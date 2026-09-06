@@ -90,9 +90,22 @@ pub(super) fn is_parent_component(component: std::path::Component<'_>) -> bool {
 }
 
 pub(super) fn package_root() -> PathBuf {
-    std::env::var_os("NICH_LINK_PACKAGE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+    if let Some(configured) = std::env::var_os("NICH_LINK_PACKAGE_ROOT") {
+        let path = PathBuf::from(configured);
+        return if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(path)
+        };
+    }
+    if let Ok(current) = std::env::current_dir() {
+        if current.join("Cargo.toml").is_file() {
+            return current;
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 pub(super) fn source_root() -> PathBuf {
