@@ -4,6 +4,51 @@
 use super::*;
 
 impl Registry {
+    /// Validate a source-path migration by replacing one whole subtree in a
+    /// staged registry. The live registry is untouched.
+    /// 在暂存注册树中校验整个源码路径子树迁移，实时注册树不会被修改。
+    pub fn validate_snapshot_migration(
+        &self,
+        current: NodeId,
+        replacements: Vec<RegistrationSnapshot>,
+    ) -> RegistryResult<()> {
+        let existing = self.find(current).ok_or_else(|| {
+            Box::new(RegistryError::new(
+                current,
+                self.header.path.clone(),
+                SourceLocation {
+                    file: "<migration>",
+                    line: 0,
+                    column: 0,
+                    function: "Registry::validate_snapshot_migration",
+                },
+                "migrated face is no longer present in the registry",
+            ))
+        })?;
+        let Some(root) = replacements
+            .iter()
+            .find(|item| item.parent == existing.parent)
+        else {
+            return Err(Box::new(RegistryError::new(
+                current,
+                self.path_for(current)
+                    .unwrap_or_else(|| self.header.path.clone()),
+                existing.source.clone(),
+                "migrated subtree has no replacement root with the original parent",
+            )));
+        };
+        let mut staged = self.clone();
+        if staged.take_entry(current).is_none() {
+            return Err(Box::new(RegistryError::new(
+                current,
+                self.header.path.clone(),
+                root.source.clone(),
+                "migrated subtree could not be detached from the registry",
+            )));
+        }
+        staged.register_snapshot_batch(replacements)
+    }
+
     pub fn validate_replacement(
         &self,
         current: NodeId,

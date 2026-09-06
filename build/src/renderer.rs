@@ -157,6 +157,12 @@ fn render_node(
                 "{inner}pub const __REGISTRATION_SOURCE: &str = {relative:?};"
             )
             .unwrap();
+            writeln!(
+                output,
+                "{inner}pub const __REGISTRATION_MODULE_NAME: &str = {:?};",
+                node.name
+            )
+            .unwrap();
         }
     }
     for child in &node.children {

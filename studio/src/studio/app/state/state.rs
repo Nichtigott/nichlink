@@ -243,8 +243,8 @@ impl AddState {
                 String::new(),
                 String::new(),
                 String::new(),
-                "NichLink 创建的注册模块。".to_owned(),
-                "A registration module created by NichLink.".to_owned(),
+                String::new(),
+                String::new(),
                 // preset, params, handle, stable name, external registry,
                 // rule path, handle traits, handle contracts, part traits,
                 // requires, provides

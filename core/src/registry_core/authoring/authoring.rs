@@ -26,7 +26,7 @@ use super::parse::{
     parse_requirements_owned, render_admission, render_expression_list, render_face_list,
     render_flow_expression, render_flow_provider, render_impls, render_literal_list,
     render_optional_source, render_path_list, render_registration_rule, render_requirements,
-    replace_string_field, rule_syntax_for_source, source_path_from_file, split_csv_owned,
+    rule_syntax_for_source, source_path_from_file, split_csv_owned,
 };
 #[allow(unused_imports)]
 use super::validation::{
@@ -123,8 +123,8 @@ impl FaceManifest {
             ("summary_en", ""),
             ("params", ""),
             ("stable_name", ""),
-            ("exports", &format!("module.{name}")),
-            ("provides", &format!("module.{name}")),
+            ("exports", ""),
+            ("provides", ""),
             ("needs_registry", "false"),
             ("getting_from_other_registry", ""),
             ("handle_traits", ""),

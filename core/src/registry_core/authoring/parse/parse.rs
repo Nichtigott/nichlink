@@ -245,18 +245,6 @@ pub(super) fn render_expression_list(value: &str) -> Result<String, String> {
     })
 }
 
-pub(super) fn replace_string_field(source: &mut String, field: &str, value: &str) {
-    let marker = format!("{field}: \"");
-    let Some(start) = source.find(&marker) else {
-        return;
-    };
-    let value_start = start + marker.len();
-    let Some(end) = source[value_start..].find('"') else {
-        return;
-    };
-    source.replace_range(value_start..value_start + end, &rust_string(value));
-}
-
 /// Render the editor's `id|version|input|output` form as a Rust expression.
 /// 将编辑器中的 `id|version|input|output` 形式渲染为 Rust 表达式。
 pub(super) fn render_flow_expression(value: &str) -> Result<String, String> {

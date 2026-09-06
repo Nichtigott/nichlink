@@ -18,15 +18,18 @@ macro_rules! __registration_face {
         collector: $collector:ident,
         kind: $kind:ident,
         preset: $preset:ty,
+        preset_name: $preset_name:expr,
         parts: $parts:ty,
-        name: { zh: $name_zh:expr, en: $name_en:expr },
-        summary: { zh: $summary_zh:expr, en: $summary_en:expr },
+        parts_name: $parts_name:expr,
+        name: { zh: $name_zh:expr, en: $name_en:expr $(,)? },
+        summary: { zh: $summary_zh:expr, en: $summary_en:expr $(,)? },
         params: $params:expr,
         exports: [$($export:expr),* $(,)?],
         handle: $handle:ident,
+        handle_name: $handle_name:expr,
         $(stable_name: $stable_name:literal,)?
         needs_registry: $needs_registry:expr,
-        registry_name: $registry_name:ident,
+        registry_name: $registry_name:expr,
         parent: $parent:expr,
         getting_from_other_registry: $getting:expr,
         registry_rule_path: $rule_path:expr,
@@ -58,16 +61,16 @@ macro_rules! __registration_face {
             id: NODE_ID,
             parent: $parent,
             kind: stringify!($kind),
-            preset: stringify!($preset),
-            parts: stringify!($parts),
+            preset: $preset_name,
+            parts: $parts_name,
             params: $params,
-            handle: stringify!($handle),
+            handle: $handle_name,
             stable_name: $crate::__stable_name!($($stable_name)?),
             name: $crate::LocalizedText { zh: $name_zh, en: $name_en },
             summary: $crate::LocalizedText { zh: $summary_zh, en: $summary_en },
             exports: &[$($export),*],
             needs_registry: $needs_registry,
-            registry_name: stringify!($registry_name),
+            registry_name: $registry_name,
             getting_from_other_registry: $getting,
             registry_rule_path: $rule_path,
             registry_rule: $rule,
@@ -93,7 +96,7 @@ macro_rules! __registration_face {
                 file: $source,
                 line: line!(),
                 column: column!(),
-                function: stringify!($handle),
+                function: $handle_name,
             },
         };
 
@@ -231,17 +234,6 @@ macro_rules! __assert_impls {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __face_type_or {
-    ($fallback:ty;) => {
-        $fallback
-    };
-    ($fallback:ty; $value:ty) => {
-        $value
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
 macro_rules! __face_expr_or {
     ($fallback:expr;) => {
         $fallback
@@ -253,12 +245,12 @@ macro_rules! __face_expr_or {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __face_ident_or {
-    ($fallback:ident;) => {
+macro_rules! __face_string_or {
+    ($fallback:expr; []) => {
         $fallback
     };
-    ($fallback:ident; $value:ident) => {
-        $value
+    ($fallback:expr; [$value:ident]) => {
+        stringify!($value)
     };
 }
 
@@ -326,16 +318,19 @@ macro_rules! __control_object {
             source: __REGISTRATION_SOURCE,
             collector: $collector,
             kind: $kind,
-            preset: $preset,
-            parts: $parts,
+            preset: ($preset),
+            preset_name: stringify!($preset),
+            parts: ($parts),
+            parts_name: stringify!($parts),
             name: { zh: $name_zh, en: $name_en },
             summary: { zh: $summary_zh, en: $summary_en },
             params: $params,
             exports: [$($export),*],
             handle: $handle,
+            handle_name: stringify!($handle),
             $(stable_name: $stable_name,)?
             needs_registry: $needs_registry,
-            registry_name: $registry_name,
+            registry_name: stringify!($registry_name),
             parent: $parent,
             getting_from_other_registry: $getting,
             registry_rule_path: $rule_path,
@@ -355,19 +350,37 @@ macro_rules! __control_object {
         }
     };
 
+    // Custom handle with default preset and parts.
+    // 自定义 handle、默认 preset/parts 的精简写法。
+    {
+        collector: $collector:ident,
+        kind: $kind:ident,
+        handle: $handle:ident,
+        $($rest:tt)*
+    } => {
+        $crate::__control_object! {
+            collector: $collector,
+            kind: $kind,
+            preset: $crate::NoPreset,
+            parts: $crate::NoParts,
+            handle: $handle,
+            $($rest)*
+        }
+    };
+
     // Compact form. Fields are intentionally ordered like the generated
     // source, but every field after `kind` is optional and has a safe default.
     // 精简写法按生成源码顺序排列；除 kind 外均可省略，并使用安全默认值。
     {
         collector: $collector:ident,
         kind: $kind:ident,
-        $(preset: $preset:ty,)?
-        $(parts: $parts:ty,)?
+        preset: $preset:ty,
+        parts: $parts:ty,
         $(name: { zh: $name_zh:expr, en: $name_en:expr },)?
         $(summary: { zh: $summary_zh:expr, en: $summary_en:expr },)?
         $(params: $params:expr,)?
         $(exports: [$($export:expr),* $(,)?],)?
-        $(handle: $handle:ident,)?
+        handle: $handle:ident,
         $(stable_name: $stable_name:literal,)?
         $(needs_registry: $needs_registry:expr,)?
         $(registry_name: $registry_name:ident,)?
@@ -393,34 +406,108 @@ macro_rules! __control_object {
             source: __REGISTRATION_SOURCE,
             collector: $collector,
             kind: $kind,
-            preset: $crate::__face_type_or!($crate::NoPreset; $($preset)?),
-            parts: $crate::__face_type_or!($crate::NoParts; $($parts)?),
+            preset: $preset,
+            preset_name: stringify!($preset),
+            parts: $parts,
+            parts_name: stringify!($parts),
             name: {
-                zh: { $crate::__face_value_or!(stringify!($kind); [$($name_zh)?]) },
-                en: { $crate::__face_value_or!(stringify!($kind); [$($name_en)?]) },
+                zh: $crate::__face_value_or!(stringify!($kind); [$($name_zh)?]),
+                en: $crate::__face_value_or!(stringify!($kind); [$($name_en)?]),
             },
             summary: {
-                zh: { $crate::__face_value_or!(""; [$($summary_zh)?]) },
-                en: { $crate::__face_value_or!(""; [$($summary_en)?]) },
+                zh: $crate::__face_value_or!(""; [$($summary_zh)?]),
+                en: $crate::__face_value_or!(""; [$($summary_en)?]),
             },
-            params: { $crate::__face_expr_or!(stringify!($kind); $($params)?) },
+            params: $crate::__face_expr_or!(stringify!($kind); $($params)?),
             exports: [$($($export),*)?],
-            handle: $crate::__face_ident_or!($kind; $($handle)?),
+            handle: $handle,
+            handle_name: stringify!($handle),
             $(stable_name: $stable_name,)?
-            needs_registry: { $crate::__face_expr_or!(false; $($needs_registry)?) },
-            registry_name: $crate::__face_ident_or!($kind; $($registry_name)?),
-            parent: { $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?) },
-            getting_from_other_registry: { $crate::__face_expr_or!(None; $($getting)?) },
-            registry_rule_path: { $crate::__face_expr_or!(__REGISTRATION_SOURCE; $($rule_path)?) },
-            registry_rule: { $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?) },
+            needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
+            registry_name: $crate::__face_string_or!(__REGISTRATION_MODULE_NAME; [$($registry_name)?]),
+            parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
+            getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
+            registry_rule_path: $crate::__face_expr_or!(__REGISTRATION_SOURCE; $($rule_path)?),
+            registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
             $(admission: $admission,)?
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
             requires: [$($($require => $provider),*)?],
             provides: [$($($provide),*)?],
-            expected_output: { $crate::__face_expr_or!("()"; $($expected_output)?) },
-            actual_output: { $crate::__face_expr_or!("()"; $($actual_output)?) },
+            expected_output: $crate::__face_expr_or!("()"; $($expected_output)?),
+            actual_output: $crate::__face_expr_or!("()"; $($actual_output)?),
+            $(flow: $flow,)?
+            $(flow_provider: $flow_provider,)?
+            $(plugin: $plugin,)?
+            runtime_checks: [$($($runtime_check),*)?],
+        }
+    };
+    {
+        collector: $collector:ident,
+        kind: $kind:ident,
+        $(preset: $preset:ty,)?
+        $(parts: $parts:ty,)?
+        $(name: { zh: $name_zh:expr, en: $name_en:expr },)?
+        $(summary: { zh: $summary_zh:expr, en: $summary_en:expr },)?
+        $(params: $params:expr,)?
+        $(exports: [$($export:expr),* $(,)?],)?
+        $(stable_name: $stable_name:literal,)?
+        $(needs_registry: $needs_registry:expr,)?
+        $(registry_name: $registry_name:ident,)?
+        $(parent: $parent:expr,)?
+        $(getting_from_other_registry: $getting:expr,)?
+        $(registry_rule_path: $rule_path:expr,)?
+        $(registry_rule: $rule:expr,)?
+        $(admission: $admission:expr,)?
+        $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
+        $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
+        $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(requires: [$($require:expr => $provider:expr),* $(,)?],)?
+        $(provides: [$($provide:expr),* $(,)?],)?
+        $(expected_output: $expected_output:expr,)?
+        $(actual_output: $actual_output:expr,)?
+        $(flow: $flow:expr,)?
+        $(flow_provider: $flow_provider:path,)?
+        $(plugin: $plugin:expr,)?
+        $(runtime_checks: [$($runtime_check:expr),* $(,)?],)?
+        $(,)?
+    } => {
+        $crate::__registration_face! {
+            source: __REGISTRATION_SOURCE,
+            collector: $collector,
+            kind: $kind,
+            preset: $crate::NoPreset,
+            preset_name: "NoPreset",
+            parts: $crate::NoParts,
+            parts_name: "NoParts",
+            name: {
+                zh: $crate::__face_value_or!(stringify!($kind); [$($name_zh)?]),
+                en: $crate::__face_value_or!(stringify!($kind); [$($name_en)?]),
+            },
+            summary: {
+                zh: $crate::__face_value_or!(""; [$($summary_zh)?]),
+                en: $crate::__face_value_or!(""; [$($summary_en)?]),
+            },
+            params: $crate::__face_expr_or!(stringify!($kind); $($params)?),
+            exports: [$($($export),*)?],
+            handle: $kind,
+            handle_name: stringify!($kind),
+            $(stable_name: $stable_name,)?
+            needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
+            registry_name: $crate::__face_string_or!(__REGISTRATION_MODULE_NAME; [$($registry_name)?]),
+            parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
+            getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
+            registry_rule_path: $crate::__face_expr_or!(__REGISTRATION_SOURCE; $($rule_path)?),
+            registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
+            $(admission: $admission,)?
+            $(handle_traits: [$($handle_trait),*],)?
+            $(handle_contracts: [$($handle_contract),*],)?
+            $(part_traits: [$($part_trait),*],)?
+            requires: [$($($require => $provider),*)?],
+            provides: [$($($provide),*)?],
+            expected_output: $crate::__face_expr_or!("()"; $($expected_output)?),
+            actual_output: $crate::__face_expr_or!("()"; $($actual_output)?),
             $(flow: $flow,)?
             $(flow_provider: $flow_provider,)?
             $(plugin: $plugin,)?
@@ -439,15 +526,18 @@ macro_rules! __control_object {
             source: __REGISTRATION_SOURCE,
             collector: $collector,
             kind: $kind,
-            preset: $crate::NoPreset,
-            parts: $crate::NoParts,
+            preset: ($crate::NoPreset),
+            preset_name: "NoPreset",
+            parts: ($crate::NoParts),
+            parts_name: "NoParts",
             name: { zh: stringify!($kind), en: stringify!($kind) },
             summary: { zh: "", en: "" },
             params: stringify!($kind),
             exports: [],
             handle: $kind,
+            handle_name: stringify!($kind),
             needs_registry: false,
-            registry_name: $kind,
+            registry_name: stringify!($kind),
             parent: $crate::root_node_id(env!("CARGO_PKG_NAME")),
             getting_from_other_registry: None,
             registry_rule_path: __REGISTRATION_SOURCE,
@@ -517,16 +607,19 @@ macro_rules! __external_object {
             source: $source,
             collector: $collector,
             kind: $kind,
-            preset: $preset,
-            parts: $parts,
+            preset: ($preset),
+            preset_name: stringify!($preset),
+            parts: ($parts),
+            parts_name: stringify!($parts),
             name: { zh: $name_zh, en: $name_en },
             summary: { zh: $summary_zh, en: $summary_en },
             params: $params,
             exports: [$($export),*],
             handle: $handle,
+            handle_name: stringify!($handle),
             $(stable_name: $stable_name,)?
             needs_registry: $needs_registry,
-            registry_name: $registry_name,
+            registry_name: stringify!($registry_name),
             parent: $parent,
             getting_from_other_registry: $getting,
             registry_rule_path: $rule_path,

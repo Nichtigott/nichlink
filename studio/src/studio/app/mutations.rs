@@ -197,6 +197,7 @@ impl App {
             }
         };
         let patch = nichlink::ModuleFacePatch {
+            module: &edit.values[1],
             kind: &edit.values[8],
             preset: &edit.values[13],
             parts: &edit.values[6],
@@ -228,12 +229,21 @@ impl App {
         match nichlink::edit_module_face(&self.registry, id, &patch) {
             Ok(change) => {
                 let message = change.message;
+                let changed_source = change.source;
                 // Keep the visible inspector in sync with the file we just
                 // committed. The reload is deliberately after the atomic
                 // write, so a failed parse keeps the previous healthy state.
                 // 保存成功后立即刷新检视器；刷新失败时仍保留上一份健康快照。
                 self.reload();
                 if self.reload_error.is_none() {
+                    if let Some(info) = self
+                        .registry
+                        .depth_first()
+                        .into_iter()
+                        .find(|info| source_path_for(&info.source.file) == changed_source)
+                    {
+                        self.selected = info.id;
+                    }
                     self.event = format!("{message}; registration reloaded");
                 }
                 self.overlay = None;

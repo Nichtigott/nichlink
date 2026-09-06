@@ -233,6 +233,11 @@ impl FaceManifest {
             .map(|item| format!("\"{}\"", rust_string(item)))
             .collect::<Vec<_>>()
             .join(", ");
+        let exports_decl = if exports.is_empty() {
+            String::new()
+        } else {
+            format!("    exports: [{exports}],\n")
+        };
         let handle_traits = render_face_list("handle_traits", value("handle_traits"));
         let handle_contracts = render_path_list(value("handle_contracts"));
         let handle_contracts_decl = if handle_contracts.is_empty() {
@@ -292,40 +297,68 @@ impl FaceManifest {
         // Keep structural type markers explicit; prose and identity fields may
         // use defaults without losing the contract surface.
         // 保留结构类型标记；说明文字和身份字段可以使用默认值。
-        let preset_decl = format!("    preset: {preset},\n");
-        let parts_decl = format!("    parts: {parts},\n");
-        let force_full = value("needs_registry") == "true" || has_custom_rule;
-        let params_decl = if force_full || (!value("params").is_empty() && value("params") != kind)
-        {
+        let preset_decl = if !is_default_type(preset, "NoPreset") {
+            format!("    preset: {preset},\n")
+        } else {
+            String::new()
+        };
+        let parts_decl = if !is_default_type(parts, "NoParts") {
+            format!("    parts: {parts},\n")
+        } else {
+            String::new()
+        };
+        let custom_shape =
+            !is_default_type(preset, "NoPreset") || !is_default_type(parts, "NoParts");
+        let preset_decl = if custom_shape && preset_decl.is_empty() {
+            format!("    preset: {preset},\n")
+        } else {
+            preset_decl
+        };
+        let parts_decl = if custom_shape && parts_decl.is_empty() {
+            format!("    parts: {parts},\n")
+        } else {
+            parts_decl
+        };
+        let params_decl = if !value("params").is_empty() && value("params") != kind {
             format!("    params: \"{}\",\n", rust_string(value("params")))
         } else {
             String::new()
         };
-        let handle_decl = if force_full || handle != kind {
+        let handle_decl = if handle != kind || custom_shape {
             format!("    handle: {handle},\n")
         } else {
             String::new()
         };
-        let needs_decl = if force_full {
+        let needs_decl = if value("needs_registry") == "true" {
             "    needs_registry: true,\n".to_owned()
         } else {
             String::new()
         };
-        let parent_decl = format!("    parent: {parent},\n");
-        let registry_decl = format!("    registry_name: {registry_name},\n");
-        let module = normalized_path(
-            Path::new(value("source"))
-                .parent()
-                .unwrap_or_else(|| Path::new("")),
-        );
+        let parent_decl = if value("parent_source") == "<root>" {
+            String::new()
+        } else {
+            format!("    parent: {parent},\n")
+        };
+        let registry_decl = if registry_name == value("module") {
+            String::new()
+        } else {
+            format!("    registry_name: {registry_name},\n")
+        };
+        let canonical_rule_path = rule_path_for_source(value("source"));
         let registry_fields = if value("needs_registry") == "true" || has_custom_rule {
-            format!(
-                "    registry_rule_path: \"src/{module}/registry_rule/registry_rule.rs\",\n    registry_rule: {registration_rule},\n"
-            )
+            let rule_path = if registry_rule_path == canonical_rule_path {
+                String::new()
+            } else {
+                format!(
+                    "    registry_rule_path: \"{}\",\n",
+                    rust_string(&registry_rule_path)
+                )
+            };
+            format!("{rule_path}    registry_rule: {registration_rule},\n")
         } else {
             String::new()
         };
-        let getting_decl = if force_full || (!getting.is_empty() && getting != "None") {
+        let getting_decl = if !getting.is_empty() && getting != "None" {
             format!("    getting_from_other_registry: {getting},\n")
         } else {
             String::new()
@@ -335,39 +368,31 @@ impl FaceManifest {
         } else {
             format!("    admission: {admission},\n")
         };
-        let requirements_decl = if force_full || !requirements.is_empty() {
+        let requirements_decl = if !requirements.is_empty() {
             format!("    requires: [{requirements}],\n")
         } else {
             String::new()
         };
-        let provides_decl = if !force_full
-            && (value("provides").trim().is_empty()
-                || value("provides").trim() == value("exports").trim())
-        {
-            String::new()
-        } else {
+        let provides_decl = if !provides.is_empty() {
             format!("    provides: [{provides}],\n")
+        } else {
+            String::new()
         };
-        let output_decl =
-            if force_full || value("expected_output") != "()" || value("actual_output") != "()" {
-                format!(
-                    "    expected_output: \"{}\",\n    actual_output: \"{}\",\n",
-                    rust_string(value("expected_output")),
-                    rust_string(value("actual_output"))
-                )
-            } else {
-                String::new()
-            };
-        let runtime_decl = if force_full
-            || !runtime_checks.is_empty()
-            || !flow.is_empty()
-            || !flow_provider.is_empty()
-        {
+        let output_decl = if value("expected_output") != "()" || value("actual_output") != "()" {
+            format!(
+                "    expected_output: \"{}\",\n    actual_output: \"{}\",\n",
+                rust_string(value("expected_output")),
+                rust_string(value("actual_output"))
+            )
+        } else {
+            String::new()
+        };
+        let runtime_decl = if !runtime_checks.is_empty() {
             format!("    runtime_checks: [{runtime_checks}],\n")
         } else {
             String::new()
         };
-        let mut source = format!(
+        let source = format!(
             "{module_doc}\n\n\
              use crate::{{NoParts, NoPreset}};\n\n\
              {handle_doc}\n\
@@ -376,14 +401,14 @@ impl FaceManifest {
              crate::control_object! {{\n\
                  kind: {kind},\n\
              {preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}\
-                 exports: [{exports}],\n\
+                 {exports_decl}\
              {handle_decl}\
              {stable_decl}\
              {needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}\
              {handle_traits}\
              {handle_contracts_decl}\
              {part_traits}\
-             {requirements_decl}{provides_decl}{output_decl}{runtime_decl}\
+             {requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}\
              }}\n",
             kind = kind,
             module_doc = module_doc,
@@ -393,6 +418,7 @@ impl FaceManifest {
             name_decl = name_decl,
             summary_decl = summary_decl,
             params_decl = params_decl,
+            exports_decl = exports_decl,
             handle_decl = handle_decl,
             handle_contracts_decl = handle_contracts_decl,
             handle_impls = handle_impls,
@@ -407,21 +433,15 @@ impl FaceManifest {
             provides_decl = provides_decl,
             output_decl = output_decl,
             runtime_decl = runtime_decl,
+            flow = flow,
+            flow_provider = flow_provider,
             parent_decl = parent_decl,
         );
-        replace_string_field(&mut source, "registry_rule_path", &registry_rule_path);
-        if !flow.is_empty() {
-            if let Some(index) = source.find("runtime_checks:") {
-                let line_start = source[..index].rfind('\n').map_or(0, |line| line + 1);
-                source.insert_str(line_start, &flow);
-            }
-        }
-        if !flow_provider.is_empty() {
-            if let Some(index) = source.find("runtime_checks:") {
-                let line_start = source[..index].rfind('\n').map_or(0, |line| line + 1);
-                source.insert_str(line_start, &flow_provider);
-            }
-        }
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }
+}
+
+fn is_default_type(value: &str, default: &str) -> bool {
+    let value = value.trim();
+    value == default || value.rsplit("::").next() == Some(default)
 }

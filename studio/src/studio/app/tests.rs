@@ -112,8 +112,8 @@ fn add_form_starts_with_editable_bilingual_summary() {
     let add = AddState::new(nichlink::ROOT_NODE_ID);
     assert!(add.values[9].is_empty());
     assert!(add.values[10].is_empty());
-    assert_eq!(add.values[11], "NichLink 创建的注册模块。");
-    assert_eq!(add.values[12], "A registration module created by NichLink.");
+    assert!(add.values[11].is_empty());
+    assert!(add.values[12].is_empty());
 }
 
 #[test]
@@ -378,6 +378,87 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
     match original_manifest {
         Some(value) => std::env::set_var("NICH_LINK_HOST_MANIFEST", value),
         None => std::env::remove_var("NICH_LINK_HOST_MANIFEST"),
+    }
+    match original_namespace {
+        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
+        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
+    }
+}
+
+#[test]
+fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
+    let _guard = PROJECT_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
+    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-rename-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("create source root");
+    std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
+    std::env::set_var("NICH_LINK_NAMESPACE", "rename-test");
+
+    let mut app = App::load();
+    let root_id = app.registry.id();
+    let mut add = AddState::new(root_id);
+    add.values[1] = "test".to_owned();
+    add.values[2] = "true".to_owned();
+    add.values[8] = "Test".to_owned();
+    app.submit_add(&add);
+    assert!(!app.event.starts_with("Add failed"), "{}", app.event);
+    let old_source = root.join("src/test/test.rs");
+    let initial = std::fs::read_to_string(&old_source).expect("new face source");
+    assert!(initial.contains("kind: Test"));
+    assert!(!initial.contains("preset:"));
+    assert!(!initial.contains("parts:"));
+    assert!(!initial.contains("exports:"));
+    assert!(!initial.contains("registry_name:"));
+    assert!(!initial.contains("parent:"));
+
+    let id = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|info| info.registry_name == "test")
+        .expect("new face in registry")
+        .id;
+    let mut child = AddState::new(id);
+    child.values[1] = "child".to_owned();
+    child.values[8] = "Child".to_owned();
+    app.submit_add(&child);
+    assert!(!app.event.starts_with("Add failed"), "{}", app.event);
+
+    let mut edit = AddState::new(root_id);
+    edit.values[1] = "panel".to_owned();
+    edit.values[2] = "true".to_owned();
+    edit.values[3] = "test".to_owned();
+    edit.values[8] = "Test".to_owned();
+    app.submit_edit(id, &edit);
+
+    assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
+    assert!(!old_source.exists());
+    let new_source = root.join("src/panel/panel.rs");
+    assert!(new_source.is_file());
+    let new_child = root.join("src/panel/object/child/child.rs");
+    assert!(new_child.is_file());
+    assert!(std::fs::read_to_string(&new_child)
+        .expect("renamed child source")
+        .contains("crate::panel::NODE_ID"));
+    assert_eq!(
+        app.selected_info().map(|info| info.source.file.as_str()),
+        Some("panel/panel.rs")
+    );
+    assert!(std::fs::read_to_string(&new_source)
+        .expect("renamed face source")
+        .contains("kind: Test"));
+
+    let _ = std::fs::remove_dir_all(&root);
+    match original_root {
+        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
+        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
     }
     match original_namespace {
         Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
