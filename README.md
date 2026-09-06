@@ -247,15 +247,13 @@ modules, traits, or constructor injection are usually simpler.
 
 ## Studio at a glance
 
-```text
 ┌─ NichLink ───────────────────────────────────────────────────────┐
-│ Search  Inspect  Data  Compare                    [watch: live]  │
+│ Search  Inspect  Data  Compare                    [watch: live]    │
 ├───────────────┬────────────────────┬─────────────────────────────┤
 │ callers       │  selected symbol   │  foldable source / data     │
-│ current       │  input → output    │  highlighted Rust preview    │
+│ current       │  input → output    │  highlighted Rust preview   │
 │ callees       │  evidence + status │  Enter: open source         │
 └───────────────┴────────────────────┴─────────────────────────────┘
-```
 
 The Studio is an optional, event-driven Ratatui tool. It is not part of the core
 runtime and is only redrawn after input, resize, or watch events.
