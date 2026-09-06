@@ -360,17 +360,17 @@ pub fn edit_module(registry: &Registry, spec: &str) -> Result<AuthoringChange, S
 
     let (_, source) = generated_paths(registry, id)?;
     let mut face = FaceManifest::parse_source(&source)?;
-    if field == "kind" {
-        let next_kind = normalize_kind_name(value);
+    let normalized_kind = (field == "kind").then(|| normalize_kind_name(value));
+    let kind_changed = if let Some(next_kind) = normalized_kind.as_ref() {
         let current_kind = face.values.get("kind").cloned().unwrap_or_default();
-        if next_kind != current_kind {
-            return Err(
-                "kind is part of NodeId and cannot be edited; use an explicit subtree migration"
-                    .to_owned(),
-            );
-        }
+        next_kind != &current_kind
+    } else {
+        false
+    };
+    face.edit(field, normalized_kind.as_deref().unwrap_or(value))?;
+    if kind_changed {
+        return migrate_kind_subtree(registry, id, source, face);
     }
-    face.edit(field, value)?;
     let authored = face.to_snapshot()?;
     let existing = registry
         .find(id)
@@ -413,12 +413,7 @@ pub fn edit_module_face(
     let module_changed = requested_module != old_module;
     let original_kind = face.values.get("kind").cloned().unwrap_or_default();
     let normalized_kind = normalize_kind_name(patch.kind.trim());
-    if normalized_kind != original_kind {
-        return Err(
-            "kind is part of NodeId and cannot be edited; use an explicit subtree migration"
-                .to_owned(),
-        );
-    }
+    let kind_changed = normalized_kind != original_kind;
     face.edit("kind", &normalized_kind)?;
     face.edit("preset", patch.preset)?;
     face.edit("parts", patch.parts)?;
@@ -457,6 +452,9 @@ pub fn edit_module_face(
     }
     if module_changed {
         return migrate_module_subtree(registry, id, source, face, requested_module);
+    }
+    if kind_changed {
+        return migrate_kind_subtree(registry, id, source, face);
     }
     // Parse the complete edited face before touching either file.
     // 在修改任一文件前先解析完整注册面，保证错误编辑不会落盘。
@@ -513,6 +511,68 @@ pub fn edit_module_face(
     }
     Ok(AuthoringChange {
         message: format!("updated registration face {}", source.display()),
+        source,
+    })
+}
+
+/// Change a face kind by migrating its identity in one validated transaction.
+/// 修改注册面的 kind，并在一次校验事务中迁移其身份。
+///
+/// `kind` participates in `NodeId`, so changing it cannot use an in-place
+/// replacement. The source file stays where it is; descendants are reparsed
+/// so their parent IDs follow the new kind, then the complete subtree is
+/// validated before the caller reloads the live registry.
+/// `kind` 是 `NodeId` 的组成部分，不能原地替换。源码文件位置保持不变，
+/// 重新解析后代以跟随新的父级身份，并在刷新实时注册树前校验整棵子树。
+fn migrate_kind_subtree(
+    registry: &Registry,
+    id: NodeId,
+    source: PathBuf,
+    face: FaceManifest,
+) -> Result<AuthoringChange, String> {
+    let old_source = fs::read_to_string(&source)
+        .map_err(|error| format!("cannot read {}: {error}", source.display()))?;
+    let rendered = face.render_source()?;
+    atomic_write(&source, &rendered)?;
+
+    let source_root = source_root();
+    let relative = source
+        .strip_prefix(&source_root)
+        .map_err(|_| "generated module is outside the package source tree".to_owned())?;
+    let relative = normalized_path(relative);
+    let directory = Path::new(&relative)
+        .parent()
+        .map(normalized_path)
+        .unwrap_or_default();
+    let prefix = if directory.is_empty() {
+        String::new()
+    } else {
+        format!("{directory}/")
+    };
+    let snapshots = match generated_snapshots() {
+        Ok(snapshots) => snapshots
+            .into_iter()
+            .filter(|snapshot| {
+                snapshot.source.file == relative
+                    || (!prefix.is_empty() && snapshot.source.file.starts_with(&prefix))
+            })
+            .collect::<Vec<_>>(),
+        Err(error) => {
+            let _ = atomic_write(&source, &old_source);
+            return Err(error);
+        }
+    };
+    if snapshots.is_empty() {
+        let _ = atomic_write(&source, &old_source);
+        return Err("kind migration produced no registration face".to_owned());
+    }
+    if let Err(error) = registry.validate_snapshot_migration(id, snapshots) {
+        let _ = atomic_write(&source, &old_source);
+        return Err(format!("registration rejected after kind change:\n{error}"));
+    }
+
+    Ok(AuthoringChange {
+        message: format!("updated kind in {}", source.display()),
         source,
     })
 }

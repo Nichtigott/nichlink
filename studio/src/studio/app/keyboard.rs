@@ -45,7 +45,18 @@ impl App {
                         .registry
                         .path_for(info.parent)
                         .unwrap_or_else(|| "root".to_owned());
-                    edit.values[1] = info.registry_name.to_owned();
+                    // `module` describes the source directory/file, while
+                    // `registry_name` is the name in the registration tree.
+                    // They often start equal, but a module rename must not
+                    // make the editor appear to revert after reload.
+                    // `module` 表示源码目录/文件名，`registry_name` 表示注册树
+                    // 中的槽位名。两者初始值可能相同，但重命名后必须分别读取。
+                    edit.values[1] = std::path::Path::new(&info.source.file)
+                        .file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .filter(|stem| !stem.is_empty())
+                        .unwrap_or(info.registry_name.as_str())
+                        .to_owned();
                     edit.values[2] = info.needs_registry.to_string();
                     edit.values[3] = info.registry_name.to_owned();
                     edit.values[4] = registration_rule_text(&info.registry_rule);

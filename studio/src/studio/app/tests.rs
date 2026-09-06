@@ -451,9 +451,46 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         app.selected_info().map(|info| info.source.file.as_str()),
         Some("panel/panel.rs")
     );
+    // Re-opening Edit after reload must derive module from the source path,
+    // not from registry_name. This guards against a rename being displayed as
+    // the old module and then moved back on the next save.
+    // reload 后重新打开编辑表单时，module 必须来自源码路径，而不是
+    // registry_name；这样不会把已重命名的模块显示成旧名称并移回去。
+    app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+    let Some(Overlay::Edit(_, reopened)) = app.overlay.take() else {
+        panic!("e should reopen the Edit form after module migration");
+    };
+    assert_eq!(reopened.values[1], "panel");
+    assert_eq!(reopened.values[3], "test");
+    // Kind is an identity field too, but it is migrated atomically instead of
+    // being silently ignored by the form.
+    // kind 同样属于身份字段；它应通过原子迁移生效，而不是被表单静默忽略。
+    let migrated_id = app
+        .selected_info()
+        .expect("renamed face remains selected")
+        .id;
+    let mut kind_edit = reopened;
+    kind_edit.values[8] = "Panel".to_owned();
+    app.submit_edit(migrated_id, &kind_edit);
+    assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
+    assert_eq!(
+        app.selected_info().map(|info| info.kind.as_str()),
+        Some("Panel")
+    );
+    let panel_id = app
+        .selected_info()
+        .expect("migrated face remains selected")
+        .id;
+    let child_parent = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|info| info.registry_name == "child")
+        .map(|info| info.parent);
+    assert_eq!(child_parent, Some(panel_id));
     assert!(std::fs::read_to_string(&new_source)
         .expect("renamed face source")
-        .contains("kind: Test"));
+        .contains("kind: Panel"));
 
     let _ = std::fs::remove_dir_all(&root);
     match original_root {
