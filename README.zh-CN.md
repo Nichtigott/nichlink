@@ -183,15 +183,7 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
 
 ## Studio 界面示意
 
-```text
-┌─ NichLink ───────────────────────────────────────────────────────┐
-│ Search  Inspect  Data  Compare                    [watch: live]  │
-├───────────────┬────────────────────┬─────────────────────────────┤
-│ 调用者        │     当前符号       │   可折叠源码 / 数据          │
-│ 当前项        │   输入 → 输出      │   Rust 语法高亮预览           │
-│ 被调用者      │   证据 + 状态       │   Enter：打开源码            │
-└───────────────┴────────────────────┴─────────────────────────────┘
-```
+![](./picture/NichLink_studio.png)
 
 Studio 是可选的、事件驱动的 Ratatui 工具，只在输入、窗口变化或 watch 事件后重绘，不会进入 core 运行时。
 
