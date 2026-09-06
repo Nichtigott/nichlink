@@ -1,0 +1,21 @@
+[package]
+name = "nichlink-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Registry, transaction, contracts, grafts, and diagnostics for NichLink"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-core"
+autobins = false
+
+[features]
+authoring = ["dep:proc-macro2", "dep:syn"]
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"], optional = true }
+syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
+
+[lib]
+name = "nichlink"
+path = "src/lib.rs"

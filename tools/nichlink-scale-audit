@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+mkdir -p target/nichlink-audit
+if [ -x /usr/bin/time ]; then
+  /usr/bin/time -f 'peak_rss_kb=%M' \
+    cargo run --quiet --release -p nichlink-core --example scale_audit -- 10000 100000 \
+    2>target/nichlink-audit/scale.time
+  cat target/nichlink-audit/scale.time
+else
+  echo "peak_rss_kb=unavailable (install GNU time for RSS measurement)" >&2
+  cargo run --quiet --release -p nichlink-core --example scale_audit -- 10000 100000
+fi

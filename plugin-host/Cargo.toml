@@ -1,0 +1,29 @@
+[package]
+name = "nichlink-plugin-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Verified WASM/process plugin adapters and atomic deployment for NichLink"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-plugin-host"
+autobins = false
+
+[lib]
+name = "nichlink_host"
+path = "src/lib.rs"
+
+[features]
+default = ["wasm"]
+wasm = ["dep:wasmi"]
+process-tools = ["dep:tempfile"]
+
+[dependencies]
+arc-swap = "1.9"
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+nichlink-core = { path = "../core", version = "0.1.0" }
+tempfile = { version = "3.22", optional = true }
+wasmi = { version = "0.42.1", default-features = false, features = ["std"], optional = true }
+
+[dev-dependencies]
+wat = "1"

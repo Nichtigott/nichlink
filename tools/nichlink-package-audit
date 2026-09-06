@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+cargo package -p nichlink-core --locked --allow-dirty --offline
+cargo package -p nichlink-build --locked --allow-dirty --offline
+cargo package -p nichlink-mcp --locked --allow-dirty --offline
+
+cat <<'EOF'
+Core, build, and MCP packages passed local verification.
+The debug, studio, and plugin-host packages depend on the published
+nichlink-core version. After publishing core, run cargo package for them in
+dependency order against the target registry.
+EOF

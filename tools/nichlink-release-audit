@@ -1,0 +1,74 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+cargo fmt --all -- --check
+cargo test --workspace --offline
+cargo clippy --workspace --all-targets --offline -- -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --offline
+cargo build --workspace --release --all-targets
+
+audit_dir=target/nichlink-audit/release
+mkdir -p "$audit_dir"
+printf 'artifact\tbytes\tdefined_symbols\n' >"$audit_dir/artifacts.tsv"
+
+find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -print0 \
+  | while IFS= read -r -d '' artifact; do
+      name=${artifact#target/release/}
+      bytes=$(wc -c <"$artifact" | tr -d ' ')
+      safe_name=$(printf '%s' "$name" | tr '/' '_')
+      symbols="$audit_dir/$safe_name.symbols"
+      if command -v nm >/dev/null 2>&1; then
+        nm -C --defined-only "$artifact" 2>/dev/null | sort -u >"$symbols" || :
+        count=$(wc -l <"$symbols" | tr -d ' ')
+      else
+        printf '%s\n' "nm unavailable" >"$symbols"
+        count=unavailable
+      fi
+      printf '%s\t%s\t%s\n' "$name" "$bytes" "$count" >>"$audit_dir/artifacts.tsv"
+      if command -v readelf >/dev/null 2>&1 \
+        && readelf -SW "$artifact" 2>/dev/null | grep -Eiq '[[:space:]]\.inventory([[:space:]]|$)'; then
+          echo "release artifact retains an inventory linker section: $artifact" >&2
+          exit 1
+      fi
+    done
+
+find target/release/build -name function_manifest.tsv -type f -print \
+  | sort -u \
+  | while IFS= read -r manifest; do
+      package=$(basename "$(dirname "$(dirname "$manifest")")")
+      awk -v package="$package" 'NR == 1 { next } { print package "\t" $0 }' "$manifest"
+    done >"$audit_dir/node_functions.tsv"
+
+if [ -n "${NICH_LINK_FULL_BINARY:-}" ] || [ -n "${NICH_LINK_MINIMAL_BINARY:-}" ]; then
+  full=${NICH_LINK_FULL_BINARY:?NICH_LINK_FULL_BINARY must be set with NICH_LINK_MINIMAL_BINARY}
+  minimal=${NICH_LINK_MINIMAL_BINARY:?NICH_LINK_MINIMAL_BINARY must be set with NICH_LINK_FULL_BINARY}
+  [ -f "$full" ] && [ -f "$minimal" ] || {
+    echo "full/minimal binary paths must point to files" >&2
+    exit 1
+  }
+  command -v nm >/dev/null 2>&1 || {
+    echo "nm is required for full/minimal symbol comparison" >&2
+    exit 1
+  }
+  nm -C --defined-only "$full" 2>/dev/null | sort -u >"$audit_dir/full.symbols"
+  nm -C --defined-only "$minimal" 2>/dev/null | sort -u >"$audit_dir/minimal.symbols"
+  comm -23 "$audit_dir/minimal.symbols" "$audit_dir/full.symbols" >"$audit_dir/minimal-only.symbols"
+  if [ -s "$audit_dir/minimal-only.symbols" ]; then
+    echo "minimal binary contains symbols absent from full binary" >&2
+    exit 1
+  fi
+  printf 'full_bytes\t%s\nminimal_bytes\t%s\ndelta_bytes\t%s\n' \
+    "$(wc -c <"$full" | tr -d ' ')" \
+    "$(wc -c <"$minimal" | tr -d ' ')" \
+    "$(( $(wc -c <"$full") - $(wc -c <"$minimal") ))" \
+    >"$audit_dir/size.tsv"
+fi
+
+start=$(date +%s%N)
+cargo run --quiet --release -p nichlink-core --example scale_audit -- 10000 >/dev/null
+end=$(date +%s%N)
+printf 'startup_ms=%s\n' "$(( (end - start) / 1000000 ))"
+printf 'symbol_audit=%s\n' "$audit_dir/artifacts.tsv"

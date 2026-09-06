@@ -1,0 +1,28 @@
+[package]
+name = "nichlink-studio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Ratatui Studio for NichLink registry authoring and diagnostics"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-studio"
+default-run = "nichlink-studio"
+
+[features]
+prototype-fixtures = []
+
+[dependencies]
+crossterm = "0.28"
+notify = "7"
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+nichlink-core = { path = "../core", version = "0.1.0", features = ["authoring"] }
+nichlink-debug = { path = "../debug", version = "0.1.0" }
+
+[[bin]]
+name = "nichlink-studio"
+path = "src/main.rs"
+
+[[bin]]
+name = "nichlink-dev"
+path = "src/bin/nichlink-dev.rs"
