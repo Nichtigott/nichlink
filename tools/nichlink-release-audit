@@ -5,9 +5,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
 cargo fmt --all -- --check
-cargo test --workspace --offline
-cargo clippy --workspace --all-targets --offline -- -D warnings
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --offline
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
 cargo build --workspace --release --all-targets
 
 audit_dir=target/nichlink-audit/release

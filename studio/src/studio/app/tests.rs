@@ -432,6 +432,43 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
 }
 
 #[test]
+fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
+    let _guard = PROJECT_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
+    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-old-face-{suffix}"));
+    let source = root.join("src/test/test.rs");
+    std::fs::create_dir_all(source.parent().expect("face parent")).expect("create fixture");
+    std::fs::write(
+        &source,
+        "// generated-by=NichLink\npub struct Test;\ncrate::control_object! { kind: Test, }\n",
+    )
+    .expect("write old generated face");
+    std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
+    std::env::set_var("NICH_LINK_NAMESPACE", "old-face-test");
+
+    let app = App::load();
+
+    assert!(app.reload_error.is_none(), "{}", app.event);
+    assert_eq!(app.registry.depth_first().len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+    match original_root {
+        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
+        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
+    }
+    match original_namespace {
+        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
+        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
+    }
+}
+
+#[test]
 fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     let _guard = PROJECT_ENV_LOCK
         .lock()

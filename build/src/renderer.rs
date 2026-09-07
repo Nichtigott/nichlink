@@ -41,16 +41,10 @@ pub(crate) fn render_lib(
         .collect::<BTreeMap<_, _>>();
     output.push_str("\n// Registration rules are consumed by const evaluation only.\n// 注册规则只参与常量求值，不进入发布态数据。\n");
     for face in static_faces {
-        let rule = if face.parent == registry_identity::package_root_node_id() {
-            "registry_core::RegistrationRule::ANY".to_owned()
-        } else {
-            format!(
-                "{}::REGISTRATION.registry_rule",
-                modules
-                    .get(&face.parent)
-                    .expect("static-plan parent was validated")
-            )
-        };
+        let rule = modules.get(&face.parent).map_or_else(
+            || "registry_core::RegistrationRule::ANY".to_owned(),
+            |parent| format!("{parent}::REGISTRATION.registry_rule"),
+        );
         writeln!(
             output,
             "const _: () = registry_core::assert_static_registration({rule}, {}::REGISTRATION);",

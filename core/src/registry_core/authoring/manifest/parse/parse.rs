@@ -37,8 +37,12 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
     let declared_parent_registry = face
         .macro_name
         .strip_suffix("_object")
-        .filter(|name| *name != "external")
-        .filter(|name| *name != "control" || text.contains("generated-by=NichLink"));
+        // Studio must be able to open declarations written before hierarchy
+        // macros existed. The build validator still rejects a newly generated
+        // `control_object!` whose explicit parent is not `control`.
+        // Studio 必须能打开层级宏出现前生成的声明；构建校验仍会拒绝新文件中
+        // 与 control 父级不一致的 `control_object!`。
+        .filter(|name| !matches!(*name, "control" | "external"));
     if let Some(parent_registry) = declared_parent_registry {
         values.insert(
             "parent_registry_name".to_owned(),
