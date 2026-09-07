@@ -167,133 +167,123 @@ impl App {
         }
         // Every graph column has its own focus and selection.
         // 调用图的每一列都有独立焦点和选择项。
-        if let Some(Overlay::Search(search)) = self.overlay.as_ref() {
-            if search.graph_mode {
-                let in_a_input = self.graph_a_input_area.contains(point);
-                let in_a_center = self.graph_a_center_area.contains(point);
-                let in_a_output = self.graph_a_output_area.contains(point);
-                let in_b_input = self.graph_b_input_area.contains(point);
-                let in_b_center = self.graph_b_center_area.contains(point);
-                let in_b_output = self.graph_b_output_area.contains(point);
-                let in_tree = self.graph_tree_a_area.contains(point)
-                    || self.graph_tree_b_area.contains(point);
-                let in_data = self.graph_data_a_area.contains(point)
-                    || self.graph_data_b_area.contains(point);
-                let tree_b = self.graph_tree_b_area.contains(point);
-                let data_b = self.graph_data_b_area.contains(point);
-                if in_a_input
-                    || in_a_center
-                    || in_a_output
-                    || in_b_input
-                    || in_b_center
-                    || in_b_output
-                {
-                    let side = if in_b_input || in_b_center || in_b_output {
-                        1
+        if let Some(Overlay::Search(search)) = self.overlay.as_ref()
+            && search.graph_mode
+        {
+            let in_a_input = self.graph_a_input_area.contains(point);
+            let in_a_center = self.graph_a_center_area.contains(point);
+            let in_a_output = self.graph_a_output_area.contains(point);
+            let in_b_input = self.graph_b_input_area.contains(point);
+            let in_b_center = self.graph_b_center_area.contains(point);
+            let in_b_output = self.graph_b_output_area.contains(point);
+            let in_tree =
+                self.graph_tree_a_area.contains(point) || self.graph_tree_b_area.contains(point);
+            let in_data =
+                self.graph_data_a_area.contains(point) || self.graph_data_b_area.contains(point);
+            let tree_b = self.graph_tree_b_area.contains(point);
+            let data_b = self.graph_data_b_area.contains(point);
+            if in_a_input || in_a_center || in_a_output || in_b_input || in_b_center || in_b_output
+            {
+                let side = if in_b_input || in_b_center || in_b_output {
+                    1
+                } else {
+                    0
+                };
+                let input = if side == 0 { in_a_input } else { in_b_input };
+                let center = if side == 0 { in_a_center } else { in_b_center };
+                let area = if input {
+                    if side == 0 {
+                        self.graph_a_input_area
                     } else {
-                        0
-                    };
-                    let input = if side == 0 { in_a_input } else { in_b_input };
-                    let center = if side == 0 { in_a_center } else { in_b_center };
-                    let area = if input {
-                        if side == 0 {
-                            self.graph_a_input_area
-                        } else {
-                            self.graph_b_input_area
-                        }
-                    } else if center {
-                        if side == 0 {
-                            self.graph_a_center_area
-                        } else {
-                            self.graph_b_center_area
-                        }
-                    } else if side == 0 {
-                        self.graph_a_output_area
-                    } else {
-                        self.graph_b_output_area
-                    };
-                    let item = self.graph_item(search, side);
-                    let (caller_len, callee_len) = item
-                        .as_ref()
-                        .map(|item| {
-                            let (callers, callees) = self.call_relations(item.node, &item.function);
-                            (callers.len(), callees.len())
-                        })
-                        .unwrap_or((0, 0));
-                    let relation_index = row.saturating_sub(area.y.saturating_add(1)) as usize / 2;
-                    let selected = if input {
-                        relation_index.min(caller_len.saturating_sub(1))
-                    } else if center {
-                        caller_len
-                    } else {
-                        (caller_len + 1 + relation_index).min(caller_len + callee_len)
-                    };
-                    if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                        search.graph_focus = side;
-                        search.graph_side = side;
-                        if side == 0 {
-                            search.graph_selected = selected;
-                        } else {
-                            search.compare_graph_selected = selected;
-                        }
+                        self.graph_b_input_area
                     }
-                    return;
+                } else if center {
+                    if side == 0 {
+                        self.graph_a_center_area
+                    } else {
+                        self.graph_b_center_area
+                    }
+                } else if side == 0 {
+                    self.graph_a_output_area
+                } else {
+                    self.graph_b_output_area
+                };
+                let item = self.graph_item(search, side);
+                let (caller_len, callee_len) = item
+                    .as_ref()
+                    .map(|item| {
+                        let (callers, callees) = self.call_relations(item.node, &item.function);
+                        (callers.len(), callees.len())
+                    })
+                    .unwrap_or((0, 0));
+                let relation_index = row.saturating_sub(area.y.saturating_add(1)) as usize / 2;
+                let selected = if input {
+                    relation_index.min(caller_len.saturating_sub(1))
+                } else if center {
+                    caller_len
+                } else {
+                    (caller_len + 1 + relation_index).min(caller_len + callee_len)
+                };
+                if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
+                    search.graph_focus = side;
+                    search.graph_side = side;
+                    if side == 0 {
+                        search.graph_selected = selected;
+                    } else {
+                        search.compare_graph_selected = selected;
+                    }
                 }
-                if in_tree || in_data {
-                    let side = if in_tree {
-                        if tree_b {
-                            1
-                        } else {
-                            0
-                        }
-                    } else if data_b {
-                        1
+                return;
+            }
+            if in_tree || in_data {
+                let side = if in_tree {
+                    if tree_b { 1 } else { 0 }
+                } else if data_b {
+                    1
+                } else {
+                    0
+                };
+                let top = if in_tree {
+                    if tree_b {
+                        self.graph_tree_b_area.y
                     } else {
-                        0
-                    };
-                    let top = if in_tree {
-                        if tree_b {
-                            self.graph_tree_b_area.y
-                        } else {
-                            self.graph_tree_a_area.y
-                        }
-                    } else if data_b {
-                        self.graph_data_b_area.y
-                    } else {
-                        self.graph_data_a_area.y
-                    };
-                    let raw_selected = row.saturating_sub(top.saturating_add(1)) as usize;
-                    let selected = self
-                        .graph_item(search, side)
-                        .map(|item| {
-                            if in_tree {
-                                raw_selected
-                                    .min(self.call_tree_targets(&item).len().saturating_sub(1))
-                            } else {
-                                raw_selected.min(self.graph_locals(&item).len().saturating_sub(1))
-                            }
-                        })
-                        .unwrap_or_default();
-                    if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                        search.graph_focus = if in_tree { 2 } else { 3 };
-                        search.graph_side = side;
-                        search.outline_focus = in_tree;
+                        self.graph_tree_a_area.y
+                    }
+                } else if data_b {
+                    self.graph_data_b_area.y
+                } else {
+                    self.graph_data_a_area.y
+                };
+                let raw_selected = row.saturating_sub(top.saturating_add(1)) as usize;
+                let selected = self
+                    .graph_item(search, side)
+                    .map(|item| {
                         if in_tree {
-                            if search.graph_side == 1 {
-                                search.compare_outline_selected = selected;
-                            } else {
-                                search.outline_selected = selected;
-                            }
+                            raw_selected.min(self.call_tree_targets(&item).len().saturating_sub(1))
                         } else {
-                            if search.graph_side == 1 {
-                                search.compare_data_selected = selected;
-                            } else {
-                                search.data_selected = selected;
-                            }
+                            raw_selected.min(self.graph_locals(&item).len().saturating_sub(1))
+                        }
+                    })
+                    .unwrap_or_default();
+                if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
+                    search.graph_focus = if in_tree { 2 } else { 3 };
+                    search.graph_side = side;
+                    search.outline_focus = in_tree;
+                    if in_tree {
+                        if search.graph_side == 1 {
+                            search.compare_outline_selected = selected;
+                        } else {
+                            search.outline_selected = selected;
+                        }
+                    } else {
+                        if search.graph_side == 1 {
+                            search.compare_data_selected = selected;
+                        } else {
+                            search.data_selected = selected;
                         }
                     }
-                    return;
                 }
+                return;
             }
         }
         if self.action_cancel_area.contains(point) || self.action_exit_area.contains(point) {

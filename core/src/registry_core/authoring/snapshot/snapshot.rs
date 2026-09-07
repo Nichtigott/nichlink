@@ -58,7 +58,7 @@ impl FaceManifest {
         let registration_rule = parse_registration_rule_owned(value("registration_rule"))?;
         let admission = parse_admission_owned(value("admission"))?;
         let namespace = if value("namespace").is_empty() {
-            std::env::var("NICH_LINK_NAMESPACE").unwrap_or_else(|_| "nichlink.default".to_owned())
+            authoring_namespace()
         } else {
             value("namespace").to_owned()
         };

@@ -118,7 +118,7 @@ fn quote_dot(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{span_for, CallGraph};
+    use super::{CallGraph, span_for};
     use crate::{CallEvidence, CallRelation};
     use crate::{CallTrace, NodeId, SourceLocation};
 

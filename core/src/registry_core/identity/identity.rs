@@ -395,7 +395,7 @@ pub fn sha256_hex(input: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{root_node_id, sha256_hex, NodeId, ROOT_NODE_ID};
+    use super::{NodeId, ROOT_NODE_ID, root_node_id, sha256_hex};
 
     const ABC: NodeId = NodeId::from_bytes(b"abc");
     const MULTI_BLOCK: NodeId =

@@ -9,8 +9,9 @@ use crate::registry_core::authoring::parse::{
     parse_admission_expression, parse_flow_expression, rule_syntax_for_source,
     source_path_from_file,
 };
+use crate::registry_core::authoring::validation::authoring_namespace;
 use crate::{
-    parse_face as parse_face_syntax, root_node_id, NodeId, ParentSyntax, RuntimeCheckSpec,
+    NodeId, ParentSyntax, RuntimeCheckSpec, parse_face as parse_face_syntax, root_node_id,
 };
 
 use super::super::FaceManifest;
@@ -227,8 +228,7 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
     }
     match parent_syntax {
         Some(ParentSyntax::Root) => {
-            let namespace = std::env::var("NICH_LINK_NAMESPACE")
-                .unwrap_or_else(|_| "nichlink.default".to_owned());
+            let namespace = authoring_namespace();
             values.insert("namespace".to_owned(), namespace.clone());
             values.insert(
                 "parent_node".to_owned(),
@@ -240,13 +240,7 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
         Some(ParentSyntax::FromPath { source, kind }) => {
             values.insert(
                 "parent_node".to_owned(),
-                NodeId::from_namespaced_path(
-                    &std::env::var("NICH_LINK_NAMESPACE")
-                        .unwrap_or_else(|_| "nichlink.default".to_owned()),
-                    &source,
-                    &kind,
-                )
-                .to_string(),
+                NodeId::from_namespaced_path(&authoring_namespace(), &source, &kind).to_string(),
             );
             values.insert("parent_source".to_owned(), source);
             values.insert("parent_kind".to_owned(), kind);
@@ -260,13 +254,7 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             values.insert("parent_kind".to_owned(), kind.clone());
             values.insert(
                 "parent_node".to_owned(),
-                NodeId::from_namespaced_path(
-                    &std::env::var("NICH_LINK_NAMESPACE")
-                        .unwrap_or_else(|_| "nichlink.default".to_owned()),
-                    &source,
-                    &kind,
-                )
-                .to_string(),
+                NodeId::from_namespaced_path(&authoring_namespace(), &source, &kind).to_string(),
             );
         }
         None => return Err("generated face has an invalid parent path".to_owned()),

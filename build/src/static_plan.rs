@@ -9,7 +9,7 @@ use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_identity;
 use super::types::Node;
 use super::{
-    cached_parent_id, face_source_is_active, node_id, parsed_face, relative_display, SourceScope,
+    SourceScope, cached_parent_id, face_source_is_active, node_id, parsed_face, relative_display,
 };
 
 #[derive(Clone, Debug)]
@@ -124,34 +124,32 @@ fn collect_static_faces(
                 .as_ref()
                 .expect("an active registration face has a source file");
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/") {
-                if let Ok(source) = fs::read_to_string(file) {
-                    if let Some(face) = parsed_face(&source, &relative) {
-                        if face.field("plugin").is_none() {
-                            let id = node_id(src, node).expect("a parsed face has an identity");
-                            let parent = cached_parent_id(src, &face).or_else(|| {
-                                face.field("parent")
-                                    .is_none()
-                                    .then_some(registry_identity::package_root_node_id())
-                            });
-                            match parent {
-                                Some(parent) => records.push(StaticFaceRecord {
-                                    id,
-                                    parent,
-                                    owns_registry: face.boolean("needs_registry").unwrap_or(false),
-                                    module: source_module_path(&relative),
-                                    source: relative,
-                                }),
-                                None => errors.push(
-                                    BuildDiagnostic::new(
-                                        "static-plan",
-                                        "parent declaration cannot be resolved",
-                                    )
-                                    .at(relative, 0),
-                                ),
-                            }
-                        }
-                    }
+            if !relative.starts_with("registry_core/")
+                && let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+                && face.field("plugin").is_none()
+            {
+                let id = node_id(src, node).expect("a parsed face has an identity");
+                let parent = cached_parent_id(src, &face).or_else(|| {
+                    face.field("parent")
+                        .is_none()
+                        .then_some(registry_identity::package_root_node_id())
+                });
+                match parent {
+                    Some(parent) => records.push(StaticFaceRecord {
+                        id,
+                        parent,
+                        owns_registry: face.boolean("needs_registry").unwrap_or(false),
+                        module: source_module_path(&relative),
+                        source: relative,
+                    }),
+                    None => errors.push(
+                        BuildDiagnostic::new(
+                            "static-plan",
+                            "parent declaration cannot be resolved",
+                        )
+                        .at(relative, 0),
+                    ),
                 }
             }
         }

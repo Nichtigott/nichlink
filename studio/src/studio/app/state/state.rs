@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use super::support::package_root;
-use nichlink::{NodeId, Registry, FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS};
+use nichlink::{FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS, NodeId, Registry};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Focus {
@@ -174,12 +174,12 @@ pub(crate) fn source_path_for(file: &str) -> PathBuf {
     } else {
         package_root.join("src").join(relative)
     };
-    if path.is_dir() {
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            let attached = path.join(format!("{name}.rs"));
-            if attached.is_file() {
-                return attached;
-            }
+    if path.is_dir()
+        && let Some(name) = path.file_name().and_then(|name| name.to_str())
+    {
+        let attached = path.join(format!("{name}.rs"));
+        if attached.is_file() {
+            return attached;
         }
     }
     path

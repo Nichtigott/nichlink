@@ -213,11 +213,10 @@ impl CallTrace {
         for (index, local) in self.locals.iter().enumerate() {
             self.local_index.insert(local.id, index);
             self.local_name_index.entry(local.name.clone()).or_default().push(local.id);
-            if let Some(frame_id) = local.frame_id {
-                if let Some(function) = self.frame(frame_id).map(|frame| frame.call.function) {
+            if let Some(frame_id) = local.frame_id
+                && let Some(function) = self.frame(frame_id).map(|frame| frame.call.function) {
                     self.local_function_index.entry(function).or_default().push(local.id);
                 }
-            }
         }
         self.outgoing_index.clear();
         self.incoming_index.clear();

@@ -30,9 +30,11 @@ use super::parse::{
 };
 #[allow(unused_imports)]
 use super::validation::{
-    is_parent_component, normalize_kind_name, normalized_path, package_root, rule_path_for_source,
-    rust_string, rust_type_name, source_root, validate_kind_name, validate_name,
+    authoring_namespace, is_parent_component, normalize_kind_name, normalized_path, package_root,
+    rule_path_for_source, rust_string, rust_type_name, source_root, validate_kind_name,
+    validate_name,
 };
+pub use super::validation::AuthoringContext;
 use self::manifest::FaceManifest;
 
 pub use self::operations::{
@@ -101,8 +103,7 @@ impl FaceManifest {
         source: &str,
     ) -> Self {
         let mut values = BTreeMap::new();
-        let namespace = std::env::var("NICH_LINK_NAMESPACE")
-            .unwrap_or_else(|_| "nichlink.default".to_owned());
+        let namespace = authoring_namespace();
         for (key, value) in [
             ("namespace", namespace.as_str()),
             ("module", name),

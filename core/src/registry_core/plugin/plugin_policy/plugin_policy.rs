@@ -229,11 +229,13 @@ mod tests {
             PluginDecision::Rejected(PluginRejectReason::InvalidDigest)
         );
         let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        assert!(PluginManifest {
-            checksum: digest,
-            ..manifest
-        }
-        .verify_bytes(b"abc"));
+        assert!(
+            PluginManifest {
+                checksum: digest,
+                ..manifest
+            }
+            .verify_bytes(b"abc")
+        );
     }
 
     #[test]

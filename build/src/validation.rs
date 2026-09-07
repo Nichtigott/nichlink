@@ -7,9 +7,9 @@ use std::path::Path;
 
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registration_check;
-use super::registry_syntax::{parse_face, FaceSyntax, ParentSyntax};
+use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
 use super::types::Node;
-use super::{collect_active_ids, relative_display, SourceScope};
+use super::{SourceScope, collect_active_ids, relative_display};
 
 pub(crate) fn aggregate_requirements(
     src: &Path,
@@ -45,60 +45,57 @@ fn collect_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDia
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if let Ok(source) = fs::read_to_string(file) {
-                if let Some(face) = parsed_face(&source, &relative) {
-                    let declared = face
-                        .macro_name
-                        .strip_suffix("_object")
-                        .filter(|name| *name != "external")
-                        .filter(|name| {
-                            *name != "control" || source.contains("generated-by=NichLink")
-                        });
-                    if let Some(declared) = declared {
-                        let Some(parent) = face.parent() else {
-                            errors.push(
-                                BuildDiagnostic::new(
-                                    "parent-macro",
-                                    "parent-specific registration macro requires an explicit parent",
-                                )
-                                .at(relative.clone(), face.location.line)
-                                .field("parent")
-                                .expected(if declared == "root" {
-                                    "parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\"))"
-                                        .to_owned()
-                                } else {
-                                    format!("parent: crate::{declared}::NODE_ID")
-                                })
-                                .actual("missing"),
-                            );
-                            collect_parent_macro_errors(src, &node.children, errors);
-                            continue;
-                        };
-                        let expected = match parent {
-                            ParentSyntax::Root => "root".to_owned(),
-                            ParentSyntax::FromPath { source, .. } => Path::new(&source)
-                                .file_stem()
-                                .and_then(|stem| stem.to_str())
-                                .unwrap_or("root")
-                                .to_owned(),
-                            ParentSyntax::NodePath(module) => module
-                                .rsplit("::")
-                                .find(|segment| !segment.is_empty())
-                                .unwrap_or("root")
-                                .to_owned(),
-                        };
-                        if declared != expected {
-                            errors.push(
-                                BuildDiagnostic::new(
-                                    "parent-macro",
-                                    "registration macro does not match its parent registry",
-                                )
-                                .at(relative.clone(), face.location.line)
-                                .field("parent")
-                                .expected(format!("crate::{expected}_object!"))
-                                .actual(format!("crate::{}_object!", declared)),
-                            );
-                        }
+            if let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let declared = face
+                    .macro_name
+                    .strip_suffix("_object")
+                    .filter(|name| *name != "external")
+                    .filter(|name| *name != "control" || source.contains("generated-by=NichLink"));
+                if let Some(declared) = declared {
+                    let Some(parent) = face.parent() else {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "parent-specific registration macro requires an explicit parent",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(if declared == "root" {
+                                "parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\"))".to_owned()
+                            } else {
+                                format!("parent: crate::{declared}::NODE_ID")
+                            })
+                            .actual("missing"),
+                        );
+                        collect_parent_macro_errors(src, &node.children, errors);
+                        continue;
+                    };
+                    let expected = match parent {
+                        ParentSyntax::Root => "root".to_owned(),
+                        ParentSyntax::FromPath { source, .. } => Path::new(&source)
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .unwrap_or("root")
+                            .to_owned(),
+                        ParentSyntax::NodePath(module) => module
+                            .rsplit("::")
+                            .find(|segment| !segment.is_empty())
+                            .unwrap_or("root")
+                            .to_owned(),
+                    };
+                    if declared != expected {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "registration macro does not match its parent registry",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(format!("crate::{expected}_object!"))
+                            .actual(format!("crate::{}_object!", declared)),
+                        );
                     }
                 }
             }
@@ -116,31 +113,29 @@ fn collect_stable_names(
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/") {
-                if let Ok(source) = fs::read_to_string(file) {
-                    if let Some(face) = parsed_face(&source, &relative) {
-                        if let Some(stable_name) = face.string("stable_name") {
-                            let line = face
-                                .field_location("stable_name")
-                                .map_or(face.location.line, |location| location.line);
-                            if let Some((previous_file, previous_line)) = names.get(&stable_name) {
-                                errors.push(
-                                    BuildDiagnostic::new(
-                                        "stable-identity",
-                                        format!("duplicate stable_name `{stable_name}`"),
-                                    )
-                                    .at(relative, line)
-                                    .field("stable_name")
-                                    .expected(format!(
-                                        "unique; already declared at {previous_file}:{previous_line}"
-                                    ))
-                                    .actual(stable_name),
-                                );
-                            } else {
-                                names.insert(stable_name, (relative, line));
-                            }
-                        }
-                    }
+            if !relative.starts_with("registry_core/")
+                && let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+                && let Some(stable_name) = face.string("stable_name")
+            {
+                let line = face
+                    .field_location("stable_name")
+                    .map_or(face.location.line, |location| location.line);
+                if let Some((previous_file, previous_line)) = names.get(&stable_name) {
+                    errors.push(
+                        BuildDiagnostic::new(
+                            "stable-identity",
+                            format!("duplicate stable_name `{stable_name}`"),
+                        )
+                        .at(relative, line)
+                        .field("stable_name")
+                        .expected(format!(
+                            "unique; already declared at {previous_file}:{previous_line}"
+                        ))
+                        .actual(stable_name),
+                    );
+                } else {
+                    names.insert(stable_name, (relative, line));
                 }
             }
         }
@@ -175,7 +170,10 @@ mod tests {
             &panel,
             "crate::workspace_object! { kind: Panel, parent: crate::workspace::NODE_ID, }",
         );
-        write_face(&child, "crate::panel_object! { kind: Child, parent: crate::workspace::object::panel::NODE_ID, }");
+        write_face(
+            &child,
+            "crate::panel_object! { kind: Child, parent: crate::workspace::object::panel::NODE_ID, }",
+        );
         let nodes = vec![Node {
             name: "workspace".to_owned(),
             file: Some(workspace),
@@ -224,7 +222,9 @@ mod tests {
             children: Vec::new(),
         }];
         let rendered = aggregate_parent_macro_errors(&root, &nodes).render();
-        assert!(rendered.contains("parent-specific registration macro requires an explicit parent"));
+        assert!(
+            rendered.contains("parent-specific registration macro requires an explicit parent")
+        );
         assert!(rendered.contains("expected=parent: crate::panel::NODE_ID"));
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }

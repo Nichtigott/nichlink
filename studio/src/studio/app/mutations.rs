@@ -1,7 +1,7 @@
 //! App mutations and editor handoff.
 //! App 文件变更与编辑器交接。
 
-use super::support::package_root;
+use super::support::{package_root, select_project, with_authoring_context};
 use super::*;
 
 impl App {
@@ -62,10 +62,14 @@ impl App {
         };
         let prelude = format!(
             "pub use nichlink_core::{{application, external_object}};\n\npub mod registry_core {{\n    pub use nichlink_core::*;\n}}\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n{}",
-            if kind == "library" { "" } else { "\nfn main() { println!(\"registered faces: {}\", registrations().len()); }" }
+            if kind == "library" {
+                ""
+            } else {
+                "\nfn main() { println!(\"registered faces: {}\", registrations().len()); }"
+            }
         );
         let cargo = format!(
-            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[dependencies]\nnichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}\n\n[build-dependencies]\nnichlink-build = {{ path = \"{build}\" }}\n"
+            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nnichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}\n\n[build-dependencies]\nnichlink-build = {{ path = \"{build}\" }}\n"
         );
         let files = [
             ("Cargo.toml", cargo),
@@ -82,9 +86,7 @@ impl App {
         // Keep the new project visible immediately. The next reload reads its
         // folder-backed faces; no manual environment setup or restart needed.
         // 立即切换到新项目；下一次 reload 会读取它的文件注册面，无需手动设置环境变量。
-        std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
-        std::env::set_var("NICH_LINK_HOST_MANIFEST", root.join("Cargo.toml"));
-        std::env::set_var("NICH_LINK_NAMESPACE", package);
+        select_project(root.clone(), root.join("Cargo.toml"), package);
         self.reload();
         self.event = format!(
             "Created {kind} project at {}; Studio switched to it",
@@ -175,7 +177,7 @@ impl App {
             flow: &add.values[27],
             flow_provider: &add.values[28],
         };
-        match nichlink::add_module_from_face(&self.registry, &face) {
+        match with_authoring_context(|| nichlink::add_module_from_face(&self.registry, &face)) {
             Ok((change, info)) => {
                 if let Err(error) = self.registry.register_snapshot_batch([info]) {
                     self.event = format!("Add failed:\n{error}");
@@ -226,7 +228,7 @@ impl App {
             flow: &edit.values[27],
             flow_provider: &edit.values[28],
         };
-        match nichlink::edit_module_face(&self.registry, id, &patch) {
+        match with_authoring_context(|| nichlink::edit_module_face(&self.registry, id, &patch)) {
             Ok(change) => {
                 let message = change.message;
                 let changed_source = change.source;
@@ -340,16 +342,15 @@ impl App {
         let entry = plugin_root.join(entry_name);
         let anchor = format!("\n#[allow(unused_imports)]\nuse {crate_name} as _;\n");
         let entry_text = std::fs::read_to_string(&entry).unwrap_or_default();
-        if !entry_text.contains(&format!("use {crate_name} as _;")) {
-            if let Err(error) = std::fs::OpenOptions::new()
+        if !entry_text.contains(&format!("use {crate_name} as _;"))
+            && let Err(error) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&entry)
                 .and_then(|mut file| std::io::Write::write_all(&mut file, anchor.as_bytes()))
-            {
-                self.event = format!("Plugin failed: cannot update {entry_name}: {error}");
-                return;
-            }
+        {
+            self.event = format!("Plugin failed: cannot update {entry_name}: {error}");
+            return;
         }
         let line = format!("{record}\n");
         if let Err(error) = std::fs::OpenOptions::new()

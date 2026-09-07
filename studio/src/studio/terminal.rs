@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 
 use crossterm::event::DisableMouseCapture;
 use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
+use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
 
 /// Open the editor in a separate terminal window and leave Studio untouched.
 /// 在独立终端窗口打开编辑器，Studio 自身不离开当前 TUI。

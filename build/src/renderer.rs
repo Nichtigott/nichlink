@@ -7,10 +7,9 @@ use std::fs;
 use std::path::Path;
 
 use super::diagnostics::BuildDiagnostics;
-use super::registry_identity;
 use super::static_plan::StaticFaceRecord;
 use super::types::Node;
-use super::{module_feature, node_id, relative_display, source_is_active, SourceScope};
+use super::{SourceScope, module_feature, node_id, relative_display, source_is_active};
 
 pub(crate) fn render_lib(
     src: &Path,
@@ -184,24 +183,26 @@ fn render_node(
     )
     .unwrap();
     writeln!(output, "{indent}pub mod {} {{", node.name).unwrap();
-    if include_source {
-        if let Some(file) = &node.file {
-            let inner = "    ".repeat(depth + 1);
-            let relative = relative_display(src, file);
-            writeln!(output, "{inner}include!(concat!(env!(\"OUT_DIR\"), \"/registration_sources/{relative}\"));").unwrap();
-            writeln!(output, "{inner}#[rustfmt::skip]").unwrap();
-            writeln!(
-                output,
-                "{inner}pub const __REGISTRATION_SOURCE: &str = {relative:?};"
-            )
-            .unwrap();
-            writeln!(
-                output,
-                "{inner}pub const __REGISTRATION_MODULE_NAME: &str = {:?};",
-                node.name
-            )
-            .unwrap();
-        }
+    if include_source && let Some(file) = &node.file {
+        let inner = "    ".repeat(depth + 1);
+        let relative = relative_display(src, file);
+        writeln!(
+            output,
+            "{inner}include!(concat!(env!(\"OUT_DIR\"), \"/registration_sources/{relative}\"));"
+        )
+        .unwrap();
+        writeln!(output, "{inner}#[rustfmt::skip]").unwrap();
+        writeln!(
+            output,
+            "{inner}pub const __REGISTRATION_SOURCE: &str = {relative:?};"
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "{inner}pub const __REGISTRATION_MODULE_NAME: &str = {:?};",
+            node.name
+        )
+        .unwrap();
     }
     for child in &node.children {
         render_node(

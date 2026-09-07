@@ -3,9 +3,9 @@
 use std::time::Instant;
 
 use nichlink::{
-    root_node_id, FrameworkId, NodeId, OwnedAdmission, OwnedFlowContract, OwnedLocalizedText,
+    FrameworkId, NodeId, OwnedAdmission, OwnedFlowContract, OwnedLocalizedText,
     OwnedObjectContract, OwnedRegistrationRule, OwnedSourceLocation, RegistrationSnapshot,
-    Registry,
+    Registry, root_node_id,
 };
 
 fn snapshot(namespace: &str, index: usize, parent: NodeId) -> RegistrationSnapshot {

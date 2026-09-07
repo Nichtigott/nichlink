@@ -237,6 +237,6 @@ cargo package -p nichlink-mcp --allow-dirty --offline
 
 `tools/nichlink-release-audit` 会在 `target/nichlink-audit/release/` 输出产物大小、符号列表和节点/函数清单。`debug`、`studio`、`plugin-host` 需要先发布可解析的 `nichlink-core`，再按依赖顺序打包。
 
-MSRV 为 Rust 1.82；CI 还会运行当前 stable。技术路线见 `ROADMAP.md`；迁移和威胁模型属于可选补充，不影响核心 API 的快速上手。
+MSRV 为 Rust 1.96；CI 会同时运行这个固定版本和当前 stable，分别验证兼容下限与最新 Rust。技术路线见 `ROADMAP.md`；迁移和威胁模型属于可选补充，不影响核心 API 的快速上手。
 
 英文文档：[`README.md`](README.md) 和 [`ROADMAP.md`](ROADMAP.md)。补充文档各自提供语言链接。

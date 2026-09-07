@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_identity::NodeId;
-use super::registry_syntax::{parse_face, FaceSyntax, ParentSyntax};
+use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
 
 // Keep the requirement cache in lockstep with build.rs identity units.
 // 让需求缓存与 build.rs 的身份单元保持同一版本。

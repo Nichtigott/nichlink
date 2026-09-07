@@ -178,11 +178,7 @@ fn render_item(output: &mut String, diagnostic: &BuildDiagnostic) {
 }
 
 fn empty(value: &str) -> &str {
-    if value.is_empty() {
-        "<unknown>"
-    } else {
-        value
-    }
+    if value.is_empty() { "<unknown>" } else { value }
 }
 
 #[cfg(test)]

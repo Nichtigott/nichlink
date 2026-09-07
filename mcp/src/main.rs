@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -119,7 +119,7 @@ fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
             return success(
                 id,
                 json!({ "content": [{"type":"text","text":error}], "isError": true }),
-            )
+            );
         }
     };
     let result = match name {
@@ -533,8 +533,10 @@ mod tests {
     fn tools_list_is_mcp_shaped() {
         let listed = tools();
         assert!(listed.iter().any(|tool| tool["name"] == "nichlink.search"));
-        assert!(listed
-            .iter()
-            .all(|tool| tool["inputSchema"]["type"] == "object"));
+        assert!(
+            listed
+                .iter()
+                .all(|tool| tool["inputSchema"]["type"] == "object")
+        );
     }
 }

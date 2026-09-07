@@ -232,13 +232,13 @@ impl RegistrationRule {
                 info.kind
             ));
         }
-        if let Some(expected) = self.required_preset {
-            if info.preset != expected {
-                failures.push(format!(
-                    "preset `{}` is required, received `{}`",
-                    expected, info.preset
-                ));
-            }
+        if let Some(expected) = self.required_preset
+            && info.preset != expected
+        {
+            failures.push(format!(
+                "preset `{}` is required, received `{}`",
+                expected, info.preset
+            ));
         }
         for required in self.required_parts {
             if !info.contract.provided_parts.contains(required) {
@@ -531,13 +531,13 @@ impl OwnedRegistrationRule {
                 snapshot.kind
             ));
         }
-        if let Some(expected) = &self.required_preset {
-            if snapshot.preset != *expected {
-                failures.push(format!(
-                    "preset `{expected}` is required, received `{}`",
-                    snapshot.preset
-                ));
-            }
+        if let Some(expected) = &self.required_preset
+            && snapshot.preset != *expected
+        {
+            failures.push(format!(
+                "preset `{expected}` is required, received `{}`",
+                snapshot.preset
+            ));
         }
         for required in &self.required_parts {
             if !snapshot

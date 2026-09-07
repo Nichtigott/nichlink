@@ -81,10 +81,10 @@ pub const fn assert_static_registration(rule: RegistrationRule, info: Registrati
     {
         panic!("static registration failed: kind rejected by parent rule; see declaration source");
     }
-    if let Some(required) = rule.required_preset {
-        if !str_eq(required, info.preset) {
-            panic!("static registration failed: wrong preset; see declaration source");
-        }
+    if let Some(required) = rule.required_preset
+        && !str_eq(required, info.preset)
+    {
+        panic!("static registration failed: wrong preset; see declaration source");
     }
     if !contains_all(info.contract.provided_parts, rule.required_parts) {
         panic!("static registration failed: missing structural part; see declaration source");

@@ -528,7 +528,7 @@ fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
 
 #[cfg(test)]
 mod tests {
-    use super::{application_entries, parse_face, source_references, ParentSyntax};
+    use super::{ParentSyntax, application_entries, parse_face, source_references};
 
     #[test]
     fn parses_multiline_registration_tokens_and_locations() {
@@ -600,9 +600,11 @@ fn run() {
 }
 "#;
         let references = source_references(source).unwrap();
-        assert!(references
-            .paths
-            .contains("crate::control::object::button::dispatch_action"));
+        assert!(
+            references
+                .paths
+                .contains("crate::control::object::button::dispatch_action")
+        );
         assert!(!references.paths.iter().any(|path| path.contains("unused")));
         assert!(!references.paths.iter().any(|path| path.contains("hidden")));
         assert!(!references.conservative);

@@ -129,13 +129,13 @@ impl CallTrace {
             .entry(local.name.clone())
             .or_default()
             .push(id.0);
-        if let Some(frame_id) = local.frame_id {
-            if let Some(function) = self.frame(frame_id).map(|frame| frame.call.function) {
-                self.local_function_index
-                    .entry(function)
-                    .or_default()
-                    .push(id.0);
-            }
+        if let Some(frame_id) = local.frame_id
+            && let Some(function) = self.frame(frame_id).map(|frame| frame.call.function)
+        {
+            self.local_function_index
+                .entry(function)
+                .or_default()
+                .push(id.0);
         }
         id
     }

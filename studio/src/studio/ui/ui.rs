@@ -1,13 +1,13 @@
 //! Ratatui rendering for Studio.
 //! Studio 的 Ratatui 渲染。
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap,
 };
-use ratatui::Frame;
 
 mod graph;
 use graph::draw_search_graph;
@@ -18,8 +18,8 @@ use search::{draw_search, format_admission, format_registration_rule};
 mod search_detail;
 
 use super::app::{
-    app_function_source_range, face_field_indices, source_path_for, AddState, App, CallRef, Focus,
-    Overlay, SearchState,
+    AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
+    face_field_indices, source_path_for,
 };
 use nichlink::FACE_FIELD_NAMES;
 
@@ -210,24 +210,24 @@ fn draw_details(frame: &mut Frame<'_>, area: Rect, app: &App) {
         .enumerate()
         .flat_map(|(index, (name, value))| {
             let mut field_lines = detail_field(name, value, inner_width);
-            if index == selected {
-                if let Some(first) = field_lines.first_mut() {
-                    first.spans.insert(
-                        0,
-                        Span::styled(
-                            "› ",
-                            Style::default()
-                                .fg(if app.focus == Focus::Details {
-                                    Color::Black
-                                } else {
-                                    CYAN
-                                })
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    );
-                    if app.focus == Focus::Details {
-                        first.style = Style::default().bg(CYAN).fg(Color::Black);
-                    }
+            if index == selected
+                && let Some(first) = field_lines.first_mut()
+            {
+                first.spans.insert(
+                    0,
+                    Span::styled(
+                        "› ",
+                        Style::default()
+                            .fg(if app.focus == Focus::Details {
+                                Color::Black
+                            } else {
+                                CYAN
+                            })
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                );
+                if app.focus == Focus::Details {
+                    first.style = Style::default().bg(CYAN).fg(Color::Black);
                 }
             }
             field_lines
@@ -426,7 +426,7 @@ fn centered(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn rendered_text(width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

@@ -212,10 +212,10 @@ impl CallTrace {
         let Some(frame) = self.frame(frame_id) else {
             return true;
         };
-        if let Some(parent) = frame.parent {
-            if !self.visit_path_inner(parent, visit) {
-                return false;
-            }
+        if let Some(parent) = frame.parent
+            && !self.visit_path_inner(parent, visit)
+        {
+            return false;
         }
         visit(&frame.call)
     }

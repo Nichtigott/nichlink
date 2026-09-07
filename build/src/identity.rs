@@ -407,7 +407,7 @@ pub fn sha256_hex(input: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{package_namespace, package_node_id, sha256_hex, NodeId};
+    use super::{NodeId, package_namespace, package_node_id, sha256_hex};
 
     const ABC: NodeId = NodeId::from_bytes(b"abc");
     const MULTI_BLOCK: NodeId =

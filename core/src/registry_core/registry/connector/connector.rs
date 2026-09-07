@@ -239,11 +239,10 @@ impl Registry {
                 }
                 if let Some(provider) =
                     root.provider_for_capability(entry.info.parent, &requirement.capability)
-                {
-                    if let Some(provider_path) =
+                    && let Some(provider_path) =
                         Self::external_provider_rejected(root, entry.info.parent, provider)
-                    {
-                        failures.push(RegistryError::new(
+                {
+                    failures.push(RegistryError::new(
                             entry.info.id,
                             path.clone(),
                             entry.info.source.clone(),
@@ -252,8 +251,7 @@ impl Registry {
                                 requirement.capability, provider.kind, requirement.provider,
                             ),
                         ));
-                        continue;
-                    }
+                    continue;
                 }
                 let detail = root
                     .ancestor_capability(entry.info.parent, &requirement.capability)

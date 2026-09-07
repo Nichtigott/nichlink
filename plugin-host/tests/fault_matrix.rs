@@ -1,7 +1,7 @@
 use nichlink::{
-    sha256_hex, Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract,
-    PluginArtifact, PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
-    RegistrationRule, RuntimeCheckSpec, SourceLocation,
+    Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
+    PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
+    RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
 };
 
 fn artifact(bytes: Vec<u8>, mode: PluginMode) -> nichlink::VerifiedPluginArtifact {

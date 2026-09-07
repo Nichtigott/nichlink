@@ -22,8 +22,8 @@ mod registry_identity;
 #[path = "syntax.rs"]
 mod registry_syntax;
 
-use registry_identity::{NodeId, IDENTITY_SCHEMA};
-use registry_syntax::{application_entries, source_references, FaceSyntax, ParentSyntax};
+use registry_identity::{IDENTITY_SCHEMA, NodeId};
+use registry_syntax::{FaceSyntax, ParentSyntax, application_entries, source_references};
 
 // Bump this whenever the identity input or generated-plan format changes.
 // 身份输入或生成计划格式变化时必须递增，避免旧缓存混入新构建。
@@ -192,10 +192,10 @@ impl SourceScope {
                 for face in faces.iter().filter(|face| {
                     deepest == Some(face.module.len()) && path_mentions_module(path, &face.module)
                 }) {
-                    if selected.insert(face.id) {
-                        if let Ok(next) = fs::read_to_string(&face.source) {
-                            queue.push(next);
-                        }
+                    if selected.insert(face.id)
+                        && let Ok(next) = fs::read_to_string(&face.source)
+                    {
+                        queue.push(next);
                     }
                 }
             }
@@ -451,10 +451,10 @@ fn collect_active_ids(
                     .as_ref()
                     .is_some_and(|roots| roots.contains(&id))
             });
-        if face_source_is_active(src, node, scope, selected_ancestor) {
-            if let Some(id) = node_id(src, node) {
-                active.insert(id);
-            }
+        if face_source_is_active(src, node, scope, selected_ancestor)
+            && let Some(id) = node_id(src, node)
+        {
+            active.insert(id);
         }
         collect_active_ids(src, &node.children, scope, selected_here, active);
     }
@@ -596,23 +596,22 @@ fn cached_parent_id(src: &Path, face: &FaceSyntax) -> Option<NodeId> {
             let mut relative_path = module.split("::").collect::<PathBuf>();
             let name = relative_path.file_name()?.to_owned();
             relative_path.push(format!("{}.rs", name.to_string_lossy()));
-            let parent_source = fs::read_to_string(src.join(&relative_path)).ok()?;
-            let parent = parsed_face(&parent_source, &relative_path.to_string_lossy())?;
+            let parent_path = src.join(&relative_path);
+            let relative = relative_display(src, &parent_path);
+            let parent_source = fs::read_to_string(parent_path).ok()?;
+            let parent = parsed_face(&parent_source, &relative)?;
             let kind = parent.path("kind")?;
-            Some(registry_identity::package_node_id(
-                &relative_path.to_string_lossy(),
-                &kind,
-            ))
+            Some(registry_identity::package_node_id(&relative, &kind))
         }
     }
 }
 
 fn collect_discovery_rows(src: &Path, nodes: &[Node], rows: &mut Vec<(String, NodeId)>) {
     for node in nodes {
-        if let Some(file) = &node.file {
-            if let Some(id) = node_id(src, node) {
-                rows.push((relative_display(src, file), id));
-            }
+        if let Some(file) = &node.file
+            && let Some(id) = node_id(src, node)
+        {
+            rows.push((relative_display(src, file), id));
         }
         collect_discovery_rows(src, &node.children, rows);
     }

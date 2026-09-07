@@ -263,8 +263,8 @@ impl Registry {
 mod tests {
     use super::*;
     use crate::{
-        root_node_id, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
-        OwnedSourceLocation,
+        OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
+        root_node_id,
     };
 
     fn snapshot(namespace: &str, kind: &str) -> RegistrationSnapshot {

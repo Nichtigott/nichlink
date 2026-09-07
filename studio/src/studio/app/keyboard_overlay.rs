@@ -6,15 +6,15 @@ use super::*;
 impl App {
     pub(super) fn handle_overlay_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Esc {
-            if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                if search.graph_mode {
-                    search.graph_mode = false;
-                    search.center = None;
-                    search.center_line = None;
-                    search.graph_selected = 0;
-                    self.page = StudioPage::Search;
-                    return;
-                }
+            if let Some(Overlay::Search(search)) = self.overlay.as_mut()
+                && search.graph_mode
+            {
+                search.graph_mode = false;
+                search.center = None;
+                search.center_line = None;
+                search.graph_selected = 0;
+                self.page = StudioPage::Search;
+                return;
             }
             self.overlay = None;
             self.page = StudioPage::Inspect;

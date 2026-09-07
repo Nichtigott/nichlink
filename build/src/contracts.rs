@@ -7,7 +7,7 @@ use std::path::Path;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_syntax::{FaceSyntax, ParentSyntax};
 use super::types::Node;
-use super::{node_id, parsed_face, relative_display, SourceScope};
+use super::{SourceScope, node_id, parsed_face, relative_display};
 
 pub(crate) fn aggregate_contract_errors(
     src: &Path,
@@ -43,13 +43,12 @@ fn collect_contract_errors(
             });
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/") {
-                if let Ok(source) = fs::read_to_string(file) {
-                    if let Some(face) = parsed_face(&source, &relative) {
-                        check_output(&face, &relative, src, node, errors);
-                        check_parent_rule(&face, &relative, src, node, errors);
-                    }
-                }
+            if !relative.starts_with("registry_core/")
+                && let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                check_output(&face, &relative, src, node, errors);
+                check_parent_rule(&face, &relative, src, node, errors);
             }
         }
         collect_contract_errors(

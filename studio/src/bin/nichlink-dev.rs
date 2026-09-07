@@ -198,7 +198,7 @@ fn relevant_event(event: &notify::Event) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use notify::{event::CreateKind, Event, EventKind};
+    use notify::{Event, EventKind, event::CreateKind};
 
     use super::relevant_event;
 

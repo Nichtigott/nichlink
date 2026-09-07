@@ -71,7 +71,7 @@ fn hex(value: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use ed25519_dalek::{Signer, SigningKey};
-    use nichlink::{sha256_hex, FrameworkId, PluginMode, PluginSource};
+    use nichlink::{FrameworkId, PluginMode, PluginSource, sha256_hex};
 
     use super::*;
 

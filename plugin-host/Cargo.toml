@@ -26,6 +26,4 @@ tempfile = { version = "3.22", optional = true }
 wasmi = { version = "0.42.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
-# Keep the dev-only WAT toolchain compatible with the workspace MSRV. Newer
-# releases use Edition 2024 and cannot even be parsed by Cargo 1.82.
-wat = "=1.227.1"
+wat = "1"

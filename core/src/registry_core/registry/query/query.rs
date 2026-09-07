@@ -7,8 +7,8 @@ use crate::registry_core::identity::StableFaceId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use super::pages_impl::RegisteredEntry;
 use super::Registry;
+use super::pages_impl::RegisteredEntry;
 
 impl Registry {
     pub(super) fn registry_mut(&mut self, wanted: NodeId) -> Option<&mut Registry> {
@@ -104,10 +104,10 @@ impl Registry {
             if entry.info.id == wanted {
                 return true;
             }
-            if let Some(child) = entry.child.as_ref() {
-                if child.collect_node_path(wanted, path) {
-                    return true;
-                }
+            if let Some(child) = entry.child.as_ref()
+                && child.collect_node_path(wanted, path)
+            {
+                return true;
             }
             path.pop();
         }

@@ -7,13 +7,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
 
-use super::support::{host_manifest, package_root};
+use super::support::{host_manifest, package_root, select_project};
 use super::{
-    advance_graph_focus, app_function_source_range, body_calls, function_bodies, function_symbols,
-    visible_search_rows, AddState, App, Overlay, SearchState, StudioPage,
+    AddState, App, Overlay, SearchState, StudioPage, advance_graph_focus,
+    app_function_source_range, body_calls, function_bodies, function_symbols, visible_search_rows,
 };
-
-static PROJECT_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[test]
 fn workspace_page_shortcuts_route_to_the_expected_mode() {
@@ -118,9 +116,6 @@ fn add_form_starts_with_editable_bilingual_summary() {
 
 #[test]
 fn standalone_studio_resolves_one_project_root_and_manifest() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let root = package_root();
     assert!(root.is_dir());
     assert_eq!(
@@ -131,12 +126,6 @@ fn standalone_studio_resolves_one_project_root_and_manifest() {
 
 #[test]
 fn new_project_and_explicit_root_face_compile() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_manifest = std::env::var_os("NICH_LINK_HOST_MANIFEST");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -170,9 +159,10 @@ fn new_project_and_explicit_root_face_compile() {
     owner.values[3] = "workspace".to_owned();
     owner.values[8] = "Workspace".to_owned();
     app.submit_add(&owner);
-    assert!(root
-        .join("src/workspace/registry_rule/registry_rule.rs")
-        .is_file());
+    assert!(
+        root.join("src/workspace/registry_rule/registry_rule.rs")
+            .is_file()
+    );
     let workspace =
         std::fs::read_to_string(root.join("src/workspace/workspace.rs")).expect("workspace face");
     assert!(workspace.starts_with("// generated-by=NichLink"));
@@ -193,9 +183,10 @@ fn new_project_and_explicit_root_face_compile() {
     child.values[3] = "panel".to_owned();
     child.values[8] = "Panel".to_owned();
     app.submit_add(&child);
-    assert!(root
-        .join("src/workspace/object/panel/registry_rule/registry_rule.rs")
-        .is_file());
+    assert!(
+        root.join("src/workspace/object/panel/registry_rule/registry_rule.rs")
+            .is_file()
+    );
     let panel = std::fs::read_to_string(root.join("src/workspace/object/panel/panel.rs"))
         .expect("panel face");
     assert!(panel.contains("crate::workspace_object!"));
@@ -245,7 +236,7 @@ fn new_project_and_explicit_root_face_compile() {
     assert!(slider.contains("parent: crate::control::NODE_ID"));
 
     let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
-    assert!(manifest.contains("edition = \"2021\""));
+    assert!(manifest.contains("edition = \"2024\""));
 
     let check = std::process::Command::new("cargo")
         .args(["check", "--offline"])
@@ -259,18 +250,6 @@ fn new_project_and_explicit_root_face_compile() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_manifest {
-        Some(value) => std::env::set_var("NICH_LINK_HOST_MANIFEST", value),
-        None => std::env::remove_var("NICH_LINK_HOST_MANIFEST"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
@@ -286,12 +265,6 @@ fn new_project_wizard_toggles_library_kind() {
 
 #[test]
 fn new_project_wizard_creates_library_entrypoint() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_manifest = std::env::var_os("NICH_LINK_HOST_MANIFEST");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -314,28 +287,10 @@ fn new_project_wizard_creates_library_entrypoint() {
     assert!(!root.join("src/control").exists());
 
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_manifest {
-        Some(value) => std::env::set_var("NICH_LINK_HOST_MANIFEST", value),
-        None => std::env::remove_var("NICH_LINK_HOST_MANIFEST"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
 fn new_project_starts_with_an_empty_registration_tree() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_manifest = std::env::var_os("NICH_LINK_HOST_MANIFEST");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -352,28 +307,10 @@ fn new_project_starts_with_an_empty_registration_tree() {
     assert!(app.registry.depth_first().is_empty());
 
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_manifest {
-        Some(value) => std::env::set_var("NICH_LINK_HOST_MANIFEST", value),
-        None => std::env::remove_var("NICH_LINK_HOST_MANIFEST"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
 fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_manifest = std::env::var_os("NICH_LINK_HOST_MANIFEST");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -392,9 +329,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
         "use crate::RegistrationRule;\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::ANY;\n",
     )
     .expect("write legacy rule");
-    std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
-    std::env::set_var("NICH_LINK_HOST_MANIFEST", root.join("Cargo.toml"));
-    std::env::set_var("NICH_LINK_NAMESPACE", "legacy-app");
+    select_project(root.clone(), root.join("Cargo.toml"), "legacy-app");
 
     let mut app = App::load();
     app.selected = app.registry.depth_first()[0].id;
@@ -420,27 +355,10 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_manifest {
-        Some(value) => std::env::set_var("NICH_LINK_HOST_MANIFEST", value),
-        None => std::env::remove_var("NICH_LINK_HOST_MANIFEST"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
 fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -453,39 +371,24 @@ fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
         "// generated-by=NichLink\npub struct Test;\ncrate::control_object! { kind: Test, }\n",
     )
     .expect("write old generated face");
-    std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
-    std::env::set_var("NICH_LINK_NAMESPACE", "old-face-test");
+    select_project(root.clone(), root.join("Cargo.toml"), "old-face-test");
 
     let app = App::load();
 
     assert!(app.reload_error.is_none(), "{}", app.event);
     assert_eq!(app.registry.depth_first().len(), 1);
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
 fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
-    let _guard = PROJECT_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let original_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT");
-    let original_namespace = std::env::var_os("NICH_LINK_NAMESPACE");
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
     let root = std::env::temp_dir().join(format!("nichlink-studio-rename-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
-    std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root);
-    std::env::set_var("NICH_LINK_NAMESPACE", "rename-test");
+    select_project(root.clone(), root.join("Cargo.toml"), "rename-test");
 
     let mut app = App::load();
     let root_id = app.registry.id();
@@ -549,15 +452,20 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(new_source.is_file());
     let new_child = root.join("src/panel/object/child/child.rs");
     assert!(new_child.is_file());
-    assert!(root
-        .join("src/panel/object/child/object/leaf/leaf.rs")
-        .is_file());
-    assert!(std::fs::read_to_string(&new_child)
-        .expect("renamed child source")
-        .contains("crate::panel::NODE_ID"));
-    assert!(std::fs::read_to_string(&new_child)
-        .expect("renamed child source")
-        .contains("crate::panel_object!"));
+    assert!(
+        root.join("src/panel/object/child/object/leaf/leaf.rs")
+            .is_file()
+    );
+    assert!(
+        std::fs::read_to_string(&new_child)
+            .expect("renamed child source")
+            .contains("crate::panel::NODE_ID")
+    );
+    assert!(
+        std::fs::read_to_string(&new_child)
+            .expect("renamed child source")
+            .contains("crate::panel_object!")
+    );
     assert_eq!(
         app.selected_info().map(|info| info.source.file.as_str()),
         Some("panel/panel.rs")
@@ -599,19 +507,13 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .find(|info| info.registry_name == "child")
         .map(|info| info.parent);
     assert_eq!(child_parent, Some(panel_id));
-    assert!(std::fs::read_to_string(&new_source)
-        .expect("renamed face source")
-        .contains("kind: Panel"));
+    assert!(
+        std::fs::read_to_string(&new_source)
+            .expect("renamed face source")
+            .contains("kind: Panel")
+    );
 
     let _ = std::fs::remove_dir_all(&root);
-    match original_root {
-        Some(value) => std::env::set_var("NICH_LINK_PACKAGE_ROOT", value),
-        None => std::env::remove_var("NICH_LINK_PACKAGE_ROOT"),
-    }
-    match original_namespace {
-        Some(value) => std::env::set_var("NICH_LINK_NAMESPACE", value),
-        None => std::env::remove_var("NICH_LINK_NAMESPACE"),
-    }
 }
 
 #[test]
@@ -710,20 +612,26 @@ fn call_relations_report_real_cross_file_function_calls() {
         })
         .expect("NodeEditor face");
     let (callers, callees) = app.call_relations(node_editor.id, "preview_canvas_width");
-    assert!(callers
-        .iter()
-        .any(|item| item.function == "preview_canvas_width_traced"));
-    assert!(callees
-        .iter()
-        .any(|item| item.function == "clamp_canvas_width"));
+    assert!(
+        callers
+            .iter()
+            .any(|item| item.function == "preview_canvas_width_traced")
+    );
+    assert!(
+        callees
+            .iter()
+            .any(|item| item.function == "clamp_canvas_width")
+    );
     let canvas = callees
         .iter()
         .find(|item| item.function == "clamp_canvas_width")
         .expect("Canvas call");
     let (reverse_callers, _) = app.call_relations(canvas.node, "clamp_canvas_width");
-    assert!(reverse_callers
-        .iter()
-        .any(|item| item.function == "preview_canvas_width"));
+    assert!(
+        reverse_callers
+            .iter()
+            .any(|item| item.function == "preview_canvas_width")
+    );
 }
 
 #[test]
@@ -897,10 +805,12 @@ fn call_tree_targets_keep_rows_navigable() {
             .map(|item| item.function.as_str()),
         Some("preview_canvas_width")
     );
-    assert!(targets
-        .iter()
-        .flatten()
-        .any(|item| item.function == "clamp_canvas_width"));
+    assert!(
+        targets
+            .iter()
+            .flatten()
+            .any(|item| item.function == "clamp_canvas_width")
+    );
 }
 
 #[test]
@@ -929,9 +839,10 @@ fn searching_a_function_name_finds_the_source_symbol() {
     let app = App::load();
     let rows = app.search_rows("accept_canvas", &BTreeSet::new());
     assert!(rows.iter().any(|row| row.function == "accept_canvas"));
-    assert!(rows
-        .iter()
-        .any(|row| row.signature.contains("accept_canvas")));
+    assert!(
+        rows.iter()
+            .any(|row| row.signature.contains("accept_canvas"))
+    );
 }
 
 #[test]

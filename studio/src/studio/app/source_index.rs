@@ -1,7 +1,7 @@
 //! Source indexing and registry snapshot helpers for Studio.
 //! Studio 的源码索引与注册快照辅助逻辑。
 
-use super::support::package_root;
+use super::support::{package_namespace, package_root, with_authoring_context};
 use super::*;
 
 pub(crate) fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize)> {
@@ -35,8 +35,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     // Studio owns an empty, namespace-isolated root and lets the authoring UI
     // add faces. A host can choose a stable namespace per library through the
     // environment when several libraries share one process.
-    let namespace =
-        std::env::var("NICH_LINK_NAMESPACE").unwrap_or_else(|_| "nichlink.default".to_owned());
+    let namespace = package_namespace();
     let mut registry =
         Registry::root_for_namespace(nichlink::FrameworkId::new("nichlink.studio"), namespace);
     // Scan only the host package's `src/` tree. When Studio is launched from
@@ -48,7 +47,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     if !source_root.is_dir() {
         return Ok(registry);
     }
-    let snapshots = nichlink::generated_snapshots_from(&source_root)
+    let snapshots = with_authoring_context(|| nichlink::generated_snapshots_from(&source_root))
         .map_err(|error| format!("cannot load generated registration faces: {error}"))?;
     registry
         .register_snapshot_batch(snapshots)

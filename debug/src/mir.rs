@@ -126,7 +126,7 @@ impl MirGraph {
                     return Err(MirParseError {
                         line,
                         message: format!("unsupported record kind `{other}`"),
-                    })
+                    });
                 }
             }
         }

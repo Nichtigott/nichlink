@@ -4,12 +4,12 @@
 use std::path::{Path, PathBuf};
 
 use super::super::FaceManifest;
+use crate::registry_core::authoring::GENERATED_MARKER;
 use crate::registry_core::authoring::parse::*;
 use crate::registry_core::authoring::validation::{
     legacy_rule_path_for_source, normalized_path, rule_path_for_source, rust_string, source_root,
     validate_kind_name, validate_name,
 };
-use crate::registry_core::authoring::GENERATED_MARKER;
 use crate::{OwnedRegistrationRule, RuntimeCheckSpec};
 
 impl FaceManifest {
@@ -18,12 +18,12 @@ impl FaceManifest {
         let directory = source
             .parent()
             .ok_or_else(|| "generated face has no module directory".to_owned())?;
-        if let Some(declared) = self.values.get("registry_rule_path") {
-            if !declared.trim().is_empty() {
-                let path = Path::new(declared);
-                let relative = path.strip_prefix("src/").unwrap_or(path);
-                return Ok(source_root().join(relative));
-            }
+        if let Some(declared) = self.values.get("registry_rule_path")
+            && !declared.trim().is_empty()
+        {
+            let path = Path::new(declared);
+            let relative = path.strip_prefix("src/").unwrap_or(path);
+            return Ok(source_root().join(relative));
         }
         let canonical = source_root()
             .join(directory)
@@ -44,10 +44,10 @@ impl FaceManifest {
 
     #[allow(dead_code)]
     pub(crate) fn rule_source_path_string(&self) -> Result<String, String> {
-        if let Some(declared) = self.values.get("registry_rule_path") {
-            if !declared.trim().is_empty() {
-                return Ok(declared.clone());
-            }
+        if let Some(declared) = self.values.get("registry_rule_path")
+            && !declared.trim().is_empty()
+        {
+            return Ok(declared.clone());
         }
         Ok(rule_path_for_source(
             self.values.get("source").map(String::as_str).unwrap_or(""),
@@ -75,7 +75,9 @@ impl FaceManifest {
                 .map(String::as_str)
                 .unwrap_or("ANY"),
         )?;
-        Ok(Some(format!("//! Registry rule.\n//! 注册规范。\n\nuse crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = {rule};\n")))
+        Ok(Some(format!(
+            "//! Registry rule.\n//! 注册规范。\n\nuse crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = {rule};\n"
+        )))
     }
 
     pub(crate) fn inherit_registry_contract(&mut self, rule: &OwnedRegistrationRule) {

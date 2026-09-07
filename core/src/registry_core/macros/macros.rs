@@ -709,9 +709,7 @@ macro_rules! __external_object {
 /// 也不会在热路径上增加全局回调。
 #[macro_export]
 macro_rules! trace_call {
-    ($trace:expr, $node:expr, $function:literal, $operation:expr) => {{
-        $trace.with($node, $function, $operation)
-    }};
+    ($trace:expr, $node:expr, $function:literal, $operation:expr) => {{ $trace.with($node, $function, $operation) }};
 }
 
 /// Record a fallible invocation according to the trace policy.
@@ -724,43 +722,33 @@ macro_rules! trace_call {
 /// 其它模式保持正常收集行为。
 #[macro_export]
 macro_rules! trace_call_result {
-    ($trace:expr, $operation:expr) => {{
-        $trace.with_result($operation)
-    }};
+    ($trace:expr, $operation:expr) => {{ $trace.with_result($operation) }};
 }
 
 /// Capture a function input or local value at the macro call site.
 /// 在宏调用位置记录函数输入或局部值。
 #[macro_export]
 macro_rules! trace_value {
-    ($trace:expr, $name:literal, $type_name:literal, $value:expr, $kind:expr) => {{
-        $trace.local($name, $type_name, $value, $kind)
-    }};
+    ($trace:expr, $name:literal, $type_name:literal, $value:expr, $kind:expr) => {{ $trace.local($name, $type_name, $value, $kind) }};
 }
 
 /// Capture a transformed value and connect it to its producer.
 /// 记录转换后的值，并把它连接到生产者。
 #[macro_export]
 macro_rules! trace_transform {
-    ($trace:expr, $input:expr, $name:literal, $type_name:literal, $value:expr) => {{
-        $trace.transform($input, $name, $type_name, $value)
-    }};
+    ($trace:expr, $input:expr, $name:literal, $type_name:literal, $value:expr) => {{ $trace.transform($input, $name, $type_name, $value) }};
 }
 
 /// Capture a value consumed by another function parameter.
 /// 记录值被另一个函数参数消费的位置。
 #[macro_export]
 macro_rules! trace_consume {
-    ($trace:expr, $input:expr, $function:literal, $parameter:literal) => {{
-        $trace.consume($input, $function, $parameter)
-    }};
+    ($trace:expr, $input:expr, $function:literal, $parameter:literal) => {{ $trace.consume($input, $function, $parameter) }};
 }
 
 /// Capture a function return value and connect it to its input.
 /// 记录函数返回值，并把它连接到输入值。
 #[macro_export]
 macro_rules! trace_return {
-    ($trace:expr, $input:expr, $name:literal, $type_name:literal, $value:expr) => {{
-        $trace.return_value($input, $name, $type_name, $value)
-    }};
+    ($trace:expr, $input:expr, $name:literal, $type_name:literal, $value:expr) => {{ $trace.return_value($input, $name, $type_name, $value) }};
 }

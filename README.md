@@ -339,9 +339,9 @@ The parent directory contains the original prototype tests and external module
 fixtures. They are intentionally outside this workspace and are not included
 when packaging `nichlink/`.
 
-The workspace declares Rust `1.82` as its MSRV. CI also runs the moving
-`stable` toolchain (currently `1.96` in the development environment), so the
-latest compiler is checked without hard-coding a version that will go stale.
+The workspace declares Rust `1.96` as its MSRV. CI checks that exact toolchain
+alongside moving `stable`, keeping the compatibility floor and current Rust
+releases independently visible.
 
 The public technical roadmap is `ROADMAP.md`. Migration and threat details are
 kept as supplemental notes; they are not required to understand the core API.

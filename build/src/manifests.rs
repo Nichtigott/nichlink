@@ -7,7 +7,7 @@ use std::path::Path;
 
 use super::registry_identity::NodeId;
 use super::types::Node;
-use super::{collect_faces, parsed_face, relative_display, write_if_changed, SourceScope};
+use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
 pub(crate) fn write_pruning_manifest(src: &Path, nodes: &[Node], out_dir: &Path) {
     let mut rows = Vec::new();
@@ -80,54 +80,53 @@ fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, 
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if let Ok(source) = fs::read_to_string(file) {
-                if !relative.starts_with("registry_core/") {
-                    if let Some(face) = parsed_face(&source, &relative) {
-                        let id = super::registry_identity::package_node_id(
-                            &relative,
-                            &face.path("kind").unwrap_or_else(|| node.name.clone()),
-                        );
-                        let module = relative
-                            .rsplit_once('/')
-                            .map_or_else(
-                                || relative.trim_end_matches(".rs").to_owned(),
-                                |(parent, _)| parent.to_owned(),
-                            )
-                            .replace('/', "::");
-                        let mut impl_type = None;
-                        for line in source.lines() {
-                            let trimmed = line.trim();
-                            if let Some(rest) = trimmed.strip_prefix("impl ") {
-                                let ty = rest
-                                    .split_once(" for ")
-                                    .map_or(rest, |(_, implementation)| implementation)
-                                    .split('{')
-                                    .next()
-                                    .unwrap_or_default()
-                                    .trim();
-                                if !ty.is_empty() && !trimmed.ends_with('}') {
-                                    impl_type = Some(ty.trim_end_matches(['<', '>']).to_owned());
-                                }
-                            }
-                            if let Some(name) = function_name(trimmed) {
-                                rows.push((
-                                    id,
-                                    relative.clone(),
-                                    format!(
-                                        "{}::{}{}",
-                                        module,
-                                        impl_type
-                                            .as_deref()
-                                            .map(|ty| format!("{ty}::"))
-                                            .unwrap_or_default(),
-                                        name
-                                    ),
-                                ));
-                            }
-                            if trimmed == "}" {
-                                impl_type = None;
-                            }
+            if let Ok(source) = fs::read_to_string(file)
+                && !relative.starts_with("registry_core/")
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let id = super::registry_identity::package_node_id(
+                    &relative,
+                    &face.path("kind").unwrap_or_else(|| node.name.clone()),
+                );
+                let module = relative
+                    .rsplit_once('/')
+                    .map_or_else(
+                        || relative.trim_end_matches(".rs").to_owned(),
+                        |(parent, _)| parent.to_owned(),
+                    )
+                    .replace('/', "::");
+                let mut impl_type = None;
+                for line in source.lines() {
+                    let trimmed = line.trim();
+                    if let Some(rest) = trimmed.strip_prefix("impl ") {
+                        let ty = rest
+                            .split_once(" for ")
+                            .map_or(rest, |(_, implementation)| implementation)
+                            .split('{')
+                            .next()
+                            .unwrap_or_default()
+                            .trim();
+                        if !ty.is_empty() && !trimmed.ends_with('}') {
+                            impl_type = Some(ty.trim_end_matches(['<', '>']).to_owned());
                         }
+                    }
+                    if let Some(name) = function_name(trimmed) {
+                        rows.push((
+                            id,
+                            relative.clone(),
+                            format!(
+                                "{}::{}{}",
+                                module,
+                                impl_type
+                                    .as_deref()
+                                    .map(|ty| format!("{ty}::"))
+                                    .unwrap_or_default(),
+                                name
+                            ),
+                        ));
+                    }
+                    if trimmed == "}" {
+                        impl_type = None;
                     }
                 }
             }
@@ -149,29 +148,28 @@ fn collect_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, S
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if let Ok(source) = fs::read_to_string(file) {
-                if !relative.starts_with("registry_core/") {
-                    if let Some(face) = parsed_face(&source, &relative) {
-                        let id = super::registry_identity::package_node_id(
-                            &relative,
-                            &face.path("kind").unwrap_or_else(|| node.name.clone()),
-                        );
-                        let module = relative
-                            .rsplit_once('/')
-                            .map_or_else(
-                                || relative.trim_end_matches(".rs").to_owned(),
-                                |(parent, _)| parent.to_owned(),
-                            )
-                            .replace('/', "::");
-                        let mut found = false;
-                        for item in source.lines().filter_map(parse_pruning_item) {
-                            found = true;
-                            rows.push((id, relative.clone(), format!("{module}::{item}")));
-                        }
-                        if !found {
-                            rows.push((id, relative, "-".to_owned()));
-                        }
-                    }
+            if let Ok(source) = fs::read_to_string(file)
+                && !relative.starts_with("registry_core/")
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let id = super::registry_identity::package_node_id(
+                    &relative,
+                    &face.path("kind").unwrap_or_else(|| node.name.clone()),
+                );
+                let module = relative
+                    .rsplit_once('/')
+                    .map_or_else(
+                        || relative.trim_end_matches(".rs").to_owned(),
+                        |(parent, _)| parent.to_owned(),
+                    )
+                    .replace('/', "::");
+                let mut found = false;
+                for item in source.lines().filter_map(parse_pruning_item) {
+                    found = true;
+                    rows.push((id, relative.clone(), format!("{module}::{item}")));
+                }
+                if !found {
+                    rows.push((id, relative, "-".to_owned()));
                 }
             }
         }

@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    parse_face as parse_face_syntax, OwnedAdmission, OwnedFlowContract, OwnedRegistrationRule,
-    OwnedRequirementSpec, RuntimeCheckSpec,
+    OwnedAdmission, OwnedFlowContract, OwnedRegistrationRule, OwnedRequirementSpec,
+    RuntimeCheckSpec, parse_face as parse_face_syntax,
 };
 
 use super::validation::{normalized_path, rust_string, source_root};
@@ -488,7 +488,7 @@ pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistra
             }
             "part_trait" | "part_traits" => rule.required_part_traits.extend(values),
             "preset" if body.trim().is_empty() => {
-                return Err("registration_rule preset cannot be empty".to_owned())
+                return Err("registration_rule preset cannot be empty".to_owned());
             }
             "preset" => rule.required_preset = Some(body.trim().to_owned()),
             key => return Err(format!("unknown registration_rule clause `{key}`")),

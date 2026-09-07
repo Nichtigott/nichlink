@@ -43,12 +43,12 @@ impl PluginCatalog {
             if line.starts_with('#') {
                 continue;
             }
-            if let Some(version) = schema {
-                if version != IDENTITY_SCHEMA {
-                    return Err(format!(
-                        "plugin lock uses identity schema {version}, expected {IDENTITY_SCHEMA}"
-                    ));
-                }
+            if let Some(version) = schema
+                && version != IDENTITY_SCHEMA
+            {
+                return Err(format!(
+                    "plugin lock uses identity schema {version}, expected {IDENTITY_SCHEMA}"
+                ));
             }
             let fields = line.split('|').collect::<Vec<_>>();
             if fields.len() != 7 && fields.len() != 10 {

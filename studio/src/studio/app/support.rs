@@ -1,10 +1,58 @@
 //! Shared interaction geometry and editor helpers.
 //! 交互几何与编辑器辅助。
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+
+#[derive(Clone)]
+struct ProjectContext {
+    root: PathBuf,
+    manifest: PathBuf,
+    namespace: String,
+}
+
+thread_local! {
+    static PROJECT_CONTEXT: RefCell<Option<ProjectContext>> = const { RefCell::new(None) };
+}
+
+/// Switch this Studio session to a project without mutating process-global
+/// environment variables. This remains safe when file watchers use threads.
+pub(super) fn select_project(root: PathBuf, manifest: PathBuf, namespace: impl Into<String>) {
+    PROJECT_CONTEXT.with(|current| {
+        *current.borrow_mut() = Some(ProjectContext {
+            root,
+            manifest,
+            namespace: namespace.into(),
+        });
+    });
+}
+
+pub(super) fn package_namespace() -> String {
+    PROJECT_CONTEXT
+        .with(|current| {
+            current
+                .borrow()
+                .as_ref()
+                .map(|project| project.namespace.clone())
+        })
+        .or_else(|| std::env::var("NICH_LINK_NAMESPACE").ok())
+        .unwrap_or_else(|| "nichlink.default".to_owned())
+}
+
+pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
+    nichlink::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
+}
 
 /// Resolve the project whose sources Studio reads and edits.
 pub(super) fn package_root() -> PathBuf {
+    if let Some(root) = PROJECT_CONTEXT.with(|current| {
+        current
+            .borrow()
+            .as_ref()
+            .map(|project| project.root.clone())
+    }) {
+        return root;
+    }
     if let Some(configured) = std::env::var_os("NICH_LINK_PACKAGE_ROOT") {
         let path = PathBuf::from(configured);
         if path.is_absolute() {
@@ -18,10 +66,10 @@ pub(super) fn package_root() -> PathBuf {
     // target. This keeps `cargo run --manifest-path .../studio/Cargo.toml`
     // useful without requiring an environment variable.
     // 从宿主项目目录启动 Studio 时，当前目录就是默认目标，无需额外环境变量。
-    if let Ok(current) = std::env::current_dir() {
-        if current.join("Cargo.toml").is_file() {
-            return current;
-        }
+    if let Ok(current) = std::env::current_dir()
+        && current.join("Cargo.toml").is_file()
+    {
+        return current;
     }
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -31,6 +79,14 @@ pub(super) fn package_root() -> PathBuf {
 
 /// Resolve the Cargo manifest used for MIR inspection and rebuilds.
 pub(super) fn host_manifest() -> PathBuf {
+    if let Some(manifest) = PROJECT_CONTEXT.with(|current| {
+        current
+            .borrow()
+            .as_ref()
+            .map(|project| project.manifest.clone())
+    }) {
+        return manifest;
+    }
     if let Some(configured) = std::env::var_os("NICH_LINK_HOST_MANIFEST") {
         let path = PathBuf::from(configured);
         let path = if path.is_absolute() {
@@ -86,11 +142,11 @@ impl App {
             .unwrap_or_default();
         let last = nodes.len().saturating_sub(1) as isize;
         let next = (current as isize + delta).clamp(0, last) as usize;
-        if let Some((id, _)) = nodes.get(next) {
-            if self.selected != *id {
-                self.selected = *id;
-                self.details_selected = 0;
-            }
+        if let Some((id, _)) = nodes.get(next)
+            && self.selected != *id
+        {
+            self.selected = *id;
+            self.details_selected = 0;
         }
     }
 
