@@ -244,6 +244,9 @@ fn new_project_and_explicit_root_face_compile() {
     assert!(slider.contains("crate::control_object!"));
     assert!(slider.contains("parent: crate::control::NODE_ID"));
 
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
+    assert!(manifest.contains("edition = \"2021\""));
+
     let check = std::process::Command::new("cargo")
         .args(["check", "--offline"])
         .current_dir(&root)

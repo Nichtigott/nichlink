@@ -65,7 +65,7 @@ impl App {
             if kind == "library" { "" } else { "\nfn main() { println!(\"registered faces: {}\", registrations().len()); }" }
         );
         let cargo = format!(
-            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2026\"\nbuild = \"build.rs\"\n\n[dependencies]\nnichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}\n\n[build-dependencies]\nnichlink-build = {{ path = \"{build}\" }}\n"
+            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[dependencies]\nnichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}\n\n[build-dependencies]\nnichlink-build = {{ path = \"{build}\" }}\n"
         );
         let files = [
             ("Cargo.toml", cargo),
