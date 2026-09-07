@@ -53,7 +53,9 @@ fn decode_signature(value: &str) -> Option<Signature> {
         return None;
     }
     let mut bytes = [0; 64];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+    let (chunks, remainder) = value.as_bytes().as_chunks::<2>();
+    debug_assert!(remainder.is_empty());
+    for (index, pair) in chunks.iter().enumerate() {
         bytes[index] = hex(pair[0])? << 4 | hex(pair[1])?;
     }
     Some(Signature::from_bytes(&bytes))
