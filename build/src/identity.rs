@@ -348,7 +348,8 @@ pub fn sha256_hex(input: &[u8]) -> String {
         0x1f83d9ab,
         0x5be0cd19,
     ];
-    let (chunks,remainder) = data.as_chunks::<64>();
+
+    let (chunks, remainder) = data.as_chunks::<64>();
     debug_assert!(remainder.is_empty());
     for chunk in chunks {
         let mut w = [0u32; 64];
