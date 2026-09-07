@@ -76,11 +76,6 @@ impl StaticPlan {
 /// 在生成 crate 时求值挂载规则与构造规则。
 #[doc(hidden)]
 pub const fn assert_static_registration(rule: RegistrationRule, info: RegistrationInfo) {
-    if has_str(rule.denied_kinds, info.kind)
-        || (!rule.allowed_kinds.is_empty() && !has_str(rule.allowed_kinds, info.kind))
-    {
-        panic!("static registration failed: kind rejected by parent rule; see declaration source");
-    }
     if let Some(required) = rule.required_preset
         && !str_eq(required, info.preset)
     {

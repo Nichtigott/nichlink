@@ -1,6 +1,7 @@
 //! Keyboard and overlay-key interaction.
 //! 键盘与浮层键盘交互。
 
+use super::support::with_authoring_context;
 use super::*;
 
 impl App {
@@ -112,6 +113,44 @@ impl App {
                     };
                     edit.values[28] = info.flow_provider.as_deref().unwrap_or_default().to_owned();
                     self.overlay = Some(Overlay::Edit(info.id, edit));
+                }
+            }
+            KeyCode::Char('g') if self.selected != self.registry.id() => {
+                match with_authoring_context(nichlink::graft_drafts) {
+                    Ok(drafts) => {
+                        if let Some(draft) = drafts
+                            .into_iter()
+                            .find(|draft| draft.target() == self.selected)
+                        {
+                            let mut graft = GraftState {
+                                draft,
+                                validation: "Not validated in this Studio session".to_owned(),
+                            };
+                            self.validate_graft(&mut graft);
+                            self.overlay = Some(Overlay::Graft(graft));
+                            return;
+                        }
+                    }
+                    Err(error) => {
+                        self.event = format!("Cannot load graft drafts: {error}");
+                        return;
+                    }
+                }
+                // Start a graft candidate from the selected face's complete
+                // declaration. The user can adjust the copy before saving it.
+                // 根据当前注册面的完整声明创建 graft 候选，保存前仍可继续编辑。
+                let source = self.selected;
+                self.handle_key(KeyEvent::from(KeyCode::Char('e')));
+                if let Some(Overlay::Edit(_, mut graft)) = self.overlay.take() {
+                    let module = graft.values[1].clone();
+                    let registry_name = graft.values[3].clone();
+                    graft.values[1] = format!("{module}_graft");
+                    graft.values[3] = format!("{registry_name}_graft");
+                    graft.copy_source = Some(source);
+                    self.event = format!(
+                        "Graft copy prepared from `{module}`; implementation and contracts will be copied"
+                    );
+                    self.overlay = Some(Overlay::Add(graft));
                 }
             }
             KeyCode::Char('r') | KeyCode::F(5) => self.reload(),

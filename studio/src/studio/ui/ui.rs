@@ -12,7 +12,7 @@ use ratatui::widgets::{
 mod graph;
 use graph::draw_search_graph;
 mod forms;
-use forms::{draw_add, draw_delete, draw_edit, draw_new_project, draw_plugin};
+use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
 mod search;
 use search::{draw_search, format_admission, format_registration_rule};
 mod search_detail;
@@ -58,7 +58,9 @@ fn draw_brand(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let art = vec![
         Line::from(r"________   ___  ________  ___  ___  ___       ___  ________   ___  __"),
         Line::from(r" |\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \"),
-        Line::from(r"   \ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_"),
+        Line::from(
+            r"   \ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_",
+        ),
         Line::from(
             r"     \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \",
         ),
@@ -267,7 +269,7 @@ fn draw_event(frame: &mut Frame<'_>, area: Rect, app: &App) {
 
 fn draw_keys(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(
-        Paragraph::new(" 1 search   2 inspect   3 data   4 compare   q quit   / search   n new   a add   p plugin   e edit   d delete   Enter fold   m MIR   r/F5 reload   b/F9 build   ←/→ resize ")
+        Paragraph::new(" 1 search   2 inspect   3 data   4 compare   q quit   / search   n new   a add   g graft draft   p plugin   e edit   d delete   Enter fold   m MIR   r/F5 reload   b/F9 build   ←/→ resize ")
             .alignment(Alignment::Center)
             .style(Style::default().fg(MUTED)),
         area,
@@ -300,6 +302,8 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
         app.graph_b_input_area = Rect::default();
         app.graph_b_center_area = Rect::default();
         app.graph_b_output_area = Rect::default();
+        app.action_validate_area = Rect::default();
+        app.action_edit_area = Rect::default();
         return;
     };
     let area = if matches!(overlay, Overlay::Search(ref search) if search.graph_mode) {
@@ -313,6 +317,8 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
     app.delete_cancel_area = Rect::default();
     app.delete_confirm_area = Rect::default();
     app.action_cancel_area = Rect::default();
+    app.action_validate_area = Rect::default();
+    app.action_edit_area = Rect::default();
     app.action_confirm_area = Rect::default();
     app.action_exit_area = Rect::default();
     app.graph_area = Rect::default();
@@ -362,6 +368,13 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
             app.action_cancel_area = cancel;
             app.action_confirm_area = confirm;
             app.action_exit_area = exit;
+        }
+        Overlay::Graft(graft) => {
+            let (validate, apply, cancel, edit) = draw_graft(frame, area, &graft);
+            app.action_validate_area = validate;
+            app.action_confirm_area = apply;
+            app.action_cancel_area = cancel;
+            app.action_edit_area = edit;
         }
         Overlay::Plugin(plugin) => {
             let (list, cancel, confirm, exit) = draw_plugin(frame, area, &plugin);

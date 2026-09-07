@@ -115,6 +115,66 @@ fn add_form_starts_with_editable_bilingual_summary() {
 }
 
 #[test]
+fn graft_stays_inactive_until_apply_and_reopens_after_reload() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-graft-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("create source root");
+    select_project(root.clone(), root.join("Cargo.toml"), "graft-studio-test");
+
+    let mut app = App::load();
+    let mut add = AddState::new(app.registry.id());
+    add.values[1] = "canvas".to_owned();
+    add.values[8] = "Canvas".to_owned();
+    app.submit_add(&add);
+    let target = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|face| face.registry_name == "canvas")
+        .expect("canvas face")
+        .id;
+    app.selected = target;
+
+    app.handle_key(KeyEvent::from(KeyCode::Char('g')));
+    let Some(Overlay::Add(graft)) = app.overlay.take() else {
+        panic!("g should open a configured graft form");
+    };
+    app.submit_add(&graft);
+    let Some(Overlay::Graft(plan)) = app.overlay.take() else {
+        panic!("saving a graft form should open the plan");
+    };
+    assert!(plan.draft.source().is_file());
+    assert!(!root.join("src/canvas_graft").exists());
+
+    let draft_source = plan.draft.source().to_path_buf();
+    app.overlay = Some(Overlay::Graft(plan));
+    app.handle_key(KeyEvent::from(KeyCode::Esc));
+    assert!(app.overlay.is_none());
+    assert!(
+        draft_source.is_file(),
+        "cancel must keep the inactive draft"
+    );
+
+    app.handle_key(KeyEvent::from(KeyCode::Char('g')));
+    assert!(matches!(app.overlay, Some(Overlay::Graft(_))));
+    app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+    let (draft_source, line) = app.take_editor_request().expect("graft editor request");
+    assert!(draft_source.starts_with(root.join(".nichlink/grafts")));
+    assert_eq!(line, 1);
+    app.handle_key(KeyEvent::from(KeyCode::Char('a')));
+    assert!(app.overlay.is_none(), "{}", app.event);
+    assert!(
+        root.join(".nichlink/grafts/canvas_graft/original/canvas.rs")
+            .is_file()
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn standalone_studio_resolves_one_project_root_and_manifest() {
     let root = package_root();
     assert!(root.is_dir());

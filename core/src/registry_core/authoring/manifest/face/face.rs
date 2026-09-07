@@ -121,6 +121,7 @@ impl FaceManifest {
             | "handle_traits"
             | "handle_contracts"
             | "part_traits"
+            | "part_contracts"
             | "requires"
             | "provides"
             | "expected_output"
@@ -264,6 +265,12 @@ impl FaceManifest {
         };
         let handle_impls = render_impls(kind, value("handle_contracts"));
         let part_traits = render_face_list("part_traits", value("part_traits"));
+        let part_contracts = render_path_list(value("part_contracts"));
+        let part_contracts_decl = if part_contracts.is_empty() {
+            String::new()
+        } else {
+            format!("    part_contracts: [{part_contracts}],\n")
+        };
         let requirements = render_requirements(value("requires"));
         let provides = render_literal_list(value("provides"));
         let runtime_checks = render_expression_list(value("runtime_checks"))?;
@@ -411,7 +418,7 @@ impl FaceManifest {
             String::new()
         };
         let source = format!(
-            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
+            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

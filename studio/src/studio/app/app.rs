@@ -64,6 +64,8 @@ pub struct App {
     pub delete_cancel_area: ratatui::layout::Rect,
     pub delete_confirm_area: ratatui::layout::Rect,
     pub action_cancel_area: ratatui::layout::Rect,
+    pub action_validate_area: ratatui::layout::Rect,
+    pub action_edit_area: ratatui::layout::Rect,
     pub action_confirm_area: ratatui::layout::Rect,
     pub action_exit_area: ratatui::layout::Rect,
     pub tree_offset: usize,

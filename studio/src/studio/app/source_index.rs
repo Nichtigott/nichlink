@@ -66,35 +66,30 @@ pub(super) fn admission_text(admission: &nichlink::OwnedAdmission) -> String {
 }
 
 pub(super) fn registration_rule_text(rule: &nichlink::OwnedRegistrationRule) -> String {
-    let mut text = if rule.allowed_kinds.is_empty() && rule.denied_kinds.is_empty() {
-        "ANY".to_owned()
-    } else if !rule.allowed_kinds.is_empty() {
-        format!("allow:{}", rule.allowed_kinds.join(","))
-    } else {
-        format!("deny:{}", rule.denied_kinds.join(","))
-    };
+    let mut clauses = Vec::new();
     if let Some(preset) = &rule.required_preset {
-        text.push_str(&format!(";preset:{preset}"));
+        clauses.push(format!("preset:{preset}"));
     }
     if !rule.required_parts.is_empty() {
-        text.push_str(&format!(";parts:{}", rule.required_parts.join(",")));
+        clauses.push(format!("parts:{}", rule.required_parts.join(",")));
     }
     if !rule.required_exports.is_empty() {
-        text.push_str(&format!(";exports:{}", rule.required_exports.join(",")));
+        clauses.push(format!("exports:{}", rule.required_exports.join(",")));
     }
     if !rule.required_handle_traits.is_empty() {
-        text.push_str(&format!(
-            ";handle:{}",
-            rule.required_handle_traits.join(",")
-        ));
+        clauses.push(format!("handle:{}", rule.required_handle_traits.join(",")));
     }
     if !rule.required_part_traits.is_empty() {
-        text.push_str(&format!(
-            ";part_trait:{}",
+        clauses.push(format!(
+            "part_trait:{}",
             rule.required_part_traits.join(",")
         ));
     }
-    text
+    if clauses.is_empty() {
+        "ANY".to_owned()
+    } else {
+        clauses.join(";")
+    }
 }
 
 #[cfg(test)]

@@ -180,6 +180,62 @@ pub(super) fn draw_edit(
     draw_face_form(frame, area, edit, " EDIT REGISTRATION FACE ")
 }
 
+pub(super) fn draw_graft(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    graft: &super::super::app::GraftState,
+) -> (Rect, Rect, Rect, Rect) {
+    let inner = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(8), Constraint::Length(4)])
+        .split(area);
+    let lines = vec![
+        field("draft", graft.draft.name()),
+        field("source", &graft.draft.source().display().to_string()),
+        field("target", &graft.draft.target().to_string()),
+        Line::from(""),
+        Line::from(Span::styled(
+            graft.validation.clone(),
+            Style::default().fg(if graft.validation.starts_with("Rejected") {
+                Color::LightRed
+            } else {
+                GREEN
+            }),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "The draft is outside src and cannot participate in registration until Apply.",
+            Style::default().fg(MUTED),
+        )),
+    ];
+    frame.render_widget(
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .block(panel(" GRAFT PLAN ", MAGENTA)),
+        inner[0],
+    );
+    let buttons = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+        ])
+        .split(inner[1]);
+    let button = |label: &'static str, color: Color| {
+        Paragraph::new(label)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(color))
+            .block(panel("", color))
+    };
+    frame.render_widget(button("Validate [v]", CYAN), buttons[0]);
+    frame.render_widget(button("Apply [a/Enter]", GREEN), buttons[1]);
+    frame.render_widget(button("Cancel [Esc]", MUTED), buttons[2]);
+    frame.render_widget(button("Edit source [e]", MAGENTA), buttons[3]);
+    (buttons[0], buttons[1], buttons[2], buttons[3])
+}
+
 pub(super) fn draw_plugin(
     frame: &mut Frame<'_>,
     area: Rect,

@@ -64,6 +64,8 @@ impl App {
             delete_cancel_area: ratatui::layout::Rect::default(),
             delete_confirm_area: ratatui::layout::Rect::default(),
             action_cancel_area: ratatui::layout::Rect::default(),
+            action_validate_area: ratatui::layout::Rect::default(),
+            action_edit_area: ratatui::layout::Rect::default(),
             action_confirm_area: ratatui::layout::Rect::default(),
             action_exit_area: ratatui::layout::Rect::default(),
             tree_offset: 0,

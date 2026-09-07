@@ -34,8 +34,6 @@ fn snapshot(namespace: &str, index: usize, parent: NodeId) -> RegistrationSnapsh
         getting_from_other_registry: None,
         registry_rule_path: "<scale-audit>".to_owned(),
         registry_rule: OwnedRegistrationRule {
-            allowed_kinds: Vec::new(),
-            denied_kinds: Vec::new(),
             required_preset: None,
             required_parts: Vec::new(),
             required_exports: Vec::new(),

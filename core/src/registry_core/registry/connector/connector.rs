@@ -214,7 +214,7 @@ impl Registry {
                             path.clone(),
                             entry.info.source.clone(),
                             format!(
-                                "requirement `{}` is ambiguous; provider kind `{}` appears at: {}",
+                                "input `{}` cannot connect: provider kind `{}` is ambiguous at {}",
                                 requirement.capability, requirement.provider, paths
                             ),
                         ));
@@ -230,7 +230,7 @@ impl Registry {
                             path.clone(),
                             entry.info.source.clone(),
                             format!(
-                                "dependency admission rejected external provider `{provider_path}` for requirement `{}`",
+                                "input `{}` cannot connect to `{provider_path}`: the parent Registry admission gate rejects that external branch",
                                 requirement.capability,
                             ),
                         ));
@@ -247,7 +247,7 @@ impl Registry {
                             path.clone(),
                             entry.info.source.clone(),
                             format!(
-                                "dependency admission rejected external provider `{provider_path}` for requirement `{}` (provider kind `{}`, expected `{}`)",
+                                "input `{}` cannot connect to `{provider_path}`: admission rejects the branch and provider kind `{}` does not match expected `{}`",
                                 requirement.capability, provider.kind, requirement.provider,
                             ),
                         ));
@@ -267,7 +267,7 @@ impl Registry {
                     .map(|provider| {
                         let provider_path = root.path_for(provider.id).unwrap_or_default();
                         format!(
-                            "capability `{}` is provided by `{}` at `{}` (kind `{}`), expected kind `{}`",
+                            "input `{}` found `{}` at `{}`, but its kind is `{}` instead of `{}`",
                             requirement.capability,
                             provider.registry_name,
                             provider_path,
@@ -277,7 +277,7 @@ impl Registry {
                     })
                     .unwrap_or_else(|| {
                         format!(
-                            "capability `{}` is missing; expected provider kind `{}`",
+                            "input `{}` has no provider; expected provider kind `{}`",
                             requirement.capability, requirement.provider
                         )
                     });
@@ -285,7 +285,7 @@ impl Registry {
                     entry.info.id,
                     path.clone(),
                     entry.info.source.clone(),
-                    format!("requirement `{}` failed: {detail}", requirement.capability),
+                    format!("data-flow attachment failed: {detail}"),
                 ));
             }
             if !failures.is_empty() {
@@ -294,8 +294,8 @@ impl Registry {
                     path,
                     entry.info.source.clone(),
                     format!(
-                        "registration connector rejected `{}` (registration rule validation; rule `{}`)",
-                        entry.info.kind, entry.info.registry_rule_path
+                        "data-flow connector rejected `{}`; one or more declared inputs could not attach",
+                        entry.info.kind
                     ),
                 );
                 error.registration_chain = root.registration_chain(entry.info.id);

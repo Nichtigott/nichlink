@@ -155,6 +155,12 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             .join(","),
     );
     values.insert(
+        "part_contracts".to_owned(),
+        face.path_list("part_contracts")
+            .unwrap_or_default()
+            .join(","),
+    );
+    values.insert(
         "part_traits".to_owned(),
         face.string_list("part_traits")
             .unwrap_or_default()

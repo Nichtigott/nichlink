@@ -42,6 +42,9 @@ pub use self::operations::{
     edit_module_face, generated_snapshots, generated_snapshots_from, AuthoringChange,
     ModuleFacePatch, NewModuleFace,
 };
+pub use self::graft_copy::{
+    apply_graft_draft, copy_module_for_graft, graft_drafts, validate_graft_draft, GraftDraft,
+};
 
 const GENERATED_MARKER: &str = "// generated-by=NichLink";
 
@@ -94,7 +97,7 @@ pub const FACE_PRIMARY_FIELDS: &[usize] = &[0, 1, 2, 8, 9, 10, 11, 12, 7, 23];
 /// A source-tree mutation that needs one rebuild before it becomes executable.
 /// 一次源码树变更；它需要经过一次重建才会成为可执行注册面。
 impl FaceManifest {
-    fn new(
+    pub(crate) fn new(
         name: &str,
         kind: &str,
         parent: NodeId,
@@ -131,6 +134,7 @@ impl FaceManifest {
             ("handle_traits", ""),
             ("handle_contracts", ""),
             ("part_traits", ""),
+            ("part_contracts", ""),
             ("requires", ""),
             ("expected_output", "()"),
             ("actual_output", "()"),
@@ -277,7 +281,7 @@ mod tests {
         face.edit("summary_zh", "可释放的快照").unwrap();
         face.edit("summary_en", "A droppable snapshot").unwrap();
         face.edit("exports", "control.owned,control.debug").unwrap();
-        face.edit("registration_rule", "allow:Owned;preset:NoPreset")
+        face.edit("registration_rule", "preset:NoPreset")
             .unwrap();
         face.edit(
             "flow",
@@ -291,7 +295,6 @@ mod tests {
         assert_eq!(snapshot.kind, "Owned");
         assert_eq!(snapshot.summary.zh, "可释放的快照");
         assert_eq!(snapshot.exports, ["control.owned", "control.debug"]);
-        assert_eq!(snapshot.registry_rule.allowed_kinds, ["Owned"]);
         assert_eq!(
             snapshot.registry_rule.required_preset.as_deref(),
             Some("NoPreset")
@@ -381,13 +384,10 @@ crate::control_object! {
         snapshot.contract.expected_output = "Button".to_owned();
         snapshot.contract.actual_output = "Other".to_owned();
         let parent_rule =
-            parse_registration_rule_owned("allow:Button;parts:label;handle:ControlHandle").unwrap();
+            parse_registration_rule_owned("parts:label;handle:ControlHandle").unwrap();
         let mut failures = parent_rule.validate(&snapshot);
         failures.extend(snapshot.contract.validate(&snapshot.kind));
-        assert_eq!(failures.len(), 5);
-        assert!(failures
-            .iter()
-            .any(|failure| failure.contains("kind `Broken`")));
+        assert_eq!(failures.len(), 4);
         assert!(failures.iter().any(|failure| failure.contains("label")));
         assert!(failures
             .iter()
@@ -440,7 +440,7 @@ crate::control_object! {
         face.edit("parts", "crate::NoParts").unwrap();
         face.edit("summary_zh", "诊断面板").unwrap();
         face.edit("summary_en", "Diagnostic panel").unwrap();
-        face.edit("registration_rule", "allow:DiagnosticPanel,Inspector")
+        face.edit("registration_rule", "parts:diagnostic")
             .unwrap();
 
         let source = face.render_source().expect("edited face renders");
@@ -453,8 +453,7 @@ crate::control_object! {
         assert_eq!(info.parts, "crate::NoParts");
         assert_eq!(info.summary.zh, "诊断面板");
         assert_eq!(info.summary.en, "Diagnostic panel");
-        assert!(info.registry_rule.accepts("Inspector"));
-        assert!(!info.registry_rule.accepts("Other"));
+        assert_eq!(info.registry_rule.required_parts, ["diagnostic"]);
     }
 
     #[test]
@@ -483,10 +482,9 @@ crate::control_object! {
     #[test]
     fn registration_rule_face_can_describe_interfaces_and_shape() {
         let rule = parse_registration_rule_owned(
-            "allow:Button;preset:ActionParts;parts:label,action;exports:control.button;handle:ControlHandle;part_trait:ActionParts",
+            "preset:ActionParts;parts:label,action;exports:control.button;handle:ControlHandle;part_trait:ActionParts",
         )
         .expect("extended rule parses");
-        assert!(rule.accepts("Button"));
         assert_eq!(rule.required_preset.as_deref(), Some("ActionParts"));
         assert_eq!(rule.required_parts, ["label", "action"]);
         assert_eq!(rule.required_exports, ["control.button"]);
@@ -503,7 +501,7 @@ crate::control_object! {
         );
         face.edit(
             "registration_rule",
-            "allow:Button;preset:ActionParts;parts:label,action;exports:control.button;handle:ControlHandle;part_trait:ActionParts",
+            "preset:ActionParts;parts:label,action;exports:control.button;handle:ControlHandle;part_trait:ActionParts",
         )
         .unwrap();
         let source = face.render_source().expect("extended rule renders");

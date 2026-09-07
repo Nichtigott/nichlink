@@ -1,5 +1,7 @@
 #[path = "filesystem/filesystem.rs"]
 pub mod filesystem;
+#[path = "graft_copy/graft_copy.rs"]
+pub mod graft_copy;
 #[path = "manifest/mod.rs"]
 pub mod manifest;
 #[path = "operations/operations.rs"]

@@ -153,6 +153,23 @@ impl Registry {
         Ok(())
     }
 
+    /// Commit one already-authored replacement after validating it against the
+    /// same structural and connector rules used by registration.
+    /// 使用与注册相同的结构和连接校验，提交一个已经生成的替换快照。
+    pub fn apply_snapshot_replacement(
+        &mut self,
+        current: NodeId,
+        info: RegistrationSnapshot,
+    ) -> RegistryResult<()> {
+        self.validate_snapshot_replacement(current, info.clone())?;
+        let mut staged = self.clone();
+        if !staged.replace_info(current, info) {
+            return Err(self.graft_error(current, GraftError::UnknownTarget(current)));
+        }
+        *self = staged;
+        Ok(())
+    }
+
     fn replace_info(&mut self, wanted: NodeId, info: RegistrationSnapshot) -> bool {
         let Some(parent) = self.find(wanted).map(|entry| entry.parent) else {
             return false;
@@ -346,6 +363,25 @@ impl Registry {
         Ok(())
     }
 
+    /// Apply several independent grafts as one transaction.
+    ///
+    /// Requests may target slots in different branches. Every request is
+    /// validated against the staged tree, including connector and admission
+    /// checks. If any request fails, the live registry is left unchanged.
+    /// 将多个独立 graft 作为一次事务提交。请求可以指向不同分支的槽位；
+    /// 每一步都在暂存树上校验，包括连接器和准入检查。任一步失败，线上树不变。
+    pub fn graft_batch<I>(&mut self, requests: I) -> RegistryResult<()>
+    where
+        I: IntoIterator<Item = GraftRequest>,
+    {
+        let mut staged = self.clone();
+        for request in requests {
+            staged.graft(request)?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
     /// Resolve and execute a human-facing graft command using registered names,
     /// kinds, paths, or node identity values. Contracts come from the live nodes.
     /// 解析并执行面向人的嫁接命令；端点可用名称、kind、路径或 node identity，合同从线上节点读取。
@@ -439,6 +475,152 @@ impl Registry {
             if let Some(child) = entry.child.as_mut() {
                 Arc::make_mut(child).rebase_paths(old_prefix, new_prefix);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Admission, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
+        PluginSource, RegistrationRule,
+    };
+
+    const FRAMEWORK: FrameworkId = FrameworkId::new("graft-test");
+
+    fn flow(id: &str) -> OwnedFlowContract {
+        OwnedFlowContract {
+            id: id.to_owned(),
+            version: 1,
+            input: "LocalCoordinates".to_owned(),
+            output: "CanvasFrame".to_owned(),
+        }
+    }
+
+    fn face(namespace: &str, source: &str, kind: &str, slot: &str) -> RegistrationSnapshot {
+        RegistrationSnapshot {
+            namespace: namespace.to_owned(),
+            id: NodeId::from_namespaced_path(namespace, source, kind),
+            parent: root_node_id(namespace),
+            kind: kind.to_owned(),
+            preset: "NoPreset".to_owned(),
+            parts: "NoParts".to_owned(),
+            params: kind.to_owned(),
+            handle: kind.to_owned(),
+            stable_name: None,
+            name: OwnedLocalizedText {
+                zh: kind.to_owned(),
+                en: kind.to_owned(),
+            },
+            summary: OwnedLocalizedText {
+                zh: String::new(),
+                en: String::new(),
+            },
+            exports: Vec::new(),
+            needs_registry: false,
+            registry_name: slot.to_owned(),
+            getting_from_other_registry: None,
+            registry_rule_path: "<test>".to_owned(),
+            registry_rule: RegistrationRule::ANY.into_owned(),
+            admission: Admission::ANY.into_owned(),
+            requires: Vec::new(),
+            provides: Vec::new(),
+            contract: OwnedObjectContract {
+                required_parts: Vec::new(),
+                provided_parts: Vec::new(),
+                expected_output: "()".to_owned(),
+                actual_output: "()".to_owned(),
+            },
+            flow: flow("render.v1"),
+            flow_provider: None,
+            handle_traits: Vec::new(),
+            part_traits: Vec::new(),
+            runtime_checks: Vec::new(),
+            plugin: None,
+            source: OwnedSourceLocation {
+                file: source.to_owned(),
+                line: 1,
+                column: 1,
+                function: kind.to_owned(),
+            },
+        }
+    }
+
+    fn request(target: &RegistrationSnapshot, replacement: &RegistrationSnapshot) -> GraftRequest {
+        GraftRequest::new(
+            FRAMEWORK,
+            target.id,
+            replacement.id,
+            target.flow.clone(),
+            replacement.flow.clone(),
+            PluginSource::User,
+        )
+    }
+
+    #[test]
+    fn graft_batch_commits_independent_slots_together() {
+        let namespace = "graft-batch";
+        let target_a = face(namespace, "a/target.rs", "TargetA", "target_a");
+        let replacement_a = face(namespace, "a/replacement.rs", "ReplacementA", "candidate_a");
+        let target_b = face(namespace, "b/target.rs", "TargetB", "target_b");
+        let replacement_b = face(namespace, "b/replacement.rs", "ReplacementB", "candidate_b");
+        let mut registry = Registry::root_for_namespace(FRAMEWORK, namespace);
+        registry
+            .register_snapshot_batch([
+                target_a.clone(),
+                replacement_a.clone(),
+                target_b.clone(),
+                replacement_b.clone(),
+            ])
+            .unwrap();
+
+        registry
+            .graft_batch([
+                request(&target_a, &replacement_a),
+                request(&target_b, &replacement_b),
+            ])
+            .unwrap();
+
+        assert!(registry.find(target_a.id).is_none());
+        assert!(registry.find(target_b.id).is_none());
+        assert_eq!(
+            registry.path_for(replacement_a.id).as_deref(),
+            Some("root/target_a")
+        );
+        assert_eq!(
+            registry.path_for(replacement_b.id).as_deref(),
+            Some("root/target_b")
+        );
+    }
+
+    #[test]
+    fn graft_batch_rolls_back_when_a_later_edge_cannot_attach() {
+        let namespace = "graft-rollback";
+        let target_a = face(namespace, "a/target.rs", "TargetA", "target_a");
+        let replacement_a = face(namespace, "a/replacement.rs", "ReplacementA", "candidate_a");
+        let target_b = face(namespace, "b/target.rs", "TargetB", "target_b");
+        let mut replacement_b = face(namespace, "b/replacement.rs", "ReplacementB", "candidate_b");
+        replacement_b.flow.output = "AbsoluteCoordinates".to_owned();
+        let mut registry = Registry::root_for_namespace(FRAMEWORK, namespace);
+        registry
+            .register_snapshot_batch([
+                target_a.clone(),
+                replacement_a.clone(),
+                target_b.clone(),
+                replacement_b.clone(),
+            ])
+            .unwrap();
+
+        registry
+            .graft_batch([
+                request(&target_a, &replacement_a),
+                request(&target_b, &replacement_b),
+            ])
+            .expect_err("the incompatible second graft must reject the whole batch");
+
+        for id in [target_a.id, replacement_a.id, target_b.id, replacement_b.id] {
+            assert!(registry.find(id).is_some(), "batch mutated node {id}");
         }
     }
 }

@@ -114,7 +114,7 @@ fn check_parent_rule(
     let handle = face
         .path("handle")
         .unwrap_or_else(|| "<unknown>".to_owned());
-    for required in rule_handle_traits(&parent_rule) {
+    for required in rule_method_strings(&parent_rule, "require_handle_traits") {
         if !face
             .string_list("handle_traits")
             .unwrap_or_default()
@@ -134,8 +134,11 @@ fn check_parent_rule(
             );
         }
     }
-    for (argument, field, label) in [(4, "exports", "export"), (6, "part_traits", "part trait")] {
-        for required in rule_argument_strings(&parent_rule, argument) {
+    for (method, field, label) in [
+        ("require_exports", "exports", "export"),
+        ("require_part_traits", "part_traits", "part trait"),
+    ] {
+        for required in rule_method_strings(&parent_rule, method) {
             if !face
                 .string_list(field)
                 .unwrap_or_default()
@@ -164,26 +167,17 @@ fn parent_rule_source(src: &Path, face: &FaceSyntax) -> Option<String> {
     fs::read_to_string(src.join(relative)).ok()
 }
 
-fn rule_handle_traits(source: &str) -> Vec<String> {
-    rule_argument_strings(source, 5)
-}
-
-fn rule_argument_strings(source: &str, argument: usize) -> Vec<String> {
-    let Some(start) = source.find("new_with_contract(") else {
+fn rule_method_strings(source: &str, method: &str) -> Vec<String> {
+    let marker = format!(".{method}(");
+    let Some(start) = source.find(&marker) else {
         return Vec::new();
     };
-    let args = &source[start + "new_with_contract(".len()..];
+    let args = &source[start + marker.len()..];
     let end = args.find(')').unwrap_or(args.len());
     args[..end]
-        .split(',')
-        .nth(argument)
-        .map(|value| {
-            value
-                .split('"')
-                .enumerate()
-                .filter(|(index, _)| index % 2 == 1)
-                .map(|(_, value)| value.to_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+        .split('"')
+        .enumerate()
+        .filter(|(index, _)| index % 2 == 1)
+        .map(|(_, value)| value.to_owned())
+        .collect()
 }

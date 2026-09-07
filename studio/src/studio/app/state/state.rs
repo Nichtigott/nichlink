@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use super::support::package_root;
-use nichlink::{FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS, NodeId, Registry};
+use nichlink::{FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS, GraftDraft, NodeId, Registry};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Focus {
@@ -48,8 +48,17 @@ pub enum Overlay {
     NewProject(NewProjectState),
     Add(AddState),
     Edit(NodeId, AddState),
+    Graft(GraftState),
     Plugin(PluginState),
     Delete(NodeId),
+}
+
+/// A source-level graft waiting for explicit activation.
+/// 等待用户明确激活的源码级 graft。
+#[derive(Clone, Debug)]
+pub struct GraftState {
+    pub draft: GraftDraft,
+    pub validation: String,
 }
 
 /// Fields used by the New Project wizard.
@@ -191,6 +200,9 @@ pub struct AddState {
     pub field: usize,
     pub editing: bool,
     pub advanced: bool,
+    /// Original face whose implementation is copied for a graft candidate.
+    /// graft 候选需要复制实现源码时所对应的原注册面。
+    pub copy_source: Option<NodeId>,
 }
 
 pub(crate) fn face_field_indices(add: &AddState) -> Vec<usize> {
@@ -269,6 +281,7 @@ impl AddState {
             field: 0,
             editing: false,
             advanced: false,
+            copy_source: None,
         }
     }
 }

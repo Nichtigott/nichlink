@@ -1,41 +1,112 @@
-# NichLink
+<div align="center">
 
-[简体中文](README.zh-CN.md) | English
+<pre>
+________   ___  ________  ___  ___  ___       ___  ________   ___  __
+|\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \
+\ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_
+ \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \
+  \ \  \\ \  \ \  \ \  \____\ \  \ \  \ \  \____\ \  \ \  \\ \  \ \  \\ \  \
+   \ \__\\ \__\ \__\ \_______\ \__\ \__\ \_______\ \__\ \__\\ \__\ \__\\ \__\
+    \|__| \|__|\|__|\|_______|\|__|\|__|\|_______|\|__|\|__| \|__|\|__| \|__|
+</pre>
 
-NichLink is an open-source, Rust-first protocol for declarative object
-registration, contract checking, and atomic grafting. An object declares its
-own parent Registry; parent modules do not maintain a child roster.
+<p><strong>Declarative registries for systems that need to change.</strong><br>
+Describe an object once, check its contract, and replace one middle layer without rewriting the whole tree.</p>
 
-The workspace also contains build planning, optional runtime evidence, a
-Ratatui Studio, an MCP bridge for AI-assisted queries, and isolated plugin
-adapters. The current 0.1 line is early production: useful for real projects,
-with the static-analysis and plugin boundaries documented below.
+[![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
+[![MSRV](https://img.shields.io/badge/MSRV-Rust%201.96-8250df?style=flat-square)](Cargo.toml)
 
-## Smallest useful declaration
+<p>
+<a href="#features"><kbd>Features</kbd></a>
+<a href="#get-started"><kbd>Get started</kbd></a>
+<a href="#registration-faces"><kbd>Registration faces</kbd></a>
+<a href="#studio-and-cli"><kbd>Studio / CLI</kbd></a>
+<a href="#boundaries"><kbd>Boundaries</kbd></a>
+</p>
 
-```rust
-pub struct Workspace;
+</div>
 
-crate::root_object! {
-    kind: Workspace,
-    needs_registry: true,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
-}
+NichLink started with a practical front-end problem. A large UI project is a bad
+fit for an AI assistant when every change crosses half the repository: the task
+needs to be split into small units, each unit needs a clear purpose, and a
+replacement must be checked at the point where it is inserted. Ordinary modules
+and traits solve parts of that problem, but they do not describe the object graph
+that the tooling is working on. NichLink is an experiment in an AI-friendly
+Rust workflow: atomic objects, explicit contracts, source provenance, and a
+development view of the graph.
 
-pub struct Button;
+It is still a young project. The core protocol is useful today; static analysis
+and runtime evidence are intentionally reported with their limits instead of
+being presented as a perfect call-graph oracle.
 
-crate::workspace_object! {
-    kind: Button,
-    parent: crate::workspace::NODE_ID,
-}
+## Features
+
+- **Passive, recursive registration.** A face declares its parent in its own
+  file. The parent accepts it; no central child list is maintained. A face may
+  own another `Registry`, so the same rule repeats at every depth.
+- **One registry type.** A root registry and a nested registry use the same API.
+  The tree comes from registration, not from special root/leaf types.
+- **Contracts at the boundary.** Preset/parts output types and handle contracts
+  can fail at compile time. Structural `registry_rule` checks and external
+  `admission` checks return all failures before publication.
+- **Atomic grafting.** A replacement targets a logical slot and must match the
+  declared input/output `FlowContract`. Validation happens before the live tree
+  is changed.
+- **Two build passes.** The first pass discovers the reachable registration
+  faces and emits a smaller `StaticPlan`. The normal Rust compiler and linker
+  then perform the final code and symbol elimination. These are separate goals:
+  less registration metadata first, smaller machine code at the end.
+- **Debug only when requested.** `off`, `errors-only`, and `full` tracing keep
+  the release path free of evidence collection unless an application opts in.
+  Studio and the MCP bridge consume the same registry and call/data-flow model.
+
+## Get started
+
+There are two supported ways to try NichLink.
+
+### Install the Studio binary
+
+This keeps the NichLink source outside your application. Install the Ratatui
+tool from the Git repository, then point it at the project you want to inspect:
+
+```sh
+cargo install --git https://github.com/Nichtigott/nichlink --bin nichlink-studio nichlink-studio
+cd /work/my-app
+NICH_LINK_PACKAGE_ROOT="$PWD" nichlink-studio
 ```
 
-Fields such as `name`, `summary`, `parts`, and `registry_name` have defaults.
-The explicit `parent` is checked against the macro name. Add `needs_registry`,
-`admission`, `registry_rule`, or input/output
-contracts only when the object actually needs those boundaries.
+For a released crate, replace the Git source with `cargo install nichlink-studio`.
 
-For a host package, keep the build adapter small:
+### Run from a clone
+
+This is handy while developing NichLink itself and does not install anything:
+
+```sh
+git clone https://github.com/Nichtigott/nichlink
+cd nichlink
+cargo run -p nichlink-studio
+```
+
+To inspect another project from the clone:
+
+```sh
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-studio
+```
+
+Studio's `n` action creates a binary or library project. It writes the manifest,
+the thin build entry, and the source entry point; the first face is added with
+`a`. It does not invent a `control` tree. A registry owner gets a local
+`registry_rule/` directory only when that rule is needed.
+
+### Add NichLink to an application
+
+The application owns its declarations, so Cargo needs one small build adapter:
+
+```sh
+cargo add nichlink-core --path /path/to/nichlink/core
+cargo add nichlink-build --build --path /path/to/nichlink/build
+```
 
 ```rust
 // build.rs
@@ -44,119 +115,7 @@ fn main() {
 }
 ```
 
-`nichlink-build` discovers the folder-backed registration tree and emits the
-static plan before rustc type-checks the generated module. Cargo still requires
-this one host-side build entry; a dependency crate cannot inspect its consumer's
-`main.rs` automatically.
-
-## First run
-
-From this repository, start the development Studio:
-
-```sh
-cd prototypes/registation_test/nichlink
-cargo run -p nichlink-studio
-```
-
-Press `n` inside Studio to create a project. The wizard asks for a directory,
-package name, and `binary`/`library` kind, then writes only the Cargo metadata,
-thin `build.rs`, and entry point. The registration tree starts empty: press `a`
-to create the first root face. If that face requests a Registry, Studio creates
-its local `registry_rule/registry_rule.rs` beside it. Studio switches to the new
-project immediately; no hand-created folders or environment variables are required.
-
-The generated entry point creates one declaration macro for each Registry.
-`root_object!` mounts a root face; `<parent>_object!` mounts a child below that
-parent. The explicit `crate::...!` path keeps rust-analyzer completion working.
-The core and build crates remain normal Cargo dependencies; Cargo does not copy
-third-party source into `src/`.
-
-To use NichLink in a new application, add the two path dependencies while the
-project is local:
-
-```sh
-cargo add nichlink-core --path /path/to/nichlink/core
-cargo add nichlink-build --build --path /path/to/nichlink/build
-```
-
-Keep this `build.rs` in the application root:
-
-```rust
-fn main() {
-    nichlink_build::run();
-}
-```
-
-The generated module is included once at the crate root. The small shim keeps
-the generated `registry_core` name stable; it is metadata plumbing, not a child
-registration list:
-
-```rust
-// src/main.rs
-pub mod registry_core {
-    pub use nichlink_core::*;
-}
-
-include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
-
-fn main() {
-    println!("registered faces: {}", registrations().len());
-}
-```
-
-Put each declaration in the canonical folder layout, for example
-`src/workspace/workspace.rs`:
-
-```rust
-pub struct Workspace;
-
-crate::root_object! {
-    kind: Workspace,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
-}
-```
-
-Run `cargo check` once to generate the plan. Set `NICH_LINK_PACKAGE_ROOT` and
-launch Studio to inspect or edit that application's `src/` tree:
-
-```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-studio
-```
-
-When you are already in the host project directory, the environment variable
-is optional:
-
-```sh
-cd /work/my-app
-cargo run --manifest-path /path/to/nichlink/studio/Cargo.toml
-```
-
-A `main.rs` is not required. Library packages use `src/lib.rs` as the automatic
-scope entry; packages with neither `main.rs` nor `lib.rs` keep the safe full-tree
-fallback. Launching Studio without `NICH_LINK_PACKAGE_ROOT` shows an empty root
-when the workspace has no host `src/` directory.
-
-### If you are building a framework (library)
-
-The framework owns its registration faces and publishes the generated plan:
-
-```text
-my-framework/
-  build.rs
-  src/lib.rs
-  src/workspace/workspace.rs
-  src/workspace/registry_rule/registry_rule.rs
-  src/workspace/object/panel/panel.rs
-```
-
-Every face that owns a Registry may keep its structural contract in a local
-`registry_rule/` folder. It constrains incoming face shape; the separate
-`admission` field controls which outside objects those faces may use. Neither is
-a child roster. Existing `registry/rules/rules.rs` layouts remain readable, while
-newly authored projects use `registry_rule/`.
-
-`src/lib.rs` uses the same generated-module prelude shown above, but has no
-`main` function:
+In the crate root, connect the generated plan once:
 
 ```rust
 pub mod registry_core {
@@ -166,189 +125,387 @@ pub mod registry_core {
 include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
 ```
 
-Consumers only add `my-framework` and call its public API. They do not copy the
-framework's registration files. A consumer that adds its own faces gets its own
-`build.rs` and generated plan; Cargo cannot use the consumer's `main.rs` to prune
-the already-built dependency automatically.
+`main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
+framework library uses `src/lib.rs`. The build adapter scans the host crate's
+own source tree. Cargo does not give a dependency's `build.rs` access to the
+consumer's `main.rs`, so a consumer that owns faces needs its own adapter.
 
-### If you are building a main application (binary)
+## Registration faces
 
-If the application only uses a framework, add that framework and skip
-`nichlink-build` entirely. Add `nichlink-build`, the thin `build.rs`, and the
-generated-module prelude only when the application owns additional registration
-faces. Its `src/main.rs` can then call the generated root-level `registrations()`
-or any application API as usual.
-
-## Crates
-
-```text
-nichlink/
-  core/         nichlink-core: Registry, transactions, contracts, admission,
-                grafts, diagnostics, identity, and declaration macros
-  build/        nichlink-build: source discovery, manifest parsing, cache,
-                coarse scope, and StaticPlan generation
-  debug/        nichlink-debug: optional collector, MIR evidence, CallTrace,
-                data-flow and graph adapters
-  studio/       nichlink-studio: Ratatui UI, watch, search, source navigation,
-                and editor integration
-  mcp/          nichlink-mcp: stdio MCP bridge for compact source and graph queries
-  plugin-host/  nichlink-plugin-host: verified Wasm/process adapters, lazy
-                loading, and atomic deployment
-```
-
-`nichlink-core` has no dependency on inventory, Studio, fixtures, or a concrete
-root registry. It can be packaged independently. The other crates are workspace
-tools and are released after their workspace dependencies.
-
-## Runtime tracing modes
-
-Tracing is optional and policy-driven. A normal application can use the
-runtime default, which is `errors-only` in debug builds and `off` in release
-builds:
+A registration face has two layers. The Rust `struct` and its `impl` contain the
+real implementation. The declaration records where that implementation belongs
+and what may enter or replace it.
 
 ```rust
-let trace = nichlink::CallTrace::runtime();
-```
+pub struct Canvas;
 
-Use `CallTrace::disabled()` to force the zero-evidence path, or
-`CallTrace::full()` when a Studio/debug session needs every frame, local, and
-data edge. For fallible work, wrap the operation with
-`trace.with_result(|trace| ...)`; in `errors-only` mode successful evidence is
-rolled back while an `Err` or panic keeps the failure chain.
+pub struct CanvasParts;
+pub struct CanvasPreset;
 
-The runtime default can be overridden at process start without a feature flag:
+impl nichlink_core::PresetContract for CanvasPreset {
+    type Output = CanvasParts;
+    const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
+}
 
-```sh
-NICH_LINK_TRACE=full cargo run
-```
+impl nichlink_core::PartsContract for CanvasParts {
+    type Output = CanvasParts;
+    const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
+}
 
-Accepted values are `off`, `errors-only`, and `full` (with `errors` and
-`errors_only` accepted as readable aliases).
-
-## MCP bridge
-
-The optional `nichlink-mcp` binary exposes compact source and call-graph
-queries over MCP stdio. A generic client configuration looks like:
-
-```json
-{
-  "mcpServers": {
-    "nichlink": {
-      "command": "cargo",
-      "args": ["run", "--release", "-p", "nichlink-mcp"],
-      "env": { "NICH_LINK_PACKAGE_ROOT": "/work/my-app" }
+impl Canvas {
+    pub fn render(&self, input: CanvasInput) -> CanvasFrame {
+        // the implementation stays ordinary Rust
+        input.into_frame()
     }
-  }
+}
+
+// The generated parent macro expresses the source hierarchy.
+// For a face under `node_editor`, use `node_editor_object!` here.
+crate::node_editor_object! {
+    kind: Canvas,
+    preset: CanvasPreset,
+    parts: CanvasParts,
+    handle: Canvas,
+    summary: { zh: "二维画布", en: "A 2-D drawing surface" },
+    exports: ["canvas.render"],
+    needs_registry: false,
+    requires: ["viewport" => "layout.viewport"],
+    provides: ["canvas.frame"],
+    expected_output: "CanvasFrame",
+    actual_output: "CanvasFrame",
+    flow: nichlink_core::FlowContract::new(
+        nichlink_core::ContractId::new("canvas.render.v1"),
+        1,
+        "CanvasInput",
+        "CanvasFrame",
+    ),
 }
 ```
 
-The bridge is read-only and keeps the configured project root as its file
-boundary. Its static call graph is deliberately labelled heuristic; live
-`CallTrace` evidence remains authoritative for dynamic calls and values.
+Most fields have safe defaults. The smallest face is simply
+`crate::root_object! { kind: App }` or a generated `<parent>_object!` with a
+`kind`. Add `summary`, `exports`, `requires`, or `flow` when they carry useful
+information; do not repeat defaults just to fill a table.
 
-## Why NichLink exists
+There are three different checks, and they are deliberately not merged:
 
-Use NichLink when an object graph needs three things at once: each object declares
-where it belongs, contracts reject incompatible objects before publication, and a
-middle layer can be replaced atomically. For a small application, ordinary Rust
-modules, traits, or constructor injection are usually simpler.
+1. **Construction contract (compile time).** `preset` and `parts` must agree
+   on their associated output type. `handle_contracts` and `part_contracts` ask
+   rustc to prove that the handle and parts types implement the required traits.
+2. **Registration rule (build/publication time).** `registry_rule` describes only
+   the minimum child shape: preset, parts, exports, and interfaces. It does not
+   keep a kind allowlist or decide parentage. Missing structure is reported
+   together instead of producing
+   a half-registered object.
+3. **Admission (dependency gate).** `admission` controls which outside registry
+   paths this face may use. A call to an object outside that gate is rejected;
+   the resulting diagnostic names the face, source location, and dependency.
 
-## Studio at a glance
-
-![](./picture/NichLink_studio.png)
-
-The Studio is an optional, event-driven Ratatui tool. It is not part of the core
-runtime and is only redrawn after input, resize, or watch events.
-
-## Comparison
-
-| Approach | Good at | Missing from it | NichLink adds |
-| --- | --- | --- | --- |
-| Modules / traits | Namespaces and static behavior | Discovery, admission, recursive topology | A declaration and contract layer |
-| Dependency injection | Explicit construction and testing | Registry tree and atomic middle-layer replacement | Passive registration and graft transactions |
-| `inventory` / `linkme` | Distributed flat collection | Contracts, parent closure, provenance | Optional collector plus tree semantics |
-| Bevy plugins | Explicit application composition | Generic object paths and graft validation | Object-owned registration and contracts |
-| CodeGraph / CodeQL | Symbol and call evidence | Runtime registry decisions | Evidence consumed by Studio/MCP |
-
-## Capability boundaries
-
-- Static call results are evidence, not a promise for every `dyn Trait`, function
-  pointer, FFI, or runtime-selected call.
-- Optimized locals without instrumentation may be `unobserved`; use `full` tracing
-  when values matter.
-- Process plugins isolate failures and resources but are not OS security sandboxes.
-- A dependency crate's `build.rs` cannot read a consuming application's `main.rs`;
-  the host supplies the one build entry.
-
-## Namespace isolation
-
-Every compiled registration face carries the package namespace from
-`CARGO_PKG_NAME`. Its `NodeId` and root identity include that namespace, so two
-libraries may use the same relative source path, kind, or root display name
-without sharing identities. A `Registry` created with
-`Registry::root_for_namespace(framework, namespace)` rejects snapshots from a
-different namespace before mutating its transaction.
-
-The legacy `ROOT_NODE_ID` and `Registry::root()` remain available for the
-default compatibility namespace. New hosts should choose an explicit stable
-namespace, for example:
+For a replacement, both sides publish a flow contract. The host validates the
+contract id, version, input, and output before applying the graft:
 
 ```rust
-let registry = nichlink::Registry::root_for_namespace(
-    nichlink::FrameworkId::new("my-app"),
-    "my-company.my-app",
-);
+let command = nichlink_core::GraftCommand::parse("graft canvas_fast to canvas")?;
+// Resolve the names, build GraftRequest with both FlowContracts, then:
+registry.graft(request)?; // unchanged on any validation error
 ```
 
-Studio reads `NICH_LINK_NAMESPACE`; this lets two libraries run in one process
-without cross-loading authored faces. Set `NICH_LINK_PACKAGE_ROOT` to the host
-project directory before launching Studio so authoring reads and writes that
-project's `src/` tree. The namespace is an isolation boundary, not a display
-name: identical names are allowed in separate registries.
+An extension only needs to satisfy the target registration rule. A replacement
+also needs an input/output contract that is semantically compatible with the
+slot. This is what makes a middle-layer swap explicit rather than an accidental
+module rename.
 
-For example:
+### Structural rules are minimums
+
+registry_rule is a lower bound. A face may contain more fields, methods,
+interfaces, or exports than the rule lists; it may not omit a required one.
+The rule does not claim that the listed fields are the complete shape of the
+object. This matters for framework evolution: adding a method to an existing
+face does not break older consumers, while removing a required part does.
+
+### How a parent constrains its children
+
+The parent writes the rule on the Registry it owns. A child does not copy that
+rule; when the child is submitted, the parent Registry validates the child's
+preset, parts, exports, and declared interfaces. The rule is a minimum
+shape, so extra implementation details are fine.
+
+```rust
+pub struct Control;
+
+pub struct ControlFrame;
+pub struct ActionParts;
+
+pub trait ControlHandle {
+    fn paint(&self, parts: &ButtonParts) -> ControlFrame;
+}
+
+pub trait ActionPartsContract {
+    fn action_id(&self) -> &str;
+}
+
+pub struct Button;
+pub struct ButtonParts {
+    pub label: String,
+    pub action: String,
+}
+
+impl nichlink_core::PresetContract for ActionParts {
+    type Output = ButtonParts;
+    const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
+}
+
+impl nichlink_core::PartsContract for ButtonParts {
+    type Output = ButtonParts;
+    const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
+}
+
+impl ControlHandle for Button {
+    fn paint(&self, parts: &ButtonParts) -> ControlFrame {
+        let _label = &parts.label;
+        ControlFrame
+    }
+}
+
+impl ActionPartsContract for ButtonParts {
+    fn action_id(&self) -> &str {
+        &self.action
+    }
+}
+
+// The parent face owns the Registry and declares its minimum child shape.
+crate::root_object! {
+    kind: Control,
+    needs_registry: true,
+    registry_rule: crate::RegistrationRule::new()
+        .require_preset("ActionParts")
+        .require_parts(&["paint"])
+        .require_exports(&["control.render"])
+        .require_handle_traits(&["ControlHandle"])
+        .require_part_traits(&["ActionPartsContract"]),
+}
+
+// Button supplies every required item, and may add more.
+crate::control_object! {
+    kind: Button,
+    preset: ActionParts,
+    parts: ButtonParts,
+    handle: Button,
+    exports: ["control.render"],
+    handle_traits: ["ControlHandle"],
+    handle_contracts: [crate::ControlHandle],
+    part_traits: ["ActionPartsContract"],
+    part_contracts: [crate::ActionPartsContract],
+}
+```
+
+The constraint runs from parent to child: Control's Registry reads its rule and
+validates Button. A preset other than ActionParts, no `paint` in
+`ButtonParts::PROVIDED_PARTS`, no `control.render` export, or either missing
+interface is included in one structured report. `handle_contracts` and
+`part_contracts` additionally ask rustc to prove that both impls exist. Button may add
+fields, methods, traits, and exports; extra structure is never rejected.
+
+Parentage comes from `control_object!` and `parent`, not a kind filter. External
+calls are controlled separately by `admission`.
+
+Older prototypes used `RegistrationRule::new(&["Button"], &[])`. That form is
+gone. Replace it with `RegistrationRule::new()` plus only the required shape
+methods shown above. Move external path allow/deny entries to `Admission`; do
+not move the old kind list there, because kind never decides parentage.
+
+The three layers stay separate:
+
+    Rust impl / struct       actual code and private details
+    registry_rule            minimum shape accepted by the parent Registry
+    admission                outside registry paths this face may use
+    FlowContract             wire-level input/output at a replacement boundary
+
+### Output extensions and compatibility
+
+The current flow contract compares a stable contract id, version, and the
+declared input/output labels. It does not guess field-level covariance from
+Rust types. If a new implementation returns more information, use one of these
+explicit designs:
+
+- keep the same output label and add backward-compatible fields to a stable
+  envelope (CanvasFrame with optional metadata);
+- publish a new contract version (CanvasFrame v2) and update every consumer
+  boundary in one change; or
+- add an adapter face that converts the richer output back to the old contract.
+
+The last two choices make the affected boundary visible instead of silently
+discarding data. A graft is accepted only after the chosen boundary contracts
+and the destination registration rule pass.
+
+### One graft or a coordinated graft set
+
+The registration tree describes ownership, not every data-flow edge. A
+requires edge can resolve a provider on another branch, and runtime data edges
+may cross several registry boundaries. When a replacement changes several
+consumers, describe the affected slots as one plan and commit them together:
+
+```rust
+// Each helper supplies the target and replacement contracts.
+let requests = [
+    request_for(&canvas_target, &canvas_fast),
+    request_for(&hit_test_target, &hit_test_fast),
+    request_for(&layout_target, &layout_fast),
+];
+
+registry.graft_batch(requests)?;
+```
+
+graft_batch stages the whole set. Each request checks namespace, overlap,
+source and destination contracts, destination registry_rule, and connector
+admission; only when every request succeeds is the live tree replaced. If one
+consumer still expects the old boundary, the complete transaction fails and no
+slot is half-replaced. The helper graft_command remains convenient for one
+human-facing “graft replacement to target” command; tooling can build a batch
+when an impact set spans branches.
+
+The current graft operation moves a registered implementation into a target
+slot. It keeps the target's child registry, rejects an implementation that
+already owns a non-empty child registry, and rejects overlapping source/target
+subtrees. A candidate may come from another branch of the same framework, but
+the destination rule and connector checks still apply. If the thing being
+replaced is an entire subtree rather than an implementation slot, use the
+snapshot migration API so the new subtree is validated as one batch.
+
+Studio uses a safer source-authoring path. Pressing `g` copies the selected
+face, its implementation, helper files, and contract into
+`.nichlink/grafts/<draft>/`. That directory is outside `src`, so the draft is
+not compiled, discovered, or registered and cannot create a second provider.
+The plan screen offers Validate, Apply, and Cancel. Validate re-reads the edited
+draft and checks it as if it occupied the original slot. Apply keeps the old
+module in the draft's `original/` directory, atomically swaps the source
+directory, and reloads the registration tree. Press `g` on the same target
+after restarting Studio to reopen its draft.
+
+NichLink does not prescribe the programming paradigm inside a face. Functions,
+traits, generics, closures, dependency injection, and message passing remain
+ordinary Rust. The registration face governs the published boundary. Declared
+`requires/provides` and `FlowContract` edges are checked automatically during
+registration, connection, and grafting. Changing an implementation is fine; a
+failure occurs only when an input has no admitted provider or a replacement no
+longer reconnects to the declared data flow. The diagnostic names the broken
+capability, consumer, candidate provider, source location, and phase. This is
+not a claim that NichLink guesses every undeclared value flow inside arbitrary
+Rust code.
+
+## Studio and CLI
+
+Studio is a resident Ratatui application, not a stream of printed snapshots. It
+opens an alternate terminal screen, watches the selected project, and redraws
+on input, resize, or a file event.
+
+![NichLink Studio](./picture/NichLink_studio.png)
+
+| Key | Action |
+| --- | --- |
+| `n` | New binary/library project |
+| `a` / `e` / `d` | Add, edit, or delete a face |
+| `g` | Create or reopen an inactive graft draft for the selected face |
+| `e` / `v` / `a` | Edit, validate, or apply the open graft plan |
+| `/` | Search files and functions |
+| `1`–`4` | Search, inspect, data, compare pages |
+| `Tab` | Move focus between tree and details |
+| arrows / `j` `k` | Move or resize the focused panel |
+| `r` / `F5` | Reload the project |
+| `b` / `F9` | Run the build check |
+| `q` / `Ctrl-C` | Quit |
+
+For source-driven hot rebuild while working on Studio itself:
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app \
-NICH_LINK_NAMESPACE=my-app \
-cargo run -p nichlink-studio
+  cargo run -p nichlink-studio --bin nichlink-dev -- watch
 ```
 
-## Build and package
+The command-line surface is intentionally small. `cargo check` is the build
+validation command, `nichlink-mcp` is the read-only JSON-RPC/MCP bridge for AI
+clients, and Studio is the interactive authoring/debug surface:
+
+```sh
+cargo check
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
+```
+
+MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
+`nichlink.read`, and `nichlink.status`. Static call-graph answers are labelled
+heuristic; live `CallTrace` evidence is authoritative for dynamic calls and
+runtime values.
+
+## When NichLink is worth it
+
+NichLink is not a replacement for Rust's module system. It earns its place when
+an object graph is maintained by several people or tools, when a middle layer
+must be swapped without rebuilding its neighbours, or when an AI agent needs a
+machine-readable explanation of what an object accepts and provides. For a
+small application assembled in one place, ordinary Rust is usually the better
+choice.
+
+## Comparison
+
+| Approach | Solves well | Leaves to the application |
+| --- | --- | --- |
+| Modules, traits, DI | Namespaces, static behaviour, explicit construction | Discovery, parent closure, admission, replacement policy |
+| `inventory` / `linkme` | Distributed collection of static items | Tree semantics, contracts, provenance, atomic grafts |
+| Bevy-style plugins | Explicit composition of an application | Generic source paths and middle-layer contract checks |
+| CodeGraph / CodeQL | Symbol and call evidence | Runtime registration and replacement decisions |
+| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio/MCP views | Rust's own rules for dynamic dispatch and optimised values |
+
+## Boundaries
+
+- The coarse build pass sees the host crate's source, not a downstream
+  consumer's source. The final binary still follows rustc/LLVM/linker reachability.
+- MIR and static scans provide candidates. `dyn Trait`, function pointers, FFI,
+  runtime-selected calls, and macro-generated code may require conservative
+  retention or live evidence.
+- Uninstrumented optimized locals may be shown as `unobserved`. Use the `full`
+  tracing mode when values, not just types, matter.
+- Process plugins isolate crashes and resource limits; they are not an
+  operating-system security sandbox. Wasm/process loading is optional.
+- Studio, debug, MCP, and plugin-host code are optional tools. A core-only
+  release keeps the registry protocol without the development UI.
+
+## Runtime tracing
+
+```rust
+let trace = nichlink_core::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_core::CallTrace::disabled();
+let detailed = nichlink_core::CallTrace::full();
+```
+
+`errors-only` keeps failed chains and discards successful evidence. `full` keeps
+frames, locals, and data edges for Studio/MCP inspection. The default release
+path collects nothing unless the application opts in.
+
+## Workspace layout
+
+```text
+core/         nichlink-core: Registry, contracts, admission, grafts, macros
+build/        nichlink-build: source discovery, cache, coarse StaticPlan
+debug/        optional CallTrace, MIR evidence, data-flow and graph adapters
+studio/       Ratatui authoring, search, watch and source navigation
+mcp/          read-only MCP bridge for AI-assisted queries
+plugin-host/  optional Wasm/process adapters and atomic deployment
+```
+
+The technical roadmap is in [`docs/ROADMAP.md`](docs/ROADMAP.md), with a Chinese
+version at [`docs/ROADMAP.zh-CN.md`](docs/ROADMAP.zh-CN.md). Package-specific API
+notes live beside each crate.
+
+## Build and license
 
 ```sh
 cargo fmt --all
 cargo test --workspace --offline
-cargo test --workspace --release --offline
-cargo package -p nichlink-core --allow-dirty --offline
-cargo package -p nichlink-build --allow-dirty --offline
-cargo package -p nichlink-mcp --allow-dirty --offline
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-`tools/nichlink-release-audit` also writes release evidence under
-`target/nichlink-audit/release/`: artifact sizes, defined-symbol lists, and the
-node/function manifest used to review final linker pruning.
+NichLink is released under the [MIT License](LICENSE). Contributions, design
+critique, and real-world failure reports are welcome in GitHub Issues and
+Discussions.
 
-The dependent packages (`nichlink-debug`, `nichlink-studio`, and
-`nichlink-plugin-host`) use the published `nichlink-core` version when Cargo
-creates an upload package. Publish or stage the core package in a registry
-first, then package those crates in dependency order; a local offline package
-run cannot resolve an unpublished crate from crates.io.
-
-The parent directory contains the original prototype tests and external module
-fixtures. They are intentionally outside this workspace and are not included
-when packaging `nichlink/`.
-
-The workspace declares Rust `1.96` as its MSRV. CI checks that exact toolchain
-alongside moving `stable`, keeping the compatibility floor and current Rust
-releases independently visible.
-
-The public technical roadmap is `ROADMAP.md`. Migration and threat details are
-kept as supplemental notes; they are not required to understand the core API.
-
-The independent CI definition is in `.github/workflows/ci.yml`. Run
-`tools/nichlink-package-audit` for the local package checks and the dependency
-order required before publishing the remaining crates.
-
-Language index: [简体中文 README](README.zh-CN.md) and
-[中文路线图](ROADMAP.zh-CN.md). Supplemental notes also provide Chinese links.
+[简体中文](README.zh-CN.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md)

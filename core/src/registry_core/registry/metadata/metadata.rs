@@ -26,12 +26,6 @@ impl Registry {
         self.entries.is_empty()
     }
 
-    pub fn registration_rule_accepts(&self, kind: &str) -> bool {
-        self.header.registration_rule.accepts(kind)
-    }
-    pub fn allowed_kinds(&self) -> &[String] {
-        &self.header.registration_rule.allowed_kinds
-    }
     pub fn registration_rule(&self) -> &OwnedRegistrationRule {
         &self.header.registration_rule
     }

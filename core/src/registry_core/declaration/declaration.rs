@@ -143,8 +143,6 @@ impl Admission {
 /// 注册面进入 Registry 时必须满足的结构规范。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegistrationRule {
-    pub allowed_kinds: &'static [&'static str],
-    pub denied_kinds: &'static [&'static str],
     pub required_preset: Option<&'static str>,
     pub required_parts: &'static [&'static str],
     pub required_exports: &'static [&'static str],
@@ -157,81 +155,47 @@ pub struct RegistrationRule {
 }
 
 impl RegistrationRule {
-    pub const ANY: Self = Self::new(&[], &[]);
+    pub const ANY: Self = Self::new();
 
-    pub const fn new(
-        allowed_kinds: &'static [&'static str],
-        denied_kinds: &'static [&'static str],
-    ) -> Self {
-        Self::new_with_shape(allowed_kinds, denied_kinds, None, &[], &[])
-    }
-
-    pub const fn new_with_shape(
-        allowed_kinds: &'static [&'static str],
-        denied_kinds: &'static [&'static str],
-        required_preset: Option<&'static str>,
-        required_parts: &'static [&'static str],
-        required_exports: &'static [&'static str],
-    ) -> Self {
+    /// Start an unconstrained structural rule.
+    /// 创建一个尚未添加结构要求的规则。
+    pub const fn new() -> Self {
         Self {
-            allowed_kinds,
-            denied_kinds,
-            required_preset,
-            required_parts,
-            required_exports,
+            required_preset: None,
+            required_parts: &[],
+            required_exports: &[],
             required_handle_traits: &[],
             required_part_traits: &[],
         }
     }
 
-    /// Add interface requirements to a structural registration rule.
-    /// 为注册结构规范增加接口实现要求。
-    pub const fn with_interfaces(
-        mut self,
-        required_handle_traits: &'static [&'static str],
-        required_part_traits: &'static [&'static str],
-    ) -> Self {
-        self.required_handle_traits = required_handle_traits;
-        self.required_part_traits = required_part_traits;
+    pub const fn require_preset(mut self, preset: &'static str) -> Self {
+        self.required_preset = Some(preset);
         self
     }
 
-    /// Construct a complete shape rule in one const expression.
-    /// 用一个 const 表达式构造完整的注册结构规范。
-    pub const fn new_with_contract(
-        allowed_kinds: &'static [&'static str],
-        denied_kinds: &'static [&'static str],
-        required_preset: Option<&'static str>,
-        required_parts: &'static [&'static str],
-        required_exports: &'static [&'static str],
-        required_handle_traits: &'static [&'static str],
-        required_part_traits: &'static [&'static str],
-    ) -> Self {
-        Self::new_with_shape(
-            allowed_kinds,
-            denied_kinds,
-            required_preset,
-            required_parts,
-            required_exports,
-        )
-        .with_interfaces(required_handle_traits, required_part_traits)
+    pub const fn require_parts(mut self, parts: &'static [&'static str]) -> Self {
+        self.required_parts = parts;
+        self
     }
 
-    pub fn accepts(self, kind: &str) -> bool {
-        if self.denied_kinds.contains(&kind) {
-            return false;
-        }
-        self.allowed_kinds.is_empty() || self.allowed_kinds.contains(&kind)
+    pub const fn require_exports(mut self, exports: &'static [&'static str]) -> Self {
+        self.required_exports = exports;
+        self
+    }
+
+    pub const fn require_handle_traits(mut self, traits: &'static [&'static str]) -> Self {
+        self.required_handle_traits = traits;
+        self
+    }
+
+    pub const fn require_part_traits(mut self, traits: &'static [&'static str]) -> Self {
+        self.required_part_traits = traits;
+        self
     }
 
     pub fn validate(&self, info: &RegistrationInfo) -> Vec<String> {
         let mut failures = Vec::new();
-        if !self.accepts(info.kind) {
-            failures.push(format!(
-                "kind `{}` is not accepted by the registration rule",
-                info.kind
-            ));
-        }
         if let Some(expected) = self.required_preset
             && info.preset != expected
         {
@@ -267,6 +231,12 @@ impl RegistrationRule {
             }
         }
         failures
+    }
+}
+
+impl Default for RegistrationRule {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -476,8 +446,6 @@ pub struct OwnedAdmission {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OwnedRegistrationRule {
-    pub allowed_kinds: Vec<String>,
-    pub denied_kinds: Vec<String>,
     pub required_preset: Option<String>,
     pub required_parts: Vec<String>,
     pub required_exports: Vec<String>,
@@ -513,24 +481,10 @@ impl OwnedAdmission {
 }
 
 impl OwnedRegistrationRule {
-    /// Check whether a kind is admitted by this rule.
-    /// 检查某个 kind 是否被该注册规范准入。
-    pub fn accepts(&self, kind: &str) -> bool {
-        !self.denied_kinds.iter().any(|value| value == kind)
-            && (self.allowed_kinds.is_empty()
-                || self.allowed_kinds.iter().any(|value| value == kind))
-    }
-
     /// Validate all structural requirements and return every failure.
     /// 校验全部结构要求，并一次返回所有失败项。
     pub fn validate(&self, snapshot: &RegistrationSnapshot) -> Vec<String> {
         let mut failures = Vec::new();
-        if !self.accepts(&snapshot.kind) {
-            failures.push(format!(
-                "kind `{}` is not accepted by the registration rule",
-                snapshot.kind
-            ));
-        }
         if let Some(expected) = &self.required_preset
             && snapshot.preset != *expected
         {
@@ -598,17 +552,6 @@ impl OwnedObjectContract {
                 ));
             }
         }
-        for provided in &self.provided_parts {
-            if !self
-                .required_parts
-                .iter()
-                .any(|required| required == provided)
-            {
-                failures.push(format!(
-                    "`{object}` provides unexpected construction part `{provided}`"
-                ));
-            }
-        }
         if self.expected_output != self.actual_output {
             failures.push(format!(
                 "`{object}` returns `{}`, expected `{}`",
@@ -641,7 +584,14 @@ impl RegistrationSnapshot {
         self.admission = authored.admission;
         self.requires = authored.requires;
         self.provides = authored.provides;
-        self.contract = authored.contract;
+        // The part lists come from the compiled PresetContract and
+        // PartsContract associated constants. A source-only reload cannot
+        // reconstruct them, so keep that executable evidence while applying
+        // the editable output labels.
+        // part 列表来自已编译 trait 的关联常量；只读源码的热刷新无法可靠重建，
+        // 因此保留这份可执行证据，只更新可编辑的输出标签。
+        self.contract.expected_output = authored.contract.expected_output;
+        self.contract.actual_output = authored.contract.actual_output;
         if authored.flow.is_declared() {
             self.flow = authored.flow;
         }
@@ -763,16 +713,6 @@ impl Admission {
 impl RegistrationRule {
     pub fn into_owned(self) -> OwnedRegistrationRule {
         OwnedRegistrationRule {
-            allowed_kinds: self
-                .allowed_kinds
-                .iter()
-                .map(|value| (*value).to_owned())
-                .collect(),
-            denied_kinds: self
-                .denied_kinds
-                .iter()
-                .map(|value| (*value).to_owned())
-                .collect(),
             required_preset: self.required_preset.map(str::to_owned),
             required_parts: self
                 .required_parts
@@ -838,17 +778,6 @@ impl ObjectContract {
             {
                 failures.push(format!(
                     "`{object}` is missing construction part `{required}`"
-                ));
-            }
-        }
-        for provided in self.provided_parts {
-            if !self
-                .required_parts
-                .iter()
-                .any(|required| required == provided)
-            {
-                failures.push(format!(
-                    "`{object}` provides unexpected construction part `{provided}`"
                 ));
             }
         }

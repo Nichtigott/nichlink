@@ -38,6 +38,7 @@ macro_rules! __registration_face {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         requires: [$($require:expr => $provider:expr),* $(,)?],
         provides: [$($provide:expr),* $(,)?],
         expected_output: $expected_output:expr,
@@ -49,6 +50,7 @@ macro_rules! __registration_face {
     } => {
         const _: () = $crate::assert_contract::<$preset, $parts>();
         $crate::__assert_impls!($handle; [$($($handle_contract),*)?]);
+        $crate::__assert_impls!($parts; [$($($part_contract),*)?]);
 
         pub const NODE_ID: $crate::NodeId = $crate::NodeId::from_namespaced_path(
             env!("CARGO_PKG_NAME"),
@@ -302,6 +304,7 @@ macro_rules! __control_object {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         requires: [$($require:literal => $provider:literal),* $(,)?],
         provides: [$($provide:literal),* $(,)?],
         expected_output: $expected_output:literal,
@@ -336,6 +339,7 @@ macro_rules! __control_object {
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
+            $(part_contracts: [$($part_contract),*],)?
             requires: [$($require => $provider),*],
             provides: [$($provide),*],
             expected_output: $expected_output,
@@ -389,6 +393,7 @@ macro_rules! __control_object {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         $(requires: [$($require:expr => $provider:expr),* $(,)?],)?
         $(provides: [$($provide:expr),* $(,)?],)?
         $(expected_output: $expected_output:expr,)?
@@ -430,6 +435,7 @@ macro_rules! __control_object {
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
+            $(part_contracts: [$($part_contract),*],)?
             requires: [$($($require => $provider),*)?],
             provides: [$($($provide),*)?],
             expected_output: $crate::__face_expr_or!("()"; $($expected_output)?),
@@ -461,6 +467,7 @@ macro_rules! __control_object {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         $(requires: [$($require:expr => $provider:expr),* $(,)?],)?
         $(provides: [$($provide:expr),* $(,)?],)?
         $(expected_output: $expected_output:expr,)?
@@ -492,6 +499,7 @@ macro_rules! __control_object {
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
+            $(part_contracts: [$($part_contract),*],)?
             $(requires: [$($require => $provider),*],)?
             $(provides: [$($provide),*],)?
             $(expected_output: $expected_output,)?
@@ -522,6 +530,7 @@ macro_rules! __control_object {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         $(requires: [$($require:expr => $provider:expr),* $(,)?],)?
         $(provides: [$($provide:expr),* $(,)?],)?
         $(expected_output: $expected_output:expr,)?
@@ -563,6 +572,7 @@ macro_rules! __control_object {
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
+            $(part_contracts: [$($part_contract),*],)?
             requires: [$($($require => $provider),*)?],
             provides: [$($($provide),*)?],
             expected_output: $crate::__face_expr_or!("()"; $($expected_output)?),
@@ -653,6 +663,7 @@ macro_rules! __external_object {
         $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
         $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
         $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(part_contracts: [$($part_contract:path),* $(,)?],)?
         requires: [$($require:literal => $provider:literal),* $(,)?],
         provides: [$($provide:literal),* $(,)?],
         expected_output: $expected_output:literal,
@@ -687,6 +698,7 @@ macro_rules! __external_object {
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
             $(part_traits: [$($part_trait),*],)?
+            $(part_contracts: [$($part_contract),*],)?
             requires: [$($require => $provider),*],
             provides: [$($provide),*],
             expected_output: $expected_output,

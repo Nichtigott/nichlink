@@ -45,16 +45,35 @@ impl App {
         let workspace = studio_manifest
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
-        let core = workspace
-            .join("core")
-            .display()
-            .to_string()
-            .replace('\\', "\\\\");
-        let build = workspace
-            .join("build")
-            .display()
-            .to_string()
-            .replace('\\', "\\\\");
+        // A source checkout can use sibling path dependencies. A binary
+        // installed by `cargo install` has no workspace siblings, so projects
+        // created from it must point back to the published Git packages.
+        let (core_dependency, build_dependency) = if workspace.join("core").is_dir()
+            && workspace.join("build").is_dir()
+        {
+            let core = workspace
+                .join("core")
+                .display()
+                .to_string()
+                .replace('\\', "\\\\");
+            let build = workspace
+                .join("build")
+                .display()
+                .to_string()
+                .replace('\\', "\\\\");
+            (
+                format!("nichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}"),
+                format!("nichlink-build = {{ path = \"{build}\" }}"),
+            )
+        } else {
+            let repository = "https://github.com/Nichtigott/nichlink";
+            (
+                format!(
+                    "nichlink-core = {{ package = \"nichlink-core\", git = \"{repository}\", version = \"0.1.0\" }}"
+                ),
+                format!("nichlink-build = {{ git = \"{repository}\", version = \"0.1.0\" }}"),
+            )
+        };
         let crate_source = if kind == "library" {
             "src/lib.rs"
         } else {
@@ -69,7 +88,7 @@ impl App {
             }
         );
         let cargo = format!(
-            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nnichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}\n\n[build-dependencies]\nnichlink-build = {{ path = \"{build}\" }}\n"
+            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{core_dependency}\n\n[build-dependencies]\n{build_dependency}\n"
         );
         let files = [
             ("Cargo.toml", cargo),
@@ -177,6 +196,22 @@ impl App {
             flow: &add.values[27],
             flow_provider: &add.values[28],
         };
+        if let Some(source) = add.copy_source {
+            match with_authoring_context(|| {
+                nichlink::copy_module_for_graft(&self.registry, source, &face)
+            }) {
+                Ok((change, draft)) => {
+                    self.event = change.message;
+                    self.overlay = Some(Overlay::Graft(GraftState {
+                        draft,
+                        validation: "Validated: structure and declared data-flow edges reconnect"
+                            .to_owned(),
+                    }));
+                }
+                Err(error) => self.event = format!("Graft draft failed: {error}"),
+            }
+            return;
+        }
         match with_authoring_context(|| nichlink::add_module_from_face(&self.registry, &face)) {
             Ok((change, info)) => {
                 if let Err(error) = self.registry.register_snapshot_batch([info]) {
@@ -187,6 +222,38 @@ impl App {
                 self.overlay = None;
             }
             Err(error) => self.event = format!("Add failed: {error}"),
+        }
+    }
+
+    pub(super) fn validate_graft(&mut self, graft: &mut GraftState) {
+        match with_authoring_context(|| {
+            nichlink::validate_graft_draft(&self.registry, &graft.draft)
+        }) {
+            Ok(_) => {
+                graft.validation =
+                    "Validated: structure and declared data-flow edges reconnect".to_owned();
+                self.event = format!("Graft draft `{}` is valid", graft.draft.name());
+            }
+            Err(error) => {
+                graft.validation = format!("Rejected: {error}");
+                self.event = format!("Graft validation failed: {error}");
+            }
+        }
+    }
+
+    pub(super) fn apply_graft(&mut self, graft: &GraftState) {
+        match with_authoring_context(|| {
+            nichlink::apply_graft_draft(&mut self.registry, &graft.draft)
+        }) {
+            Ok(change) => {
+                let message = change.message;
+                self.reload();
+                if self.reload_error.is_none() {
+                    self.event = format!("{message}; registration reloaded");
+                }
+                self.overlay = None;
+            }
+            Err(error) => self.event = format!("Graft apply failed: {error}"),
         }
     }
 

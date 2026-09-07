@@ -340,4 +340,58 @@ mod tests {
         assert_eq!(left.find_kind("Thing").len(), 1);
         assert_eq!(right.find_kind("Thing").len(), 1);
     }
+
+    #[test]
+    fn parent_rule_is_a_minimum_shape_not_a_kind_filter() {
+        let namespace = "structural-rule";
+        let mut registry = Registry::root_for_namespace(FrameworkId::new("test"), namespace);
+        Arc::make_mut(&mut registry.header).registration_rule = RegistrationRule::new()
+            .require_preset("ActionParts")
+            .require_parts(&["paint"])
+            .require_exports(&["control.render"])
+            .require_handle_traits(&["ControlHandle"])
+            .require_part_traits(&["ActionParts"])
+            .into_owned();
+        let mut child = snapshot(namespace, "AnyChildKind");
+        child.preset = "ActionParts".to_owned();
+        child.contract.provided_parts = vec!["paint".to_owned(), "extra".to_owned()];
+        child.exports = vec!["control.render".to_owned(), "control.inspect".to_owned()];
+        child.handle_traits = vec!["ControlHandle".to_owned(), "Debug".to_owned()];
+        child.part_traits = vec!["ActionParts".to_owned(), "Clone".to_owned()];
+
+        registry
+            .register_snapshot_batch([child])
+            .expect("a child may use any kind and provide more than the minimum shape");
+    }
+
+    #[test]
+    fn parent_rule_aggregates_every_missing_structural_requirement() {
+        let namespace = "broken-structural-rule";
+        let mut registry = Registry::root_for_namespace(FrameworkId::new("test"), namespace);
+        Arc::make_mut(&mut registry.header).registration_rule = RegistrationRule::new()
+            .require_preset("ActionParts")
+            .require_parts(&["paint"])
+            .require_exports(&["control.render"])
+            .require_handle_traits(&["ControlHandle"])
+            .require_part_traits(&["ActionParts"])
+            .into_owned();
+
+        let error = registry
+            .register_snapshot_batch([snapshot(namespace, "Button")])
+            .expect_err("missing parent requirements must reject the child")
+            .to_string();
+
+        for missing in [
+            "preset `ActionParts` is required",
+            "structural part `paint`",
+            "export `control.render`",
+            "interface `ControlHandle`",
+            "interface `ActionParts`",
+        ] {
+            assert!(
+                error.contains(missing),
+                "missing diagnostic: {missing}\n{error}"
+            );
+        }
+    }
 }

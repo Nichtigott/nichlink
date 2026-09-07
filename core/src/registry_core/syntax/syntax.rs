@@ -26,6 +26,9 @@ struct FieldSyntax {
 pub struct FaceSyntax {
     pub macro_name: String,
     pub location: SyntaxLocation,
+    /// Exclusive end of the macro invocation in the source file.
+    /// 宏调用在源码中的排他结束位置。
+    pub end: SyntaxLocation,
     fields: BTreeMap<String, FieldSyntax>,
 }
 
@@ -206,6 +209,52 @@ pub fn parse_face(source: &str) -> Result<Option<FaceSyntax>, FaceSyntaxError> {
     Ok(faces.pop())
 }
 
+/// Replace only the registration macro, preserving the surrounding Rust code.
+/// 只替换注册宏，保留同一文件里的其余 Rust 实现。
+pub fn replace_face_macro(source: &str, replacement: &str) -> Result<String, FaceSyntaxError> {
+    let current = parse_face(source)?.ok_or_else(|| FaceSyntaxError {
+        message: "source has no registration face".to_owned(),
+        location: None,
+    })?;
+    let next = parse_face(replacement)?.ok_or_else(|| FaceSyntaxError {
+        message: "replacement has no registration face".to_owned(),
+        location: None,
+    })?;
+    let current_start = source_offset(source, &current.location)?;
+    let current_end = source_offset(source, &current.end)?;
+    let replacement_start = source_offset(replacement, &next.location)?;
+    let replacement_end = source_offset(replacement, &next.end)?;
+    let mut output =
+        String::with_capacity(source.len() + replacement_end.saturating_sub(replacement_start));
+    output.push_str(&source[..current_start]);
+    output.push_str(&replacement[replacement_start..replacement_end]);
+    output.push_str(&source[current_end..]);
+    Ok(output)
+}
+
+fn source_offset(source: &str, location: &SyntaxLocation) -> Result<usize, FaceSyntaxError> {
+    let line_start = if location.line <= 1 {
+        0
+    } else {
+        source
+            .match_indices('\n')
+            .nth(location.line - 2)
+            .map(|(index, _)| index + 1)
+            .ok_or_else(|| FaceSyntaxError {
+                message: "macro span points outside source".to_owned(),
+                location: Some(location.clone()),
+            })?
+    };
+    let offset = line_start + location.column.saturating_sub(1);
+    source
+        .is_char_boundary(offset)
+        .then_some(offset)
+        .ok_or_else(|| FaceSyntaxError {
+            message: "macro span is not on a UTF-8 boundary".to_owned(),
+            location: Some(location.clone()),
+        })
+}
+
 /// Collect paths used by executable expressions, excluding imports, comments,
 /// strings, and registration-macro metadata.
 /// 收集可执行表达式使用的路径，排除导入、注释、字符串和注册宏元数据。
@@ -282,11 +331,15 @@ impl<'ast> Visit<'ast> for FaceVisitor {
             return;
         }
         match parse_fields(item.mac.tokens.clone(), item.mac.span()) {
-            Ok(fields) => self.faces.push(FaceSyntax {
-                macro_name,
-                location: location(item.mac.span()),
-                fields,
-            }),
+            Ok(fields) => {
+                let span = item.span();
+                self.faces.push(FaceSyntax {
+                    macro_name,
+                    location: location(span),
+                    end: end_location(span),
+                    fields,
+                })
+            }
             Err(error) => self.error = Some(error),
         }
     }
@@ -441,6 +494,14 @@ fn location(span: Span) -> SyntaxLocation {
     }
 }
 
+fn end_location(span: Span) -> SyntaxLocation {
+    let end = span.end();
+    SyntaxLocation {
+        line: end.line,
+        column: end.column + 1,
+    }
+}
+
 fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
     FaceSyntaxError {
         message: message.into(),
@@ -450,7 +511,7 @@ fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
 
 #[cfg(test)]
 mod tests {
-    use super::{ParentSyntax, parse_face, source_references};
+    use super::{ParentSyntax, parse_face, replace_face_macro, source_references};
 
     #[test]
     fn parses_multiline_registration_tokens_and_locations() {
@@ -509,6 +570,29 @@ crate::control_object! {
         let source = "crate::control_object! { kind: First, kind: Second }";
         let error = parse_face(source).unwrap_err();
         assert!(error.message.contains("duplicate field `kind`"));
+    }
+
+    #[test]
+    fn replacing_a_face_preserves_its_rust_implementation() {
+        let source = r#"pub struct Button;
+impl Button { pub fn paint(&self) -> u32 { 7 } }
+crate::control_object! {
+    kind: Button,
+    registry_name: button,
+}
+#[test] fn paints() { assert_eq!(Button.paint(), 7); }
+"#;
+        let replacement = r#"crate::control_object! {
+    kind: Button,
+    registry_name: button_graft,
+}"#;
+
+        let copied = replace_face_macro(source, replacement).unwrap();
+
+        assert!(copied.contains("pub fn paint(&self) -> u32 { 7 }"));
+        assert!(copied.contains("registry_name: button_graft"));
+        assert!(!copied.contains("registry_name: button,"));
+        assert!(copied.contains("#[test] fn paints()"));
     }
 
     #[test]

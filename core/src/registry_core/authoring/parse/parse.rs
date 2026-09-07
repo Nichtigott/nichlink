@@ -58,6 +58,13 @@ pub(super) fn quoted_list_field(text: &str, marker: &str) -> Vec<String> {
         .collect()
 }
 
+fn quoted_value_field(text: &str, marker: &str) -> Option<String> {
+    let rest = text.split_once(marker)?.1;
+    let start = rest.find('"')? + 1;
+    let end = rest[start..].find('"')? + start;
+    Some(rest[start..end].to_owned())
+}
+
 pub(super) fn source_path_from_file(path: &Path) -> String {
     if let Ok(relative) = path.strip_prefix(source_root()) {
         return normalized_path(relative);
@@ -108,20 +115,32 @@ pub(super) fn rule_syntax_for_source(path: &Path) -> Result<String, String> {
         return Ok("ANY".to_owned());
     };
     let expression = text
-        .lines()
-        .find_map(|line| {
-            line.split_once('=')
-                .map(|(_, value)| value.trim().trim_end_matches(';'))
-        })
+        .split_once('=')
+        .map(|(_, value)| value.trim().trim_end_matches(';'))
         .unwrap_or("");
     if expression.contains("RegistrationRule::ANY") {
         return Ok("ANY".to_owned());
     }
-    let values = quoted_list_field(expression, "RegistrationRule::new(");
-    if !values.is_empty() {
-        return Ok(format!("allow:{}", values.join(",")));
+    let mut clauses = Vec::new();
+    if let Some(preset) = quoted_value_field(expression, ".require_preset(") {
+        clauses.push(format!("preset:{preset}"));
     }
-    Ok("ANY".to_owned())
+    for (marker, key) in [
+        (".require_parts(", "parts"),
+        (".require_exports(", "exports"),
+        (".require_handle_traits(", "handle"),
+        (".require_part_traits(", "part_trait"),
+    ] {
+        let values = quoted_list_field(expression, marker);
+        if !values.is_empty() {
+            clauses.push(format!("{key}:{}", values.join(",")));
+        }
+    }
+    Ok(if clauses.is_empty() {
+        "ANY".to_owned()
+    } else {
+        clauses.join(";")
+    })
 }
 
 /// Render the compact registration-rule syntax as a const Rust expression.
@@ -139,43 +158,21 @@ pub(super) fn render_registration_rule(value: &str) -> Result<String, String> {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    let simple = rule.required_preset.is_none()
-        && rule.required_parts.is_empty()
-        && rule.required_exports.is_empty()
-        && rule.required_handle_traits.is_empty()
-        && rule.required_part_traits.is_empty();
-    if simple {
-        if rule.allowed_kinds.is_empty() && rule.denied_kinds.is_empty() {
-            return Ok("crate::RegistrationRule::ANY".to_owned());
-        }
-        if rule.denied_kinds.is_empty() {
-            return Ok(format!(
-                "crate::RegistrationRule::new(&[{}], &[])",
-                render_values(&rule.allowed_kinds)
-            ));
-        }
-        if rule.allowed_kinds.is_empty() {
-            return Ok(format!(
-                "crate::RegistrationRule::new(&[], &[{}])",
-                render_values(&rule.denied_kinds)
-            ));
+    let mut expression = "crate::RegistrationRule::new()".to_owned();
+    if let Some(preset) = rule.required_preset {
+        expression.push_str(&format!(".require_preset(\"{}\")", rust_string(&preset)));
+    }
+    for (method, values) in [
+        ("require_parts", &rule.required_parts),
+        ("require_exports", &rule.required_exports),
+        ("require_handle_traits", &rule.required_handle_traits),
+        ("require_part_traits", &rule.required_part_traits),
+    ] {
+        if !values.is_empty() {
+            expression.push_str(&format!(".{method}(&[{}])", render_values(values)));
         }
     }
-    let preset = rule
-        .required_preset
-        .as_deref()
-        .map(|value| format!("Some(\"{}\")", rust_string(value)))
-        .unwrap_or_else(|| "None".to_owned());
-    Ok(format!(
-        "crate::RegistrationRule::new_with_contract(&[{}], &[{}], {}, &[{}], &[{}], &[{}], &[{}])",
-        render_values(&rule.allowed_kinds),
-        render_values(&rule.denied_kinds),
-        preset,
-        render_values(&rule.required_parts),
-        render_values(&rule.required_exports),
-        render_values(&rule.required_handle_traits),
-        render_values(&rule.required_part_traits),
-    ))
+    Ok(expression)
 }
 
 pub(super) fn render_face_list(field: &str, value: &str) -> String {
@@ -448,8 +445,6 @@ pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistra
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok(OwnedRegistrationRule {
-            allowed_kinds: Vec::new(),
-            denied_kinds: Vec::new(),
             required_preset: None,
             required_parts: Vec::new(),
             required_exports: Vec::new(),
@@ -458,8 +453,6 @@ pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistra
         });
     }
     let mut rule = OwnedRegistrationRule {
-        allowed_kinds: Vec::new(),
-        denied_kinds: Vec::new(),
         required_preset: None,
         required_parts: Vec::new(),
         required_exports: Vec::new(),
@@ -479,8 +472,6 @@ pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistra
             return Err("registration_rule clauses must list at least one value".to_owned());
         }
         match key.trim().to_ascii_lowercase().as_str() {
-            "allow" => rule.allowed_kinds.extend(values),
-            "deny" => rule.denied_kinds.extend(values),
             "parts" => rule.required_parts.extend(values),
             "exports" => rule.required_exports.extend(values),
             "handle" | "handle_trait" | "handle_traits" => {
@@ -552,5 +543,37 @@ pub(super) fn render_admission(value: &str) -> Result<String, String> {
             rendered.join(", ")
         )),
         _ => Err("admission must be ANY, allow:path/prefix, or deny:path/prefix".to_owned()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_registration_rule_owned, render_registration_rule};
+
+    #[test]
+    fn registration_rules_only_describe_minimum_structure() {
+        let rule = parse_registration_rule_owned(
+            "preset:ActionParts;parts:paint;exports:control.render;handle:ControlHandle;part_trait:ActionParts",
+        )
+        .unwrap();
+        assert_eq!(rule.required_preset.as_deref(), Some("ActionParts"));
+        assert_eq!(rule.required_parts, ["paint"]);
+        assert_eq!(rule.required_exports, ["control.render"]);
+        assert_eq!(rule.required_handle_traits, ["ControlHandle"]);
+        assert_eq!(rule.required_part_traits, ["ActionParts"]);
+
+        let source = render_registration_rule(
+            "preset:ActionParts;parts:paint;exports:control.render;handle:ControlHandle;part_trait:ActionParts",
+        )
+        .unwrap();
+        assert!(source.contains("RegistrationRule::new()"));
+        assert!(source.contains("require_parts(&[\"paint\"])"));
+        assert!(!source.contains("allow"));
+    }
+
+    #[test]
+    fn kind_filters_are_not_registration_rules() {
+        let error = parse_registration_rule_owned("allow:Button").unwrap_err();
+        assert!(error.contains("unknown registration_rule clause `allow`"));
     }
 }
