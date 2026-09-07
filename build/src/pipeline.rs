@@ -1,9 +1,10 @@
 use super::diagnostics::BuildDiagnostics;
 use super::{
-    aggregate_contract_errors, aggregate_requirements, aggregate_stable_name_errors,
-    cache_directory, discover_root, emit_rerun_paths, materialize_sources, prime_node_id_cache,
-    render_lib, static_plan, update_discovery_cache, write_function_manifest, write_if_changed,
-    write_pruning_manifest, write_source_scope_manifest, BuildInput, SourceScope,
+    aggregate_contract_errors, aggregate_parent_macro_errors, aggregate_requirements,
+    aggregate_stable_name_errors, cache_directory, discover_root, emit_rerun_paths,
+    materialize_sources, prime_node_id_cache, render_lib, static_plan, update_discovery_cache,
+    write_function_manifest, write_if_changed, write_pruning_manifest, write_source_scope_manifest,
+    BuildInput, SourceScope,
 };
 
 pub(crate) fn run(input: &BuildInput) {
@@ -21,6 +22,8 @@ pub(crate) fn run(input: &BuildInput) {
     append_error(&mut compile_errors, contract_errors);
     let stable_errors = aggregate_stable_name_errors(src, &nodes);
     append_error(&mut compile_errors, stable_errors);
+    let parent_macro_errors = aggregate_parent_macro_errors(src, &nodes);
+    append_error(&mut compile_errors, parent_macro_errors);
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);

@@ -14,15 +14,25 @@ with the static-analysis and plugin boundaries documented below.
 ## Smallest useful declaration
 
 ```rust
+pub struct Workspace;
+
+crate::root_object! {
+    kind: Workspace,
+    needs_registry: true,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+}
+
 pub struct Button;
 
-nichlink::control_object! {
+crate::workspace_object! {
     kind: Button,
+    parent: crate::workspace::NODE_ID,
 }
 ```
 
-Fields such as `name`, `summary`, `parts`, `parent`, and `registry_name` have
-defaults. Add `needs_registry`, `admission`, `registry_rule`, or input/output
+Fields such as `name`, `summary`, `parts`, and `registry_name` have defaults.
+The explicit `parent` is checked against the macro name. Add `needs_registry`,
+`admission`, `registry_rule`, or input/output
 contracts only when the object actually needs those boundaries.
 
 For a host package, keep the build adapter small:
@@ -55,10 +65,11 @@ to create the first root face. If that face requests a Registry, Studio creates
 its local `registry_rule/registry_rule.rs` beside it. Studio switches to the new
 project immediately; no hand-created folders or environment variables are required.
 
-The generated entry point re-exports the NichLink declaration macros. Registration
-files keep the explicit `crate::control_object!` path, so rust-analyzer can
-complete macro fields inside the project. The core and build crates remain normal
-Cargo dependencies; Cargo does not copy third-party source into `src/`.
+The generated entry point creates one declaration macro for each Registry.
+`root_object!` mounts a root face; `<parent>_object!` mounts a child below that
+parent. The explicit `crate::...!` path keeps rust-analyzer completion working.
+The core and build crates remain normal Cargo dependencies; Cargo does not copy
+third-party source into `src/`.
 
 To use NichLink in a new application, add the two path dependencies while the
 project is local:
@@ -82,11 +93,8 @@ registration list:
 
 ```rust
 // src/main.rs
-#[macro_use]
-extern crate nichlink_core as nichlink;
-
 pub mod registry_core {
-    pub use nichlink::*;
+    pub use nichlink_core::*;
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
@@ -102,7 +110,10 @@ Put each declaration in the canonical folder layout, for example
 ```rust
 pub struct Workspace;
 
-crate::control_object! { kind: Workspace }
+crate::root_object! {
+    kind: Workspace,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+}
 ```
 
 Run `cargo check` once to generate the plan. Set `NICH_LINK_PACKAGE_ROOT` and
@@ -148,11 +159,8 @@ newly authored projects use `registry_rule/`.
 `main` function:
 
 ```rust
-#[macro_use]
-extern crate nichlink_core as nichlink;
-
 pub mod registry_core {
-    pub use nichlink::*;
+    pub use nichlink_core::*;
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));

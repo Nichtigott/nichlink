@@ -34,6 +34,17 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
     let source = source_path_from_file(path);
     values.insert("source".to_owned(), source);
     values.insert("module".to_owned(), module_name_from_path(path));
+    let declared_parent_registry = face
+        .macro_name
+        .strip_suffix("_object")
+        .filter(|name| *name != "external")
+        .filter(|name| *name != "control" || text.contains("generated-by=NichLink"));
+    if let Some(parent_registry) = declared_parent_registry {
+        values.insert(
+            "parent_registry_name".to_owned(),
+            parent_registry.to_owned(),
+        );
+    }
 
     for key in ["kind", "preset", "parts", "handle", "registry_name"] {
         if let Some(value) = face.path(key) {
@@ -184,7 +195,33 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
         face.location.line.to_string(),
     );
 
-    match face.parent().or(Some(ParentSyntax::Root)) {
+    let parent_syntax = face.parent();
+    if declared_parent_registry.is_some() && parent_syntax.is_none() {
+        return Err("parent-specific registration macro requires an explicit parent".to_owned());
+    }
+    let parent_syntax = parent_syntax.or(Some(ParentSyntax::Root));
+    if let (Some(declared), Some(parent)) = (declared_parent_registry, parent_syntax.as_ref()) {
+        let expected = match parent {
+            ParentSyntax::Root => "root".to_owned(),
+            ParentSyntax::FromPath { source, .. } => Path::new(source)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("root")
+                .to_owned(),
+            ParentSyntax::NodePath(module) => module
+                .rsplit("::")
+                .find(|segment| !segment.is_empty())
+                .unwrap_or("root")
+                .to_owned(),
+        };
+        if declared != expected {
+            return Err(format!(
+                "registration macro `{}_object!` does not match parent `{expected}`",
+                declared
+            ));
+        }
+    }
+    match parent_syntax {
         Some(ParentSyntax::Root) => {
             let namespace = std::env::var("NICH_LINK_NAMESPACE")
                 .unwrap_or_else(|_| "nichlink.default".to_owned());

@@ -61,7 +61,10 @@ use manifests::{write_function_manifest, write_pruning_manifest, write_source_sc
 use renderer::{materialize_sources, render_lib};
 use static_plan::static_plan;
 use types::{BuildInput, Node};
-use validation::{aggregate_requirements, aggregate_stable_name_errors, parsed_face};
+use validation::{
+    aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
+    parsed_face,
+};
 
 static CACHED_NODE_IDS: OnceLock<BTreeMap<String, (NodeId, String)>> = OnceLock::new();
 

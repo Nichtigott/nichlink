@@ -176,6 +176,8 @@ fn new_project_and_explicit_root_face_compile() {
     let workspace =
         std::fs::read_to_string(root.join("src/workspace/workspace.rs")).expect("workspace face");
     assert!(workspace.starts_with("// generated-by=NichLink"));
+    assert!(workspace.contains("crate::root_object!"));
+    assert!(workspace.contains("crate::root_object! {\n    kind: Workspace,"));
 
     let workspace_id = app
         .registry
@@ -196,7 +198,51 @@ fn new_project_and_explicit_root_face_compile() {
         .is_file());
     let panel = std::fs::read_to_string(root.join("src/workspace/object/panel/panel.rs"))
         .expect("panel face");
+    assert!(panel.contains("crate::workspace_object!"));
     assert!(panel.contains("crate::workspace::object::panel::registry_rule::REGISTRATION_RULE"));
+    let panel_id = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|info| info.registry_name == "panel")
+        .expect("panel registry")
+        .id;
+    let mut leaf = AddState::new(panel_id);
+    leaf.values[0] = panel_id.to_string();
+    leaf.values[1] = "button".to_owned();
+    leaf.values[8] = "Button".to_owned();
+    app.submit_add(&leaf);
+    let button =
+        std::fs::read_to_string(root.join("src/workspace/object/panel/object/button/button.rs"))
+            .expect("third-level button face");
+    assert!(button.contains("crate::panel_object!"));
+    assert!(button.contains("parent: crate::workspace::object::panel::NODE_ID"));
+
+    // `control_object!` is no longer the generic implementation. It is
+    // generated only as the declaration name for children of `control`.
+    // `control_object!` 不再是通用实现，只作为 control 子对象的声明名生成。
+    let mut control = AddState::new(root_id);
+    control.values[0] = root_id.to_string();
+    control.values[1] = "control".to_owned();
+    control.values[2] = "true".to_owned();
+    control.values[8] = "Control".to_owned();
+    app.submit_add(&control);
+    let control_id = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|info| info.registry_name == "control")
+        .expect("control registry")
+        .id;
+    let mut control_child = AddState::new(control_id);
+    control_child.values[0] = control_id.to_string();
+    control_child.values[1] = "slider".to_owned();
+    control_child.values[8] = "Slider".to_owned();
+    app.submit_add(&control_child);
+    let slider = std::fs::read_to_string(root.join("src/control/object/slider/slider.rs"))
+        .expect("control child face");
+    assert!(slider.contains("crate::control_object!"));
+    assert!(slider.contains("parent: crate::control::NODE_ID"));
 
     let check = std::process::Command::new("cargo")
         .args(["check", "--offline"])
@@ -411,12 +457,13 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
     let old_source = root.join("src/test/test.rs");
     let initial = std::fs::read_to_string(&old_source).expect("new face source");
-    assert!(initial.contains("kind: Test"));
+    assert!(initial.contains("crate::root_object! {\n    kind: Test,"));
+    assert!(initial.contains("crate::root_object!"));
     assert!(!initial.contains("preset:"));
     assert!(!initial.contains("parts:"));
     assert!(!initial.contains("exports:"));
     assert!(!initial.contains("registry_name:"));
-    assert!(!initial.contains("parent:"));
+    assert!(initial.contains("parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\"))"));
 
     let id = app
         .registry
@@ -427,9 +474,27 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .id;
     let mut child = AddState::new(id);
     child.values[1] = "child".to_owned();
+    child.values[2] = "true".to_owned();
     child.values[8] = "Child".to_owned();
     app.submit_add(&child);
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
+    let child_id = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|info| info.registry_name == "child")
+        .expect("child registry in tree")
+        .id;
+    let mut leaf = AddState::new(child_id);
+    leaf.values[1] = "leaf".to_owned();
+    leaf.values[8] = "Leaf".to_owned();
+    app.submit_add(&leaf);
+    assert!(!app.event.starts_with("Add failed"), "{}", app.event);
+    assert!(
+        std::fs::read_to_string(root.join("src/test/object/child/object/leaf/leaf.rs"))
+            .expect("three-level child source")
+            .contains("crate::child_object!")
+    );
 
     let mut edit = AddState::new(root_id);
     edit.values[1] = "panel".to_owned();
@@ -444,9 +509,15 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(new_source.is_file());
     let new_child = root.join("src/panel/object/child/child.rs");
     assert!(new_child.is_file());
+    assert!(root
+        .join("src/panel/object/child/object/leaf/leaf.rs")
+        .is_file());
     assert!(std::fs::read_to_string(&new_child)
         .expect("renamed child source")
         .contains("crate::panel::NODE_ID"));
+    assert!(std::fs::read_to_string(&new_child)
+        .expect("renamed child source")
+        .contains("crate::panel_object!"));
     assert_eq!(
         app.selected_info().map(|info| info.source.file.as_str()),
         Some("panel/panel.rs")

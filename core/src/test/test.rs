@@ -8,14 +8,14 @@ use crate::{NoParts, NoPreset};
 /// 仅用于 Test 注册面的 handle 标记，不代表运行时 object 实现。
 pub struct Test;
 
-crate::control_object! {
-kind: Test,
+crate::root_object! {
+    kind: Test,
     preset: NoPreset,
     parts: NoParts,
     name: { zh: "test", en: "Test" },
     summary: { zh: "NichLink 创建的注册模块。", en: "A registration module created by NichLink." },
     params: "Test",
-exports: ["module.test"],
+    exports: ["module.test"],
     handle: Test,
     needs_registry: true,
     registry_name: test,

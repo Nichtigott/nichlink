@@ -46,9 +46,9 @@ const GENERATED_MARKER: &str = "// generated-by=NichLink";
 /// Field order shared by the Studio form and the file authoring API.
 /// Studio 表单与文件创作 API 共用的字段顺序。
 ///
-/// The field order mirrors every field that can appear in `control_object!`.
+/// The field order mirrors every field accepted by a parent-specific object macro.
 /// Keeping one shared order prevents Add/Edit from silently dropping metadata.
-/// 字段顺序覆盖 `control_object!` 的全部可编辑字段；统一顺序可避免
+/// 字段顺序覆盖父级专属 object 宏的全部可编辑字段；统一顺序可避免
 /// Add/Edit 静默丢失注册面信息。
 pub const FACE_FIELD_NAMES: [&str; 29] = [
     "parent",

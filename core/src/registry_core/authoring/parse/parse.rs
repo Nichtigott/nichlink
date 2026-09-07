@@ -188,7 +188,7 @@ pub(super) fn render_face_list(field: &str, value: &str) -> String {
     if values.is_empty() {
         String::new()
     } else {
-        format!("             \x20   {field}: [{}],\n", values.join(", "))
+        format!("    {field}: [{}],\n", values.join(", "))
     }
 }
 

@@ -1,6 +1,6 @@
 const __REGISTRATION_SOURCE: &str = "tests/debug_probe/debug_probe.rs";
 
-nichlink::control_object!(collector: debug, kind: DebugProbe);
+nichlink::__nichlink_object!(collector: debug, kind: DebugProbe);
 
 #[test]
 #[cfg(debug_assertions)]

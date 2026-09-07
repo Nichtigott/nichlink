@@ -61,7 +61,7 @@ impl App {
             "src/main.rs"
         };
         let prelude = format!(
-            "pub use nichlink_core::{{application, control_object, external_object}};\n\npub mod registry_core {{\n    pub use nichlink_core::*;\n}}\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n{}",
+            "pub use nichlink_core::{{application, external_object}};\n\npub mod registry_core {{\n    pub use nichlink_core::*;\n}}\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n{}",
             if kind == "library" { "" } else { "\nfn main() { println!(\"registered faces: {}\", registrations().len()); }" }
         );
         let cargo = format!(

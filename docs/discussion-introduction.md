@@ -21,8 +21,9 @@ NichLink：面向 Rust 对象图的递归注册与原子嫁接
 最小声明可以很短：
 
 ```rust
-nichlink::control_object! {
+crate::root_object! {
     kind: Button,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
 }
 ```
 

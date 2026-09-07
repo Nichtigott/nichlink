@@ -265,14 +265,11 @@ macro_rules! __face_value_or {
     };
 }
 
-/// Declare an object in a module discovered inside this crate.
-/// 在本 crate 内由自动发现模块声明一个对象。
-///
-/// `registry_rule` controls the required registration shape. The optional
-/// `admission` controls which external registry paths this face may depend on.
-/// `registry_rule` 控制注册结构；可选的 `admission` 控制该注册面可依赖的外部注册路径。
+/// Internal declaration primitive used by generated parent-specific macros.
+/// 供生成的父级专属宏使用的内部声明原语。
+#[doc(hidden)]
 #[macro_export]
-macro_rules! control_object {
+macro_rules! __nichlink_object {
     (collector: $collector:ident, $($tokens:tt)*) => {
         $crate::__control_object! { collector: $collector, $($tokens)* }
     };
@@ -443,6 +440,68 @@ macro_rules! __control_object {
             runtime_checks: [$($($runtime_check),*)?],
         }
     };
+    // Compact form with a custom handle but default preset and parts.
+    // 使用自定义 handle、但采用默认 preset/parts 的精简形式。
+    {
+        collector: $collector:ident,
+        kind: $kind:ident,
+        $(name: { zh: $name_zh:expr, en: $name_en:expr },)?
+        $(summary: { zh: $summary_zh:expr, en: $summary_en:expr },)?
+        $(params: $params:expr,)?
+        $(exports: [$($export:expr),* $(,)?],)?
+        handle: $handle:ident,
+        $(stable_name: $stable_name:literal,)?
+        $(needs_registry: $needs_registry:expr,)?
+        $(registry_name: $registry_name:ident,)?
+        $(parent: $parent:expr,)?
+        $(getting_from_other_registry: $getting:expr,)?
+        $(registry_rule_path: $rule_path:expr,)?
+        $(registry_rule: $rule:expr,)?
+        $(admission: $admission:expr,)?
+        $(handle_traits: [$($handle_trait:literal),* $(,)?],)?
+        $(handle_contracts: [$($handle_contract:path),* $(,)?],)?
+        $(part_traits: [$($part_trait:literal),* $(,)?],)?
+        $(requires: [$($require:expr => $provider:expr),* $(,)?],)?
+        $(provides: [$($provide:expr),* $(,)?],)?
+        $(expected_output: $expected_output:expr,)?
+        $(actual_output: $actual_output:expr,)?
+        $(flow: $flow:expr,)?
+        $(flow_provider: $flow_provider:path,)?
+        $(plugin: $plugin:expr,)?
+        $(runtime_checks: [$($runtime_check:expr),* $(,)?],)?
+        $(,)?
+    } => {
+        $crate::__control_object! {
+            collector: $collector,
+            kind: $kind,
+            preset: $crate::NoPreset,
+            parts: $crate::NoParts,
+            $(name: { zh: $name_zh, en: $name_en },)?
+            $(summary: { zh: $summary_zh, en: $summary_en },)?
+            $(params: $params,)?
+            $(exports: [$($export),*],)?
+            handle: $handle,
+            $(stable_name: $stable_name,)?
+            $(needs_registry: $needs_registry,)?
+            $(registry_name: $registry_name,)?
+            $(parent: $parent,)?
+            $(getting_from_other_registry: $getting,)?
+            $(registry_rule_path: $rule_path,)?
+            $(registry_rule: $rule,)?
+            $(admission: $admission,)?
+            $(handle_traits: [$($handle_trait),*],)?
+            $(handle_contracts: [$($handle_contract),*],)?
+            $(part_traits: [$($part_trait),*],)?
+            $(requires: [$($require => $provider),*],)?
+            $(provides: [$($provide),*],)?
+            $(expected_output: $expected_output,)?
+            $(actual_output: $actual_output,)?
+            $(flow: $flow,)?
+            $(flow_provider: $flow_provider,)?
+            $(plugin: $plugin,)?
+            $(runtime_checks: [$($runtime_check),*],)?
+        }
+    };
     {
         collector: $collector:ident,
         kind: $kind:ident,
@@ -555,9 +614,9 @@ macro_rules! __control_object {
 /// Declare a registration face owned by an external crate.
 /// 声明由外部 crate 所有的注册面。
 ///
-/// Unlike `control_object!`, this form receives its source path explicitly;
-/// an external crate is not part of the host's generated module tree.
-/// 与 `control_object!` 不同，此形式显式接收源码路径；外部 crate 不在宿主
+/// Unlike generated parent-specific macros, this form receives its source path
+/// explicitly; an external crate is not part of the host's generated tree.
+/// 与生成的父级专属宏不同，此形式显式接收源码路径；外部 crate 不在宿主
 /// 自动生成的模块树中。
 #[macro_export]
 macro_rules! external_object {

@@ -13,7 +13,7 @@ Hi everyone. I am open-sourcing NichLink, a Rust-first infrastructure project fo
 It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. Studio, `CallTrace`, and MCP make the resulting calls and data flow inspectable.
 
 ```rust
-nichlink::control_object! { kind: Button, }
+crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_NAME")), }
 ```
 
 A typical replacement looks like `NodeEditor -> Canvas2D -> WGPU`: a new `Canvas2D` must satisfy the old input, output, and structural contracts before the graft is published.

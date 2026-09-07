@@ -7,14 +7,23 @@ NichLink 是一个 Rust 优先的声明式注册协议，用于递归注册对�
 ## 最小声明
 
 ```rust
+pub struct Workspace;
+
+crate::root_object! {
+    kind: Workspace,
+    needs_registry: true,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+}
+
 pub struct Button;
 
-nichlink::control_object! {
+crate::workspace_object! {
     kind: Button,
+    parent: crate::workspace::NODE_ID,
 }
 ```
 
-`name`、`summary`、`parts`、`parent` 和 `registry_name` 都有默认值。只有需要边界控制时，才填写 `needs_registry`、`admission`、`registry_rule` 或输入/输出合同。
+`name`、`summary`、`parts` 和 `registry_name` 都有默认值。显式 `parent` 会与宏名互相校验。只有需要边界控制时，才填写 `needs_registry`、`admission`、`registry_rule` 或输入/输出合同。
 
 宿主的 `build.rs` 只需保留一次性入口：
 
@@ -41,9 +50,10 @@ cargo run -p nichlink-studio
 Studio 才会在它旁边生成自己的 `registry_rule/registry_rule.rs`。随后 Studio 会自动
 切换到新项目，无需手动创建目录或再设置环境变量。
 
-生成的入口文件会重新导出 NichLink 注册声明宏。注册文件保留明确的
-`crate::control_object!` 路径，rust-analyzer 可以在项目内部提供宏字段补全。
-core 和 build 仍是普通 Cargo 依赖；Cargo 不会把第三方源码复制到项目的 `src/`。
+生成入口会为每个注册机创建一个声明宏：`root_object!` 把注册面挂到根，
+`<parent>_object!` 把子对象挂到对应父注册机。注册文件保留明确的
+`crate::...!` 路径，rust-analyzer 可以在项目内部提供宏字段补全。core 和 build
+仍是普通 Cargo 依赖；Cargo 不会把第三方源码复制到项目的 `src/`。
 
 在自己的新应用中，项目尚未发布时先添加两个本地路径依赖：
 
@@ -64,11 +74,8 @@ fn main() {
 
 ```rust
 // src/main.rs
-#[macro_use]
-extern crate nichlink_core as nichlink;
-
 pub mod registry_core {
-    pub use nichlink::*;
+    pub use nichlink_core::*;
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
@@ -83,7 +90,10 @@ fn main() {
 ```rust
 pub struct Workspace;
 
-crate::control_object! { kind: Workspace }
+crate::root_object! {
+    kind: Workspace,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+}
 ```
 
 先运行一次 `cargo check` 生成静态计划。设置 `NICH_LINK_PACKAGE_ROOT` 后启动 Studio，就能检查或编辑该应用的 `src/`：
@@ -122,11 +132,8 @@ my-framework/
 `src/lib.rs` 使用前面相同的生成模块接线，但不需要 `main`：
 
 ```rust
-#[macro_use]
-extern crate nichlink_core as nichlink;
-
 pub mod registry_core {
-    pub use nichlink::*;
+    pub use nichlink_core::*;
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));

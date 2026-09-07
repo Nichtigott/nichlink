@@ -223,7 +223,22 @@ impl FaceManifest {
             let module = source
                 .parent()
                 .map_or_else(|| source.to_string_lossy().into_owned(), normalized_path);
-            format!("crate::{module}::NODE_ID")
+            format!("crate::{}::NODE_ID", module.replace('/', "::"))
+        };
+        // The declaration macro names the registry that owns this face. The
+        // generated aliases are emitted by the build crate from the folder
+        // tree; `__nichlink_object!` remains their single hidden implementation.
+        // 注册声明的宏名表达当前注册面所属的父注册机。别名由 build crate
+        // 根据文件夹树生成，`__nichlink_object!` 仍是唯一隐藏实现。
+        let object_macro = if value("parent_source") == "<root>" {
+            "root_object".to_owned()
+        } else {
+            let source = Path::new(value("parent_source"));
+            let module = source
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("registry");
+            format!("{module}_object")
         };
         let admission = render_admission(value("admission"))?;
         let exports = value("exports")
@@ -243,7 +258,7 @@ impl FaceManifest {
         let handle_contracts_decl = if handle_contracts.is_empty() {
             String::new()
         } else {
-            format!("             \x20   handle_contracts: [{handle_contracts}],\n")
+            format!("    handle_contracts: [{handle_contracts}],\n")
         };
         let handle_impls = render_impls(kind, value("handle_contracts"));
         let part_traits = render_face_list("part_traits", value("part_traits"));
@@ -334,11 +349,12 @@ impl FaceManifest {
         } else {
             String::new()
         };
-        let parent_decl = if value("parent_source") == "<root>" {
-            String::new()
-        } else {
-            format!("    parent: {parent},\n")
-        };
+        // Keep the parent visible even for root faces. The macro still has a
+        // root fallback for hand-written declarations, but generated faces
+        // should show their registration target explicitly.
+        // 即使父级是 root 也保留 parent 字段。手写声明仍可使用宏的 root
+        // 默认值，但生成注册面应明确展示自己的挂载目标。
+        let parent_decl = format!("    parent: {parent},\n");
         let registry_decl = if registry_name == value("module") {
             String::new()
         } else {
@@ -393,49 +409,7 @@ impl FaceManifest {
             String::new()
         };
         let source = format!(
-            "{module_doc}\n\n\
-             use crate::{{NoParts, NoPreset}};\n\n\
-             {handle_doc}\n\
-             pub struct {kind};\n\n\
-             {handle_impls}\
-             crate::control_object! {{\n\
-                 kind: {kind},\n\
-             {preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}\
-                 {exports_decl}\
-             {handle_decl}\
-             {stable_decl}\
-             {needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}\
-             {handle_traits}\
-             {handle_contracts_decl}\
-             {part_traits}\
-             {requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}\
-             }}\n",
-            kind = kind,
-            module_doc = module_doc,
-            handle_doc = handle_doc,
-            preset_decl = preset_decl,
-            parts_decl = parts_decl,
-            name_decl = name_decl,
-            summary_decl = summary_decl,
-            params_decl = params_decl,
-            exports_decl = exports_decl,
-            handle_decl = handle_decl,
-            handle_contracts_decl = handle_contracts_decl,
-            handle_impls = handle_impls,
-            stable_decl = stable_decl,
-            needs_decl = needs_decl,
-            registry_fields = registry_fields,
-            getting_decl = getting_decl,
-            admission_decl = admission_decl,
-            handle_traits = handle_traits,
-            part_traits = part_traits,
-            requirements_decl = requirements_decl,
-            provides_decl = provides_decl,
-            output_decl = output_decl,
-            runtime_decl = runtime_decl,
-            flow = flow,
-            flow_provider = flow_provider,
-            parent_decl = parent_decl,
+            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

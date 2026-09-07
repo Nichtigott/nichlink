@@ -207,10 +207,8 @@ fn collect_face_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<
                 .any(|component| component.as_os_str() == "compile_error_demo")
             && fs::read_to_string(&path)
                 .map(|source| {
-                    source
-                        .lines()
-                        .any(|line| line.trim_start().starts_with("crate::control_object!"))
-                        || source.lines().any(|line| line == GENERATED_MARKER)
+                    source.lines().any(|line| line == GENERATED_MARKER)
+                        || parse_face_syntax(&source).ok().flatten().is_some()
                 })
                 .unwrap_or(false)
         {

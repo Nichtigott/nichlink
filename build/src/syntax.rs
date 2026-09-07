@@ -354,7 +354,9 @@ impl<'ast> Visit<'ast> for FaceVisitor {
             return;
         };
         let macro_name = segment.ident.to_string();
-        if !matches!(macro_name.as_str(), "control_object" | "external_object") {
+        let is_face_macro = matches!(macro_name.as_str(), "control_object" | "external_object")
+            || macro_name.ends_with("_object");
+        if !is_face_macro {
             return;
         }
         match parse_fields(item.mac.tokens.clone(), item.mac.span()) {
