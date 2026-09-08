@@ -2,7 +2,7 @@
 
 <img src="./picture/NichLink_wordmark.svg" alt="NichLink ASCII wordmark">
 
-<p><strong>A new Rust code-organization model for AI-assisted development that supports passive recursive registration and atomic replacement at any level.</strong></p>
+<p><strong>A Rust code-organization model built for how communities actually extend software, for engineering collaboration, and for agentic coding: passive recursive registration, explicit contracts, atomic replacement at any level.</strong></p>
 
 [![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
@@ -18,29 +18,31 @@
 
 </div>
 
-NichLink started with a practical front-end problem: as a project grows, a small
-change can cross half the repository. That is a code-organization problem before
-it is an AI problem. Useful pieces need a small, explicit boundary; a replacement
-should be checked where it plugs in; and the source location should remain
-visible to the people and tools working on it.
+In a large Rust project, a localized change can cut across half the
+repository. NichLink addresses this at the structural level: objects carry
+small, explicit boundaries; a replacement is validated where it plugs in; and
+the source location of every object remains visible to the people and tools
+working on it.
 
-AI-assisted and agentic coding make this pressure more obvious. No model, and no
-human, keeps perfect attention over a large codebase. Hallucinations and missed
-context are normal failure modes, so NichLink makes the important assumptions
-inspectable instead of relying on good luck: atomic objects, explicit contracts,
-source provenance, and a development graph that a team can read together. The
-same boundaries help code review, community contributions, and ordinary Rust
-development; AI is one of the users, not the reason the architecture exists.
+AI-assisted and agentic coding amplify this pressure rather than create it.
+Neither a model nor a human reviewer sustains complete attention over a large
+codebase; hallucinated references and missed context are routine failure
+modes, not exceptions. NichLink therefore turns assumptions that usually live
+in convention into inspectable structure: atomic objects, explicit contracts,
+source provenance, and a development-time registry graph that a team can read
+together. The same boundaries serve code review, community contributions, and
+ordinary Rust development — AI agents are one consumer of this structure, not
+the reason it exists.
 
-This also changes how a community can extend a project. A contributor can ship
-an implementation beside the original tree, state the boundary it replaces,
-and let the host validate the graft. Competing implementations can coexist
-without turning the upstream source into a patch queue. The project keeps its
-shape, while the community gets room to experiment inside named contracts.
+The model also defines how a community extends a project. A contributor ships
+an implementation beside the original tree, declares the boundary it
+replaces, and lets the host validate the graft. Competing implementations
+coexist without turning upstream into a patch queue: the project keeps its
+shape, and experimentation happens inside named contracts.
 
-It is still a young project. The core protocol is useful today; static analysis
-and runtime evidence are intentionally reported with their limits instead of
-being presented as a perfect call-graph oracle.
+NichLink is early-stage software: the core protocol is usable in real projects
+today, and both static analysis and runtime evidence report their coverage
+explicitly.
 
 ## Features
 
