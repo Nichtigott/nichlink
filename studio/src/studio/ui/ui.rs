@@ -21,7 +21,6 @@ use super::app::{
     AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
     face_field_indices, source_path_for,
 };
-use nichlink::FACE_FIELD_NAMES;
 
 const INK: Color = Color::Rgb(214, 225, 231);
 const MUTED: Color = Color::Rgb(112, 132, 143);
@@ -457,5 +456,26 @@ mod tests {
     fn narrow_terminal_stays_renderable_without_panicking() {
         let output = rendered_text(64, 20);
         assert!(!output.is_empty());
+    }
+
+    #[test]
+    fn add_form_explains_required_and_derived_values() {
+        let mut terminal = Terminal::new(TestBackend::new(140, 48)).unwrap();
+        let mut app = App::load();
+        app.overlay = Some(Overlay::Add(AddState::new(app.registry.id())));
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let output = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(output.contains("module name"));
+        assert!(output.contains("* required"));
+        assert!(output.contains("FIELD GUIDE"));
+        assert!(output.contains("DERIVED"));
+        assert!(output.contains("<default: NoParts>"));
     }
 }

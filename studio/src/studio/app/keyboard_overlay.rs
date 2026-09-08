@@ -524,28 +524,12 @@ impl App {
                     }
                 } else {
                     match key.code {
-                        KeyCode::Char('v') => {
-                            add.advanced = !add.advanced;
-                            if !add.advanced && !FACE_PRIMARY_FIELDS.contains(&add.field) {
-                                add.field = FACE_PRIMARY_FIELDS[0];
-                            }
-                        }
-                        KeyCode::Up => {
-                            add.field = add.field.saturating_sub(1);
-                            if !add.advanced && !FACE_PRIMARY_FIELDS.contains(&add.field) {
-                                add.advanced = true;
-                            }
-                        }
-                        KeyCode::Down | KeyCode::Tab => {
-                            add.field = (add.field + 1).min(FACE_FIELD_COUNT - 1);
-                            if !add.advanced && !FACE_PRIMARY_FIELDS.contains(&add.field) {
-                                add.advanced = true;
-                            }
-                        }
+                        KeyCode::Up => move_face_field(&mut add, -1),
+                        KeyCode::Down | KeyCode::Tab => move_face_field(&mut add, 1),
                         KeyCode::Enter | KeyCode::Char(' ') if add.field == 2 => {
                             add.values[2] = (add.values[2] != "true").to_string();
                         }
-                        KeyCode::Enter if add.field != 16 => add.editing = true,
+                        KeyCode::Enter if add.is_editable(add.field) => add.editing = true,
                         KeyCode::Char('s') => {
                             self.submit_add(&add);
                             return;
@@ -571,28 +555,12 @@ impl App {
                     }
                 } else {
                     match key.code {
-                        KeyCode::Char('v') => {
-                            edit.advanced = !edit.advanced;
-                            if !edit.advanced && !FACE_PRIMARY_FIELDS.contains(&edit.field) {
-                                edit.field = FACE_PRIMARY_FIELDS[0];
-                            }
-                        }
-                        KeyCode::Up => {
-                            edit.field = edit.field.saturating_sub(1);
-                            if !edit.advanced && !FACE_PRIMARY_FIELDS.contains(&edit.field) {
-                                edit.advanced = true;
-                            }
-                        }
-                        KeyCode::Down | KeyCode::Tab => {
-                            edit.field = (edit.field + 1).min(FACE_FIELD_COUNT - 1);
-                            if !edit.advanced && !FACE_PRIMARY_FIELDS.contains(&edit.field) {
-                                edit.advanced = true;
-                            }
-                        }
+                        KeyCode::Up => move_face_field(&mut edit, -1),
+                        KeyCode::Down | KeyCode::Tab => move_face_field(&mut edit, 1),
                         KeyCode::Enter | KeyCode::Char(' ') if edit.field == 2 => {
                             edit.values[2] = (edit.values[2] != "true").to_string();
                         }
-                        KeyCode::Enter if edit.field != 16 => edit.editing = true,
+                        KeyCode::Enter if edit.is_editable(edit.field) => edit.editing = true,
                         KeyCode::Char('s') => {
                             self.submit_edit(id, &edit);
                             return;

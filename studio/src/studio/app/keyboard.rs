@@ -31,6 +31,9 @@ impl App {
                     .registry
                     .path_for(parent)
                     .unwrap_or_else(|| "root".to_owned());
+                if let Some(parent_face) = self.registry.find(parent) {
+                    add.apply_parent_rule(&parent_face.registry_rule);
+                }
                 self.overlay = Some(Overlay::Add(add));
             }
             KeyCode::Char('p') => self.overlay = Some(Overlay::Plugin(PluginState::new())),
@@ -41,7 +44,13 @@ impl App {
             }
             KeyCode::Char('e') if self.selected != self.registry.id() => {
                 if let Some(info) = self.selected_info() {
+                    let (handle_contracts, part_contracts) =
+                        std::fs::read_to_string(source_path_for(&info.source.file))
+                            .ok()
+                            .map(|source| declaration_contract_paths(&source))
+                            .unwrap_or_default();
                     let mut edit = AddState::new(info.parent);
+                    edit.locked_fields.insert(0);
                     edit.values[0] = self
                         .registry
                         .path_for(info.parent)
@@ -76,15 +85,7 @@ impl App {
                     edit.values[17] = info.getting_from_other_registry.clone().unwrap_or_default();
                     edit.values[18] = info.registry_rule_path.to_owned();
                     edit.values[19] = info.handle_traits.join(",");
-                    edit.values[20] = info
-                        .handle_traits
-                        .iter()
-                        .filter_map(|trait_name| match trait_name.as_str() {
-                            "ControlHandle" => Some("crate::control::ControlHandle"),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",");
+                    edit.values[20] = handle_contracts;
                     edit.values[21] = info.part_traits.join(",");
                     edit.values[22] = info
                         .requires
@@ -112,6 +113,10 @@ impl App {
                         String::new()
                     };
                     edit.values[28] = info.flow_provider.as_deref().unwrap_or_default().to_owned();
+                    edit.values[29] = part_contracts;
+                    if let Some(parent_face) = self.registry.find(info.parent) {
+                        edit.apply_parent_rule(&parent_face.registry_rule);
+                    }
                     self.overlay = Some(Overlay::Edit(info.id, edit));
                 }
             }
@@ -174,4 +179,12 @@ impl App {
             _ => {}
         }
     }
+}
+
+pub(super) fn declaration_contract_paths(source: &str) -> (String, String) {
+    let Ok(Some(face)) = nichlink::parse_face(source) else {
+        return (String::new(), String::new());
+    };
+    let paths = |field| face.path_list(field).unwrap_or_default().join(",");
+    (paths("handle_contracts"), paths("part_contracts"))
 }

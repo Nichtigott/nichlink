@@ -361,25 +361,27 @@ impl App {
             }
             Some(Overlay::Add(add)) => {
                 let fields = face_field_indices(add);
-                let Some(field) = fields.get(visible_row).copied() else {
+                let offset = face_form_offset(add, self.overlay_list_area.height);
+                let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };
                 add.field = field;
                 if field == 2 {
                     add.values[2] = (add.values[2] != "true").to_string();
-                } else {
+                } else if add.is_editable(field) {
                     add.editing = true;
                 }
             }
             Some(Overlay::Edit(_, edit)) => {
                 let fields = face_field_indices(edit);
-                let Some(field) = fields.get(visible_row).copied() else {
+                let offset = face_form_offset(edit, self.overlay_list_area.height);
+                let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };
                 edit.field = field;
                 if field == 2 {
                     edit.values[2] = (edit.values[2] != "true").to_string();
-                } else {
+                } else if edit.is_editable(field) {
                     edit.editing = true;
                 }
             }
@@ -399,4 +401,14 @@ impl App {
             _ => {}
         }
     }
+}
+
+fn face_form_offset(form: &AddState, height: u16) -> usize {
+    let fields = face_field_indices(form);
+    let selected = fields
+        .iter()
+        .position(|field| *field == form.field)
+        .unwrap_or_default();
+    let visible = height.saturating_sub(2) as usize;
+    selected.saturating_sub(visible.saturating_sub(1))
 }

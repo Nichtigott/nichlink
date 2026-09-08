@@ -26,7 +26,7 @@ use super::parse::{
     parse_requirements_owned, render_admission, render_expression_list, render_face_list,
     render_flow_expression, render_flow_provider, render_impls, render_literal_list,
     render_optional_source, render_path_list, render_registration_rule, render_requirements,
-    rule_syntax_for_source, source_path_from_file, split_csv_owned,
+    rule_syntax_for_source, source_path_from_file, split_csv_owned, trait_names_from_paths,
 };
 #[allow(unused_imports)]
 use super::validation::{
@@ -53,44 +53,40 @@ const GENERATED_MARKER: &str = "// generated-by=NichLink";
 /// Keeping one shared order prevents Add/Edit from silently dropping metadata.
 /// 字段顺序覆盖父级专属 object 宏的全部可编辑字段；统一顺序可避免
 /// Add/Edit 静默丢失注册面信息。
-pub const FACE_FIELD_NAMES: [&str; 29] = [
+pub const FACE_FIELD_NAMES: [&str; 30] = [
     "parent",
     "module",
     "needs registry",
-    "registry name",
-    "registration rule",
-    "admission",
-    "parts",
+    "tree slot",
+    "child structure rule",
+    "allowed dependencies",
+    "parts type",
     "exports",
-    "kind",
-    "name zh",
-    "name en",
+    "Rust type",
+    "display name zh",
+    "display name en",
     "summary zh",
     "summary en",
-    "preset",
-    "params",
-    "handle",
-    "stable name",
-    "other registry",
-    "rule path",
-    "handle traits",
-    "handle contracts",
-    "part traits",
+    "preset type",
+    "parameter metadata",
+    "handle type",
+    "stable identity",
+    "external source note",
+    "rule source",
+    "handle trait labels",
+    "handle trait paths",
+    "parts trait labels",
     "requires",
     "provides",
-    "expected output",
-    "actual output",
+    "expected object output",
+    "actual object output",
     "runtime checks",
-    "flow",
-    "flow provider",
+    "graft flow contract",
+    "flow provider type",
+    "parts trait paths",
 ];
 
 pub const FACE_FIELD_COUNT: usize = FACE_FIELD_NAMES.len();
-
-/// Fields needed to create a useful face. The remaining fields are advanced
-/// contracts and are inherited or derived until explicitly changed.
-/// 创建可用注册面所需的字段；其余是高级合同，默认继承或推导。
-pub const FACE_PRIMARY_FIELDS: &[usize] = &[0, 1, 2, 8, 9, 10, 11, 12, 7, 23];
 
 /// A source-tree mutation that needs one rebuild before it becomes executable.
 /// 一次源码树变更；它需要经过一次重建才会成为可执行注册面。

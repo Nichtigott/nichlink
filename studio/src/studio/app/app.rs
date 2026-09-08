@@ -29,8 +29,7 @@ use support::host_manifest;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use nichlink::{
-    FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS, NodeId, PluginCatalog, PluginMode, PluginRecord,
-    PluginSource, RegistrationSnapshot, Registry,
+    NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
 };
 use nichlink_debug::{CallEvidence, CallTrace, MirCall, MirGraph};
 

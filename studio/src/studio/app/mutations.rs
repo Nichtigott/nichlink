@@ -159,7 +159,7 @@ impl App {
             preset: &add.values[13],
             parts: &add.values[6],
             name_zh: if add.values[9].trim().is_empty() {
-                &add.values[1]
+                kind
             } else {
                 &add.values[9]
             },
@@ -188,6 +188,7 @@ impl App {
             handle_traits: &add.values[19],
             handle_contracts: &add.values[20],
             part_traits: &add.values[21],
+            part_contracts: &add.values[29],
             requires: &add.values[22],
             provides: &add.values[23],
             expected_output: &add.values[24],
@@ -239,6 +240,7 @@ impl App {
             handle_traits: &edit.values[19],
             handle_contracts: &edit.values[20],
             part_traits: &edit.values[21],
+            part_contracts: &edit.values[29],
             requires: &edit.values[22],
             provides: &edit.values[23],
             expected_output: &edit.values[24],

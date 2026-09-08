@@ -4,13 +4,13 @@
 use std::path::{Path, PathBuf};
 
 use super::super::FaceManifest;
+use crate::RuntimeCheckSpec;
 use crate::registry_core::authoring::GENERATED_MARKER;
 use crate::registry_core::authoring::parse::*;
 use crate::registry_core::authoring::validation::{
     legacy_rule_path_for_source, normalized_path, rule_path_for_source, rust_string, source_root,
     validate_kind_name, validate_name,
 };
-use crate::{OwnedRegistrationRule, RuntimeCheckSpec};
 
 impl FaceManifest {
     pub(crate) fn rule_source_path(&self) -> Result<PathBuf, String> {
@@ -78,27 +78,6 @@ impl FaceManifest {
         Ok(Some(format!(
             "//! Registry rule.\n//! 注册规范。\n\nuse crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = {rule};\n"
         )))
-    }
-
-    pub(crate) fn inherit_registry_contract(&mut self, rule: &OwnedRegistrationRule) {
-        self.values.insert(
-            "handle_traits".to_owned(),
-            rule.required_handle_traits.join(","),
-        );
-        self.values.insert(
-            "part_traits".to_owned(),
-            rule.required_part_traits.join(","),
-        );
-        let contracts = rule
-            .required_handle_traits
-            .iter()
-            .filter_map(|trait_name| match trait_name.as_str() {
-                "ControlHandle" => Some("crate::control::ControlHandle"),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        self.values
-            .insert("handle_contracts".to_owned(), contracts.join(","));
     }
 
     pub(crate) fn edit(&mut self, field: &str, value: &str) -> Result<(), String> {

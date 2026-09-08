@@ -1,11 +1,11 @@
 //! Studio focus, overlays, and form state.
 //! Studio 焦点、浮层和表单状态。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::support::package_root;
-use nichlink::{FACE_FIELD_COUNT, FACE_PRIMARY_FIELDS, NodeId, Registry};
+use nichlink::{FACE_FIELD_COUNT, NodeId, Registry};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Focus {
@@ -190,15 +190,34 @@ pub struct AddState {
     pub values: [String; FACE_FIELD_COUNT],
     pub field: usize,
     pub editing: bool,
-    pub advanced: bool,
+    /// Fields made mandatory by the selected parent Registry contract.
+    /// 由所选父 Registry 合同提升为必填的字段及其具体要求。
+    pub parent_requirements: BTreeMap<usize, String>,
+    /// Derived fields shown for context but not accepted as free-form input.
+    /// 仅用于说明、不能自由输入的派生字段。
+    pub locked_fields: BTreeSet<usize>,
 }
 
-pub(crate) fn face_field_indices(add: &AddState) -> Vec<usize> {
-    if add.advanced || !FACE_PRIMARY_FIELDS.contains(&add.field) {
-        (0..FACE_FIELD_COUNT).collect()
-    } else {
-        FACE_PRIMARY_FIELDS.to_vec()
-    }
+/// Stable, task-oriented order used by both Add and Edit.
+/// Add 与 Edit 共用的稳定任务顺序；所有字段始终可见，不再切换表单形态。
+pub(crate) const FACE_FORM_ORDER: [usize; FACE_FIELD_COUNT] = [
+    0, 1, 8, 9, 10, 11, 12, 16, 2, 3, 4, 5, 17, 18, 13, 6, 14, 15, 20, 19, 29, 21, 7, 22, 23, 24,
+    25, 27, 28, 26,
+];
+
+pub(crate) fn face_field_indices(_add: &AddState) -> Vec<usize> {
+    FACE_FORM_ORDER.to_vec()
+}
+
+pub(crate) fn move_face_field(add: &mut AddState, step: isize) {
+    let position = FACE_FORM_ORDER
+        .iter()
+        .position(|field| *field == add.field)
+        .unwrap_or_default();
+    let next = position
+        .saturating_add_signed(step)
+        .min(FACE_FORM_ORDER.len().saturating_sub(1));
+    add.field = FACE_FORM_ORDER[next];
 }
 
 /// Plugin selection form. The UI writes one crate anchor, never an object list.
@@ -229,7 +248,7 @@ impl PluginState {
 }
 
 impl AddState {
-    pub(super) fn new(parent: NodeId) -> Self {
+    pub(crate) fn new(parent: NodeId) -> Self {
         Self {
             values: [
                 parent.to_string(),
@@ -265,10 +284,52 @@ impl AddState {
                 String::new(),
                 String::new(),
                 String::new(),
+                // part contracts
+                String::new(),
             ],
             field: 0,
             editing: false,
-            advanced: false,
+            parent_requirements: BTreeMap::new(),
+            locked_fields: BTreeSet::from([18, 19, 21]),
+        }
+    }
+
+    pub(super) fn is_editable(&self, field: usize) -> bool {
+        !self.locked_fields.contains(&field)
+    }
+
+    pub(super) fn apply_parent_rule(&mut self, rule: &nichlink::OwnedRegistrationRule) {
+        self.parent_requirements.clear();
+        if let Some(preset) = &rule.required_preset {
+            self.values[13] = preset.clone();
+            self.parent_requirements
+                .insert(13, format!("preset `{preset}`"));
+        }
+        if !rule.required_parts.is_empty() {
+            self.parent_requirements.insert(
+                6,
+                format!("parts providing {}", rule.required_parts.join(", ")),
+            );
+        }
+        if !rule.required_exports.is_empty() {
+            self.values[7] = rule.required_exports.join(",");
+            self.parent_requirements
+                .insert(7, format!("exports {}", rule.required_exports.join(", ")));
+        }
+        if !rule.required_handle_traits.is_empty() {
+            self.parent_requirements.insert(
+                20,
+                format!(
+                    "handle implements {}",
+                    rule.required_handle_traits.join(", ")
+                ),
+            );
+        }
+        if !rule.required_part_traits.is_empty() {
+            self.parent_requirements.insert(
+                29,
+                format!("parts implement {}", rule.required_part_traits.join(", ")),
+            );
         }
     }
 }

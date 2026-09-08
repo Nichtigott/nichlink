@@ -2,18 +2,18 @@
 //! 文件化的新增、编辑和删除操作。
 
 use super::*;
-
 #[path = "migration.rs"]
 mod migration;
 use migration::migrate_module_subtree;
+#[path = "paths.rs"]
+mod paths;
+use paths::generated_paths;
 
 pub struct AuthoringChange {
     pub message: String,
     pub source: PathBuf,
 }
 
-/// Complete registration face accepted by the atomic add operation.
-/// 原子 add 操作接收的完整注册面。
 #[derive(Clone, Copy, Debug)]
 pub struct NewModuleFace<'a> {
     pub module: &'a str,
@@ -38,6 +38,7 @@ pub struct NewModuleFace<'a> {
     pub handle_traits: &'a str,
     pub handle_contracts: &'a str,
     pub part_traits: &'a str,
+    pub part_contracts: &'a str,
     pub requires: &'a str,
     pub provides: &'a str,
     pub expected_output: &'a str,
@@ -47,8 +48,6 @@ pub struct NewModuleFace<'a> {
     pub flow_provider: &'a str,
 }
 
-/// Editable subset used by the Studio's multi-field edit form.
-/// Studio 多字段编辑表单使用的可编辑字段集合。
 #[derive(Clone, Copy, Debug)]
 pub struct ModuleFacePatch<'a> {
     /// New module directory/file name. Changing it migrates the whole subtree.
@@ -74,6 +73,7 @@ pub struct ModuleFacePatch<'a> {
     pub handle_traits: &'a str,
     pub handle_contracts: &'a str,
     pub part_traits: &'a str,
+    pub part_contracts: &'a str,
     pub requires: &'a str,
     pub provides: &'a str,
     pub expected_output: &'a str,
@@ -102,9 +102,8 @@ pub(super) fn apply_new_face_values(
             "getting_from_other_registry",
             configured.getting_from_other_registry,
         ),
-        ("handle_traits", configured.handle_traits),
         ("handle_contracts", configured.handle_contracts),
-        ("part_traits", configured.part_traits),
+        ("part_contracts", configured.part_contracts),
         ("requires", configured.requires),
         ("provides", configured.provides),
         ("expected_output", configured.expected_output),
@@ -117,6 +116,18 @@ pub(super) fn apply_new_face_values(
             face.edit(field, value.trim())?;
         }
     }
+    apply_trait_contract(
+        face,
+        "handle_traits",
+        configured.handle_traits,
+        configured.handle_contracts,
+    )?;
+    apply_trait_contract(
+        face,
+        "part_traits",
+        configured.part_traits,
+        configured.part_contracts,
+    )?;
     face.edit("needs_registry", &configured.needs_registry.to_string())?;
     if !configured.registry_name.trim().is_empty() {
         face.edit("registry_name", configured.registry_name.trim())?;
@@ -130,6 +141,23 @@ pub(super) fn apply_new_face_values(
     // 两个无关目录。
     let _ = configured.registry_rule_path;
     Ok(())
+}
+
+fn apply_trait_contract(
+    face: &mut FaceManifest,
+    label_field: &str,
+    labels: &str,
+    contract_paths: &str,
+) -> Result<(), String> {
+    if labels.trim().is_empty() && contract_paths.trim().is_empty() {
+        return Ok(());
+    }
+    let labels = if contract_paths.trim().is_empty() {
+        labels.trim().to_owned()
+    } else {
+        trait_names_from_paths(contract_paths)?
+    };
+    face.edit(label_field, &labels)
 }
 
 /// Create the standard `<parent>/object/<name>/<name>.rs` registration face.
@@ -285,12 +313,6 @@ fn create_module(
         parent_kind,
         &normalized_path(&source_relative),
     );
-    // The target registry owns the mounting contract. New faces inherit its
-    // interface requirements so Add never asks users to copy parent metadata.
-    // 目标注册机拥有挂载合同。新注册面自动继承接口要求，Add 不要求用户重复填写父级元数据。
-    if let Some(target_registry) = registry.registry(parent) {
-        face.inherit_registry_contract(target_registry.registration_rule());
-    }
     if let Some(configured) = configured {
         if !configured.kind.trim().is_empty() {
             let normalized_kind = normalize_kind_name(configured.kind.trim());
@@ -435,9 +457,20 @@ pub fn edit_module_face(
     )?;
     face.edit("registration_rule", patch.registration_rule)?;
     face.edit("admission", patch.admission)?;
-    face.edit("handle_traits", patch.handle_traits)?;
     face.edit("handle_contracts", patch.handle_contracts)?;
-    face.edit("part_traits", patch.part_traits)?;
+    face.edit("part_contracts", patch.part_contracts)?;
+    apply_trait_contract(
+        &mut face,
+        "handle_traits",
+        patch.handle_traits,
+        patch.handle_contracts,
+    )?;
+    apply_trait_contract(
+        &mut face,
+        "part_traits",
+        patch.part_traits,
+        patch.part_contracts,
+    )?;
     face.edit("requires", patch.requires)?;
     face.edit("provides", patch.provides)?;
     face.edit("expected_output", patch.expected_output)?;
@@ -613,51 +646,4 @@ pub fn delete_module(registry: &Registry, spec: &str) -> Result<AuthoringChange,
         message: format!("moved `{name}` to {}", trash.display()),
         source: trash,
     })
-}
-
-pub(super) fn generated_paths(
-    registry: &Registry,
-    id: NodeId,
-) -> Result<(String, PathBuf), String> {
-    let face = registry
-        .find(id)
-        .ok_or_else(|| format!("node `{id}` is not registered"))?;
-    let declared = Path::new(&face.source.file);
-    let root = source_root();
-    let source = if declared.is_absolute() {
-        // Some collectors preserve an absolute declaration path. It is safe to
-        // edit only when that path resolves below the active package's `src/`.
-        // 某些收集器会保留绝对声明路径；只有确认它位于当前包 `src/`
-        // 目录下时才允许编辑。
-        let canonical_root = fs::canonicalize(&root)
-            .map_err(|error| format!("cannot resolve package source root: {error}"))?;
-        let canonical_source = fs::canonicalize(declared)
-            .map_err(|error| format!("cannot resolve registration source: {error}"))?;
-        if !canonical_source.starts_with(&canonical_root) {
-            return Err("only package-local generated modules can be edited".to_owned());
-        }
-        canonical_source
-    } else {
-        if declared.components().any(is_parent_component) {
-            return Err("only package-local generated modules can be edited".to_owned());
-        }
-        root.join(declared)
-    };
-    let relative = source.strip_prefix(&root).unwrap_or(declared);
-    let text = fs::read_to_string(&source)
-        .map_err(|_| "this module was not generated by NichLink".to_owned())?;
-    if !is_nichlink_owned_source(relative, &text) {
-        return Err("this module was not generated by NichLink".to_owned());
-    }
-    Ok((face.registry_name.to_owned(), source))
-}
-
-/// Recognize current generated files and the short-lived New Project scaffold.
-/// 识别当前生成文件，以及曾经由 New Project 生成的旧脚手架。
-fn is_nichlink_owned_source(relative: &Path, text: &str) -> bool {
-    text.lines().any(|line| line == GENERATED_MARKER)
-        || (relative == Path::new("control/control.rs")
-            && text.contains("pub struct ControlRegistry;")
-            && text.contains("registry_rule_path:")
-            && text.contains("registry_rule:"))
 }

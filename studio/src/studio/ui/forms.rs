@@ -3,6 +3,9 @@
 
 use super::*;
 
+mod face_fields;
+use face_fields::{draw_face_field_help, face_field_presentation, face_field_value};
+
 pub(super) fn draw_add(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -88,10 +91,14 @@ fn draw_face_form(
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(9), Constraint::Length(4)])
         .split(area);
+    let body = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+        .split(inner[0]);
     let fields = face_field_indices(add);
     let name_width = fields
         .iter()
-        .map(|index| FACE_FIELD_NAMES[*index].len())
+        .map(|index| face_field_presentation(*index).label.len())
         .max()
         .unwrap_or(1);
     let rows = fields
@@ -105,31 +112,30 @@ fn draw_face_form(
             } else {
                 " "
             };
-            let value = if *index == 2 {
-                if add.values[*index] == "true" {
-                    "[x]"
-                } else {
-                    "[ ]"
-                }
-            } else if add.values[*index].is_empty() {
-                "auto"
-            } else {
-                &add.values[*index]
-            };
+            let presentation = face_field_presentation(*index);
+            let value = face_field_value(add, *index);
             let style = if selected {
                 Style::default().fg(Color::Black).bg(CYAN)
             } else {
                 Style::default().fg(INK)
             };
+            let role = if add.locked_fields.contains(index) {
+                face_fields::FaceFieldRole::ReadOnly
+            } else if add.parent_requirements.contains_key(index) {
+                face_fields::FaceFieldRole::Required
+            } else {
+                presentation.role
+            };
             ListItem::new(format!(
-                "{marker} {:<name_width$} {value}",
-                FACE_FIELD_NAMES[*index]
+                "{marker} {} {:<name_width$} {value}",
+                role.marker(),
+                presentation.label,
             ))
             .style(style)
         })
         .collect::<Vec<_>>();
     let selected_row = fields.iter().position(|index| *index == add.field);
-    let visible = inner[0].height.saturating_sub(2) as usize;
+    let visible = body[0].height.saturating_sub(2) as usize;
     let offset = selected_row
         .unwrap_or_default()
         .saturating_sub(visible.saturating_sub(1));
@@ -138,9 +144,10 @@ fn draw_face_form(
         .with_offset(offset);
     frame.render_stateful_widget(
         List::new(rows).block(panel(title, GREEN)),
-        inner[0],
+        body[0],
         &mut state,
     );
+    draw_face_field_help(frame, body[1], add);
     let buttons = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -160,16 +167,12 @@ fn draw_face_form(
     frame.render_widget(button("Cancel [Esc]", MUTED), buttons[1]);
     frame.render_widget(button("Exit [q]", Color::LightRed), buttons[2]);
     frame.render_widget(
-        Paragraph::new(if add.advanced {
-            "↑↓ field   Enter edit/toggle   v basic fields"
-        } else {
-            "↑↓ field   Enter edit/toggle   v advanced fields"
-        })
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(MUTED).bg(PANEL)),
+        Paragraph::new("* required  ◇ derived  ↳ read only  · optional  ? when used")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(MUTED).bg(PANEL)),
         buttons[3],
     );
-    (inner[0], buttons[1], buttons[0], buttons[2])
+    (body[0], buttons[1], buttons[0], buttons[2])
 }
 
 pub(super) fn draw_edit(

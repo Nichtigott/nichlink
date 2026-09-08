@@ -217,6 +217,25 @@ pub(super) fn render_impls(kind: &str, value: &str) -> String {
         .collect()
 }
 
+/// Derive the human-facing trait labels from compiler-checked Rust paths.
+/// 从参与编译检查的 Rust 路径派生人类可读的 trait 名称。
+pub(super) fn trait_names_from_paths(value: &str) -> Result<String, String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(|source| {
+            let path = syn::parse_str::<syn::Path>(source)
+                .map_err(|_| format!("`{source}` is not a Rust trait path"))?;
+            path.segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+                .ok_or_else(|| format!("`{source}` has no trait name"))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|names| names.join(","))
+}
+
 pub(super) fn render_requirements(value: &str) -> String {
     value
         .split(',')
@@ -548,7 +567,7 @@ pub(super) fn render_admission(value: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_registration_rule_owned, render_registration_rule};
+    use super::{parse_registration_rule_owned, render_registration_rule, trait_names_from_paths};
 
     #[test]
     fn registration_rules_only_describe_minimum_structure() {
@@ -575,5 +594,14 @@ mod tests {
     fn kind_filters_are_not_registration_rules() {
         let error = parse_registration_rule_owned("allow:Button").unwrap_err();
         assert!(error.contains("unknown registration_rule clause `allow`"));
+    }
+
+    #[test]
+    fn compiler_checked_trait_paths_supply_searchable_labels() {
+        assert_eq!(
+            trait_names_from_paths("crate::ui::ControlHandle, crate::parts::ActionParts").unwrap(),
+            "ControlHandle,ActionParts"
+        );
+        assert!(trait_names_from_paths("not a path").is_err());
     }
 }
