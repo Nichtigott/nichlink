@@ -111,9 +111,18 @@ the thin build entry, and the source entry point; the first face is added with
 The application owns its declarations, so Cargo needs one small build adapter:
 
 ```sh
+# From Git. `nichlink-build` belongs to the build dependency table.
+cargo add nichlink-core --git https://github.com/Nichtigott/nichlink --branch main
+cargo add nichlink-build --build --git https://github.com/Nichtigott/nichlink --branch main
+
+# Or, while developing both projects from local checkouts:
 cargo add nichlink-core --path /path/to/nichlink/core
 cargo add nichlink-build --build --path /path/to/nichlink/build
 ```
+
+Do not add `nichlink-build` once under `[dependencies]` and again from a
+different source under `[build-dependencies]`; Cargo requires one canonical
+source for a package throughout a manifest.
 
 ```rust
 // build.rs

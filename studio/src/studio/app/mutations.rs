@@ -1,7 +1,9 @@
 //! App mutations and editor handoff.
 //! App 文件变更与编辑器交接。
 
-use super::support::{package_root, select_project, with_authoring_context};
+use super::support::{
+    nichlink_dependency_specs, package_root, select_project, with_authoring_context,
+};
 use super::*;
 
 impl App {
@@ -42,38 +44,9 @@ impl App {
             return;
         }
         let studio_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let workspace = studio_manifest
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."));
-        // A source checkout can use sibling path dependencies. A binary
-        // installed by `cargo install` has no workspace siblings, so projects
-        // created from it must point back to the published Git packages.
-        let (core_dependency, build_dependency) = if workspace.join("core").is_dir()
-            && workspace.join("build").is_dir()
-        {
-            let core = workspace
-                .join("core")
-                .display()
-                .to_string()
-                .replace('\\', "\\\\");
-            let build = workspace
-                .join("build")
-                .display()
-                .to_string()
-                .replace('\\', "\\\\");
-            (
-                format!("nichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}"),
-                format!("nichlink-build = {{ path = \"{build}\" }}"),
-            )
-        } else {
-            let repository = "https://github.com/Nichtigott/nichlink";
-            (
-                format!(
-                    "nichlink-core = {{ package = \"nichlink-core\", git = \"{repository}\", version = \"0.1.0\" }}"
-                ),
-                format!("nichlink-build = {{ git = \"{repository}\", version = \"0.1.0\" }}"),
-            )
-        };
+        let current_exe = std::env::current_exe().unwrap_or_default();
+        let (core_dependency, build_dependency) =
+            nichlink_dependency_specs(&studio_manifest, &current_exe);
         let crate_source = if kind == "library" {
             "src/lib.rs"
         } else {

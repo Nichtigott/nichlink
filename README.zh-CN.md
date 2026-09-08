@@ -99,9 +99,18 @@ Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo �
 注册声明属于宿主项目，所以 Cargo 需要一个很薄的构建入口：
 
 ```sh
+# 使用 Git。nichlink-build 必须进入 build-dependencies。
+cargo add nichlink-core --git https://github.com/Nichtigott/nichlink --branch main
+cargo add nichlink-build --build --git https://github.com/Nichtigott/nichlink --branch main
+
+# 或者，在两个本地源码仓库之间联调：
 cargo add nichlink-core --path /path/to/nichlink/core
 cargo add nichlink-build --build --path /path/to/nichlink/build
 ```
+
+不要把 `nichlink-build` 同时以一种来源放进 `[dependencies]`、又以另一种
+来源放进 `[build-dependencies]`。Cargo 要求同一个包在整份清单中只有一个
+canonical source。
 
 ```rust
 // build.rs

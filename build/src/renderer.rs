@@ -92,17 +92,12 @@ pub(crate) fn render_lib(
 /// 别名让源码直接表达层级（如 `test1_object!`），同时仍只转发到唯一的
 /// 隐藏实现；真正的父子关系仍以显式 `parent:` 字段为准。
 fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
-    // `control` remains available so projects created by pre-hierarchy
-    // versions can be opened and rewritten by Studio. New generated files
-    // validate it strictly as the name of the control parent.
-    // 始终保留 control，旧项目才能被 Studio 打开并迁移；新生成文件会严格
-    // 把它校验为 control 父注册机的名字。
-    let mut names = BTreeSet::from(["control".to_owned(), "root".to_owned()]);
+    let mut names = BTreeSet::from(["root".to_owned()]);
     collect_object_aliases(src, nodes, &mut names);
     for name in names {
         writeln!(
             output,
-            "#[doc(hidden)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{ crate::registry_core::__nichlink_object! {{ $($tokens)* }} }}\n}}\npub(crate) use {name}_object;\n"
+            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{ crate::registry_core::__nichlink_object! {{ $($tokens)* }} }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -295,6 +290,20 @@ mod tests {
         assert!(output.contains("macro_rules! panel_object"));
         assert!(output.contains("macro_rules! control_object"));
         assert!(output.contains("crate::registry_core::__nichlink_object!"));
+        assert!(output.contains("#[allow(unused_macros)]"));
+        assert!(output.contains("#[allow(unused_imports)]"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    #[test]
+    fn empty_tree_does_not_emit_a_legacy_control_alias() {
+        let root = temporary_directory("empty-object-aliases");
+        let mut output = String::new();
+
+        render_object_aliases(&mut output, &root, &[]);
+
+        assert!(output.contains("macro_rules! root_object"));
+        assert!(!output.contains("macro_rules! control_object"));
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }
 

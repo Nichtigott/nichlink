@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
 
-use super::support::{host_manifest, package_root, select_project};
+use super::support::{host_manifest, nichlink_dependency_specs, package_root, select_project};
 use super::{
     AddState, App, Overlay, SearchState, StudioPage, advance_graph_focus,
     app_function_source_range, body_calls, function_bodies, function_symbols, visible_search_rows,
@@ -260,6 +260,29 @@ fn standalone_studio_resolves_one_project_root_and_manifest() {
         host_manifest().file_name().and_then(|name| name.to_str()),
         Some("Cargo.toml")
     );
+}
+
+#[test]
+fn installed_studio_never_exports_cargo_git_cache_paths() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let checkout = std::env::temp_dir().join(format!("cargo-git-checkout-{suffix}"));
+    std::fs::create_dir_all(checkout.join("core")).expect("core sibling");
+    std::fs::create_dir_all(checkout.join("build")).expect("build sibling");
+    std::fs::create_dir_all(checkout.join("studio")).expect("studio sibling");
+
+    let (core, build) = nichlink_dependency_specs(
+        &checkout.join("studio/Cargo.toml"),
+        &checkout.join("outside-bin/nichlink-studio"),
+    );
+
+    assert!(core.contains("git = \"https://github.com/Nichtigott/nichlink\""));
+    assert!(build.contains("branch = \"main\""));
+    assert!(!core.contains(checkout.to_string_lossy().as_ref()));
+    assert!(!build.contains(checkout.to_string_lossy().as_ref()));
+    let _ = std::fs::remove_dir_all(checkout);
 }
 
 #[test]

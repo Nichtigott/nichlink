@@ -42,10 +42,13 @@ pub(crate) fn run(input: &BuildInput) {
         &out_dir.join("discovery.fingerprint"),
         &discovery_fingerprint,
     );
-    println!(
-        "cargo:warning=nichlink discovery cache {cache_state} ({})",
-        discovery_fingerprint
-    );
+    if let Some(status) = cache_status_line(
+        &cache_state,
+        &discovery_fingerprint,
+        build_output_is_verbose(),
+    ) {
+        println!("cargo:warning={status}");
+    }
     materialize_sources(src, &nodes, out_dir);
     write_pruning_manifest(src, &nodes, out_dir);
     write_function_manifest(src, &nodes, out_dir);
@@ -55,14 +58,37 @@ pub(crate) fn run(input: &BuildInput) {
     emit_rerun_paths(src, &nodes);
     println!("cargo:rerun-if-env-changed=NICH_LINK_SCOPE");
     println!("cargo:rerun-if-env-changed=NICH_LINK_ENTRY");
+    println!("cargo:rerun-if-env-changed=NICH_LINK_BUILD_VERBOSE");
     println!(
         "cargo:rerun-if-changed={}",
         manifest.join("Cargo.toml").display()
     );
 }
 
+fn build_output_is_verbose() -> bool {
+    std::env::var_os("NICH_LINK_BUILD_VERBOSE").is_some_and(|value| !value.is_empty())
+}
+
+fn cache_status_line(cache_state: &str, fingerprint: &str, verbose: bool) -> Option<String> {
+    verbose.then(|| format!("nichlink discovery cache {cache_state} ({fingerprint})"))
+}
+
 /// Keep the generated diagnostic stream deterministic and compact.
 /// 保持生成的诊断流稳定且紧凑。
 fn append_error(target: &mut BuildDiagnostics, addition: BuildDiagnostics) {
     target.extend(addition);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cache_status_line;
+
+    #[test]
+    fn successful_build_is_silent_unless_verbose_output_is_requested() {
+        assert_eq!(cache_status_line("hit", "abc", false), None);
+        assert_eq!(
+            cache_status_line("hit", "abc", true).as_deref(),
+            Some("nichlink discovery cache hit (abc)")
+        );
+    }
 }
