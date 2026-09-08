@@ -8,6 +8,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-Rust%201.96-8250df?style=flat-square)](Cargo.toml)
 
+
 <p>
 <a href="#features"><kbd>Features</kbd></a>
 <a href="#get-started"><kbd>Get started</kbd></a>
@@ -17,6 +18,8 @@
 </p>
 
 </div>
+
+💬 [Discuss the graft model](https://github.com/Nichtigott/nichlink/discussions)
 
 In a large Rust project, a localized change can cut across half the
 repository. NichLink addresses this at the structural level: objects carry

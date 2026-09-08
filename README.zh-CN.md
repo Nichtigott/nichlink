@@ -18,6 +18,8 @@
 
 </div>
 
+💬 [Discuss the graft model](https://github.com/Nichtigott/nichlink/discussions)
+
 项目规模越大，一次局部改动越可能波及半个仓库。NichLink 在结构层面处
 理这件事：对象携带小而明确的边界；替换在接入点完成校验；每个对象的
 源码位置对人和工具保持可见。
