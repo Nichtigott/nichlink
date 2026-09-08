@@ -416,16 +416,4 @@ mod tests {
         assert!(error.contains("identity schema 2"));
         assert!(error.contains("expected 3"));
     }
-
-    #[test]
-    fn graft_command_has_a_small_unambiguous_grammar() {
-        assert_eq!(
-            GraftCommand::parse("graft canvas2d_v2 to canvas2d").unwrap(),
-            GraftCommand {
-                replacement: "canvas2d_v2".to_owned(),
-                target: "canvas2d".to_owned(),
-            }
-        );
-        assert!(GraftCommand::parse("graft canvas2d").is_err());
-    }
 }

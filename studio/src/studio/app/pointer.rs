@@ -286,20 +286,6 @@ impl App {
                 return;
             }
         }
-        if self.action_validate_area.contains(point) {
-            if let Some(Overlay::Graft(mut graft)) = self.overlay.take() {
-                self.validate_graft(&mut graft);
-                self.overlay = Some(Overlay::Graft(graft));
-            }
-            return;
-        }
-        if self.action_edit_area.contains(point) {
-            if let Some(Overlay::Graft(graft)) = self.overlay.take() {
-                self.open_editor_file(graft.draft.source().to_path_buf(), 1);
-                self.overlay = Some(Overlay::Graft(graft));
-            }
-            return;
-        }
         if self.action_cancel_area.contains(point) || self.action_exit_area.contains(point) {
             self.overlay = None;
             return;
@@ -313,7 +299,6 @@ impl App {
                 Some(Overlay::NewProject(project)) => self.submit_new_project(&project),
                 Some(Overlay::Add(add)) => self.submit_add(&add),
                 Some(Overlay::Edit(id, edit)) => self.submit_edit(id, &edit),
-                Some(Overlay::Graft(graft)) => self.apply_graft(&graft),
                 Some(Overlay::Plugin(plugin)) => self.submit_plugin(&plugin),
                 _ => {}
             }

@@ -11,6 +11,60 @@ macro_rules! application {
     };
 }
 
+/// Build a persistent external graft overlay without touching source files.
+/// 构造持久化外部 graft 覆盖计划，不移动或修改任何源码文件。
+///
+/// ```
+/// # use nichlink::{FrameworkId, graft_plan};
+/// # let framework = FrameworkId::new("example");
+/// let plan = graft_plan!(framework,
+///     cut ["root/a1/b2"] graft "canvas_fast",
+///     cut ["root/a"] full graft "a_fast",
+/// );
+/// assert_eq!(plan.cuts.len(), 2);
+/// ```
+#[macro_export]
+macro_rules! graft_plan {
+    ($framework:expr, $($cuts:tt)+) => {{
+        let mut plan = $crate::GraftPlan::new($framework);
+        $crate::__graft_plan_cuts!(plan; $($cuts)+);
+        plan
+    }};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __graft_plan_cuts {
+    ($plan:ident;) => {};
+    ($plan:ident; cut [$start:literal to $end:literal] full graft $graft:literal $(, $($rest:tt)*)?) => {{
+        let mut cut = $crate::GraftCut::range($start, $end, $graft);
+        cut.subtree = true;
+        $plan.cuts.push(cut);
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+    ($plan:ident; cut [$start:literal to $end:literal] graft $graft:literal $(, $($rest:tt)*)?) => {{
+        $plan.cuts
+            .push($crate::GraftCut::range($start, $end, $graft));
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+    ($plan:ident; cut [$path:literal] full graft $graft:literal $(, $($rest:tt)*)?) => {{
+        $plan.cuts.push($crate::GraftCut::subtree($path, $graft));
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+    ($plan:ident; cut [$path:literal] graft $graft:literal $(, $($rest:tt)*)?) => {{
+        $plan.cuts.push($crate::GraftCut::new($path, $graft));
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+    ($plan:ident; cut $path:literal full graft $graft:literal $(, $($rest:tt)*)?) => {{
+        $plan.cuts.push($crate::GraftCut::subtree($path, $graft));
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+    ($plan:ident; cut $path:literal graft $graft:literal $(, $($rest:tt)*)?) => {{
+        $plan.cuts.push($crate::GraftCut::new($path, $graft));
+        $crate::__graft_plan_cuts!($plan; $($($rest)*)?);
+    }};
+}
+
 #[macro_export]
 macro_rules! __registration_face {
     {

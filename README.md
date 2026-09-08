@@ -1,17 +1,8 @@
 <div align="center">
 
-<pre>
-________   ___  ________  ___  ___  ___       ___  ________   ___  __
-|\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \
-\ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_
- \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \
-  \ \  \\ \  \ \  \ \  \____\ \  \ \  \ \  \____\ \  \ \  \\ \  \ \  \\ \  \
-   \ \__\\ \__\ \__\ \_______\ \__\ \__\ \_______\ \__\ \__\\ \__\ \__\\ \__\
-    \|__| \|__|\|__|\|_______|\|__|\|__|\|_______|\|__|\|__| \|__|\|__| \|__|
-</pre>
+<img src="./picture/NichLink_wordmark.svg" alt="NichLink ASCII wordmark">
 
-<p><strong>Declarative registries for systems that need to change.</strong><br>
-Describe an object once, check its contract, and replace one middle layer without rewriting the whole tree.</p>
+<p><strong>A new Rust code-organization model for AI-assisted development that supports passive recursive registration and atomic replacement at any level.</strong></p>
 
 [![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
@@ -27,14 +18,25 @@ Describe an object once, check its contract, and replace one middle layer withou
 
 </div>
 
-NichLink started with a practical front-end problem. A large UI project is a bad
-fit for an AI assistant when every change crosses half the repository: the task
-needs to be split into small units, each unit needs a clear purpose, and a
-replacement must be checked at the point where it is inserted. Ordinary modules
-and traits solve parts of that problem, but they do not describe the object graph
-that the tooling is working on. NichLink is an experiment in an AI-friendly
-Rust workflow: atomic objects, explicit contracts, source provenance, and a
-development view of the graph.
+NichLink started with a practical front-end problem: as a project grows, a small
+change can cross half the repository. That is a code-organization problem before
+it is an AI problem. Useful pieces need a small, explicit boundary; a replacement
+should be checked where it plugs in; and the source location should remain
+visible to the people and tools working on it.
+
+AI-assisted and agentic coding make this pressure more obvious. No model, and no
+human, keeps perfect attention over a large codebase. Hallucinations and missed
+context are normal failure modes, so NichLink makes the important assumptions
+inspectable instead of relying on good luck: atomic objects, explicit contracts,
+source provenance, and a development graph that a team can read together. The
+same boundaries help code review, community contributions, and ordinary Rust
+development; AI is one of the users, not the reason the architecture exists.
+
+This also changes how a community can extend a project. A contributor can ship
+an implementation beside the original tree, state the boundary it replaces,
+and let the host validate the graft. Competing implementations can coexist
+without turning the upstream source into a patch queue. The project keeps its
+shape, while the community gets room to experiment inside named contracts.
 
 It is still a young project. The core protocol is useful today; static analysis
 and runtime evidence are intentionally reported with their limits instead of
@@ -205,9 +207,11 @@ For a replacement, both sides publish a flow contract. The host validates the
 contract id, version, input, and output before applying the graft:
 
 ```rust
-let command = nichlink_core::GraftCommand::parse("graft canvas_fast to canvas")?;
-// Resolve the names, build GraftRequest with both FlowContracts, then:
-registry.graft(request)?; // unchanged on any validation error
+let plan = nichlink_core::GraftPlan::command(
+    framework,
+    "cut root/canvas graft canvas_fast",
+)?;
+let effective = base.overlay(&plan, &external)?;
 ```
 
 An extension only needs to satisfy the target registration rule. A replacement
@@ -346,41 +350,40 @@ may cross several registry boundaries. When a replacement changes several
 consumers, describe the affected slots as one plan and commit them together:
 
 ```rust
-// Each helper supplies the target and replacement contracts.
-let requests = [
-    request_for(&canvas_target, &canvas_fast),
-    request_for(&hit_test_target, &hit_test_fast),
-    request_for(&layout_target, &layout_fast),
-];
-
-registry.graft_batch(requests)?;
+let plan = nichlink_core::graft_plan!(framework,
+    cut ["root/canvas"] graft "canvas_fast",
+    cut ["root/hit_test"] graft "hit_test_fast",
+    cut ["root/layout"] graft "layout_fast",
+);
+let effective = base.overlay(&plan, &external)?;
 ```
 
-graft_batch stages the whole set. Each request checks namespace, overlap,
-source and destination contracts, destination registry_rule, and connector
-admission; only when every request succeeds is the live tree replaced. If one
-consumer still expects the old boundary, the complete transaction fails and no
-slot is half-replaced. The helper graft_command remains convenient for one
-human-facing “graft replacement to target” command; tooling can build a batch
-when an impact set spans branches.
+`overlay` stages the whole set. Every cut checks source and destination
+contracts, destination registry_rule, and connector admission. If one consumer
+still expects the old boundary, the operation fails without publishing a
+partial effective tree.
 
-The current graft operation moves a registered implementation into a target
-slot. It keeps the target's child registry, rejects an implementation that
-already owns a non-empty child registry, and rejects overlapping source/target
-subtrees. A candidate may come from another branch of the same framework, but
-the destination rule and connector checks still apply. If the thing being
-replaced is an entire subtree rather than an implementation slot, use the
-snapshot migration API so the new subtree is validated as one batch.
+The overlay operation never moves source code or mutates either registry. Use
+`cut A graft X` to replace only slot `A` (its existing children are inherited),
+or `cut A full graft X` to replace the complete subtree rooted at `A` with the
+external subtree rooted at `X`. A path range can target contiguous siblings:
 
-Studio uses a safer source-authoring path. Pressing `g` copies the selected
-face, its implementation, helper files, and contract into
-`.nichlink/grafts/<draft>/`. That directory is outside `src`, so the draft is
-not compiled, discovered, or registered and cannot create a second provider.
-The plan screen offers Validate, Apply, and Cancel. Validate re-reads the edited
-draft and checks it as if it occupied the original slot. Apply keeps the old
-module in the draft's `original/` directory, atomically swaps the source
-directory, and reloads the registration tree. Press `g` on the same target
-after restarting Studio to reopen its draft.
+```rust
+let plan = nichlink_core::GraftPlan::command(
+    framework,
+    "cut [root/a1 to root/a3] graft replacement",
+)?;
+let effective = base.overlay(&plan, &external)?;
+```
+
+The returned effective registry keeps the base tree and external tree
+unchanged, preserves the logical target path, inherits untouched siblings, and
+re-runs destination-rule, admission, and connector checks before publication.
+
+Studio's graft workflow uses `g`. It creates
+`.nichlink/external-grafts/<selector>/graft.plan`, opens that plan in the
+configured editor, and leaves the host source untouched. There is no
+source-copy or source-replacement graft path.
 
 NichLink does not prescribe the programming paradigm inside a face. Functions,
 traits, generics, closures, dependency injection, and message passing remain
@@ -405,8 +408,7 @@ on input, resize, or a file event.
 | --- | --- |
 | `n` | New binary/library project |
 | `a` / `e` / `d` | Add, edit, or delete a face |
-| `g` | Create or reopen an inactive graft draft for the selected face |
-| `e` / `v` / `a` | Edit, validate, or apply the open graft plan |
+| `g` | Create and edit an external graft plan for the selected face |
 | `/` | Search files and functions |
 | `1`–`4` | Search, inspect, data, compare pages |
 | `Tab` | Move focus between tree and details |

@@ -1,7 +1,7 @@
+#[path = "external_graft/external_graft.rs"]
+pub mod external_graft;
 #[path = "filesystem/filesystem.rs"]
 pub mod filesystem;
-#[path = "graft_copy/graft_copy.rs"]
-pub mod graft_copy;
 #[path = "manifest/mod.rs"]
 pub mod manifest;
 #[path = "operations/operations.rs"]

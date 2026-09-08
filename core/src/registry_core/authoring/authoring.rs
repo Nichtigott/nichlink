@@ -42,9 +42,7 @@ pub use self::operations::{
     edit_module_face, generated_snapshots, generated_snapshots_from, AuthoringChange,
     ModuleFacePatch, NewModuleFace,
 };
-pub use self::graft_copy::{
-    apply_graft_draft, copy_module_for_graft, graft_drafts, validate_graft_draft, GraftDraft,
-};
+pub use self::external_graft::{ExternalGraftPlanFile, create_external_graft};
 
 const GENERATED_MARKER: &str = "// generated-by=NichLink";
 

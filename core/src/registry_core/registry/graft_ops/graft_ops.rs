@@ -2,8 +2,180 @@
 //! 替换与嫁接操作。
 
 use super::*;
+use crate::registry_core::plugin::{GraftCut, GraftPlan};
 
 impl Registry {
+    /// Build an effective tree by overlaying external graft implementations.
+    ///
+    /// Neither `self` nor `external` is moved or edited. Each cut addresses a
+    /// logical path in the base tree; the selected external face occupies that
+    /// slot while the target's untouched siblings and child registry remain.
+    /// 从外部 graft 实现生成有效注册树；不会移动或编辑原树、外部树。每个 cut
+    /// 指向原树逻辑路径，外部实现只覆盖该槽位，兄弟和未覆盖子树继续继承。
+    pub fn overlay(&self, plan: &GraftPlan, external: &Registry) -> RegistryResult<Self> {
+        if plan.framework != self.header.framework || external.header.framework != plan.framework {
+            return Err(self.graft_error(
+                self.header.id,
+                GraftError::FrameworkMismatch(plan.framework),
+            ));
+        }
+        let mut staged = self.clone();
+        let mut seen = BTreeSet::new();
+        for cut in &plan.cuts {
+            let replacement = external.resolve_node(&cut.graft).ok_or_else(|| {
+                staged.graft_error(
+                    staged.header.id,
+                    GraftError::UnknownReplacement(staged.header.id),
+                )
+            })?;
+            let replacement = external
+                .find(replacement)
+                .expect("resolve_node returned a registered external face");
+            for target in staged.resolve_cut_targets(cut)? {
+                if !seen.insert(target) {
+                    return Err(
+                        staged.graft_error(target, GraftError::DuplicateCut(cut.cut.clone()))
+                    );
+                }
+                staged.apply_overlay_face(target, replacement, cut.subtree, external)?;
+            }
+        }
+        if let Some(error) = staged.connector_error_with_external(Some(external)) {
+            return Err(error.into());
+        }
+        Ok(staged)
+    }
+
+    fn apply_overlay_face(
+        &mut self,
+        target: NodeId,
+        replacement: &RegistrationSnapshot,
+        replace_subtree: bool,
+        external: &Registry,
+    ) -> RegistryResult<()> {
+        let target_info = self
+            .find(target)
+            .cloned()
+            .ok_or_else(|| self.graft_error(target, GraftError::UnknownTarget(target)))?;
+        if !replacement.flow.is_declared() || !target_info.flow.is_declared() {
+            return Err(self.graft_error(target, GraftError::ContractUndeclared));
+        }
+        if !replacement
+            .flow
+            .semantically_compatible_with(&target_info.flow)
+        {
+            return Err(self.graft_error(
+                target,
+                GraftError::ContractMismatch {
+                    expected: target_info.flow.clone(),
+                    received: replacement.flow.clone(),
+                },
+            ));
+        }
+        let parent = self.registry(target_info.parent).ok_or_else(|| {
+            self.graft_error(target, GraftError::UnknownTarget(target_info.parent))
+        })?;
+        let parent_path = parent.header.path.clone();
+        let mut candidate = replacement.clone();
+        candidate.id = target_info.id;
+        candidate.parent = target_info.parent;
+        candidate.registry_name = target_info.registry_name.clone();
+        let failures = parent.header.registration_rule.validate(&candidate);
+        if !failures.is_empty() {
+            let mut error = self.graft_error(
+                target,
+                GraftError::ContractMismatch {
+                    expected: target_info.flow.clone(),
+                    received: replacement.flow.clone(),
+                },
+            );
+            error.message = format!(
+                "graft overlay rejected by destination rule: {}",
+                failures.join("; ")
+            );
+            return Err(error);
+        }
+        let Some(owner) = self.registry_mut(target_info.parent) else {
+            return Err(self.graft_error(target, GraftError::UnknownTarget(target_info.parent)));
+        };
+        let Some(entry) = Arc::make_mut(&mut owner.entries).get_mut(&target) else {
+            return Err(self.graft_error(target, GraftError::UnknownTarget(target)));
+        };
+        let child = if replace_subtree {
+            let mut child = external
+                .entry_at(replacement.id)
+                .and_then(|entry| entry.child.clone());
+            if let Some(registry) = &mut child {
+                let old_path = registry.header.path.clone();
+                let new_path = format!("{}/{}", parent_path, target_info.registry_name);
+                let child = Arc::make_mut(registry);
+                // The copied child registry still carries the external
+                // replacement's identity. Reconfigure its root before
+                // rebasing descendants so `registry(target.id)` and parent
+                // lookups continue to address the logical base slot.
+                // 外部实现的子注册机仍带着 replacement 身份；先重配置根节点，
+                // 再重基后代，确保逻辑槽位的查询和父链保持一致。
+                child.reconfigure(&candidate);
+                child.rebase_parent_ids(replacement.id, target_info.id);
+                child.rebase_paths(&old_path, &new_path);
+            }
+            child
+        } else {
+            entry.child.clone()
+        };
+        entry.info = Arc::new(candidate);
+        entry.child = child;
+        Ok(())
+    }
+
+    fn resolve_path(&self, path: &str) -> Option<NodeId> {
+        self.depth_first().into_iter().find_map(|info| {
+            self.path_for(info.id)
+                .filter(|candidate| candidate == path)
+                .map(|_| info.id)
+        })
+    }
+
+    fn resolve_cut_targets(&self, cut: &GraftCut) -> RegistryResult<Vec<NodeId>> {
+        let start = self.resolve_path(&cut.cut).ok_or_else(|| {
+            self.graft_error(self.header.id, GraftError::UnknownTarget(self.header.id))
+        })?;
+        let Some(end_path) = &cut.end else {
+            return Ok(vec![start]);
+        };
+        let end = self
+            .resolve_path(end_path)
+            .ok_or_else(|| self.graft_error(start, GraftError::UnknownTarget(start)))?;
+        let start_info = self.find(start).expect("resolved cut start");
+        let end_info = self.find(end).expect("resolved cut end");
+        if start_info.parent != end_info.parent {
+            return Err(self.graft_error(start, GraftError::InvalidRange(end_path.clone())));
+        }
+        let parent = self
+            .registry(start_info.parent)
+            .ok_or_else(|| self.graft_error(start, GraftError::UnknownTarget(start_info.parent)))?;
+        let mut siblings = parent
+            .entries
+            .values()
+            .map(|entry| (entry.info.registry_name.as_str(), entry.info.id))
+            .collect::<Vec<_>>();
+        siblings.sort_unstable_by_key(|(name, _)| *name);
+        let first = siblings
+            .iter()
+            .position(|(_, id)| *id == start)
+            .unwrap_or(0);
+        let last = siblings
+            .iter()
+            .position(|(_, id)| *id == end)
+            .unwrap_or(first);
+        let (low, high) = if first <= last {
+            (first, last)
+        } else {
+            (last, first)
+        };
+        Ok(siblings[low..=high].iter().map(|(_, id)| *id).collect())
+    }
+
     /// Validate a source-path migration by replacing one whole subtree in a
     /// staged registry. The live registry is untouched.
     /// 在暂存注册树中校验整个源码路径子树迁移，实时注册树不会被修改。
@@ -229,193 +401,6 @@ impl Registry {
         header.admission = info.admission.clone();
     }
 
-    /// Replace one registered implementation with another atomically.
-    /// 原子地用一个已注册实现替换另一个实现。
-    ///
-    /// The replacement keeps the target's child registry and display slot.
-    /// A candidate carrying its own populated child registry is rejected so
-    /// grafting cannot silently discard a subtree.
-    /// 替换会保留目标的子注册机和展示插槽。候选实现若带有非空子注册机会被拒绝，
-    /// 避免嫁接悄悄丢失一棵子树。
-    pub fn graft(&mut self, request: GraftRequest) -> RegistryResult<()> {
-        if request.framework != self.header.framework {
-            return Err(self.graft_error(
-                request.target,
-                GraftError::FrameworkMismatch(request.framework),
-            ));
-        }
-        let target = self.find(request.target).cloned().ok_or_else(|| {
-            self.graft_error(request.target, GraftError::UnknownTarget(request.target))
-        })?;
-        let replacement = self.find(request.replacement).cloned().ok_or_else(|| {
-            self.graft_error(
-                request.replacement,
-                GraftError::UnknownReplacement(request.replacement),
-            )
-        })?;
-        if target.id == replacement.id {
-            return Err(self.graft_error(target.id, GraftError::SameNode));
-        }
-        if self
-            .node_path(target.id)
-            .zip(self.node_path(replacement.id))
-            .is_some_and(|(target_path, replacement_path)| {
-                replacement_path.starts_with(&target_path)
-                    || target_path.starts_with(&replacement_path)
-            })
-        {
-            return Err(self.graft_error(target.id, GraftError::OverlappingSubtree));
-        }
-        if !target.flow.is_declared() || !replacement.flow.is_declared() {
-            return Err(self.graft_error(target.id, GraftError::ContractUndeclared));
-        }
-        if target.flow != request.target_contract
-            || replacement.flow != request.replacement_contract
-        {
-            return Err(self.graft_error(
-                target.id,
-                GraftError::ContractMismatch {
-                    expected: request.target_contract.clone(),
-                    received: target.flow.clone(),
-                },
-            ));
-        }
-        if !replacement.flow.semantically_compatible_with(&target.flow) {
-            return Err(self.graft_error(
-                replacement.id,
-                GraftError::ContractMismatch {
-                    expected: target.flow.clone(),
-                    received: replacement.flow.clone(),
-                },
-            ));
-        }
-
-        // Validate the candidate against the target parent's rule as well.
-        // A candidate may come from another branch with a different admission
-        // rule; moving it must not bypass the destination contract.
-        // 候选来自另一分支时，还要按目标父注册机的规范重新校验，不能绕过目标门槛。
-        let mut destination_info = replacement.clone();
-        destination_info.parent = target.parent;
-        destination_info.registry_name = target.registry_name.clone();
-        if let Some(parent) = self.registry(target.parent) {
-            let failures = parent.header.registration_rule.validate(&destination_info);
-            if !failures.is_empty() {
-                let mut error = self.graft_error(
-                    target.id,
-                    GraftError::ContractMismatch {
-                        expected: target.flow.clone(),
-                        received: replacement.flow.clone(),
-                    },
-                );
-                error.message = format!(
-                    "graft candidate rejected by destination rule: {}",
-                    failures.join("; ")
-                );
-                return Err(error);
-            }
-        }
-
-        let mut staged = self.clone();
-        let candidate = staged
-            .take_entry(request.replacement)
-            .expect("graft replacement was found in the live tree");
-        if candidate
-            .child
-            .as_ref()
-            .is_some_and(|child| !child.is_empty())
-        {
-            return Err(self.graft_error(request.replacement, GraftError::ReplacementHasChildren));
-        }
-        let mut target_entry = staged
-            .take_entry(request.target)
-            .expect("graft target was found in the live tree");
-        let old_id = target_entry.info.id;
-        let mut replacement_info = (*candidate.info).clone();
-        replacement_info.parent = target_entry.info.parent;
-        // The target name is the stable logical slot. The candidate keeps its
-        // own node identity and kind while occupying that slot.
-        // 目标名称是稳定的逻辑槽位；候选保留自己的 node identity 和 kind，但占据该槽位。
-        replacement_info.registry_name = target_entry.info.registry_name.clone();
-        let child = target_entry.child.take();
-        if let Some(mut child) = child {
-            let old_path = child.header.path.clone();
-            let new_path = format!(
-                "{}/{}",
-                self.path_for(replacement_info.parent)
-                    .unwrap_or_else(|| self.header.path.clone()),
-                replacement_info.registry_name
-            );
-            let child_ref = Arc::make_mut(&mut child);
-            child_ref.reconfigure(&replacement_info);
-            child_ref.rebase_paths(&old_path, &new_path);
-            child_ref.rebase_parent_ids(old_id, replacement_info.id);
-            target_entry.child = Some(child);
-        }
-        let target_parent = replacement_info.parent;
-        target_entry.info = Arc::new(replacement_info);
-        if !staged.insert_entry_at(target_parent, target_entry) {
-            return Err(self.graft_error(request.target, GraftError::UnknownTarget(request.target)));
-        }
-        if let Some(error) = staged.connector_error() {
-            return Err(error.into());
-        }
-        *self = staged;
-        Ok(())
-    }
-
-    /// Apply several independent grafts as one transaction.
-    ///
-    /// Requests may target slots in different branches. Every request is
-    /// validated against the staged tree, including connector and admission
-    /// checks. If any request fails, the live registry is left unchanged.
-    /// 将多个独立 graft 作为一次事务提交。请求可以指向不同分支的槽位；
-    /// 每一步都在暂存树上校验，包括连接器和准入检查。任一步失败，线上树不变。
-    pub fn graft_batch<I>(&mut self, requests: I) -> RegistryResult<()>
-    where
-        I: IntoIterator<Item = GraftRequest>,
-    {
-        let mut staged = self.clone();
-        for request in requests {
-            staged.graft(request)?;
-        }
-        *self = staged;
-        Ok(())
-    }
-
-    /// Resolve and execute a human-facing graft command using registered names,
-    /// kinds, paths, or node identity values. Contracts come from the live nodes.
-    /// 解析并执行面向人的嫁接命令；端点可用名称、kind、路径或 node identity，合同从线上节点读取。
-    pub fn graft_command(&mut self, command: &str) -> RegistryResult<()> {
-        let command = GraftCommand::parse(command).map_err(|message| {
-            self.graft_error(self.header.id, GraftError::InvalidCommand(message))
-        })?;
-        let target = self.resolve_node(&command.target).ok_or_else(|| {
-            self.graft_error(self.header.id, GraftError::UnknownTarget(self.header.id))
-        })?;
-        let replacement = self.resolve_node(&command.replacement).ok_or_else(|| {
-            self.graft_error(
-                self.header.id,
-                GraftError::UnknownReplacement(self.header.id),
-            )
-        })?;
-        let target_flow = self
-            .find(target)
-            .map(|info| info.flow.clone())
-            .unwrap_or_else(crate::OwnedFlowContract::none);
-        let replacement_flow = self
-            .find(replacement)
-            .map(|info| info.flow.clone())
-            .unwrap_or_else(crate::OwnedFlowContract::none);
-        self.graft(GraftRequest::new(
-            self.header.framework,
-            target,
-            replacement,
-            target_flow,
-            replacement_flow,
-            crate::PluginSource::User,
-        ))
-    }
-
     fn resolve_node(&self, value: &str) -> Option<NodeId> {
         if let Ok(id) = value.parse::<NodeId>() {
             return self.find(id).map(|_| id);
@@ -435,7 +420,7 @@ impl Registry {
                 file: "<graft>",
                 line: 0,
                 column: 0,
-                function: "Registry::graft",
+                function: "Registry::overlay",
             },
             error.to_string(),
         ))
@@ -445,14 +430,6 @@ impl Registry {
         let parent = self.find(wanted)?.parent;
         let registry = self.registry_mut(parent)?;
         Arc::make_mut(&mut registry.entries).remove(&wanted)
-    }
-
-    fn insert_entry_at(&mut self, parent: NodeId, entry: RegisteredEntry) -> bool {
-        if let Some(registry) = self.registry_mut(parent) {
-            Arc::make_mut(&mut registry.entries).insert(entry.info.id, entry);
-            return true;
-        }
-        false
     }
 
     fn rebase_parent_ids(&mut self, old: NodeId, new: NodeId) {
@@ -483,8 +460,8 @@ impl Registry {
 mod tests {
     use super::*;
     use crate::{
-        Admission, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
-        PluginSource, RegistrationRule,
+        Admission, CutGraftCommand, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
+        OwnedSourceLocation, RegistrationRule,
     };
 
     const FRAMEWORK: FrameworkId = FrameworkId::new("graft-test");
@@ -547,80 +524,100 @@ mod tests {
         }
     }
 
-    fn request(target: &RegistrationSnapshot, replacement: &RegistrationSnapshot) -> GraftRequest {
-        GraftRequest::new(
-            FRAMEWORK,
-            target.id,
-            replacement.id,
-            target.flow.clone(),
-            replacement.flow.clone(),
-            PluginSource::User,
-        )
+    #[test]
+    fn overlay_keeps_base_siblings_and_source_trees_untouched() {
+        let namespace = "overlay";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut a = face(namespace, "a.rs", "A", "a");
+        a.needs_registry = true;
+        a.id = NodeId::from_namespaced_path(namespace, "a.rs", "A");
+        let mut a1 = face(namespace, "a1.rs", "A1", "a1");
+        a1.parent = a.id;
+        let a2 = {
+            let mut value = face(namespace, "a2.rs", "A2", "a2");
+            value.parent = a.id;
+            value
+        };
+        let mut original = face("external", "original.rs", "Original", "replacement");
+        original.id = NodeId::from_namespaced_path("external", "original.rs", "Original");
+        original.flow = flow("render.v1");
+        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
+        root.register_snapshot_batch([a.clone(), a1.clone(), a2.clone()])
+            .unwrap();
+        external
+            .register_snapshot_batch([original.clone()])
+            .unwrap();
+        let plan = GraftPlan::new(FRAMEWORK).cut("root/a/a1", "replacement");
+
+        let effective = root.overlay(&plan, &external).unwrap();
+        assert_eq!(effective.find_kind("Original").len(), 1);
+        assert_eq!(effective.path_for(a2.id).as_deref(), Some("root/a/a2"));
+        assert_eq!(root.find(a1.id).map(|item| item.kind.as_str()), Some("A1"));
+        assert_eq!(
+            external.find(original.id).map(|item| item.kind.as_str()),
+            Some("Original")
+        );
+        assert_eq!(effective.path_for(a1.id).as_deref(), Some("root/a/a1"));
     }
 
     #[test]
-    fn graft_batch_commits_independent_slots_together() {
-        let namespace = "graft-batch";
-        let target_a = face(namespace, "a/target.rs", "TargetA", "target_a");
-        let replacement_a = face(namespace, "a/replacement.rs", "ReplacementA", "candidate_a");
-        let target_b = face(namespace, "b/target.rs", "TargetB", "target_b");
-        let replacement_b = face(namespace, "b/replacement.rs", "ReplacementB", "candidate_b");
-        let mut registry = Registry::root_for_namespace(FRAMEWORK, namespace);
-        registry
-            .register_snapshot_batch([
-                target_a.clone(),
-                replacement_a.clone(),
-                target_b.clone(),
-                replacement_b.clone(),
-            ])
-            .unwrap();
-
-        registry
-            .graft_batch([
-                request(&target_a, &replacement_a),
-                request(&target_b, &replacement_b),
-            ])
-            .unwrap();
-
-        assert!(registry.find(target_a.id).is_none());
-        assert!(registry.find(target_b.id).is_none());
-        assert_eq!(
-            registry.path_for(replacement_a.id).as_deref(),
-            Some("root/target_a")
-        );
-        assert_eq!(
-            registry.path_for(replacement_b.id).as_deref(),
-            Some("root/target_b")
-        );
+    fn cut_command_supports_single_node_and_full_subtree_forms() {
+        let single = CutGraftCommand::parse("cut [root/a1] graft replacement").unwrap();
+        assert_eq!(single.cut, "root/a1");
+        assert!(!single.full);
+        let full = CutGraftCommand::parse("cut [root/a] full graft replacement").unwrap();
+        assert_eq!(full.cut, "root/a");
+        assert!(full.full);
     }
 
     #[test]
-    fn graft_batch_rolls_back_when_a_later_edge_cannot_attach() {
-        let namespace = "graft-rollback";
-        let target_a = face(namespace, "a/target.rs", "TargetA", "target_a");
-        let replacement_a = face(namespace, "a/replacement.rs", "ReplacementA", "candidate_a");
-        let target_b = face(namespace, "b/target.rs", "TargetB", "target_b");
-        let mut replacement_b = face(namespace, "b/replacement.rs", "ReplacementB", "candidate_b");
-        replacement_b.flow.output = "AbsoluteCoordinates".to_owned();
-        let mut registry = Registry::root_for_namespace(FRAMEWORK, namespace);
-        registry
-            .register_snapshot_batch([
-                target_a.clone(),
-                replacement_a.clone(),
-                target_b.clone(),
-                replacement_b.clone(),
-            ])
+    fn full_cut_inherits_external_subtree_without_moving_source_trees() {
+        let namespace = "overlay-full";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut target = face(namespace, "base/a.rs", "BaseA", "a");
+        target.needs_registry = true;
+        target.id = NodeId::from_namespaced_path(namespace, "base/a.rs", "BaseA");
+        let mut base_child = face(namespace, "base/old.rs", "OldChild", "old");
+        base_child.parent = target.id;
+        let sibling = face(namespace, "base/sibling.rs", "Sibling", "sibling");
+        root.register_snapshot_batch([target.clone(), base_child.clone(), sibling.clone()])
             .unwrap();
 
-        registry
-            .graft_batch([
-                request(&target_a, &replacement_a),
-                request(&target_b, &replacement_b),
-            ])
-            .expect_err("the incompatible second graft must reject the whole batch");
+        let external_namespace = "overlay-full-external";
+        let mut replacement = face(external_namespace, "graft/fast_a.rs", "FastA", "fast_a");
+        replacement.needs_registry = true;
+        replacement.id =
+            NodeId::from_namespaced_path(external_namespace, "graft/fast_a.rs", "FastA");
+        let mut external_child = face(external_namespace, "graft/new.rs", "NewChild", "new");
+        external_child.parent = replacement.id;
+        let mut external = Registry::root_for_namespace(FRAMEWORK, external_namespace);
+        external
+            .register_snapshot_batch([replacement.clone(), external_child.clone()])
+            .unwrap();
 
-        for id in [target_a.id, replacement_a.id, target_b.id, replacement_b.id] {
-            assert!(registry.find(id).is_some(), "batch mutated node {id}");
-        }
+        let plan = GraftPlan::new(FRAMEWORK).cut("root/a", "fast_a");
+        let single = root.overlay(&plan, &external).unwrap();
+        assert!(!single.find_kind("OldChild").is_empty());
+        assert_eq!(single.find_kind("NewChild").len(), 0);
+
+        let full_plan = GraftPlan::new(FRAMEWORK);
+        let full_plan = GraftPlan {
+            framework: full_plan.framework,
+            cuts: vec![GraftCut::subtree("root/a", "fast_a")],
+        };
+        let effective = root.overlay(&full_plan, &external).unwrap();
+        assert_eq!(effective.find_kind("FastA").len(), 1);
+        assert_eq!(effective.find_kind("OldChild").len(), 0);
+        assert_eq!(effective.find_kind("NewChild").len(), 1);
+        assert_eq!(
+            effective.path_for(external_child.id).as_deref(),
+            Some("root/a/new")
+        );
+        assert_eq!(
+            effective.path_for(sibling.id).as_deref(),
+            Some("root/sibling")
+        );
+        assert_eq!(root.find_kind("OldChild").len(), 1);
+        assert_eq!(external.find_kind("NewChild").len(), 1);
     }
 }

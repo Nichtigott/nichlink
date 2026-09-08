@@ -12,7 +12,7 @@ pub use self::trust::{
 pub use self::artifact::{
     PluginArtifact, PluginAssurance, PluginDecision, PluginRejectReason, VerifiedPluginArtifact,
 };
-pub use self::graft::{GraftCommand, GraftError, GraftMode, GraftRequest};
+pub use self::graft::{CutGraftCommand, GraftCut, GraftError, GraftPlan};
 pub use self::catalog::{PluginCatalog, PluginRecord};
 pub use self::manifest::PluginManifest;
 

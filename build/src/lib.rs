@@ -23,7 +23,9 @@ mod registry_identity;
 mod registry_syntax;
 
 use registry_identity::{IDENTITY_SCHEMA, NodeId};
-use registry_syntax::{FaceSyntax, ParentSyntax, application_entries, source_references};
+use registry_syntax::{
+    FaceSyntax, GraftSyntax, ParentSyntax, application_entries, graft_entries, source_references,
+};
 
 // Bump this whenever the identity input or generated-plan format changes.
 // 身份输入或生成计划格式变化时必须递增，避免旧缓存混入新构建。
@@ -57,7 +59,10 @@ use discovery::{discover_root, discovery_fingerprint, emit_rerun_paths};
 use identity_cache::{
     cache_directory, prime_node_id_cache, source_unit_fingerprint, valid_cached_unit,
 };
-use manifests::{write_function_manifest, write_pruning_manifest, write_source_scope_manifest};
+use manifests::{
+    write_function_manifest, write_graft_manifest, write_pruning_manifest,
+    write_source_scope_manifest,
+};
 use renderer::{materialize_sources, render_lib};
 use static_plan::static_plan;
 use types::{BuildInput, Node};
@@ -161,6 +166,15 @@ impl SourceScope {
                 reason: "missing-entry",
             };
         };
+        // Graft declarations belong to the host entry. Parse them here so a
+        // malformed overlay fails at build time; the plan itself is applied by
+        // the host against an external Registry at runtime or release setup.
+        if let Err(error) = graft_entries(&entry_source) {
+            panic!(
+                "invalid graft declaration in `{}`: {error}",
+                entry.display()
+            );
+        }
         let faces = collect_faces(src, nodes);
         if faces.is_empty() {
             return Self {
@@ -304,6 +318,23 @@ fn application_entry_source(src: &Path, nodes: &[Node]) -> Option<PathBuf> {
             panic!("multiple application! entry declarations found: {details}");
         }
     }
+}
+
+/// Read the host entry's graft declarations once for generated release metadata.
+/// 读取宿主入口中的 graft 声明，并生成正式构建可携带的静态选择器表。
+pub(crate) fn host_graft_entries(src: &Path, nodes: &[Node]) -> Vec<GraftSyntax> {
+    let Some(file) = application_entry_source(src, nodes) else {
+        return Vec::new();
+    };
+    let source = fs::read_to_string(&file).unwrap_or_else(|error| {
+        panic!(
+            "failed to read graft entry source `{}`: {error}",
+            file.display()
+        )
+    });
+    graft_entries(&source).unwrap_or_else(|error| {
+        panic!("invalid graft declaration in `{}`: {error}", file.display())
+    })
 }
 
 fn entry_path_exists(src: &Path, path: &str) -> bool {

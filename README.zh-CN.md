@@ -1,17 +1,8 @@
 <div align="center">
 
-<pre>:
-________   ___  ________  ___  ___  ___       ___  ________   ___  __
-|\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \
-\ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_
- \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \
-  \ \  \\ \  \ \  \ \  \____\ \  \ \  \ \  \____\ \  \ \  \\ \  \ \  \\ \  \
-   \ \__\\ \__\ \__\ \_______\ \__\ \__\ \_______\ \__\ \__\\ \__\ \__\\ \__\
-    \|__| \|__|\|__|\|_______|\|__|\|__|\|_______|\|__|\|__| \|__|\|__| \|__|
-</pre>
+<img src="./picture/NichLink_wordmark.svg" alt="NichLink ASCII 字标">
 
-<p><strong>给会不断变化的 Rust 系统使用的声明式注册机。</strong><br>
-声明一次，先验合同；需要替换时，只动中间那一层，不重写整棵树。</p>
+<p><strong>一种面向 AI 协作开发、支持被动式递归注册和任意层级原子替换的 Rust 代码组织新范式。</strong></p>
 
 [![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
@@ -27,12 +18,22 @@ ________   ___  ________  ___  ___  ___       ___  ________   ___  __
 
 </div>
 
-NichLink 起于一个很具体的前端开发困境：项目一大，AI 每次改动都要
-穿过半个仓库。需求必须拆成足够小的原子单元；每个单元要说清楚自己是
-干什么的；换掉中间实现时，还要在接入点验证输入和输出。普通模块和
-trait 能解决其中几块，却不会告诉工具“这个对象在图里的位置、谁可以
-依赖它、它为什么能被替换”。NichLink 是对 AI 时代 Rust 工作流的一次
-实践：原子对象、显式合同、源码溯源，以及一眼能读懂的开发期注册图。
+NichLink 起于一个很具体的前端工程困境：项目一大，一次小改动也可能
+穿过半个仓库。这首先是代码组织问题，其次才是 AI 问题。一个可维护的
+对象需要小而明确的边界；替换实现时，要在接入点检查它；人和工具还要
+能回到它的源码位置。
+
+现在的 AI 辅助开发、agentic coding 只是把这个问题放大了。人和模型都
+不可能永远对整个仓库保持完美注意力，幻觉、漏看上下文和误解意图都会
+发生。与其假设这些错误可以被彻底消除，不如把关键假设变成可检查的
+结构：原子对象、显式合同、源码溯源，以及团队都能读懂的开发期注册图。
+这套边界同样服务于代码评审、社区协作和普通 Rust 开发；AI 只是使用者
+之一，不是架构存在的唯一理由。
+
+它也在尝试改变社区扩展项目的方式。贡献者可以把新实现放在原树之外，
+声明自己替换哪一个边界，再由宿主验证 graft；不同实现可以并存，不必
+把上游源码变成一长串 patch。项目保留自己的结构，社区则能在明确合同
+以内自由试验。
 
 项目还很年轻。核心协议已经可以用于真实工程，但静态分析和运行时证据
 会老实标注自己的覆盖范围，不把候选调用图说成万能答案。
@@ -196,9 +197,11 @@ crate::node_editor_object! {
 通过后才执行嫁接：
 
 ```rust
-let command = nichlink_core::GraftCommand::parse("graft canvas_fast to canvas")?;
-// 解析名称，用两边的 FlowContract 构造 GraftRequest，然后：
-registry.graft(request)?; // 任一校验失败，原注册树完全不变
+let plan = nichlink_core::GraftPlan::command(
+    framework,
+    "cut root/canvas graft canvas_fast",
+)?;
+let effective = base.overlay(&plan, &external)?;
 ```
 
 扩展对象只需满足目标注册规范；替换对象还必须和槽位的输入/输出合同
@@ -328,34 +331,36 @@ trait 和 export；父规则从不把额外结构当成错误。
 会影响多个消费者时，把受影响的槽位组成一个计划，一起提交：
 
 ```rust
-// helper 会填入目标和替换端的合同
-let requests = [
-    request_for(&canvas_target, &canvas_fast),
-    request_for(&hit_test_target, &hit_test_fast),
-    request_for(&layout_target, &layout_fast),
-];
-
-registry.graft_batch(requests)?;
+let plan = nichlink_core::graft_plan!(framework,
+    cut ["root/canvas"] graft "canvas_fast",
+    cut ["root/hit_test"] graft "hit_test_fast",
+    cut ["root/layout"] graft "layout_fast",
+);
+let effective = base.overlay(&plan, &external)?;
 ```
 
-graft_batch 会先暂存整组请求。每一项都会检查命名空间、重叠关系、源端和
-目标端合同、目标 registry_rule 以及连接器准入；全部成功后才替换线上树。
-如果仍有一个消费者只接受旧边界，整笔事务失败，不会出现半棵树已经换掉的
-状态。面向人的 graft_command 仍适合执行一条“graft replacement to target”；
-当影响范围跨越多个分支时，由工具构造批量请求。
+`overlay` 会暂存整组切口。每一项都会检查源端和目标端合同、目标
+registry_rule 以及连接器准入；如果仍有消费者只接受旧边界，操作失败，
+不会发布只完成一部分的 effective tree。
 
-当前 graft 操作会把一个已注册实现移动到目标槽位。目标原有的子注册机会被
-保留；如果候选实现自己带着非空子注册机，或者源、目标子树互相包含，操作
-会拒绝。候选可以来自同一框架的另一条分支，但仍必须通过目标注册规范和
-连接器校验。如果要替换的是整棵子树，而不是一个实现槽位，应使用 snapshot
-migration API，让新子树作为一个批次完成校验。
+overlay 操作不会移动源码，也不会修改原树或外部树。`cut A graft X` 只替换
+`A` 这个槽位，并继承它原来的子树；`cut A full graft X` 才会用外部 `X` 的整棵
+子树替换 `A`。也可以选择同一父注册机下的一段兄弟节点：
 
-Studio 采用更稳妥的源码创作流程。按 `g` 后，它把选中注册面的实现、辅助文件
-和合同复制到 `.nichlink/grafts/<draft>/`。草稿不在 `src` 内，因此不会参与编译、
-发现或注册，也不会凭空增加第二个 provider。计划页提供 Validate、Apply 和
-Cancel。Validate 会重新读取编辑后的草稿，并假设它已经占据原槽位来检查结构、
-数据流和准入；Apply 先把旧模块保存在草稿的 `original/` 中，再原子替换源码目录
-并刷新注册树。Studio 重启后，在同一目标上再按 `g` 就能重新打开该草稿。
+```rust
+let plan = nichlink_core::GraftPlan::command(
+    framework,
+    "cut [root/a1 to root/a3] graft replacement",
+)?;
+let effective = base.overlay(&plan, &external)?;
+```
+
+返回的 effective registry 保留原树和外部树不变，维持目标的逻辑路径，自动继承
+未覆盖的兄弟，并在发布前重新执行目标注册规范、准入和连接器校验。
+
+Studio 的 graft 流程使用 `g`：它创建
+`.nichlink/external-grafts/<selector>/graft.plan`，并用默认编辑器打开计划，
+宿主源码不会被修改。系统不存在复制或替换宿主源码的 graft 路径。
 
 NichLink 不限定对象内部采用哪种编程范式。普通函数、trait、泛型、闭包、
 依赖注入或消息传递都可以继续使用；注册面只约束它们对外暴露的边界。声明过
@@ -376,8 +381,7 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 | --- | --- |
 | `n` | 新建 binary/library 项目 |
 | `a` / `e` / `d` | 添加、编辑、删除注册面 |
-| `g` | 为选中注册面创建或重新打开一个非激活 graft 草稿 |
-| `e` / `v` / `a` | 编辑、校验或应用当前 graft 计划 |
+| `g` | 为选中注册面创建并编辑外部 graft 计划 |
 | `/` | 搜索文件和函数 |
 | `1`–`4` | 搜索、检视、数据、对比页面 |
 | `Tab` | 在树和详情之间切换焦点 |

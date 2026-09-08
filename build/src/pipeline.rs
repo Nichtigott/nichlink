@@ -3,8 +3,8 @@ use super::{
     BuildInput, SourceScope, aggregate_contract_errors, aggregate_parent_macro_errors,
     aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root,
     emit_rerun_paths, materialize_sources, prime_node_id_cache, render_lib, static_plan,
-    update_discovery_cache, write_function_manifest, write_if_changed, write_pruning_manifest,
-    write_source_scope_manifest,
+    update_discovery_cache, write_function_manifest, write_graft_manifest, write_if_changed,
+    write_pruning_manifest, write_source_scope_manifest,
 };
 
 pub(crate) fn run(input: &BuildInput) {
@@ -27,6 +27,7 @@ pub(crate) fn run(input: &BuildInput) {
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
+    let grafts = super::host_graft_entries(src, &nodes);
     let generated = render_lib(
         src,
         &nodes,
@@ -34,6 +35,7 @@ pub(crate) fn run(input: &BuildInput) {
         &demo_errors,
         &scope,
         &static_faces,
+        &grafts,
     );
     let out_dir = &input.out_dir;
     write_if_changed(
@@ -48,6 +50,7 @@ pub(crate) fn run(input: &BuildInput) {
     write_pruning_manifest(src, &nodes, out_dir);
     write_function_manifest(src, &nodes, out_dir);
     write_source_scope_manifest(src, &nodes, &scope, out_dir);
+    write_graft_manifest(out_dir, &grafts);
     write_if_changed(&out_dir.join("generated_lib.rs"), &generated);
     emit_rerun_paths(src, &nodes);
     println!("cargo:rerun-if-env-changed=NICH_LINK_SCOPE");

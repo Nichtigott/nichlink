@@ -165,7 +165,19 @@ impl Registry {
     /// Return all connector failures in the staged tree as one error tree.
     /// 将暂存注册树中的全部连接器失败聚合成一棵错误树。
     pub(super) fn connector_error(&self) -> Option<RegistryError> {
-        let failures = self.connector_errors_from(self);
+        self.connector_error_with_external(None)
+    }
+
+    /// Validate connectors while allowing providers from an external overlay
+    /// registry. Providers are read-only evidence; they are never copied into
+    /// the effective tree.
+    /// 在允许外部覆盖注册机提供者的情况下校验连接器。外部提供者只作为只读证据，
+    /// 不会被复制进有效树。
+    pub(super) fn connector_error_with_external(
+        &self,
+        external: Option<&Registry>,
+    ) -> Option<RegistryError> {
+        let failures = self.connector_errors_from(self, external);
         if failures.is_empty() {
             None
         } else {
@@ -190,7 +202,11 @@ impl Registry {
         }
     }
 
-    fn connector_errors_from(&self, root: &Registry) -> Vec<RegistryError> {
+    fn connector_errors_from(
+        &self,
+        root: &Registry,
+        external: Option<&Registry>,
+    ) -> Vec<RegistryError> {
         let mut errors = Vec::new();
         for entry in self.entries.values() {
             let path = format!("{}/{}", self.header.path, entry.info.registry_name);
@@ -221,10 +237,33 @@ impl Registry {
                         continue;
                     }
                 };
+                let provider = if provider.is_none() {
+                    external.and_then(|registry| {
+                        registry
+                            .provider_for(
+                                entry.info.parent,
+                                &requirement.capability,
+                                &requirement.provider,
+                            )
+                            .ok()
+                            .flatten()
+                    })
+                } else {
+                    provider
+                };
                 if let Some(provider) = provider {
-                    if let Some(provider_path) =
-                        Self::external_provider_rejected(root, entry.info.parent, provider)
-                    {
+                    let provider_path = root
+                        .path_for(provider.id)
+                        .or_else(|| external.and_then(|registry| registry.path_for(provider.id)));
+                    if let Some(provider_path) = provider_path.filter(|provider_path| {
+                        let Some(owner) = root.registry(entry.info.parent) else {
+                            return true;
+                        };
+                        let owner_path = owner.path();
+                        let is_external = provider_path != owner_path
+                            && !provider_path.starts_with(&format!("{owner_path}/"));
+                        is_external && !owner.header.admission.accepts(provider_path)
+                    }) {
                         failures.push(RegistryError::new(
                             entry.info.id,
                             path.clone(),
@@ -237,8 +276,14 @@ impl Registry {
                     }
                     continue;
                 }
-                if let Some(provider) =
-                    root.provider_for_capability(entry.info.parent, &requirement.capability)
+                if let Some(provider) = root
+                    .provider_for_capability(entry.info.parent, &requirement.capability)
+                    .or_else(|| {
+                        external.and_then(|registry| {
+                            registry
+                                .provider_for_capability(entry.info.parent, &requirement.capability)
+                        })
+                    })
                     && let Some(provider_path) =
                         Self::external_provider_rejected(root, entry.info.parent, provider)
                 {
@@ -265,7 +310,12 @@ impl Registry {
                         .next()
                     })
                     .map(|provider| {
-                        let provider_path = root.path_for(provider.id).unwrap_or_default();
+                        let provider_path = root
+                            .path_for(provider.id)
+                            .or_else(|| {
+                                external.and_then(|registry| registry.path_for(provider.id))
+                            })
+                            .unwrap_or_default();
                         format!(
                             "input `{}` found `{}` at `{}`, but its kind is `{}` instead of `{}`",
                             requirement.capability,
@@ -303,7 +353,7 @@ impl Registry {
                 errors.push(error);
             }
             if let Some(child) = entry.child.as_ref() {
-                errors.extend(child.connector_errors_from(root));
+                errors.extend(child.connector_errors_from(root, external));
             }
         }
         errors

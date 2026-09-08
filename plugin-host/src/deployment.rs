@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
-use nichlink::{GraftRequest, Registry};
+use nichlink::{GraftPlan, Registry};
 
 use crate::{HostError, PluginInstance};
 
@@ -39,16 +39,21 @@ impl<I: PluginInstance> HotDeployment<I> {
 
     /// Validate code and registry graft before publishing one new generation.
     /// 发布新代之前，先完成代码体检和注册树嫁接校验。
-    pub fn replace(&self, plugin: I, graft: GraftRequest) -> Result<u64, HostError> {
+    pub fn replace(
+        &self,
+        plugin: I,
+        plan: &GraftPlan,
+        external: &Registry,
+    ) -> Result<u64, HostError> {
         plugin.health_check()?;
         let _writer = self
             .writer
             .lock()
             .map_err(|_| HostError::Process("deployment writer lock was poisoned".to_owned()))?;
         let live = self.current.load_full();
-        let mut registry = live.registry.clone();
-        registry
-            .graft(graft)
+        let registry = live
+            .registry
+            .overlay(plan, external)
             .map_err(|error| HostError::Registry(error.to_string()))?;
         let generation = live.generation.saturating_add(1);
         self.current.store(Arc::new(Deployment {

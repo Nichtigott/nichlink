@@ -12,7 +12,7 @@ use ratatui::widgets::{
 mod graph;
 use graph::draw_search_graph;
 mod forms;
-use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
+use forms::{draw_add, draw_delete, draw_edit, draw_new_project, draw_plugin};
 mod search;
 use search::{draw_search, format_admission, format_registration_rule};
 mod search_detail;
@@ -29,6 +29,16 @@ const CYAN: Color = Color::Rgb(75, 201, 220);
 const GREEN: Color = Color::Rgb(97, 210, 151);
 const MAGENTA: Color = Color::Rgb(223, 116, 186);
 const PANEL: Color = Color::Rgb(16, 23, 28);
+
+const NICH_LINK_MARK: [&str; 7] = [
+    r"________   ___  ________  ___  ___  ___       ___  ________   ___  __",
+    r"|\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \",
+    r"\ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_",
+    r" \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \",
+    r"  \ \  \\ \  \ \  \ \  \____\ \  \ \  \ \  \____\ \  \ \  \\ \  \ \  \\ \  \",
+    r"   \ \__\\ \__\ \__\ \_______\ \__\ \__\ \_______\ \__\ \__\\ \__\ \__\\ \__\",
+    r"    \|__| \|__|\|__|\|_______|\|__|\|__|\|_______|\|__|\|__| \|__|\|__| \|__|",
+];
 
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let area = frame.area();
@@ -55,41 +65,26 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
 }
 
 fn draw_brand(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let art = vec![
-        Line::from(r"________   ___  ________  ___  ___  ___       ___  ________   ___  __"),
-        Line::from(r" |\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \"),
-        Line::from(
-            r"   \ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_",
+    let mut art = NICH_LINK_MARK
+        .into_iter()
+        .map(Line::from)
+        .collect::<Vec<_>>();
+    art.push(Line::from(vec![
+        Span::styled(
+            "  LIVE  ",
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
-        Line::from(
-            r"     \ \  \\ \  \ \  \ \  \    \ \   __  \ \  \    \ \  \ \  \\ \  \ \   ___  \",
-        ),
-        Line::from(
-            r"       \ \  \\ \  \ \  \ \  \____\ \  \ \  \ \  \____\ \  \ \  \\ \  \ \  \\ \  \",
-        ),
-        Line::from(
-            r"         \ \__\\ \__\ \__\ \_______\ \__\ \__\ \_______\ \__\ \__\\ \__\ \__\\ \__\",
-        ),
-        Line::from(
-            r"           \|__| \|__|\|__|\|_______|\|__|\|__|\|_______|\|__|\|__| \|__|\|__| \|__|",
-        ),
-        Line::from(vec![
-            Span::styled(
-                "  LIVE  ",
-                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        Span::styled(
+            format!(
+                "{}  nodes {}  registries {}  checks {}  studio adapter",
+                app.page.label(),
+                app.registry.node_count(),
+                app.registry.registry_count(),
+                app.registry.check_count()
             ),
-            Span::styled(
-                format!(
-                    "{}  nodes {}  registries {}  checks {}  studio adapter",
-                    app.page.label(),
-                    app.registry.node_count(),
-                    app.registry.registry_count(),
-                    app.registry.check_count()
-                ),
-                Style::default().fg(MUTED),
-            ),
-        ]),
-    ];
+            Style::default().fg(MUTED),
+        ),
+    ]));
     frame.render_widget(
         Paragraph::new(art)
             .alignment(Alignment::Center)
@@ -269,7 +264,7 @@ fn draw_event(frame: &mut Frame<'_>, area: Rect, app: &App) {
 
 fn draw_keys(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(
-        Paragraph::new(" 1 search   2 inspect   3 data   4 compare   q quit   / search   n new   a add   g graft draft   p plugin   e edit   d delete   Enter fold   m MIR   r/F5 reload   b/F9 build   ←/→ resize ")
+        Paragraph::new(" 1 search   2 inspect   3 data   4 compare   q quit   / search   n new   a add   g graft   p plugin   e edit   d delete   Enter fold   m MIR   r/F5 reload   b/F9 build   ←/→ resize ")
             .alignment(Alignment::Center)
             .style(Style::default().fg(MUTED)),
         area,
@@ -369,13 +364,6 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
             app.action_confirm_area = confirm;
             app.action_exit_area = exit;
         }
-        Overlay::Graft(graft) => {
-            let (validate, apply, cancel, edit) = draw_graft(frame, area, &graft);
-            app.action_validate_area = validate;
-            app.action_confirm_area = apply;
-            app.action_cancel_area = cancel;
-            app.action_edit_area = edit;
-        }
         Overlay::Plugin(plugin) => {
             let (list, cancel, confirm, exit) = draw_plugin(frame, area, &plugin);
             app.overlay_list_area = list;
@@ -458,8 +446,9 @@ mod tests {
     fn renders_brand_and_primary_panels_at_wide_size() {
         let output = rendered_text(140, 48);
         assert!(output.contains("NICH LINK"));
-        assert!(output.contains("________"));
-        assert!(output.contains("|__|"));
+        for row in NICH_LINK_MARK {
+            assert!(output.contains(row), "missing or distorted logo row: {row}");
+        }
         assert!(output.contains("REGISTRATION TREE"));
         assert!(output.contains("FACE INSPECTOR"));
     }

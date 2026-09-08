@@ -36,3 +36,24 @@ Install only `VerifiedPluginArtifact` values. Declare Wasm slots at compile
 time; enable `process-tools` only for isolated process adapters. Existing
 `PluginManifest` flow contracts and lock records remain compatible with the
 new host APIs.
+# Graft overlay migration
+
+The current graft model is an immutable overlay. A host keeps its original
+source tree and declares the external implementation at its entry point:
+
+```rust
+let plan = nichlink::graft_plan!(framework,
+    cut ["root/canvas"] graft "canvas_fast",
+    cut ["root/layout"] full graft "layout_v2",
+);
+let effective = base.overlay(&plan, &external)?;
+```
+
+`cut A graft X` replaces one logical slot and inherits A's children. `cut A
+full graft X` replaces the entire subtree rooted at A. A range cut addresses
+contiguous siblings. The base and external registries remain unchanged; the
+effective view is published only after contract, registration-rule, admission,
+and connector validation succeeds.
+
+The pre-overlay `Registry::graft` API and Studio source-copy workflow have been
+removed. The public execution path is `GraftPlan` followed by `Registry::overlay`.

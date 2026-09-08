@@ -41,6 +41,39 @@ pub struct StaticPlan {
     faces: &'static [StaticFace],
 }
 
+/// One host-declared external graft cut retained in release metadata.
+/// 正式构建保留的一条宿主外部 graft 切口元数据。
+///
+/// The table stores selectors only; it never pulls implementation code into
+/// the binary. The host resolves these selectors against an external Registry
+/// when it chooses to enable an overlay.
+/// 表中只保存选择器，不会把实现代码拉进二进制。宿主启用覆盖层时，再将选择器
+/// 解析到外部 Registry。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StaticGraftCut {
+    cut: &'static str,
+    graft: &'static str,
+    full: bool,
+}
+
+impl StaticGraftCut {
+    pub const fn new(cut: &'static str, graft: &'static str, full: bool) -> Self {
+        Self { cut, graft, full }
+    }
+
+    pub const fn cut(self) -> &'static str {
+        self.cut
+    }
+
+    pub const fn graft(self) -> &'static str {
+        self.graft
+    }
+
+    pub const fn full(self) -> bool {
+        self.full
+    }
+}
+
 impl StaticPlan {
     pub const fn new(faces: &'static [StaticFace]) -> Self {
         Self { faces }

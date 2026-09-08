@@ -4,86 +4,174 @@
 use super::*;
 use std::fmt;
 
-/// A graft request is intentionally data-only, so it can be staged and
-/// validated before mutating the live Registry.
-/// 嫁接请求只保存数据，因此可以先暂存校验，再修改线上 Registry。
+/// One path cut and its external implementation selector.
+/// 一条路径切口及其外部实现选择器。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GraftRequest {
+pub struct GraftCut {
+    /// A slash-separated logical path, for example `root/a1/b2`.
+    /// 逻辑路径，例如 `root/a1/b2`。
+    pub cut: String,
+    /// Name, path, or NodeId of a face supplied by the external graft set.
+    /// 外部 graft 集合中实现的名称、路径或 NodeId。
+    pub graft: String,
+    /// Optional end of a contiguous path range.
+    /// 连续路径范围的可选终点。
+    pub end: Option<String>,
+    /// Whether the cut replaces the complete subtree rooted at `cut`.
+    /// 是否替换 cut 根节点下的整棵子树。
+    pub subtree: bool,
+}
+
+impl GraftCut {
+    pub fn new(cut: impl Into<String>, graft: impl Into<String>) -> Self {
+        Self {
+            cut: cut.into(),
+            graft: graft.into(),
+            end: None,
+            subtree: false,
+        }
+    }
+
+    pub fn range(
+        start: impl Into<String>,
+        end: impl Into<String>,
+        graft: impl Into<String>,
+    ) -> Self {
+        Self {
+            cut: start.into(),
+            graft: graft.into(),
+            end: Some(end.into()),
+            subtree: false,
+        }
+    }
+
+    pub fn subtree(cut: impl Into<String>, graft: impl Into<String>) -> Self {
+        Self {
+            cut: cut.into(),
+            graft: graft.into(),
+            end: None,
+            subtree: true,
+        }
+    }
+}
+
+/// A persistent overlay plan. It never moves or edits source files.
+/// 持久化覆盖计划；它永不移动或编辑源码文件。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraftPlan {
     pub framework: FrameworkId,
-    pub target: crate::NodeId,
-    pub replacement: crate::NodeId,
-    pub target_contract: OwnedFlowContract,
-    pub replacement_contract: OwnedFlowContract,
-    pub source: PluginSource,
+    pub cuts: Vec<GraftCut>,
 }
 
-/// Current graft semantics are an atomic move into one logical slot.
-/// 当前 graft 语义是原子地把候选移动到一个逻辑槽位。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GraftMode {
-    Move,
-}
-
-impl GraftRequest {
-    pub const fn mode(&self) -> GraftMode {
-        GraftMode::Move
-    }
-}
-
-/// Parsed form of the Studio command `graft <replacement> to <target>`.
-/// Studio 命令 `graft <replacement> to <target>` 的解析结果。
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GraftCommand {
-    pub replacement: String,
-    pub target: String,
-}
-
-impl GraftCommand {
-    pub fn parse(command: &str) -> Result<Self, String> {
-        let mut parts = command.split_whitespace();
-        if parts.next() != Some("graft") {
-            return Err("graft command must start with `graft`".to_owned());
-        }
-        let replacement = parts
-            .next()
-            .ok_or_else(|| "graft command is missing the replacement".to_owned())?;
-        if parts.next() != Some("to") {
-            return Err("graft command must use `graft <replacement> to <target>`".to_owned());
-        }
-        let target = parts
-            .next()
-            .ok_or_else(|| "graft command is missing the target".to_owned())?;
-        if parts.next().is_some() {
-            return Err("graft command has unexpected trailing arguments".to_owned());
-        }
-        Ok(Self {
-            replacement: replacement.to_owned(),
-            target: target.to_owned(),
-        })
-    }
-}
-
-impl GraftRequest {
-    pub fn new<T, R>(
-        framework: FrameworkId,
-        target: crate::NodeId,
-        replacement: crate::NodeId,
-        target_contract: T,
-        replacement_contract: R,
-        source: PluginSource,
-    ) -> Self
-    where
-        T: Into<OwnedFlowContract>,
-        R: Into<OwnedFlowContract>,
-    {
+impl GraftPlan {
+    pub fn new(framework: FrameworkId) -> Self {
         Self {
             framework,
-            target,
-            replacement,
-            target_contract: target_contract.into(),
-            replacement_contract: replacement_contract.into(),
-            source,
+            cuts: Vec::new(),
         }
+    }
+
+    pub fn cut(mut self, path: impl Into<String>, graft: impl Into<String>) -> Self {
+        self.cuts.push(GraftCut::new(path, graft));
+        self
+    }
+
+    pub fn push(&mut self, path: impl Into<String>, graft: impl Into<String>) {
+        self.cuts.push(GraftCut::new(path, graft));
+    }
+
+    pub fn command(framework: FrameworkId, command: &str) -> Result<Self, String> {
+        let parsed = CutGraftCommand::parse(command)?;
+        let mut plan = Self::new(framework);
+        if let Some(end) = parsed.end {
+            let mut cut = GraftCut::range(parsed.cut, end, parsed.graft);
+            cut.subtree = parsed.full;
+            plan.cuts.push(cut);
+        } else if parsed.full {
+            plan.cuts.push(GraftCut::subtree(parsed.cut, parsed.graft));
+        } else {
+            plan.cuts.push(GraftCut::new(parsed.cut, parsed.graft));
+        }
+        Ok(plan)
+    }
+
+    /// Materialize the selectors emitted by the build step without retaining
+    /// any implementation references in the generated crate.
+    /// 将构建阶段生成的静态选择器物化为运行时计划；生成代码不携带实现引用。
+    pub fn from_static(framework: FrameworkId, cuts: &[crate::StaticGraftCut]) -> Self {
+        let mut plan = Self::new(framework);
+        for cut in cuts {
+            if let Some((start, end)) = cut.cut().split_once(" to ") {
+                let mut range = GraftCut::range(start, end, cut.graft());
+                range.subtree = cut.full();
+                plan.cuts.push(range);
+            } else if cut.full() {
+                plan.cuts.push(GraftCut::subtree(cut.cut(), cut.graft()));
+            } else {
+                plan.cuts.push(GraftCut::new(cut.cut(), cut.graft()));
+            }
+        }
+        plan
+    }
+}
+
+/// Parsed `cut [A/a1/b2] graft replacement` command.
+/// 解析 `cut [A/a1/b2] graft replacement` 命令。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CutGraftCommand {
+    pub cut: String,
+    pub end: Option<String>,
+    pub graft: String,
+    pub full: bool,
+}
+
+impl CutGraftCommand {
+    pub fn parse(command: &str) -> Result<Self, String> {
+        let command = command.trim();
+        let body = command
+            .strip_prefix("cut ")
+            .ok_or_else(|| "cut command must start with `cut`".to_owned())?;
+        let (raw_cut, rest) = if let Some(inner) = body.strip_prefix('[') {
+            let end = inner
+                .find(']')
+                .ok_or_else(|| "cut command is missing `]`".to_owned())?;
+            (&inner[..end], inner[end + 1..].trim())
+        } else {
+            let mut parts = body.splitn(2, char::is_whitespace);
+            let path = parts.next().unwrap_or_default();
+            (path, parts.next().unwrap_or_default().trim())
+        };
+        if raw_cut.is_empty() {
+            return Err("cut path must contain non-empty `/`-separated segments".to_owned());
+        }
+        let mut parts = rest.split_whitespace();
+        let full = matches!(parts.clone().next(), Some("full"));
+        if full {
+            parts.next();
+        }
+        if parts.next() != Some("graft") {
+            return Err("cut command must use `cut [path] graft <implementation>`".to_owned());
+        }
+        let graft = parts
+            .next()
+            .ok_or_else(|| "cut command is missing the graft implementation".to_owned())?;
+        if parts.next().is_some() {
+            return Err("cut command has unexpected trailing arguments".to_owned());
+        }
+        let (cut, end) = raw_cut
+            .split_once(" to ")
+            .map_or((raw_cut.trim(), None), |(start, finish)| {
+                (start.trim(), Some(finish.trim().to_owned()))
+            });
+        if cut.is_empty() || end.as_deref().is_some_and(str::is_empty) {
+            return Err("cut path must contain non-empty `/`-separated segments".to_owned());
+        }
+        Ok(Self {
+            cut: cut.to_owned(),
+            end,
+            graft: graft.to_owned(),
+            full,
+        })
     }
 }
 
@@ -94,15 +182,14 @@ pub enum GraftError {
     InvalidCommand(String),
     UnknownTarget(crate::NodeId),
     UnknownReplacement(crate::NodeId),
-    OverlappingSubtree,
-    SameNode,
     ContractUndeclared,
     ContractMismatch {
         expected: OwnedFlowContract,
         received: OwnedFlowContract,
     },
-    ReplacementHasChildren,
     FrameworkMismatch(FrameworkId),
+    DuplicateCut(String),
+    InvalidRange(String),
 }
 
 impl fmt::Display for GraftError {
@@ -112,12 +199,6 @@ impl fmt::Display for GraftError {
             Self::UnknownTarget(id) => write!(formatter, "graft target `{id}` is not registered"),
             Self::UnknownReplacement(id) => {
                 write!(formatter, "graft replacement `{id}` is not registered")
-            }
-            Self::OverlappingSubtree => {
-                formatter.write_str("graft target and replacement cannot contain each other")
-            }
-            Self::SameNode => {
-                formatter.write_str("graft target and replacement must be different nodes")
             }
             Self::ContractUndeclared => {
                 formatter.write_str("graft requires both nodes to declare a flow contract")
@@ -134,11 +215,14 @@ impl fmt::Display for GraftError {
                 received.input,
                 received.output
             ),
-            Self::ReplacementHasChildren => {
-                formatter.write_str("graft replacement owns a non-empty child registry")
-            }
             Self::FrameworkMismatch(framework) => {
                 write!(formatter, "plugin does not target framework `{framework}`")
+            }
+            Self::DuplicateCut(path) => {
+                write!(formatter, "graft plan cuts `{path}` more than once")
+            }
+            Self::InvalidRange(path) => {
+                write!(formatter, "graft range `{path}` must share one parent")
             }
         }
     }

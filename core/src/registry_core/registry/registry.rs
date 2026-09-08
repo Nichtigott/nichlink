@@ -12,7 +12,7 @@ use crate::registry_core::diagnostic::{
     DiagnosticSource, RegistrationState, RegistryError, RegistryResult,
 };
 use crate::registry_core::identity::{root_node_id, NodeId, StableFaceId, ROOT_NODE_ID};
-use crate::registry_core::plugin::{FrameworkId, GraftCommand, GraftError, GraftRequest};
+use crate::registry_core::plugin::{FrameworkId, GraftError};
 #[path = "entry_pages/entry_pages.rs"]
 #[allow(dead_code)]
 mod pages_impl;

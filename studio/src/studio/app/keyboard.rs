@@ -116,41 +116,23 @@ impl App {
                 }
             }
             KeyCode::Char('g') if self.selected != self.registry.id() => {
-                match with_authoring_context(nichlink::graft_drafts) {
-                    Ok(drafts) => {
-                        if let Some(draft) = drafts
-                            .into_iter()
-                            .find(|draft| draft.target() == self.selected)
-                        {
-                            let mut graft = GraftState {
-                                draft,
-                                validation: "Not validated in this Studio session".to_owned(),
-                            };
-                            self.validate_graft(&mut graft);
-                            self.overlay = Some(Overlay::Graft(graft));
-                            return;
-                        }
+                let selector = self
+                    .registry
+                    .find(self.selected)
+                    .map(|info| format!("{}_graft", info.registry_name))
+                    .unwrap_or_else(|| "replacement".to_owned());
+                match with_authoring_context(|| {
+                    nichlink::create_external_graft(&self.registry, self.selected, selector, false)
+                }) {
+                    Ok(plan) => {
+                        let plan_path = plan.plan_path();
+                        self.open_editor_file(plan_path.clone(), 1);
+                        self.event = format!(
+                            "External graft plan created at {}; edit it, then reload",
+                            plan_path.display()
+                        );
                     }
-                    Err(error) => {
-                        self.event = format!("Cannot load graft drafts: {error}");
-                        return;
-                    }
-                }
-                // Start a graft candidate from the selected face's complete
-                // declaration. The user can adjust the copy before saving it.
-                // 根据当前注册面的完整声明创建 graft 候选，保存前仍可继续编辑。
-                let source = self.selected;
-                self.handle_key(KeyEvent::from(KeyCode::Char('e')));
-                if let Some(Overlay::Edit(_, mut graft)) = self.overlay.take() {
-                    let module = graft.values[1].clone();
-                    let registry_name = graft.values[3].clone();
-                    graft.values[1] = format!("{module}_graft");
-                    graft.values[3] = format!("{registry_name}_graft");
-                    graft.copy_source = Some(source);
-                    self.event = format!(
-                        "Graft copy prepared from `{module}`; implementation and contracts will be copied"
-                    );
-                    self.overlay = Some(Overlay::Add(graft));
+                    Err(error) => self.event = format!("External graft failed: {error}"),
                 }
             }
             KeyCode::Char('r') | KeyCode::F(5) => self.reload(),

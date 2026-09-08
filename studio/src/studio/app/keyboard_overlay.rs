@@ -602,26 +602,6 @@ impl App {
                 }
                 self.overlay = Some(Overlay::Edit(id, edit));
             }
-            Overlay::Graft(mut graft) => match key.code {
-                KeyCode::Char('v') => {
-                    self.validate_graft(&mut graft);
-                    self.overlay = Some(Overlay::Graft(graft));
-                }
-                KeyCode::Char('e') => {
-                    self.open_editor_file(graft.draft.source().to_path_buf(), 1);
-                    self.overlay = Some(Overlay::Graft(graft));
-                }
-                KeyCode::Char('a') | KeyCode::Enter => self.apply_graft(&graft),
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    self.overlay = None;
-                    self.event = format!(
-                        "Graft draft `{}` kept at {}",
-                        graft.draft.name(),
-                        graft.draft.root().display()
-                    );
-                }
-                _ => self.overlay = Some(Overlay::Graft(graft)),
-            },
             Overlay::Plugin(mut plugin) => {
                 if !plugin.editing && matches!(key.code, KeyCode::Char('q')) {
                     self.overlay = None;

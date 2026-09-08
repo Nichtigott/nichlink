@@ -196,22 +196,6 @@ impl App {
             flow: &add.values[27],
             flow_provider: &add.values[28],
         };
-        if let Some(source) = add.copy_source {
-            match with_authoring_context(|| {
-                nichlink::copy_module_for_graft(&self.registry, source, &face)
-            }) {
-                Ok((change, draft)) => {
-                    self.event = change.message;
-                    self.overlay = Some(Overlay::Graft(GraftState {
-                        draft,
-                        validation: "Validated: structure and declared data-flow edges reconnect"
-                            .to_owned(),
-                    }));
-                }
-                Err(error) => self.event = format!("Graft draft failed: {error}"),
-            }
-            return;
-        }
         match with_authoring_context(|| nichlink::add_module_from_face(&self.registry, &face)) {
             Ok((change, info)) => {
                 if let Err(error) = self.registry.register_snapshot_batch([info]) {
@@ -222,38 +206,6 @@ impl App {
                 self.overlay = None;
             }
             Err(error) => self.event = format!("Add failed: {error}"),
-        }
-    }
-
-    pub(super) fn validate_graft(&mut self, graft: &mut GraftState) {
-        match with_authoring_context(|| {
-            nichlink::validate_graft_draft(&self.registry, &graft.draft)
-        }) {
-            Ok(_) => {
-                graft.validation =
-                    "Validated: structure and declared data-flow edges reconnect".to_owned();
-                self.event = format!("Graft draft `{}` is valid", graft.draft.name());
-            }
-            Err(error) => {
-                graft.validation = format!("Rejected: {error}");
-                self.event = format!("Graft validation failed: {error}");
-            }
-        }
-    }
-
-    pub(super) fn apply_graft(&mut self, graft: &GraftState) {
-        match with_authoring_context(|| {
-            nichlink::apply_graft_draft(&mut self.registry, &graft.draft)
-        }) {
-            Ok(change) => {
-                let message = change.message;
-                self.reload();
-                if self.reload_error.is_none() {
-                    self.event = format!("{message}; registration reloaded");
-                }
-                self.overlay = None;
-            }
-            Err(error) => self.event = format!("Graft apply failed: {error}"),
         }
     }
 

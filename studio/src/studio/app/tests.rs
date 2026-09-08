@@ -115,14 +115,14 @@ fn add_form_starts_with_editable_bilingual_summary() {
 }
 
 #[test]
-fn graft_stays_inactive_until_apply_and_reopens_after_reload() {
+fn graft_creates_external_overlay_plan_without_touching_source() {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-studio-graft-{suffix}"));
+    let root = std::env::temp_dir().join(format!("nichlink-studio-external-graft-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
-    select_project(root.clone(), root.join("Cargo.toml"), "graft-studio-test");
+    select_project(root.clone(), root.join("Cargo.toml"), "external-graft-test");
 
     let mut app = App::load();
     let mut add = AddState::new(app.registry.id());
@@ -137,37 +137,29 @@ fn graft_stays_inactive_until_apply_and_reopens_after_reload() {
         .expect("canvas face")
         .id;
     app.selected = target;
-
-    app.handle_key(KeyEvent::from(KeyCode::Char('g')));
-    let Some(Overlay::Add(graft)) = app.overlay.take() else {
-        panic!("g should open a configured graft form");
-    };
-    app.submit_add(&graft);
-    let Some(Overlay::Graft(plan)) = app.overlay.take() else {
-        panic!("saving a graft form should open the plan");
-    };
-    assert!(plan.draft.source().is_file());
-    assert!(!root.join("src/canvas_graft").exists());
-
-    let draft_source = plan.draft.source().to_path_buf();
-    app.overlay = Some(Overlay::Graft(plan));
-    app.handle_key(KeyEvent::from(KeyCode::Esc));
-    assert!(app.overlay.is_none());
-    assert!(
-        draft_source.is_file(),
-        "cancel must keep the inactive draft"
+    let source = root.join("src").join(
+        app.registry
+            .find(target)
+            .expect("target metadata")
+            .source
+            .file
+            .as_str(),
     );
-
+    let before = std::fs::read(&source).expect("source exists");
     app.handle_key(KeyEvent::from(KeyCode::Char('g')));
-    assert!(matches!(app.overlay, Some(Overlay::Graft(_))));
-    app.handle_key(KeyEvent::from(KeyCode::Char('e')));
-    let (draft_source, line) = app.take_editor_request().expect("graft editor request");
-    assert!(draft_source.starts_with(root.join(".nichlink/grafts")));
-    assert_eq!(line, 1);
-    app.handle_key(KeyEvent::from(KeyCode::Char('a')));
-    assert!(app.overlay.is_none(), "{}", app.event);
     assert!(
-        root.join(".nichlink/grafts/canvas_graft/original/canvas.rs")
+        app.event.contains("External graft plan created"),
+        "{}",
+        app.event
+    );
+    let (plan_path, line) = app
+        .take_editor_request()
+        .expect("external plan editor request");
+    assert!(plan_path.ends_with("external-grafts/canvas_graft/graft.plan"));
+    assert_eq!(line, 1);
+    assert_eq!(std::fs::read(&source).expect("source remains"), before);
+    assert!(
+        root.join(".nichlink/external-grafts/canvas_graft/graft.plan")
             .is_file()
     );
 

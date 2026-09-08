@@ -6,6 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use super::registry_identity::NodeId;
+use super::registry_syntax::GraftSyntax;
 use super::types::Node;
 use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
@@ -64,6 +65,21 @@ pub(crate) fn write_source_scope_manifest(
         }
     }
     write_if_changed(&out_dir.join("source_scope.tsv"), &output);
+}
+
+/// Persist host graft selectors as data-only build metadata.
+/// 将宿主 graft 选择器持久化为只含数据的构建元信息。
+pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) {
+    let mut output = String::from("# cut\tgraft\tfull\tline\tcolumn\n");
+    for graft in grafts {
+        writeln!(
+            output,
+            "{}\t{}\t{}\t{}\t{}",
+            graft.cut, graft.graft, graft.full, graft.location.line, graft.location.column
+        )
+        .unwrap();
+    }
+    write_if_changed(&out_dir.join("graft_plan.tsv"), &output);
 }
 
 fn write_rows(path: impl AsRef<Path>, mut rows: Vec<(NodeId, String, String)>) {

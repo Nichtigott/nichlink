@@ -48,6 +48,16 @@ pub struct SourceReferences {
     pub conservative: bool,
 }
 
+/// A host-declared external graft cut discovered before code generation.
+/// 在代码生成前从宿主入口发现的一条外部 graft 切口。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraftSyntax {
+    pub cut: String,
+    pub graft: String,
+    pub full: bool,
+    pub location: SyntaxLocation,
+}
+
 impl fmt::Display for FaceSyntaxError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(location) = &self.location {
@@ -238,6 +248,148 @@ pub fn application_entries(source: &str) -> Result<Vec<(String, SyntaxLocation)>
     } else {
         Ok(entries)
     }
+}
+
+/// Parse `graft_plan!` declarations without executing them.
+/// 只解析 `graft_plan!` 声明，不执行宏。
+pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> {
+    let file =
+        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let mut entries = Vec::new();
+    struct Visitor<'a> {
+        entries: &'a mut Vec<GraftSyntax>,
+        error: Option<FaceSyntaxError>,
+    }
+    impl<'ast> Visit<'ast> for Visitor<'_> {
+        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+            let Some(name) = mac
+                .path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+            else {
+                return;
+            };
+            if name != "graft_plan" {
+                return;
+            }
+            let tokens = mac.tokens.clone().into_iter().collect::<Vec<_>>();
+            let mut index = 0;
+            while index < tokens.len() {
+                if !matches!(&tokens[index], TokenTree::Ident(value) if value == "cut") {
+                    index += 1;
+                    continue;
+                }
+                index += 1;
+                let path_token = tokens.get(index).cloned();
+                index += 1;
+                let (path_tokens, path_span, path_text) = match path_token {
+                    Some(TokenTree::Group(group)) => (
+                        group.stream().into_iter().collect::<Vec<_>>(),
+                        group.span(),
+                        None,
+                    ),
+                    Some(TokenTree::Literal(literal)) => {
+                        let text = syn::parse_str::<syn::LitStr>(&literal.to_string())
+                            .map(|value| value.value())
+                            .map_err(|_| {
+                                syntax_error(literal.span(), "graft cut path must be a string")
+                            });
+                        let Ok(text) = text else {
+                            self.error = text.err();
+                            return;
+                        };
+                        (Vec::new(), literal.span(), Some(text))
+                    }
+                    _ => {
+                        self.error = Some(syntax_error(
+                            mac.span(),
+                            "graft cut expects `[path]` or a path string",
+                        ));
+                        return;
+                    }
+                };
+                let (cut, end) = if path_tokens.len() == 3
+                    && matches!(&path_tokens[1], TokenTree::Ident(value) if value == "to")
+                {
+                    let start = syn::parse2::<syn::LitStr>(path_tokens[0].clone().into())
+                        .map_err(|_| syntax_error(path_span, "graft range start must be a string"));
+                    let finish = syn::parse2::<syn::LitStr>(path_tokens[2].clone().into())
+                        .map_err(|_| syntax_error(path_span, "graft range end must be a string"));
+                    match (start, finish) {
+                        (Ok(start), Ok(finish)) => (start.value(), Some(finish.value())),
+                        (Err(error), _) | (_, Err(error)) => {
+                            self.error = Some(error);
+                            return;
+                        }
+                    }
+                } else {
+                    (
+                        path_text.unwrap_or_else(|| {
+                            syn::parse2::<syn::LitStr>(path_tokens.clone().into_iter().collect())
+                                .map(|value| value.value())
+                                .unwrap_or_else(|_| {
+                                    path_tokens
+                                        .iter()
+                                        .map(ToString::to_string)
+                                        .collect::<String>()
+                                })
+                        }),
+                        None,
+                    )
+                };
+                if cut.is_empty() {
+                    self.error = Some(syntax_error(path_span, "graft cut path is empty"));
+                    return;
+                }
+                let full =
+                    matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "full");
+                if full {
+                    index += 1;
+                }
+                if !matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "graft") {
+                    self.error = Some(syntax_error(
+                        mac.span(),
+                        "graft cut expects `graft <implementation>`",
+                    ));
+                    return;
+                }
+                index += 1;
+                let Some(TokenTree::Literal(value)) = tokens.get(index) else {
+                    self.error = Some(syntax_error(
+                        mac.span(),
+                        "graft implementation must be a string literal",
+                    ));
+                    return;
+                };
+                let Ok(graft) = syn::parse_str::<syn::LitStr>(&value.to_string()) else {
+                    self.error = Some(syntax_error(
+                        value.span(),
+                        "graft implementation must be a string literal",
+                    ));
+                    return;
+                };
+                let mut cut = cut;
+                if let Some(end) = end {
+                    cut.push_str(" to ");
+                    cut.push_str(&end);
+                }
+                self.entries.push(GraftSyntax {
+                    cut,
+                    graft: graft.value(),
+                    full,
+                    location: location(mac.span()),
+                });
+                index += 1;
+            }
+        }
+    }
+    let mut visitor = Visitor {
+        entries: &mut entries,
+        error: None,
+    };
+    visitor.visit_file(&file);
+    visitor.error.map_or(Ok(entries), Err)
 }
 
 struct FaceVisitor {
@@ -528,7 +680,7 @@ fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
 
 #[cfg(test)]
 mod tests {
-    use super::{ParentSyntax, application_entries, parse_face, source_references};
+    use super::{ParentSyntax, application_entries, graft_entries, parse_face, source_references};
 
     #[test]
     fn parses_multiline_registration_tokens_and_locations() {
@@ -636,5 +788,45 @@ nichlink::application!(entry = crate::app::run);
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].0, "crate::main");
         assert_eq!(entries[1].0, "crate::run");
+    }
+
+    #[test]
+    fn graft_parser_collects_single_and_full_cuts() {
+        let source = r#"
+fn application_plan() {
+    let _plan = nichlink::graft_plan!(framework,
+        cut ["root/a1/b2"] graft "canvas_fast",
+        cut ["root/a"] full graft "a_fast",
+    );
+}
+"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].cut, "root/a1/b2");
+        assert!(!entries[0].full);
+        assert_eq!(entries[1].graft, "a_fast");
+        assert!(entries[1].full);
+    }
+
+    #[test]
+    fn graft_parser_keeps_range_endpoints() {
+        let source = r#"nichlink::graft_plan!(framework, cut ["root/a1" to "root/a3"] graft "replacement");"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries[0].cut, "root/a1 to root/a3");
+    }
+
+    #[test]
+    fn graft_parser_accepts_unbracketed_single_cut() {
+        let source = r#"fn plan() { nichlink::graft_plan!(framework, cut "root/a" full graft "replacement"); }"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries[0].cut, "root/a");
+        assert!(entries[0].full);
+    }
+
+    #[test]
+    fn graft_parser_ignores_removed_macro_names() {
+        let source =
+            r#"fn plan() { nichlink::graft!(framework, cut "root/a" graft "replacement"); }"#;
+        assert!(graft_entries(source).unwrap().is_empty());
     }
 }
