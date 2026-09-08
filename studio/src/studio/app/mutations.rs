@@ -84,7 +84,7 @@ impl App {
             if kind == "library" {
                 ""
             } else {
-                "\nfn main() { println!(\"registered faces: {}\", registrations().len()); }"
+                "\nfn main() { println!(\"registered faces: {}\", builtin_static_plan().len()); }"
             }
         );
         let cargo = format!(

@@ -3,6 +3,39 @@
 
 use super::*;
 use crate::registry_core::plugin::{GraftCut, GraftPlan};
+use crate::registry_core::release::StaticGraftCut;
+
+#[derive(Clone, Copy)]
+struct GraftCutRef<'a> {
+    cut: &'a str,
+    graft: &'a str,
+    end: Option<&'a str>,
+    subtree: bool,
+}
+
+impl<'a> GraftCutRef<'a> {
+    fn dynamic(cut: &'a GraftCut) -> Self {
+        Self {
+            cut: &cut.cut,
+            graft: &cut.graft,
+            end: cut.end.as_deref(),
+            subtree: cut.subtree,
+        }
+    }
+
+    fn static_cut(cut: &'a StaticGraftCut) -> Self {
+        let (path, end) = cut
+            .cut()
+            .split_once(" to ")
+            .map_or((cut.cut(), None), |(start, end)| (start, Some(end)));
+        Self {
+            cut: path,
+            graft: cut.graft(),
+            end,
+            subtree: cut.full(),
+        }
+    }
+}
 
 impl Registry {
     /// Build an effective tree by overlaying external graft implementations.
@@ -13,16 +46,46 @@ impl Registry {
     /// 从外部 graft 实现生成有效注册树；不会移动或编辑原树、外部树。每个 cut
     /// 指向原树逻辑路径，外部实现只覆盖该槽位，兄弟和未覆盖子树继续继承。
     pub fn overlay(&self, plan: &GraftPlan, external: &Registry) -> RegistryResult<Self> {
-        if plan.framework != self.header.framework || external.header.framework != plan.framework {
-            return Err(self.graft_error(
-                self.header.id,
-                GraftError::FrameworkMismatch(plan.framework),
-            ));
+        self.overlay_cuts(
+            plan.framework,
+            plan.cuts.iter().map(GraftCutRef::dynamic),
+            external,
+        )
+    }
+
+    /// Apply build-captured selectors directly from read-only data.
+    ///
+    /// This skips `GraftPlan`, `Vec`, and selector `String` construction. The
+    /// returned effective Registry remains a runtime object because an
+    /// external implementation may be loaded after the binary was built.
+    /// 直接应用构建阶段捕获的只读 selector；不会构造 `GraftPlan`、`Vec` 或
+    /// selector `String`。由于外部实现可能在二进制生成后才加载，返回的有效
+    /// Registry 仍属于运行时对象。
+    pub fn overlay_static(
+        &self,
+        cuts: &[StaticGraftCut],
+        external: &Registry,
+    ) -> RegistryResult<Self> {
+        self.overlay_cuts(
+            self.header.framework,
+            cuts.iter().map(GraftCutRef::static_cut),
+            external,
+        )
+    }
+
+    fn overlay_cuts<'a>(
+        &self,
+        framework: FrameworkId,
+        cuts: impl IntoIterator<Item = GraftCutRef<'a>>,
+        external: &Registry,
+    ) -> RegistryResult<Self> {
+        if framework != self.header.framework || external.header.framework != framework {
+            return Err(self.graft_error(self.header.id, GraftError::FrameworkMismatch(framework)));
         }
         let mut staged = self.clone();
         let mut seen = BTreeSet::new();
-        for cut in &plan.cuts {
-            let replacement = external.resolve_node(&cut.graft).ok_or_else(|| {
+        for cut in cuts {
+            let replacement = external.resolve_node(cut.graft).ok_or_else(|| {
                 staged.graft_error(
                     staged.header.id,
                     GraftError::UnknownReplacement(staged.header.id),
@@ -34,7 +97,7 @@ impl Registry {
             for target in staged.resolve_cut_targets(cut)? {
                 if !seen.insert(target) {
                     return Err(
-                        staged.graft_error(target, GraftError::DuplicateCut(cut.cut.clone()))
+                        staged.graft_error(target, GraftError::DuplicateCut(cut.cut.to_owned()))
                     );
                 }
                 staged.apply_overlay_face(target, replacement, cut.subtree, external)?;
@@ -136,11 +199,11 @@ impl Registry {
         })
     }
 
-    fn resolve_cut_targets(&self, cut: &GraftCut) -> RegistryResult<Vec<NodeId>> {
-        let start = self.resolve_path(&cut.cut).ok_or_else(|| {
+    fn resolve_cut_targets(&self, cut: GraftCutRef<'_>) -> RegistryResult<Vec<NodeId>> {
+        let start = self.resolve_path(cut.cut).ok_or_else(|| {
             self.graft_error(self.header.id, GraftError::UnknownTarget(self.header.id))
         })?;
-        let Some(end_path) = &cut.end else {
+        let Some(end_path) = cut.end else {
             return Ok(vec![start]);
         };
         let end = self
@@ -149,7 +212,7 @@ impl Registry {
         let start_info = self.find(start).expect("resolved cut start");
         let end_info = self.find(end).expect("resolved cut end");
         if start_info.parent != end_info.parent {
-            return Err(self.graft_error(start, GraftError::InvalidRange(end_path.clone())));
+            return Err(self.graft_error(start, GraftError::InvalidRange(end_path.to_owned())));
         }
         let parent = self
             .registry(start_info.parent)
@@ -550,7 +613,14 @@ mod tests {
         let plan = GraftPlan::new(FRAMEWORK).cut("root/a/a1", "replacement");
 
         let effective = root.overlay(&plan, &external).unwrap();
+        let effective_static = root
+            .overlay_static(
+                &[StaticGraftCut::new("root/a/a1", "replacement", false)],
+                &external,
+            )
+            .unwrap();
         assert_eq!(effective.find_kind("Original").len(), 1);
+        assert_eq!(effective_static.find_kind("Original").len(), 1);
         assert_eq!(effective.path_for(a2.id).as_deref(), Some("root/a/a2"));
         assert_eq!(root.find(a1.id).map(|item| item.kind.as_str()), Some("A1"));
         assert_eq!(

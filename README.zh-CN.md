@@ -214,43 +214,98 @@ registry_rule 是最低边界。注册面可以拥有比规范列出的更多字
 
 ### 父级如何约束子注册面
 
-父对象把规范写在自己拥有的 Registry 上。子对象不需要复制这份规范；子对象
-提交时，父 Registry 会检查它的 preset、parts、exports 和接口声明。
-规范只是最低结构，额外的实现细节不会造成拒绝。
+下面是一棵只有两层的完整示例。`Control` 是父注册面，`Button` 是进入
+`Control` 所拥有 Registry 的子注册面。规则属于父级，所以单独放在
+`control/registry_rule/`；子级只声明自己提供了什么。
+
+```text
+src/
+└── control/
+    ├── control.rs                         # 父：Control
+    ├── registry_rule/
+    │   └── registry_rule.rs               # Control 对所有直接子级的最低要求
+    └── object/
+        └── button/
+            └── button.rs                  # 子：Button
+```
+
+父注册面先定义共享接口，并声明自己拥有 Registry：
 
 ```rust
-pub struct Control;
+// src/control/control.rs
+use crate::control::registry_rule::REGISTRATION_RULE;
 
+pub struct Control;
 pub struct ControlFrame;
-pub struct ActionParts;
 
 pub trait ControlHandle {
-    fn paint(&self, parts: &ButtonParts) -> ControlFrame;
+    type Parts;
+
+    fn paint(&self, parts: &Self::Parts) -> ControlFrame;
 }
 
 pub trait ActionPartsContract {
     fn action_id(&self) -> &str;
 }
 
+crate::root_object! {
+    kind: Control,
+    needs_registry: true,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    registry_rule_path: "src/control/registry_rule/registry_rule.rs",
+    registry_rule: REGISTRATION_RULE,
+}
+```
+
+这里的 `needs_registry: true` 才是“Control 可以接收子对象”的声明。
+`parent` 则表示 Control 自己位于包根下。它没有列出 Button；新增另一个合法
+子对象时，不需要回来改 `control.rs`。
+
+父级规则只写最低结构，不写允许进入的 kind 清单：
+
+```rust
+// src/control/registry_rule/registry_rule.rs
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
+    .require_preset("ActionParts")
+    .require_parts(&["label", "action"])
+    .require_exports(&["control.render"])
+    .require_handle_traits(&["ControlHandle"])
+    .require_part_traits(&["ActionPartsContract"]);
+```
+
+一个能通过这份规则的 Button 如下：
+
+```rust
+// src/control/object/button/button.rs
+use crate::control::{ActionPartsContract, ControlFrame, ControlHandle};
+use crate::{PartsContract, PresetContract};
+
 pub struct Button;
+pub struct ActionParts;
+
 pub struct ButtonParts {
     pub label: String,
     pub action: String,
+    pub tooltip: Option<String>, // 父规则没要求，但允许多提供
 }
 
-impl nichlink_core::PresetContract for ActionParts {
+impl PresetContract for ActionParts {
     type Output = ButtonParts;
-    const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
+    const REQUIRED_PARTS: &'static [&'static str] = &["label", "action"];
 }
 
-impl nichlink_core::PartsContract for ButtonParts {
+impl PartsContract for ButtonParts {
     type Output = ButtonParts;
-    const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
+    const PROVIDED_PARTS: &'static [&'static str] = &["label", "action", "tooltip"];
 }
 
 impl ControlHandle for Button {
+    type Parts = ButtonParts;
+
     fn paint(&self, parts: &ButtonParts) -> ControlFrame {
-        let _label = &parts.label;
+        let _ = (&parts.label, &parts.action);
         ControlFrame
     }
 }
@@ -261,52 +316,71 @@ impl ActionPartsContract for ButtonParts {
     }
 }
 
-// 父注册面拥有 Registry，并声明子注册面的最低结构。
-crate::root_object! {
-    kind: Control,
-    needs_registry: true,
-    registry_rule: crate::RegistrationRule::new()
-        .require_preset("ActionParts")
-        .require_parts(&["paint"])
-        .require_exports(&["control.render"])
-        .require_handle_traits(&["ControlHandle"])
-        .require_part_traits(&["ActionPartsContract"]),
-}
-
-// Button 提供全部必需项，同时仍可增加自己的结构。
 crate::control_object! {
     kind: Button,
     preset: ActionParts,
     parts: ButtonParts,
     handle: Button,
+    parent: crate::control::NODE_ID,
     exports: ["control.render"],
     handle_traits: ["ControlHandle"],
-    handle_contracts: [crate::ControlHandle],
+    handle_contracts: [crate::control::ControlHandle],
     part_traits: ["ActionPartsContract"],
-    part_contracts: [crate::ActionPartsContract],
+    part_contracts: [crate::control::ActionPartsContract],
 }
 ```
 
-约束是从父到子生效的：`Control` 拥有的 Registry 读取自己的规则，再验证
-`Button`。preset 不是 `ActionParts`、`ButtonParts::PROVIDED_PARTS` 没有
-`paint`、没有 `control.render` export，或者缺少两个接口中的任意一个，都会
-列入同一份结构化错误。`handle_contracts` 与 `part_contracts` 还会让 rustc
-直接检查两个 `impl` 是否真的存在。Button 可以继续增加字段、方法、
-trait 和 export；父规则从不把额外结构当成错误。
+`control_object!` 来自父目录名，让源码一眼能看出层级；真正用于建树的事实是
+`parent: crate::control::NODE_ID`。构建阶段会核对宏名、文件夹位置和 `parent`，
+所以把 Button 误接到另一个 Registry 会在生成代码前失败。
 
-父子归属由 `control_object!` 和 `parent` 确定，不由规则筛选 kind。外部对象能否
-被调用由 `admission` 决定。这三件事不能混在一个白名单里。
+这份声明会经过四层验证：
+
+| 检查 | 由谁执行 | 在本例中验证什么 |
+| --- | --- | --- |
+| 父子拓扑 | `nichlink-build` | Button 的宏名、目录位置和 `parent` 是否都指向 Control |
+| Rust 类型合同 | rustc | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
+| 父级注册规范 | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则 |
+| 外部准入 | Registry 连接器 | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内 |
+
+`handle_traits` / `part_traits` 是可存入注册元数据的接口名；对应的
+`handle_contracts` / `part_contracts` 是 Rust trait 路径，负责让 rustc 证明
+`impl` 真的存在。前者供规则和工具读取，后者不创建 trait object 或 vtable。
+
+下面的子声明故意不合格。假设 `WrongPreset` 和 `BrokenParts` 已经实现了输出
+类型相同的 `PresetContract` / `PartsContract`，这样错误只聚焦在父规则：
+
+```rust
+crate::control_object! {
+    kind: BrokenButton,
+    preset: WrongPreset,
+    parts: BrokenParts,
+    parent: crate::control::NODE_ID,
+    exports: ["control.preview"],
+}
+```
+
+一次 `cargo check` 会在同一份 NichLink 诊断中列出错误声明的源码位置，以及
+缺少的 `ActionParts` preset、`control.render` export、`ControlHandle` 和
+`ActionPartsContract`。如果只从 `BrokenParts::PROVIDED_PARTS` 删除 `action`，
+生成代码的 const 检查会拒绝缺失的结构 part；如果保留
+`handle_contracts: [crate::control::ControlHandle]` 却删除真实 impl，rustc 会在
+声明点给出 trait bound 错误。这三条路径分别处理“声明缺项”“结构常量缺项”
+和“Rust 实现不存在”，不会伪装成同一种错误。
+
+父子归属不由规则筛选 kind，外部对象能否被调用也不由规则决定：
+
+| 层次 | 负责的问题 |
+| --- | --- |
+| Rust `struct` / `impl` | 对象真正如何工作 |
+| `parent` + 父级专属宏 | 对象注册到哪里 |
+| `registry_rule` | 进入父 Registry 的对象至少长什么样 |
+| `admission` | 这个分支允许依赖哪些外部路径 |
+| `FlowContract` | graft 接口两端的数据是否兼容 |
 
 早期原型里的 `RegistrationRule::new(&["Button"], &[])` 已经删除。迁移时改成
 `RegistrationRule::new()`，只追加上面这些最低结构要求。外部分支的 allow/deny
 移到 `Admission`；旧的 kind 列表不需要搬过去，因为 kind 从来不负责确定父子关系。
-
-三层含义保持分开：
-
-Rust impl / struct       真正运行的代码和内部细节
-registry_rule            父 Registry 接受的最低结构
-admission                允许使用的外部注册路径
-FlowContract             替换边界上的输入/输出合同
 
 ### 输出增加内容时如何兼容
 
@@ -326,24 +400,87 @@ FlowContract             替换边界上的输入/输出合同
 
 注册树描述的是对象归属，并不等于完整的数据流图。requires 可以解析到
 另一条分支上的 provider，运行时数据边也可能跨过多个注册边界。当一次替换
-会影响多个消费者时，把受影响的槽位组成一个计划，一起提交：
+会影响多个消费者时，把受影响的槽位组成一个计划，一起提交。
+
+graft 的三个参与者始终分开。框架原树和第三方实现各自留在原 crate；宿主只在
+自己的 `main.rs` 或 `lib.rs` 中声明覆盖计划：
+
+```text
+framework crate                         external graft crate
+src/                                    src/
+└── control/                            └── button_fast/
+    ├── control.rs                          └── button_fast.rs
+    └── object/button/...                        │
+             │                                   │
+             └──── immutable base Registry       └──── external Registry
+                                  \               /
+                                   GraftPlan + overlay
+                                            │
+                                    effective Registry
+                                            │
+                                  host crate: src/main.rs
+```
+
+宿主入口只声明切口与外部 selector，不复制框架或第三方源码。静态宏本身
+不构造 `Vec` 或 `String`；构建器会把内容直接写进 `StaticPlan`：
 
 ```rust
-let plan = nichlink_core::graft_plan!(framework,
+use nichlink_core::{FrameworkId, Registry};
+
+const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
+
+nichlink_core::static_graft_plan!(FRAMEWORK,
+    cut "root/control/button" graft "button_fast",
+);
+
+fn registry_for_this_run(base: &Registry, external: &Registry) -> Registry {
+    base.overlay_static(builtin_static_plan().grafts(), external)
+        .expect("checked graft")
+}
+```
+
+`overlay` 返回一棵新的 effective Registry。`base` 和 `external` 都不会被修改；
+任一切口的 flow contract、目标父规则、admission 或连接器检查失败，整组计划
+都不会发布。`overlay_static` 省掉动态 `GraftPlan` 及其 selector 字符串分配；
+外部实现若在运行时才加载，effective Registry 的校验和构造仍然只做一次。
+
+普通 cut 只换一个节点，原节点的子树继续接在新实现下面：
+
+```text
+base                              cut A/a1 graft a1_fast
+A                                 A
+├── a1                            ├── a1_fast       # 只替换 a1
+│   ├── b1                        │   ├── b1         # 从 base 继承
+│   └── b2                        │   └── b2         # 从 base 继承
+├── a2                            ├── a2
+└── a3                            └── a3
+```
+
+`full` 明确丢弃原节点的整棵子树，改用外部实现携带的子树：
+
+```text
+external                          cut A/a1 full graft a1_fast
+a1_fast                           A
+└── bx                            ├── a1_fast
+                                  │   └── bx         # 来自 external
+                                  ├── a2
+                                  └── a3
+```
+
+需要同时修改多个数据边界时，把切口写在同一个静态声明里：
+
+```rust
+nichlink_core::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
 );
-let effective = base.overlay(&plan, &external)?;
 ```
 
-`overlay` 会暂存整组切口。每一项都会检查源端和目标端合同、目标
-registry_rule 以及连接器准入；如果仍有消费者只接受旧边界，操作失败，
-不会发布只完成一部分的 effective tree。
+只有编辑器、命令行或热加载流程需要在运行时创建和修改计划时，才使用返回
+动态 `GraftPlan` 的 `graft_plan!`。
 
-overlay 操作不会移动源码，也不会修改原树或外部树。`cut A graft X` 只替换
-`A` 这个槽位，并继承它原来的子树；`cut A full graft X` 才会用外部 `X` 的整棵
-子树替换 `A`。也可以选择同一父注册机下的一段兄弟节点：
+也可以选择同一父 Registry 下的一段兄弟节点：
 
 ```rust
 let plan = nichlink_core::GraftPlan::command(
@@ -367,6 +504,67 @@ NichLink 不限定对象内部采用哪种编程范式。普通函数、trait、
 provider、跨过 admission 门禁，或替换端无法接回原数据流时才会失败。错误会
 指出断开的 capability、消费端、候选 provider、源码位置和失败阶段，而不是只给
 一句“注册失败”。这不等于猜测任意 Rust 函数内部所有未声明的数据流。
+
+## 发布静态化、性能与两阶段修剪
+
+NichLink 的两阶段修剪解决两个不同问题。
+
+第一阶段发生在 rustc 展开生成模块之前，颗粒度是整个注册面：
+
+1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-build`；
+2. 构建器读取目录注册面以及 `main.rs`、`lib.rs` 或 `application!` 指定的入口；
+3. 它保守推导本 crate 需要的注册面，只把这些面写入生成模块和 `StaticPlan`；
+4. 遇到无法静态证明的动态分发、生成代码或路径时，回退全树，而不是误删代码。
+
+这一步能减少送进 rustc 的注册面和元数据，但它不是完整 rustc 调用图，也不裁剪
+一个活跃注册面内部的单个函数。
+
+第二阶段由正常 Rust 工具链完成。rustc 的可达性和单态化、LLVM、ThinLTO 与
+链接器垃圾回收继续删除未引用函数和符号。workspace 的 release profile 已启用
+ThinLTO 和单 codegen unit；`tools/nichlink-release-audit` 会检查发布产物、拒绝
+残留的 `.inventory` linker section，并可对比 full/minimal 二进制的符号和字节数。
+NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
+
+发布态也不再启动时重建内置注册树。生成代码把通过检查的拓扑固化成
+`&'static [StaticFace]`，把编译前声明的 graft 固化成同一 `StaticPlan` 内的
+`&'static [StaticGraftCut]`。`builtin_static_plan()` 直接借用这些只读数据：没有
+堆分配、全局 constructor、inventory 遍历或启动时注册循环。构建期
+`registry_rule` 检查也不会变成每帧执行的运行时逻辑。
+
+但“静态化”等于成本清楚，不等于所有场景绝对零成本：
+
+| 使用方式 | 运行时保留什么 | 成本边界 |
+| --- | --- | --- |
+| 只读内置拓扑 | `StaticFace` 静态切片 | 启动零分配；`find` 为二分查找 O(log n)，`children_of` 当前为 O(n) 过滤 |
+| 开发态可变 Registry | `Arc` header、32 页 entries 和索引 | clone 只增加 `Arc` 引用；首次修改只复制命中的页，不复制整棵树 |
+| 编译前静态 graft | `StaticPlan` 内的静态 selector 切片 | 声明读取零分配；框架若已静态绑定实现，不需要构造 Registry overlay |
+| 发布后启用 plugin/graft | 所选动态元数据和 effective Registry | `overlay_static` 不分配计划，但仍要做一次合同、准入和连接器检查 |
+| `CallTrace::runtime()` | debug 默认 `errors-only`，release 默认 `off` | off 不收集证据；应用仍显式调用追踪 API 时，不承诺指令级零开销 |
+
+因此，先前担心的 Registry 复制页不会出现在“只使用内置静态计划”的发布启动
+路径；只有应用明确构建可变 Registry、启用运行时插件或执行 graft 时才使用页级
+COW。类似地，Studio、MCP、debug 和 plugin-host 是独立工具或可选依赖，应用
+没有链接它们就不会出现在最终二进制里。
+
+NichLink core 不会重写任意 Rust 调用点。所谓“静态绑定实现”需要框架自己的
+生成层按 selector 选择具体 Rust 类型或函数；NichLink 提供经过验证的静态选择
+数据。运行时插件没有可提前链接的实现，所以仍需要一次 overlay。这条区分避免
+为了追求“零开销”而把动态插件能力说成编译期魔法。
+
+性能数字与硬件、文件系统和注册面内容相关，仓库提供复现实验而不写死营销数字：
+
+```sh
+# 构造并索引大树
+cargo run --release -p nichlink-core --example scale_audit -- 100000
+
+# fmt、测试、Clippy、文档、release 产物、符号和 linker section
+tools/nichlink-release-audit
+
+# 可选：提供两个实际应用产物，生成大小与符号差异
+NICH_LINK_FULL_BINARY=/path/to/full \
+NICH_LINK_MINIMAL_BINARY=/path/to/minimal \
+tools/nichlink-release-audit
+```
 
 ## Studio 与命令行
 

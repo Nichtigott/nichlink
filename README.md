@@ -231,44 +231,99 @@ face does not break older consumers, while removing a required part does.
 
 ### How a parent constrains its children
 
-The parent writes the rule on the Registry it owns. A child does not copy that
-rule; when the child is submitted, the parent Registry validates the child's
-preset, parts, exports, and declared interfaces. The rule is a minimum
-shape, so extra implementation details are fine.
+Here is a complete two-level example. `Control` is the parent face. `Button` is
+a child entering the Registry owned by `Control`. The rule belongs to the
+parent, so it lives under `control/registry_rule/`; the child only declares
+what it supplies.
+
+```text
+src/
+└── control/
+    ├── control.rs                         # parent: Control
+    ├── registry_rule/
+    │   └── registry_rule.rs               # minimum shape of every direct child
+    └── object/
+        └── button/
+            └── button.rs                  # child: Button
+```
+
+The parent defines the shared interfaces and declares that it owns a Registry:
 
 ```rust
-pub struct Control;
+// src/control/control.rs
+use crate::control::registry_rule::REGISTRATION_RULE;
 
+pub struct Control;
 pub struct ControlFrame;
-pub struct ActionParts;
 
 pub trait ControlHandle {
-    fn paint(&self, parts: &ButtonParts) -> ControlFrame;
+    type Parts;
+
+    fn paint(&self, parts: &Self::Parts) -> ControlFrame;
 }
 
 pub trait ActionPartsContract {
     fn action_id(&self) -> &str;
 }
 
+crate::root_object! {
+    kind: Control,
+    needs_registry: true,
+    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    registry_rule_path: "src/control/registry_rule/registry_rule.rs",
+    registry_rule: REGISTRATION_RULE,
+}
+```
+
+`needs_registry: true` is the declaration that lets Control receive children.
+`parent` places Control below the package root. Nothing here lists Button; a
+second valid child does not require an edit to `control.rs`.
+
+The parent's rule describes a minimum shape, not a kind allowlist:
+
+```rust
+// src/control/registry_rule/registry_rule.rs
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
+    .require_preset("ActionParts")
+    .require_parts(&["label", "action"])
+    .require_exports(&["control.render"])
+    .require_handle_traits(&["ControlHandle"])
+    .require_part_traits(&["ActionPartsContract"]);
+```
+
+This Button satisfies that rule:
+
+```rust
+// src/control/object/button/button.rs
+use crate::control::{ActionPartsContract, ControlFrame, ControlHandle};
+use crate::{PartsContract, PresetContract};
+
 pub struct Button;
+pub struct ActionParts;
+
 pub struct ButtonParts {
     pub label: String,
     pub action: String,
+    pub tooltip: Option<String>, // extra structure is allowed
 }
 
-impl nichlink_core::PresetContract for ActionParts {
+impl PresetContract for ActionParts {
     type Output = ButtonParts;
-    const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
+    const REQUIRED_PARTS: &'static [&'static str] = &["label", "action"];
 }
 
-impl nichlink_core::PartsContract for ButtonParts {
+impl PartsContract for ButtonParts {
     type Output = ButtonParts;
-    const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
+    const PROVIDED_PARTS: &'static [&'static str] = &["label", "action", "tooltip"];
 }
 
 impl ControlHandle for Button {
+    type Parts = ButtonParts;
+
     fn paint(&self, parts: &ButtonParts) -> ControlFrame {
-        let _label = &parts.label;
+        let _ = (&parts.label, &parts.action);
         ControlFrame
     }
 }
@@ -279,53 +334,78 @@ impl ActionPartsContract for ButtonParts {
     }
 }
 
-// The parent face owns the Registry and declares its minimum child shape.
-crate::root_object! {
-    kind: Control,
-    needs_registry: true,
-    registry_rule: crate::RegistrationRule::new()
-        .require_preset("ActionParts")
-        .require_parts(&["paint"])
-        .require_exports(&["control.render"])
-        .require_handle_traits(&["ControlHandle"])
-        .require_part_traits(&["ActionPartsContract"]),
-}
-
-// Button supplies every required item, and may add more.
 crate::control_object! {
     kind: Button,
     preset: ActionParts,
     parts: ButtonParts,
     handle: Button,
+    parent: crate::control::NODE_ID,
     exports: ["control.render"],
     handle_traits: ["ControlHandle"],
-    handle_contracts: [crate::ControlHandle],
+    handle_contracts: [crate::control::ControlHandle],
     part_traits: ["ActionPartsContract"],
-    part_contracts: [crate::ActionPartsContract],
+    part_contracts: [crate::control::ActionPartsContract],
 }
 ```
 
-The constraint runs from parent to child: Control's Registry reads its rule and
-validates Button. A preset other than ActionParts, no `paint` in
-`ButtonParts::PROVIDED_PARTS`, no `control.render` export, or either missing
-interface is included in one structured report. `handle_contracts` and
-`part_contracts` additionally ask rustc to prove that both impls exist. Button may add
-fields, methods, traits, and exports; extra structure is never rejected.
+The `control_object!` name mirrors the parent folder, making the relationship
+visible in source. The source of truth used to build the tree is
+`parent: crate::control::NODE_ID`. The build step checks the macro name, folder
+position, and parent together, so accidentally wiring Button to another
+Registry fails before generated code is compiled.
 
-Parentage comes from `control_object!` and `parent`, not a kind filter. External
-calls are controlled separately by `admission`.
+Four layers validate this declaration:
+
+| Check | Enforced by | What it proves here |
+| --- | --- | --- |
+| Parent topology | `nichlink-build` | Button's macro, folder, and `parent` all point to Control |
+| Rust type contract | rustc | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
+| Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum |
+| External admission | Registry connector | Cross-tree `requires` stay within Control's allowed `admission` paths |
+
+`handle_traits` and `part_traits` are interface names retained in registration
+metadata. The matching `handle_contracts` and `part_contracts` are Rust trait
+paths, which make rustc prove that the implementations exist. They do not
+create trait objects or vtables.
+
+The following child is intentionally invalid. Assume `WrongPreset` and
+`BrokenParts` implement `PresetContract` and `PartsContract` with the same
+output type, so this example isolates failures against the parent rule:
+
+```rust
+crate::control_object! {
+    kind: BrokenButton,
+    preset: WrongPreset,
+    parts: BrokenParts,
+    parent: crate::control::NODE_ID,
+    exports: ["control.preview"],
+}
+```
+
+One `cargo check` reports the declaration site together with the missing
+`ActionParts` preset, `control.render` export, `ControlHandle`, and
+`ActionPartsContract`. Removing only `action` from
+`BrokenParts::PROVIDED_PARTS` is rejected by the generated const check. Keeping
+`handle_contracts: [crate::control::ControlHandle]` while deleting the real
+impl produces a rustc trait-bound error at the declaration. Those paths cover
+a missing declaration, a missing structural constant, and a missing Rust
+implementation without pretending they are the same error.
+
+Parentage is not selected by a kind filter, and external use is not controlled
+by the registration rule:
+
+| Layer | Question it answers |
+| --- | --- |
+| Rust `struct` / `impl` | How does the object actually work? |
+| `parent` + parent-specific macro | Where is the object registered? |
+| `registry_rule` | What is the minimum shape accepted by the parent Registry? |
+| `admission` | Which external paths may this branch depend on? |
+| `FlowContract` | Are both sides of a graft data-compatible? |
 
 Older prototypes used `RegistrationRule::new(&["Button"], &[])`. That form is
 gone. Replace it with `RegistrationRule::new()` plus only the required shape
 methods shown above. Move external path allow/deny entries to `Admission`; do
 not move the old kind list there, because kind never decides parentage.
-
-The three layers stay separate:
-
-    Rust impl / struct       actual code and private details
-    registry_rule            minimum shape accepted by the parent Registry
-    admission                outside registry paths this face may use
-    FlowContract             wire-level input/output at a replacement boundary
 
 ### Output extensions and compatibility
 
@@ -349,26 +429,92 @@ and the destination registration rule pass.
 The registration tree describes ownership, not every data-flow edge. A
 requires edge can resolve a provider on another branch, and runtime data edges
 may cross several registry boundaries. When a replacement changes several
-consumers, describe the affected slots as one plan and commit them together:
+consumers, describe the affected slots as one plan and commit them together.
+
+The three participants stay separate. The framework tree and third-party
+implementation remain in their own crates. The host only declares an overlay
+plan in its `main.rs` or `lib.rs`:
+
+```text
+framework crate                         external graft crate
+src/                                    src/
+└── control/                            └── button_fast/
+    ├── control.rs                          └── button_fast.rs
+    └── object/button/...                        │
+             │                                   │
+             └──── immutable base Registry       └──── external Registry
+                                  \               /
+                                   GraftPlan + overlay
+                                            │
+                                    effective Registry
+                                            │
+                                  host crate: src/main.rs
+```
+
+The host entry declares cuts and external selectors. It never copies framework
+or third-party source. The static macro constructs no `Vec` or `String`; the
+builder writes its contents directly into the `StaticPlan`:
 
 ```rust
-let plan = nichlink_core::graft_plan!(framework,
+use nichlink_core::{FrameworkId, Registry};
+
+const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
+
+nichlink_core::static_graft_plan!(FRAMEWORK,
+    cut "root/control/button" graft "button_fast",
+);
+
+fn registry_for_this_run(base: &Registry, external: &Registry) -> Registry {
+    base.overlay_static(builtin_static_plan().grafts(), external)
+        .expect("checked graft")
+}
+```
+
+`overlay` returns a new effective Registry. Neither `base` nor `external` is
+modified. If any cut fails its flow contract, destination parent rule,
+admission, or connector check, none of the plan is published. `overlay_static`
+skips dynamic `GraftPlan` and selector-string allocation. If the external
+implementation is loaded at runtime, validation and effective Registry
+construction still happen once.
+
+A normal cut replaces one node and keeps the base node's children:
+
+```text
+base                              cut A/a1 graft a1_fast
+A                                 A
+├── a1                            ├── a1_fast       # only a1 is replaced
+│   ├── b1                        │   ├── b1         # inherited from base
+│   └── b2                        │   └── b2         # inherited from base
+├── a2                            ├── a2
+└── a3                            └── a3
+```
+
+`full` explicitly drops the base subtree and uses the external subtree:
+
+```text
+external                          cut A/a1 full graft a1_fast
+a1_fast                           A
+└── bx                            ├── a1_fast
+                                  │   └── bx         # supplied by external
+                                  ├── a2
+                                  └── a3
+```
+
+When several data boundaries must change together, put all cuts in one static
+declaration:
+
+```rust
+nichlink_core::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
 );
-let effective = base.overlay(&plan, &external)?;
 ```
 
-`overlay` stages the whole set. Every cut checks source and destination
-contracts, destination registry_rule, and connector admission. If one consumer
-still expects the old boundary, the operation fails without publishing a
-partial effective tree.
+Use the dynamic `graft_plan!` expression only when an editor, command, or hot
+reload path must construct and modify a plan at runtime.
 
-The overlay operation never moves source code or mutates either registry. Use
-`cut A graft X` to replace only slot `A` (its existing children are inherited),
-or `cut A full graft X` to replace the complete subtree rooted at `A` with the
-external subtree rooted at `X`. A path range can target contiguous siblings:
+A path range can target contiguous siblings under one parent Registry:
 
 ```rust
 let plan = nichlink_core::GraftPlan::command(
@@ -397,6 +543,81 @@ longer reconnects to the declared data flow. The diagnostic names the broken
 capability, consumer, candidate provider, source location, and phase. This is
 not a claim that NichLink guesses every undeclared value flow inside arbitrary
 Rust code.
+
+## Static release plans, performance, and two-stage pruning
+
+NichLink's two pruning stages solve different problems.
+
+The first stage runs before rustc expands the generated module tree. Its unit is
+a complete registration face:
+
+1. the host crate's thin `build.rs` calls `nichlink-build`;
+2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
+   or `application!`;
+3. it conservatively derives the faces needed by this crate and emits only
+   those faces into the generated modules and `StaticPlan`;
+4. dynamic dispatch, generated code, or an unresolved path forces a full-tree
+   fallback instead of an unsafe deletion.
+
+This reduces registration faces and metadata sent to rustc. It is not a
+complete rustc call graph, and it does not remove individual functions from an
+active face.
+
+The second stage is the normal Rust toolchain. Rustc reachability and
+monomorphisation, LLVM, ThinLTO, and linker garbage collection remove unused
+functions and symbols. The workspace release profile enables ThinLTO with one
+codegen unit. `tools/nichlink-release-audit` checks release artifacts, rejects a
+remaining `.inventory` linker section, and can compare the symbols and bytes of
+full and minimal application binaries. NichLink does not present source-level
+function-name matching as compiler-accurate elimination.
+
+A release build also does not reconstruct the built-in Registry at startup.
+Generated code stores checked topology as `&'static [StaticFace]` and
+build-declared grafts as `&'static [StaticGraftCut]` in the same `StaticPlan`.
+`builtin_static_plan()` borrows that read-only data directly. There is no heap
+allocation, global constructor, inventory walk, or startup registration loop.
+Build-time `registry_rule` checks do not become per-frame runtime checks.
+
+Static does not mean every operation in every configuration is free. It means
+the costs are explicit:
+
+| Usage | Runtime representation | Cost boundary |
+| --- | --- | --- |
+| Read-only built-in topology | Static `StaticFace` slice | No startup allocation; `find` is O(log n), while `children_of` currently filters in O(n) |
+| Mutable development Registry | `Arc` header, 32 entry pages, and indexes | Cloning increments `Arc` counts; the first write copies only the touched page, not the tree |
+| Build-declared static graft | Static selector slice inside `StaticPlan` | Reading the declaration allocates nothing; a framework with statically bound implementations needs no Registry overlay |
+| Post-release plugin/graft | Selected dynamic metadata and an effective Registry | `overlay_static` allocates no plan but still performs contract, admission, and connector validation once |
+| `CallTrace::runtime()` | `errors-only` in debug, `off` in release | Off collects no evidence; code that still calls tracing APIs is not promised instruction-level zero overhead |
+
+The Registry page-copy concern therefore does not affect startup when an
+application only reads the built-in static plan. Page-level COW is used only
+when an application explicitly builds a mutable Registry, enables runtime
+plugins, or applies a graft. Studio, MCP, debug, and plugin-host are separate
+tools or optional dependencies; an application that does not link them does
+not carry them in its binary.
+
+NichLink core does not rewrite arbitrary Rust call sites. A framework that
+wants a fully static implementation binding uses its own generated layer to
+select a concrete Rust type or function from these checked selectors. A
+runtime plugin has no implementation to link ahead of time, so it still needs
+one overlay. This distinction avoids presenting dynamic loading as compile-time
+magic.
+
+Results depend on hardware, filesystem, and face contents. The repository
+ships reproducible checks instead of a fixed benchmark claim:
+
+```sh
+# Build and index a large Registry
+cargo run --release -p nichlink-core --example scale_audit -- 100000
+
+# fmt, tests, Clippy, docs, release artifacts, symbols, and linker sections
+tools/nichlink-release-audit
+
+# Optional: compare two real application artifacts
+NICH_LINK_FULL_BINARY=/path/to/full \
+NICH_LINK_MINIMAL_BINARY=/path/to/minimal \
+tools/nichlink-release-audit
+```
 
 ## Studio and CLI
 

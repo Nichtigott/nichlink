@@ -11,6 +11,25 @@ macro_rules! application {
     };
 }
 
+/// Declare graft selectors for build-time capture without constructing a
+/// runtime `GraftPlan`.
+/// 声明供构建阶段捕获的 graft selector，不构造运行时 `GraftPlan`。
+///
+/// Put this at the host crate entry. `nichlink-build` validates the grammar and
+/// stores the cuts in the generated `StaticPlan`. Use the dynamic
+/// [`graft_plan!`](crate::graft_plan) expression only when code needs to build
+/// or edit a plan at runtime.
+/// 将它放在宿主 crate 入口。`nichlink-build` 校验语法并把切口写入生成的
+/// `StaticPlan`；只有运行时代码确实要构造或编辑计划时才使用动态
+/// [`graft_plan!`](crate::graft_plan) 表达式。
+#[macro_export]
+macro_rules! static_graft_plan {
+    ($framework:expr, $($cuts:tt)+) => {
+        const _: $crate::FrameworkId = $framework;
+        const _: &str = stringify!($($cuts)+);
+    };
+}
+
 /// Build a persistent external graft overlay without touching source files.
 /// 构造持久化外部 graft 覆盖计划，不移动或修改任何源码文件。
 ///

@@ -250,8 +250,8 @@ pub fn application_entries(source: &str) -> Result<Vec<(String, SyntaxLocation)>
     }
 }
 
-/// Parse `graft_plan!` declarations without executing them.
-/// 只解析 `graft_plan!` 声明，不执行宏。
+/// Parse static and dynamic graft declarations without executing them.
+/// 解析静态和动态 graft 声明，不执行宏。
 pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> {
     let file =
         syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
@@ -270,7 +270,7 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
             else {
                 return;
             };
-            if name != "graft_plan" {
+            if !matches!(name.as_str(), "graft_plan" | "static_graft_plan") {
                 return;
             }
             let tokens = mac.tokens.clone().into_iter().collect::<Vec<_>>();
@@ -821,6 +821,17 @@ fn application_plan() {
         let entries = graft_entries(source).unwrap();
         assert_eq!(entries[0].cut, "root/a");
         assert!(entries[0].full);
+    }
+
+    #[test]
+    fn graft_parser_collects_declaration_only_static_plans() {
+        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    cut "root/a" graft "replacement",
+);"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].cut, "root/a");
+        assert_eq!(entries[0].graft, "replacement");
     }
 
     #[test]

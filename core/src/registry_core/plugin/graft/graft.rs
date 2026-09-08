@@ -94,25 +94,6 @@ impl GraftPlan {
         }
         Ok(plan)
     }
-
-    /// Materialize the selectors emitted by the build step without retaining
-    /// any implementation references in the generated crate.
-    /// 将构建阶段生成的静态选择器物化为运行时计划；生成代码不携带实现引用。
-    pub fn from_static(framework: FrameworkId, cuts: &[crate::StaticGraftCut]) -> Self {
-        let mut plan = Self::new(framework);
-        for cut in cuts {
-            if let Some((start, end)) = cut.cut().split_once(" to ") {
-                let mut range = GraftCut::range(start, end, cut.graft());
-                range.subtree = cut.full();
-                plan.cuts.push(range);
-            } else if cut.full() {
-                plan.cuts.push(GraftCut::subtree(cut.cut(), cut.graft()));
-            } else {
-                plan.cuts.push(GraftCut::new(cut.cut(), cut.graft()));
-            }
-        }
-        plan
-    }
 }
 
 /// Parsed `cut [A/a1/b2] graft replacement` command.

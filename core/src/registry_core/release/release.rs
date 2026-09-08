@@ -39,6 +39,7 @@ impl StaticFace {
 #[derive(Clone, Copy, Debug)]
 pub struct StaticPlan {
     faces: &'static [StaticFace],
+    grafts: &'static [StaticGraftCut],
 }
 
 /// One host-declared external graft cut retained in release metadata.
@@ -76,11 +77,26 @@ impl StaticGraftCut {
 
 impl StaticPlan {
     pub const fn new(faces: &'static [StaticFace]) -> Self {
-        Self { faces }
+        Self { faces, grafts: &[] }
+    }
+
+    /// Build a release plan whose graft selectors are stored in read-only data.
+    /// 构造把 graft selector 直接保存在只读数据中的发布计划。
+    pub const fn with_grafts(
+        faces: &'static [StaticFace],
+        grafts: &'static [StaticGraftCut],
+    ) -> Self {
+        Self { faces, grafts }
     }
 
     pub const fn faces(self) -> &'static [StaticFace] {
         self.faces
+    }
+
+    /// Host-declared grafts captured by the build step without allocation.
+    /// 构建阶段捕获、无需分配即可读取的宿主 graft 声明。
+    pub const fn grafts(self) -> &'static [StaticGraftCut] {
+        self.grafts
     }
 
     pub const fn len(self) -> usize {
@@ -172,4 +188,27 @@ const fn str_eq(left: &str, right: &str) -> bool {
         index += 1;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FRAMEWORK: crate::FrameworkId = crate::FrameworkId::new("static-plan-test");
+    const ROOT: NodeId = crate::root_node_id("static-plan-test");
+    const CHILD: NodeId = NodeId::from_namespaced_path("static-plan-test", "child.rs", "Child");
+    static FACES: &[StaticFace] = &[StaticFace::new(CHILD, ROOT, false)];
+    static GRAFTS: &[StaticGraftCut] = &[StaticGraftCut::new("root/child", "child_fast", false)];
+
+    crate::static_graft_plan!(FRAMEWORK,
+        cut "root/child" graft "child_fast",
+    );
+
+    #[test]
+    fn graft_selectors_are_part_of_the_zero_allocation_static_plan() {
+        let plan = StaticPlan::with_grafts(FACES, GRAFTS);
+
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan.grafts(), GRAFTS);
+    }
 }

@@ -198,6 +198,11 @@ fn new_project_and_explicit_root_face_compile() {
     assert!(root.join("Cargo.toml").is_file());
     assert!(root.join("build.rs").is_file());
     assert!(root.join("src/main.rs").is_file());
+    assert!(
+        std::fs::read_to_string(root.join("src/main.rs"))
+            .expect("generated binary entry")
+            .contains("builtin_static_plan().len()")
+    );
     let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
     assert!(manifest.contains("nichlink-core"));
     assert!(manifest.contains("nichlink-build"));

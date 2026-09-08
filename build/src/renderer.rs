@@ -53,8 +53,6 @@ pub(crate) fn render_lib(
         )
         .unwrap();
     }
-    output.push_str("\npub static BUILTIN_STATIC_PLAN: registry_core::StaticPlan = registry_core::StaticPlan::new(BUILTIN_STATIC_FACES);\n\n");
-    output.push_str("pub const fn builtin_static_plan() -> &'static registry_core::StaticPlan { &BUILTIN_STATIC_PLAN }\n");
     output.push_str(
         "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[registry_core::StaticGraftCut] = &[\n",
     );
@@ -67,12 +65,8 @@ pub(crate) fn render_lib(
         .unwrap();
     }
     output.push_str("];\n\n");
-    output.push_str(
-        "pub const fn builtin_graft_cuts() -> &'static [registry_core::StaticGraftCut] { &BUILTIN_GRAFT_CUTS }\n",
-    );
-    output.push_str(
-        "\npub fn builtin_graft_plan() -> registry_core::GraftPlan {\n    registry_core::GraftPlan::from_static(registry_core::FrameworkId::new(env!(\"CARGO_PKG_NAME\")), BUILTIN_GRAFT_CUTS)\n}\n",
-    );
+    output.push_str("pub static BUILTIN_STATIC_PLAN: registry_core::StaticPlan = registry_core::StaticPlan::with_grafts(BUILTIN_STATIC_FACES, BUILTIN_GRAFT_CUTS);\n\n");
+    output.push_str("pub const fn builtin_static_plan() -> &'static registry_core::StaticPlan { &BUILTIN_STATIC_PLAN }\n");
     output.push_str("\npub fn registrations() -> Vec<RegistrationInfo> {\n    vec![\n");
     for face in static_faces {
         writeln!(output, "        {}::REGISTRATION,", face.module).unwrap();
@@ -248,7 +242,10 @@ fn render_node(
 
 #[cfg(test)]
 mod tests {
-    use super::render_object_aliases;
+    use super::{render_lib, render_object_aliases};
+    use crate::SourceScope;
+    use crate::diagnostics::BuildDiagnostics;
+    use crate::registry_syntax::{GraftSyntax, SyntaxLocation};
     use crate::types::Node;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -298,6 +295,33 @@ mod tests {
         assert!(output.contains("macro_rules! panel_object"));
         assert!(output.contains("macro_rules! control_object"));
         assert!(output.contains("crate::registry_core::__nichlink_object!"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    #[test]
+    fn generated_static_plan_owns_build_time_graft_selectors() {
+        let root = temporary_directory("static-graft-plan");
+        let output = render_lib(
+            &root,
+            &[],
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            &[],
+            &[GraftSyntax {
+                cut: "root/control/button".to_owned(),
+                graft: "button_fast".to_owned(),
+                full: false,
+                location: SyntaxLocation { line: 3, column: 5 },
+            }],
+        );
+
+        assert!(output.contains("StaticPlan::with_grafts"));
+        assert!(output.contains("StaticGraftCut::new(\"root/control/button\", \"button_fast\""));
+        assert!(!output.contains("pub fn builtin_graft_plan"));
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }
 
