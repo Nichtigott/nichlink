@@ -180,10 +180,10 @@ fn package_name(manifest: &Path) -> Result<String, String> {
         .map_err(|error| format!("cannot read manifest: {error}"))?;
     for line in content.lines() {
         let line = line.trim();
-        if let Some(rest) = line.strip_prefix("name = \"") {
-            if let Some(name) = rest.split('"').next().filter(|name| !name.is_empty()) {
-                return Ok(name.to_owned());
-            }
+        if let Some(rest) = line.strip_prefix("name = \"")
+            && let Some(name) = rest.split('"').next().filter(|name| !name.is_empty())
+        {
+            return Ok(name.to_owned());
         }
     }
     manifest
