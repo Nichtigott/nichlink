@@ -42,14 +42,14 @@ pub(crate) fn run(input: &BuildInput) -> Option<String> {
         &out_dir.join("discovery.fingerprint"),
         &discovery_fingerprint,
     );
-    if input.emit_cargo_directives {
-        if let Some(status) = cache_status_line(
+    if input.emit_cargo_directives
+        && let Some(status) = cache_status_line(
             &cache_state,
             &discovery_fingerprint,
             build_output_is_verbose(),
-        ) {
-            println!("cargo:warning={status}");
-        }
+        )
+    {
+        println!("cargo:warning={status}");
     }
     materialize_sources(src, &nodes, out_dir);
     write_pruning_manifest(src, &nodes, out_dir);
