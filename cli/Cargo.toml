@@ -21,7 +21,9 @@ path = "src/lib.rs"
 [[bin]]
 name = "nichlink"
 path = "src/bin/nichlink.rs"
+doc = false
 
 [[bin]]
 name = "cargo-nichlink"
 path = "src/bin/cargo-nichlink.rs"
+doc = false

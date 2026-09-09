@@ -23,7 +23,9 @@ nichlink-build = { path = "../build", version = "0.1.0" }
 [[bin]]
 name = "nichlink-studio"
 path = "src/main.rs"
+doc = false
 
 [[bin]]
 name = "nichlink-dev"
 path = "src/bin/nichlink-dev.rs"
+doc = false

@@ -14,3 +14,4 @@ serde_json = "1"
 [[bin]]
 name = "nichlink-mcp"
 path = "src/main.rs"
+doc = false
