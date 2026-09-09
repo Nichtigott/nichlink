@@ -129,12 +129,11 @@ fn main() {
 在 crate 根部只接线一次生成计划：
 
 ```rust
-pub mod registry_core {
-    pub use nichlink_core::*;
-}
-
-include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
+nichlink_core::host!();
 ```
+
+它展开为 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
+直接书写该 include 是等价的高级写法。
 
 不要求必须有 `main.rs`：二进制项目以 `src/main.rs` 作为入口，前端框架
 这类库项目以 `src/lib.rs` 作为入口。构建适配器扫描的是宿主自己的源码；
@@ -612,8 +611,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
 ```
 
 命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
-项目，`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给 AI
-客户端使用的只读 JSON-RPC/MCP 桥。`cargo check` 仍是构建校验命令：
+项目，`nichlink check` 不做完整编译即可运行注册发现与校验，`nichlink
+build` 先校验注册树再调用 `cargo build`，`nichlink studio` 负责交互式编辑
+和调试，`nichlink mcp` 是给 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
+check` 仍是构建校验命令：
 
 ```sh
 cargo check
@@ -670,7 +671,7 @@ let detailed = nichlink_core::CallTrace::full();
 ```text
 core/         nichlink-core：Registry、合同、准入、graft、声明宏
 build/        nichlink-build：源码发现、缓存、第一阶段 StaticPlan
-cli/          nichlink-cli：统一入口（nichlink new/studio/mcp、cargo-nichlink）
+cli/          nichlink-cli：统一入口（nichlink new/check/build/studio/mcp、cargo-nichlink）
 debug/        可选 CallTrace、MIR 证据、数据流和图适配器
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的只读 MCP 桥

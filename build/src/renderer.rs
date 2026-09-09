@@ -28,12 +28,12 @@ pub(crate) fn render_lib(
     for node in nodes {
         render_node(&mut output, src, node, 0, scope, false);
     }
-    output.push_str("\npub use registry_core::*;\n");
+    output.push_str("\npub use ::nichlink_core::registry_core::*;\n");
     output.push_str(
-        "\n#[doc(hidden)]\npub static BUILTIN_STATIC_FACES: &[registry_core::StaticFace] = &[\n",
+        "\n#[doc(hidden)]\npub static BUILTIN_STATIC_FACES: &[::nichlink_core::registry_core::StaticFace] = &[\n",
     );
     for face in static_faces {
-        writeln!(output, "    registry_core::StaticFace::new(registry_core::NodeId::from_raw({:?}), registry_core::NodeId::from_raw({:?}), {}),", face.id.into_bytes(), face.parent.into_bytes(), face.owns_registry).unwrap();
+        writeln!(output, "    ::nichlink_core::registry_core::StaticFace::new(::nichlink_core::registry_core::NodeId::from_raw({:?}), ::nichlink_core::registry_core::NodeId::from_raw({:?}), {}),", face.id.into_bytes(), face.parent.into_bytes(), face.owns_registry).unwrap();
     }
     output.push_str("];\n");
     let modules = static_faces
@@ -43,30 +43,30 @@ pub(crate) fn render_lib(
     output.push_str("\n// Registration rules are consumed by const evaluation only.\n// 注册规则只参与常量求值，不进入发布态数据。\n");
     for face in static_faces {
         let rule = modules.get(&face.parent).map_or_else(
-            || "registry_core::RegistrationRule::ANY".to_owned(),
+            || "::nichlink_core::registry_core::RegistrationRule::ANY".to_owned(),
             |parent| format!("{parent}::REGISTRATION.registry_rule"),
         );
         writeln!(
             output,
-            "const _: () = registry_core::assert_static_registration({rule}, {}::REGISTRATION);",
+            "const _: () = ::nichlink_core::registry_core::assert_static_registration({rule}, {}::REGISTRATION);",
             face.module
         )
         .unwrap();
     }
     output.push_str(
-        "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[registry_core::StaticGraftCut] = &[\n",
+        "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[::nichlink_core::registry_core::StaticGraftCut] = &[\n",
     );
     for graft in grafts {
         writeln!(
             output,
-            "    registry_core::StaticGraftCut::new({:?}, {:?}, {}),",
+            "    ::nichlink_core::registry_core::StaticGraftCut::new({:?}, {:?}, {}),",
             graft.cut, graft.graft, graft.full
         )
         .unwrap();
     }
     output.push_str("];\n\n");
-    output.push_str("pub static BUILTIN_STATIC_PLAN: registry_core::StaticPlan = registry_core::StaticPlan::with_grafts(BUILTIN_STATIC_FACES, BUILTIN_GRAFT_CUTS);\n\n");
-    output.push_str("pub const fn builtin_static_plan() -> &'static registry_core::StaticPlan { &BUILTIN_STATIC_PLAN }\n");
+    output.push_str("pub static BUILTIN_STATIC_PLAN: ::nichlink_core::registry_core::StaticPlan = ::nichlink_core::registry_core::StaticPlan::with_grafts(BUILTIN_STATIC_FACES, BUILTIN_GRAFT_CUTS);\n\n");
+    output.push_str("pub const fn builtin_static_plan() -> &'static ::nichlink_core::registry_core::StaticPlan { &BUILTIN_STATIC_PLAN }\n");
     output.push_str("\npub fn registrations() -> Vec<RegistrationInfo> {\n    vec![\n");
     for face in static_faces {
         writeln!(output, "        {}::REGISTRATION,", face.module).unwrap();
@@ -97,7 +97,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{ crate::registry_core::__nichlink_object! {{ $($tokens)* }} }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{ ::nichlink_core::__nichlink_object! {{ $($tokens)* }} }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -289,7 +289,7 @@ mod tests {
         assert!(output.contains("macro_rules! workspace_object"));
         assert!(output.contains("macro_rules! panel_object"));
         assert!(output.contains("macro_rules! control_object"));
-        assert!(output.contains("crate::registry_core::__nichlink_object!"));
+        assert!(output.contains("::nichlink_core::__nichlink_object!"));
         assert!(output.contains("#[allow(unused_macros)]"));
         assert!(output.contains("#[allow(unused_imports)]"));
         fs::remove_dir_all(root).expect("temporary fixture cleanup");

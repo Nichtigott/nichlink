@@ -39,7 +39,7 @@ NodeEditor -> Canvas2D -> WGPU
 
 - `nichlink-core`：Registry、合同、admission、graft 和事务；
 - `nichlink-build`：目录发现、粗修和静态计划；
-- `nichlink-cli`：统一命令行入口（`nichlink new/studio/mcp`）；
+- `nichlink-cli`：统一命令行入口（`nichlink new/check/build/studio/mcp`）；
 - `nichlink-debug`：MIR 候选、CallTrace 和数据流证据；
 - `nichlink-studio`：常驻 Ratatui 调试界面；
 - `nichlink-mcp`：给 AI 使用的紧凑查询入口；

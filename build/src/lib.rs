@@ -498,6 +498,26 @@ pub fn run() {
     pipeline::run(&input);
 }
 
+/// Run the discovery and validation pipeline for an explicit host project,
+/// outside a Cargo build script. `out_dir` receives the generated plan and
+/// manifests; when validation fails the rendered diagnostics are returned.
+/// 在 Cargo build script 之外为显式指定的宿主项目运行发现与校验管线。
+/// `out_dir` 接收生成的计划与清单；校验失败时返回渲染后的诊断。
+pub fn run_for(manifest: &Path, out_dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(out_dir)
+        .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
+    let input = BuildInput {
+        manifest: manifest.to_path_buf(),
+        src: manifest.join("src"),
+        out_dir: out_dir.to_path_buf(),
+        emit_cargo_directives: false,
+    };
+    match pipeline::run(&input) {
+        Some(diagnostics) => Err(diagnostics),
+        None => Ok(()),
+    }
+}
+
 /// Keep a reusable discovery snapshot outside Cargo's ephemeral OUT_DIR.
 /// 将发现结果保存在 Cargo 临时 OUT_DIR 之外，供后续构建复用。
 ///

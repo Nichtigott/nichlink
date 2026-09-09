@@ -12,6 +12,11 @@ fn main() {
 }
 ```
 
+渲染出的计划落在 Cargo 的 `OUT_DIR` 中；宿主 crate 根部用
+`nichlink_core::host!();` 引入——等价于
+`include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`——使整个 crate 内
+可用 `builtin_static_plan()` 与各层级的 `{name}_object!` 别名。
+
 可选入口使用语法解析而不是文本搜索：
 
 ```rust

@@ -94,7 +94,7 @@ pub fn project_files(
 ) -> Vec<(&'static str, String)> {
     let (core_dependency, build_dependency) = dependency_specs(source);
     let prelude = format!(
-        "pub use nichlink_core::{{application, external_object}};\n\npub mod registry_core {{\n    pub use nichlink_core::*;\n}}\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n{}",
+        "nichlink_core::host!();\n{}",
         if kind == ProjectKind::Library {
             ""
         } else {

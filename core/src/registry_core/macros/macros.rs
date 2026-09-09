@@ -11,6 +11,28 @@ macro_rules! application {
     };
 }
 
+/// Declare this crate as a NichLink host and pull in the registration plan
+/// captured at build time.
+/// 声明当前 crate 为 NichLink 宿主，并引入构建时捕获的注册计划。
+///
+/// `nichlink-build` renders the discovered registration tree to
+/// `OUT_DIR/generated_lib.rs`; this macro includes it at the crate root so
+/// `builtin_static_plan()` and the per-level `{name}_object!` aliases are
+/// available crate-wide. It expands to
+/// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))` — writing that
+/// line directly is an equivalent, advanced alternative.
+/// `nichlink-build` 把发现的注册树渲染到 `OUT_DIR/generated_lib.rs`；
+/// 此宏将其包含到 crate 根，使 `builtin_static_plan()` 与各层级的
+/// `{name}_object!` 别名在整个 crate 内可用。它展开为
+/// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
+/// 直接书写该行是等价的高级写法。
+#[macro_export]
+macro_rules! host {
+    () => {
+        include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
+    };
+}
+
 /// Declare graft selectors for build-time capture without constructing a
 /// runtime `GraftPlan`.
 /// 声明供构建阶段捕获的 graft selector，不构造运行时 `GraftPlan`。

@@ -13,6 +13,8 @@ cd my-app && nichlink studio
 | 命令 | 作用 |
 | --- | --- |
 | `nichlink new <name> [--lib] [--path <workspace> \| --git <url>]` | 在 `./<name>` 生成 NichLink 宿主项目 |
+| `nichlink check [path]` | 不做编译，运行注册发现与校验 |
+| `nichlink build [path] [cargo 选项]` | 先校验注册树，再运行 `cargo build` |
 | `nichlink studio` | 为当前项目启动 Studio TUI |
 | `nichlink mcp` | 运行只读 MCP stdio 桥 |
 

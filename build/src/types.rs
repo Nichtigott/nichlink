@@ -12,6 +12,11 @@ pub(crate) struct BuildInput {
     pub(crate) manifest: PathBuf,
     pub(crate) src: PathBuf,
     pub(crate) out_dir: PathBuf,
+    /// Whether to emit `cargo:` directives on stdout. Cargo build scripts set
+    /// this; standalone CLI runs leave it off.
+    /// 是否在 stdout 输出 `cargo:` 指令。Cargo build script 置位；独立 CLI
+    /// 运行时不输出。
+    pub(crate) emit_cargo_directives: bool,
 }
 
 impl BuildInput {
@@ -24,6 +29,7 @@ impl BuildInput {
             manifest,
             src,
             out_dir,
+            emit_cargo_directives: true,
         }
     }
 }

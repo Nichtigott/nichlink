@@ -13,6 +13,8 @@ cd my-app && nichlink studio
 | Command | Action |
 | --- | --- |
 | `nichlink new <name> [--lib] [--path <workspace> \| --git <url>]` | Scaffold a NichLink host project in `./<name>` |
+| `nichlink check [path]` | Run the registration discovery and validation pass without compiling |
+| `nichlink build [path] [cargo options]` | Validate the registration tree, then run `cargo build` |
 | `nichlink studio` | Launch the Studio TUI for the current project |
 | `nichlink mcp` | Run the read-only MCP stdio bridge |
 

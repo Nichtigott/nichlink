@@ -7,7 +7,7 @@ use super::{
     write_pruning_manifest, write_source_scope_manifest,
 };
 
-pub(crate) fn run(input: &BuildInput) {
+pub(crate) fn run(input: &BuildInput) -> Option<String> {
     let manifest = &input.manifest;
     let src = &input.src;
     let nodes = discover_root(src);
@@ -42,12 +42,14 @@ pub(crate) fn run(input: &BuildInput) {
         &out_dir.join("discovery.fingerprint"),
         &discovery_fingerprint,
     );
-    if let Some(status) = cache_status_line(
-        &cache_state,
-        &discovery_fingerprint,
-        build_output_is_verbose(),
-    ) {
-        println!("cargo:warning={status}");
+    if input.emit_cargo_directives {
+        if let Some(status) = cache_status_line(
+            &cache_state,
+            &discovery_fingerprint,
+            build_output_is_verbose(),
+        ) {
+            println!("cargo:warning={status}");
+        }
     }
     materialize_sources(src, &nodes, out_dir);
     write_pruning_manifest(src, &nodes, out_dir);
@@ -55,14 +57,21 @@ pub(crate) fn run(input: &BuildInput) {
     write_source_scope_manifest(src, &nodes, &scope, out_dir);
     write_graft_manifest(out_dir, &grafts);
     write_if_changed(&out_dir.join("generated_lib.rs"), &generated);
-    emit_rerun_paths(src, &nodes);
-    println!("cargo:rerun-if-env-changed=NICH_LINK_SCOPE");
-    println!("cargo:rerun-if-env-changed=NICH_LINK_ENTRY");
-    println!("cargo:rerun-if-env-changed=NICH_LINK_BUILD_VERBOSE");
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest.join("Cargo.toml").display()
-    );
+    if input.emit_cargo_directives {
+        emit_rerun_paths(src, &nodes);
+        println!("cargo:rerun-if-env-changed=NICH_LINK_SCOPE");
+        println!("cargo:rerun-if-env-changed=NICH_LINK_ENTRY");
+        println!("cargo:rerun-if-env-changed=NICH_LINK_BUILD_VERBOSE");
+        println!(
+            "cargo:rerun-if-changed={}",
+            manifest.join("Cargo.toml").display()
+        );
+    }
+    if compile_errors.is_empty() {
+        None
+    } else {
+        Some(compile_errors.render())
+    }
 }
 
 fn build_output_is_verbose() -> bool {
@@ -90,5 +99,39 @@ mod tests {
             cache_status_line("hit", "abc", true).as_deref(),
             Some("nichlink discovery cache hit (abc)")
         );
+    }
+
+    #[test]
+    fn run_for_validates_outside_cargo_and_reports_diagnostics() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("nichlink-run-for-{suffix}"));
+        let manifest = root.join("host");
+        std::fs::create_dir_all(manifest.join("src")).expect("src");
+        let out = root.join("out");
+
+        // An empty host has no registration faces; validation succeeds.
+        assert!(crate::run_for(&manifest, &out).is_ok());
+
+        // Two faces declaring the same stable_name fail with rendered
+        // diagnostics instead of `cargo:` directive noise. Faces follow the
+        // `<name>/<name>.rs` layout.
+        let face = |kind: &str| {
+            format!("crate::root_object! {{\n    kind: {kind},\n    stable_name: \"dup\",\n}}\n")
+        };
+        for (dir, kind) in [("one", "One"), ("two", "Two")] {
+            let folder = manifest.join("src").join(dir);
+            std::fs::create_dir_all(&folder).expect("face folder");
+            std::fs::write(folder.join(format!("{dir}.rs")), face(kind)).expect("write face");
+        }
+        let error = crate::run_for(&manifest, &out).expect_err("duplicate stable_name must fail");
+        assert!(
+            error.contains("duplicate stable_name"),
+            "unexpected diagnostics: {error}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

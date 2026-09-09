@@ -4,7 +4,7 @@
 
 ## 从旧的多功能布局迁移
 
-注册协议位于 `nichlink-core`；构建发现、身份缓存、scope 和 `StaticPlan` 位于 `nichlink-build`；MIR 和数据流证据位于 `nichlink-debug`；TUI 位于 `nichlink-studio`；隔离插件执行位于 `nichlink-plugin-host`；统一命令行入口（`nichlink new/studio/mcp`）位于 `nichlink-cli`。
+注册协议位于 `nichlink-core`；构建发现、身份缓存、scope 和 `StaticPlan` 位于 `nichlink-build`；MIR 和数据流证据位于 `nichlink-debug`；TUI 位于 `nichlink-studio`；隔离插件执行位于 `nichlink-plugin-host`；统一命令行入口（`nichlink new/check/build/studio/mcp`）位于 `nichlink-cli`。
 
 应用通过 `Registry::root_for_namespace` 提供自己的根 Registry。release 使用宿主生成的 `StaticPlan`，本 workspace 不提供固定的 `root_registry`。
 

@@ -11,6 +11,12 @@ Call `nichlink_build::run()` from the host crate's `build.rs`. The build process
 uses the host package's `CARGO_PKG_NAME` as the identity namespace, matching the
 identity captured by `nichlink-core` declaration macros.
 
+The rendered plan lands in Cargo's `OUT_DIR`. The host crate root pulls it in
+with `nichlink_core::host!();` — equivalently
+`include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))` — making
+`builtin_static_plan()` and the per-level `{name}_object!` aliases available
+crate-wide.
+
 The optional host entry is parsed as Rust syntax, not text search:
 
 ```rust

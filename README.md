@@ -143,12 +143,11 @@ fn main() {
 In the crate root, connect the generated plan once:
 
 ```rust
-pub mod registry_core {
-    pub use nichlink_core::*;
-}
-
-include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
+nichlink_core::host!();
 ```
+
+This expands to `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`;
+writing the include directly is an equivalent, advanced alternative.
 
 `main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
 framework library uses `src/lib.rs`. The build adapter scans the host crate's
@@ -669,10 +668,12 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
 ```
 
 The command-line surface is intentionally small. `nichlink` is the unified
-entry point: `nichlink new` scaffolds host projects, `nichlink studio` is the
-interactive authoring/debug surface, and `nichlink mcp` is the read-only
-JSON-RPC/MCP bridge for AI clients. `cargo check` remains the build validation
-command:
+entry point: `nichlink new` scaffolds host projects, `nichlink check` runs the
+registration discovery and validation pass without a full compile, `nichlink
+build` validates the registration tree and then invokes `cargo build`,
+`nichlink studio` is the interactive authoring/debug surface, and `nichlink
+mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
+remains the build validation command:
 
 ```sh
 cargo check
@@ -734,7 +735,7 @@ path collects nothing unless the application opts in.
 ```text
 core/         nichlink-core: Registry, contracts, admission, grafts, macros
 build/        nichlink-build: source discovery, cache, coarse StaticPlan
-cli/          nichlink-cli: unified entry (nichlink new/studio/mcp, cargo-nichlink)
+cli/          nichlink-cli: unified entry (nichlink new/check/build/studio/mcp, cargo-nichlink)
 debug/        optional CallTrace, MIR evidence, data-flow and graph adapters
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries
