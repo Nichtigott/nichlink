@@ -570,6 +570,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nichlink-cli"
+version = "0.1.0"
+dependencies = [
+ "nichlink-build",
+ "nichlink-mcp",
+ "nichlink-studio",
+]
+
+[[package]]
 name = "nichlink-core"
 version = "0.1.0"
 dependencies = [
@@ -611,6 +620,7 @@ name = "nichlink-studio"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "nichlink-build",
  "nichlink-core",
  "nichlink-debug",
  "notify",

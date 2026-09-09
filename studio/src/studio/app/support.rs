@@ -4,8 +4,6 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-const NICHLINK_REPOSITORY: &str = "https://github.com/Nichtigott/nichlink";
-
 #[derive(Clone)]
 struct ProjectContext {
     root: PathBuf,
@@ -103,39 +101,6 @@ pub(super) fn host_manifest() -> PathBuf {
         };
     }
     package_root().join("Cargo.toml")
-}
-
-/// Select portable Git dependencies for installed Studio binaries. Path
-/// dependencies are reserved for a binary running from this checkout's own
-/// target directory; Cargo's Git cache also contains sibling crates, but must
-/// never leak into a generated manifest.
-pub(super) fn nichlink_dependency_specs(
-    studio_manifest: &Path,
-    current_exe: &Path,
-) -> (String, String) {
-    let workspace = studio_manifest.parent().unwrap_or_else(|| Path::new("."));
-    let runs_from_workspace = current_exe.starts_with(workspace.join("target"));
-    if runs_from_workspace && workspace.join("core").is_dir() && workspace.join("build").is_dir() {
-        let core = toml_path(&workspace.join("core"));
-        let build = toml_path(&workspace.join("build"));
-        (
-            format!("nichlink-core = {{ package = \"nichlink-core\", path = \"{core}\" }}"),
-            format!("nichlink-build = {{ path = \"{build}\" }}"),
-        )
-    } else {
-        (
-            format!(
-                "nichlink-core = {{ package = \"nichlink-core\", git = \"{NICHLINK_REPOSITORY}\", branch = \"main\", version = \"0.1.0\" }}"
-            ),
-            format!(
-                "nichlink-build = {{ git = \"{NICHLINK_REPOSITORY}\", branch = \"main\", version = \"0.1.0\" }}"
-            ),
-        )
-    }
-}
-
-fn toml_path(path: &Path) -> String {
-    path.display().to_string().replace('\\', "\\\\")
 }
 
 use super::*;

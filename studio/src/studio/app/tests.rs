@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
 
-use super::support::{host_manifest, nichlink_dependency_specs, package_root, select_project};
+use super::support::{host_manifest, package_root, select_project};
 use super::{
     AddState, App, Overlay, SearchState, StudioPage, advance_graph_focus,
     app_function_source_range, body_calls, function_bodies, function_symbols, visible_search_rows,
@@ -273,10 +273,11 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
     std::fs::create_dir_all(checkout.join("build")).expect("build sibling");
     std::fs::create_dir_all(checkout.join("studio")).expect("studio sibling");
 
-    let (core, build) = nichlink_dependency_specs(
-        &checkout.join("studio/Cargo.toml"),
+    let source = nichlink_build::scaffold::detected_source(
+        &checkout.join("studio"),
         &checkout.join("outside-bin/nichlink-studio"),
     );
+    let (core, build) = nichlink_build::scaffold::dependency_specs(&source);
 
     assert!(core.contains("git = \"https://github.com/Nichtigott/nichlink\""));
     assert!(build.contains("branch = \"main\""));

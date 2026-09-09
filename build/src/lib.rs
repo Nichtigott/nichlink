@@ -47,6 +47,8 @@ mod pipeline;
 mod registration_check;
 #[path = "renderer.rs"]
 mod renderer;
+#[path = "scaffold.rs"]
+pub mod scaffold;
 #[path = "static_plan.rs"]
 mod static_plan;
 #[path = "types.rs"]

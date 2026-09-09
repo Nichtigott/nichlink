@@ -6,10 +6,10 @@
 NichLink work. It uses newline-delimited JSON-RPC over stdin/stdout and keeps
 all diagnostics on stderr so it can be attached directly to an MCP client.
 
-Run it from a host project:
+Run it from a host project (or `nichlink mcp` via the `nichlink-cli` package):
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
 The server exposes compact, read-only tools:

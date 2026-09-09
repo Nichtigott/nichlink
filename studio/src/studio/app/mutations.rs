@@ -1,9 +1,7 @@
 //! App mutations and editor handoff.
 //! App 文件变更与编辑器交接。
 
-use super::support::{
-    nichlink_dependency_specs, package_root, select_project, with_authoring_context,
-};
+use super::support::{package_root, select_project, with_authoring_context};
 use super::*;
 
 impl App {
@@ -35,43 +33,17 @@ impl App {
                 .unwrap_or_else(|_| std::path::PathBuf::from("."))
                 .join(root)
         };
-        if root.exists()
-            && std::fs::read_dir(&root)
-                .map(|mut entries| entries.next().is_some())
-                .unwrap_or(true)
-        {
-            self.event = format!("New project failed: {} is not empty", root.display());
-            return;
-        }
-        let studio_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let current_exe = std::env::current_exe().unwrap_or_default();
-        let (core_dependency, build_dependency) =
-            nichlink_dependency_specs(&studio_manifest, &current_exe);
-        let crate_source = if kind == "library" {
-            "src/lib.rs"
+        let source = nichlink_build::scaffold::detected_source(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            &std::env::current_exe().unwrap_or_default(),
+        );
+        let kind = if kind == "library" {
+            nichlink_build::scaffold::ProjectKind::Library
         } else {
-            "src/main.rs"
+            nichlink_build::scaffold::ProjectKind::Binary
         };
-        let prelude = format!(
-            "pub use nichlink_core::{{application, external_object}};\n\npub mod registry_core {{\n    pub use nichlink_core::*;\n}}\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n{}",
-            if kind == "library" {
-                ""
-            } else {
-                "\nfn main() { println!(\"registered faces: {}\", builtin_static_plan().len()); }"
-            }
-        );
-        let cargo = format!(
-            "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{core_dependency}\n\n[build-dependencies]\n{build_dependency}\n"
-        );
-        let files = [
-            ("Cargo.toml", cargo),
-            (
-                "build.rs",
-                "fn main() { nichlink_build::run(); }\n".to_owned(),
-            ),
-            (crate_source, prelude),
-        ];
-        if let Err(error) = write_project_files(&root, &files) {
+        if let Err(error) = nichlink_build::scaffold::create_project(&root, package, kind, &source)
+        {
             self.event = format!("New project failed: {error}");
             return;
         }
@@ -394,20 +366,4 @@ impl App {
             )),
         }
     }
-}
-
-fn write_project_files(root: &std::path::Path, files: &[(&str, String)]) -> Result<(), String> {
-    std::fs::create_dir_all(root)
-        .map_err(|error| format!("cannot create {}: {error}", root.display()))?;
-    for (relative, content) in files {
-        let path = root.join(relative);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-        }
-        if let Err(error) = std::fs::write(&path, content) {
-            return Err(format!("cannot write {}: {error}", path.display()));
-        }
-    }
-    Ok(())
 }

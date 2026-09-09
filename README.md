@@ -72,18 +72,27 @@ explicitly.
 
 There are two supported ways to try NichLink.
 
-### Install the Studio binary
+### Install the NichLink CLI
 
-This keeps the NichLink source outside your application. Install the Ratatui
-tool from the Git repository, then point it at the project you want to inspect:
+This keeps the NichLink source outside your application. Install the CLI from
+the Git repository; it provides the `nichlink` command, including `nichlink
+studio` for the Ratatui Studio:
 
 ```sh
-cargo install --git https://github.com/Nichtigott/nichlink --bin nichlink-studio nichlink-studio
-cd /work/my-app
-NICH_LINK_PACKAGE_ROOT="$PWD" nichlink-studio
+cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli
+nichlink new my-app
+cd my-app && nichlink studio
 ```
 
-For a released crate, replace the Git source with `cargo install nichlink-studio`.
+For a released crate, replace the Git source with `cargo install nichlink-cli`.
+The plugin binary also answers to `cargo nichlink <command>`. To inspect an
+existing project instead, point the CLI at it:
+
+```sh
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
+```
+
+The standalone `nichlink-studio` binary remains available for direct installs.
 
 ### Run from a clone
 
@@ -92,13 +101,13 @@ This is handy while developing NichLink itself and does not install anything:
 ```sh
 git clone https://github.com/Nichtigott/nichlink
 cd nichlink
-cargo run -p nichlink-studio
+cargo run -p nichlink-cli -- studio
 ```
 
 To inspect another project from the clone:
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-studio
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-cli -- studio
 ```
 
 Studio's `n` action creates a binary or library project. It writes the manifest,
@@ -659,13 +668,15 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
   cargo run -p nichlink-studio --bin nichlink-dev -- watch
 ```
 
-The command-line surface is intentionally small. `cargo check` is the build
-validation command, `nichlink-mcp` is the read-only JSON-RPC/MCP bridge for AI
-clients, and Studio is the interactive authoring/debug surface:
+The command-line surface is intentionally small. `nichlink` is the unified
+entry point: `nichlink new` scaffolds host projects, `nichlink studio` is the
+interactive authoring/debug surface, and `nichlink mcp` is the read-only
+JSON-RPC/MCP bridge for AI clients. `cargo check` remains the build validation
+command:
 
 ```sh
 cargo check
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
 MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
@@ -723,6 +734,7 @@ path collects nothing unless the application opts in.
 ```text
 core/         nichlink-core: Registry, contracts, admission, grafts, macros
 build/        nichlink-build: source discovery, cache, coarse StaticPlan
+cli/          nichlink-cli: unified entry (nichlink new/studio/mcp, cargo-nichlink)
 debug/        optional CallTrace, MIR evidence, data-flow and graph adapters
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries

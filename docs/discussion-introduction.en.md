@@ -18,7 +18,7 @@ crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_
 
 A typical replacement looks like `NodeEditor -> Canvas2D -> WGPU`: a new `Canvas2D` must satisfy the old input, output, and structural contracts before the graft is published.
 
-The repository contains `nichlink-core`, `nichlink-build`, `nichlink-debug`, `nichlink-studio`, `nichlink-mcp`, and `nichlink-plugin-host`.
+The repository contains `nichlink-core`, `nichlink-build`, `nichlink-cli`, `nichlink-debug`, `nichlink-studio`, `nichlink-mcp`, and `nichlink-plugin-host`.
 
 I would value feedback on three points:
 

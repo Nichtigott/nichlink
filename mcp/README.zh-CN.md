@@ -5,8 +5,11 @@
 `nichlink-mcp` 是面向 AI 辅助开发的轻量 Model Context Protocol 服务。它通过 stdin/stdout 传输逐行 JSON-RPC，把诊断写到 stderr，能直接挂到 MCP 客户端。
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
+
+（`nichlink` 命令由 `nichlink-cli` package 提供；也可在本仓库内
+`cargo run -p nichlink-mcp` 运行。）
 
 只读工具包括：
 

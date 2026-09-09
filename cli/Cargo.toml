@@ -1,0 +1,27 @@
+[package]
+name = "nichlink-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "NichLink command-line interface: project scaffolding, Studio, and the MCP bridge"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-cli"
+autobins = false
+
+[dependencies]
+nichlink-build = { path = "../build", version = "0.1.0" }
+nichlink-mcp = { path = "../mcp", version = "0.1.0" }
+nichlink-studio = { path = "../studio", version = "0.1.0" }
+
+[lib]
+name = "nichlink_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nichlink"
+path = "src/bin/nichlink.rs"
+
+[[bin]]
+name = "cargo-nichlink"
+path = "src/bin/cargo-nichlink.rs"

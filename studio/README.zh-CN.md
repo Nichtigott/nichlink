@@ -2,7 +2,9 @@
 
 [English](README.md) | 简体中文
 
-`nichlink-studio` 是独立的 Ratatui 注册面编辑和诊断工具。
+`nichlink-studio` 是独立的 Ratatui 注册面编辑和诊断工具。终端用户通常通过
+统一 CLI 使用它（`nichlink-cli` 提供的 `nichlink studio`）；本 crate 同时
+保留 `nichlink-studio` 二进制和 `nichlink-dev` 重建监督器。
 
 ```sh
 cargo run --manifest-path studio/Cargo.toml

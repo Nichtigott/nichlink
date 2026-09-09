@@ -8,6 +8,7 @@ The registration protocol stays in `nichlink-core`. Build-time discovery,
 identity caching, scope calculation, and `StaticPlan` generation are now in
 `nichlink-build`; MIR and data-flow evidence are in `nichlink-debug`; the TUI
 is in `nichlink-studio`; isolated plugin execution is in `nichlink-plugin-host`.
+The unified command-line entry (`nichlink new/studio/mcp`) is in `nichlink-cli`.
 
 Applications provide their own root registry through
 `Registry::root_for_namespace`. Release builds consume the host application's

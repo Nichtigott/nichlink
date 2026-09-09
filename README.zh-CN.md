@@ -60,18 +60,25 @@ NichLink 目前处于早期阶段：核心协议已可用于真实工程，静�
 
 有两种方式可以试用 NichLink。
 
-### 方式一：安装 Studio 工具
+### 方式一：安装 NichLink CLI
 
-这种方式不会把 NichLink 源码放进你的应用目录。先安装 Ratatui 工具，再
-把它指向要检查的项目：
+这种方式不会把 NichLink 源码放进你的应用目录。先安装 CLI，它提供
+`nichlink` 命令（包含 Ratatui Studio 的 `nichlink studio` 子命令）：
 
 ```sh
-cargo install --git https://github.com/Nichtigott/nichlink --bin nichlink-studio nichlink-studio
-cd /work/my-app
-NICH_LINK_PACKAGE_ROOT="$PWD" nichlink-studio
+cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli
+nichlink new my-app
+cd my-app && nichlink studio
 ```
 
-发布到 crates.io 后，可以把 Git 地址替换为 `cargo install nichlink-studio`。
+发布到 crates.io 后，可以把 Git 地址替换为 `cargo install nichlink-cli`。
+插件二进制同时支持 `cargo nichlink <命令>` 形式。如果要检查已有项目：
+
+```sh
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
+```
+
+独立的 `nichlink-studio` 二进制仍可单独安装。
 
 ### 方式二：直接克隆源码运行
 
@@ -80,13 +87,13 @@ NICH_LINK_PACKAGE_ROOT="$PWD" nichlink-studio
 ```sh
 git clone https://github.com/Nichtigott/nichlink
 cd nichlink
-cargo run -p nichlink-studio
+cargo run -p nichlink-cli -- studio
 ```
 
 从源码仓库检查另一个项目：
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-studio
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-cli -- studio
 ```
 
 Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo 清单、
@@ -604,12 +611,13 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
   cargo run -p nichlink-studio --bin nichlink-dev -- watch
 ```
 
-命令行入口刻意保持精简：`cargo check` 负责构建校验，`nichlink-mcp` 是给 AI
-客户端使用的只读 JSON-RPC/MCP 桥，Studio 负责交互式编辑和调试：
+命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
+项目，`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给 AI
+客户端使用的只读 JSON-RPC/MCP 桥。`cargo check` 仍是构建校验命令：
 
 ```sh
 cargo check
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-mcp
+NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
 MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
@@ -662,6 +670,7 @@ let detailed = nichlink_core::CallTrace::full();
 ```text
 core/         nichlink-core：Registry、合同、准入、graft、声明宏
 build/        nichlink-build：源码发现、缓存、第一阶段 StaticPlan
+cli/          nichlink-cli：统一入口（nichlink new/studio/mcp、cargo-nichlink）
 debug/        可选 CallTrace、MIR 证据、数据流和图适配器
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的只读 MCP 桥
