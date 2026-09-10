@@ -317,6 +317,7 @@ mod tests {
     }
 
     fn temporary_directory(label: &str) -> PathBuf {
+        crate::registry_identity::freeze_test_namespace();
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock after Unix epoch")

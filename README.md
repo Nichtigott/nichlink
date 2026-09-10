@@ -630,7 +630,7 @@ ships reproducible checks instead of a fixed benchmark claim:
 
 ```sh
 # Build and index a large Registry
-cargo run --release -p nichlink-core --example scale_audit -- 100000
+cargo run --release -p nichlink-run-method --example scale_audit -- 100000
 
 # fmt, tests, Clippy, docs, release artifacts, symbols, and linker sections
 tools/nichlink-release-audit

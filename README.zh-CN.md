@@ -574,7 +574,7 @@ NichLink core 不会重写任意 Rust 调用点。所谓“静态绑定实现”
 
 ```sh
 # 构造并索引大树
-cargo run --release -p nichlink-core --example scale_audit -- 100000
+cargo run --release -p nichlink-run-method --example scale_audit -- 100000
 
 # fmt、测试、Clippy、文档、release 产物、符号和 linker section
 tools/nichlink-release-audit

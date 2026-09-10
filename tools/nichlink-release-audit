@@ -14,8 +14,8 @@ audit_dir=target/nichlink-audit/release
 mkdir -p "$audit_dir"
 printf 'artifact\tbytes\tdefined_symbols\n' >"$audit_dir/artifacts.tsv"
 
-find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -print0 \
-  | while IFS= read -r -d '' artifact; do
+find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -print \
+  | while IFS= read -r artifact; do
       name=${artifact#target/release/}
       bytes=$(wc -c <"$artifact" | tr -d ' ')
       safe_name=$(printf '%s' "$name" | tr '/' '_')
@@ -68,7 +68,7 @@ if [ -n "${NICH_LINK_FULL_BINARY:-}" ] || [ -n "${NICH_LINK_MINIMAL_BINARY:-}" ]
 fi
 
 start=$(date +%s%N)
-cargo run --quiet --release -p nichlink-core --example scale_audit -- 10000 >/dev/null
+cargo run --quiet --release -p nichlink-run-method --example scale_audit -- 10000 >/dev/null
 end=$(date +%s%N)
 printf 'startup_ms=%s\n' "$(( (end - start) / 1000000 ))"
 printf 'symbol_audit=%s\n' "$audit_dir/artifacts.tsv"

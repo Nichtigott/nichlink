@@ -23,6 +23,21 @@ pub fn set_package_namespace(namespace: String) {
     let _ = PACKAGE_NAMESPACE_OVERRIDE.set(namespace);
 }
 
+/// Pin a deterministic namespace for the whole test process.
+/// 为整个测试进程固定一个确定的命名空间。
+///
+/// The override is first-write-wins. Freezing it at fixture creation means a
+/// concurrent `run_for` test can no longer flip the namespace between another
+/// test's rule-collection and rule-lookup scans, which previously made the
+/// parent-rule lookup miss and rendered empty diagnostics.
+/// 该覆盖是先到先得。在夹具创建时冻结后，并发的 `run_for` 测试就无法在
+/// 另一个测试收集规则与查找规则之间翻转命名空间——那会导致父规则查找
+/// 失配、诊断渲染为空。
+#[cfg(test)]
+pub(crate) fn freeze_test_namespace() {
+    set_package_namespace("nichlink-build-method-tests".to_owned());
+}
+
 /// Return the namespace of the package whose build script is currently running.
 ///
 /// Cargo exposes the consuming package name to a build-script process. Using
