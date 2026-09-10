@@ -35,9 +35,11 @@ jobs:
         run: cargo doc --workspace --no-deps
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
-        run: |
-          cargo package -p nichlink-core --locked --allow-dirty
-          cargo package -p nichlink-build-method --locked --allow-dirty
+        # nichlink-build-method is not packaged here: its versioned dependency
+        # on nichlink-core cannot resolve until nichlink-core is published.
+        # Add `cargo package -p nichlink-build-method --locked --allow-dirty`
+        # after the first crates.io release.
+        run: cargo package -p nichlink-core --locked --allow-dirty
 
   release-audit:
     runs-on: ubuntu-latest
