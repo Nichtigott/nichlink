@@ -2,6 +2,7 @@
 //! 零依赖、编译期计算的 SHA-256 节点身份。
 
 use std::fmt;
+use std::slice::ChunkBy;
 use std::str::FromStr;
 
 /// Version of the identity input and persisted catalog formats.
@@ -195,7 +196,8 @@ pub fn hex_decode(value: &str) -> Option<Vec<u8>> {
     }
     let bytes = value.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len() / 2);
-    for pair in bytes.chunks_exact(2) {
+    let chunk = bytes.as_chunks::<2>().0;
+    for pair in chunk {
         let high = hex_nibble(pair[0])?;
         let low = hex_nibble(pair[1])?;
         decoded.push((high << 4) | low);
