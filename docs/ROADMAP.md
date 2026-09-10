@@ -13,6 +13,11 @@ This roadmap covers NichLink itself. NichUI product work, funding, and community
 - [x] Studio search/inspect/data/compare views and source navigation.
 - [x] Read-only MCP bridge and verified Wasm/process plugin adapters.
 - [x] Cross-platform CI, scale audits, symbol audits, and package checks.
+- [x] Kernel/execution-surface split: one pure kernel (`nichlink-core`) holding
+  protocol vocabulary and pure methods, with thin surfaces
+  (`nichlink-build-method`, `nichlink-run-method`, `nichlink-debug-method`,
+  `nichlink-studio`, `nichlink-mcp`, `nichlink-cli`, `nichlink-plugin-host`)
+  binding those methods to their own contexts.
 
 0.1 is suitable for experiments and selected internal production use. It does not claim complete static analysis for arbitrary Rust programs.
 
@@ -41,6 +46,13 @@ Freeze the first face-field subset, publish schema migrations, and keep `FaceMan
 ### 6. Evidence-aware tooling
 
 Connect MCP and Studio to Registry snapshots, contracts, diagnostics, and live provenance. Keep redaction, trust policy, and evidence level visible in every result.
+
+### 7. Validated MCP authoring tools
+
+Grow the MCP bridge from read-only queries to validated `add` / `edit` /
+`graft` tools. Every write goes through the same kernel admission, contract,
+and topology validation the build surface uses, and reports provenance back to
+the caller.
 
 ## Explicit boundaries
 

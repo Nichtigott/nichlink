@@ -1,0 +1,19 @@
+[package]
+name = "nichlink-debug-method"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Optional MIR, CallTrace, data-flow, and graph evidence for NichLink"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-debug"
+
+[dependencies]
+nichlink-run-method = { path = "../run_method", version = "0.1.0" }
+petgraph = "0.6"
+tracing = "0.1"
+inventory = "0.3.24"
+
+[lib]
+name = "nichlink_debug_method"
+path = "src/lib.rs"

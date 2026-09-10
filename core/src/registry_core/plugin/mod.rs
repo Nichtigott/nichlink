@@ -10,6 +10,8 @@ pub mod graft;
 pub mod manifest;
 #[path = "plugin_policy/plugin_policy.rs"]
 pub mod plugin_policy;
+#[path = "slot/slot.rs"]
+pub mod slot;
 #[path = "trust/trust.rs"]
 pub mod trust;
 

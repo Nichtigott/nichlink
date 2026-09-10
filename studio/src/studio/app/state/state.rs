@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::support::package_root;
-use nichlink::{FACE_FIELD_COUNT, NodeId, Registry};
+use nichlink_run_method::{FACE_FIELD_COUNT, NodeId, Registry};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Focus {
@@ -298,7 +298,7 @@ impl AddState {
         !self.locked_fields.contains(&field)
     }
 
-    pub(super) fn apply_parent_rule(&mut self, rule: &nichlink::OwnedRegistrationRule) {
+    pub(super) fn apply_parent_rule(&mut self, rule: &nichlink_run_method::OwnedRegistrationRule) {
         self.parent_requirements.clear();
         if let Some(preset) = &rule.required_preset {
             self.values[13] = preset.clone();

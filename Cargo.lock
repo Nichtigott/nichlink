@@ -562,9 +562,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "685a9ac4b61f4e728e1d2c6a7844609c16527aeb5e6c865915c08e619c16410f"
 
 [[package]]
-name = "nichlink-build"
+name = "nichlink-build-method"
 version = "0.1.0"
 dependencies = [
+ "nichlink-core",
  "proc-macro2",
  "syn 2.0.119",
 ]
@@ -573,7 +574,7 @@ dependencies = [
 name = "nichlink-cli"
 version = "0.1.0"
 dependencies = [
- "nichlink-build",
+ "nichlink-build-method",
  "nichlink-mcp",
  "nichlink-studio",
 ]
@@ -587,11 +588,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "nichlink-debug"
+name = "nichlink-debug-method"
 version = "0.1.0"
 dependencies = [
  "inventory",
- "nichlink-core",
+ "nichlink-run-method",
  "petgraph",
  "tracing",
 ]
@@ -600,6 +601,7 @@ dependencies = [
 name = "nichlink-mcp"
 version = "0.1.0"
 dependencies = [
+ "nichlink-core",
  "serde_json",
 ]
 
@@ -609,10 +611,18 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "ed25519-dalek",
- "nichlink-core",
+ "nichlink-run-method",
  "tempfile",
  "wasmi",
  "wat",
+]
+
+[[package]]
+name = "nichlink-run-method"
+version = "0.1.0"
+dependencies = [
+ "nichlink-core",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -620,9 +630,9 @@ name = "nichlink-studio"
 version = "0.1.0"
 dependencies = [
  "crossterm",
- "nichlink-build",
- "nichlink-core",
- "nichlink-debug",
+ "nichlink-build-method",
+ "nichlink-debug-method",
+ "nichlink-run-method",
  "notify",
  "ratatui",
 ]

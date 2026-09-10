@@ -9,6 +9,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 mod source_index;
 pub(super) use source_index::function_source_range as app_function_source_range;
 use source_index::*;
+pub(crate) use source_index::{admission_text, function_line, registration_rule_text};
 mod navigation;
 use navigation::*;
 mod sample;
@@ -28,10 +29,10 @@ pub use state::*;
 use support::host_manifest;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
-use nichlink::{
+use nichlink_debug_method::{CallEvidence, CallTrace, MirCall, MirGraph};
+use nichlink_run_method::{
     NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
 };
-use nichlink_debug::{CallEvidence, CallTrace, MirCall, MirGraph};
 
 #[derive(Debug)]
 pub struct App {

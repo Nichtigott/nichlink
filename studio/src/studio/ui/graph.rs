@@ -477,7 +477,7 @@ fn draw_call_tree(
     } else {
         for caller in callers {
             let target = caller.clone();
-            let line = function_start_line(&caller.file, &caller.function).unwrap_or(1);
+            let line = function_line(&caller.file, &caller.function).unwrap_or(1);
             entries.push((
                 vec![Line::from(vec![
                     Span::styled("│  ← ", Style::default().fg(CYAN)),
@@ -535,7 +535,7 @@ fn draw_call_tree(
     } else {
         for callee in callees {
             let target = callee.clone();
-            let line = function_start_line(&callee.file, &callee.function).unwrap_or(1);
+            let line = function_line(&callee.file, &callee.function).unwrap_or(1);
             entries.push((
                 vec![Line::from(vec![
                     Span::styled("   → ", Style::default().fg(CYAN)),
@@ -597,7 +597,7 @@ fn draw_data_flow_panel(
         )));
     } else {
         for local in locals {
-            let id = nichlink::LocalId(local.id);
+            let id = nichlink_run_method::LocalId(local.id);
             let upstream = app
                 .runtime_trace
                 .incoming(id)
@@ -676,14 +676,6 @@ fn draw_data_flow_panel(
         area,
         &mut state,
     );
-}
-
-fn function_start_line(file: &str, function: &str) -> Option<usize> {
-    let source = source_path_for(file);
-    let text = std::fs::read_to_string(source).ok()?;
-    text.lines()
-        .position(|line| line.contains(&format!("{}(", function)))
-        .map(|line| line + 1)
 }
 
 fn wrap_text(text: &str, width: usize) -> Vec<String> {

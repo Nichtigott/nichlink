@@ -4,6 +4,9 @@
 use super::*;
 
 impl App {
+    /// Folded-set filtering is not wired in yet; the parameter is accepted to
+    /// keep the call sites stable.
+    /// 折叠集合过滤尚未接入；为保持调用点稳定先保留该参数。
     pub fn search_rows(&self, query: &str, folded: &BTreeSet<usize>) -> Vec<SearchRow> {
         let mut rows = self.source_symbol_rows(query);
         let _ = folded;
@@ -133,11 +136,6 @@ impl App {
 
     pub(super) fn source_function_line(&self, node: NodeId, function: &str) -> Option<u32> {
         let info = self.registry.find(node)?;
-        let source = source_path_for(&info.source.file);
-        let text = std::fs::read_to_string(source).ok()?;
-        function_symbols(&text)
-            .into_iter()
-            .find(|item| item.name == function)
-            .map(|item| item.line)
+        function_line(&info.source.file, function)
     }
 }

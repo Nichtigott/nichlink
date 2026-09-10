@@ -2,7 +2,7 @@
 //! 插件执行边界上的 Ed25519 验证。
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use nichlink::{PluginManifest, PluginSignatureVerifier};
+use nichlink_run_method::{PluginManifest, PluginSignatureVerifier};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TrustedPublicKey {
@@ -30,7 +30,9 @@ impl Ed25519Verifier {
         self.keys
             .iter()
             .find(|key| key.fingerprint.eq_ignore_ascii_case(fingerprint))
-            .filter(|key| nichlink::sha256_hex(&key.bytes).eq_ignore_ascii_case(key.fingerprint))
+            .filter(|key| {
+                nichlink_run_method::sha256_hex(&key.bytes).eq_ignore_ascii_case(key.fingerprint)
+            })
             .and_then(|key| VerifyingKey::from_bytes(&key.bytes).ok())
     }
 }
@@ -52,28 +54,14 @@ fn decode_signature(value: &str) -> Option<Signature> {
     if value.len() != 128 {
         return None;
     }
-    let mut bytes = [0; 64];
-    let (chunks, remainder) = value.as_bytes().as_chunks::<2>();
-    debug_assert!(remainder.is_empty());
-    for (index, pair) in chunks.iter().enumerate() {
-        bytes[index] = hex(pair[0])? << 4 | hex(pair[1])?;
-    }
+    let bytes: [u8; 64] = nichlink_run_method::hex_decode(value)?.try_into().ok()?;
     Some(Signature::from_bytes(&bytes))
-}
-
-fn hex(value: u8) -> Option<u8> {
-    match value {
-        b'0'..=b'9' => Some(value - b'0'),
-        b'a'..=b'f' => Some(value - b'a' + 10),
-        b'A'..=b'F' => Some(value - b'A' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use ed25519_dalek::{Signer, SigningKey};
-    use nichlink::{FrameworkId, PluginMode, PluginSource, sha256_hex};
+    use nichlink_run_method::{FrameworkId, PluginMode, PluginSource, sha256_hex};
 
     use super::*;
 

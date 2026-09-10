@@ -16,9 +16,9 @@ prototype-fixtures = []
 crossterm = "0.28"
 notify = "7"
 ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
-nichlink-core = { path = "../core", version = "0.1.0", features = ["authoring"] }
-nichlink-debug = { path = "../debug", version = "0.1.0" }
-nichlink-build = { path = "../build", version = "0.1.0" }
+nichlink-run-method = { path = "../run_method", version = "0.1.0", features = ["authoring"] }
+nichlink-debug-method = { path = "../debug_method", version = "0.1.0" }
+nichlink-build-method = { path = "../build_method", version = "0.1.0" }
 
 [[bin]]
 name = "nichlink-studio"

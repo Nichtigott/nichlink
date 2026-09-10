@@ -573,39 +573,6 @@ fn highlight_rust_line(source: &str) -> Line<'static> {
     Line::from(spans)
 }
 
-pub(super) fn format_admission(admission: &nichlink::OwnedAdmission) -> String {
-    if admission.allowed_paths.is_empty() && admission.denied_paths.is_empty() {
-        return "ANY".to_owned();
-    }
-    if !admission.allowed_paths.is_empty() {
-        return format!("allow:{}", admission.allowed_paths.join(","));
-    }
-    format!("deny:{}", admission.denied_paths.join(","))
-}
-
-pub(super) fn format_registration_rule(rule: &nichlink::OwnedRegistrationRule) -> String {
-    let mut clauses = Vec::new();
-    if let Some(preset) = &rule.required_preset {
-        clauses.push(format!("preset:{preset}"));
-    }
-    if !rule.required_parts.is_empty() {
-        clauses.push(format!("parts:{}", rule.required_parts.join(",")));
-    }
-    if !rule.required_exports.is_empty() {
-        clauses.push(format!("exports:{}", rule.required_exports.join(",")));
-    }
-    if !rule.required_handle_traits.is_empty() {
-        clauses.push(format!("handle:{}", rule.required_handle_traits.join(",")));
-    }
-    if !rule.required_part_traits.is_empty() {
-        clauses.push(format!(
-            "part_trait:{}",
-            rule.required_part_traits.join(",")
-        ));
-    }
-    if clauses.is_empty() {
-        "ANY".to_owned()
-    } else {
-        clauses.join(";")
-    }
-}
+pub(super) use crate::studio::app::{
+    admission_text as format_admission, registration_rule_text as format_registration_rule,
+};

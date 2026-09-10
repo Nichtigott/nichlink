@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use nichlink::{PluginAdapter, VerifiedPluginArtifact};
+use nichlink_run_method::{PluginAdapter, VerifiedPluginArtifact};
 use wasmi::{
     Config, Engine, Instance, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder,
 };
@@ -68,10 +68,10 @@ impl WasmBackend {
             let version = abi
                 .call(&mut store, ())
                 .map_err(|error| HostError::Abi(error.to_string()))?;
-            if version != nichlink::PLUGIN_ABI_VERSION as i32 {
+            if version != nichlink_run_method::PLUGIN_ABI_VERSION as i32 {
                 return Err(HostError::Abi(format!(
                     "plugin ABI version {version} is incompatible with host ABI {}",
-                    nichlink::PLUGIN_ABI_VERSION
+                    nichlink_run_method::PLUGIN_ABI_VERSION
                 )));
             }
         }
@@ -164,11 +164,7 @@ impl PluginInstance for WasmInstance {
 }
 
 fn operation_export(operation: &str) -> Result<String, HostError> {
-    if operation.is_empty()
-        || !operation
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-    {
+    if nichlink_run_method::validate_operation_name(operation).is_err() {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(format!("nichlink_{operation}"))

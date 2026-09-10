@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
-use nichlink::{GraftPlan, Registry};
+use nichlink_run_method::{GraftPlan, Registry};
 
 use crate::{HostError, PluginInstance};
 

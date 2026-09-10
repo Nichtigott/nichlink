@@ -6,7 +6,7 @@
 
 The registration protocol stays in `nichlink-core`. Build-time discovery,
 identity caching, scope calculation, and `StaticPlan` generation are now in
-`nichlink-build`; MIR and data-flow evidence are in `nichlink-debug`; the TUI
+`nichlink-build-method`; MIR and data-flow evidence are in `nichlink-debug-method`; the TUI
 is in `nichlink-studio`; isolated plugin execution is in `nichlink-plugin-host`.
 The unified command-line entry (`nichlink new/check/build/studio/mcp`) is in `nichlink-cli`.
 

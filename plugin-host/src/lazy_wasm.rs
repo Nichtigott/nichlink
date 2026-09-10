@@ -3,20 +3,18 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwapOption;
-use nichlink::{
-    FlowContract, FrameworkId, PluginAssurance, PluginMode, PluginSource, VerifiedPluginArtifact,
-};
+use nichlink_run_method::{FlowContract, FrameworkId, PluginMode, VerifiedPluginArtifact};
 
 use crate::{HostError, PluginInstance, WasmBackend, WasmInstance};
 
 /// Trust lane enabled for one runtime plugin slot.
 /// 运行时插件槽允许使用的信任通道。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ValidationChannel {
-    Official,
-    Community,
-    Local,
-}
+///
+/// The definition lives in the kernel `plugin` module; this alias keeps the
+/// historical `nichlink_host::ValidationChannel` path.
+/// 定义本体在 kernel 的 `plugin` 模块；本别名保留
+/// `nichlink_host::ValidationChannel` 历史路径。
+pub use nichlink_run_method::PluginChannel as ValidationChannel;
 
 /// A release-time opening for one Wasm extension or replacement.
 /// 正式发布时保留的一个 Wasm 扩展或替换入口。
@@ -219,60 +217,17 @@ fn validate_artifact(
     channel: ValidationChannel,
     artifact: &VerifiedPluginArtifact,
 ) -> Result<(), HostError> {
-    if !slot.channels.contains(&channel) {
-        return Err(HostError::Policy(format!(
-            "plugin slot `{}` does not allow the {channel:?} channel",
-            slot.name
-        )));
-    }
-    let registration = artifact.registration();
-    let manifest = registration
-        .plugin
-        .ok_or_else(|| HostError::Policy("verified plugin has no manifest".to_owned()))?;
-    if manifest.framework != slot.framework {
-        return Err(HostError::Policy(format!(
-            "plugin targets `{}`, slot `{}` belongs to `{}`",
-            manifest.framework, slot.name, slot.framework
-        )));
-    }
-    if manifest.mode != slot.mode {
-        return Err(HostError::Policy(format!(
-            "plugin mode {:?} does not match slot mode {:?}",
-            manifest.mode, slot.mode
-        )));
-    }
-    match channel {
-        ValidationChannel::Official
-            if manifest.source != PluginSource::Official
-                || artifact.assurance() != PluginAssurance::Signature =>
-        {
-            return Err(HostError::Policy(
-                "official plugins require an official manifest and verified signature".to_owned(),
-            ));
-        }
-        ValidationChannel::Community | ValidationChannel::Local
-            if manifest.source != PluginSource::User =>
-        {
-            return Err(HostError::Policy(
-                "community and local channels accept user manifests only".to_owned(),
-            ));
-        }
-        _ => {}
-    }
-    if slot.mode == PluginMode::Replacement && !registration.flow.is_declared() {
-        return Err(HostError::Contract(
-            "replacement plugin has no flow contract".to_owned(),
-        ));
-    }
-    if slot.contract.is_declared()
-        && !registration
-            .flow
-            .semantically_compatible_with(slot.contract)
-    {
-        return Err(HostError::Contract(format!(
-            "plugin flow {:?} does not match slot flow {:?}",
-            registration.flow, slot.contract
-        )));
-    }
-    Ok(())
+    nichlink_run_method::validate_artifact(
+        slot.name,
+        slot.framework,
+        slot.mode,
+        slot.contract,
+        slot.channels,
+        channel,
+        artifact,
+    )
+    .map_err(|error| match error {
+        nichlink_run_method::SlotValidationError::Policy(message) => HostError::Policy(message),
+        nichlink_run_method::SlotValidationError::Contract(message) => HostError::Contract(message),
+    })
 }

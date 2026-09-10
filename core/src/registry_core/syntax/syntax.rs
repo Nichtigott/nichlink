@@ -397,7 +397,8 @@ fn parse_fields(
     Ok(fields)
 }
 
-fn split_top_level(tokens: TokenStream) -> Vec<TokenStream> {
+#[doc(hidden)]
+pub fn split_top_level(tokens: TokenStream) -> Vec<TokenStream> {
     let mut items = Vec::new();
     let mut current = TokenStream::new();
     for token in tokens {
@@ -464,7 +465,8 @@ fn only_group(tokens: &TokenStream, delimiter: Delimiter) -> Option<proc_macro2:
     (group.delimiter() == delimiter && tokens.next().is_none()).then_some(group)
 }
 
-fn path_to_string(path: &syn::Path) -> String {
+#[doc(hidden)]
+pub fn path_to_string(path: &syn::Path) -> String {
     let mut output = String::new();
     if path.leading_colon.is_some() {
         output.push_str("::");
@@ -486,7 +488,8 @@ fn compact(tokens: &TokenStream) -> String {
         .replace(") ", ")")
 }
 
-fn location(span: Span) -> SyntaxLocation {
+#[doc(hidden)]
+pub fn location(span: Span) -> SyntaxLocation {
     let start = span.start();
     SyntaxLocation {
         line: start.line,
@@ -502,7 +505,8 @@ fn end_location(span: Span) -> SyntaxLocation {
     }
 }
 
-fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
+#[doc(hidden)]
+pub fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
     FaceSyntaxError {
         message: message.into(),
         location: Some(location(span)),
@@ -614,5 +618,325 @@ fn run() {
         assert!(!references.paths.iter().any(|path| path.contains("unused")));
         assert!(!references.paths.iter().any(|path| path.contains("hidden")));
         assert!(!references.conservative);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Application and graft declarations. These extend the face parser with the
+// two host-entry grammars; both build_method and run_method consume them.
+// 应用与嫁接声明。在注册面解析器之上补充两个宿主入口语法；
+// build_method 与 run_method 共同消费。
+
+/// A host-declared external graft cut discovered before code generation.
+/// 在代码生成前从宿主入口发现的一条外部 graft 切口。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraftSyntax {
+    pub cut: String,
+    pub graft: String,
+    pub full: bool,
+    pub location: SyntaxLocation,
+}
+
+/// Return the host entry paths declared with `application!(entry = ...)`.
+/// 返回通过 `application!(entry = ...)` 声明的宿主入口路径。
+///
+/// Parsing the macro token stream keeps comments and string literals out of
+/// discovery. The build step can therefore reject duplicate or malformed
+/// declarations before it attempts scope inference.
+/// 解析宏 token 流可以排除注释和字符串，构建阶段能在推导作用域前拒绝重复或损坏声明。
+pub fn application_entries(source: &str) -> Result<Vec<(String, SyntaxLocation)>, FaceSyntaxError> {
+    let file =
+        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let mut entries = Vec::new();
+    let mut visitor = ApplicationVisitor {
+        entries: &mut entries,
+        error: None,
+    };
+    visitor.visit_file(&file);
+    if let Some(error) = visitor.error {
+        Err(error)
+    } else {
+        Ok(entries)
+    }
+}
+
+/// Parse static and dynamic graft declarations without executing them.
+/// 解析静态和动态 graft 声明，不执行宏。
+pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> {
+    let file =
+        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let mut entries = Vec::new();
+    struct Visitor<'a> {
+        entries: &'a mut Vec<GraftSyntax>,
+        error: Option<FaceSyntaxError>,
+    }
+    impl<'ast> Visit<'ast> for Visitor<'_> {
+        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+            let Some(name) = mac
+                .path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+            else {
+                return;
+            };
+            if !matches!(name.as_str(), "graft_plan" | "static_graft_plan") {
+                return;
+            }
+            let tokens = mac.tokens.clone().into_iter().collect::<Vec<_>>();
+            let mut index = 0;
+            while index < tokens.len() {
+                if !matches!(&tokens[index], TokenTree::Ident(value) if value == "cut") {
+                    index += 1;
+                    continue;
+                }
+                index += 1;
+                let path_token = tokens.get(index).cloned();
+                index += 1;
+                let (path_tokens, path_span, path_text) = match path_token {
+                    Some(TokenTree::Group(group)) => (
+                        group.stream().into_iter().collect::<Vec<_>>(),
+                        group.span(),
+                        None,
+                    ),
+                    Some(TokenTree::Literal(literal)) => {
+                        let text = syn::parse_str::<syn::LitStr>(&literal.to_string())
+                            .map(|value| value.value())
+                            .map_err(|_| {
+                                syntax_error(literal.span(), "graft cut path must be a string")
+                            });
+                        let Ok(text) = text else {
+                            self.error = text.err();
+                            return;
+                        };
+                        (Vec::new(), literal.span(), Some(text))
+                    }
+                    _ => {
+                        self.error = Some(syntax_error(
+                            mac.span(),
+                            "graft cut expects `[path]` or a path string",
+                        ));
+                        return;
+                    }
+                };
+                let (cut, end) = if path_tokens.len() == 3
+                    && matches!(&path_tokens[1], TokenTree::Ident(value) if value == "to")
+                {
+                    let start = syn::parse2::<syn::LitStr>(path_tokens[0].clone().into())
+                        .map_err(|_| syntax_error(path_span, "graft range start must be a string"));
+                    let finish = syn::parse2::<syn::LitStr>(path_tokens[2].clone().into())
+                        .map_err(|_| syntax_error(path_span, "graft range end must be a string"));
+                    match (start, finish) {
+                        (Ok(start), Ok(finish)) => (start.value(), Some(finish.value())),
+                        (Err(error), _) | (_, Err(error)) => {
+                            self.error = Some(error);
+                            return;
+                        }
+                    }
+                } else {
+                    (
+                        path_text.unwrap_or_else(|| {
+                            syn::parse2::<syn::LitStr>(path_tokens.clone().into_iter().collect())
+                                .map(|value| value.value())
+                                .unwrap_or_else(|_| {
+                                    path_tokens
+                                        .iter()
+                                        .map(ToString::to_string)
+                                        .collect::<String>()
+                                })
+                        }),
+                        None,
+                    )
+                };
+                if cut.is_empty() {
+                    self.error = Some(syntax_error(path_span, "graft cut path is empty"));
+                    return;
+                }
+                let full =
+                    matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "full");
+                if full {
+                    index += 1;
+                }
+                if !matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "graft") {
+                    self.error = Some(syntax_error(
+                        mac.span(),
+                        "graft cut expects `graft <implementation>`",
+                    ));
+                    return;
+                }
+                index += 1;
+                let Some(TokenTree::Literal(value)) = tokens.get(index) else {
+                    self.error = Some(syntax_error(
+                        mac.span(),
+                        "graft implementation must be a string literal",
+                    ));
+                    return;
+                };
+                let Ok(graft) = syn::parse_str::<syn::LitStr>(&value.to_string()) else {
+                    self.error = Some(syntax_error(
+                        value.span(),
+                        "graft implementation must be a string literal",
+                    ));
+                    return;
+                };
+                let mut cut = cut;
+                if let Some(end) = end {
+                    cut.push_str(" to ");
+                    cut.push_str(&end);
+                }
+                self.entries.push(GraftSyntax {
+                    cut,
+                    graft: graft.value(),
+                    full,
+                    location: location(mac.span()),
+                });
+                index += 1;
+            }
+        }
+    }
+    let mut visitor = Visitor {
+        entries: &mut entries,
+        error: None,
+    };
+    visitor.visit_file(&file);
+    visitor.error.map_or(Ok(entries), Err)
+}
+
+struct ApplicationVisitor<'a> {
+    entries: &'a mut Vec<(String, SyntaxLocation)>,
+    error: Option<FaceSyntaxError>,
+}
+
+impl<'ast> Visit<'ast> for ApplicationVisitor<'_> {
+    fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
+        if self.error.is_some() {
+            return;
+        }
+        let Some(segment) = item.mac.path.segments.last() else {
+            return;
+        };
+        if segment.ident != "application" {
+            syn::visit::visit_item_macro(self, item);
+            return;
+        }
+        let tokens = split_top_level(item.mac.tokens.clone());
+        if tokens.len() != 1 {
+            self.error = Some(syntax_error(
+                item.mac.span(),
+                "application! expects exactly `entry = <path>`",
+            ));
+            return;
+        }
+        let mut tokens = tokens[0].clone().into_iter();
+        let Some(TokenTree::Ident(name)) = tokens.next() else {
+            self.error = Some(syntax_error(
+                item.mac.span(),
+                "application! entry must start with `entry`",
+            ));
+            return;
+        };
+        if name != "entry"
+            || !matches!(tokens.next(), Some(TokenTree::Punct(punct)) if punct.as_char() == '=')
+        {
+            self.error = Some(syntax_error(
+                name.span(),
+                "application! expects `entry = <path>`",
+            ));
+            return;
+        }
+        let path = tokens.collect::<TokenStream>();
+        let Ok(path) = syn::parse2::<syn::Path>(path) else {
+            self.error = Some(syntax_error(
+                name.span(),
+                "application! entry must be a Rust path",
+            ));
+            return;
+        };
+        self.entries
+            .push((path_to_string(&path), location(item.mac.span())));
+    }
+}
+
+#[cfg(test)]
+mod declaration_tests {
+    use super::{application_entries, graft_entries};
+
+    #[test]
+    fn application_entry_parser_ignores_comments_and_strings() {
+        let source = r#"
+// application!(entry = crate::wrong)
+const TEXT: &str = "application!(entry = crate::also_wrong)";
+nichlink::application!(entry = crate::app::run);
+"#;
+        let entries = application_entries(source).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "crate::app::run");
+        assert_eq!(entries[0].1.line, 4);
+    }
+
+    #[test]
+    fn application_entry_parser_rejects_malformed_declarations() {
+        let error = application_entries("application!(crate::main)").unwrap_err();
+        assert!(!error.message.is_empty());
+    }
+
+    #[test]
+    fn application_entry_parser_keeps_duplicates_visible_to_the_build_policy() {
+        let source = "application!(entry = crate::main); application!(entry = crate::run);";
+        let entries = application_entries(source).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].0, "crate::main");
+        assert_eq!(entries[1].0, "crate::run");
+    }
+
+    #[test]
+    fn graft_parser_collects_single_and_full_cuts() {
+        let source = r#"
+fn application_plan() {
+    let _plan = nichlink::graft_plan!(framework,
+        cut ["root/a1/b2"] graft "canvas_fast",
+        cut ["root/a"] full graft "a_fast",
+    );
+}
+"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].cut, "root/a1/b2");
+        assert!(!entries[0].full);
+        assert_eq!(entries[1].graft, "a_fast");
+        assert!(entries[1].full);
+    }
+
+    #[test]
+    fn graft_parser_keeps_range_endpoints() {
+        let source = r#"nichlink::graft_plan!(framework, cut ["root/a1" to "root/a3"] graft "replacement");"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries[0].cut, "root/a1 to root/a3");
+    }
+
+    #[test]
+    fn graft_parser_accepts_unbracketed_single_cut() {
+        let source = r#"fn plan() { nichlink::graft_plan!(framework, cut "root/a" full graft "replacement"); }"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries[0].cut, "root/a");
+        assert!(entries[0].full);
+    }
+
+    #[test]
+    fn graft_parser_collects_declaration_only_static_plans() {
+        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    cut "root/a" graft "replacement",
+);"#;
+        let entries = graft_entries(source).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].cut, "root/a");
+        assert_eq!(entries[0].graft, "replacement");
+    }
+
+    #[test]
+    fn graft_parser_ignores_removed_macro_names() {
+        let source =
+            r#"fn plan() { nichlink::graft!(framework, cut "root/a" graft "replacement"); }"#;
+        assert!(graft_entries(source).unwrap().is_empty());
     }
 }

@@ -1,15 +1,13 @@
 //! Plugin execution policy and adapter contracts.
 //! 插件执行策略与适配器合同。
+//!
+//! `PluginMode` and `PluginSource` live in the kernel crate because
+//! registration declarations carry them; they are re-exported here.
+//! PluginMode 与 PluginSource 定义在 kernel，此处为兼容而重导出。
+
+pub use nichlink::{PluginMode, PluginSource};
 
 use super::*;
-
-/// Whether a plugin adds a new capability or replaces an existing slot.
-/// 插件是增加能力还是替换已有插槽。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PluginMode {
-    Extension,
-    Replacement,
-}
 
 /// Where plugin code executes. Native code is trusted process code; the other
 /// two modes are explicit isolation choices for untrusted extensions.
@@ -24,35 +22,6 @@ pub enum PluginAdapter {
 impl PluginAdapter {
     pub const fn requires_isolation(self) -> bool {
         !matches!(self, Self::Native)
-    }
-}
-
-/// Where the plugin came from. Trust policy is deliberately separate from
-/// registration structure and flow compatibility.
-/// 插件来源。信任策略与注册结构、数据流兼容性刻意分离。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PluginSource {
-    Official,
-    User,
-}
-
-impl PluginSource {
-    pub(crate) fn parse(value: &str) -> Option<Self> {
-        match value {
-            "official" => Some(Self::Official),
-            "user" => Some(Self::User),
-            _ => None,
-        }
-    }
-}
-
-impl PluginMode {
-    pub(crate) fn parse(value: &str) -> Option<Self> {
-        match value {
-            "extension" => Some(Self::Extension),
-            "replacement" => Some(Self::Replacement),
-            _ => None,
-        }
     }
 }
 

@@ -1,17 +1,25 @@
 //! Parsing and rendering helpers for authored registration faces.
 //! 注册面创作文件的解析与渲染辅助函数。
+//!
+//! Only source-text transformations live here. The two filesystem-bound
+//! entry points (`kind_from_source_path` and `rule_syntax_for_source`) stay
+//! in the run_method authoring shim as thin wrappers around
+//! `kind_from_source_text` / `rule_syntax_from_text`.
+//! 这里只保留源码文本层面的变换。两个绑定文件系统的入口
+//! （`kind_from_source_path` 与 `rule_syntax_for_source`）留在 run_method
+//! 的 authoring shim 中，作为 `kind_from_source_text` 与
+//! `rule_syntax_from_text` 的薄包装。
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::{
     OwnedAdmission, OwnedFlowContract, OwnedRegistrationRule, OwnedRequirementSpec,
     RuntimeCheckSpec, parse_face as parse_face_syntax,
 };
 
-use super::validation::{normalized_path, rust_string, source_root};
+use super::validation::{normalized_path, rust_string};
 
-pub(super) fn module_source_from_node_path(module: &str) -> Option<String> {
+pub fn module_source_from_node_path(module: &str) -> Option<String> {
     let module = module.strip_prefix("crate::").unwrap_or(module);
     let mut segments = module.split("::").filter(|segment| !segment.is_empty());
     let first = segments.next()?;
@@ -25,17 +33,15 @@ pub(super) fn module_source_from_node_path(module: &str) -> Option<String> {
     Some(normalized_path(&path))
 }
 
-/// Read the parent's declared `kind` from its attached source file.
-/// 从父注册面的附属源文件读取它声明的 `kind`。
-pub(super) fn kind_from_source_path(source: &str) -> Option<String> {
-    let path = source_root().join(source);
-    let text = fs::read_to_string(path).ok()?;
-    parse_face_syntax(&text)
+/// Read the declared `kind` out of a registration-face source text.
+/// 从注册面源码文本中读取它声明的 `kind`。
+pub fn kind_from_source_text(text: &str) -> Option<String> {
+    parse_face_syntax(text)
         .ok()?
         .and_then(|face| face.path("kind"))
 }
 
-pub(super) fn quoted_list_field(text: &str, marker: &str) -> Vec<String> {
+pub fn quoted_list_field(text: &str, marker: &str) -> Vec<String> {
     let Some(start) = text.find(marker) else {
         return Vec::new();
     };
@@ -65,31 +71,14 @@ fn quoted_value_field(text: &str, marker: &str) -> Option<String> {
     Some(rest[start..end].to_owned())
 }
 
-pub(super) fn source_path_from_file(path: &Path) -> String {
-    if let Ok(relative) = path.strip_prefix(source_root()) {
-        return normalized_path(relative);
-    }
-    let roots = ["compile_error_demo", "control", "engine", "trimmed_core"];
-    let mut components = path.components();
-    while let Some(component) = components.next() {
-        let text = component.as_os_str().to_string_lossy();
-        if roots.contains(&text.as_ref()) {
-            let mut result = PathBuf::from(text.as_ref());
-            result.extend(components.map(|part| part.as_os_str()));
-            return normalized_path(&result);
-        }
-    }
-    normalized_path(path)
-}
-
-pub(super) fn module_name_from_path(path: &Path) -> String {
+pub fn module_name_from_path(path: &std::path::Path) -> String {
     path.file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or("module")
         .to_owned()
 }
 
-pub(super) fn parse_admission_expression(expression: &str) -> Result<String, String> {
+pub fn parse_admission_expression(expression: &str) -> Result<String, String> {
     let expression = expression.trim().trim_end_matches(',');
     if expression.is_empty() || expression.contains("Admission::ANY") {
         return Ok("ANY".to_owned());
@@ -105,21 +94,15 @@ pub(super) fn parse_admission_expression(expression: &str) -> Result<String, Str
     Err("generated face has an invalid admission expression".to_owned())
 }
 
-pub(super) fn rule_syntax_for_source(path: &Path) -> Result<String, String> {
-    let Some(parent) = path.parent() else {
-        return Ok("ANY".to_owned());
-    };
-    let canonical = parent.join("registry_rule/registry_rule.rs");
-    let legacy = parent.join("registry/rules/rules.rs");
-    let Ok(text) = fs::read_to_string(&canonical).or_else(|_| fs::read_to_string(&legacy)) else {
-        return Ok("ANY".to_owned());
-    };
+/// Reduce a registry-rule source text to its compact syntax form.
+/// 将注册规则源码文本化简为紧凑语法形式。
+pub fn rule_syntax_from_text(text: &str) -> String {
     let expression = text
         .split_once('=')
         .map(|(_, value)| value.trim().trim_end_matches(';'))
         .unwrap_or("");
     if expression.contains("RegistrationRule::ANY") {
-        return Ok("ANY".to_owned());
+        return "ANY".to_owned();
     }
     let mut clauses = Vec::new();
     if let Some(preset) = quoted_value_field(expression, ".require_preset(") {
@@ -136,16 +119,16 @@ pub(super) fn rule_syntax_for_source(path: &Path) -> Result<String, String> {
             clauses.push(format!("{key}:{}", values.join(",")));
         }
     }
-    Ok(if clauses.is_empty() {
+    if clauses.is_empty() {
         "ANY".to_owned()
     } else {
         clauses.join(";")
-    })
+    }
 }
 
 /// Render the compact registration-rule syntax as a const Rust expression.
 /// 将紧凑注册规范语法渲染成 const Rust 表达式。
-pub(super) fn render_registration_rule(value: &str) -> Result<String, String> {
+pub fn render_registration_rule(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok("crate::RegistrationRule::ANY".to_owned());
@@ -175,7 +158,7 @@ pub(super) fn render_registration_rule(value: &str) -> Result<String, String> {
     Ok(expression)
 }
 
-pub(super) fn render_face_list(field: &str, value: &str) -> String {
+pub fn render_face_list(field: &str, value: &str) -> String {
     let values = value
         .split(',')
         .map(str::trim)
@@ -189,7 +172,7 @@ pub(super) fn render_face_list(field: &str, value: &str) -> String {
     }
 }
 
-pub(super) fn render_literal_list(value: &str) -> String {
+pub fn render_literal_list(value: &str) -> String {
     value
         .split(',')
         .map(str::trim)
@@ -199,7 +182,7 @@ pub(super) fn render_literal_list(value: &str) -> String {
         .join(", ")
 }
 
-pub(super) fn render_path_list(value: &str) -> String {
+pub fn render_path_list(value: &str) -> String {
     value
         .split(',')
         .map(str::trim)
@@ -208,7 +191,7 @@ pub(super) fn render_path_list(value: &str) -> String {
         .join(", ")
 }
 
-pub(super) fn render_impls(kind: &str, value: &str) -> String {
+pub fn render_impls(kind: &str, value: &str) -> String {
     value
         .split(',')
         .map(str::trim)
@@ -219,7 +202,7 @@ pub(super) fn render_impls(kind: &str, value: &str) -> String {
 
 /// Derive the human-facing trait labels from compiler-checked Rust paths.
 /// 从参与编译检查的 Rust 路径派生人类可读的 trait 名称。
-pub(super) fn trait_names_from_paths(value: &str) -> Result<String, String> {
+pub fn trait_names_from_paths(value: &str) -> Result<String, String> {
     value
         .split(',')
         .map(str::trim)
@@ -236,7 +219,7 @@ pub(super) fn trait_names_from_paths(value: &str) -> Result<String, String> {
         .map(|names| names.join(","))
 }
 
-pub(super) fn render_requirements(value: &str) -> String {
+pub fn render_requirements(value: &str) -> String {
     value
         .split(',')
         .filter_map(|item| {
@@ -251,7 +234,7 @@ pub(super) fn render_requirements(value: &str) -> String {
         .join(", ")
 }
 
-pub(super) fn render_expression_list(value: &str) -> Result<String, String> {
+pub fn render_expression_list(value: &str) -> Result<String, String> {
     RuntimeCheckSpec::parse_list(value).map(|checks| {
         checks
             .into_iter()
@@ -263,7 +246,7 @@ pub(super) fn render_expression_list(value: &str) -> Result<String, String> {
 
 /// Render the editor's `id|version|input|output` form as a Rust expression.
 /// 将编辑器中的 `id|version|input|output` 形式渲染为 Rust 表达式。
-pub(super) fn render_flow_expression(value: &str) -> Result<String, String> {
+pub fn render_flow_expression(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         return Ok(String::new());
@@ -289,7 +272,7 @@ pub(super) fn render_flow_expression(value: &str) -> Result<String, String> {
 
 /// Parse the compact flow value into an owned contract for a reload snapshot.
 /// 将紧凑 flow 值解析为热重载快照使用的拥有型合同。
-pub(super) fn parse_flow_value(value: &str) -> Result<Option<OwnedFlowContract>, String> {
+pub fn parse_flow_value(value: &str) -> Result<Option<OwnedFlowContract>, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         return Ok(None);
@@ -315,7 +298,7 @@ pub(super) fn parse_flow_value(value: &str) -> Result<Option<OwnedFlowContract>,
 
 /// Render an explicitly selected flow provider type.
 /// 渲染显式选择的数据流合同提供者类型。
-pub(super) fn render_flow_provider(value: &str) -> Result<String, String> {
+pub fn render_flow_provider(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() {
         return Ok(String::new());
@@ -327,7 +310,7 @@ pub(super) fn render_flow_provider(value: &str) -> Result<String, String> {
 
 /// Parse a flow expression back into the editor's compact form.
 /// 将 flow 表达式解析回编辑器使用的紧凑形式。
-pub(super) fn parse_flow_expression(value: &str) -> Result<String, String> {
+pub fn parse_flow_expression(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.ends_with("FlowContract::NONE") {
         return Ok(String::new());
@@ -379,7 +362,7 @@ pub(super) fn parse_flow_expression(value: &str) -> Result<String, String> {
     Ok(format!("{id}|{version}|{input}|{output}"))
 }
 
-pub(super) fn path_ends_with(expression: &syn::Expr, suffix: &str) -> bool {
+pub fn path_ends_with(expression: &syn::Expr, suffix: &str) -> bool {
     let syn::Expr::Path(path) = expression else {
         return false;
     };
@@ -393,7 +376,7 @@ pub(super) fn path_ends_with(expression: &syn::Expr, suffix: &str) -> bool {
     actual.ends_with(suffix)
 }
 
-pub(super) fn literal_string_expr(expression: &syn::Expr) -> Result<String, String> {
+pub fn literal_string_expr(expression: &syn::Expr) -> Result<String, String> {
     let syn::Expr::Lit(literal) = expression else {
         return Err("generated face expects a string literal".to_owned());
     };
@@ -403,7 +386,7 @@ pub(super) fn literal_string_expr(expression: &syn::Expr) -> Result<String, Stri
     Ok(value.value())
 }
 
-pub(super) fn render_optional_source(value: &str) -> Result<String, String> {
+pub fn render_optional_source(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         Ok("None".to_owned())
@@ -412,7 +395,7 @@ pub(super) fn render_optional_source(value: &str) -> Result<String, String> {
     }
 }
 
-pub(super) fn split_csv_owned(value: &str) -> Vec<String> {
+pub fn split_csv_owned(value: &str) -> Vec<String> {
     value
         .split(',')
         .map(str::trim)
@@ -421,7 +404,7 @@ pub(super) fn split_csv_owned(value: &str) -> Vec<String> {
         .collect()
 }
 
-pub(super) fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec> {
+pub fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec> {
     value
         .split(',')
         .filter_map(|item| {
@@ -434,7 +417,7 @@ pub(super) fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec>
         .collect()
 }
 
-pub(super) fn parse_requirements(value: &str) -> Result<(), String> {
+pub fn parse_requirements(value: &str) -> Result<(), String> {
     if value.trim().is_empty() {
         return Ok(());
     }
@@ -449,7 +432,7 @@ pub(super) fn parse_requirements(value: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn parse_optional_source(value: &str) -> Result<(), String> {
+pub fn parse_optional_source(value: &str) -> Result<(), String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         return Ok(());
@@ -460,7 +443,7 @@ pub(super) fn parse_optional_source(value: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRule, String> {
+pub fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRule, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok(OwnedRegistrationRule {
@@ -507,7 +490,7 @@ pub(super) fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistra
     Ok(rule)
 }
 
-pub(super) fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, String> {
+pub fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok(OwnedAdmission {
@@ -535,7 +518,7 @@ pub(super) fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, Strin
     }
 }
 
-pub(super) fn render_admission(value: &str) -> Result<String, String> {
+pub fn render_admission(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok("crate::Admission::ANY".to_owned());

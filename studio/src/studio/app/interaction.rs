@@ -3,8 +3,6 @@
 
 use super::*;
 
-impl App {}
-
 impl App {
     pub fn handle(&mut self, event: Event) {
         match event {

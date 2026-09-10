@@ -3,6 +3,7 @@
 
 use super::support::{package_root, select_project, with_authoring_context};
 use super::*;
+use nichlink_run_method::pascal_case;
 
 impl App {
     pub(super) fn submit_new_project(&mut self, project: &NewProjectState) {
@@ -33,16 +34,17 @@ impl App {
                 .unwrap_or_else(|_| std::path::PathBuf::from("."))
                 .join(root)
         };
-        let source = nichlink_build::scaffold::detected_source(
+        let source = nichlink_build_method::scaffold::detected_source(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
             &std::env::current_exe().unwrap_or_default(),
         );
         let kind = if kind == "library" {
-            nichlink_build::scaffold::ProjectKind::Library
+            nichlink_build_method::scaffold::ProjectKind::Library
         } else {
-            nichlink_build::scaffold::ProjectKind::Binary
+            nichlink_build_method::scaffold::ProjectKind::Binary
         };
-        if let Err(error) = nichlink_build::scaffold::create_project(&root, package, kind, &source)
+        if let Err(error) =
+            nichlink_build_method::scaffold::create_project(&root, package, kind, &source)
         {
             self.event = format!("New project failed: {error}");
             return;
@@ -71,17 +73,7 @@ impl App {
                 return;
             }
         };
-        let kind_fallback = add.values[1]
-            .split('_')
-            .filter(|part| !part.is_empty())
-            .map(|part| {
-                let mut chars = part.chars();
-                chars
-                    .next()
-                    .map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
-                    .unwrap_or_default()
-            })
-            .collect::<String>();
+        let kind_fallback = pascal_case(&add.values[1]);
         let kind = if add.values[8].trim().is_empty() {
             kind_fallback.as_str()
         } else {
@@ -98,7 +90,7 @@ impl App {
                 return;
             }
         };
-        let face = nichlink::NewModuleFace {
+        let face = nichlink_run_method::NewModuleFace {
             module: &add.values[1],
             kind,
             preset: &add.values[13],
@@ -142,7 +134,9 @@ impl App {
             flow: &add.values[27],
             flow_provider: &add.values[28],
         };
-        match with_authoring_context(|| nichlink::add_module_from_face(&self.registry, &face)) {
+        match with_authoring_context(|| {
+            nichlink_run_method::add_module_from_face(&self.registry, &face)
+        }) {
             Ok((change, info)) => {
                 if let Err(error) = self.registry.register_snapshot_batch([info]) {
                     self.event = format!("Add failed:\n{error}");
@@ -163,7 +157,7 @@ impl App {
                 return;
             }
         };
-        let patch = nichlink::ModuleFacePatch {
+        let patch = nichlink_run_method::ModuleFacePatch {
             module: &edit.values[1],
             kind: &edit.values[8],
             preset: &edit.values[13],
@@ -194,7 +188,9 @@ impl App {
             flow: &edit.values[27],
             flow_provider: &edit.values[28],
         };
-        match with_authoring_context(|| nichlink::edit_module_face(&self.registry, id, &patch)) {
+        match with_authoring_context(|| {
+            nichlink_run_method::edit_module_face(&self.registry, id, &patch)
+        }) {
             Ok(change) => {
                 let message = change.message;
                 let changed_source = change.source;

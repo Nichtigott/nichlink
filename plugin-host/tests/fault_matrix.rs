@@ -1,15 +1,15 @@
-use nichlink::{
+use nichlink_run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
 };
 
-fn artifact(bytes: Vec<u8>, mode: PluginMode) -> nichlink::VerifiedPluginArtifact {
+fn artifact(bytes: Vec<u8>, mode: PluginMode) -> nichlink_run_method::VerifiedPluginArtifact {
     let checksum = Box::leak(sha256_hex(&bytes).into_boxed_str());
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink::ROOT_NODE_ID,
+        parent: nichlink_run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

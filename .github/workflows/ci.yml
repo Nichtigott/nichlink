@@ -37,7 +37,7 @@ jobs:
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         run: |
           cargo package -p nichlink-core --locked --allow-dirty
-          cargo package -p nichlink-build --locked --allow-dirty
+          cargo package -p nichlink-build-method --locked --allow-dirty
 
   release-audit:
     runs-on: ubuntu-latest

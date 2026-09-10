@@ -13,6 +13,10 @@
 - [x] Studio 的搜索、检查、数据、对比和源码跳转；
 - [x] 只读 MCP 桥、经过校验的 Wasm/进程插件适配器；
 - [x] 跨平台 CI、规模审计、符号审计和打包检查。
+- [x] kernel / 执行面分界：一个纯 kernel（`nichlink-core`）承载协议名词与纯方法，
+  薄执行面（`nichlink-build-method`、`nichlink-run-method`、
+  `nichlink-debug-method`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`、
+  `nichlink-plugin-host`）把这些方法绑定到各自上下文。
 
 0.1 可用于实验和选定的内部生产项目，但不宣称能完整分析任意 Rust 程序。
 
@@ -41,6 +45,10 @@
 ### 6. 证据感知工具链
 
 将 MCP 和 Studio 连接到 Registry 快照、合同、诊断及实时 provenance。每条结果都显示脱敏策略、信任状态和证据级别。
+
+### 7. 经校验的 MCP 写入工具
+
+把 MCP 桥从只读查询扩展为经校验的 `add` / `edit` / `graft` 工具。每次写入都走与构建面相同的 kernel admission、合同与拓扑校验，并向调用方回报 provenance。
 
 ## 明确边界
 

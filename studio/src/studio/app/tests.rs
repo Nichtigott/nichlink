@@ -123,12 +123,12 @@ fn add_navigation_never_changes_the_visible_field_set() {
     };
     let after = super::face_field_indices(current);
     assert_eq!(before, after, "moving to kind changed the form layout");
-    assert_eq!(after.len(), nichlink::FACE_FIELD_COUNT);
+    assert_eq!(after.len(), nichlink_run_method::FACE_FIELD_COUNT);
 }
 
 #[test]
 fn add_form_starts_with_editable_bilingual_summary() {
-    let add = AddState::new(nichlink::ROOT_NODE_ID);
+    let add = AddState::new(nichlink_run_method::ROOT_NODE_ID);
     assert!(add.values[9].is_empty());
     assert!(add.values[10].is_empty());
     assert!(add.values[11].is_empty());
@@ -138,8 +138,8 @@ fn add_form_starts_with_editable_bilingual_summary() {
 
 #[test]
 fn parent_rule_marks_the_fields_a_child_must_supply() {
-    let mut add = AddState::new(nichlink::ROOT_NODE_ID);
-    add.apply_parent_rule(&nichlink::OwnedRegistrationRule {
+    let mut add = AddState::new(nichlink_run_method::ROOT_NODE_ID);
+    add.apply_parent_rule(&nichlink_run_method::OwnedRegistrationRule {
         required_preset: Some("ActionParts".to_owned()),
         required_parts: vec!["paint".to_owned()],
         required_exports: vec!["control.render".to_owned()],
@@ -270,14 +270,14 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
         .as_nanos();
     let checkout = std::env::temp_dir().join(format!("cargo-git-checkout-{suffix}"));
     std::fs::create_dir_all(checkout.join("core")).expect("core sibling");
-    std::fs::create_dir_all(checkout.join("build")).expect("build sibling");
+    std::fs::create_dir_all(checkout.join("build_method")).expect("build sibling");
     std::fs::create_dir_all(checkout.join("studio")).expect("studio sibling");
 
-    let source = nichlink_build::scaffold::detected_source(
+    let source = nichlink_build_method::scaffold::detected_source(
         &checkout.join("studio"),
         &checkout.join("outside-bin/nichlink-studio"),
     );
-    let (core, build) = nichlink_build::scaffold::dependency_specs(&source);
+    let (core, build) = nichlink_build_method::scaffold::dependency_specs(&source);
 
     assert!(core.contains("git = \"https://github.com/Nichtigott/nichlink\""));
     assert!(build.contains("branch = \"main\""));
@@ -314,7 +314,7 @@ fn new_project_and_explicit_root_face_compile() {
             .contains("builtin_static_plan().len()")
     );
     let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
-    assert!(manifest.contains("nichlink-core"));
+    assert!(manifest.contains("nichlink-run-method"));
     assert!(manifest.contains("nichlink-build"));
     assert!(app.registry.depth_first().is_empty());
 

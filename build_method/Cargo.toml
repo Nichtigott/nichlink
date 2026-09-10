@@ -1,0 +1,18 @@
+[package]
+name = "nichlink-build-method"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Source discovery, manifest parsing, cache, scope, and StaticPlan generation"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-build"
+
+[dependencies]
+nichlink-core = { path = "../core", version = "0.1.0", features = ["syntax"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "2", features = ["full", "parsing", "visit"] }
+
+[lib]
+name = "nichlink_build_method"
+path = "src/lib.rs"

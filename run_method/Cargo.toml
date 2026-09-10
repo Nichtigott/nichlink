@@ -1,0 +1,18 @@
+[package]
+name = "nichlink-run-method"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Runtime registry trees, transactions, tracing, plugins, and authoring for NichLink"
+
+[features]
+authoring = ["nichlink-core/syntax", "dep:syn"]
+
+[dependencies]
+nichlink-core = { path = "../core", version = "0.1.0" }
+syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
+
+[lib]
+name = "nichlink_run_method"
+path = "src/lib.rs"

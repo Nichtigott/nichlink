@@ -1,33 +1,17 @@
 //! Source indexing and registry snapshot helpers for Studio.
 //! Studio 的源码索引与注册快照辅助逻辑。
+//!
+//! The pure Rust-source lexer lives in the kernel `source` module; this shim
+//! keeps the historical paths and hosts the Studio-specific file-bound helpers.
+//! 纯 Rust 源码词法器本体在 kernel 的 `source` 模块；本 shim 保留历史路径，
+//! 并承载 Studio 特有的文件绑定辅助逻辑。
+
+// Kernel lexer re-exports. Historical Studio paths stay valid through these.
+// kernel 词法器重导出，Studio 历史路径经由它们保持可用。
+pub use nichlink_run_method::source::{body_calls, function_source_range, function_symbols};
 
 use super::support::{package_namespace, package_root, with_authoring_context};
 use super::*;
-
-pub(crate) fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize)> {
-    let start = lines.iter().position(|line| {
-        let trimmed = line.trim_start();
-        trimmed.contains("fn ") && trimmed.contains(&format!("{name}("))
-    })?;
-    let mut depth = 0usize;
-    let mut opened = false;
-    for (index, line) in lines.iter().enumerate().skip(start) {
-        for character in line.chars() {
-            match character {
-                '{' => {
-                    depth += 1;
-                    opened = true;
-                }
-                '}' if opened => depth = depth.saturating_sub(1),
-                _ => {}
-            }
-        }
-        if opened && depth == 0 {
-            return Some((start, index));
-        }
-    }
-    Some((start, start))
-}
 
 /// Compose compiled, external, and newly authored faces into one snapshot.
 /// 将已编译、外部和刚落盘的注册面装配成同一个快照。
@@ -36,8 +20,10 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     // add faces. A host can choose a stable namespace per library through the
     // environment when several libraries share one process.
     let namespace = package_namespace();
-    let mut registry =
-        Registry::root_for_namespace(nichlink::FrameworkId::new("nichlink.studio"), namespace);
+    let mut registry = Registry::root_for_namespace(
+        nichlink_run_method::FrameworkId::new("nichlink.studio"),
+        namespace,
+    );
     // Scan only the host package's `src/` tree. When Studio is launched from
     // the NichLink workspace itself there is no host `src/`; show an empty
     // registry instead of mistaking build/debug fixtures for faces.
@@ -47,15 +33,18 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     if !source_root.is_dir() {
         return Ok(registry);
     }
-    let snapshots = with_authoring_context(|| nichlink::generated_snapshots_from(&source_root))
-        .map_err(|error| format!("cannot load generated registration faces: {error}"))?;
+    let snapshots =
+        with_authoring_context(|| nichlink_run_method::generated_snapshots_from(&source_root))
+            .map_err(|error| format!("cannot load generated registration faces: {error}"))?;
     registry
         .register_snapshot_batch(snapshots)
         .map_err(|error| format!("generated registration faces were rejected: {error}"))?;
     Ok(registry)
 }
 
-pub(super) fn admission_text(admission: &nichlink::OwnedAdmission) -> String {
+/// Render one admission policy as a compact single-line summary.
+/// 将一条 admission 策略渲染成紧凑的单行摘要。
+pub(crate) fn admission_text(admission: &nichlink_run_method::OwnedAdmission) -> String {
     if admission.allowed_paths.is_empty() && admission.denied_paths.is_empty() {
         return "ANY".to_owned();
     }
@@ -65,7 +54,9 @@ pub(super) fn admission_text(admission: &nichlink::OwnedAdmission) -> String {
     format!("deny:{}", admission.denied_paths.join(","))
 }
 
-pub(super) fn registration_rule_text(rule: &nichlink::OwnedRegistrationRule) -> String {
+/// Render one registry rule as compact `preset:...;parts:...` clauses.
+/// 将一条注册规则渲染成紧凑的 `preset:...;parts:...` 子句。
+pub(crate) fn registration_rule_text(rule: &nichlink_run_method::OwnedRegistrationRule) -> String {
     let mut clauses = Vec::new();
     if let Some(preset) = &rule.required_preset {
         clauses.push(format!("preset:{preset}"));
@@ -90,6 +81,16 @@ pub(super) fn registration_rule_text(rule: &nichlink::OwnedRegistrationRule) -> 
     } else {
         clauses.join(";")
     }
+}
+
+/// Locate the 1-based declaration line of a function in a registry source file.
+/// 在注册面源码文件中定位函数声明的 1 起始行号。
+pub(crate) fn function_line(file: &str, function: &str) -> Option<u32> {
+    let text = std::fs::read_to_string(source_path_for(file)).ok()?;
+    function_symbols(&text)
+        .into_iter()
+        .find(|item| item.name == function)
+        .map(|item| item.line)
 }
 
 #[cfg(test)]
@@ -137,303 +138,12 @@ pub(super) fn visible_search_rows(lines: &[String], folded: &BTreeSet<usize>) ->
     rows
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct SourceFunction {
-    pub(super) name: String,
-    pub(super) signature: String,
-    pub(super) body: String,
-    pub(super) line: u32,
-}
-
-/// Index function bodies without treating comments, strings, or macro text as Rust.
-/// 扫描函数体时屏蔽注释、字符串和宏文本，避免把它们误认成 Rust 函数。
-pub(super) fn function_symbols(source: &str) -> Vec<SourceFunction> {
-    let masked = mask_non_code(source);
-    let bytes = masked.as_bytes();
-    let mut result = Vec::new();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        if !is_ident_start(bytes[index]) {
-            index += 1;
-            continue;
-        }
-        let token_start = index;
-        index += 1;
-        while index < bytes.len() && is_ident_continue(bytes[index]) {
-            index += 1;
-        }
-        if &masked[token_start..index] != "fn" {
-            continue;
-        }
-        let mut name_start = index;
-        while name_start < bytes.len() && bytes[name_start].is_ascii_whitespace() {
-            name_start += 1;
-        }
-        if name_start >= bytes.len() || !is_ident_start(bytes[name_start]) {
-            continue;
-        }
-        let mut name_end = name_start + 1;
-        while name_end < bytes.len() && is_ident_continue(bytes[name_end]) {
-            name_end += 1;
-        }
-        let name = masked[name_start..name_end].to_owned();
-        let mut open = name_end;
-        let mut angle_depth = 0usize;
-        while open < bytes.len() {
-            match bytes[open] {
-                b'<' => angle_depth += 1,
-                b'>' if angle_depth > 0 => angle_depth -= 1,
-                b'{' if angle_depth == 0 => break,
-                b';' if angle_depth == 0 => break,
-                _ => {}
-            }
-            open += 1;
-        }
-        if open >= bytes.len() || bytes[open] != b'{' {
-            continue;
-        }
-        let mut depth = 1usize;
-        let mut close = open + 1;
-        while close < bytes.len() && depth > 0 {
-            match bytes[close] {
-                b'{' => depth += 1,
-                b'}' => depth = depth.saturating_sub(1),
-                _ => {}
-            }
-            close += 1;
-        }
-        if depth != 0 {
-            continue;
-        }
-        let line_start = source[..token_start].rfind('\n').map_or(0, |line| line + 1);
-        let line = source[..token_start]
-            .bytes()
-            .filter(|byte| *byte == b'\n')
-            .count() as u32
-            + 1;
-        let signature = source[line_start..open].trim().to_owned();
-        result.push(SourceFunction {
-            name,
-            signature,
-            body: source[open + 1..close - 1].to_owned(),
-            line,
-        });
-        index = close;
-    }
-    result
-}
-
 #[cfg(test)]
 pub(super) fn function_bodies(source: &str) -> Vec<(String, String)> {
     function_symbols(source)
         .into_iter()
         .map(|function| (function.name, function.body))
         .collect()
-}
-
-fn is_ident_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_ident_continue(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
-/// Replace comments and quoted literals with spaces while preserving offsets.
-/// 用空格替换注释和引号字面量，同时保留原始偏移量。
-fn mask_non_code(source: &str) -> String {
-    let bytes = source.as_bytes();
-    let mut masked = bytes.to_vec();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'/') {
-            index += 2;
-            while index < bytes.len() && bytes[index] != b'\n' {
-                masked[index] = b' ';
-                index += 1;
-            }
-            continue;
-        }
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
-            masked[index] = b' ';
-            if index + 1 < bytes.len() {
-                masked[index + 1] = b' ';
-            }
-            index += 2;
-            let mut depth = 1usize;
-            while index < bytes.len() && depth > 0 {
-                if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
-                    depth += 1;
-                    masked[index] = b' ';
-                    masked[index + 1] = b' ';
-                    index += 2;
-                } else if bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'/') {
-                    depth = depth.saturating_sub(1);
-                    masked[index] = b' ';
-                    masked[index + 1] = b' ';
-                    index += 2;
-                } else {
-                    if bytes[index] != b'\n' {
-                        masked[index] = b' ';
-                    }
-                    index += 1;
-                }
-            }
-            continue;
-        }
-        if bytes[index] == b'"' || bytes[index] == b'\'' {
-            let quote = bytes[index];
-            masked[index] = b' ';
-            index += 1;
-            while index < bytes.len() {
-                let escaped = bytes[index] == b'\\';
-                if bytes[index] != b'\n' {
-                    masked[index] = b' ';
-                }
-                index += 1;
-                if escaped && index < bytes.len() {
-                    if bytes[index] != b'\n' {
-                        masked[index] = b' ';
-                    }
-                    index += 1;
-                } else if bytes[index - 1] == quote {
-                    break;
-                }
-            }
-            continue;
-        }
-        index += 1;
-    }
-    String::from_utf8(masked).unwrap_or_else(|_| source.to_owned())
-}
-
-/// Match a real function call in a body, ignoring comments, strings and macros.
-/// 只匹配函数体里的真实调用，跳过注释、字符串和宏调用。
-pub(super) fn body_calls(body: &str, target: &str) -> bool {
-    if target.is_empty() {
-        return false;
-    }
-    let bytes = body.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'/') {
-            index += 2;
-            while index < bytes.len() && bytes[index] != b'\n' {
-                index += 1;
-            }
-            continue;
-        }
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
-            index += 2;
-            while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/') {
-                index += 1;
-            }
-            index = (index + 2).min(bytes.len());
-            continue;
-        }
-        if bytes[index] == b'"' {
-            index += 1;
-            while index < bytes.len() {
-                if bytes[index] == b'\\' {
-                    index = (index + 2).min(bytes.len());
-                    continue;
-                }
-                let end = bytes[index] == b'"';
-                index += 1;
-                if end {
-                    break;
-                }
-            }
-            continue;
-        }
-        let is_start = bytes[index].is_ascii_alphabetic() || bytes[index] == b'_';
-        if !is_start {
-            index += 1;
-            continue;
-        }
-        let start = index;
-        index += 1;
-        while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
-        {
-            index += 1;
-        }
-        let mut lookahead = index;
-        while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
-            lookahead += 1;
-        }
-        if bytes.get(lookahead) == Some(&b'!') {
-            let macro_name = &body[start..index];
-            if matches!(macro_name, "control_object" | "external_object") {
-                index = lookahead + 1;
-                if let Some(open) = bytes.get(index).copied() {
-                    let close = match open {
-                        b'(' => Some(b')'),
-                        b'[' => Some(b']'),
-                        b'{' => Some(b'}'),
-                        _ => None,
-                    };
-                    if let Some(close) = close {
-                        let mut depth = 0usize;
-                        while index < bytes.len() {
-                            if bytes[index] == open {
-                                depth += 1;
-                            }
-                            if bytes[index] == close {
-                                depth = depth.saturating_sub(1);
-                                if depth == 0 {
-                                    index += 1;
-                                    break;
-                                }
-                            }
-                            index += 1;
-                        }
-                    }
-                }
-                continue;
-            }
-            // Keep scanning ordinary macros: closures passed to tracing or
-            // instrumentation macros still contain real function calls.
-            // 普通宏内部继续扫描；追踪宏闭包里的调用仍是真实调用。
-            index = lookahead + 1;
-            continue;
-        }
-        if &body[start..index] != target {
-            continue;
-        }
-        while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
-            lookahead += 1;
-        }
-        if bytes.get(lookahead) == Some(&b':') && bytes.get(lookahead + 1) == Some(&b':') {
-            lookahead += 2;
-            while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
-                lookahead += 1;
-            }
-            if bytes.get(lookahead) == Some(&b'<') {
-                let mut angle_depth = 0usize;
-                while lookahead < bytes.len() {
-                    match bytes[lookahead] {
-                        b'<' => angle_depth += 1,
-                        b'>' if angle_depth > 0 => {
-                            angle_depth -= 1;
-                            if angle_depth == 0 {
-                                lookahead += 1;
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                    lookahead += 1;
-                }
-                while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
-                    lookahead += 1;
-                }
-            }
-        }
-        if bytes.get(lookahead) == Some(&b'(') {
-            return true;
-        }
-    }
-    false
 }
 
 /// Turn the verbose headless report into a human-readable search row.

@@ -1,8 +1,8 @@
 //! Built-in live trace sample for the standalone Studio demo.
 //! 独立 Studio 演示使用的内置实时追踪样本。
 
-use nichlink::{NodeId, SourceLocation};
-use nichlink_debug::CallTrace;
+use nichlink_debug_method::CallTrace;
+use nichlink_run_method::{NodeId, SourceLocation};
 
 pub(super) fn sample_live_trace() -> CallTrace {
     let mut trace = CallTrace::full();

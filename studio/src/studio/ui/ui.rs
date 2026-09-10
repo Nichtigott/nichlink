@@ -19,7 +19,7 @@ mod search_detail;
 
 use super::app::{
     AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
-    face_field_indices, source_path_for,
+    face_field_indices, function_line, source_path_for,
 };
 
 const INK: Color = Color::Rgb(214, 225, 231);

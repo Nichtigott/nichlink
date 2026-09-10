@@ -10,7 +10,7 @@ documentation = "https://docs.rs/nichlink-core"
 autobins = false
 
 [features]
-authoring = ["dep:proc-macro2", "dep:syn"]
+syntax = ["dep:proc-macro2", "dep:syn"]
 
 [dependencies]
 proc-macro2 = { version = "1", features = ["span-locations"], optional = true }

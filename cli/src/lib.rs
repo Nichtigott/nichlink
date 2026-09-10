@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_build::scaffold::{self, DependencySource, ProjectKind};
+use nichlink_build_method::scaffold::{self, DependencySource, ProjectKind};
 
 const USAGE: &str = "\
 nichlink — NichLink command-line interface
@@ -159,16 +159,8 @@ fn registration_check(directory: &str) -> Result<String, String> {
         return Err(format!("{} has no Cargo.toml", manifest.display()));
     }
     let package = package_name(&manifest)?;
-    // The identity pass reads CARGO_PKG_NAME at runtime. Cargo build scripts
-    // receive it from Cargo; standalone runs must provide it themselves.
-    // Soundness: this runs on the main thread before any worker threads
-    // exist, and the process exits after the pipeline finishes.
-    // 身份计算在运行期读取 CARGO_PKG_NAME。build script 由 Cargo 注入；
-    // 独立运行必须自行提供。此处仅在主线程、任何工作线程启动前设置，
-    // 且进程在管线结束后退出。
-    unsafe { std::env::set_var("CARGO_PKG_NAME", &package) };
     let out_dir = manifest.join("target/nichlink/out");
-    nichlink_build::run_for(&manifest, &out_dir)?;
+    nichlink_build_method::run_for(&manifest, &out_dir, &package)?;
     Ok(package)
 }
 

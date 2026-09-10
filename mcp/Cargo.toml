@@ -9,6 +9,7 @@ readme = "README.md"
 documentation = "https://docs.rs/nichlink-mcp"
 
 [dependencies]
+nichlink-core = { path = "../core", version = "0.1.0" }
 serde_json = "1"
 
 [[bin]]

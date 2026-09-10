@@ -127,7 +127,12 @@ impl App {
                     .map(|info| format!("{}_graft", info.registry_name))
                     .unwrap_or_else(|| "replacement".to_owned());
                 match with_authoring_context(|| {
-                    nichlink::create_external_graft(&self.registry, self.selected, selector, false)
+                    nichlink_run_method::create_external_graft(
+                        &self.registry,
+                        self.selected,
+                        selector,
+                        false,
+                    )
                 }) {
                     Ok(plan) => {
                         let plan_path = plan.plan_path();
@@ -182,7 +187,7 @@ impl App {
 }
 
 pub(super) fn declaration_contract_paths(source: &str) -> (String, String) {
-    let Ok(Some(face)) = nichlink::parse_face(source) else {
+    let Ok(Some(face)) = nichlink_run_method::parse_face(source) else {
         return (String::new(), String::new());
     };
     let paths = |field| face.path_list(field).unwrap_or_default().join(",");

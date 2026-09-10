@@ -261,7 +261,7 @@ pub(super) fn draw_delete(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    id: nichlink::NodeId,
+    id: nichlink_run_method::NodeId,
 ) -> (Rect, Rect) {
     let path = app
         .registry

@@ -40,7 +40,7 @@ pub(super) fn package_namespace() -> String {
 }
 
 pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
-    nichlink::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
+    nichlink_run_method::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
 }
 
 /// Resolve the project whose sources Studio reads and edits.
@@ -196,13 +196,13 @@ impl App {
 }
 
 impl App {
-    pub(crate) fn graph_locals(&self, item: &CallRef) -> Vec<nichlink::LocalValue> {
+    pub(crate) fn graph_locals(&self, item: &CallRef) -> Vec<nichlink_run_method::LocalValue> {
         self.runtime_trace
             .locals()
             .iter()
             .filter(|local| {
                 self.runtime_trace
-                    .path_for_local(nichlink::LocalId(local.id))
+                    .path_for_local(nichlink_run_method::LocalId(local.id))
                     .iter()
                     .any(|call| call.function == item.function)
             })

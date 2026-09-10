@@ -38,9 +38,10 @@ NodeEditor -> Canvas2D -> WGPU
 当前仓库包含：
 
 - `nichlink-core`：Registry、合同、admission、graft 和事务；
-- `nichlink-build`：目录发现、粗修和静态计划；
+- `nichlink-build-method`：目录发现、粗修和静态计划；
+- `nichlink-run-method`：运行期 trace 状态与 `host!`/`trace_call!` 宏；
 - `nichlink-cli`：统一命令行入口（`nichlink new/check/build/studio/mcp`）；
-- `nichlink-debug`：MIR 候选、CallTrace 和数据流证据；
+- `nichlink-debug-method`：MIR 候选、CallTrace 和数据流证据；
 - `nichlink-studio`：常驻 Ratatui 调试界面；
 - `nichlink-mcp`：给 AI 使用的紧凑查询入口；
 - `nichlink-plugin-host`：Wasm/process 插件适配。

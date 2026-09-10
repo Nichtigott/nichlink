@@ -22,4 +22,4 @@ The server exposes compact, read-only tools:
 
 Call-graph results are labelled `static-heuristic`. They intentionally do not
 claim to resolve dynamic dispatch, function pointers, FFI, or runtime-selected
-calls; use `nichlink-debug` and a live `CallTrace` for those edges.
+calls; use `nichlink-debug-method` and a live `CallTrace` for those edges.

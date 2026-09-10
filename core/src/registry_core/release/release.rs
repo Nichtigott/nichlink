@@ -200,9 +200,12 @@ mod tests {
     static FACES: &[StaticFace] = &[StaticFace::new(CHILD, ROOT, false)];
     static GRAFTS: &[StaticGraftCut] = &[StaticGraftCut::new("root/child", "child_fast", false)];
 
-    crate::static_graft_plan!(FRAMEWORK,
-        cut "root/child" graft "child_fast",
-    );
+    // The `static_graft_plan!` macro moved to nichlink-runtime; anchor the same
+    // compile-time assertions here without a kernel -> runtime dependency.
+    // `static_graft_plan!` 宏已移至 nichlink-runtime；为避免 kernel 反向依赖，
+    // 这里直接写出等价的编译期断言。
+    const _: crate::FrameworkId = FRAMEWORK;
+    const _: &str = stringify!(cut "root/child" graft "child_fast");
 
     #[test]
     fn graft_selectors_are_part_of_the_zero_allocation_static_plan() {

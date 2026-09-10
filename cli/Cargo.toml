@@ -10,7 +10,7 @@ documentation = "https://docs.rs/nichlink-cli"
 autobins = false
 
 [dependencies]
-nichlink-build = { path = "../build", version = "0.1.0" }
+nichlink-build-method = { path = "../build_method", version = "0.1.0" }
 nichlink-mcp = { path = "../mcp", version = "0.1.0" }
 nichlink-studio = { path = "../studio", version = "0.1.0" }
 

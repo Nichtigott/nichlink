@@ -21,7 +21,7 @@ pub use verifier::{Ed25519Verifier, TrustedPublicKey};
 #[cfg(feature = "wasm")]
 pub use wasm::{WasmBackend, WasmInstance, WasmLimits};
 
-use nichlink::PluginAdapter;
+use nichlink_run_method::PluginAdapter;
 
 /// One callable plugin implementation.
 /// 一个可调用的插件实现。

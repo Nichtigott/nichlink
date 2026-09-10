@@ -19,4 +19,4 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.read`：读取有大小上限的源码窗口；
 - `nichlink.status`：报告源码根目录和索引数量。
 
-调用图标记为 `static-heuristic`。动态分派、函数指针、FFI 和运行时选择的调用不保证静态解析，应结合 `nichlink-debug` 和实时 `CallTrace`。
+调用图标记为 `static-heuristic`。动态分派、函数指针、FFI 和运行时选择的调用不保证静态解析，应结合 `nichlink-debug-method` 和实时 `CallTrace`。

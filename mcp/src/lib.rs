@@ -1,5 +1,4 @@
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
@@ -197,7 +196,7 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
             function.calls.join(", ")
         ));
     }
-    let registrations = registration_kinds(&file.source);
+    let registrations = nichlink::source::registration_kinds(&file.source);
     if !registrations.is_empty() {
         output.push_str("registrations: ");
         output.push_str(&registrations.join(", "));
@@ -398,100 +397,15 @@ fn resolve_root(base: &Path, requested: Option<&str>) -> Result<PathBuf, String>
 }
 
 fn parse_functions(source: &str) -> Vec<Function> {
-    let lines = source.lines().collect::<Vec<_>>();
-    let mut functions = Vec::new();
-    for (index, line) in lines.iter().enumerate() {
-        let Some(name) = function_name(line) else {
-            continue;
-        };
-        let end_line = matching_end(&lines, index);
-        let body = lines[index..end_line].join("\n");
-        let calls = direct_calls(&body, &name);
-        functions.push(Function {
-            name,
-            line: index + 1,
-            end_line,
-            calls,
-        });
-    }
-    functions
-}
-
-fn function_name(line: &str) -> Option<String> {
-    let marker = line.find("fn ")?;
-    let name = line[marker + 3..]
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-        .collect::<String>();
-    (!name.is_empty()).then_some(name)
-}
-
-fn matching_end(lines: &[&str], start: usize) -> usize {
-    let mut depth = 0usize;
-    let mut opened = false;
-    for (index, line) in lines.iter().enumerate().skip(start) {
-        for character in line.chars() {
-            match character {
-                '{' => {
-                    opened = true;
-                    depth += 1;
-                }
-                '}' if opened => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return index + 1;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    lines.len().max(start + 1)
-}
-
-fn direct_calls(body: &str, current: &str) -> Vec<String> {
-    let mut calls = BTreeMap::new();
-    for (index, _) in body.match_indices('(') {
-        let candidate = body[..index]
-            .trim_end()
-            .rsplit(|character: char| !character.is_ascii_alphanumeric() && character != '_')
-            .next()
-            .unwrap_or_default();
-        if candidate.is_empty()
-            || candidate == current
-            || matches!(candidate, "if" | "for" | "while" | "match" | "loop")
-        {
-            continue;
-        }
-        calls.insert(candidate.to_owned(), ());
-    }
-    calls.into_keys().collect()
-}
-
-fn registration_kinds(source: &str) -> Vec<String> {
-    let mut kinds = Vec::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(kind) = trimmed.split_once("kind:").map(|(_, remainder)| remainder) {
-            let kind = kind
-                .trim()
-                .split(|character: char| {
-                    character == ',' || character == '}' || character.is_whitespace()
-                })
-                .next()
-                .unwrap_or_default();
-            if !kind.is_empty()
-                && kind
-                    .chars()
-                    .all(|character| character.is_ascii_alphanumeric() || character == '_')
-            {
-                kinds.push(kind.to_owned());
-            }
-        }
-    }
-    kinds.sort();
-    kinds.dedup();
-    kinds
+    nichlink::source::function_symbols(source)
+        .into_iter()
+        .map(|function| Function {
+            calls: nichlink::source::direct_calls(&function.body, &function.name),
+            name: function.name,
+            line: function.line as usize,
+            end_line: function.end_line as usize,
+        })
+        .collect()
 }
 
 fn display_list(items: &[String]) -> String {
@@ -526,7 +440,7 @@ mod tests {
 
     #[test]
     fn registration_kinds_are_compact_and_deduplicated() {
-        let kinds = registration_kinds(
+        let kinds = nichlink::source::registration_kinds(
             "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
         );
         assert_eq!(kinds, ["Button"]);

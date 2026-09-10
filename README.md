@@ -120,34 +120,36 @@ the thin build entry, and the source entry point; the first face is added with
 The application owns its declarations, so Cargo needs one small build adapter:
 
 ```sh
-# From Git. `nichlink-build` belongs to the build dependency table.
-cargo add nichlink-core --git https://github.com/Nichtigott/nichlink --branch main
-cargo add nichlink-build --build --git https://github.com/Nichtigott/nichlink --branch main
+# From Git. `nichlink-build-method` belongs to the build dependency table.
+cargo add nichlink-run-method --git https://github.com/Nichtigott/nichlink --branch main
+cargo add nichlink-build-method --build --git https://github.com/Nichtigott/nichlink --branch main
 
 # Or, while developing both projects from local checkouts:
-cargo add nichlink-core --path /path/to/nichlink/core
-cargo add nichlink-build --build --path /path/to/nichlink/build
+cargo add nichlink-run-method --path /path/to/nichlink/run_method
+cargo add nichlink-build-method --build --path /path/to/nichlink/build_method
 ```
 
-Do not add `nichlink-build` once under `[dependencies]` and again from a
+Do not add `nichlink-build-method` once under `[dependencies]` and again from a
 different source under `[build-dependencies]`; Cargo requires one canonical
 source for a package throughout a manifest.
 
 ```rust
 // build.rs
 fn main() {
-    nichlink_build::run();
+    nichlink_build_method::run();
 }
 ```
 
 In the crate root, connect the generated plan once:
 
 ```rust
-nichlink_core::host!();
+nichlink_run_method::host!();
 ```
 
 This expands to `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`;
 writing the include directly is an equivalent, advanced alternative.
+`nichlink-run-method` re-exports the kernel, so face code refers to
+contracts, plans, and traces through `nichlink_run_method::…`.
 
 `main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
 framework library uses `src/lib.rs`. The build adapter scans the host crate's
@@ -166,12 +168,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_core::PresetContract for CanvasPreset {
+impl nichlink_run_method::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_core::PartsContract for CanvasParts {
+impl nichlink_run_method::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -197,8 +199,8 @@ crate::node_editor_object! {
     provides: ["canvas.frame"],
     expected_output: "CanvasFrame",
     actual_output: "CanvasFrame",
-    flow: nichlink_core::FlowContract::new(
-        nichlink_core::ContractId::new("canvas.render.v1"),
+    flow: nichlink_run_method::FlowContract::new(
+        nichlink_run_method::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -229,7 +231,7 @@ For a replacement, both sides publish a flow contract. The host validates the
 contract id, version, input, and output before applying the graft:
 
 ```rust
-let plan = nichlink_core::GraftPlan::command(
+let plan = nichlink_run_method::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -378,7 +380,7 @@ Four layers validate this declaration:
 
 | Check | Enforced by | What it proves here |
 | --- | --- | --- |
-| Parent topology | `nichlink-build` | Button's macro, folder, and `parent` all point to Control |
+| Parent topology | `nichlink-build-method` | Button's macro, folder, and `parent` all point to Control |
 | Rust type contract | rustc | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
 | Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum |
 | External admission | Registry connector | Cross-tree `requires` stay within Control's allowed `admission` paths |
@@ -476,11 +478,11 @@ or third-party source. The static macro constructs no `Vec` or `String`; the
 builder writes its contents directly into the `StaticPlan`:
 
 ```rust
-use nichlink_core::{FrameworkId, Registry};
+use nichlink_run_method::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_core::static_graft_plan!(FRAMEWORK,
+nichlink_run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -524,7 +526,7 @@ When several data boundaries must change together, put all cuts in one static
 declaration:
 
 ```rust
-nichlink_core::static_graft_plan!(FRAMEWORK,
+nichlink_run_method::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -537,7 +539,7 @@ reload path must construct and modify a plan at runtime.
 A path range can target contiguous siblings under one parent Registry:
 
 ```rust
-let plan = nichlink_core::GraftPlan::command(
+let plan = nichlink_run_method::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -571,7 +573,7 @@ NichLink's two pruning stages solve different problems.
 The first stage runs before rustc expands the generated module tree. Its unit is
 a complete registration face:
 
-1. the host crate's thin `build.rs` calls `nichlink-build`;
+1. the host crate's thin `build.rs` calls `nichlink-build-method`;
 2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
    or `application!`;
 3. it conservatively derives the faces needed by this crate and emits only
@@ -721,22 +723,51 @@ choice.
 ## Runtime tracing
 
 ```rust
-let trace = nichlink_core::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_core::CallTrace::disabled();
-let detailed = nichlink_core::CallTrace::full();
+let trace = nichlink_run_method::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_run_method::CallTrace::disabled();
+let detailed = nichlink_run_method::CallTrace::full();
 ```
 
 `errors-only` keeps failed chains and discards successful evidence. `full` keeps
 frames, locals, and data edges for Studio/MCP inspection. The default release
 path collects nothing unless the application opts in.
 
+## Kernel and execution surfaces
+
+NichLink splits the workspace into one pure kernel and a set of thin
+execution surfaces. The sinking rule is simple: **logic with no I/O, no
+`std::env`, and no time or process binding belongs in the kernel**; anything
+that reads the filesystem, spawns processes, or drives a terminal stays in an
+execution surface that binds kernel methods to its own context.
+
+`nichlink-core` (library name `nichlink`) is the kernel. It holds the
+protocol vocabulary and the complete set of pure operations: identity,
+declaration, parsing, tree operations, policy, and rendering. Nothing in the
+kernel performs I/O or binds to the environment, so every tool can reuse the
+same methods.
+
+| Crate | Directory | Execution surface |
+| --- | --- | --- |
+| `nichlink-build-method` | `build_method/` | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives |
+| `nichlink-run-method` | `run_method/` | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor |
+| `nichlink-debug-method` | `debug_method/` | Observation evidence: inventory collection, MIR subprocess orchestration, tracing/petgraph adapters, `UnifiedCallGraph` |
+| `nichlink-plugin-host` | `plugin-host/` | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table |
+| `nichlink-studio` | `studio/` | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods |
+| `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |
+| `nichlink-cli` | `cli/` | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding |
+
 ## Workspace layout
 
 ```text
-core/         nichlink-core: Registry, contracts, admission, grafts, macros
-build/        nichlink-build: source discovery, cache, coarse StaticPlan
+core/         nichlink-core (kernel): protocol vocabulary and pure methods — identity,
+              declaration, diagnostic, tree, plugin, mir, requirements, release,
+              source, authoring, syntax
+build_method/ nichlink-build-method: build-time discovery, cache, coarse StaticPlan
+run_method/   nichlink-run-method: runtime trace state, host!/trace_call! macros,
+              authoring executor
+debug_method/ nichlink-debug-method: optional CallTrace adapters, MIR evidence,
+              data-flow and graph models
 cli/          nichlink-cli: unified entry (nichlink new/check/build/studio/mcp, cargo-nichlink)
-debug/        optional CallTrace, MIR evidence, data-flow and graph adapters
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries
 plugin-host/  optional Wasm/process adapters and atomic deployment

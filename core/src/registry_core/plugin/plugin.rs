@@ -15,6 +15,9 @@ pub use self::artifact::{
 pub use self::graft::{CutGraftCommand, GraftCut, GraftError, GraftPlan};
 pub use self::catalog::{PluginCatalog, PluginRecord};
 pub use self::manifest::PluginManifest;
+pub use self::slot::{
+    PluginChannel, SlotValidationError, validate_artifact, validate_operation_name,
+};
 
 /// Version of the host/plugin execution ABI.
 /// 宿主与插件执行 ABI 的版本。

@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use nichlink::{PluginAdapter, VerifiedPluginArtifact};
+use nichlink_run_method::{PluginAdapter, VerifiedPluginArtifact};
 use tempfile::{Builder, TempPath};
 
 use crate::{HostError, PluginInstance};
@@ -206,11 +206,7 @@ impl PluginInstance for ProcessInstance {
 }
 
 fn validate_operation(operation: &str) -> Result<(), HostError> {
-    if operation.is_empty()
-        || !operation
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-    {
+    if nichlink_run_method::validate_operation_name(operation).is_err() {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(())
