@@ -2,7 +2,6 @@
 //! 零依赖、编译期计算的 SHA-256 节点身份。
 
 use std::fmt;
-use std::slice::ChunkBy;
 use std::str::FromStr;
 
 /// Version of the identity input and persisted catalog formats.
