@@ -20,6 +20,7 @@ pub mod runtime;
 pub use nichlink::registry_core;
 #[allow(ambiguous_glob_reexports)]
 pub use nichlink::*;
+pub use nichlink_macros::object;
 
 #[cfg(feature = "authoring")]
 #[allow(ambiguous_glob_reexports)]

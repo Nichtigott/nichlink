@@ -158,60 +158,61 @@ consumer's `main.rs`, so a consumer that owns faces needs its own adapter.
 
 ## Registration faces
 
-A registration face has two layers. The Rust `struct` and its `impl` contain the
-real implementation. The declaration records where that implementation belongs
-and what may enter or replace it.
+A registration face is an ordinary Rust `struct` carrying a `#[nichlink::object]`
+attribute. The struct and its `impl` contain the real implementation; the
+attribute records where that implementation belongs and what may enter or
+replace it.
 
 ```rust
-pub struct Canvas;
+use nichlink_run_method as nichlink;
 
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_run_method::PresetContract for CanvasPreset {
+impl nichlink::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_run_method::PartsContract for CanvasParts {
+impl nichlink::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
 
+#[nichlink::object(
+    summary(zh = "二维画布", en = "A 2-D drawing surface"),
+    requires("viewport" => "layout.viewport"),
+    provides("canvas.frame"),
+    expected_output = "CanvasFrame",
+    actual_output = "CanvasFrame",
+    flow = nichlink::FlowContract::new(
+        nichlink::ContractId::new("canvas.render.v1"),
+        1,
+        "CanvasInput",
+        "CanvasFrame",
+    ),
+)]
+pub struct Canvas {
+    preset: CanvasPreset,
+    parts: CanvasParts,
+}
+
 impl Canvas {
+    pub const EXPORTS: &'static [&'static str] = &["canvas.render"];
+
     pub fn render(&self, input: CanvasInput) -> CanvasFrame {
         // the implementation stays ordinary Rust
         input.into_frame()
     }
 }
-
-// The generated parent macro expresses the source hierarchy.
-// For a face under `node_editor`, use `node_editor_object!` here.
-crate::node_editor_object! {
-    kind: Canvas,
-    preset: CanvasPreset,
-    parts: CanvasParts,
-    handle: Canvas,
-    summary: { zh: "二维画布", en: "A 2-D drawing surface" },
-    exports: ["canvas.render"],
-    needs_registry: false,
-    requires: ["viewport" => "layout.viewport"],
-    provides: ["canvas.frame"],
-    expected_output: "CanvasFrame",
-    actual_output: "CanvasFrame",
-    flow: nichlink_run_method::FlowContract::new(
-        nichlink_run_method::ContractId::new("canvas.render.v1"),
-        1,
-        "CanvasInput",
-        "CanvasFrame",
-    ),
-}
 ```
 
 Most fields have safe defaults. The smallest face is simply
-`crate::root_object! { kind: App }` or a generated `<parent>_object!` with a
-`kind`. Add `summary`, `exports`, `requires`, or `flow` when they carry useful
-information; do not repeat defaults just to fill a table.
+`#[nichlink::object] pub struct App;` — the struct name is the kind, the
+default handle, and the default display name. Add `summary`, `exports`,
+`requires`, or `flow` when they carry useful information; do not repeat
+defaults just to fill a table. A face nested under a folder face may omit
+`parent`; the build step derives it from the folder tree.
 
 There are three different checks, and they are deliberately not merged:
 
@@ -274,6 +275,7 @@ The parent defines the shared interfaces and declares that it owns a Registry:
 ```rust
 // src/control/control.rs
 use crate::control::registry_rule::REGISTRATION_RULE;
+use nichlink_run_method as nichlink;
 
 pub struct Control;
 pub struct ControlFrame;
@@ -288,16 +290,16 @@ pub trait ActionPartsContract {
     fn action_id(&self) -> &str;
 }
 
-crate::root_object! {
-    kind: Control,
-    needs_registry: true,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
-    registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: REGISTRATION_RULE,
-}
+#[nichlink::object(
+    needs_registry = true,
+    parent = crate::root_node_id(env!("CARGO_PKG_NAME")),
+    registry_rule_path = "src/control/registry_rule/registry_rule.rs",
+    registry_rule = REGISTRATION_RULE,
+)]
+pub struct Control;
 ```
 
-`needs_registry: true` is the declaration that lets Control receive children.
+`needs_registry = true` is the declaration that lets Control receive children.
 `parent` places Control below the package root. Nothing here lists Button; a
 second valid child does not require an edit to `control.rs`.
 
@@ -321,8 +323,8 @@ This Button satisfies that rule:
 // src/control/object/button/button.rs
 use crate::control::{ActionPartsContract, ControlFrame, ControlHandle};
 use crate::{PartsContract, PresetContract};
+use nichlink_run_method as nichlink;
 
-pub struct Button;
 pub struct ActionParts;
 
 pub struct ButtonParts {
@@ -341,10 +343,26 @@ impl PartsContract for ButtonParts {
     const PROVIDED_PARTS: &'static [&'static str] = &["label", "action", "tooltip"];
 }
 
+#[nichlink::object(
+    parent = crate::control::NODE_ID,
+    handle_traits = ["ControlHandle"],
+    handle_contracts = [crate::control::ControlHandle],
+    part_traits = ["ActionPartsContract"],
+    part_contracts = [crate::control::ActionPartsContract],
+)]
+pub struct Button {
+    preset: ActionParts,
+    parts: ButtonParts,
+}
+
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.render"];
+}
+
 impl ControlHandle for Button {
     type Parts = ButtonParts;
 
-    fn paint(&self, parts: &ButtonParts) -> ControlFrame {
+    fn paint(&self, parts: &Self::Parts) -> ControlFrame {
         let _ = (&parts.label, &parts.action);
         ControlFrame
     }
@@ -355,32 +373,18 @@ impl ActionPartsContract for ButtonParts {
         &self.action
     }
 }
-
-crate::control_object! {
-    kind: Button,
-    preset: ActionParts,
-    parts: ButtonParts,
-    handle: Button,
-    parent: crate::control::NODE_ID,
-    exports: ["control.render"],
-    handle_traits: ["ControlHandle"],
-    handle_contracts: [crate::control::ControlHandle],
-    part_traits: ["ActionPartsContract"],
-    part_contracts: [crate::control::ActionPartsContract],
-}
 ```
 
-The `control_object!` name mirrors the parent folder, making the relationship
-visible in source. The source of truth used to build the tree is
-`parent: crate::control::NODE_ID`. The build step checks the macro name, folder
-position, and parent together, so accidentally wiring Button to another
-Registry fails before generated code is compiled.
+The face is an ordinary struct; `parent = crate::control::NODE_ID` places it
+below Control's Registry. When `parent` is omitted, the build step derives it
+from the folder tree, so accidentally wiring Button to another Registry fails
+before generated code is compiled.
 
 Four layers validate this declaration:
 
 | Check | Enforced by | What it proves here |
 | --- | --- | --- |
-| Parent topology | `nichlink-build-method` | Button's macro, folder, and `parent` all point to Control |
+| Parent topology | `nichlink-build-method` | Button's folder and `parent` both point to Control |
 | Rust type contract | rustc | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
 | Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum |
 | External admission | Registry connector | Cross-tree `requires` stay within Control's allowed `admission` paths |
@@ -395,12 +399,14 @@ The following child is intentionally invalid. Assume `WrongPreset` and
 output type, so this example isolates failures against the parent rule:
 
 ```rust
-crate::control_object! {
-    kind: BrokenButton,
+#[nichlink::object(parent = crate::control::NODE_ID)]
+pub struct BrokenButton {
     preset: WrongPreset,
     parts: BrokenParts,
-    parent: crate::control::NODE_ID,
-    exports: ["control.preview"],
+}
+
+impl BrokenButton {
+    pub const EXPORTS: &'static [&'static str] = &["control.preview"];
 }
 ```
 
@@ -408,7 +414,7 @@ One `cargo check` reports the declaration site together with the missing
 `ActionParts` preset, `control.render` export, `ControlHandle`, and
 `ActionPartsContract`. Removing only `action` from
 `BrokenParts::PROVIDED_PARTS` is rejected by the generated const check. Keeping
-`handle_contracts: [crate::control::ControlHandle]` while deleting the real
+`handle_contracts = [crate::control::ControlHandle]` while deleting the real
 impl produces a rustc trait-bound error at the declaration. Those paths cover
 a missing declaration, a missing structural constant, and a missing Rust
 implementation without pretending they are the same error.
@@ -419,7 +425,7 @@ by the registration rule:
 | Layer | Question it answers |
 | --- | --- |
 | Rust `struct` / `impl` | How does the object actually work? |
-| `parent` + parent-specific macro | Where is the object registered? |
+| `parent` (+ folder position when omitted) | Where is the object registered? |
 | `registry_rule` | What is the minimum shape accepted by the parent Registry? |
 | `admission` | Which external paths may this branch depend on? |
 | `FlowContract` | Are both sides of a graft data-compatible? |

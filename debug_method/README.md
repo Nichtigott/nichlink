@@ -8,8 +8,8 @@ edges win over MIR candidates) — lives in the kernel (`nichlink-core` `mir`
 and `source` modules). This crate binds it to the toolchain and the process:
 
 - `collector`: the inventory linker-section collection for declarations that
-  opt in with the generated parent macro, for example
-  `crate::workspace_object!(collector: debug, ...)`. The kernel stays free of
+  opt in with the attribute parameter, for example
+  `#[nichlink::object(collector = debug)]`. The kernel stays free of
   inventory and linker-section dependencies.
 - `mir::UnifiedCallGraph`: merges static MIR candidates with one live
   `CallTrace` run.

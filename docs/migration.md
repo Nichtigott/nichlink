@@ -16,13 +16,42 @@ generated `StaticPlan`; this workspace does not ship a concrete `root_registry`.
 
 ## External declarations
 
-Use `nichlink::external_object!` for declarations owned by another crate. A
-linked declaration must include plugin provenance, version, target framework,
-and a parent node identity. Development builds discover these declarations when
-the host explicitly opts into `collector: debug`; the core crate itself remains
-free of inventory. Release applications must retain external faces through a
-verified plugin artifact or another explicit application-owned input; release
-builds do not create inventory linker sections.
+Use `#[nichlink::object(source = "...", parent = ...)]` for declarations owned
+by another crate; the collector links them automatically. A linked declaration
+must include plugin provenance, version, target framework, and a parent node
+identity. Development builds discover these declarations when the host
+explicitly opts into `collector = debug`; the core crate itself remains free of
+inventory. Release applications must retain external faces through a verified
+plugin artifact or another explicit application-owned input; release builds do
+not create inventory linker sections.
+
+## From the declaration-macro DSL
+
+Registration faces are plain structs now. The previous
+`crate::<parent>_object! { kind: Button, preset: ..., parts: ..., parent: ... }`
+form becomes:
+
+```rust
+#[nichlink::object(parent = crate::control::NODE_ID)]
+pub struct Button {
+    preset: ActionParts,
+    parts: ButtonParts,
+}
+```
+
+The struct name replaces `kind`, attribute arguments use `name = value`
+syntax, `name`/`summary`/`requires`/`provides` use group syntax, and `exports`
+moves into an inherent const:
+
+```rust
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.render"];
+}
+```
+
+A face may omit `parent` when it sits below a folder face; the build step
+derives the mount point from the directory tree. `nichlink::external_object!`
+is gone — pass `source = "..."` to the attribute instead.
 
 ## Studio
 

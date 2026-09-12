@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "run_method", "build_method", "cli", "debug_method", "studio", "plugin-host", "mcp"]
+members = ["core", "run_method", "build_method", "cli", "debug_method", "studio", "plugin-host", "mcp", "macros"]
 resolver = "2"
 
 

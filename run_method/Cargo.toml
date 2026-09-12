@@ -11,6 +11,7 @@ authoring = ["nichlink-core/syntax", "dep:syn"]
 
 [dependencies]
 nichlink-core = { path = "../core", version = "0.1.0" }
+nichlink-macros = { path = "../macros", version = "0.1.0" }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
 
 [lib]

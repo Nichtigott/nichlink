@@ -1,10 +1,10 @@
 use super::diagnostics::BuildDiagnostics;
 use super::{
-    BuildInput, SourceScope, aggregate_contract_errors, aggregate_parent_macro_errors,
-    aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root,
-    emit_rerun_paths, materialize_sources, prime_node_id_cache, render_lib, static_plan,
-    update_discovery_cache, write_function_manifest, write_graft_manifest, write_if_changed,
-    write_pruning_manifest, write_source_scope_manifest,
+    BuildInput, SourceScope, aggregate_contract_errors, aggregate_requirements,
+    aggregate_stable_name_errors, cache_directory, discover_root, emit_rerun_paths,
+    materialize_sources, prime_node_id_cache, render_lib, static_plan, update_discovery_cache,
+    write_function_manifest, write_graft_manifest, write_if_changed, write_pruning_manifest,
+    write_source_scope_manifest,
 };
 
 pub(crate) fn run(input: &BuildInput) -> Option<String> {
@@ -22,8 +22,6 @@ pub(crate) fn run(input: &BuildInput) -> Option<String> {
     append_error(&mut compile_errors, contract_errors);
     let stable_errors = aggregate_stable_name_errors(src, &nodes);
     append_error(&mut compile_errors, stable_errors);
-    let parent_macro_errors = aggregate_parent_macro_errors(src, &nodes);
-    append_error(&mut compile_errors, parent_macro_errors);
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
@@ -119,7 +117,7 @@ mod tests {
         // diagnostics instead of `cargo:` directive noise. Faces follow the
         // `<name>/<name>.rs` layout.
         let face = |kind: &str| {
-            format!("crate::root_object! {{\n    kind: {kind},\n    stable_name: \"dup\",\n}}\n")
+            format!("#[nichlink::object(stable_name = \"dup\")]\npub struct {kind};\n")
         };
         for (dir, kind) in [("one", "One"), ("two", "Two")] {
             let folder = manifest.join("src").join(dir);

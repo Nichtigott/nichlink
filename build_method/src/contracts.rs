@@ -8,7 +8,7 @@ use std::path::Path;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_syntax::{FaceSyntax, ParentSyntax};
 use super::types::Node;
-use super::{SourceScope, cached_parent_id, node_id, parsed_face, relative_display};
+use super::{SourceScope, node_id, parsed_face, relative_display};
 
 type ParentRules = BTreeMap<super::registry_identity::NodeId, String>;
 
@@ -151,10 +151,13 @@ fn check_parent_rule(
     parent_rules: &ParentRules,
     errors: &mut BuildDiagnostics,
 ) {
-    if matches!(face.parent(), Some(ParentSyntax::Root) | None) {
+    if face.parent() == Some(ParentSyntax::Root) {
         return;
     }
-    let Some(parent_rule) = cached_parent_id(src, face).and_then(|id| parent_rules.get(&id)) else {
+    let Some(parent_id) = super::face_parent_id(src, relative, face) else {
+        return;
+    };
+    let Some(parent_rule) = parent_rules.get(&parent_id) else {
         return;
     };
     let id = node_id(src, node).map_or_else(|| "<unknown>".to_owned(), |id| id.to_string());
@@ -247,6 +250,67 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn struct_face_derives_directory_parent_and_checks_the_registry_rule() {
+        let src = temporary_directory("struct-parent-contract");
+        let control = src.join("control/control.rs");
+        let button = src.join("control/object/button/button.rs");
+        let rule = src.join("control/registry_rule/registry_rule.rs");
+        write(
+            &control,
+            r#"#[nichlink::object(needs_registry = true, registry_rule = crate::control::registry_rule::REGISTRATION_RULE)]
+pub struct Control {}
+"#,
+        );
+        write(
+            &button,
+            r#"#[nichlink::object]
+pub struct BrokenButton {
+    preset: WrongPreset,
+    parts: BrokenParts,
+}
+
+impl BrokenButton {
+    pub const EXPORTS: &'static [&'static str] = &["control.preview"];
+}
+"#,
+        );
+        write(
+            &rule,
+            r#"RegistrationRule::new()
+    .require_preset("ActionParts")
+    .require_exports(&["control.render"]);"#,
+        );
+        let nodes = vec![Node {
+            name: "control".to_owned(),
+            file: Some(control),
+            children: vec![Node {
+                name: "button".to_owned(),
+                file: Some(button),
+                children: Vec::new(),
+            }],
+        }];
+        let diagnostics = aggregate_contract_errors(
+            &src,
+            &nodes,
+            false,
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+        )
+        .render();
+        assert!(
+            diagnostics.contains("required preset is missing"),
+            "{diagnostics}"
+        );
+        assert!(
+            diagnostics.contains("required export is missing"),
+            "{diagnostics}"
+        );
+        fs::remove_dir_all(src).expect("temporary fixture cleanup");
+    }
+
+    #[test]
     fn child_errors_are_checked_against_the_parent_registry_rule() {
         let src = temporary_directory("parent-contract");
         let control = src.join("control/control.rs");
@@ -254,22 +318,24 @@ mod tests {
         let rule = src.join("control/registry_rule/registry_rule.rs");
         write(
             &control,
-            r#"crate::root_object! {
-    kind: Control,
-    needs_registry: true,
-    parent: crate::ROOT_NODE_ID,
-    registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,
-}"#,
+            r#"#[nichlink::object(
+    needs_registry = true,
+    parent = crate::ROOT_NODE_ID,
+    registry_rule_path = "src/control/registry_rule/registry_rule.rs",
+    registry_rule = crate::control::registry_rule::REGISTRATION_RULE,
+)]
+pub struct Control;"#,
         );
         write(
             &button,
-            r#"crate::control_object! {
-    kind: BrokenButton,
+            r#"#[nichlink::object(parent = crate::control::NODE_ID)]
+pub struct BrokenButton {
     preset: WrongPreset,
     parts: BrokenParts,
-    parent: crate::control::NODE_ID,
-    exports: ["control.preview"],
+}
+
+impl BrokenButton {
+    pub const EXPORTS: &'static [&'static str] = &["control.preview"];
 }"#,
         );
         write(

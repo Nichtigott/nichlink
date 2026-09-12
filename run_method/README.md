@@ -12,7 +12,8 @@ What stays here:
 - `CallTrace` frame stacks, locals, and data edges (`TraceMode::from_env`
   reads `NICH_LINK_TRACE`; the enum and its parser are kernel types)
 - Declaration macros: `host!`, `application!`, `static_graft_plan!`,
-  `graft_plan!`, `trace_call!`, and the generated `*_object!` family
+  `graft_plan!`, `trace_call!`, plus the re-exported `object` attribute macro
+  (`#[nichlink::object]`)
 - The authoring **executor** (feature `authoring`): applies file plans to the
   host's `src/` tree. The pure plan/render logic and the `FACE` field
   dictionary live in the kernel `authoring` module

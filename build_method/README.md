@@ -19,8 +19,7 @@ no environment mutation needed.
 The rendered plan lands in Cargo's `OUT_DIR`. The host crate root pulls it in
 with `nichlink_run_method::host!();` — equivalently
 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))` — making
-`builtin_static_plan()` and the per-level `{name}_object!` aliases available
-crate-wide.
+`builtin_static_plan()` available crate-wide.
 
 The optional host entry is parsed as Rust syntax, not text search:
 

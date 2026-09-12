@@ -7,7 +7,7 @@ pub mod authoring;
 pub mod declaration;
 #[path = "registry_core/diagnostic/diagnostic.rs"]
 pub mod diagnostic;
-#[path = "registry_core/identity/identity.rs"]
+#[path = "registry_core/identity/mod.rs"]
 pub mod identity;
 #[path = "registry_core/mir/mir.rs"]
 pub mod mir;

@@ -207,21 +207,11 @@ impl FaceManifest {
                 .map_or_else(|| source.to_string_lossy().into_owned(), normalized_path);
             format!("crate::{}::NODE_ID", module.replace('/', "::"))
         };
-        // The declaration macro names the registry that owns this face. The
-        // generated aliases are emitted by the build crate from the folder
-        // tree; `__nichlink_object!` remains their single hidden implementation.
-        // 注册声明的宏名表达当前注册面所属的父注册机。别名由 build crate
-        // 根据文件夹树生成，`__nichlink_object!` 仍是唯一隐藏实现。
-        let object_macro = if value("parent_source") == "<root>" {
-            "root_object".to_owned()
-        } else {
-            let source = Path::new(value("parent_source"));
-            let module = source
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .unwrap_or("registry");
-            format!("{module}_object")
-        };
+        // The generated face is a plain struct plus the `object` attribute;
+        // exports ride in an inherent `EXPORTS` const so the attribute stays
+        // readable even with long capability lists.
+        // 生成的注册面是普通结构体加 `object` 属性；exports 放在固有的
+        // `EXPORTS` 常量里，属性参数再多也不会难以阅读。
         let admission = render_admission(value("admission"))?;
         let exports = value("exports")
             .split(',')
@@ -230,17 +220,19 @@ impl FaceManifest {
             .map(|item| format!("\"{}\"", rust_string(item)))
             .collect::<Vec<_>>()
             .join(", ");
-        let exports_decl = if exports.is_empty() {
+        let exports_impl = if exports.is_empty() {
             String::new()
         } else {
-            format!("    exports: [{exports}],\n")
+            format!(
+                "impl {kind} {{\n    pub const EXPORTS: &'static [&'static str] = &[{exports}];\n}}\n\n"
+            )
         };
         let handle_traits = render_face_list("handle_traits", value("handle_traits"));
         let handle_contracts = render_path_list(value("handle_contracts"));
         let handle_contracts_decl = if handle_contracts.is_empty() {
             String::new()
         } else {
-            format!("    handle_contracts: [{handle_contracts}],\n")
+            format!("    handle_contracts = [{handle_contracts}],\n")
         };
         let handle_impls = render_impls(kind, value("handle_contracts"));
         let part_traits = render_face_list("part_traits", value("part_traits"));
@@ -248,7 +240,7 @@ impl FaceManifest {
         let part_contracts_decl = if part_contracts.is_empty() {
             String::new()
         } else {
-            format!("    part_contracts: [{part_contracts}],\n")
+            format!("    part_contracts = [{part_contracts}],\n")
         };
         let requirements = render_requirements(value("requires"));
         let provides = render_literal_list(value("provides"));
@@ -265,7 +257,7 @@ impl FaceManifest {
             String::new()
         } else {
             format!(
-                "\x20   stable_name: \"{}\",\n",
+                "    stable_name = \"{}\",\n",
                 rust_string(value("stable_name"))
             )
         };
@@ -283,7 +275,7 @@ impl FaceManifest {
             String::new()
         } else {
             format!(
-                "    name: {{ zh: \"{}\", en: \"{}\" }},\n",
+                "    name(zh = \"{}\", en = \"{}\"),\n",
                 rust_string(name_zh),
                 rust_string(name_en)
             )
@@ -292,7 +284,7 @@ impl FaceManifest {
             String::new()
         } else {
             format!(
-                "    summary: {{ zh: \"{}\", en: \"{}\" }},\n",
+                "    summary(zh = \"{}\", en = \"{}\"),\n",
                 rust_string(value("summary_zh")),
                 rust_string(value("summary_en"))
             )
@@ -301,52 +293,52 @@ impl FaceManifest {
         // use defaults without losing the contract surface.
         // 保留结构类型标记；说明文字和身份字段可以使用默认值。
         let preset_decl = if !is_default_type(preset, "NoPreset") {
-            format!("    preset: {preset},\n")
+            format!("    preset = {preset},\n")
         } else {
             String::new()
         };
         let parts_decl = if !is_default_type(parts, "NoParts") {
-            format!("    parts: {parts},\n")
+            format!("    parts = {parts},\n")
         } else {
             String::new()
         };
         let custom_shape =
             !is_default_type(preset, "NoPreset") || !is_default_type(parts, "NoParts");
         let preset_decl = if custom_shape && preset_decl.is_empty() {
-            format!("    preset: {preset},\n")
+            format!("    preset = {preset},\n")
         } else {
             preset_decl
         };
         let parts_decl = if custom_shape && parts_decl.is_empty() {
-            format!("    parts: {parts},\n")
+            format!("    parts = {parts},\n")
         } else {
             parts_decl
         };
         let params_decl = if !value("params").is_empty() && value("params") != kind {
-            format!("    params: \"{}\",\n", rust_string(value("params")))
+            format!("    params = \"{}\",\n", rust_string(value("params")))
         } else {
             String::new()
         };
         let handle_decl = if handle != kind || custom_shape {
-            format!("    handle: {handle},\n")
+            format!("    handle = {handle},\n")
         } else {
             String::new()
         };
         let needs_decl = if value("needs_registry") == "true" {
-            "    needs_registry: true,\n".to_owned()
+            "    needs_registry = true,\n".to_owned()
         } else {
             String::new()
         };
-        // Keep the parent visible even for root faces. The macro still has a
-        // root fallback for hand-written declarations, but generated faces
-        // should show their registration target explicitly.
-        // 即使父级是 root 也保留 parent 字段。手写声明仍可使用宏的 root
-        // 默认值，但生成注册面应明确展示自己的挂载目标。
-        let parent_decl = format!("    parent: {parent},\n");
+        // Keep the parent visible even for root faces. Hand-written
+        // declarations may rely on the macro's directory fallback, but
+        // generated faces should show their registration target explicitly.
+        // 即使父级是 root 也保留 parent 参数。手写声明可以使用宏的目录
+        // 推导缺省值，但生成注册面应明确展示自己的挂载目标。
+        let parent_decl = format!("    parent = {parent},\n");
         let registry_decl = if registry_name == value("module") {
             String::new()
         } else {
-            format!("    registry_name: {registry_name},\n")
+            format!("    registry_name = {registry_name},\n")
         };
         let canonical_rule_path = rule_path_for_source(value("source"));
         let registry_fields = if value("needs_registry") == "true" || has_custom_rule {
@@ -354,37 +346,37 @@ impl FaceManifest {
                 String::new()
             } else {
                 format!(
-                    "    registry_rule_path: \"{}\",\n",
+                    "    registry_rule_path = \"{}\",\n",
                     rust_string(&registry_rule_path)
                 )
             };
-            format!("{rule_path}    registry_rule: {registration_rule},\n")
+            format!("{rule_path}    registry_rule = {registration_rule},\n")
         } else {
             String::new()
         };
         let getting_decl = if !getting.is_empty() && getting != "None" {
-            format!("    getting_from_other_registry: {getting},\n")
+            format!("    getting_from_other_registry = {getting},\n")
         } else {
             String::new()
         };
         let admission_decl = if value("admission").is_empty() || value("admission") == "ANY" {
             String::new()
         } else {
-            format!("    admission: {admission},\n")
+            format!("    admission = {admission},\n")
         };
         let requirements_decl = if !requirements.is_empty() {
-            format!("    requires: [{requirements}],\n")
+            format!("    requires({requirements}),\n")
         } else {
             String::new()
         };
         let provides_decl = if !provides.is_empty() {
-            format!("    provides: [{provides}],\n")
+            format!("    provides({provides}),\n")
         } else {
             String::new()
         };
         let output_decl = if value("expected_output") != "()" || value("actual_output") != "()" {
             format!(
-                "    expected_output: \"{}\",\n    actual_output: \"{}\",\n",
+                "    expected_output = \"{}\",\n    actual_output = \"{}\",\n",
                 rust_string(value("expected_output")),
                 rust_string(value("actual_output"))
             )
@@ -392,12 +384,30 @@ impl FaceManifest {
             String::new()
         };
         let runtime_decl = if !runtime_checks.is_empty() {
-            format!("    runtime_checks: [{runtime_checks}],\n")
+            format!("    runtime_checks = [{runtime_checks}],\n")
         } else {
             String::new()
         };
+        let args = format!(
+            "{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}"
+        );
+        let attribute = if args.trim().is_empty() {
+            "#[nichlink::object]".to_owned()
+        } else {
+            format!("#[nichlink::object(\n{args})]")
+        };
+        // Marker fields stay private and unread by design; the attribute
+        // macro only inspects their types at compile time.
+        // 标记字段刻意保持私有且不被读取；属性宏只在编译期检查它们的类型。
+        let struct_decl = if custom_shape {
+            format!(
+                "#[allow(dead_code)]\npub struct {kind} {{\n    preset: {preset},\n    parts: {parts},\n}}\n"
+            )
+        } else {
+            format!("pub struct {kind};\n")
+        };
         let source = format!(
-            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
+            "{module_doc}\n\nuse nichlink_run_method as nichlink;\n\n{handle_doc}\n{attribute}\n{struct_decl}\n{exports_impl}{handle_impls}"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn registration_kinds_are_compact_and_deduplicated() {
         let kinds = nichlink::source::registration_kinds(
-            "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
+            "#[nichlink::object]\npub struct Button;\n#[nichlink::object]\npub struct Button;\n",
         );
         assert_eq!(kinds, ["Button"]);
     }

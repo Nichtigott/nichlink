@@ -7,9 +7,7 @@ use std::path::Path;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_identity;
 use super::types::Node;
-use super::{
-    SourceScope, cached_parent_id, face_source_is_active, node_id, parsed_face, relative_display,
-};
+use super::{SourceScope, face_source_is_active, node_id, parsed_face, relative_display};
 use nichlink::{TopologyRecord, validate_face_topology};
 
 #[derive(Clone, Debug)]
@@ -86,11 +84,7 @@ fn collect_static_faces(
                 && face.field("plugin").is_none()
             {
                 let id = node_id(src, node).expect("a parsed face has an identity");
-                let parent = cached_parent_id(src, &face).or_else(|| {
-                    face.field("parent")
-                        .is_none()
-                        .then_some(registry_identity::package_root_node_id())
-                });
+                let parent = super::face_parent_id(src, &relative, &face);
                 match parent {
                     Some(parent) => records.push(StaticFaceRecord {
                         id,

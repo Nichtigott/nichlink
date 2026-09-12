@@ -168,7 +168,7 @@ pub fn render_face_list(field: &str, value: &str) -> String {
     if values.is_empty() {
         String::new()
     } else {
-        format!("    {field}: [{}],\n", values.join(", "))
+        format!("    {field} = [{}],\n", values.join(", "))
     }
 }
 
@@ -263,7 +263,7 @@ pub fn render_flow_expression(value: &str) -> Result<String, String> {
         .parse::<u32>()
         .map_err(|_| "flow version must be an unsigned integer".to_owned())?;
     Ok(format!(
-        "    flow: crate::FlowContract::new(crate::ContractId::new(\"{}\"), {version}, \"{}\", \"{}\"),\n",
+        "    flow = crate::FlowContract::new(crate::ContractId::new(\"{}\"), {version}, \"{}\", \"{}\"),\n",
         rust_string(id),
         rust_string(input),
         rust_string(output),
@@ -305,7 +305,7 @@ pub fn render_flow_provider(value: &str) -> Result<String, String> {
     }
     syn::parse_str::<syn::Path>(value)
         .map_err(|_| "flow_provider must be a Rust type path".to_owned())?;
-    Ok(format!("    flow_provider: {value},\n"))
+    Ok(format!("    flow_provider = {value},\n"))
 }
 
 /// Parse a flow expression back into the editor's compact form.

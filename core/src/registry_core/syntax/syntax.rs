@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
+use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
@@ -186,13 +187,27 @@ pub fn parse_faces(source: &str) -> Result<Vec<FaceSyntax>, FaceSyntaxError> {
         syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
     let mut visitor = FaceVisitor {
         faces: Vec::new(),
+        exports_consts: BTreeMap::new(),
         error: None,
     };
     visitor.visit_file(&file);
     if let Some(error) = visitor.error {
         Err(error)
     } else {
-        Ok(visitor.faces)
+        let mut faces = visitor.faces;
+        // An inherent `impl Kind { pub const EXPORTS: ... = &[...]; }` supplies
+        // the export list when the attribute omits `exports = [...]`.
+        // 属性未写 `exports = [...]` 时，由固有
+        // `impl Kind { pub const EXPORTS: ... = &[...]; }` 提供 exports 列表。
+        for face in &mut faces {
+            if !face.fields.contains_key("exports") {
+                let kind = face.fields.get("kind").map(|field| compact(&field.tokens));
+                if let Some(exports) = kind.and_then(|kind| visitor.exports_consts.get(&kind)) {
+                    face.fields.insert("exports".to_owned(), exports.clone());
+                }
+            }
+        }
+        Ok(faces)
     }
 }
 
@@ -268,6 +283,9 @@ pub fn source_references(source: &str) -> Result<SourceReferences, FaceSyntaxErr
 
 struct FaceVisitor {
     faces: Vec<FaceSyntax>,
+    /// Inherent `EXPORTS` consts collected per kind name, keyed by kind.
+    /// 按 kind 收集的固有 `EXPORTS` 常量。
+    exports_consts: BTreeMap<String, FieldSyntax>,
     error: Option<FaceSyntaxError>,
 }
 
@@ -317,32 +335,276 @@ impl<'ast> Visit<'ast> for ReferenceVisitor {
 }
 
 impl<'ast> Visit<'ast> for FaceVisitor {
-    fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
+    fn visit_item_struct(&mut self, item: &'ast syn::ItemStruct) {
         if self.error.is_some() {
             return;
         }
-        let Some(segment) = item.mac.path.segments.last() else {
+        let Some(attr) = item.attrs.iter().find(|attr| is_object_attribute(attr)) else {
             return;
         };
-        let macro_name = segment.ident.to_string();
-        let is_face_macro = matches!(macro_name.as_str(), "control_object" | "external_object")
-            || macro_name.ends_with("_object");
-        if !is_face_macro {
-            return;
-        }
-        match parse_fields(item.mac.tokens.clone(), item.mac.span()) {
-            Ok(fields) => {
-                let span = item.span();
-                self.faces.push(FaceSyntax {
-                    macro_name,
-                    location: location(span),
-                    end: end_location(span),
-                    fields,
-                })
-            }
+        match struct_face_fields(item, attr) {
+            Ok(fields) => self.faces.push(FaceSyntax {
+                macro_name: "object".to_owned(),
+                location: location(attr.span()),
+                end: end_location(item.span()),
+                fields,
+            }),
             Err(error) => self.error = Some(error),
         }
     }
+
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if self.error.is_some() || item.trait_.is_some() {
+            return;
+        }
+        let syn::Type::Path(self_ty) = &*item.self_ty else {
+            return;
+        };
+        let Some(kind) = self_ty
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string())
+        else {
+            return;
+        };
+        for impl_item in &item.items {
+            let syn::ImplItem::Const(constant) = impl_item else {
+                continue;
+            };
+            if constant.ident != "EXPORTS" {
+                continue;
+            }
+            if let Some(literals) = exports_literal_tokens(&constant.expr) {
+                let mut tokens = TokenStream::new();
+                for (index, literal) in literals.iter().enumerate() {
+                    if index > 0 {
+                        tokens.extend([TokenTree::Punct(proc_macro2::Punct::new(
+                            ',',
+                            proc_macro2::Spacing::Alone,
+                        ))]);
+                    }
+                    tokens.extend(literal.clone());
+                }
+                self.exports_consts.insert(
+                    kind.clone(),
+                    FieldSyntax {
+                        tokens: TokenStream::from(TokenTree::Group(proc_macro2::Group::new(
+                            Delimiter::Bracket,
+                            tokens,
+                        ))),
+                        location: location(constant.ident.span()),
+                    },
+                );
+            }
+        }
+    }
+}
+
+fn is_object_attribute(attr: &syn::Attribute) -> bool {
+    attr.path()
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "object")
+}
+
+/// Build the `fields` map for a `#[nichlink::object]` struct. Attribute
+/// arguments are stored under their key; `name(...)`/`summary(...)` groups are
+/// rewritten into the `{ zh: ..., en: ... }` shape and `requires(...)` /
+/// `provides(...)` into `[ ... ]` so the existing accessors keep working.
+/// 为 `#[nichlink::object]` 结构体构造 `fields` 映射。属性参数按键存储；
+/// `name(...)`/`summary(...)` 组改写成 `{ zh: ..., en: ...}` 形状，
+/// `requires(...)`/`provides(...)` 改写成 `[ ... ]`，现有取值函数因此无需改动。
+fn struct_face_fields(
+    item: &syn::ItemStruct,
+    attr: &syn::Attribute,
+) -> Result<std::collections::BTreeMap<String, FieldSyntax>, FaceSyntaxError> {
+    let mut fields = std::collections::BTreeMap::new();
+    insert_field(
+        &mut fields,
+        "kind",
+        item.ident.to_token_stream(),
+        item.ident.span(),
+    )?;
+    match &item.fields {
+        syn::Fields::Named(named) => {
+            for field in &named.named {
+                let Some(name) = &field.ident else { continue };
+                match name.to_string().as_str() {
+                    "preset" | "parts" => insert_field(
+                        &mut fields,
+                        &name.to_string(),
+                        field.ty.to_token_stream(),
+                        name.span(),
+                    )?,
+                    other => {
+                        return Err(syntax_error(
+                            name.span(),
+                            format!(
+                                "unknown `object` field `{other}`; a face struct only carries `preset` and `parts` types"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        syn::Fields::Unit => {}
+        syn::Fields::Unnamed(_) => {
+            return Err(syntax_error(
+                item.span(),
+                "`#[nichlink::object]` expects a plain struct (no tuple fields)",
+            ));
+        }
+    }
+
+    let args = match &attr.meta {
+        syn::Meta::Path(_) => TokenStream::new(),
+        syn::Meta::List(list) => list.tokens.clone(),
+        _ => {
+            return Err(syntax_error(
+                attr.span(),
+                "`#[nichlink::object]` expects `object` or `object(...)`",
+            ));
+        }
+    };
+    for chunk in split_top_level(args) {
+        let mut trees = chunk.into_iter();
+        let Some(TokenTree::Ident(name)) = trees.next() else {
+            return Err(syntax_error(
+                attr.span(),
+                "expected `name = value` or `name(...)` in the `object` attribute",
+            ));
+        };
+        let key = name.to_string();
+        match trees.next() {
+            Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => {
+                let value: TokenStream = trees.collect();
+                if value.is_empty() {
+                    return Err(syntax_error(name.span(), format!("`{key}` has no value")));
+                }
+                insert_field(&mut fields, &key, value, name.span())?;
+            }
+            Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis => {
+                let converted = convert_group(&key, group.stream(), name.span())?;
+                insert_field(&mut fields, &key, converted, name.span())?;
+            }
+            _ => {
+                return Err(syntax_error(
+                    name.span(),
+                    format!("expected `=` or `(...)` after `{key}`"),
+                ));
+            }
+        }
+    }
+    Ok(fields)
+}
+
+fn convert_group(
+    key: &str,
+    tokens: TokenStream,
+    span: Span,
+) -> Result<TokenStream, FaceSyntaxError> {
+    match key {
+        "name" | "summary" => {
+            // `name(zh = "...", en = "...")` → `{ zh: "...", en: "..." }`
+            let mut body = TokenStream::new();
+            for (index, chunk) in split_top_level(tokens).into_iter().enumerate() {
+                if index > 0 {
+                    body.extend([TokenTree::Punct(proc_macro2::Punct::new(
+                        ',',
+                        proc_macro2::Spacing::Alone,
+                    ))]);
+                }
+                let mut trees = chunk.into_iter();
+                let Some(TokenTree::Ident(lang)) = trees.next() else {
+                    return Err(syntax_error(
+                        span,
+                        format!("{key}(...) expects `zh = \"...\"` / `en = \"...\"`"),
+                    ));
+                };
+                let Some(TokenTree::Punct(punct)) = trees.next() else {
+                    return Err(syntax_error(
+                        lang.span(),
+                        format!("expected `=` after `{lang}`"),
+                    ));
+                };
+                if punct.as_char() != '=' {
+                    return Err(syntax_error(
+                        punct.span(),
+                        format!("expected `=` after `{lang}`"),
+                    ));
+                }
+                let value: TokenStream = trees.collect();
+                if value.is_empty() {
+                    return Err(syntax_error(lang.span(), format!("`{lang}` has no value")));
+                }
+                body.extend([TokenTree::Ident(lang)]);
+                body.extend([TokenTree::Punct(proc_macro2::Punct::new(
+                    ':',
+                    proc_macro2::Spacing::Alone,
+                ))]);
+                body.extend(value);
+            }
+            Ok(TokenStream::from(TokenTree::Group(
+                proc_macro2::Group::new(Delimiter::Brace, body),
+            )))
+        }
+        "requires" | "provides" => Ok(TokenStream::from(TokenTree::Group(
+            proc_macro2::Group::new(Delimiter::Bracket, tokens),
+        ))),
+        _ => Err(syntax_error(
+            span,
+            format!(
+                "unknown `object` group `{key}(...)`; expected name(...), summary(...), requires(...), provides(...)"
+            ),
+        )),
+    }
+}
+
+fn insert_field(
+    fields: &mut std::collections::BTreeMap<String, FieldSyntax>,
+    key: &str,
+    tokens: TokenStream,
+    span: Span,
+) -> Result<(), FaceSyntaxError> {
+    if fields
+        .insert(
+            key.to_owned(),
+            FieldSyntax {
+                tokens,
+                location: location(span),
+            },
+        )
+        .is_some()
+    {
+        return Err(syntax_error(span, format!("duplicate field `{key}`")));
+    }
+    Ok(())
+}
+
+/// Extract the string literals from `&["a", "b"]` (or `["a", "b"]`) EXPORTS
+/// initializers; anything else (const references, computed values) returns
+/// `None` and leaves the export list unresolved.
+/// 从 `&["a", "b"]`（或 `["a", "b"]`）形式的 EXPORTS 初始化表达式提取字符串
+/// 字面量；其它形式（常量引用、计算值）返回 `None`，exports 保持未解析。
+fn exports_literal_tokens(expr: &syn::Expr) -> Option<Vec<TokenStream>> {
+    let expr = match expr {
+        syn::Expr::Reference(reference) => &*reference.expr,
+        other => other,
+    };
+    let syn::Expr::Array(array) = expr else {
+        return None;
+    };
+    array
+        .elems
+        .iter()
+        .map(|elem| match elem {
+            syn::Expr::Lit(literal) if matches!(literal.lit, syn::Lit::Str(_)) => {
+                Some(literal.to_token_stream())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn parse_fields(
@@ -514,28 +776,154 @@ pub fn syntax_error(span: Span, message: impl Into<String>) -> FaceSyntaxError {
 }
 
 #[cfg(test)]
+mod struct_form_tests {
+    use super::{ParentSyntax, parse_face, replace_face_macro};
+
+    #[test]
+    fn explicit_root_face_with_full_rule_metadata_parses() {
+        let source = "use nichlink_run_method as nichlink;\n\n#[nichlink::object(\n    needs_registry = true,\n    registry_name = control,\n    parent = crate::ROOT_NODE_ID,\n    registry_rule_path = \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule = crate::control::registry_rule::REGISTRATION_RULE,\n)]\npub struct ControlRegistry;\n";
+        let face = parse_face(source).unwrap().unwrap();
+        assert_eq!(face.path("kind").as_deref(), Some("ControlRegistry"));
+    }
+
+    #[test]
+    fn parses_object_struct_with_attribute_metadata() {
+        let source = r#"
+#[nichlink::object(
+    parent = crate::control::NODE_ID,
+    needs_registry = true,
+    name(zh = "按钮", en = "Button"),
+    summary(zh = "摘要", en = "Summary"),
+    requires("layout.viewport" => "ControlRegistry"),
+    provides("control.render"),
+)]
+pub struct Button {
+    preset: ControlPreset,
+    parts: ButtonParts,
+}
+"#;
+        let face = parse_face(source).unwrap().unwrap();
+
+        assert_eq!(face.macro_name, "object");
+        assert_eq!(face.path("kind").as_deref(), Some("Button"));
+        assert_eq!(face.path("preset").as_deref(), Some("ControlPreset"));
+        assert_eq!(face.path("parts").as_deref(), Some("ButtonParts"));
+        assert_eq!(face.boolean("needs_registry"), Some(true));
+        assert_eq!(face.localized("name", "zh").as_deref(), Some("按钮"));
+        assert_eq!(face.localized("summary", "en").as_deref(), Some("Summary"));
+        assert_eq!(
+            face.requirements("requires").unwrap(),
+            [("layout.viewport".to_owned(), "ControlRegistry".to_owned())]
+        );
+        assert_eq!(face.string_list("provides").unwrap(), ["control.render"]);
+        assert_eq!(
+            face.parent(),
+            Some(ParentSyntax::NodePath("crate::control".to_owned()))
+        );
+    }
+
+    #[test]
+    fn impl_exports_const_supplies_the_export_list() {
+        let source = r#"
+#[nichlink::object]
+pub struct Button {
+    preset: ControlPreset,
+    parts: ButtonParts,
+}
+
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.preview", "control.render"];
+}
+"#;
+        let face = parse_face(source).unwrap().unwrap();
+
+        assert_eq!(
+            face.string_list("exports").unwrap(),
+            ["control.preview", "control.render"]
+        );
+        let exports = face.field("exports").expect("exports field");
+        assert!(exports.starts_with('['), "{exports}");
+        assert!(exports.contains("\"control.preview\""), "{exports}");
+        assert!(exports.contains("\"control.render\""), "{exports}");
+    }
+
+    #[test]
+    fn attribute_exports_win_over_the_impl_const() {
+        let source = r#"
+#[nichlink::object(exports = ["control.attr"])]
+pub struct Button {}
+
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.impl"];
+}
+"#;
+        let face = parse_face(source).unwrap().unwrap();
+
+        assert_eq!(face.string_list("exports").unwrap(), ["control.attr"]);
+    }
+
+    #[test]
+    fn unknown_struct_field_is_rejected() {
+        let source = "#[nichlink::object] pub struct Button { wat: Thing }";
+        let error = parse_face(source).unwrap_err();
+        assert!(error.message.contains("unknown `object` field `wat`"));
+    }
+
+    #[test]
+    fn unknown_group_is_rejected() {
+        let source = "#[nichlink::object(frobnicate(a = \"b\"))] pub struct Button {}";
+        let error = parse_face(source).unwrap_err();
+        assert!(
+            error
+                .message
+                .contains("unknown `object` group `frobnicate(...)`"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn replacing_a_struct_face_preserves_its_impl_block() {
+        let source = r#"#[nichlink::object]
+pub struct Button { preset: P, parts: Q }
+impl Button { pub const EXPORTS: &'static [&'static str] = &["a"]; }
+#[test] fn works() {}
+"#;
+        let replacement = r#"#[nichlink::object]
+pub struct Button { preset: P2, parts: Q2 }"#;
+
+        let copied = replace_face_macro(source, replacement).unwrap();
+
+        assert!(copied.contains("preset: P2"));
+        assert!(copied.contains("pub const EXPORTS"));
+        assert!(copied.contains("#[test] fn works()"));
+        assert!(!copied.contains("preset: P,"));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{ParentSyntax, parse_face, replace_face_macro, source_references};
 
     #[test]
     fn parses_multiline_registration_tokens_and_locations() {
         let source = r#"
-crate::control_object! {
-    kind: Button,
-    name: { zh: "按钮", en: "Button" },
-    requires: [
+#[nichlink::object(
+    name(zh = "按钮", en = "Button"),
+    requires(
         "layout.viewport" => "ControlRegistry",
         "draw.basic" => "BasicDrawing",
-    ],
-    parent: crate::NodeId::from_path("control/control.rs", "ControlRegistry"),
-    getting_from_other_registry: Some("engine"),
-}
+    ),
+    parent = crate::NodeId::from_path("control/control.rs", "ControlRegistry"),
+    getting_from_other_registry = Some("engine"),
+)]
+pub struct Button;
 "#;
         let face = parse_face(source).unwrap().unwrap();
 
         assert_eq!(face.path("kind").as_deref(), Some("Button"));
         assert_eq!(face.localized("name", "zh").as_deref(), Some("按钮"));
-        assert_eq!(face.field_location("requires").unwrap().line, 5);
+        assert_eq!(face.field_location("requires").unwrap().line, 4);
         assert_eq!(
             face.requirements("requires").unwrap(),
             [
@@ -559,10 +947,8 @@ crate::control_object! {
     #[test]
     fn parses_namespaced_package_root_parent() {
         let source = r#"
-crate::control_object! {
-    kind: Workspace,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
-}
+#[nichlink::object(parent = crate::root_node_id(env!("CARGO_PKG_NAME")))]
+pub struct Workspace;
 "#;
         let face = parse_face(source).unwrap().unwrap();
 
@@ -571,31 +957,27 @@ crate::control_object! {
 
     #[test]
     fn rejects_duplicate_fields() {
-        let source = "crate::control_object! { kind: First, kind: Second }";
+        let source =
+            r#"#[nichlink::object(stable_name = "a", stable_name = "b")] pub struct Button;"#;
         let error = parse_face(source).unwrap_err();
-        assert!(error.message.contains("duplicate field `kind`"));
+        assert!(error.message.contains("duplicate field `stable_name`"));
     }
 
     #[test]
     fn replacing_a_face_preserves_its_rust_implementation() {
-        let source = r#"pub struct Button;
-impl Button { pub fn paint(&self) -> u32 { 7 } }
-crate::control_object! {
-    kind: Button,
-    registry_name: button,
-}
+        let source = r#"impl Button { pub fn paint(&self) -> u32 { 7 } }
+#[nichlink::object(registry_name = button)]
+pub struct Button;
 #[test] fn paints() { assert_eq!(Button.paint(), 7); }
 "#;
-        let replacement = r#"crate::control_object! {
-    kind: Button,
-    registry_name: button_graft,
-}"#;
+        let replacement = r#"#[nichlink::object(registry_name = button_graft)]
+pub struct Button;"#;
 
         let copied = replace_face_macro(source, replacement).unwrap();
 
         assert!(copied.contains("pub fn paint(&self) -> u32 { 7 }"));
-        assert!(copied.contains("registry_name: button_graft"));
-        assert!(!copied.contains("registry_name: button,"));
+        assert!(copied.contains("registry_name = button_graft"));
+        assert!(!copied.contains("registry_name = button,"));
         assert!(copied.contains("#[test] fn paints()"));
     }
 
@@ -606,7 +988,7 @@ use crate::unused::Thing;
 fn run() {
     crate::control::object::button::dispatch_action("unused::fake()", true);
     // crate::comment::fake();
-    crate::control_object! { kind: Fake, parent: crate::hidden::NODE_ID }
+    #[nichlink::object(parent = crate::hidden::NODE_ID)] pub struct Fake;
 }
 "#;
         let references = source_references(source).unwrap();

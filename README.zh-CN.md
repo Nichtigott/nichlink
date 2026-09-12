@@ -144,59 +144,59 @@ Cargo 不会把使用者的 `main.rs` 交给依赖 crate 的 `build.rs`，因此
 
 ## 注册面
 
-注册面分成两层。Rust 的 `struct` 和 `impl` 是真正运行的实现；声明宏
-记录它在树中的位置，以及什么对象可以进入或替换它。
+注册面就是一个带 `#[nichlink::object]` 属性的普通 Rust `struct`。
+`struct` 和 `impl` 是真正运行的实现；属性参数记录它在树中的位置，以及
+什么对象可以进入或替换它。
 
 ```rust
-pub struct Canvas;
+use nichlink_run_method as nichlink;
 
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_run_method::PresetContract for CanvasPreset {
+impl nichlink::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_run_method::PartsContract for CanvasParts {
+impl nichlink::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
 
+#[nichlink::object(
+    summary(zh = "二维画布", en = "A 2-D drawing surface"),
+    requires("viewport" => "layout.viewport"),
+    provides("canvas.frame"),
+    expected_output = "CanvasFrame",
+    actual_output = "CanvasFrame",
+    flow = nichlink::FlowContract::new(
+        nichlink::ContractId::new("canvas.render.v1"),
+        1,
+        "CanvasInput",
+        "CanvasFrame",
+    ),
+)]
+pub struct Canvas {
+    preset: CanvasPreset,
+    parts: CanvasParts,
+}
+
 impl Canvas {
+    pub const EXPORTS: &'static [&'static str] = &["canvas.render"];
+
     pub fn render(&self, input: CanvasInput) -> CanvasFrame {
         // 这里仍然是普通 Rust 实现
         input.into_frame()
     }
 }
-
-// 父级宏由构建阶段按源码层级生成。
-// 例如放在 node_editor 下，就使用 node_editor_object!。
-crate::node_editor_object! {
-    kind: Canvas,
-    preset: CanvasPreset,
-    parts: CanvasParts,
-    handle: Canvas,
-    summary: { zh: "二维画布", en: "A 2-D drawing surface" },
-    exports: ["canvas.render"],
-    needs_registry: false,
-    requires: ["viewport" => "layout.viewport"],
-    provides: ["canvas.frame"],
-    expected_output: "CanvasFrame",
-    actual_output: "CanvasFrame",
-    flow: nichlink_run_method::FlowContract::new(
-        nichlink_run_method::ContractId::new("canvas.render.v1"),
-        1,
-        "CanvasInput",
-        "CanvasFrame",
-    ),
-}
 ```
 
-大多数字段都有安全默认值。最小注册面可以写成
-`crate::root_object! { kind: App }`，或者在子级使用生成的
-`<parent>_object! { kind: Child }`。只有确实有信息时再写 `summary`、
-`exports`、`requires`、`flow`，不用为了填满表格重复默认值。
+大多数字段都有安全默认值。最小注册面就是
+`#[nichlink::object] pub struct App;` —— 结构体名同时是 kind、默认 handle
+和默认显示名。只有确实有信息时再写 `summary`、`exports`、`requires`、
+`flow`，不用为了填满表格重复默认值。位于文件夹面之下的注册面可以省略
+`parent`，构建阶段会按目录树推导挂载位置。
 
 这里有三种不同的校验，故意不合并：
 
@@ -253,6 +253,7 @@ src/
 ```rust
 // src/control/control.rs
 use crate::control::registry_rule::REGISTRATION_RULE;
+use nichlink_run_method as nichlink;
 
 pub struct Control;
 pub struct ControlFrame;
@@ -267,16 +268,16 @@ pub trait ActionPartsContract {
     fn action_id(&self) -> &str;
 }
 
-crate::root_object! {
-    kind: Control,
-    needs_registry: true,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
-    registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: REGISTRATION_RULE,
-}
+#[nichlink::object(
+    needs_registry = true,
+    parent = crate::root_node_id(env!("CARGO_PKG_NAME")),
+    registry_rule_path = "src/control/registry_rule/registry_rule.rs",
+    registry_rule = REGISTRATION_RULE,
+)]
+pub struct Control;
 ```
 
-这里的 `needs_registry: true` 才是“Control 可以接收子对象”的声明。
+这里的 `needs_registry = true` 才是“Control 可以接收子对象”的声明。
 `parent` 则表示 Control 自己位于包根下。它没有列出 Button；新增另一个合法
 子对象时，不需要回来改 `control.rs`。
 
@@ -300,8 +301,8 @@ pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
 // src/control/object/button/button.rs
 use crate::control::{ActionPartsContract, ControlFrame, ControlHandle};
 use crate::{PartsContract, PresetContract};
+use nichlink_run_method as nichlink;
 
-pub struct Button;
 pub struct ActionParts;
 
 pub struct ButtonParts {
@@ -320,10 +321,26 @@ impl PartsContract for ButtonParts {
     const PROVIDED_PARTS: &'static [&'static str] = &["label", "action", "tooltip"];
 }
 
+#[nichlink::object(
+    parent = crate::control::NODE_ID,
+    handle_traits = ["ControlHandle"],
+    handle_contracts = [crate::control::ControlHandle],
+    part_traits = ["ActionPartsContract"],
+    part_contracts = [crate::control::ActionPartsContract],
+)]
+pub struct Button {
+    preset: ActionParts,
+    parts: ButtonParts,
+}
+
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.render"];
+}
+
 impl ControlHandle for Button {
     type Parts = ButtonParts;
 
-    fn paint(&self, parts: &ButtonParts) -> ControlFrame {
+    fn paint(&self, parts: &Self::Parts) -> ControlFrame {
         let _ = (&parts.label, &parts.action);
         ControlFrame
     }
@@ -334,30 +351,17 @@ impl ActionPartsContract for ButtonParts {
         &self.action
     }
 }
-
-crate::control_object! {
-    kind: Button,
-    preset: ActionParts,
-    parts: ButtonParts,
-    handle: Button,
-    parent: crate::control::NODE_ID,
-    exports: ["control.render"],
-    handle_traits: ["ControlHandle"],
-    handle_contracts: [crate::control::ControlHandle],
-    part_traits: ["ActionPartsContract"],
-    part_contracts: [crate::control::ActionPartsContract],
-}
 ```
 
-`control_object!` 来自父目录名，让源码一眼能看出层级；真正用于建树的事实是
-`parent: crate::control::NODE_ID`。构建阶段会核对宏名、文件夹位置和 `parent`，
-所以把 Button 误接到另一个 Registry 会在生成代码前失败。
+注册面就是普通结构体；`parent = crate::control::NODE_ID` 把它挂到 Control
+的 Registry 下。省略 `parent` 时，构建阶段按目录树推导挂载位置，所以把
+Button 误接到另一个 Registry 会在生成代码前失败。
 
 这份声明会经过四层验证：
 
 | 检查 | 由谁执行 | 在本例中验证什么 |
 | --- | --- | --- |
-| 父子拓扑 | `nichlink-build-method` | Button 的宏名、目录位置和 `parent` 是否都指向 Control |
+| 父子拓扑 | `nichlink-build-method` | Button 的目录位置和 `parent` 是否都指向 Control |
 | Rust 类型合同 | rustc | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
 | 父级注册规范 | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则 |
 | 外部准入 | Registry 连接器 | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内 |
@@ -370,12 +374,14 @@ crate::control_object! {
 类型相同的 `PresetContract` / `PartsContract`，这样错误只聚焦在父规则：
 
 ```rust
-crate::control_object! {
-    kind: BrokenButton,
+#[nichlink::object(parent = crate::control::NODE_ID)]
+pub struct BrokenButton {
     preset: WrongPreset,
     parts: BrokenParts,
-    parent: crate::control::NODE_ID,
-    exports: ["control.preview"],
+}
+
+impl BrokenButton {
+    pub const EXPORTS: &'static [&'static str] = &["control.preview"];
 }
 ```
 
@@ -383,7 +389,7 @@ crate::control_object! {
 缺少的 `ActionParts` preset、`control.render` export、`ControlHandle` 和
 `ActionPartsContract`。如果只从 `BrokenParts::PROVIDED_PARTS` 删除 `action`，
 生成代码的 const 检查会拒绝缺失的结构 part；如果保留
-`handle_contracts: [crate::control::ControlHandle]` 却删除真实 impl，rustc 会在
+`handle_contracts = [crate::control::ControlHandle]` 却删除真实 impl，rustc 会在
 声明点给出 trait bound 错误。这三条路径分别处理“声明缺项”“结构常量缺项”
 和“Rust 实现不存在”，不会伪装成同一种错误。
 
@@ -392,7 +398,7 @@ crate::control_object! {
 | 层次 | 负责的问题 |
 | --- | --- |
 | Rust `struct` / `impl` | 对象真正如何工作 |
-| `parent` + 父级专属宏 | 对象注册到哪里 |
+| `parent`（省略时由目录位置推导） | 对象注册到哪里 |
 | `registry_rule` | 进入父 Registry 的对象至少长什么样 |
 | `admission` | 这个分支允许依赖哪些外部路径 |
 | `FlowContract` | graft 接口两端的数据是否兼容 |

@@ -161,11 +161,11 @@ fn parent_rule_marks_the_fields_a_child_must_supply() {
 
 #[test]
 fn edit_recovers_compiler_checked_contract_paths_from_source() {
-    let source = r#"crate::root_object! {
-        kind: Button,
-        handle_contracts: [crate::ui::ControlHandle],
-        part_contracts: [crate::ui::ActionPartsContract],
-    }"#;
+    let source = r#"#[nichlink::object(
+    handle_contracts = [crate::ui::ControlHandle],
+    part_contracts = [crate::ui::ActionPartsContract],
+)]
+pub struct Button;"#;
 
     assert_eq!(
         super::keyboard::declaration_contract_paths(source),
@@ -333,8 +333,9 @@ fn new_project_and_explicit_root_face_compile() {
     let workspace =
         std::fs::read_to_string(root.join("src/workspace/workspace.rs")).expect("workspace face");
     assert!(workspace.starts_with("// generated-by=NichLink"));
-    assert!(workspace.contains("crate::root_object!"));
-    assert!(workspace.contains("crate::root_object! {\n    kind: Workspace,"));
+    assert!(workspace.contains("#[nichlink::object("));
+    assert!(workspace.contains("pub struct Workspace;"));
+    assert!(workspace.contains("parent = crate::root_node_id(env!(\"CARGO_PKG_NAME\"))"));
 
     let workspace_id = app
         .registry
@@ -356,8 +357,11 @@ fn new_project_and_explicit_root_face_compile() {
     );
     let panel = std::fs::read_to_string(root.join("src/workspace/object/panel/panel.rs"))
         .expect("panel face");
-    assert!(panel.contains("crate::workspace_object!"));
-    assert!(panel.contains("crate::workspace::object::panel::registry_rule::REGISTRATION_RULE"));
+    assert!(panel.contains("#[nichlink::object("));
+    assert!(panel.contains("pub struct Panel;"));
+    assert!(panel.contains(
+        "registry_rule = crate::workspace::object::panel::registry_rule::REGISTRATION_RULE"
+    ));
     let panel_id = app
         .registry
         .depth_first()
@@ -373,12 +377,13 @@ fn new_project_and_explicit_root_face_compile() {
     let button =
         std::fs::read_to_string(root.join("src/workspace/object/panel/object/button/button.rs"))
             .expect("third-level button face");
-    assert!(button.contains("crate::panel_object!"));
-    assert!(button.contains("parent: crate::workspace::object::panel::NODE_ID"));
+    assert!(button.contains("#[nichlink::object("));
+    assert!(button.contains("parent = crate::workspace::object::panel::NODE_ID"));
 
-    // `control_object!` is no longer the generic implementation. It is
-    // generated only as the declaration name for children of `control`.
-    // `control_object!` 不再是通用实现，只作为 control 子对象的声明名生成。
+    // Every face is a plain struct with the `object` attribute now; children
+    // of `control` mount to `crate::control::NODE_ID` like any other face.
+    // 现在每个注册面都是带 `object` 属性的普通结构体；control 的子对象
+    // 与任何其他注册面一样挂到 `crate::control::NODE_ID`。
     let mut control = AddState::new(root_id);
     control.values[0] = root_id.to_string();
     control.values[1] = "control".to_owned();
@@ -399,8 +404,8 @@ fn new_project_and_explicit_root_face_compile() {
     app.submit_add(&control_child);
     let slider = std::fs::read_to_string(root.join("src/control/object/slider/slider.rs"))
         .expect("control child face");
-    assert!(slider.contains("crate::control_object!"));
-    assert!(slider.contains("parent: crate::control::NODE_ID"));
+    assert!(slider.contains("#[nichlink::object("));
+    assert!(slider.contains("parent = crate::control::NODE_ID"));
 
     let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
     assert!(manifest.contains("edition = \"2024\""));
@@ -477,7 +482,7 @@ fn new_project_starts_with_an_empty_registration_tree() {
 }
 
 #[test]
-fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
+fn edit_save_button_writes_changes_and_adopts_a_markerless_face() {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -488,9 +493,9 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
     std::fs::write(
         &control,
-        "pub struct ControlRegistry;\n\ncrate::control_object! {\n    kind: ControlRegistry,\n    needs_registry: true,\n    registry_name: control,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n}\n",
+        "#[nichlink::object(needs_registry = true, registry_name = control, parent = crate::ROOT_NODE_ID, registry_rule_path = \"src/control/registry_rule/registry_rule.rs\", registry_rule = crate::control::registry_rule::REGISTRATION_RULE)]\npub struct ControlRegistry;\n",
     )
-    .expect("write legacy control");
+    .expect("write markerless control face");
     std::fs::write(
         &rule,
         "use crate::RegistrationRule;\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::ANY;\n",
@@ -525,7 +530,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
 }
 
 #[test]
-fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
+fn startup_accepts_a_markerless_struct_face_without_parent() {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -533,11 +538,8 @@ fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
     let root = std::env::temp_dir().join(format!("nichlink-studio-old-face-{suffix}"));
     let source = root.join("src/test/test.rs");
     std::fs::create_dir_all(source.parent().expect("face parent")).expect("create fixture");
-    std::fs::write(
-        &source,
-        "// generated-by=NichLink\npub struct Test;\ncrate::control_object! { kind: Test, }\n",
-    )
-    .expect("write old generated face");
+    std::fs::write(&source, "#[nichlink::object]\npub struct Test;\n")
+        .expect("write markerless face");
     select_project(root.clone(), root.join("Cargo.toml"), "old-face-test");
 
     let app = App::load();
@@ -567,14 +569,14 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
     let old_source = root.join("src/test/test.rs");
     let initial = std::fs::read_to_string(&old_source).expect("new face source");
-    assert!(initial.contains("crate::root_object! {\n    kind: Test,"));
-    assert!(initial.contains("crate::root_object!"));
-    assert!(!initial.contains("preset:"));
-    assert!(!initial.contains("parts:"));
-    assert!(!initial.contains("exports:"));
-    assert!(!initial.contains("name:"));
-    assert!(!initial.contains("registry_name:"));
-    assert!(initial.contains("parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\"))"));
+    assert!(initial.contains("pub struct Test;"));
+    assert!(initial.contains("#[nichlink::object("));
+    assert!(!initial.contains("preset ="));
+    assert!(!initial.contains("parts ="));
+    assert!(!initial.contains("exports"));
+    assert!(!initial.contains("name("));
+    assert!(!initial.contains("registry_name ="));
+    assert!(initial.contains("parent = crate::root_node_id(env!(\"CARGO_PKG_NAME\"))"));
 
     let id = app
         .registry
@@ -604,7 +606,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(
         std::fs::read_to_string(root.join("src/test/object/child/object/leaf/leaf.rs"))
             .expect("three-level child source")
-            .contains("crate::child_object!")
+            .contains("#[nichlink::object(")
     );
 
     let mut edit = AddState::new(root_id);
@@ -632,7 +634,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(
         std::fs::read_to_string(&new_child)
             .expect("renamed child source")
-            .contains("crate::panel_object!")
+            .contains("#[nichlink::object(")
     );
     assert_eq!(
         app.selected_info().map(|info| info.source.file.as_str()),
@@ -678,7 +680,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     assert!(
         std::fs::read_to_string(&new_source)
             .expect("renamed face source")
-            .contains("kind: Panel")
+            .contains("pub struct Panel;")
     );
 
     let _ = std::fs::remove_dir_all(&root);

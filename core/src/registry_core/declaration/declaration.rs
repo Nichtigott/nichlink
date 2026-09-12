@@ -265,6 +265,20 @@ impl PartsContract for NoParts {
     const PROVIDED_PARTS: &'static [&'static str] = &[];
 }
 
+/// Export list carrier for the `#[nichlink::object]` struct form.
+/// `#[nichlink::object]` 结构体形态使用的 exports 列表载体。
+///
+/// The attribute macro generates `impl FaceExports for Kind` with the default
+/// empty list. An inherent `impl Kind { pub const EXPORTS: ... }` written next
+/// to the struct wins through Rust's inherent-item priority, so authors only
+/// write an impl block when the face actually exports names.
+/// 属性宏为 Kind 生成默认空列表的 `impl FaceExports for Kind`；
+/// 结构体旁手写的固有 `impl Kind { pub const EXPORTS: ... }` 依 Rust
+/// 固有项优先规则胜出，因此只有真正需要 exports 时才写 impl 块。
+pub trait FaceExports {
+    const EXPORTS: &'static [&'static str] = &[];
+}
+
 /// Force preset and parts output types to match during macro expansion.
 /// 在宏展开时强制 preset 与 parts 的输出类型相同。
 ///

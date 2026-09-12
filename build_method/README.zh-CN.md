@@ -16,7 +16,7 @@
 渲染出的计划落在 Cargo 的 `OUT_DIR`。宿主 crate 根部用
 `nichlink_run_method::host!();` 引入——等价于
 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`——使
-`builtin_static_plan()` 与各级 `{name}_object!` 别名在全 crate 可用。
+`builtin_static_plan()` 在全 crate 可用。
 
 可选的宿主入口按 Rust 语法解析，而不是文本搜索：
 

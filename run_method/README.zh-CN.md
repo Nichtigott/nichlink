@@ -11,7 +11,7 @@ trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件
 - `CallTrace` 帧栈、局部值与数据边（`TraceMode::from_env` 读取
   `NICH_LINK_TRACE`；枚举与解析器是 kernel 类型）
 - 声明宏：`host!`、`application!`、`static_graft_plan!`、`graft_plan!`、
-  `trace_call!` 以及生成的 `*_object!` 族
+  `trace_call!`，以及重导出的 `object` 属性宏（`#[nichlink::object]`）
 - authoring **执行器**（feature `authoring`）：把文件计划应用到宿主的
   `src/` 树。纯计划/渲染逻辑与 `FACE` 字段词典在 kernel 的 `authoring`
   模块

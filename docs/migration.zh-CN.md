@@ -10,7 +10,36 @@
 
 ## 外部声明
 
-跨 crate 声明使用 `nichlink::external_object!`，必须填写插件来源、版本、目标框架和父节点身份。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
+跨 crate 声明改用 `#[nichlink::object(source = "...", parent = ...)]`，
+由 collector 自动链接，必须填写插件来源、版本、目标框架和父节点身份。开发构建
+只有在宿主显式启用 `collector = debug` 时才发现这些声明；core 本身不依赖
+inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
+
+## 从声明宏 DSL 迁移
+
+注册面现在是普通结构体。旧的
+`crate::<parent>_object! { kind: Button, preset: ..., parts: ..., parent: ... }`
+写法改为：
+
+```rust
+#[nichlink::object(parent = crate::control::NODE_ID)]
+pub struct Button {
+    preset: ActionParts,
+    parts: ButtonParts,
+}
+```
+
+结构体名取代 `kind`；属性参数使用 `name = value` 语法；
+`name`/`summary`/`requires`/`provides` 使用组语法；`exports` 移到固有常量里：
+
+```rust
+impl Button {
+    pub const EXPORTS: &'static [&'static str] = &["control.render"];
+}
+```
+
+位于文件夹面之下的注册面可以省略 `parent`，构建阶段会按目录树推导挂载位置。
+`nichlink::external_object!` 已删除，改为给属性传 `source = "..."`。
 
 ## Studio 与插件宿主
 

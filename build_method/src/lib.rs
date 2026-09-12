@@ -66,11 +66,7 @@ use manifests::{
 use renderer::{materialize_sources, render_lib};
 use static_plan::static_plan;
 use types::{BuildInput, Node};
-use validation::{
-    aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
-    parsed_face,
-};
-
+use validation::{aggregate_requirements, aggregate_stable_name_errors, parsed_face};
 static CACHED_NODE_IDS: OnceLock<BTreeMap<String, (NodeId, String)>> = OnceLock::new();
 
 /// First-pass source scope. It gates whole registration faces before rustc
@@ -650,7 +646,7 @@ fn update_discovery_cache(
                 if let Some(handle) = face.path("handle") {
                     writeln!(unit_content, "handle\t{handle}").unwrap();
                 }
-                let parent_id = cached_parent_id(src, face);
+                let parent_id = face_parent_id(src, &path, face);
                 if let Some(parent_id) = parent_id {
                     writeln!(unit_content, "parent\t{parent_id}").unwrap();
                 }
@@ -718,6 +714,40 @@ pub(crate) fn cached_parent_id(src: &Path, face: &FaceSyntax) -> Option<NodeId> 
             let parent = parsed_face(&parent_source, &relative)?;
             let kind = parent.path("kind")?;
             Some(registry_identity::package_node_id(&relative, &kind))
+        }
+    }
+}
+
+/// Resolve the parent identity for a face: an explicit `parent` declaration
+/// wins; when it is omitted the parent is the nearest ancestor folder face.
+/// 解析注册面的父节点身份：显式 `parent` 声明优先；省略时取最近的祖先
+/// 文件夹面，再没有则落到包根。
+pub(crate) fn face_parent_id(src: &Path, relative: &str, face: &FaceSyntax) -> Option<NodeId> {
+    if face.parent().is_some() {
+        return cached_parent_id(src, face);
+    }
+    directory_parent_id(src, relative)
+}
+
+fn directory_parent_id(src: &Path, relative: &str) -> Option<NodeId> {
+    let mut dir = Path::new(relative).parent()?.to_path_buf();
+    // The first ancestor above the face's own folder is the parent candidate.
+    // 面自身文件夹的上一级才是父候选。
+    if !dir.pop() {
+        return Some(registry_identity::package_root_node_id());
+    }
+    loop {
+        let name = dir.file_name()?.to_string_lossy();
+        let candidate = dir.join(format!("{name}.rs"));
+        if src.join(&candidate).is_file() {
+            let parent_relative = relative_display(src, &src.join(&candidate));
+            let source = fs::read_to_string(src.join(&candidate)).ok()?;
+            let parent = parsed_face(&source, &parent_relative)?;
+            let kind = parent.path("kind")?;
+            return Some(registry_identity::package_node_id(&parent_relative, &kind));
+        }
+        if !dir.pop() {
+            return Some(registry_identity::package_root_node_id());
         }
     }
 }
@@ -854,12 +884,12 @@ mod tests {
         std::fs::create_dir_all(plugin.parent().expect("parent")).expect("mkdir");
         std::fs::write(
             &plain,
-            "crate::root_object! {\n    kind: A,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+            "#[nichlink::object(parent = crate::root_node_id(env!(\"CARGO_PKG_NAME\")))]\npub struct A;\n",
         )
         .expect("write plain face");
         std::fs::write(
             &plugin,
-            "crate::root_object! {\n    kind: C,\n    plugin: manifest,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+            "#[nichlink::object(plugin = manifest, parent = crate::root_node_id(env!(\"CARGO_PKG_NAME\")))]\npub struct C;\n",
         )
         .expect("write plugin face");
 

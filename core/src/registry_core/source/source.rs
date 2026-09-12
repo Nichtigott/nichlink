@@ -373,27 +373,30 @@ pub fn direct_calls(body: &str, current: &str) -> Vec<String> {
     calls.into_iter().collect()
 }
 
-/// Collect the deduplicated `kind:` values used in registration declarations.
-/// 收集注册声明中出现过的 `kind:` 取值，去重并排序。
+/// Collect the deduplicated struct names used in `#[nichlink::object]`
+/// registration declarations.
+/// 收集 `#[nichlink::object]` 注册声明中的结构体名，去重并排序。
 pub fn registration_kinds(source: &str) -> Vec<String> {
     let mut kinds = Vec::new();
+    let mut pending_attribute = false;
     for line in source.lines() {
         let trimmed = line.trim();
-        if let Some(kind) = trimmed.split_once("kind:").map(|(_, remainder)| remainder) {
-            let kind = kind
-                .trim()
-                .split(|character: char| {
-                    character == ',' || character == '}' || character.is_whitespace()
-                })
-                .next()
-                .unwrap_or_default();
+        if trimmed.contains("#[nichlink::object") {
+            pending_attribute = true;
+        }
+        if pending_attribute && let Some((_, rest)) = trimmed.split_once("pub struct ") {
+            let kind: String = rest
+                .chars()
+                .take_while(|character| character.is_ascii_alphanumeric() || *character == '_')
+                .collect();
             if !kind.is_empty()
                 && kind
                     .chars()
                     .all(|character| character.is_ascii_alphanumeric() || character == '_')
             {
-                kinds.push(kind.to_owned());
+                kinds.push(kind);
             }
+            pending_attribute = false;
         }
     }
     kinds.sort();
@@ -485,7 +488,7 @@ mod tests {
     #[test]
     fn registration_kinds_are_compact_and_deduplicated() {
         let kinds = registration_kinds(
-            "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
+            "#[nichlink::object]\npub struct Button;\n#[nichlink::object(parent = crate::control::NODE_ID)]\npub struct Button;",
         );
         assert_eq!(kinds, ["Button"]);
     }
