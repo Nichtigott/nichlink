@@ -42,7 +42,37 @@ pub fn face_fields(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/// Which macro the normalised declaration goes back to.
+/// 归一化后的声明要回到哪个宏。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Target {
+    /// The generated host aliases' path.
+    /// 生成的宿主别名那条路。
+    Control,
+    /// `external_object!`, whose matcher names the source file first.
+    /// `external_object!`——它的 matcher 首要指出源文件。
+    External,
+}
+
 fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
+    let mut list = input.into_iter().collect::<Vec<_>>();
+    let mut target = Target::Control;
+    if let (Some(TokenTree::Punct(at)), Some(TokenTree::Ident(name))) = (list.first(), list.get(1))
+        && at.as_char() == '@'
+    {
+        target = match name.to_string().as_str() {
+            "control" => Target::Control,
+            "external" => Target::External,
+            other => {
+                return Err(error_at(
+                    name.span(),
+                    format!("unknown face field target `{other}`"),
+                ));
+            }
+        };
+        list.drain(0..2);
+    }
+    let input = list.into_iter().collect::<Tokens>();
     let original = input.to_string();
     let mut collector: Option<TokenTree> = None;
     let mut fields: Vec<Field> = Vec::new();
@@ -68,6 +98,13 @@ fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
             return Err(error_at(
                 name.span(),
                 format!("face field `{name}` has no value"),
+            ));
+        }
+        if name == "source" && target == Target::Control {
+            return Err(error_at(
+                name.span(),
+                "`source` belongs to `external_object!`; a generated host alias                  records the file itself"
+                    .to_owned(),
             ));
         }
         if name == "collector" {
@@ -131,7 +168,7 @@ fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
         body.extend(field.tokens.clone());
         body.extend([punct(',', Spacing::Alone)]);
     }
-    if body.to_string() == original {
+    if target == Target::Control && body.to_string() == original {
         // Reordering and re-emitting produced this very token stream, so another
         // round would only recurse: the declaration already is in the accepted
         // order and still did not match, which means a field's shape is wrong.
@@ -152,7 +189,13 @@ fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
         TokenTree::Ident(Ident::new("nichlink_run_method", Span::call_site())),
         punct(':', Spacing::Joint),
         punct(':', Spacing::Alone),
-        TokenTree::Ident(Ident::new("__nichlink_object", Span::call_site())),
+        TokenTree::Ident(Ident::new(
+            match target {
+                Target::Control => "__nichlink_object",
+                Target::External => "__external_object",
+            },
+            Span::call_site(),
+        )),
         punct('!', Spacing::Alone),
         TokenTree::Group(Group::new(Delimiter::Brace, body)),
     ]);

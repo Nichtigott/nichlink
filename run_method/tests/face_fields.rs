@@ -79,3 +79,52 @@ fn a_reordered_face_reports_the_authors_lines() {
     assert_eq!(canonical::REGISTRATION.source.column, 5);
     assert_eq!(shuffled::REGISTRATION.source.column, 5);
 }
+
+mod external_shuffled {
+    use nichlink_run_method::registry_core::{
+        ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
+    };
+
+    pub struct ExternalFast;
+
+    // Same field set as any external face, but `;`-separated and in a different
+    // order: the front end must sort it and send it to `__external_object!`.
+    // 与任何外部面相同的字段集合，但用 `;` 分隔且顺序不同：前端必须把它排序后送到
+    // `__external_object!`。
+    nichlink_run_method::external_object! {
+        kind: ExternalFast;
+        flow: FlowContract::new(ContractId::new("t.v1"), 1, "In", "Out");
+        source: "face_fields/external_fast.rs";
+        handle: ExternalFast;
+        params: "ExternalFast";
+        parts: NoParts;
+        preset: NoPreset;
+        name: { zh: "外部", en: "External" };
+        summary: { zh: "外部实现", en: "External implementation" };
+        exports: ["t.out"];
+        needs_registry: false;
+        registry_name: external_shuffled;
+        parent: root_node_id(env!("CARGO_PKG_NAME"));
+        getting_from_other_registry: None;
+        registry_rule_path: "face_fields/external_fast.rs";
+        registry_rule: RegistrationRule::ANY;
+        requires: [];
+        provides: [];
+        expected_output: "Out";
+        actual_output: "Out";
+        runtime_checks: [];
+    }
+}
+
+/// An external face is written by hand too, so it gets the same tolerance.
+/// 外部面同样是手写的，因此享有同样的宽容。
+#[test]
+fn an_external_face_accepts_semicolons_and_any_order() {
+    assert_eq!(external_shuffled::REGISTRATION.kind, "ExternalFast");
+    assert_eq!(external_shuffled::REGISTRATION.name.en, "External");
+    assert!(!external_shuffled::REGISTRATION.needs_registry);
+    assert_eq!(
+        external_shuffled::REGISTRATION.source.file,
+        "face_fields/external_fast.rs"
+    );
+}

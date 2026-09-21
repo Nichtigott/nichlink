@@ -707,7 +707,7 @@ macro_rules! __control_object {
         collector: $collector:ident,
         $($tokens:tt)*
     } => {
-        ::nichlink_run_method::face_fields! { collector: $collector, $($tokens)* }
+        ::nichlink_run_method::face_fields! { @control collector: $collector, $($tokens)* }
     };
 
 }
@@ -835,12 +835,18 @@ macro_rules! __face_fields {
 #[macro_export]
 macro_rules! external_object {
     { @tokens collector: $collector:ident, $($tokens:tt)* } => {
-        $crate::__external_object! { collector: $collector, $($tokens)* }
+        // The author's fields go through the same front end as a generated
+        // alias, so `;` separators and any order are accepted here too; it
+        // re-dispatches to `__external_object!`, whose matcher names the source
+        // file first.
+        // 作者的字段与生成的别名走同一个前端，因此这里同样接受 `;` 与任意顺序；
+        // 前端会回派到 `__external_object!`——它的 matcher 首要指出源文件。
+        $crate::face_fields! { @external collector: $collector, $($tokens)* }
         #[cfg(rust_analyzer)]
         $crate::__face_fields! { $($tokens)* }
     };
     { @tokens $($tokens:tt)* } => {
-        $crate::__external_object! { collector: linked, $($tokens)* }
+        $crate::face_fields! { @external collector: linked, $($tokens)* }
         #[cfg(rust_analyzer)]
         $crate::__face_fields! { $($tokens)* }
     };
