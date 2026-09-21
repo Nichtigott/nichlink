@@ -78,18 +78,27 @@ authoring syntax:
 - each generated `*_object!` alias, and `external_object!`, also hands the
   author's tokens to `__face_fields!`, which splices them verbatim into a real
   field list;
-- `run_method` defines that macro twice: the `cfg(rust_analyzer)` copy expands
-  to `FaceFields { … }`, the other expands to nothing.
+- that call carries `#[cfg(rust_analyzer)]`, so `rustc` never expands it and
+  never has to parse an authoring spelling that is not a Rust expression
+  (`name: { zh: "…", en: "…" }`, for example).
 
 `FaceFields` is a hidden mirror of the authoring vocabulary whose fields are
 declared in the order the macros accept and typed `()` because nothing ever
-constructs it. An editor therefore lists the remaining field names in the
-accepted order, and `rustc` expands `__face_fields!` to nothing — so it never
-parses an authoring spelling that is not a Rust expression
-(`name: { zh: "…", en: "…" }`, for example) and consumer crates never need to
-declare `cfg(rust_analyzer)`. Only the host crate, which also carries the
-`cfg` on its IDE-only shadow declarations, declares it through its build
-script.
+constructs it, so an editor lists the remaining names in that order.
+
+The cfg belongs to the crate being edited. A host declares it from its build
+script — `build_method` emits `rustc-check-cfg` — and an external
+implementation, which has no build script, declares it in its own manifest:
+
+```toml
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
+```
+
+Note that the cfg cannot be moved into `run_method` instead: an editor applies
+`cfg(rust_analyzer)` to the crates it analyzes directly, not to a dependency
+resolved from git, so a macro defined in the dependency would take the
+compiler branch and offer nothing.
 
 Identities are unchanged: `source`, `registry_name`, and therefore `NodeId`,
 registry paths, and every graft selector keep the same values.

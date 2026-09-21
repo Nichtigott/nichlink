@@ -125,7 +125,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -480,7 +480,9 @@ mod tests {
         // `__face_fields!`，由它变成编辑器能补全的字段列表。rustc 从不展开这次
         // 调用：它带 `cfg(rust_analyzer)`。
         assert!(
-            output.contains("::nichlink_run_method::__face_fields! { $($tokens)* }"),
+            output.contains(
+                "#[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! { $($tokens)* }"
+            ),
             "aliases must expose the field vocabulary to an editor: {output}"
         );
         assert!(output.contains("macro_rules! root_object"));

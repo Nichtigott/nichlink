@@ -37,9 +37,18 @@
 宏的 token 树对编辑器是不透明的，因此 `crate::control_object! { … }` 的大括号里过去什么都补不出来——既没有字段名，连值位置的路径补全也没有。两处改动在不改变作者语法的前提下解决了它：
 
 - 每个生成的 `*_object!` 别名以及 `external_object!`，都会把作者的 token 再交给 `__face_fields!`，由它原样拼进一个真实字段列表；
-- `run_method` 定义该宏的两个版本：`cfg(rust_analyzer)` 的那份展开成 `FaceFields { … }`，另一份展开为空。
+- 这次调用带 `#[cfg(rust_analyzer)]`，因此 `rustc` 从不展开它，也就永远不必解析那些并非 Rust 表达式的作者侧写法（例如 `name: { zh: "…", en: "…" }`）。
 
-`FaceFields` 是作者侧词表的隐藏镜像，字段按宏接受的顺序声明、类型一律写作 `()`——因为没有任何代码构造它。编辑器因此能按接受顺序列出还没写的字段名；而 `rustc` 把 `__face_fields!` 展开为空，于是永远不会解析那些并非 Rust 表达式的作者侧写法（例如 `name: { zh: "…", en: "…" }`），消费方 crate 也不必认识 `cfg(rust_analyzer)`——只有同时用该 cfg 承载 IDE 影子声明的宿主 crate，才通过自己的 build script 声明它。
+`FaceFields` 是作者侧词表的隐藏镜像，字段按宏接受的顺序声明、类型一律写作 `()`——因为没有任何代码构造它。编辑器因此能按这个顺序列出还没写的字段名。
+
+该 cfg 属于**被编辑的那个 crate**。宿主通过自己的 build script 声明它——`build_method` 会输出 `rustc-check-cfg`；没有 build script 的外部实现则在自己的 manifest 里声明：
+
+```toml
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
+```
+
+注意不能把这个 cfg 挪进 `run_method`：编辑器只对**自己直接分析的 crate** 置 `cfg(rust_analyzer)`，对从 git 解析来的依赖不置，于是依赖里定义的宏会走编译器分支、什么也补不出来。
 
 身份不变：`source`、`registry_name`，以及由此而来的 `NodeId`、注册路径和全部 graft 选择器都保持原值。
 

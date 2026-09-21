@@ -16,6 +16,3 @@ syn = { version = "2", features = ["full", "parsing", "visit"], optional = true 
 [lib]
 name = "nichlink_run_method"
 path = "src/lib.rs"
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
