@@ -180,6 +180,29 @@ impl FaceManifest {
             || (!rule.is_empty() && rule != "ANY")
     }
 
+    /// Whether `registry_rule:` is redundant because the canonical sibling rule
+    /// derives it.
+    /// `registry_rule:` 是否因为同目录规范规则已经推导出它而多余。
+    ///
+    /// Only a face that owns a registry derives the field: the resolver defaults
+    /// every other face to the permissive rule, which is what a child face wants,
+    /// since the rule that governs it belongs to its parent. A face whose rule was
+    /// moved elsewhere keeps naming it.
+    /// 只有拥有注册机的面才推导该字段：解析器把其余面默认成宽松规则——这正是子面的需要，
+    /// 因为管它的规则属于它的父级。规则被挪到别处的面仍然写出它。
+    pub(crate) fn derives_rule_from_the_sibling(&self) -> bool {
+        if self.values.get("needs_registry").map(String::as_str) != Some("true") {
+            return false;
+        }
+        let source = self.values.get("source").map(String::as_str).unwrap_or("");
+        let declared = self
+            .values
+            .get("registry_rule_path")
+            .map_or("", String::as_str)
+            .trim();
+        declared.is_empty() || declared == rule_path_for_source(source)
+    }
+
     pub(crate) fn render_source(&self) -> Result<String, String> {
         // Rebuilding the declaration would drop `plugin:`: the manifest layer
         // reads it, but nothing here can render its expression back, and the
@@ -385,7 +408,8 @@ impl FaceManifest {
         };
         let canonical_rule_path = rule_path_for_source(value("source"));
         let registry_fields = if self.owns_rule_source() {
-            let rule_path = if registry_rule_path == canonical_rule_path {
+            let canonical = registry_rule_path == canonical_rule_path;
+            let rule_path = if canonical {
                 String::new()
             } else {
                 format!(
@@ -393,7 +417,21 @@ impl FaceManifest {
                     rust_string(&registry_rule_path)
                 )
             };
-            format!("{rule_path}    registry_rule: {registration_rule},\n")
+            // A face that owns a registry derives its rule from the canonical
+            // module beside it, so writing the full path back would repeat the
+            // face's own location in every declaration. A leaf face with a custom
+            // rule still names it: the default for a face that owns no registry is
+            // permissive, not the sibling rule.
+            // 拥有注册机的面从旁边的规范模块推导规则，因此把完整路径写回去等于在每份声明里
+            // 重复注册面自己的位置。带自定义规则的叶子面仍需写出它：不拥有注册机的面默认是
+            // 宽松规则，而不是同目录规则。
+            let derived = canonical && self.derives_rule_from_the_sibling();
+            let rule = if derived {
+                String::new()
+            } else {
+                format!("    registry_rule: {registration_rule},\n")
+            };
+            format!("{rule_path}{rule}")
         } else {
             String::new()
         };
@@ -474,6 +512,56 @@ mod rule_source_ownership_tests {
         assert!(!manifest("false", "ANY").owns_rule_source());
         assert!(manifest("false", "parts:paint").owns_rule_source());
         assert!(manifest("true", "ANY").owns_rule_source());
+    }
+
+    /// A face that owns a registry and keeps its rule at the canonical path does
+    /// not repeat that path to reference the rule: the declaration resolves it
+    /// from the sibling module instead. A leaf face, or one whose rule lives
+    /// elsewhere, still names it.
+    /// 拥有注册机、且规则就在规范路径上的面不必为了引用规则而重复该路径：声明改为从同目录
+    /// 模块推导它。叶子面、或规则放在别处的面仍然写出它。
+    #[test]
+    fn a_registry_face_derives_the_rule_it_keeps_beside_it() {
+        let manifest = |needs_registry: &str, declared_path: &str| {
+            let mut manifest = FaceManifest {
+                values: BTreeMap::new(),
+            };
+            // `source` is relative to the package `src` directory, which is the
+            // form the manifest keeps and `rule_path_for_source` consumes.
+            // `source` 相对包的 `src` 目录，这正是清单保存、`rule_path_for_source`
+            // 消费的形式。
+            manifest
+                .values
+                .insert("source".to_owned(), "widget/widget.rs".to_owned());
+            manifest
+                .values
+                .insert("needs_registry".to_owned(), needs_registry.to_owned());
+            manifest
+                .values
+                .insert("registration_rule".to_owned(), "parts:paint".to_owned());
+            if !declared_path.is_empty() {
+                manifest
+                    .values
+                    .insert("registry_rule_path".to_owned(), declared_path.to_owned());
+            }
+            manifest
+        };
+
+        // Canonical path, whether it is written out or left to the default.
+        assert!(manifest("true", "").derives_rule_from_the_sibling());
+        assert!(
+            manifest("true", "src/widget/registry_rule/registry_rule.rs")
+                .derives_rule_from_the_sibling()
+        );
+        // A rule that was moved elsewhere keeps its explicit reference.
+        assert!(!manifest("true", "src/widget/other/rules.rs").derives_rule_from_the_sibling());
+        // A face that owns no registry defaults to the permissive rule, so it
+        // cannot derive the sibling without changing what it enforces.
+        assert!(!manifest("false", "").derives_rule_from_the_sibling());
+        assert!(
+            !manifest("false", "src/widget/registry_rule/registry_rule.rs")
+                .derives_rule_from_the_sibling()
+        );
     }
 }
 

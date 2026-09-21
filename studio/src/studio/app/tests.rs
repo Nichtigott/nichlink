@@ -357,7 +357,16 @@ fn new_project_and_explicit_root_face_compile() {
     let panel = std::fs::read_to_string(root.join("src/workspace/object/panel/panel.rs"))
         .expect("panel face");
     assert!(panel.contains("crate::workspace_object!"));
-    assert!(panel.contains("crate::workspace::object::panel::registry_rule::REGISTRATION_RULE"));
+    // A face that owns a registry does not repeat the rule path: the declaration
+    // resolves `registry_rule:` to the canonical module beside the face, and the
+    // file written just above is that module.
+    // 拥有注册机的面不再重复规则路径：声明把 `registry_rule:` 解析到注册面旁边的规范
+    // 模块，而上面刚写下的那个文件就是该模块。
+    assert!(panel.contains("needs_registry: true"));
+    assert!(
+        !panel.contains("registry_rule:"),
+        "the derived rule must not be written back: {panel}"
+    );
     let panel_id = app
         .registry
         .depth_first()

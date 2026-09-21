@@ -273,8 +273,6 @@ The parent defines the shared interfaces and declares that it owns a Registry:
 
 ```rust
 // src/control/control.rs
-use crate::control::registry_rule::REGISTRATION_RULE;
-
 pub struct Control;
 pub struct ControlFrame;
 
@@ -292,8 +290,10 @@ crate::root_object! {
     kind: Control,
     needs_registry: true,
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    // No `registry_rule:` line: this face owns a registry, so the rule resolves
+    // to the canonical module beside it (`super::registry_rule`), and there is no
+    // second copy of the path to keep in step.
     registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: REGISTRATION_RULE,
 }
 ```
 

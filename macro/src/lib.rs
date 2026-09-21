@@ -42,6 +42,76 @@ pub fn face_fields(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/// The `registry_rule` a face gets when it does not write one.
+/// 注册面没有写 `registry_rule` 时得到什么。
+///
+/// The input is `<fallback> ; <needs_registry> ; <author expression?>`. The
+/// author's expression always wins. A face that owns a registry
+/// (`needs_registry: true`) takes the **canonical sibling rule** — the rule
+/// module the authoring layout keeps beside the face folder — and every other
+/// face keeps the permissive fallback the declarative layer passes in.
+/// 输入是 `<fallback> ; <needs_registry> ; <作者表达式?>`。作者写下的表达式永远最优先。
+/// 拥有注册机的面（`needs_registry: true`）取**同目录规范规则**——创作布局放在注册面
+/// 目录旁的那个规则模块——其余注册面保留声明层传进来的宽松默认值。
+///
+/// The path is relative (`super::registry_rule`) on purpose, and that is why this
+/// has to be a proc macro: a folder face file is loaded as the inner module of
+/// its folder, so the rule module is its *sibling*, and `module_path!()` is a
+/// string that cannot become a path. Tokens built here carry `Span::call_site()`,
+/// so the relative path resolves in the author's own module.
+/// 路径是相对的（`super::registry_rule`）而不是绝对的，这也正是它必须是过程宏的原因：
+/// 文件夹注册面文件被载入为其文件夹的内层模块，因此规则模块是它的**兄弟**；而
+/// `module_path!()` 是字符串，无法变成路径。这里生成的 token 带 `Span::call_site()`，
+/// 因此相对路径在作者自己的模块里解析。
+#[proc_macro]
+pub fn face_rule_or(input: TokenStream) -> TokenStream {
+    let mut parts = split_semicolons(Tokens::from(input)).into_iter();
+    let fallback = parts.next().unwrap_or_default();
+    let needs_registry = parts.next().unwrap_or_default();
+    let authored = parts.next().unwrap_or_default();
+    if !authored.is_empty() {
+        return authored.into();
+    }
+    let owns_registry = needs_registry
+        .into_iter()
+        .map(|token| token.to_string())
+        .collect::<String>();
+    if owns_registry == "true" {
+        return "super :: registry_rule :: REGISTRATION_RULE"
+            .parse::<Tokens>()
+            .expect("the canonical rule path is a static path")
+            .into();
+    }
+    fallback.into()
+}
+
+/// Split a token stream at its top-level `;`, keeping at most three parts.
+/// 在顶层 `;` 处切分 token 流，最多保留三段。
+///
+/// A `;` inside a group (`{ … }`, `( … )`, `[ … ]`) belongs to that group, so it
+/// is never a separator here; anything after the third separator stays in the
+/// third part.
+/// 组（`{ … }`、`( … )`、`[ … ]`）内的 `;` 属于该组，因此绝不算分隔符；第三个分隔符
+/// 之后的内容留在第三段。
+fn split_semicolons(tokens: Tokens) -> Vec<Tokens> {
+    let mut parts = vec![Tokens::new()];
+    for token in tokens {
+        let is_separator = matches!(
+            &token,
+            TokenTree::Punct(punct) if punct.as_char() == ';'
+        ) && parts.len() < 3;
+        if is_separator {
+            parts.push(Tokens::new());
+        } else {
+            parts
+                .last_mut()
+                .expect("a part is always open")
+                .extend([token]);
+        }
+    }
+    parts
+}
+
 /// Which macro the normalised declaration goes back to.
 /// 归一化后的声明要回到哪个宏。
 #[derive(Clone, Copy, PartialEq, Eq)]

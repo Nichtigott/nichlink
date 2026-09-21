@@ -138,6 +138,67 @@ fn the_parenthesised_form_declares_the_same_face() {
     assert!(lines.iter().all(|line| *line > 0), "lines: {lines:?}");
 }
 
+/// The canonical rule this test file keeps for its own module, exactly where the
+/// authoring layout puts it: beside the face, in `registry_rule`.
+/// 本测试文件为自己模块保留的规范规则，位置正是创作布局规定的地方：注册面旁边的
+/// `registry_rule`。
+mod registry_rule {
+    use nichlink_run_method::registry_core::RegistrationRule;
+
+    pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
+        .require_exports(&["control.render"])
+        .require_handle_traits(&["ControlHandle"]);
+}
+
+/// A directory face that owns a registry may omit `registry_rule:` outright: it
+/// then takes the canonical sibling rule rather than the permissive default.
+/// 拥有注册机的目录面可以直接省略 `registry_rule:`：此时取同目录的规范规则，
+/// 而不是宽松默认值。
+mod omitted_rule {
+    nichlink_run_method::__nichlink_object! {
+        kind: RuleOmitted,
+        name: { zh: "省略规则", en: "Rule omitted" },
+        needs_registry: true,
+        registry_name: omitted_rule,
+        parent: nichlink_run_method::registry_core::root_node_id("face-fields-test"),
+    }
+}
+
+/// A face that owns no registry keeps the permissive default when it omits the
+/// field, because the rule that governs it belongs to its parent.
+/// 不拥有注册机的面省略该字段时保留宽松默认值：管它的规则属于它的父级。
+mod leaf_no_rule {
+    nichlink_run_method::__nichlink_object! {
+        kind: LeafNoRule,
+        registry_name: leaf_no_rule,
+    }
+}
+
+/// Omitting the field is not the same as writing `ANY`: a registry-owning face
+/// takes the rule beside it.
+/// 省略字段不等于写 `ANY`：拥有注册机的面取它旁边那份规则。
+#[test]
+fn an_omitted_rule_resolves_to_the_canonical_sibling() {
+    let derived = omitted_rule::REGISTRATION.registry_rule;
+    let canonical = registry_rule::REGISTRATION_RULE;
+    assert_eq!(derived.required_exports, canonical.required_exports);
+    assert_eq!(
+        derived.required_handle_traits,
+        canonical.required_handle_traits
+    );
+    assert_eq!(derived.required_exports, ["control.render"]);
+}
+
+/// A face that owns no registry keeps `ANY` when it omits the field.
+/// 不拥有注册机的面省略该字段时保留 `ANY`。
+#[test]
+fn a_face_without_a_registry_keeps_the_permissive_default() {
+    let rule = leaf_no_rule::REGISTRATION.registry_rule;
+    assert!(rule.required_exports.is_empty());
+    assert!(rule.required_handle_traits.is_empty());
+    assert_eq!(rule.required_preset, None);
+}
+
 mod external_shuffled {
     use nichlink_run_method::registry_core::{
         ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,

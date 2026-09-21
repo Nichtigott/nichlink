@@ -25,6 +25,10 @@ pub use nichlink::*;
 /// the proc-macro crate itself.
 /// 注册面字段前端；再导出后宿主无需自己依赖 proc-macro crate。
 pub use nichlink_macro::face_fields;
+/// The default `registry_rule` resolver used by the declarative face arms.
+/// 声明式注册面分支使用的 `registry_rule` 默认值解析器。
+#[doc(hidden)]
+pub use nichlink_macro::face_rule_or as __face_rule_or;
 
 #[cfg(feature = "authoring")]
 #[allow(ambiguous_glob_reexports)]

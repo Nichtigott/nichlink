@@ -507,7 +507,17 @@ macro_rules! __control_object {
             parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
             registry_rule_path: $crate::__face_expr_or!($crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
-            registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
+            // The author's expression wins; an omitted rule on a
+            // registry-owning face resolves to the canonical sibling rule
+            // module, and every other face keeps `ANY`. The resolver is a proc
+            // macro because the canonical spelling is a *relative* path.
+            // 作者写下的表达式优先；拥有注册机的面省略规则时解析到同目录的规范
+            // 规则模块，其余面保留 `ANY`。解析器是过程宏，因为规范写法是**相对**路径。
+            registry_rule: $crate::__face_rule_or!(
+                $crate::RegistrationRule::ANY;
+                $($needs_registry)?;
+                $($rule)?
+            ),
             $(admission: $admission,)?
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
@@ -644,7 +654,17 @@ macro_rules! __control_object {
             parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
             registry_rule_path: $crate::__face_expr_or!($crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
-            registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
+            // The author's expression wins; an omitted rule on a
+            // registry-owning face resolves to the canonical sibling rule
+            // module, and every other face keeps `ANY`. The resolver is a proc
+            // macro because the canonical spelling is a *relative* path.
+            // 作者写下的表达式优先；拥有注册机的面省略规则时解析到同目录的规范
+            // 规则模块，其余面保留 `ANY`。解析器是过程宏，因为规范写法是**相对**路径。
+            registry_rule: $crate::__face_rule_or!(
+                $crate::RegistrationRule::ANY;
+                $($needs_registry)?;
+                $($rule)?
+            ),
             $(admission: $admission,)?
             $(handle_traits: [$($handle_trait),*],)?
             $(handle_contracts: [$($handle_contract),*],)?
@@ -870,6 +890,14 @@ pub struct FaceFields<
     pub registry_rule_path: RegistryRulePathValue,
     /// Rule this face enforces on its children.
     /// 本面对子级执行的规则。
+    ///
+    /// A face that owns a registry (`needs_registry: true`) may omit this: the
+    /// rule then resolves to the canonical one beside the face
+    /// (`super::registry_rule::REGISTRATION_RULE`). Every other face keeps
+    /// `RegistrationRule::ANY` and accepts its parent's rule instead.
+    /// 拥有注册机的面（`needs_registry: true`）可以省略本字段：规则会解析到注册面旁边
+    /// 那份规范规则（`super::registry_rule::REGISTRATION_RULE`）。其余面保留
+    /// `RegistrationRule::ANY`，改为接受父级规则。
     /// ```ignore
     /// registry_rule: crate::widget::registry_rule::REGISTRATION_RULE
     /// ```

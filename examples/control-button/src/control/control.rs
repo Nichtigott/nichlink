@@ -2,7 +2,6 @@
 //! Control folder face: it owns a Registry, and every direct child must satisfy
 //! the rule kept beside it.
 
-use crate::control::registry_rule::REGISTRATION_RULE;
 use nichlink_run_method::{ContractId, FlowContract};
 
 /// 父注册面交给子对象的绘制结果。
@@ -22,8 +21,12 @@ crate::root_object! {
     handle: Control,
     needs_registry: true,
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    // 规则不再重复写第二遍：`needs_registry: true` 的面省略 `registry_rule:` 时，
+    // 规则解析到注册面旁边那份规范规则（`super::registry_rule::REGISTRATION_RULE`）。
+    // The rule is no longer written twice: a face with `needs_registry: true` that
+    // omits `registry_rule:` resolves to the canonical rule beside the face
+    // (`super::registry_rule::REGISTRATION_RULE`).
     registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: REGISTRATION_RULE,
     // A folder face may publish its own flow contract, so a `full` cut can
     // replace the whole subtree only when the replacement agrees with it.
     // 文件夹面也可以发布自己的数据流合同；因此只有替换端与之兼容时，`full`

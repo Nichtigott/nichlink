@@ -252,8 +252,6 @@ src/
 
 ```rust
 // src/control/control.rs
-use crate::control::registry_rule::REGISTRATION_RULE;
-
 pub struct Control;
 pub struct ControlFrame;
 
@@ -271,8 +269,9 @@ crate::root_object! {
     kind: Control,
     needs_registry: true,
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    // 不再写 `registry_rule:`：这个面拥有注册机，规则会解析到它旁边的规范模块
+    // （`super::registry_rule`），路径因此没有第二份副本需要同步。
     registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    registry_rule: REGISTRATION_RULE,
 }
 ```
 
