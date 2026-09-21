@@ -72,6 +72,29 @@ fn collect_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDia
                         collect_parent_macro_errors(src, &node.children, errors);
                         continue;
                     };
+                    // `NodeId::from_path` is a plain identity: it is not
+                    // namespaced, while every face's own `NODE_ID` is. A parent
+                    // written that way resolves at build time but not at run
+                    // time, so the registry reports `<missing-parent>` after a
+                    // successful build. Refuse it with the spelling that works.
+                    // `NodeId::from_path` 是普通身份函数：它不带命名空间，而每个面自己的
+                    // `NODE_ID` 带。这样写的父级在构建期能解析、运行期不能，于是构建成功
+                    // 之后注册机会报 `<missing-parent>`。这里直接拒绝，并给出可用的写法。
+                    if let ParentSyntax::FromPath { .. } = parent {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "`NodeId::from_path` carries no namespace, so the runtime cannot resolve this parent",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(format!(
+                                "parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")) or crate::{declared}::NODE_ID"
+                            ))
+                            .actual("parent: NodeId::from_path(..)".to_owned()),
+                        );
+                        continue;
+                    }
                     let expected = match parent {
                         ParentSyntax::Root => "root".to_owned(),
                         ParentSyntax::FromPath { source, .. } => Path::new(&source)
@@ -208,6 +231,33 @@ mod tests {
         assert!(rendered.contains("phase=parent-macro"));
         assert!(rendered.contains("expected=crate::panel_object!"));
         assert!(rendered.contains("actual=crate::wrong_object!"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    /// A parent spelled `NodeId::from_path(..)` resolves for the build but not
+    /// for the runtime, so it must be refused rather than accepted and then
+    /// reported as `<missing-parent>` after a successful build.
+    /// 写成 `NodeId::from_path(..)` 的父级对构建期可解析、对运行期不可，因此必须拒绝，
+    /// 而不是接受之后在构建成功时由注册机报 `<missing-parent>`。
+    #[test]
+    fn refuses_a_parent_that_the_runtime_cannot_resolve() {
+        let root = temporary_directory("unnamespaced-parent");
+        let child = root.join("panel/object/child/child.rs");
+        write_face(
+            &child,
+            "crate::panel_object! { kind: Child, parent: crate::NodeId::from_path(\"panel/panel.rs\", \"Panel\"), }",
+        );
+        let nodes = vec![Node {
+            name: "child".to_owned(),
+            file: Some(child),
+            children: Vec::new(),
+        }];
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render();
+        assert!(
+            rendered.contains("carries no namespace"),
+            "unexpected diagnostics: {rendered}"
+        );
+        assert!(rendered.contains("crate::panel::NODE_ID"), "{rendered}");
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }
 
