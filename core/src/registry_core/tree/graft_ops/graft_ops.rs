@@ -3,35 +3,54 @@
 
 use super::*;
 use crate::plugin::{GraftCut, GraftPlan};
-use crate::registry_core::release::StaticGraftCut;
+use crate::registry_core::release::{CutTarget, StaticGraftCut};
+
+/// One selector, borrowed from either a dynamic plan or the static table.
+/// 一个选择器，借用自动态计划或静态表。
+#[derive(Clone, Copy)]
+enum GraftTargetRef<'a> {
+    Path(&'a str),
+    Id(NodeId),
+}
+
+impl GraftTargetRef<'_> {
+    fn describe(self) -> String {
+        match self {
+            Self::Path(path) => path.to_owned(),
+            Self::Id(id) => id.to_string(),
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 struct GraftCutRef<'a> {
-    cut: &'a str,
-    graft: &'a str,
-    end: Option<&'a str>,
+    cut: GraftTargetRef<'a>,
+    graft: GraftTargetRef<'a>,
+    end: Option<GraftTargetRef<'a>>,
     subtree: bool,
 }
 
 impl<'a> GraftCutRef<'a> {
     fn dynamic(cut: &'a GraftCut) -> Self {
         Self {
-            cut: &cut.cut,
-            graft: &cut.graft,
-            end: cut.end.as_deref(),
+            cut: GraftTargetRef::Path(&cut.cut),
+            graft: GraftTargetRef::Path(&cut.graft),
+            end: cut.end.as_deref().map(GraftTargetRef::Path),
             subtree: cut.subtree,
         }
     }
 
     fn static_cut(cut: &'a StaticGraftCut) -> Self {
-        let (path, end) = cut
-            .cut()
-            .split_once(" to ")
-            .map_or((cut.cut(), None), |(start, end)| (start, Some(end)));
+        fn borrow(target: CutTarget) -> GraftTargetRef<'static> {
+            match target {
+                CutTarget::Path(path) => GraftTargetRef::Path(path),
+                CutTarget::Id(id) => GraftTargetRef::Id(id),
+            }
+        }
         Self {
-            cut: path,
-            graft: cut.graft(),
-            end,
+            cut: borrow(cut.cut()),
+            graft: borrow(cut.graft()),
+            end: cut.cut_end().map(borrow),
             subtree: cut.full(),
         }
     }
@@ -85,7 +104,11 @@ impl Registry {
         let mut staged = self.clone();
         let mut seen = BTreeSet::new();
         for cut in cuts {
-            let replacement = external.resolve_node(cut.graft).ok_or_else(|| {
+            let replacement = match cut.graft {
+                GraftTargetRef::Path(value) => external.resolve_node(value),
+                GraftTargetRef::Id(id) => external.find(id).map(|_| id),
+            }
+            .ok_or_else(|| {
                 staged.graft_error(
                     staged.header.id,
                     GraftError::UnknownReplacement(staged.header.id),
@@ -97,7 +120,7 @@ impl Registry {
             for target in staged.resolve_cut_targets(cut)? {
                 if !seen.insert(target) {
                     return Err(
-                        staged.graft_error(target, GraftError::DuplicateCut(cut.cut.to_owned()))
+                        staged.graft_error(target, GraftError::DuplicateCut(cut.cut.describe()))
                     );
                 }
                 staged.apply_overlay_face(target, replacement, cut.subtree, external)?;
@@ -199,20 +222,30 @@ impl Registry {
         })
     }
 
+    /// Resolve a cut selector written either as a logical path or as the
+    /// compile-time identity of the target face.
+    /// 解析切口选择器：写法可以是逻辑路径，也可以是目标注册面的编译期身份。
+    fn resolve_target(&self, target: GraftTargetRef<'_>) -> Option<NodeId> {
+        match target {
+            GraftTargetRef::Path(path) => self.resolve_path(path),
+            GraftTargetRef::Id(id) => self.find(id).map(|_| id),
+        }
+    }
+
     fn resolve_cut_targets(&self, cut: GraftCutRef<'_>) -> RegistryResult<Vec<NodeId>> {
-        let start = self.resolve_path(cut.cut).ok_or_else(|| {
+        let start = self.resolve_target(cut.cut).ok_or_else(|| {
             self.graft_error(self.header.id, GraftError::UnknownTarget(self.header.id))
         })?;
-        let Some(end_path) = cut.end else {
+        let Some(end_target) = cut.end else {
             return Ok(vec![start]);
         };
         let end = self
-            .resolve_path(end_path)
+            .resolve_target(end_target)
             .ok_or_else(|| self.graft_error(start, GraftError::UnknownTarget(start)))?;
         let start_info = self.find(start).expect("resolved cut start");
         let end_info = self.find(end).expect("resolved cut end");
         if start_info.parent != end_info.parent {
-            return Err(self.graft_error(start, GraftError::InvalidRange(end_path.to_owned())));
+            return Err(self.graft_error(start, GraftError::InvalidRange(end_target.describe())));
         }
         let parent = self
             .registry(start_info.parent)

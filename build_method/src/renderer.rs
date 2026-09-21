@@ -57,12 +57,34 @@ pub(crate) fn render_lib(
         "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[::nichlink_run_method::registry_core::StaticGraftCut] = &[\n",
     );
     for graft in grafts {
-        writeln!(
-            output,
-            "    ::nichlink_run_method::registry_core::StaticGraftCut::new({:?}, {:?}, {}),",
-            graft.cut, graft.graft, graft.full
-        )
-        .unwrap();
+        // A typed cut is emitted verbatim, so the compiler resolves the Rust
+        // expressions the author wrote instead of a selector string. A string
+        // cut keeps the previous form, with a range split into `new_range`.
+        // 类型化切口原样发射，编译器因此解析作者写的 Rust 表达式，而不是选择器
+        // 字符串。字符串切口保持原有形式，区间拆成 `new_range`。
+        let constructor = match &graft.expressions {
+            Some(expressions) => match &expressions.cut_end {
+                Some(end) => format!(
+                    "::nichlink_run_method::registry_core::StaticGraftCut::from_id_range({}, {}, {}, {})",
+                    expressions.cut, end, expressions.graft, graft.full
+                ),
+                None => format!(
+                    "::nichlink_run_method::registry_core::StaticGraftCut::from_ids({}, {}, {})",
+                    expressions.cut, expressions.graft, graft.full
+                ),
+            },
+            None => match graft.cut.split_once(" to ") {
+                Some((start, end)) => format!(
+                    "::nichlink_run_method::registry_core::StaticGraftCut::new_range({start:?}, {end:?}, {:?}, {})",
+                    graft.graft, graft.full
+                ),
+                None => format!(
+                    "::nichlink_run_method::registry_core::StaticGraftCut::new({:?}, {:?}, {})",
+                    graft.cut, graft.graft, graft.full
+                ),
+            },
+        };
+        writeln!(output, "    {constructor},").unwrap();
     }
     output.push_str("];\n\n");
     output.push_str("pub static BUILTIN_STATIC_PLAN: ::nichlink_run_method::registry_core::StaticPlan = ::nichlink_run_method::registry_core::StaticPlan::with_grafts(BUILTIN_STATIC_FACES, BUILTIN_GRAFT_CUTS);\n\n");
@@ -310,6 +332,7 @@ mod tests {
                 graft: "button_fast".to_owned(),
                 full: false,
                 location: SyntaxLocation { line: 3, column: 5 },
+                expressions: None,
             }],
         );
 

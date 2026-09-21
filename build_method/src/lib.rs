@@ -191,7 +191,17 @@ impl SourceScope {
         // 强制存活根：嫁接槽位与插件声明面是可替换的社区面，
         // minimal 树绝不能因可达源码未提及就把它们剪掉。
         for cut in &cuts {
-            let Some(module) = graft_cut_module(&cut.cut) else {
+            // A typed cut names the target with a Rust path to a real face, so
+            // its module can be matched exactly instead of guessed from a
+            // registry path. An unmatched expression falls back to the whole
+            // tree below, never to a wrong prune.
+            // 类型化切口用指向真实注册面的 Rust 路径命名目标，因此可以精确匹配
+            // 模块，而不必从注册路径猜测。匹配不到时回退全树，绝不错误裁剪。
+            let module = match &cut.expressions {
+                Some(expressions) => graft_expression_module(&expressions.cut, &faces),
+                None => graft_cut_module(&cut.cut),
+            };
+            let Some(module) = module else {
                 return Self {
                     roots: None,
                     reason: "graft-root-cut",
@@ -408,6 +418,22 @@ fn graft_cut_module(cut: &str) -> Option<String> {
     }
     let module = cut.trim_start_matches("root/").replace('/', "::");
     (!module.is_empty()).then_some(module)
+}
+
+/// Derive the module a typed graft cut targets from its Rust expression.
+/// 从类型化 graft 切口的 Rust 表达式推导它指向的模块。
+///
+/// The expression is a path to a face's `NODE_ID`, so matching it against the
+/// discovered face modules is exact: it does not depend on the registry path
+/// agreeing with the module path.
+/// 表达式是指向某个注册面 `NODE_ID` 的路径，因此与已发现的注册面模块逐一匹配
+/// 是精确的：它不依赖注册路径与模块路径一致。
+fn graft_expression_module(expression: &str, faces: &[FaceSource]) -> Option<String> {
+    let expression = expression.trim();
+    faces
+        .iter()
+        .find(|face| expression == format!("{}::NODE_ID", face.module))
+        .map(|face| face.module.clone())
 }
 
 /// Select every face at or under `module` and return their sources for BFS.

@@ -236,8 +236,16 @@ fn static_plan_carries_faces_and_the_declared_graft() {
     assert_eq!(plan.faces().len(), 2, "both built-in faces are retained");
     assert_eq!(plan.grafts().len(), 1, "the entry declared one graft");
     let cut = plan.grafts()[0];
-    assert_eq!(cut.cut(), "root/control/button");
-    assert_eq!(cut.graft(), "button_fast");
+    assert_eq!(
+        cut.cut().id(),
+        Some(control_button::control::object::button::NODE_ID),
+        "the typed cut names the host face by compile-time identity"
+    );
+    assert_eq!(
+        cut.graft().id(),
+        Some(control_button_graft::button_fast::NODE_ID),
+        "the typed graft names the external face by compile-time identity"
+    );
     assert!(!cut.full(), "a plain cut keeps the target's children");
 }
 

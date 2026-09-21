@@ -10,15 +10,11 @@ description = "NichLink example: the README Control/Button tree as a real host c
 name = "control_button"
 path = "src/lib.rs"
 
-[[bin]]
-name = "control-button"
-path = "src/main.rs"
-
 [dependencies]
 nichlink-run-method = { path = "../../run_method", version = "0.1.0" }
+# A statically grafted implementation is named by a Rust path at the host entry,
+# so it has to be linked in. A string-named graft would not need this.
+nichlink-example-control-button-graft = { path = "../control-button-graft" }
 
 [build-dependencies]
 nichlink-build-method = { path = "../../build_method" }
-
-[dev-dependencies]
-nichlink-example-control-button-graft = { path = "../control-button-graft" }

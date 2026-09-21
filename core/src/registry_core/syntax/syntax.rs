@@ -397,6 +397,41 @@ fn parse_fields(
     Ok(fields)
 }
 
+/// Render a token stream as compact Rust source text.
+/// 把 token 流渲染成紧凑的 Rust 源码文本。
+///
+/// `TokenStream`'s own rendering spaces out `::`, which is valid but noisy in
+/// generated code. A typed graft selector is emitted verbatim, so keep it close
+/// to what the author wrote.
+/// `TokenStream` 自身渲染会在 `::` 周围加空格，虽然合法，但在生成代码里很吵。
+/// 类型化 graft 选择器会被原样发射，因此尽量贴近作者的写法。
+pub fn compact_tokens(tokens: TokenStream) -> String {
+    tokens
+        .to_string()
+        .replace(" :: ", "::")
+        .replace(" (", "(")
+        .replace(") ", ")")
+}
+
+/// Split a typed cut's tokens on a top-level `to`, returning both sides as
+/// compact source text: `cut(a to b)` names a sibling range verbatim.
+/// 在类型化切口的 token 里按顶层 `to` 切分，返回两侧的紧凑源码文本：
+/// `cut(a to b)` 就是用原样 Rust 表达兄弟区间。
+fn split_typed_range(tokens: Vec<TokenTree>) -> Option<(String, String)> {
+    let position = tokens
+        .iter()
+        .position(|token| matches!(token, TokenTree::Ident(value) if value == "to"))?;
+    let start = tokens[..position].iter().cloned().collect::<TokenStream>();
+    let finish = tokens[position + 1..]
+        .iter()
+        .cloned()
+        .collect::<TokenStream>();
+    if start.is_empty() || finish.is_empty() {
+        return None;
+    }
+    Some((compact_tokens(start), compact_tokens(finish)))
+}
+
 #[doc(hidden)]
 pub fn split_top_level(tokens: TokenStream) -> Vec<TokenStream> {
     let mut items = Vec::new();
@@ -635,6 +670,23 @@ pub struct GraftSyntax {
     pub graft: String,
     pub full: bool,
     pub location: SyntaxLocation,
+    /// Present when `cut(...)` / `graft(...)` supplied Rust expressions. The
+    /// renderer emits those expressions verbatim, so the compiler — and any
+    /// editor that resolves Rust paths — sees the real target instead of a
+    /// string the tooling would have to interpret.
+    /// 当 `cut(...)` / `graft(...)` 给出 Rust 表达式时存在。渲染器会原样发射这些
+    /// 表达式，因此编译器和任何能解析 Rust 路径的编辑器看到的都是真实目标，
+    /// 而不是需要工具自己解释的字符串。
+    pub expressions: Option<GraftExpressions>,
+}
+
+/// Rust expressions used by a typed graft cut, in source order.
+/// 类型化 graft 切口使用的 Rust 表达式，按源码顺序。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraftExpressions {
+    pub cut: String,
+    pub cut_end: Option<String>,
+    pub graft: String,
 }
 
 /// Return the host entry paths declared with `application!(entry = ...)`.
@@ -693,63 +745,104 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
                 index += 1;
                 let path_token = tokens.get(index).cloned();
                 index += 1;
-                let (path_tokens, path_span, path_text) = match path_token {
-                    Some(TokenTree::Group(group)) => (
-                        group.stream().into_iter().collect::<Vec<_>>(),
-                        group.span(),
-                        None,
-                    ),
-                    Some(TokenTree::Literal(literal)) => {
-                        let text = syn::parse_str::<syn::LitStr>(&literal.to_string())
-                            .map(|value| value.value())
-                            .map_err(|_| {
-                                syntax_error(literal.span(), "graft cut path must be a string")
-                            });
-                        let Ok(text) = text else {
-                            self.error = text.err();
-                            return;
-                        };
-                        (Vec::new(), literal.span(), Some(text))
+                // `cut(<expr>)` / `cut(<expr> to <expr>)` names the target with
+                // Rust expressions, so the compiler and any editor that resolves
+                // Rust paths see the real face instead of a string the tooling
+                // would have to interpret.
+                // `cut(<expr>)` / `cut(<expr> to <expr>)` 用 Rust 表达式命名目标，
+                // 让编译器和任何能解析 Rust 路径的编辑器看到真实的注册面，而不是
+                // 需要工具自己解释的字符串。
+                let typed_cut = match &path_token {
+                    Some(TokenTree::Group(group))
+                        if group.delimiter() == Delimiter::Parenthesis =>
+                    {
+                        let inner = group.stream().into_iter().collect::<Vec<_>>();
+                        Some(match split_typed_range(inner) {
+                            Some((start, finish)) => (start, Some(finish)),
+                            None => (compact_tokens(group.stream()), None),
+                        })
                     }
-                    _ => {
-                        self.error = Some(syntax_error(
-                            mac.span(),
-                            "graft cut expects `[path]` or a path string",
-                        ));
-                        return;
-                    }
+                    _ => None,
                 };
-                let (cut, end) = if path_tokens.len() == 3
-                    && matches!(&path_tokens[1], TokenTree::Ident(value) if value == "to")
-                {
-                    let start = syn::parse2::<syn::LitStr>(path_tokens[0].clone().into())
-                        .map_err(|_| syntax_error(path_span, "graft range start must be a string"));
-                    let finish = syn::parse2::<syn::LitStr>(path_tokens[2].clone().into())
-                        .map_err(|_| syntax_error(path_span, "graft range end must be a string"));
-                    match (start, finish) {
-                        (Ok(start), Ok(finish)) => (start.value(), Some(finish.value())),
-                        (Err(error), _) | (_, Err(error)) => {
-                            self.error = Some(error);
-                            return;
-                        }
+                let (cut, end, cut_span, typed) = match typed_cut {
+                    Some((start, finish)) => (start, finish, mac.span(), true),
+                    None => {
+                        let (path_tokens, path_span, path_text) = match path_token {
+                            Some(TokenTree::Group(group)) => (
+                                group.stream().into_iter().collect::<Vec<_>>(),
+                                group.span(),
+                                None,
+                            ),
+                            Some(TokenTree::Literal(literal)) => {
+                                let text = syn::parse_str::<syn::LitStr>(&literal.to_string())
+                                    .map(|value| value.value())
+                                    .map_err(|_| {
+                                        syntax_error(
+                                            literal.span(),
+                                            "graft cut path must be a string",
+                                        )
+                                    });
+                                let Ok(text) = text else {
+                                    self.error = text.err();
+                                    return;
+                                };
+                                (Vec::new(), literal.span(), Some(text))
+                            }
+                            _ => {
+                                self.error = Some(syntax_error(
+                                    mac.span(),
+                                    "graft cut expects `[path]`, a path string, or `(<expression>)`",
+                                ));
+                                return;
+                            }
+                        };
+                        let range = path_text.is_none()
+                            && path_tokens.len() == 3
+                            && matches!(&path_tokens[1], TokenTree::Ident(value) if value == "to");
+                        let resolved = if range {
+                            let start = syn::parse2::<syn::LitStr>(path_tokens[0].clone().into())
+                                .map_err(|_| {
+                                    syntax_error(path_span, "graft range start must be a string")
+                                });
+                            let finish = syn::parse2::<syn::LitStr>(path_tokens[2].clone().into())
+                                .map_err(|_| {
+                                    syntax_error(path_span, "graft range end must be a string")
+                                });
+                            match (start, finish) {
+                                (Ok(start), Ok(finish)) => {
+                                    Ok((start.value(), Some(finish.value())))
+                                }
+                                (Err(error), _) | (_, Err(error)) => Err(error),
+                            }
+                        } else {
+                            Ok((
+                                path_text.unwrap_or_else(|| {
+                                    syn::parse2::<syn::LitStr>(
+                                        path_tokens.clone().into_iter().collect(),
+                                    )
+                                    .map(|value| value.value())
+                                    .unwrap_or_else(|_| {
+                                        path_tokens
+                                            .iter()
+                                            .map(ToString::to_string)
+                                            .collect::<String>()
+                                    })
+                                }),
+                                None,
+                            ))
+                        };
+                        let (cut, end) = match resolved {
+                            Ok(pair) => pair,
+                            Err(error) => {
+                                self.error = Some(error);
+                                return;
+                            }
+                        };
+                        (cut, end, path_span, false)
                     }
-                } else {
-                    (
-                        path_text.unwrap_or_else(|| {
-                            syn::parse2::<syn::LitStr>(path_tokens.clone().into_iter().collect())
-                                .map(|value| value.value())
-                                .unwrap_or_else(|_| {
-                                    path_tokens
-                                        .iter()
-                                        .map(ToString::to_string)
-                                        .collect::<String>()
-                                })
-                        }),
-                        None,
-                    )
                 };
                 if cut.is_empty() {
-                    self.error = Some(syntax_error(path_span, "graft cut path is empty"));
+                    self.error = Some(syntax_error(cut_span, "graft cut path is empty"));
                     return;
                 }
                 let full =
@@ -765,19 +858,49 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
                     return;
                 }
                 index += 1;
-                let Some(TokenTree::Literal(value)) = tokens.get(index) else {
-                    self.error = Some(syntax_error(
-                        mac.span(),
-                        "graft implementation must be a string literal",
-                    ));
-                    return;
+                let graft_token = tokens.get(index).cloned();
+                let (graft, graft_expr) = match graft_token {
+                    Some(TokenTree::Group(group))
+                        if group.delimiter() == Delimiter::Parenthesis =>
+                    {
+                        let text = compact_tokens(group.stream());
+                        (text.clone(), Some(text))
+                    }
+                    Some(TokenTree::Literal(value)) => {
+                        let Ok(text) = syn::parse_str::<syn::LitStr>(&value.to_string()) else {
+                            self.error = Some(syntax_error(
+                                value.span(),
+                                "graft implementation must be a string literal or `(<expression>)`",
+                            ));
+                            return;
+                        };
+                        (text.value(), None)
+                    }
+                    _ => {
+                        self.error = Some(syntax_error(
+                            mac.span(),
+                            "graft expects a string literal or `(<expression>)`",
+                        ));
+                        return;
+                    }
                 };
-                let Ok(graft) = syn::parse_str::<syn::LitStr>(&value.to_string()) else {
-                    self.error = Some(syntax_error(
-                        value.span(),
-                        "graft implementation must be a string literal",
-                    ));
-                    return;
+                // A cut names both sides the same way, so the generated table
+                // never has to mix a resolved identity with an unresolved name.
+                // 一条切口的命名方式必须一致，生成表因此不会混合已解析身份与未解析名称。
+                let expressions = match (typed, graft_expr) {
+                    (true, Some(graft)) => Some(GraftExpressions {
+                        cut: cut.clone(),
+                        cut_end: end.clone(),
+                        graft,
+                    }),
+                    (false, None) => None,
+                    _ => {
+                        self.error = Some(syntax_error(
+                            mac.span(),
+                            "a graft cut must name both sides with Rust expressions or both with strings",
+                        ));
+                        return;
+                    }
                 };
                 let mut cut = cut;
                 if let Some(end) = end {
@@ -786,10 +909,12 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
                 }
                 self.entries.push(GraftSyntax {
                     cut,
-                    graft: graft.value(),
+                    graft,
                     full,
                     location: location(mac.span()),
+                    expressions,
                 });
+                index += 1;
                 index += 1;
             }
         }
@@ -938,5 +1063,62 @@ fn application_plan() {
         let source =
             r#"fn plan() { nichlink::graft!(framework, cut "root/a" graft "replacement"); }"#;
         assert!(graft_entries(source).unwrap().is_empty());
+    }
+
+    /// The typed form keeps both sides as Rust expressions so the compiler and
+    /// any editor that resolves Rust paths can see the real target.
+    /// 类型化形式把两侧都保留为 Rust 表达式，编译器和任何能解析 Rust 路径的编辑器
+    /// 因此都能看到真实目标。
+    #[test]
+    fn graft_parser_keeps_typed_expressions() {
+        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+            cut(crate::control::object::button::NODE_ID)
+                graft(graft_crate::button_fast::NODE_ID),
+        );"#;
+        let entries = graft_entries(source).unwrap();
+        let expressions = entries[0].expressions.as_ref().expect("typed expressions");
+        assert_eq!(
+            expressions.cut, "crate::control::object::button::NODE_ID",
+            "the host path is preserved verbatim so the compiler resolves it"
+        );
+        assert_eq!(expressions.graft, "graft_crate::button_fast::NODE_ID");
+        assert_eq!(expressions.cut_end, None);
+        assert!(!entries[0].full);
+    }
+
+    #[test]
+    fn graft_parser_keeps_a_typed_sibling_range() {
+        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+            cut(crate::control::object::button::NODE_ID to crate::control::object::slider::NODE_ID)
+                graft(graft_crate::fast::NODE_ID),
+        );"#;
+        let entries = graft_entries(source).unwrap();
+        let expressions = entries[0].expressions.as_ref().expect("typed expressions");
+        assert_eq!(expressions.cut, "crate::control::object::button::NODE_ID");
+        assert_eq!(
+            expressions.cut_end.as_deref(),
+            Some("crate::control::object::slider::NODE_ID")
+        );
+        // The description keeps the readable range form for diagnostics.
+        // 描述字段保留可读的区间形式，供诊断使用。
+        assert_eq!(
+            entries[0].cut,
+            "crate::control::object::button::NODE_ID to crate::control::object::slider::NODE_ID"
+        );
+    }
+
+    /// A cut may not mix a resolved identity with an unresolved name.
+    /// 一条切口不允许混合"已解析身份"与"未解析名称"。
+    #[test]
+    fn graft_parser_rejects_mixed_typed_and_string_sides() {
+        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+            cut(crate::control::NODE_ID) graft "button_fast",
+        );"#;
+        let error = graft_entries(source).unwrap_err();
+        assert!(
+            error.message.contains("both sides"),
+            "unexpected message: {}",
+            error.message
+        );
     }
 }

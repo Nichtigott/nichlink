@@ -42,6 +42,49 @@ pub struct StaticPlan {
     grafts: &'static [StaticGraftCut],
 }
 
+/// How a release-time graft selector addresses a face.
+/// 发布态 graft 选择器如何寻址一个注册面。
+///
+/// `Path` is the human-written selector (`root/control/button`, or a `a to b`
+/// range) parsed from the host entry. `Id` is a compile-time node identity, so
+/// a host can write the target as a Rust path
+/// (`crate::control::object::button::NODE_ID`) and let the compiler and editor
+/// resolve it instead of spelling a string.
+/// `Path` 是从宿主入口解析出的手写选择器（`root/control/button`，或 `a to b`
+/// 区间）。`Id` 是编译期节点身份，宿主因此可以把目标写成 Rust 路径
+/// （`crate::control::object::button::NODE_ID`），由编译器和编辑器解析，而不必
+/// 手写字符串。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CutTarget {
+    Path(&'static str),
+    Id(NodeId),
+}
+
+impl CutTarget {
+    pub const fn path(self) -> Option<&'static str> {
+        match self {
+            Self::Path(path) => Some(path),
+            Self::Id(_) => None,
+        }
+    }
+
+    pub const fn id(self) -> Option<NodeId> {
+        match self {
+            Self::Id(id) => Some(id),
+            Self::Path(_) => None,
+        }
+    }
+
+    /// Render the selector for diagnostics; an identity prints as its hex form.
+    /// 渲染选择器用于诊断；身份打印为十六进制形式。
+    pub fn describe(self) -> String {
+        match self {
+            Self::Path(path) => path.to_owned(),
+            Self::Id(id) => id.to_string(),
+        }
+    }
+}
+
 /// One host-declared external graft cut retained in release metadata.
 /// 正式构建保留的一条宿主外部 graft 切口元数据。
 ///
@@ -52,21 +95,71 @@ pub struct StaticPlan {
 /// 解析到外部 Registry。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StaticGraftCut {
-    cut: &'static str,
-    graft: &'static str,
+    cut: CutTarget,
+    cut_end: Option<CutTarget>,
+    graft: CutTarget,
     full: bool,
 }
 
 impl StaticGraftCut {
+    /// A single logical path replaced by a named external implementation.
+    /// 用命名外部实现替换的单个逻辑路径。
     pub const fn new(cut: &'static str, graft: &'static str, full: bool) -> Self {
-        Self { cut, graft, full }
+        Self {
+            cut: CutTarget::Path(cut),
+            cut_end: None,
+            graft: CutTarget::Path(graft),
+            full,
+        }
     }
 
-    pub const fn cut(self) -> &'static str {
+    /// A contiguous sibling range replaced by one external implementation.
+    /// 用同一个外部实现替换的一段连续兄弟。
+    pub const fn new_range(
+        start: &'static str,
+        end: &'static str,
+        graft: &'static str,
+        full: bool,
+    ) -> Self {
+        Self {
+            cut: CutTarget::Path(start),
+            cut_end: Some(CutTarget::Path(end)),
+            graft: CutTarget::Path(graft),
+            full,
+        }
+    }
+
+    /// A single slot addressed by compile-time identity on both sides.
+    /// 两侧都用编译期身份寻址的单个槽位。
+    pub const fn from_ids(cut: NodeId, graft: NodeId, full: bool) -> Self {
+        Self {
+            cut: CutTarget::Id(cut),
+            cut_end: None,
+            graft: CutTarget::Id(graft),
+            full,
+        }
+    }
+
+    /// A contiguous sibling range addressed by compile-time identity.
+    /// 用编译期身份寻址的一段连续兄弟。
+    pub const fn from_id_range(start: NodeId, end: NodeId, graft: NodeId, full: bool) -> Self {
+        Self {
+            cut: CutTarget::Id(start),
+            cut_end: Some(CutTarget::Id(end)),
+            graft: CutTarget::Id(graft),
+            full,
+        }
+    }
+
+    pub const fn cut(self) -> CutTarget {
         self.cut
     }
 
-    pub const fn graft(self) -> &'static str {
+    pub const fn cut_end(self) -> Option<CutTarget> {
+        self.cut_end
+    }
+
+    pub const fn graft(self) -> CutTarget {
         self.graft
     }
 
