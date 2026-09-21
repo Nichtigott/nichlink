@@ -163,6 +163,12 @@ pub enum GraftError {
     InvalidCommand(String),
     UnknownTarget(crate::NodeId),
     UnknownReplacement(crate::NodeId),
+    /// A string selector matched more than one registered face.
+    /// 字符串选择器匹配到不止一个已注册的面。
+    AmbiguousReplacement {
+        selector: String,
+        matches: usize,
+    },
     ContractUndeclared,
     ContractMismatch {
         expected: OwnedFlowContract,
@@ -181,6 +187,10 @@ impl fmt::Display for GraftError {
             Self::UnknownReplacement(id) => {
                 write!(formatter, "graft replacement `{id}` is not registered")
             }
+            Self::AmbiguousReplacement { selector, matches } => write!(
+                formatter,
+                "graft replacement selector `{selector}` matches {matches} registered faces; use the face's NODE_ID"
+            ),
             Self::ContractUndeclared => {
                 formatter.write_str("graft requires both nodes to declare a flow contract")
             }

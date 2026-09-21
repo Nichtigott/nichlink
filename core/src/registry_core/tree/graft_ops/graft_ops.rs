@@ -56,6 +56,14 @@ impl<'a> GraftCutRef<'a> {
     }
 }
 
+/// The outcome of resolving a string graft selector.
+/// 字符串 graft 选择器的解析结果。
+enum Resolution {
+    One(NodeId),
+    Missing,
+    Ambiguous(usize),
+}
+
 impl Registry {
     /// Build an effective tree by overlaying external graft implementations.
     ///
@@ -105,7 +113,19 @@ impl Registry {
         let mut seen = BTreeSet::new();
         for cut in cuts {
             let replacement = match cut.graft {
-                GraftTargetRef::Path(value) => external.resolve_node(value),
+                GraftTargetRef::Path(value) => match external.resolve_node(value) {
+                    Resolution::One(id) => Some(id),
+                    Resolution::Missing => None,
+                    Resolution::Ambiguous(matches) => {
+                        return Err(staged.graft_error(
+                            staged.header.id,
+                            GraftError::AmbiguousReplacement {
+                                selector: value.to_owned(),
+                                matches,
+                            },
+                        ));
+                    }
+                },
                 GraftTargetRef::Id(id) => external.find(id).map(|_| id),
             }
             .ok_or_else(|| {
@@ -497,14 +517,35 @@ impl Registry {
         header.admission = info.admission.clone();
     }
 
-    fn resolve_node(&self, value: &str) -> Option<NodeId> {
+    fn resolve_node(&self, value: &str) -> Resolution {
         if let Ok(id) = value.parse::<NodeId>() {
-            return self.find(id).map(|_| id);
+            return if self.find(id).is_some() {
+                Resolution::One(id)
+            } else {
+                Resolution::Missing
+            };
         }
-        self.depth_first().into_iter().find_map(|info| {
-            let path = self.path_for(info.id)?;
-            (info.registry_name == value || info.kind == value || path == value).then_some(info.id)
-        })
+        let mut matches = self
+            .depth_first()
+            .into_iter()
+            .filter(|info| {
+                self.path_for(info.id).is_some_and(|path| {
+                    info.registry_name == value || info.kind == value || path == value
+                })
+            })
+            .map(|info| info.id);
+        let Some(first) = matches.next() else {
+            return Resolution::Missing;
+        };
+        match matches.count() {
+            0 => Resolution::One(first),
+            // Any one of them would be a silent, arbitrary choice, and renaming
+            // an unrelated file could flip which implementation occupies the
+            // slot. The caller has to say which face it meant.
+            // 任选其一都是静默且随意的选择，而且重命名一个无关文件就可能翻转谁占住这个
+            // 槽位。调用方必须说明它指的是哪个面。
+            extra => Resolution::Ambiguous(extra + 1),
+        }
     }
 
     fn graft_error(&self, node: NodeId, error: GraftError) -> Box<RegistryError> {
@@ -618,6 +659,38 @@ mod tests {
                 function: kind.to_owned(),
             },
         }
+    }
+
+    /// Two distinct faces can carry the same slot name. A string selector that
+    /// matches both must be refused instead of silently choosing one, because
+    /// which file happens to come first is not a decision the author made.
+    /// 两个不同的面可以带同一个槽位名。匹配到两者的字符串选择器必须被拒绝，而不是静默
+    /// 选一个——文件谁先出现并不是作者做出的决定。
+    #[test]
+    fn an_ambiguous_replacement_selector_is_refused() {
+        let namespace = "ambiguous";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut base = face(namespace, "a.rs", "A", "a");
+        base.needs_registry = true;
+        base.id = NodeId::from_namespaced_path(namespace, "a.rs", "A");
+        root.register_snapshot_batch([base.clone()]).unwrap();
+
+        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
+        let mut first = face("external", "first.rs", "First", "replacement");
+        first.id = NodeId::from_namespaced_path("external", "first.rs", "First");
+        let mut second = face("external", "second.rs", "Second", "replacement");
+        second.id = NodeId::from_namespaced_path("external", "second.rs", "Second");
+        external
+            .register_snapshot_batch([first.clone(), second.clone()])
+            .unwrap();
+
+        let plan = GraftPlan::new(FRAMEWORK).cut("root/a", "replacement");
+        let error = root
+            .overlay(&plan, &external)
+            .expect_err("an ambiguous selector must be refused");
+        let rendered = format!("{error}");
+        assert!(rendered.contains("matches 2"), "{rendered}");
+        assert!(rendered.contains("replacement"), "{rendered}");
     }
 
     #[test]
