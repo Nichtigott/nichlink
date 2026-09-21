@@ -206,6 +206,7 @@ fn render_node(
         // 构建重写）。
         let absolute = file.to_string_lossy().replace('\\', "/");
         writeln!(output, "{inner}#[path = {absolute:?}]").unwrap();
+        writeln!(output, "{inner}#[doc(hidden)]").unwrap();
         writeln!(output, "{inner}mod __face;").unwrap();
         writeln!(output, "{inner}pub use __face::*;").unwrap();
         writeln!(output, "{inner}#[rustfmt::skip]").unwrap();
