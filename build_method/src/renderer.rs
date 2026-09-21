@@ -119,13 +119,22 @@ pub(crate) fn render_lib(
 /// implementation. Explicit `parent:` fields remain the source of truth.
 /// 别名让源码直接表达层级（如 `test1_object!`），同时仍只转发到唯一的
 /// 隐藏实现；真正的父子关系仍以显式 `parent:` 字段为准。
+///
+/// The doc comment is the vocabulary an editor shows on hover, because a macro
+/// body cannot be read as a field list. The matcher stays parenthesised: a
+/// brace-delimited one makes rust-analyzer drop completion at an empty value
+/// position such as `kind: |`, which is exactly where a field value is typed.
+/// 文档注释是编辑器悬停时展示的词表——宏体本身读不成字段列表。匹配器保持括号定界：
+/// 改成花括号会让 rust-analyzer 在 `kind: |` 这类空值位置失去补全，而那正是要填
+/// 字段值的地方。
 fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     let mut names = BTreeSet::from(["root".to_owned()]);
     collect_object_aliases(src, nodes, &mut names);
+    let vocabulary = "/// Declare a registration face: `kind` first, then any of `preset`, `parts`,\n/// `name`, `summary`, `params`, `exports`, `handle`, `stable_name`,\n/// `needs_registry`, `registry_name`, `parent`, `getting_from_other_registry`,\n/// `registry_rule_path`, `registry_rule`, `admission`, `handle_traits`,\n/// `handle_contracts`, `part_traits`, `part_contracts`, `requires`,\n/// `provides`, `expected_output`, `actual_output`, `flow`, `flow_provider`,\n/// `plugin`, `runtime_checks` — in that order, each one optional.\n/// 声明一个注册面：先写 `kind`，其后可依次使用 `preset`、`parts`、`name`、\n/// `summary`、`params`、`exports`、`handle`、`stable_name`、`needs_registry`、\n/// `registry_name`、`parent`、`getting_from_other_registry`、\n/// `registry_rule_path`、`registry_rule`、`admission`、`handle_traits`、\n/// `handle_contracts`、`part_traits`、`part_contracts`、`requires`、\n/// `provides`、`expected_output`、`actual_output`、`flow`、`flow_provider`、\n/// `plugin`、`runtime_checks`——顺序如上，每一项都可省略。";
     for name in names {
         writeln!(
             output,
-            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }

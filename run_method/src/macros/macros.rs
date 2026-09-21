@@ -809,6 +809,20 @@ macro_rules! __face_fields {
     };
 }
 
+/// Declare a registration face: `kind` first, then any of `preset`, `parts`,
+/// `name`, `summary`, `params`, `exports`, `handle`, `stable_name`,
+/// `needs_registry`, `registry_name`, `parent`, `getting_from_other_registry`,
+/// `registry_rule_path`, `registry_rule`, `admission`, `handle_traits`,
+/// `handle_contracts`, `part_traits`, `part_contracts`, `requires`,
+/// `provides`, `expected_output`, `actual_output`, `flow`, `flow_provider`,
+/// `plugin`, `runtime_checks` — in that order, each one optional.
+/// 声明一个注册面：先写 `kind`，其后可依次使用 `preset`、`parts`、`name`、
+/// `summary`、`params`、`exports`、`handle`、`stable_name`、`needs_registry`、
+/// `registry_name`、`parent`、`getting_from_other_registry`、
+/// `registry_rule_path`、`registry_rule`、`admission`、`handle_traits`、
+/// `handle_contracts`、`part_traits`、`part_contracts`、`requires`、
+/// `provides`、`expected_output`、`actual_output`、`flow`、`flow_provider`、
+/// `plugin`、`runtime_checks`——顺序如上，每一项都可省略。
 /// Declare a registration face owned by an external crate.
 /// 声明由外部 crate 所有的注册面。
 ///
@@ -818,15 +832,18 @@ macro_rules! __face_fields {
 /// 自动生成的模块树中。
 #[macro_export]
 macro_rules! external_object {
-    (collector: $collector:ident, $($tokens:tt)*) => {
+    { @tokens collector: $collector:ident, $($tokens:tt)* } => {
         $crate::__external_object! { collector: $collector, $($tokens)* }
         #[cfg(rust_analyzer)]
         $crate::__face_fields! { $($tokens)* }
     };
-    ($($tokens:tt)*) => {
+    { @tokens $($tokens:tt)* } => {
         $crate::__external_object! { collector: linked, $($tokens)* }
         #[cfg(rust_analyzer)]
         $crate::__face_fields! { $($tokens)* }
+    };
+    { $($tokens:tt)* } => {
+        $crate::external_object! { @tokens $($tokens)* }
     };
 }
 
