@@ -139,7 +139,15 @@ impl CallTrace {
         self.incoming_index.clear();
         self.next_local_id = 0;
         self.next_frame_id = 0;
-        self.error_scope_depth = 0;
+        // `error_scope_depth` counts the enclosing `with_result` scopes, which
+        // clearing evidence does not close. Zeroing it here made the matching
+        // decrement underflow, so a mode reset inside a scope panicked in debug
+        // and, in release, wrapped to `usize::MAX` — after which every later
+        // scope looked nested and the ErrorsOnly rollback silently stopped
+        // happening.
+        // `error_scope_depth` 记录着外层 `with_result` 作用域的数量，清除证据并不会
+        // 关闭它们。在这里清零会让配对的减法下溢：debug 下 panic，release 下回绕成
+        // `usize::MAX`，此后每个作用域都被当成嵌套，ErrorsOnly 的回滚静默失效。
     }
 
     pub(super) fn mark(&self) -> TraceMark {
@@ -202,7 +210,12 @@ impl CallTrace {
         let mark = outer.then(|| self.mark());
         self.error_scope_depth += 1;
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(self)));
-        self.error_scope_depth -= 1;
+        // Saturating rather than plain subtraction: the depth is bookkeeping for
+        // this pairing, and an inconsistent value must not turn a trace into a
+        // panic or a wrapped counter.
+        // 用饱和减法而不是直接相减：深度只是这次配对的记账，取值异常不该让 trace
+        // panic 或把计数器回绕。
+        self.error_scope_depth = self.error_scope_depth.saturating_sub(1);
         match result {
             Ok(Ok(value)) => {
                 if let Some(mark) = mark {

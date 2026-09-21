@@ -369,6 +369,31 @@ mod tests {
     }
 
     #[test]
+    fn resetting_the_mode_inside_a_scope_does_not_break_the_pairing() {
+        let node = NodeId::from_raw([9; 16]);
+        let mut trace = CallTrace::errors_only();
+        let cleared: Result<(), &str> = trace.with_result(|trace| {
+            trace.clear();
+            Ok(())
+        });
+        assert_eq!(cleared, Ok(()));
+        let changed: Result<(), &str> = trace.with_result(|trace| {
+            trace.set_mode(TraceMode::Full);
+            Ok(())
+        });
+        assert_eq!(changed, Ok(()));
+        // The trace still works, and a later failure is still kept.
+        let failure: Result<(), &str> = trace.with_result(|trace| {
+            trace.with(node, "after-reset", |trace| {
+                trace.local("value", "u32", 3, LocalKind::Binding);
+            });
+            Err("broken")
+        });
+        assert_eq!(failure, Err("broken"));
+        assert_eq!(trace.locals().len(), 1);
+    }
+
+    #[test]
     fn runtime_default_matches_the_build_profile() {
         let trace = CallTrace::runtime();
         if cfg!(debug_assertions) {
