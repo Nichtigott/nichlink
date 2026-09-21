@@ -747,36 +747,66 @@ macro_rules! __control_object {
 /// 仅供 IDE 的字面量从该字段起无法解析。这是有意的：拼接只为补全服务、从不参与
 /// 编译，而这个键仍需要被编辑器提示出来。
 #[doc(hidden)]
-pub struct FaceFields {
-    pub source: (),
-    pub kind: (),
-    pub preset: (),
-    pub parts: (),
-    pub name: (),
-    pub summary: (),
-    pub params: (),
-    pub exports: (),
-    pub handle: (),
-    pub stable_name: (),
-    pub needs_registry: (),
-    pub registry_name: (),
-    pub parent: (),
-    pub getting_from_other_registry: (),
-    pub registry_rule_path: (),
-    pub registry_rule: (),
-    pub admission: (),
-    pub handle_traits: (),
-    pub handle_contracts: (),
-    pub part_traits: (),
-    pub part_contracts: (),
-    pub requires: (),
-    pub provides: (),
-    pub expected_output: (),
-    pub actual_output: (),
-    pub flow: (),
-    pub flow_provider: (),
-    pub plugin: (),
-    pub runtime_checks: (),
+pub struct FaceFields<
+    Source,
+    Kind,
+    Preset,
+    Parts,
+    Name,
+    Summary,
+    Params,
+    Exports,
+    Handle,
+    StableName,
+    NeedsRegistry,
+    RegistryName,
+    Parent,
+    GettingFromOtherRegistry,
+    RegistryRulePath,
+    RegistryRule,
+    Admission,
+    HandleTraits,
+    HandleContracts,
+    PartTraits,
+    PartContracts,
+    Requires,
+    Provides,
+    ExpectedOutput,
+    ActualOutput,
+    Flow,
+    FlowProvider,
+    Plugin,
+    RuntimeChecks,
+> {
+    pub source: Source,
+    pub kind: Kind,
+    pub preset: Preset,
+    pub parts: Parts,
+    pub name: Name,
+    pub summary: Summary,
+    pub params: Params,
+    pub exports: Exports,
+    pub handle: Handle,
+    pub stable_name: StableName,
+    pub needs_registry: NeedsRegistry,
+    pub registry_name: RegistryName,
+    pub parent: Parent,
+    pub getting_from_other_registry: GettingFromOtherRegistry,
+    pub registry_rule_path: RegistryRulePath,
+    pub registry_rule: RegistryRule,
+    pub admission: Admission,
+    pub handle_traits: HandleTraits,
+    pub handle_contracts: HandleContracts,
+    pub part_traits: PartTraits,
+    pub part_contracts: PartContracts,
+    pub requires: Requires,
+    pub provides: Provides,
+    pub expected_output: ExpectedOutput,
+    pub actual_output: ActualOutput,
+    pub flow: Flow,
+    pub flow_provider: FlowProvider,
+    pub plugin: Plugin,
+    pub runtime_checks: RuntimeChecks,
 }
 
 /// Splice an author's face tokens into a real field list, for editors only.
@@ -804,9 +834,29 @@ pub struct FaceFields {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __face_fields {
+    // The editor has to see the fields the author has not written yet, so the
+    // literal contains only the author's tokens; `..loop {}` supplies the rest.
+    // Without it rust-analyzer reports "missing structure fields" at the macro
+    // call site, and with `()`-typed fields it reports a type error per field —
+    // both landed in the author's editor. A never-returning base coerces to the
+    // struct's type and leaves the unwritten fields open for completion.
+    // 编辑器必须看到作者还没写的字段，因此字面量只包含作者的 token，其余由
+    // `..loop {}` 提供。没有它，rust-analyzer 会在宏调用处报 "missing structure
+    // fields"；而字段类型写成 `()` 时每个字段报一个类型错误——两者都会落到作者的编辑器
+    // 里。永不返回的基值可以强制转换成结构体类型，并让未写字段继续获得候选。
+    ($($tokens:tt)* ,) => {
+        const _: () = {
+            let _ = $crate::macros::FaceFields { $($tokens)* ..loop {} };
+        };
+    };
     ($($tokens:tt)*) => {
         const _: () = {
-            let _ = $crate::macros::FaceFields { $($tokens)* };
+            let _ = $crate::macros::FaceFields { $($tokens)* , ..loop {} };
+        };
+    };
+    () => {
+        const _: () = {
+            let _ = $crate::macros::FaceFields { ..loop {} };
         };
     };
 }
@@ -1002,15 +1052,18 @@ mod tests {
     #[test]
     fn the_field_mirror_matches_the_declared_order() {
         let source = include_str!("macros.rs");
-        let start = source
-            .find("pub struct FaceFields {")
-            .expect("field mirror");
+        // Built at runtime so the needle cannot match this test's own source.
+        // 在运行时拼接，避免这个 needle 匹配到测试自身的源码。
+        let needle = ["pub struct ", "FaceFields"].concat();
+        let start = source.find(&needle).expect("field mirror");
         let end = source[start..].find("\n}").expect("field mirror end") + start;
         let mirrored = source[start..end]
             .lines()
             .filter_map(|line| {
                 let line = line.trim();
-                let name = line.strip_prefix("pub ")?.strip_suffix(": (),")?;
+                // Each field is `pub <name>: <Param>,`; only the name matters here.
+                // 每个字段形如 `pub <name>: <Param>,`；这里只关心名字。
+                let name = line.strip_prefix("pub ")?.split_once(": ")?.0;
                 Some(name)
             })
             .collect::<Vec<_>>();
