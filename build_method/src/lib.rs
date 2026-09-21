@@ -213,43 +213,51 @@ impl SourceScope {
             // 构建无法定位某个端点，说明这个区间没被读懂，因此保留整棵树而不是错剪。
             let (module, end_module) = match &cut.expressions {
                 Some(expressions) => {
-                    let Some(module) = graft_expression_module(&expressions.cut, &faces) else {
-                        return Self {
-                            roots: None,
-                            reason: "graft-root-cut",
-                        };
-                    };
-                    let end_module = match expressions.cut_end.as_deref() {
-                        Some(end) => match graft_expression_module(end, &faces) {
-                            Some(module) => Some(module),
-                            None => {
-                                return Self {
-                                    roots: None,
-                                    reason: "graft-root-cut",
-                                };
-                            }
+                    // A typed cut keeps the whole tree, and it does so
+                    // independently of how the expression is spelled. Narrowing
+                    // changes what a host ships — the example family grafts faces
+                    // outside its cut subtree — so it is a decision of its own,
+                    // recorded in `docs/audit-2026-09-21.md` (B3.6). What the
+                    // expression is *not* allowed to do is decide the policy by
+                    // accident: a `crate::…` spelling used to miss the module map
+                    // and report `graft-root-cut`, which reads like a broken
+                    // declaration.
+                    // 类型化切口保留整棵树，且与表达式的写法无关。收窄会改变宿主发布的
+                    // 内容——示例族会嫁接切口子树之外的注册面——因此那是独立的决定，记录在
+                    // `docs/audit-2026-09-21.md`（B3.6）。表达式不允许做的是"顺手决定
+                    // 策略"：`crate::…` 写法过去匹配不到模块表，却报成 `graft-root-cut`，
+                    // 读起来像声明坏了。
+                    let recognized = graft_expression_module(&expressions.cut, &faces).is_some()
+                        && expressions
+                            .cut_end
+                            .as_deref()
+                            .is_none_or(|end| graft_expression_module(end, &faces).is_some());
+                    return Self {
+                        roots: None,
+                        reason: if recognized {
+                            "graft-typed-cut-whole-tree"
+                        } else {
+                            "graft-typed-cut-unrecognized"
                         },
-                        None => None,
                     };
-                    (module, end_module)
                 }
-                None => {
-                    let (module, end_module) = string_cut_modules(&cut.cut);
-                    let Some(module) = module else {
-                        return Self {
-                            roots: None,
-                            reason: "graft-root-cut",
-                        };
-                    };
-                    if end_module.is_none() && cut.cut.contains(" to ") {
-                        return Self {
-                            roots: None,
-                            reason: "graft-root-cut",
-                        };
-                    }
-                    (module, end_module)
-                }
+                None => string_cut_modules(&cut.cut),
             };
+            let (Some(module), end_module) = (module, end_module) else {
+                return Self {
+                    roots: None,
+                    reason: "graft-root-cut",
+                };
+            };
+            // A range whose far endpoint mapped to the whole tree is not
+            // understood, so the whole tree is kept rather than pruned wrongly.
+            // 区间切口的远端映射到整棵树，说明这个区间没被读懂，因此保留整棵树而不是错剪。
+            if cut.cut.contains(" to ") && end_module.is_none() {
+                return Self {
+                    roots: None,
+                    reason: "graft-root-cut",
+                };
+            }
             queue.extend(select_module_subtree(&faces, &module, &mut selected));
             if let Some(end_module) = end_module {
                 queue.extend(select_module_subtree(&faces, &end_module, &mut selected));
@@ -537,6 +545,14 @@ fn graft_cut_module(cut: &str) -> Option<String> {
 /// 是精确的：它不依赖注册路径与模块路径一致。
 fn graft_expression_module(expression: &str, faces: &[FaceSource]) -> Option<String> {
     let expression = expression.trim();
+    // Hosts spell typed cuts from the crate root, while a face's module name is
+    // relative: without stripping the prefix the compare missed every real cut.
+    // 宿主从 crate 根书写类型化切口，而注册面的模块名是相对的：不去掉前缀就永远匹配不到
+    // 真实切口。
+    let expression = expression
+        .strip_prefix("crate::")
+        .or_else(|| expression.strip_prefix("self::"))
+        .unwrap_or(expression);
     faces
         .iter()
         .find(|face| expression == format!("{}::NODE_ID", face.module))
@@ -987,6 +1003,23 @@ mod tests {
             (Some("a".to_owned()), None)
         );
         assert_eq!(super::string_cut_modules("root"), (None, None));
+    }
+
+    #[test]
+    fn a_typed_cut_is_recognized_from_the_crate_root() {
+        let faces = vec![face(
+            "control::object::button",
+            PathBuf::from("src/button.rs"),
+        )];
+        assert_eq!(
+            super::graft_expression_module("control::object::button::NODE_ID", &faces).as_deref(),
+            Some("control::object::button")
+        );
+        assert_eq!(
+            super::graft_expression_module("crate::control::object::button::NODE_ID", &faces)
+                .as_deref(),
+            Some("control::object::button")
+        );
     }
 
     #[test]
