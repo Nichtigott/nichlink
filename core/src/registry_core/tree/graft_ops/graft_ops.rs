@@ -227,7 +227,34 @@ impl Registry {
             }
             child
         } else {
-            entry.child.clone()
+            let mut kept = entry.child.clone();
+            if let Some(registry) = &mut kept {
+                let registry = Arc::make_mut(registry);
+                // The face now declares the replacement's rule, so the registry
+                // it owns has to enforce that rule too. A base child the new
+                // rule rejects would leave the tree inconsistent, so the graft is
+                // refused instead of installing a rule nobody satisfies.
+                // 该面现在声明的是替换件的规则，因此它拥有的子注册机也必须执行该规则。
+                // 新规则会拒绝的原有子级会让树自相矛盾，因此宁可拒绝这次嫁接，也不装上一
+                // 条没人满足的规则。
+                registry.reconfigure(&candidate);
+                if let Some(violation) =
+                    registry.child_violating(candidate.id, &candidate.registry_rule)
+                {
+                    let mut error = self.graft_error(
+                        target,
+                        GraftError::ContractMismatch {
+                            expected: target_info.flow.clone(),
+                            received: replacement.flow.clone(),
+                        },
+                    );
+                    error.message = format!(
+                        "graft overlay would leave an existing child violating the new rule: {violation}"
+                    );
+                    return Err(error);
+                }
+            }
+            kept
         };
         entry.info = Arc::new(candidate);
         entry.child = child;
@@ -425,6 +452,24 @@ impl Registry {
                 ),
             )));
         }
+        // The edit may tighten the rule this face enforces on its own children.
+        // Checking only the edited face against *its* parent left the tree
+        // internally inconsistent: a child that no longer satisfies the new rule
+        // stayed put, and only some later insertion failed.
+        // 这次编辑可能收紧该面对自己子级的规则。只校验被编辑的面与其父级，会让树内部
+        // 自相矛盾：不再满足新规则的子级留在原处，只有之后某次插入才会失败。
+        if self.registry(info.id).is_some()
+            && let Some(violation) = self.child_violating(info.id, &info.registry_rule)
+        {
+            return Err(Box::new(RegistryError::new(
+                info.id,
+                format!("<edited>/{}/{}", info.kind, info.registry_name),
+                info.source.clone(),
+                format!(
+                    "registration rule rejected existing child {violation}; edit or move it first"
+                ),
+            )));
+        }
         let mut staged = self.clone();
         let source = info.source.clone();
         if !staged.replace_info(current, info) {
@@ -515,6 +560,22 @@ impl Registry {
         header.registration_rule = info.registry_rule.clone();
         header.registration_rule_path = info.registry_rule_path.clone();
         header.admission = info.admission.clone();
+    }
+
+    /// The first direct child of `parent` that `rule` would reject.
+    /// `rule` 会拒绝的、`parent` 的第一个直接子级。
+    ///
+    /// Only direct children: a rule governs what a face admits, not what its
+    /// grandchildren admit.
+    /// 只看直接子级：规则约束的是一个面接纳什么，而不是它的孙辈接纳什么。
+    fn child_violating(&self, parent: NodeId, rule: &OwnedRegistrationRule) -> Option<String> {
+        self.depth_first()
+            .iter()
+            .filter(|child| child.parent == parent)
+            .find_map(|child| {
+                let failures = rule.validate(child);
+                (!failures.is_empty()).then(|| format!("`{}`: {}", child.kind, failures.join("; ")))
+            })
     }
 
     fn resolve_node(&self, value: &str) -> Resolution {
@@ -666,6 +727,77 @@ mod tests {
     /// which file happens to come first is not a decision the author made.
     /// 两个不同的面可以带同一个槽位名。匹配到两者的字符串选择器必须被拒绝，而不是静默
     /// 选一个——文件谁先出现并不是作者做出的决定。
+    /// Tightening a face's rule must not leave an existing child behind that the
+    /// new rule rejects: the file-authoring path gates its write on this very
+    /// check, so accepting it wrote a tree that can never be built again.
+    /// 收紧某个面的规则时，不能把新规则会拒绝的既有子级留下：文件授权路径正是以这项
+    /// 检查作为写盘闸门，接受它就等于写下一棵再也构建不出来的树。
+    #[test]
+    fn an_edit_that_invalidates_an_existing_child_is_refused() {
+        let namespace = "rule-edit";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut owner = face(namespace, "owner.rs", "Owner", "owner");
+        owner.needs_registry = true;
+        owner.id = NodeId::from_namespaced_path(namespace, "owner.rs", "Owner");
+        let mut child = face(namespace, "child.rs", "Child", "child");
+        child.parent = owner.id;
+        child.exports = vec!["x".to_owned()];
+        root.register_snapshot_batch([owner.clone(), child.clone()])
+            .unwrap();
+
+        let mut tightened = owner.clone();
+        tightened.registry_rule = RegistrationRule {
+            required_exports: &["y"],
+            ..RegistrationRule::ANY
+        }
+        .into_owned();
+        let error = root
+            .validate_snapshot_replacement(owner.id, tightened)
+            .expect_err("a rule that rejects an existing child must be refused");
+        let rendered = format!("{error}");
+        assert!(rendered.contains("rejected existing child"), "{rendered}");
+        assert!(rendered.contains("Child"), "{rendered}");
+    }
+
+    /// A non-full graft keeps the base children, so the registry it leaves
+    /// behind has to enforce the replacement's rule — and must not be installed
+    /// when a kept child cannot satisfy it.
+    /// 非 full 嫁接会保留原有子级，因此留下的子注册机必须执行替换件的规则；当保留下来的
+    /// 子级无法满足它时，就不该安装这次嫁接。
+    #[test]
+    fn a_non_full_graft_does_not_install_a_rule_its_children_violate() {
+        let namespace = "rule-graft";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut owner = face(namespace, "owner.rs", "Owner", "owner");
+        owner.needs_registry = true;
+        owner.id = NodeId::from_namespaced_path(namespace, "owner.rs", "Owner");
+        let mut child = face(namespace, "child.rs", "Child", "child");
+        child.parent = owner.id;
+        child.exports = vec!["x".to_owned()];
+        root.register_snapshot_batch([owner.clone(), child.clone()])
+            .unwrap();
+
+        let mut replacement = face("external", "replacement.rs", "Replacement", "replacement");
+        replacement.id = NodeId::from_namespaced_path("external", "replacement.rs", "Replacement");
+        replacement.needs_registry = true;
+        replacement.registry_rule = RegistrationRule {
+            required_exports: &["z"],
+            ..RegistrationRule::ANY
+        }
+        .into_owned();
+        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
+        external
+            .register_snapshot_batch([replacement.clone()])
+            .unwrap();
+
+        let plan = GraftPlan::new(FRAMEWORK).cut("root/owner", "replacement");
+        let error = root
+            .overlay(&plan, &external)
+            .expect_err("a kept child that violates the new rule must refuse the graft");
+        let rendered = format!("{error}");
+        assert!(rendered.contains("violating the new rule"), "{rendered}");
+    }
+
     #[test]
     fn an_ambiguous_replacement_selector_is_refused() {
         let namespace = "ambiguous";
