@@ -1397,9 +1397,8 @@ impl OwnedFlowContract {
         self == expected
             || (self.id == expected.id
                 && self.version == expected.version
-                && flow_semantic(&self.input) == flow_semantic(&expected.input)
-                && flow_semantic(&self.output) == flow_semantic(&expected.output)
-                && flow_semantic(&self.input) != FlowSemantic::Unknown)
+                && labels_compatible(&self.input, &expected.input)
+                && labels_compatible(&self.output, &expected.output))
     }
 }
 
@@ -1483,9 +1482,26 @@ impl FlowContract {
         self.compatible_with(expected)
             || (self.id == expected.id
                 && self.version == expected.version
-                && self.input_semantic() == expected.input_semantic()
-                && self.output_semantic() == expected.output_semantic()
-                && self.input_semantic() != FlowSemantic::Unknown)
+                && labels_compatible(self.input, expected.input)
+                && labels_compatible(self.output, expected.output))
+    }
+}
+
+/// Whether two declared type labels may stand for the same domain.
+/// 两个声明的类型标签是否可能指同一个语义域。
+///
+/// A label the table below does not know carries no domain information, so it
+/// can only agree with itself, literally. Treating two *different* unknown
+/// labels as compatible is exactly what let a type-incompatible replacement
+/// occupy a slot while every check reported success.
+/// 下表不认识的标签不携带任何语义域信息，因此只能与自身字面相等才算一致。把两个
+/// *不同*的未知标签当作兼容，正是类型不兼容的替换件得以占位、而所有检查都报成功的
+/// 原因。
+fn labels_compatible(left: &str, right: &str) -> bool {
+    match (flow_semantic(left), flow_semantic(right)) {
+        (FlowSemantic::Unknown, FlowSemantic::Unknown) => left == right,
+        (FlowSemantic::Unknown, _) | (_, FlowSemantic::Unknown) => false,
+        (left, right) => left == right,
     }
 }
 
@@ -1699,6 +1715,59 @@ pub const FACE_FIELD_ORDER: &[&str] = &[
     "plugin",
     "runtime_checks",
 ];
+
+#[cfg(test)]
+mod flow_label_tests {
+    use super::{ContractId, FlowContract};
+
+    /// An output label the table does not know must not be smuggled past the
+    /// gate by comparing two unknowns with each other.
+    /// 语义表不认识的输出标签，不得靠"两个未知标签互相比较"混过关口。
+    #[test]
+    fn unknown_output_labels_must_agree_literally() {
+        let target = FlowContract::new(
+            ContractId::new("render.v1"),
+            1,
+            "LocalCoordinates",
+            "CanvasFrame",
+        );
+        let different = FlowContract::new(
+            ContractId::new("render.v1"),
+            1,
+            "LocalCoordinates",
+            "TotallyDifferentType",
+        );
+        assert!(!target.semantically_compatible_with(different));
+        assert!(target.semantically_compatible_with(target));
+    }
+
+    /// Spelling differences are still authorised where the table knows the
+    /// domain, as long as the unknown side agrees literally.
+    /// 语义表认识的域仍允许拼写差异，只要未知的那一侧字面一致。
+    #[test]
+    fn known_domains_keep_accepting_spelling_differences() {
+        let target = FlowContract::new(
+            ContractId::new("render.v1"),
+            1,
+            "LocalCoordinates",
+            "CanvasFrame",
+        );
+        let respelled = FlowContract::new(
+            ContractId::new("render.v1"),
+            1,
+            "local_coordinates",
+            "CanvasFrame",
+        );
+        assert!(target.semantically_compatible_with(respelled));
+        let respelled_with_other_output = FlowContract::new(
+            ContractId::new("render.v1"),
+            1,
+            "local_coordinates",
+            "TotallyDifferentType",
+        );
+        assert!(!target.semantically_compatible_with(respelled_with_other_output));
+    }
+}
 
 #[cfg(test)]
 mod trace_mode_tests {
