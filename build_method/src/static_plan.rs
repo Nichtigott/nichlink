@@ -85,6 +85,27 @@ fn collect_static_faces(
                 && let Some(face) = parsed_face(&source, &relative)
                 && face.field("plugin").is_none()
             {
+                // A declaration the compiler drops must not keep a plan entry:
+                // the plan and the compiled crate have to agree on which faces
+                // exist. Only `feature` gates can be followed, because they are
+                // the ones this build script can evaluate from its own
+                // environment; anything else is refused instead of guessed.
+                // 编译器会丢弃的声明不能留下计划条目：计划与编译产物必须对"有哪些面"
+                // 取得一致。只有 `feature` 门控可以跟随——它是 build script 能从自己的
+                // 环境里求值的那一种；其余一律拒绝而不是猜测。
+                if let Some(cfg) = face.cfg() {
+                    match face_cfg_enabled(cfg, &feature_enabled) {
+                        Ok(true) => {}
+                        Ok(false) => continue,
+                        Err(message) => {
+                            errors.push(
+                                BuildDiagnostic::new("face-cfg", message)
+                                    .at(relative.clone(), face.location.line),
+                            );
+                            continue;
+                        }
+                    }
+                }
                 let id = node_id(src, node).expect("a parsed face has an identity");
                 let parent = cached_parent_id(src, &face).or_else(|| {
                     face.field("parent")
@@ -117,5 +138,97 @@ fn collect_static_faces(
             records,
             errors,
         );
+    }
+}
+
+/// Whether a declaration's `cfg` gate is satisfied for this build.
+/// 声明的 `cfg` 门控在本次构建中是否成立。
+///
+/// `enabled` answers for one feature name, so the decision is testable without
+/// touching the process environment.
+/// `enabled` 回答单个特性名，因此该判断无需触碰进程环境即可测试。
+pub(crate) fn face_cfg_enabled(cfg: &str, enabled: &dyn Fn(&str) -> bool) -> Result<bool, String> {
+    let meta = syn::parse_str::<syn::Meta>(cfg)
+        .map_err(|error| unsupported_cfg(cfg, &error.to_string()))?;
+    evaluate_cfg(&meta, cfg, enabled)
+}
+
+fn evaluate_cfg(
+    meta: &syn::Meta,
+    original: &str,
+    enabled: &dyn Fn(&str) -> bool,
+) -> Result<bool, String> {
+    if let syn::Meta::NameValue(pair) = meta
+        && pair.path.is_ident("feature")
+    {
+        return match &pair.value {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(name),
+                ..
+            }) => Ok(enabled(&name.value())),
+            _ => Err(unsupported_cfg(
+                original,
+                "`feature` needs a string literal",
+            )),
+        };
+    }
+    if let syn::Meta::List(list) = meta
+        && list.path.is_ident("not")
+    {
+        let inner = syn::parse2::<syn::Meta>(list.tokens.clone())
+            .map_err(|error| unsupported_cfg(original, &error.to_string()))?;
+        return Ok(!evaluate_cfg(&inner, original, enabled)?);
+    }
+    Err(unsupported_cfg(
+        original,
+        "only `feature = \"…\"` and `not(feature = \"…\")` can be followed",
+    ))
+}
+
+fn unsupported_cfg(cfg: &str, reason: &str) -> String {
+    format!(
+        "unsupported `cfg` on a registration face: `{cfg}` ({reason}); the generated plan \
+         cannot follow it, so the plan and the compiled crate would disagree"
+    )
+}
+
+/// Whether a Cargo feature is enabled for this build script run.
+/// 本次 build script 运行中某个 Cargo 特性是否启用。
+fn feature_enabled(name: &str) -> bool {
+    let key = format!(
+        "CARGO_FEATURE_{}",
+        name.to_uppercase().replace(['-', '.'], "_")
+    );
+    std::env::var_os(key).is_some_and(|value| !value.is_empty())
+}
+
+#[cfg(test)]
+mod face_cfg_tests {
+    use super::face_cfg_enabled;
+
+    /// Feature gates are followed; anything this build cannot evaluate is
+    /// refused rather than guessed.
+    /// 特性门控会被跟随；本次构建无法求值的写法一律拒绝，而不是猜测。
+    #[test]
+    fn feature_gates_are_followed_and_others_refused() {
+        let enabled = |name: &str| name == "optional-face";
+        assert_eq!(
+            face_cfg_enabled(r#"feature = "optional-face""#, &enabled),
+            Ok(true)
+        );
+        assert_eq!(
+            face_cfg_enabled(r#"feature = "other""#, &enabled),
+            Ok(false)
+        );
+        assert_eq!(
+            face_cfg_enabled(r#"not(feature = "other")"#, &enabled),
+            Ok(true)
+        );
+        assert_eq!(
+            face_cfg_enabled(r#"not(feature = "optional-face")"#, &enabled),
+            Ok(false)
+        );
+        let error = face_cfg_enabled("test", &enabled).expect_err("unsupported gate");
+        assert!(error.contains("unsupported"), "{error}");
     }
 }

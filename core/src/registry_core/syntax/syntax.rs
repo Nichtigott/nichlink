@@ -27,6 +27,9 @@ struct FieldSyntax {
 #[derive(Clone, Debug)]
 pub struct FaceSyntax {
     pub macro_name: String,
+    /// The `cfg` gates the declaration carries, if any, exactly as written.
+    /// 声明携带的 `cfg` 门控（若有），按原文保留。
+    pub cfg: Option<String>,
     pub location: SyntaxLocation,
     /// Exclusive end of the macro invocation in the source file.
     /// 宏调用在源码中的排他结束位置。
@@ -72,6 +75,12 @@ impl std::error::Error for FaceSyntaxError {}
 impl FaceSyntax {
     pub fn field(&self, name: &str) -> Option<String> {
         self.fields.get(name).map(|field| compact(&field.tokens))
+    }
+
+    /// The `cfg` attribute written on the declaration, if any.
+    /// 声明上写下的 `cfg` 属性（若有）。
+    pub fn cfg(&self) -> Option<&str> {
+        self.cfg.as_deref()
     }
 
     pub fn field_location(&self, name: &str) -> Option<&SyntaxLocation> {
@@ -335,8 +344,21 @@ impl<'ast> Visit<'ast> for FaceVisitor {
         match parse_fields(item.mac.tokens.clone(), item.mac.span()) {
             Ok(fields) => {
                 let span = item.span();
+                let cfg = item.attrs.iter().find_map(|attribute| {
+                    attribute
+                        .path()
+                        .is_ident("cfg")
+                        .then(|| {
+                            attribute
+                                .parse_args::<TokenStream>()
+                                .ok()
+                                .map(|tokens| compact(&tokens))
+                        })
+                        .flatten()
+                });
                 self.faces.push(FaceSyntax {
                     macro_name,
+                    cfg,
                     location: location(span),
                     end: end_location(span),
                     fields,
@@ -1086,7 +1108,7 @@ impl<'ast> Visit<'ast> for ApplicationVisitor<'_> {
 
 #[cfg(test)]
 mod declaration_tests {
-    use super::{application_entries, graft_entries, split_face_fields};
+    use super::{application_entries, graft_entries, parse_face, split_face_fields};
     use proc_macro2::TokenStream;
 
     #[test]
@@ -1224,6 +1246,20 @@ fn application_plan() {
             error.message
         );
     }
+    /// The build has to follow a declaration's `cfg` gate, so the parser keeps
+    /// it exactly as written.
+    /// 构建需要跟随声明的 `cfg` 门控，因此解析器按原文保留它。
+    #[test]
+    fn a_declaration_keeps_its_cfg_gate() {
+        let face = parse_face(
+            "// generated-by=NichLink\n#[cfg(feature = \"optional-face\")]\n\
+             crate::root_object! {\n    kind: Widget,\n}\n",
+        )
+        .expect("parse")
+        .expect("face");
+        assert_eq!(face.cfg(), Some("feature = \"optional-face\""));
+    }
+
     /// A generic argument list and a closure parameter list are values, not
     /// field lists: their commas and `name:` pairs must not split a field.
     /// 泛型实参列表与闭包参数列表是值而不是字段列表：其中的逗号与 `name:` 都不该把
