@@ -794,6 +794,9 @@ pub struct GraftSyntax {
     pub graft: String,
     pub full: bool,
     pub location: SyntaxLocation,
+    /// The `cfg` gate the declaration carries, if any, exactly as written.
+    /// 声明携带的 `cfg` 门控（若有），按原文保留。
+    pub cfg: Option<String>,
     /// Present when `cut(...)` / `graft(...)` supplied Rust expressions. The
     /// renderer emits those expressions verbatim, so the compiler — and any
     /// editor that resolves Rust paths — sees the real target instead of a
@@ -847,7 +850,47 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
         error: Option<FaceSyntaxError>,
     }
     impl<'ast> Visit<'ast> for Visitor<'_> {
-        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+        /// Only a declaration written as an item belongs in the build's plan: a
+        /// `graft_plan!` inside a function is a runtime expression, and a plan
+        /// inside `#[cfg(test)] mod tests` describes tests. Both used to be
+        /// captured, shipping test cuts into the release table and pinning faces
+        /// against pruning.
+        /// 只有写成条目的声明才属于构建计划：函数里的 `graft_plan!` 是运行时表达式，
+        /// `#[cfg(test)] mod tests` 里的计划描述的是测试。两者过去都会被收集，把测试
+        /// 切口带进发布表，并让注册面躲过剪枝。
+        fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
+            self.collect(item);
+        }
+
+        fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+            // A module the compiler may drop cannot contribute to the plan.
+            // 编译器可能丢弃的模块不能参与计划。
+            if item
+                .attrs
+                .iter()
+                .any(|attribute| attribute.path().is_ident("cfg"))
+            {
+                return;
+            }
+            syn::visit::visit_item_mod(self, item);
+        }
+    }
+
+    impl<'a> Visitor<'a> {
+        fn collect(&mut self, item: &syn::ItemMacro) {
+            let cfg = item.attrs.iter().find_map(|attribute| {
+                attribute
+                    .path()
+                    .is_ident("cfg")
+                    .then(|| {
+                        attribute
+                            .parse_args::<TokenStream>()
+                            .ok()
+                            .map(|tokens| compact(&tokens))
+                    })
+                    .flatten()
+            });
+            let mac = &item.mac;
             let Some(name) = mac
                 .path
                 .segments
@@ -1036,6 +1079,7 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
                     graft,
                     full,
                     location: location(mac.span()),
+                    cfg: cfg.clone(),
                     expressions,
                 });
                 index += 1;
@@ -1142,12 +1186,10 @@ nichlink::application!(entry = crate::app::run);
     #[test]
     fn graft_parser_collects_single_and_full_cuts() {
         let source = r#"
-fn application_plan() {
-    let _plan = nichlink::graft_plan!(framework,
-        cut ["root/a1/b2"] graft "canvas_fast",
-        cut ["root/a"] full graft "a_fast",
-    );
-}
+nichlink::static_graft_plan!(FRAMEWORK,
+    cut ["root/a1/b2"] graft "canvas_fast",
+    cut ["root/a"] full graft "a_fast",
+);
 "#;
         let entries = graft_entries(source).unwrap();
         assert_eq!(entries.len(), 2);
@@ -1166,7 +1208,11 @@ fn application_plan() {
 
     #[test]
     fn graft_parser_accepts_unbracketed_single_cut() {
-        let source = r#"fn plan() { nichlink::graft_plan!(framework, cut "root/a" full graft "replacement"); }"#;
+        // A declaration belongs at the entry, so the fixture is an item; the
+        // tests below cover plans that sit somewhere else.
+        // 声明应当写在入口处，因此夹具写成条目；位置不当的计划由下面的测试覆盖。
+        let source =
+            r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" full graft "replacement");"#;
         let entries = graft_entries(source).unwrap();
         assert_eq!(entries[0].cut, "root/a");
         assert!(entries[0].full);
@@ -1181,6 +1227,37 @@ fn application_plan() {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].cut, "root/a");
         assert_eq!(entries[0].graft, "replacement");
+    }
+
+    /// Only an item-position declaration belongs to the build's plan.
+    /// 只有条目位置的声明才属于构建计划。
+    #[test]
+    fn graft_parser_ignores_declarations_that_are_not_items() {
+        let in_function = r#"
+fn plan() {
+    let _ = nichlink::graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+}
+"#;
+        assert!(graft_entries(in_function).unwrap().is_empty());
+
+        let in_test_module = r#"
+#[cfg(test)]
+mod tests {
+    nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+}
+"#;
+        assert!(graft_entries(in_test_module).unwrap().is_empty());
+
+        let at_entry = r#"
+#[cfg(feature = "optional-graft")]
+nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+"#;
+        let entries = graft_entries(at_entry).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].cfg.as_deref(),
+            Some("feature = \"optional-graft\"")
+        );
     }
 
     #[test]

@@ -194,7 +194,7 @@ fn unsupported_cfg(cfg: &str, reason: &str) -> String {
 
 /// Whether a Cargo feature is enabled for this build script run.
 /// 本次 build script 运行中某个 Cargo 特性是否启用。
-fn feature_enabled(name: &str) -> bool {
+pub(crate) fn feature_enabled(name: &str) -> bool {
     let key = format!(
         "CARGO_FEATURE_{}",
         name.to_uppercase().replace(['-', '.'], "_")

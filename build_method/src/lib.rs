@@ -413,9 +413,25 @@ pub(crate) fn host_graft_entries(src: &Path, nodes: &[Node]) -> Vec<GraftSyntax>
         }
         return Vec::new();
     };
-    graft_entries(&source).unwrap_or_else(|error| {
+    let entries = graft_entries(&source).unwrap_or_else(|error| {
         panic!("invalid graft declaration in `{}`: {error}", file.display())
-    })
+    });
+    // The same gate rule the static plan follows: a feature the build can see
+    // decides, and a gate it cannot evaluate is refused rather than guessed.
+    // 与静态计划同一条规则：构建看得见的特性说了算，无法求值的门控一律拒绝而非猜测。
+    entries
+        .into_iter()
+        .filter(|entry| match entry.cfg.as_deref() {
+            Some(cfg) => match crate::static_plan::face_cfg_enabled(
+                cfg,
+                &crate::static_plan::feature_enabled,
+            ) {
+                Ok(enabled) => enabled,
+                Err(message) => panic!("{message} in `{}`", file.display()),
+            },
+            None => true,
+        })
+        .collect()
 }
 
 fn entry_path_exists(src: &Path, path: &str) -> bool {

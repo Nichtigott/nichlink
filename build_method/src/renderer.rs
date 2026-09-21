@@ -530,6 +530,7 @@ mod tests {
             },
             &[],
             &[GraftSyntax {
+                cfg: None,
                 cut: "root/control/button".to_owned(),
                 graft: "button_fast".to_owned(),
                 full: false,
