@@ -605,7 +605,7 @@ the costs are explicit:
 
 | Usage | Runtime representation | Cost boundary |
 | --- | --- | --- |
-| Read-only built-in topology | Static `StaticFace` slice | No startup allocation; `find` is O(log n), while `children_of` currently filters in O(n) |
+| Read-only built-in topology | Static `StaticFace` slice | No startup allocation; `find` and `children_of` both scan the slice in O(n), because the table follows registry-tree order |
 | Mutable development Registry | `Arc` header, 32 entry pages, and indexes | Cloning increments `Arc` counts; the first write copies only the touched page, not the tree |
 | Build-declared static graft | Static selector slice inside `StaticPlan` | Reading the declaration allocates nothing; a framework with statically bound implementations needs no Registry overlay |
 | Post-release plugin/graft | Selected dynamic metadata and an effective Registry | `overlay_static` allocates no plan but still performs contract, admission, and connector validation once |

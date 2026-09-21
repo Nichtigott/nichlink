@@ -200,13 +200,20 @@ impl StaticPlan {
         self.faces.is_empty()
     }
 
-    /// Find a face in the identity-sorted generated table.
-    /// 在按身份排序的生成表中查找注册面。
+    /// Find a face by identity.
+    /// 按身份查找注册面。
+    ///
+    /// The generated table is emitted in registry-tree traversal order, because
+    /// `registrations()` and everything that registers from it rely on parents
+    /// coming first. It is therefore **not** sorted by identity, and a binary
+    /// search over it silently missed faces — two of the three faces in the
+    /// example plan. The scan is linear, and the table stays in the order its
+    /// other consumers need.
+    /// 生成的表按注册树遍历顺序发射，因为 `registrations()` 以及所有据此注册的代码都
+    /// 依赖父级先出现。它因此**不是**按身份排序的，对它做二分会让注册面被静默漏掉——
+    /// 示例计划里三个面漏了两个。这里改为线性扫描，表则保持其他消费方需要的顺序。
     pub fn find(self, id: NodeId) -> Option<&'static StaticFace> {
-        self.faces
-            .binary_search_by_key(&id, |face| face.id)
-            .ok()
-            .map(|index| &self.faces[index])
+        self.faces.iter().find(|face| face.id == id)
     }
 
     pub fn children_of(self, parent: NodeId) -> impl Iterator<Item = &'static StaticFace> {
@@ -281,6 +288,28 @@ const fn str_eq(left: &str, right: &str) -> bool {
         index += 1;
     }
     true
+}
+
+#[cfg(test)]
+mod static_plan_find_tests {
+    use super::{NodeId, StaticFace, StaticPlan};
+
+    /// The emitted table follows the registry tree, so `find` must not assume
+    /// identity order.
+    /// 发射的表跟随注册树，因此 `find` 不能假定身份顺序。
+    #[test]
+    fn find_sees_every_face_of_an_unsorted_table() {
+        static FACES: &[StaticFace] = &[
+            StaticFace::new(NodeId::from_raw([9; 16]), NodeId::from_raw([0; 16]), true),
+            StaticFace::new(NodeId::from_raw([1; 16]), NodeId::from_raw([9; 16]), false),
+            StaticFace::new(NodeId::from_raw([5; 16]), NodeId::from_raw([9; 16]), false),
+        ];
+        let plan = StaticPlan::with_grafts(FACES, &[]);
+        for face in FACES {
+            assert_eq!(plan.find(face.id).map(|found| found.id), Some(face.id));
+        }
+        assert!(plan.find(NodeId::from_raw([7; 16])).is_none());
+    }
 }
 
 #[cfg(test)]
