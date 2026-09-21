@@ -195,11 +195,19 @@ fn render_node(
     if include_source && let Some(file) = &node.file {
         let inner = "    ".repeat(depth + 1);
         let relative = relative_display(src, file);
-        writeln!(
-            output,
-            "{inner}include!(concat!(env!(\"OUT_DIR\"), \"/registration_sources/{relative}\"));"
-        )
-        .unwrap();
+        // Load the real face file as a module instead of including a copy, so
+        // the module the compiler and editor tooling resolve is the file being
+        // edited. `#[path]` accepts only a literal and resolves relative to the
+        // inline module's virtual directory, so the absolute path is written
+        // into the generated tree (which lives in OUT_DIR and is rebuilt).
+        // 直接以模块方式载入真实注册面文件，而不是 include 一份副本，使编译器
+        // 与编辑器解析到的模块就是正在编辑的文件。`#[path]` 只接受字面量，且按
+        // 内联模块的虚拟目录解析，因此把绝对路径写进生成树（位于 OUT_DIR，每次
+        // 构建重写）。
+        let absolute = file.to_string_lossy().replace('\\', "/");
+        writeln!(output, "{inner}#[path = {absolute:?}]").unwrap();
+        writeln!(output, "{inner}mod __face;").unwrap();
+        writeln!(output, "{inner}pub use __face::*;").unwrap();
         writeln!(output, "{inner}#[rustfmt::skip]").unwrap();
         writeln!(
             output,
