@@ -714,6 +714,20 @@ macro_rules! __control_object {
         }
     };
 
+    // Anything the strict arms above decline — fields in another order, `;`
+    // separators, a forgotten separator, a misspelled field — goes to the front
+    // end, which reorders tolerantly and reports the exact token it rejects. A
+    // well-formed face never reaches this arm, so its expansion is unchanged.
+    // 上面所有严格 arm 都不接受的声明——字段顺序不同、用 `;` 分隔、漏写分隔符、字段名
+    // 拼错——交给前端：它宽容重排，并把被拒绝的那个 token 精确报出来。合法注册面
+    // 永远不会走到这里，展开因此保持不变。
+    {
+        collector: $collector:ident,
+        $($tokens:tt)*
+    } => {
+        ::nichlink_run_method::face_fields! { collector: $collector, $($tokens)* }
+    };
+
 }
 
 /// The field vocabulary of the authoring macros, as real Rust fields.
@@ -972,4 +986,32 @@ macro_rules! trace_consume {
 #[macro_export]
 macro_rules! trace_return {
     ($trace:expr, $input:expr, $name:literal, $type_name:literal, $value:expr) => {{ $trace.return_value($input, $name, $type_name, $value) }};
+}
+
+#[cfg(test)]
+mod tests {
+    use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
+
+    /// The editor's field mirror and the order the front end sorts into must stay
+    /// one vocabulary; a field added to one alone would silently stop being
+    /// completed or silently stop being accepted.
+    /// 编辑器用的字段镜像与前端排序依据必须是同一份词表；只往一边加字段，会让它悄悄
+    /// 失去补全，或悄悄不再被接受。
+    #[test]
+    fn the_field_mirror_matches_the_declared_order() {
+        let source = include_str!("macros.rs");
+        let start = source
+            .find("pub struct FaceFields {")
+            .expect("field mirror");
+        let end = source[start..].find("\n}").expect("field mirror end") + start;
+        let mirrored = source[start..end]
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                let name = line.strip_prefix("pub ")?.strip_suffix(": (),")?;
+                Some(name)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(mirrored, FACE_FIELD_ORDER);
+    }
 }

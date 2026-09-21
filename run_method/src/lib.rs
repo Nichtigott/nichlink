@@ -18,8 +18,13 @@ pub mod registry;
 pub mod runtime;
 
 pub use nichlink::registry_core;
+
 #[allow(ambiguous_glob_reexports)]
 pub use nichlink::*;
+/// The face field front end, re-exported so a host does not have to depend on
+/// the proc-macro crate itself.
+/// 注册面字段前端；再导出后宿主无需自己依赖 proc-macro crate。
+pub use nichlink_macro::face_fields;
 
 #[cfg(feature = "authoring")]
 #[allow(ambiguous_glob_reexports)]

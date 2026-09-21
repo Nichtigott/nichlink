@@ -16,6 +16,7 @@ surface that binds kernel methods to its own context.
 | `nichlink-build-method` | `build_method/` | Build-time filesystem / `OUT_DIR` orchestration |
 | `nichlink-run-method` | `run_method/` | Runtime state instance + trace binding |
 | `nichlink-debug-method` | `debug_method/` | Observation evidence surface |
+| `nichlink-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
 | `nichlink-plugin-host` | `plugin-host/` | Wasm/process plugin host execution |
 | `nichlink-studio` | `studio/` | Ratatui authoring/inspection surface |
 | `nichlink-mcp` | `mcp/` | AI-agent stdio bridge (currently read-only) |

@@ -350,7 +350,7 @@ fn parse_fields(
     fallback_span: Span,
 ) -> Result<BTreeMap<String, FieldSyntax>, FaceSyntaxError> {
     let mut fields = BTreeMap::new();
-    for field in split_top_level(tokens) {
+    for field in split_face_fields(tokens) {
         let mut tokens = field.into_iter();
         let Some(TokenTree::Ident(name)) = tokens.next() else {
             return Err(syntax_error(
@@ -430,6 +430,67 @@ fn split_typed_range(tokens: Vec<TokenTree>) -> Option<(String, String)> {
         return None;
     }
     Some((compact_tokens(start), compact_tokens(finish)))
+}
+
+/// Split a face body into `name: value` fields.
+/// 把注册面主体切成 `name: value` 字段。
+///
+/// Authoring is hand-written, so this reader is deliberately as tolerant as the
+/// compile-time front end: `,` and `;` both separate fields, a forgotten
+/// separator still ends a field at the next `name:`, a trailing separator is
+/// ignored, and the fields may appear in any order. A path's colon is joint
+/// with the next colon, so `crate::x` stays inside its value rather than
+/// starting a field.
+/// 作者是手写注册面的，因此这个读取器刻意与编译期前端一样宽容：`,` 与 `;` 都算分隔
+/// 符，漏写分隔符也能在下一个 `name:` 处收尾，末尾多余的分隔符被忽略，字段顺序任意。
+/// 路径的冒号与下一个冒号相连，因此 `crate::x` 留在自己的值里，不会被当成新字段。
+#[doc(hidden)]
+pub fn split_face_fields(tokens: TokenStream) -> Vec<TokenStream> {
+    let tokens = tokens.into_iter().collect::<Vec<_>>();
+    let mut fields = Vec::new();
+    let mut current = TokenStream::new();
+    let mut value_started = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        if let TokenTree::Punct(punct) = &tokens[index]
+            && matches!(punct.as_char(), ',' | ';')
+        {
+            if !current.is_empty() {
+                fields.push(std::mem::take(&mut current));
+                value_started = false;
+            }
+            index += 1;
+            continue;
+        }
+        if value_started && starts_face_field(&tokens, index) {
+            fields.push(std::mem::take(&mut current));
+            value_started = false;
+            continue;
+        }
+        value_started = true;
+        current.extend([tokens[index].clone()]);
+        index += 1;
+    }
+    if !current.is_empty() {
+        fields.push(current);
+    }
+    fields
+}
+
+/// Whether a `name:` begins at this token, which is how a missing separator is
+/// detected. `crate::x` does not: its first colon is joint with the second.
+/// 这里是否开始了 `name:`——漏写分隔符就是靠它发现的。`crate::x` 不算：它的第一个
+/// 冒号与第二个相连。
+fn starts_face_field(tokens: &[TokenTree], index: usize) -> bool {
+    let Some(TokenTree::Ident(_)) = tokens.get(index) else {
+        return false;
+    };
+    match tokens.get(index + 1) {
+        Some(TokenTree::Punct(colon)) if colon.as_char() == ':' => {
+            colon.spacing() == proc_macro2::Spacing::Alone
+        }
+        _ => false,
+    }
 }
 
 #[doc(hidden)]

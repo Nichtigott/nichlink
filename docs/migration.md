@@ -68,6 +68,26 @@ Exactly one of the two declarations exists for either tool, so `rustc` reads the
 same tree it read before and nothing user-visible changes. `build_method` emits
 `cargo::rustc-check-cfg=cfg(rust_analyzer)` so the extra cfg stays quiet.
 
+## Face fields may be written in any order
+
+Hand-written declarations used to fail on a separator: `kind: Tool;` produced
+`no rules expected ';'`, and a field written out of order failed the same way.
+Both readers are now tolerant, and they share one splitter
+(`split_face_fields`), so the builder and the compiler always read the same
+fields:
+
+- `,` and `;` both separate fields, a forgotten separator ends a field at the
+  next `name:`, a trailing separator is ignored, and the order is free;
+- a field the vocabulary does not know, or one given twice, is reported on its
+  own token with the accepted field list, by the `nichlink-macro` front end;
+- a well-formed declaration never reaches that front end: it is the last arm of
+  the macro ladder, so its expansion is byte-for-byte what it always was.
+
+One limit is worth stating: the front end's diagnostic is attributed to the
+generated alias that forwarded the tokens, with the face file shown as the
+macro invocation. A `macro_rules!` hop loses the author's token spans, so a
+hand-written face cannot get the caret on the offending token itself.
+
 ## The IDE completes face fields
 
 A macro's token tree is opaque to an editor, so `crate::control_object! { … }`

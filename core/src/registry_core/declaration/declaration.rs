@@ -1654,6 +1654,45 @@ impl TraceMode {
     }
 }
 
+/// The face fields in the order the authoring macros accept them.
+/// 作者侧宏接受的注册面字段顺序。
+///
+/// This is the one place the vocabulary is ordered. The face macros declare it
+/// for an editor, and the macro front end sorts an author's fields into it, so
+/// a face may be written in any order and still reach the same declaration.
+/// 这是词表顺序的唯一来源。注册面宏据此为编辑器声明字段，宏前端据此把作者写的
+/// 字段排成这个顺序——因此注册面可以用任意顺序书写，最终仍落到同一份声明。
+pub const FACE_FIELD_ORDER: &[&str] = &[
+    "kind",
+    "preset",
+    "parts",
+    "name",
+    "summary",
+    "params",
+    "exports",
+    "handle",
+    "stable_name",
+    "needs_registry",
+    "registry_name",
+    "parent",
+    "getting_from_other_registry",
+    "registry_rule_path",
+    "registry_rule",
+    "admission",
+    "handle_traits",
+    "handle_contracts",
+    "part_traits",
+    "part_contracts",
+    "requires",
+    "provides",
+    "expected_output",
+    "actual_output",
+    "flow",
+    "flow_provider",
+    "plugin",
+    "runtime_checks",
+];
+
 #[cfg(test)]
 mod trace_mode_tests {
     use super::TraceMode;
