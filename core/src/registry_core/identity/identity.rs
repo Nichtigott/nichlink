@@ -354,6 +354,26 @@ pub fn sha256_hex(input: &[u8]) -> String {
     out
 }
 
+/// Whether a byte is a path separator on either supported platform.
+/// 该字节是否是两个受支持平台上的路径分隔符。
+const fn is_separator(byte: u8) -> bool {
+    byte == b'/' || byte == b'\\'
+}
+
+/// Drop one leading path separator, when present.
+/// 存在时去掉一个前导路径分隔符。
+const fn strip_leading_separator(value: &str) -> &str {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || !is_separator(bytes[0]) {
+        return value;
+    }
+    let (_, rest) = bytes.split_at(1);
+    match core::str::from_utf8(rest) {
+        Ok(text) => text,
+        Err(_) => value,
+    }
+}
+
 /// Return the part of `value` after `prefix`, or `None` when it is not one.
 /// 返回 `value` 中 `prefix` 之后的部分；`prefix` 不匹配时返回 `None`。
 ///
@@ -370,6 +390,36 @@ pub const fn strip_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
     let mut index = 0;
     while index < prefix_bytes.len() {
         if value_bytes[index] != prefix_bytes[index] {
+            return None;
+        }
+        index += 1;
+    }
+    let (_, rest) = value_bytes.split_at(index);
+    match core::str::from_utf8(rest) {
+        Ok(text) => Some(text),
+        Err(_) => None,
+    }
+}
+
+/// Like [`strip_prefix`], but `/` and `\` count as the same separator.
+/// 与 [`strip_prefix`] 相同，但 `/` 与 `\` 视为同一分隔符。
+///
+/// Cargo reports `CARGO_MANIFEST_DIR` with backslashes on Windows while the
+/// build step writes `#[path]` literals with forward slashes, so an exact
+/// comparison would fail there and leave the absolute path as the identity.
+/// Cargo 在 Windows 上以反斜杠给出 `CARGO_MANIFEST_DIR`，而构建步骤写出的
+/// `#[path]` 字面量用正斜杠；精确比较在那边会失败，身份会退化成绝对路径。
+pub const fn strip_path_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    let value_bytes = value.as_bytes();
+    let prefix_bytes = prefix.as_bytes();
+    if prefix_bytes.len() > value_bytes.len() {
+        return None;
+    }
+    let mut index = 0;
+    while index < prefix_bytes.len() {
+        let left = value_bytes[index];
+        let right = prefix_bytes[index];
+        if left != right && !(is_separator(left) && is_separator(right)) {
             return None;
         }
         index += 1;
@@ -411,17 +461,11 @@ pub const fn last_path_segment(path: &str) -> &str {
 /// 仓库相对路径一致，从而让生成式与推导式产生相同的 `NodeId`。当 `file`
 /// 不在 `manifest_dir` 下（外部 crate、`tests/` 目标或其它布局）时返回原值。
 pub const fn manifest_relative_source<'a>(manifest_dir: &str, file: &'a str) -> &'a str {
-    let after_manifest = match strip_prefix(file, manifest_dir) {
+    let after_manifest = match strip_path_prefix(file, manifest_dir) {
         Some(rest) => rest,
         None => return file,
     };
-    let after_separator = match strip_prefix(after_manifest, "/") {
-        Some(rest) => rest,
-        None => match strip_prefix(after_manifest, "\\") {
-            Some(rest) => rest,
-            None => after_manifest,
-        },
-    };
+    let after_separator = strip_leading_separator(after_manifest);
     match strip_prefix(after_separator, "src/") {
         Some(rest) => rest,
         None => match strip_prefix(after_separator, "src\\") {
@@ -435,7 +479,7 @@ pub const fn manifest_relative_source<'a>(manifest_dir: &str, file: &'a str) -> 
 mod tests {
     use super::{
         NodeId, ROOT_NODE_ID, last_path_segment, manifest_relative_source, root_node_id,
-        sha256_hex, strip_prefix,
+        sha256_hex, strip_path_prefix, strip_prefix,
     };
 
     const ABC: NodeId = NodeId::from_bytes(b"abc");
@@ -477,6 +521,39 @@ mod tests {
             "/elsewhere/face.rs"
         );
         assert_eq!(manifest_relative_source("/home/me/proj", ""), "");
+    }
+
+    /// Windows reports the manifest directory with backslashes while the build
+    /// step writes `#[path]` with forward slashes. An exact comparison would
+    /// leave the absolute path as the identity there, so the two forms must
+    /// agree on one relative value.
+    /// Windows 以反斜杠给出 manifest 目录，而构建步骤用正斜杠写 `#[path]`。
+    /// 精确比较会让身份退化成绝对路径，因此两种形式必须归一到同一个相对值。
+    #[test]
+    fn manifest_relative_source_normalizes_windows_separators() {
+        assert_eq!(
+            manifest_relative_source(r"C:\proj", "C:/proj/src/control/object/button/button.rs"),
+            "control/object/button/button.rs"
+        );
+        // A backslash-separated file path behaves the same.
+        // 反斜杠分隔的文件路径同样处理。
+        assert_eq!(
+            manifest_relative_source(r"C:\proj", r"C:\proj\src\control\control.rs"),
+            r"control\control.rs"
+        );
+        // A trailing separator on the manifest does not change the result.
+        // manifest 末尾多一个分隔符不影响结果。
+        assert_eq!(
+            manifest_relative_source("C:/proj/", "C:/proj/src/a.rs"),
+            "a.rs"
+        );
+    }
+
+    #[test]
+    fn strip_path_prefix_treats_both_separators_alike() {
+        assert_eq!(strip_path_prefix("C:/a/b", r"C:\a"), Some("/b"));
+        assert_eq!(strip_path_prefix(r"C:\a\b", "C:/a"), Some(r"\b"));
+        assert_eq!(strip_path_prefix("C:/a/b", "D:/a"), None);
     }
 
     #[test]

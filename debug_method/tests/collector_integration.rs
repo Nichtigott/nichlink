@@ -24,10 +24,14 @@ fn debug_collector_receives_opted_in_declarations() {
     // 不在 `src/` 下的声明保留 cargo 记录的路径，而不是让 manifest 剥离失败，
     // 因此它仍有一个稳定且唯一的身份。
     assert_eq!(probe.source.file, file!());
+    // Cargo records this path with the platform separator, so compare the
+    // normalized form rather than assuming `/`.
+    // cargo 记录该路径时使用平台分隔符，因此比较归一化后的形式，而不是假定 `/`。
     assert!(
         probe
             .source
             .file
+            .replace('\\', "/")
             .ends_with("tests/collector_integration.rs")
     );
 }
