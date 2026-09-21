@@ -68,6 +68,29 @@ Exactly one of the two declarations exists for either tool, so `rustc` reads the
 same tree it read before and nothing user-visible changes. `build_method` emits
 `cargo::rustc-check-cfg=cfg(rust_analyzer)` so the extra cfg stays quiet.
 
+## The IDE completes face fields
+
+A macro's token tree is opaque to an editor, so `crate::control_object! { … }`
+used to offer nothing inside its braces — not the field names, not even path
+completion in value position. Two pieces fix that without changing the
+authoring syntax:
+
+- each generated `*_object!` alias, and `external_object!`, also hands the
+  author's tokens to `__face_fields!`, which splices them verbatim into a real
+  field list;
+- `run_method` defines that macro twice: the `cfg(rust_analyzer)` copy expands
+  to `FaceFields { … }`, the other expands to nothing.
+
+`FaceFields` is a hidden mirror of the authoring vocabulary whose fields are
+declared in the order the macros accept and typed `()` because nothing ever
+constructs it. An editor therefore lists the remaining field names in the
+accepted order, and `rustc` expands `__face_fields!` to nothing — so it never
+parses an authoring spelling that is not a Rust expression
+(`name: { zh: "…", en: "…" }`, for example) and consumer crates never need to
+declare `cfg(rust_analyzer)`. Only the host crate, which also carries the
+`cfg` on its IDE-only shadow declarations, declares it through its build
+script.
+
 Identities are unchanged: `source`, `registry_name`, and therefore `NodeId`,
 registry paths, and every graft selector keep the same values.
 

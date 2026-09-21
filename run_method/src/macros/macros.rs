@@ -716,6 +716,106 @@ macro_rules! __control_object {
 
 }
 
+/// The field vocabulary of the authoring macros, as real Rust fields.
+/// 作者侧宏的字段词表，以真实 Rust 字段表示。
+///
+/// Nothing constructs this type, and `rustc` never even parses it: the face
+/// macros splice the author's own tokens into a literal of it under
+/// `cfg(rust_analyzer)`. That splice is what lets an editor complete the field
+/// names inside `crate::<name>_object! { … }` and list them in the order the
+/// macros accept, because an editor can only read a real field list — a macro's
+/// token tree is opaque to it. Every field is typed `()` on purpose: the literal
+/// is never type-checked, so a partial declaration costs nothing, and the
+/// editor still offers every name that is not written yet.
+/// 没有任何代码构造这个类型，`rustc` 甚至不会解析它：注册面宏在
+/// `cfg(rust_analyzer)` 下把作者写的 token 拼进它的一个字面量。正是这一步让编辑器
+/// 能在 `crate::<name>_object! { … }` 里补全字段名，并按宏接受的顺序列出候选——
+/// 编辑器读不了宏的 token 树，只能读真实的字段列表。字段一律写作 `()` 是有意的：
+/// 该字面量从不参与类型检查，因此部分声明没有代价，编辑器也照样把还没写的名字
+/// 全部列出。
+///
+/// The declaration order below is the order the compact macro arm accepts, and
+/// an editor lists fields in that order.
+/// 下面的声明顺序就是紧凑 arm 接受的顺序，编辑器也按这个顺序列出字段。
+///
+/// One authoring key is not a Rust expression — `requires: [a => b]` — so a
+/// declaration that uses it makes the IDE-only literal unparsable from that
+/// field on. That is deliberate: the splice only serves completion and is never
+/// compiled, and the key stays available for the editor to suggest.
+/// 有一个作者侧键不是 Rust 表达式——`requires: [a => b]`——因此用到它的声明会让这份
+/// 仅供 IDE 的字面量从该字段起无法解析。这是有意的：拼接只为补全服务、从不参与
+/// 编译，而这个键仍需要被编辑器提示出来。
+#[doc(hidden)]
+pub struct FaceFields {
+    pub kind: (),
+    pub preset: (),
+    pub parts: (),
+    pub name: (),
+    pub summary: (),
+    pub params: (),
+    pub exports: (),
+    pub handle: (),
+    pub stable_name: (),
+    pub needs_registry: (),
+    pub registry_name: (),
+    pub parent: (),
+    pub getting_from_other_registry: (),
+    pub registry_rule_path: (),
+    pub registry_rule: (),
+    pub admission: (),
+    pub handle_traits: (),
+    pub handle_contracts: (),
+    pub part_traits: (),
+    pub part_contracts: (),
+    pub requires: (),
+    pub provides: (),
+    pub expected_output: (),
+    pub actual_output: (),
+    pub flow: (),
+    pub flow_provider: (),
+    pub plugin: (),
+    pub runtime_checks: (),
+}
+
+/// Splice an author's face tokens into a real field list, for editors only.
+/// 把作者写的注册面 token 拼进真实字段列表，仅供编辑器使用。
+///
+/// The face macros invoke this under `cfg(rust_analyzer)`. Expanding it is what
+/// turns an opaque macro token tree into a field list an editor can read, and
+/// rustc never expands it, so the authoring syntax stays free to use spellings
+/// that are not Rust expressions (`name: { zh: "…", en: "…" }`, for example).
+/// 注册面宏在 `cfg(rust_analyzer)` 下调用它。正是这次展开把不透明的宏 token 树变成
+/// 编辑器能读的字段列表；rustc 从不展开它，因此作者侧语法可以继续使用并非 Rust
+/// 表达式的写法（例如 `name: { zh: "…", en: "…" }`）。
+/// The editor variant: it is the one rust-analyzer expands, because this crate
+/// is analyzed with `cfg(rust_analyzer)` on.
+/// 编辑器版本：rust-analyzer 分析本 crate 时 `cfg(rust_analyzer)` 为真，因此它拿到
+/// 的是这一份。
+#[cfg(rust_analyzer)]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __face_fields {
+    ($($tokens:tt)*) => {
+        const _: () = {
+            let _ = $crate::macros::FaceFields { $($tokens)* };
+        };
+    };
+}
+
+/// The compiler variant: it expands to nothing. Deciding here — instead of in
+/// the caller — is what keeps `rustc` from ever parsing an authoring spelling
+/// that is not a Rust expression, and keeps `unexpected_cfgs` out of consumer
+/// crates that have no build script to declare the name.
+/// 编译器版本：展开为空。把判定放在这里而不是调用方，既让 `rustc` 永远不会解析
+/// 那些并非 Rust 表达式的作者侧写法，也让没有 build script 可声明 cfg 名的消费方
+/// crate 不会收到 `unexpected_cfgs`。
+#[cfg(not(rust_analyzer))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __face_fields {
+    ($($tokens:tt)*) => {};
+}
+
 /// Declare a registration face owned by an external crate.
 /// 声明由外部 crate 所有的注册面。
 ///
@@ -727,9 +827,15 @@ macro_rules! __control_object {
 macro_rules! external_object {
     (collector: $collector:ident, $($tokens:tt)*) => {
         $crate::__external_object! { collector: $collector, $($tokens)* }
+        // IDE-only: reuse the author's tokens as a real field list so an editor
+        // can complete the field vocabulary. rustc drops it with the cfg.
+        // 仅供 IDE：把作者的 token 当作真实字段列表复用一次，编辑器因此能补全
+        // 字段词表。rustc 会随 cfg 丢弃它。
+        $crate::__face_fields! { $($tokens)* }
     };
     ($($tokens:tt)*) => {
         $crate::__external_object! { collector: linked, $($tokens)* }
+        $crate::__face_fields! { $($tokens)* }
     };
 }
 

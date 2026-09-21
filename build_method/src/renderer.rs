@@ -125,7 +125,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{ ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }} }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -198,7 +198,7 @@ fn render_ide_shadows(output: &mut String, shadows: &[IdeShadow]) {
     );
     for shadow in shadows {
         output.push_str(&shadow.cfg);
-        output.push_str("#[cfg(rust_analyzer)]\n");
+        output.push_str("#[allow(unexpected_cfgs)]\n#[cfg(rust_analyzer)]\n");
         output.push_str("#[doc(hidden)]\n");
         writeln!(output, "#[path = {:?}]", shadow.file).unwrap();
         if shadow.public {
@@ -472,6 +472,17 @@ mod tests {
         let mut output = String::new();
         render_object_aliases(&mut output, &root, &nodes);
 
+        // Editors cannot read a macro's token tree, so every generated alias
+        // also hands the author's tokens to `__face_fields!`, which is what
+        // turns them into a field list an editor can complete. rustc never
+        // expands that call: it carries `cfg(rust_analyzer)`.
+        // 编辑器读不了宏的 token 树，因此每个生成的别名还把作者的 token 交给
+        // `__face_fields!`，由它变成编辑器能补全的字段列表。rustc 从不展开这次
+        // 调用：它带 `cfg(rust_analyzer)`。
+        assert!(
+            output.contains("::nichlink_run_method::__face_fields! { $($tokens)* }"),
+            "aliases must expose the field vocabulary to an editor: {output}"
+        );
         assert!(output.contains("macro_rules! root_object"));
         assert!(output.contains("macro_rules! workspace_object"));
         assert!(output.contains("macro_rules! panel_object"));
@@ -663,7 +674,7 @@ mod tests {
             "top-level leaf face keeps its declaration: {output}"
         );
         assert!(
-            !output.contains("rust_analyzer"),
+            !output.contains("__nichlink_ra_"),
             "a face the IDE already sees needs no shadow: {output}"
         );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
