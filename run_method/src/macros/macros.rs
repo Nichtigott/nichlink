@@ -811,6 +811,14 @@ macro_rules! __face_fields {
     };
 }
 
+/// `kind` is the handle-marker type this file declares (`pub struct <Kind>;`), so
+/// write that type first and reference it here: an editor cannot complete a name
+/// the author has not written yet, and `kind` is captured as an identifier
+/// rather than an expression, which is also why value completion does not fire
+/// there. Every other field completes normally.
+/// `kind` 就是本文件声明的那个 handle 标记类型（`pub struct <Kind>;`）：先写出该类型，
+/// 再在这里引用它。编辑器无法补全一个作者还没写下的名字，而且 `kind` 是以标识符而非
+/// 表达式捕获的——这也是它的值位不会弹候选的原因。其余字段的值都能正常补全。
 /// Declare a registration face: `kind` first, then any of `preset`, `parts`,
 /// `name`, `summary`, `params`, `exports`, `handle`, `stable_name`,
 /// `needs_registry`, `registry_name`, `parent`, `getting_from_other_registry`,
