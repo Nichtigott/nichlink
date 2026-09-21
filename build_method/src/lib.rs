@@ -288,17 +288,50 @@ impl SourceScope {
 /// Pick the ordinary Cargo entry when no `application!` declaration exists.
 /// 没有 `application!` 声明时，按 Cargo 约定选择默认入口。
 fn default_entry_source(src: &Path) -> PathBuf {
-    let main = src.join("main.rs");
+    let candidates = [src.join("main.rs"), src.join("lib.rs")];
+    // Cargo prefers `main.rs`, but a lib+bin host calls `host!()` in whichever
+    // file owns the generated tree — often `lib.rs`, with `main.rs` left as a
+    // stub. An `application!` declaration is not the only thing that can live
+    // there: the declared graft plan does too, and picking the stub silently
+    // dropped it. The entry is the file that calls `host!()`; Cargo's order only
+    // breaks the tie.
+    // Cargo 偏好 `main.rs`，但库+二进制宿主会在拥有生成树的那个文件里调用
+    // `host!()`——常见情形是 `lib.rs`，而 `main.rs` 只是个空壳。那里不只可能放
+    // `application!` 声明，声明的 graft 计划也在其中，选中空壳会把它静默丢掉。
+    // 入口应当是调用 `host!()` 的文件；Cargo 的顺序只用来打破平局。
+    if let Some(entry) = candidates.iter().find(|path| calls_host(path)) {
+        return entry.clone();
+    }
+    let main = candidates[0].clone();
     if main.is_file() {
         return main;
     }
-    let lib = src.join("lib.rs");
+    let lib = candidates[1].clone();
     if lib.is_file() {
         return lib;
     }
     // Keep the existing missing-entry diagnostic and conservative fallback.
     // 保留原有 missing-entry 诊断，并继续使用保守的全树回退。
     main
+}
+
+/// Whether a source file declares this crate as a host.
+/// 源文件是否把本 crate 声明为宿主。
+///
+/// Line-based on purpose: it only has to tell a stub entry from the real one, and
+/// a leading `//` is enough to skip the comment that mentions `host!()` in every
+/// documented face. A `/* … */` block comment would still count, which is the
+/// conservative direction for choosing an entry.
+/// 刻意按行判断：它只需把空壳入口与真正的入口区分开，而跳过以 `//` 开头的行就足以
+/// 排除每个带文档的注册面里提到 `host!()` 的注释。`/* … */` 块注释仍会被算作命中，
+/// 这对"选择入口"而言是保守方向。
+fn calls_host(path: &Path) -> bool {
+    fs::read_to_string(path).is_ok_and(|source| {
+        source.lines().any(|line| {
+            let line = line.trim();
+            !line.starts_with("//") && line.contains("host!()")
+        })
+    })
 }
 
 fn application_entry_source(src: &Path, nodes: &[Node]) -> Option<PathBuf> {
@@ -824,7 +857,10 @@ fn write_if_changed(path: &Path, content: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{FaceSource, face_declares_plugin, graft_cut_module, select_module_subtree};
+    use super::{
+        FaceSource, default_entry_source, face_declares_plugin, graft_cut_module,
+        select_module_subtree,
+    };
     use crate::registry_identity::NodeId;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -835,6 +871,33 @@ mod tests {
             source,
             module: module.to_owned(),
         }
+    }
+
+    /// A lib+bin host keeps `main.rs` as a stub and calls `host!()` in `lib.rs`.
+    /// The declared graft plan lives at that call, so the entry must follow it
+    /// instead of Cargo's `main.rs` preference.
+    /// 库+二进制宿主把 `main.rs` 留作空壳、在 `lib.rs` 里调用 `host!()`。声明的 graft
+    /// 计划就在那次调用处，因此入口必须跟随它，而不是 Cargo 对 `main.rs` 的偏好。
+    #[test]
+    fn the_entry_is_the_file_that_calls_host() {
+        let root = std::env::temp_dir().join("nichlink-entry-fixture");
+        let source = root.join("src");
+        std::fs::create_dir_all(&source).expect("fixture dir");
+        std::fs::write(source.join("main.rs"), "fn main() {}\n").expect("stub main");
+        std::fs::write(
+            source.join("lib.rs"),
+            "//! docs mentioning host!() in prose\nnichlink_run_method::host!();\n",
+        )
+        .expect("host lib");
+        assert_eq!(default_entry_source(&source), source.join("lib.rs"));
+
+        std::fs::write(
+            source.join("main.rs"),
+            "nichlink_run_method::host!();\nfn main() {}\n",
+        )
+        .expect("host main");
+        assert_eq!(default_entry_source(&source), source.join("main.rs"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
