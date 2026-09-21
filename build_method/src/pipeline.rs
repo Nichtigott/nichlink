@@ -58,6 +58,13 @@ pub(crate) fn run(input: &BuildInput) -> Option<String> {
     write_if_changed(&out_dir.join("generated_lib.rs"), &generated);
     if input.emit_cargo_directives {
         emit_rerun_paths(src, &nodes);
+        // The generated tree carries `cfg(rust_analyzer)` declarations that give
+        // rust-analyzer a top-level view of every nested face file. rustc reads
+        // none of them, so declare the cfg name to keep `unexpected_cfgs` quiet.
+        // 生成树带有 `cfg(rust_analyzer)` 声明，用于给 rust-analyzer 提供每个嵌套
+        // 面文件的顶层视角。rustc 一条都不会读，因此声明该 cfg 名以免
+        // `unexpected_cfgs` 报警。
+        println!("cargo::rustc-check-cfg=cfg(rust_analyzer)");
         println!("cargo:rerun-if-env-changed=NICH_LINK_SCOPE");
         println!("cargo:rerun-if-env-changed=NICH_LINK_ENTRY");
         println!("cargo:rerun-if-env-changed=NICH_LINK_BUILD_VERBOSE");

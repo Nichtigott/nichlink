@@ -24,6 +24,14 @@
 - 面文件仍是普通模块文件，因此可以继续以 `//!` 或任何 inner attribute 开头。`include!` 展开无法引入它们——这正是旧设计必须在副本里把 `//!` 改写成 `//` 的原因。
 - 声明宏改为从 `file!()` 推导 `source`、从 `module_path!()` 推导注册机名，生成树因此不再注入 `__REGISTRATION_SOURCE` / `__REGISTRATION_MODULE_NAME`。不在 `src/` 下的声明（例如集成测试）保留 cargo 记录的路径，而不是让剥离失败。
 
+只有 `#[path]` 对 IDE 还不够。rust-analyzer 只在 `mod` 声明位于文件或展开的顶层时才应用该属性，因此声明在生成内联模块里的注册面——根以下的每一个面——永远进不了 crate：没有补全、没有跳转、没有悬停，尽管 `cargo` 与 `rustc` 都能看到它。所以每个这样的面还会得到一份仅供 IDE 的视角：
+
+- 真实声明由 `cfg(not(rust_analyzer))` 把关；
+- 顶层再加一条 `#[cfg(rust_analyzer)] #[path = "..."] mod __nichlink_ra_<路径>;`，在 rust-analyzer 真正应用 `#[path]` 的位置载入同一个文件；
+- 在注册面的真实位置加 `#[cfg(rust_analyzer)] use crate::__nichlink_ra_<路径> as <名字>;`，重建它的模块路径，可见性与真实声明一致（叶子面是 `pub`，容器面是 `pub(crate)`）。
+
+两种工具各自只看到其中一份声明，因此 `rustc` 读到的树与改动前完全一致，用户可见行为不变。`build_method` 会输出 `cargo::rustc-check-cfg=cfg(rust_analyzer)`，让多出来的 cfg 保持安静。
+
 身份不变：`source`、`registry_name`，以及由此而来的 `NodeId`、注册路径和全部 graft 选择器都保持原值。
 
 用 `static_graft_plan!` 声明的 graft 计划现在无论宿主是否同时声明 `application!(entry = ...)`，都会从宿主入口被捕获——与 `SourceScope` 原有的入口解析保持一致。此前缺少 `application!` 时计划会被静默丢弃。

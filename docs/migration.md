@@ -50,6 +50,24 @@ Two consequences:
   `src/` (an integration test, for example) keeps the path cargo recorded
   instead of failing the manifest strip.
 
+`#[path]` alone is not enough for the IDE. rust-analyzer applies the attribute
+only when the `mod` declaration sits at the top level of a file or an expansion,
+so a face declared inside one of the generated inline modules — every face below
+the root — would never join the crate: no completion, no go-to-definition, no
+hover, even though `cargo` and `rustc` see it. Each such face therefore also
+gets an IDE-only view:
+
+- the real declaration carries `cfg(not(rust_analyzer))`;
+- a crate-root `#[cfg(rust_analyzer)] #[path = "..."] mod __nichlink_ra_<path>;`
+  loads the same file where rust-analyzer does apply `#[path]`;
+- a `#[cfg(rust_analyzer)] use crate::__nichlink_ra_<path> as <name>;` in the
+  face's real position rebuilds its module path, with the same visibility the
+  real declaration has (`pub` for a leaf face, `pub(crate)` for a container).
+
+Exactly one of the two declarations exists for either tool, so `rustc` reads the
+same tree it read before and nothing user-visible changes. `build_method` emits
+`cargo::rustc-check-cfg=cfg(rust_analyzer)` so the extra cfg stays quiet.
+
 Identities are unchanged: `source`, `registry_name`, and therefore `NodeId`,
 registry paths, and every graft selector keep the same values.
 
