@@ -66,10 +66,16 @@ pub fn package_root_node_id() -> NodeId {
 
 #[cfg(test)]
 mod tests {
-    use super::{NodeId, package_namespace, package_node_id};
+    use super::{NodeId, freeze_test_namespace, package_namespace, package_node_id};
 
     #[test]
     fn package_identity_matches_the_macro_namespace_algorithm() {
+        // Pin the namespace before reading it: the override is first-write-wins,
+        // so a concurrent test pinning the test namespace between the two reads
+        // below would make the comparison disagree with itself.
+        // 先固定命名空间再读取：该覆盖是先到先得，若并发测试在这两次读取之间固定
+        // 测试命名空间，比较就会与自身不一致。
+        freeze_test_namespace();
         let namespace = package_namespace();
         let path = "control/object/button/button.rs";
         let kind = "Button";
