@@ -65,7 +65,8 @@ fn collect(
     for entry in entries.filter_map(Result::ok) {
         let path = entry.path();
         if path.is_dir() {
-            if path.file_name().and_then(|name| name.to_str()) != Some("registry_core") {
+            let named = path.file_name().and_then(|name| name.to_str());
+            if named != Some("registry_core") && named.is_some_and(crate::discovery::valid_name) {
                 collect(
                     root,
                     &path,

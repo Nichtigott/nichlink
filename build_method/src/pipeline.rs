@@ -107,6 +107,37 @@ mod tests {
         );
     }
 
+    /// Discovery skips a directory whose name cannot be a module, so its faces
+    /// never reach the generated tree. The admission scan reads the same tree,
+    /// so it must skip them too: a face that can never be compiled must not be
+    /// able to veto the build.
+    /// 发现过程会跳过名字无法成为模块的目录，其中的注册面永远进不了生成树。admission
+    /// 扫描读的是同一棵树，因此也必须跳过它们：永远编译不到的面不该能否决构建。
+    #[test]
+    fn an_unrepresentable_directory_cannot_veto_the_build() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let face = "crate::root_object! {\n    kind: Hidden,\n    requires: [\"missing.capability\" => \"MissingProvider\"],\n}\n";
+        let mut outcomes = Vec::new();
+        for (tag, dir) in [("valid", "hidden"), ("invalid", "bad-name")] {
+            let root = std::env::temp_dir().join(format!("nichlink-hidden-{tag}-{suffix}"));
+            let manifest = root.join("host");
+            let folder = manifest.join("src").join(dir);
+            std::fs::create_dir_all(&folder).expect("face folder");
+            std::fs::write(folder.join(format!("{dir}.rs")), face).expect("write face");
+            let out = root.join("out");
+            outcomes.push(crate::run_for(&manifest, &out, "test-host").is_err());
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        assert_eq!(
+            outcomes,
+            [true, false],
+            "the same face must fail in a representable directory and be ignored in one that cannot be a module"
+        );
+    }
+
     #[test]
     fn run_for_validates_outside_cargo_and_reports_diagnostics() {
         let suffix = std::time::SystemTime::now()

@@ -79,7 +79,17 @@ fn has_source(node: &Node) -> bool {
     node.file.is_some() || node.children.iter().any(has_source)
 }
 
-fn valid_name(name: &str) -> bool {
+/// Whether a directory name may become a module name.
+/// 目录名是否可以成为模块名。
+///
+/// Discovery and the admission scan must agree on this: a directory discovery
+/// skips is a directory whose faces never reach the generated tree, so the
+/// admission scan must skip it too — otherwise a face that can never be
+/// compiled still vetoes the build.
+/// 发现过程与 admission 扫描必须在这一点上一致：发现过程跳过的目录，其注册面永远
+/// 进不了生成树，因此 admission 扫描也必须跳过——否则一个永远编译不到的面仍然能否决
+/// 构建。
+pub(crate) fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.chars().enumerate().all(|(index, ch)| {
             ch == '_' || ch.is_ascii_alphanumeric() && (index > 0 || !ch.is_ascii_digit())
