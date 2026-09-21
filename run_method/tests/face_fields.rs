@@ -54,3 +54,24 @@ fn any_order_and_separator_declares_the_same_face() {
         shuffled::REGISTRATION.registry_rule_path
     );
 }
+
+/// Observation evidence must still point at the author's own lines, so the
+/// front end must not move `line!()`/`column!()` into the generated alias. The
+/// shuffled declaration stands later in this file, and that is what it reports.
+/// 观测证据仍须指向作者自己的行，因此前端不能把 `line!()`/`column!()` 挪到生成的
+/// 别名里。乱序声明在本文件中位置更靠后，它报出的就是那一行。
+#[test]
+fn a_reordered_face_reports_the_authors_lines() {
+    assert_eq!(
+        canonical::REGISTRATION.source.file,
+        shuffled::REGISTRATION.source.file
+    );
+    assert!(
+        shuffled::REGISTRATION.source.line > canonical::REGISTRATION.source.line,
+        "each declaration reports its own line: canonical={} shuffled={}",
+        canonical::REGISTRATION.source.line,
+        shuffled::REGISTRATION.source.line
+    );
+    assert_eq!(canonical::REGISTRATION.source.column, 5);
+    assert_eq!(shuffled::REGISTRATION.source.column, 5);
+}
