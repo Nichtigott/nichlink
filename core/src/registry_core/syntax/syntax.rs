@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
+
+use crate::registry_core::declaration::FACE_FIELD_ORDER;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
@@ -450,19 +452,50 @@ pub fn split_face_fields(tokens: TokenStream) -> Vec<TokenStream> {
     let mut fields = Vec::new();
     let mut current = TokenStream::new();
     let mut value_started = false;
+    let mut angles = 0usize;
     let mut index = 0;
     while index < tokens.len() {
-        if let TokenTree::Punct(punct) = &tokens[index]
-            && matches!(punct.as_char(), ',' | ';')
-        {
-            if !current.is_empty() {
-                fields.push(std::mem::take(&mut current));
-                value_started = false;
+        if let TokenTree::Punct(punct) = &tokens[index] {
+            match punct.as_char() {
+                // `<` and `>` are punctuation, not delimiters, so a generic
+                // argument list has to be tracked by hand: its commas separate
+                // type arguments, not fields. `>>` closes two levels at once.
+                // `<`/`>` 是标点而不是定界符，因此泛型实参列表必须手工跟踪深度：其中
+                // 的逗号分隔的是类型实参而不是字段。`>>` 一次关闭两层。
+                '<' => {
+                    angles += if punct.spacing() == proc_macro2::Spacing::Joint {
+                        2
+                    } else {
+                        1
+                    };
+                    current.extend([tokens[index].clone()]);
+                    value_started = true;
+                    index += 1;
+                    continue;
+                }
+                '>' => {
+                    let close = if punct.spacing() == proc_macro2::Spacing::Joint {
+                        2
+                    } else {
+                        1
+                    };
+                    angles = angles.saturating_sub(close);
+                    current.extend([tokens[index].clone()]);
+                    index += 1;
+                    continue;
+                }
+                ',' | ';' if angles == 0 => {
+                    if !current.is_empty() {
+                        fields.push(std::mem::take(&mut current));
+                        value_started = false;
+                    }
+                    index += 1;
+                    continue;
+                }
+                _ => {}
             }
-            index += 1;
-            continue;
         }
-        if value_started && starts_face_field(&tokens, index) {
+        if angles == 0 && value_started && starts_face_field(&tokens, index) {
             fields.push(std::mem::take(&mut current));
             value_started = false;
             continue;
@@ -482,9 +515,17 @@ pub fn split_face_fields(tokens: TokenStream) -> Vec<TokenStream> {
 /// 这里是否开始了 `name:`——漏写分隔符就是靠它发现的。`crate::x` 不算：它的第一个
 /// 冒号与第二个相连。
 fn starts_face_field(tokens: &[TokenTree], index: usize) -> bool {
-    let Some(TokenTree::Ident(_)) = tokens.get(index) else {
+    let Some(TokenTree::Ident(name)) = tokens.get(index) else {
         return false;
     };
+    // Only a name the vocabulary knows starts a field. That is what keeps a
+    // closure's typed parameter (`|a: u32| a`) or any other `name:` inside a
+    // value from splitting the field in two.
+    // 只有词表认识的键才算字段起点。闭包的类型标注参数（`|a: u32| a`）或值里其它
+    // `name:` 形状因此不会把字段切成两半。
+    if !FACE_FIELD_ORDER.contains(&name.to_string().as_str()) {
+        return false;
+    }
     match tokens.get(index + 1) {
         Some(TokenTree::Punct(colon)) if colon.as_char() == ':' => {
             colon.spacing() == proc_macro2::Spacing::Alone
@@ -1045,7 +1086,8 @@ impl<'ast> Visit<'ast> for ApplicationVisitor<'_> {
 
 #[cfg(test)]
 mod declaration_tests {
-    use super::{application_entries, graft_entries};
+    use super::{application_entries, graft_entries, split_face_fields};
+    use proc_macro2::TokenStream;
 
     #[test]
     fn application_entry_parser_ignores_comments_and_strings() {
@@ -1180,6 +1222,43 @@ fn application_plan() {
             error.message.contains("both sides"),
             "unexpected message: {}",
             error.message
+        );
+    }
+    /// A generic argument list and a closure parameter list are values, not
+    /// field lists: their commas and `name:` pairs must not split a field.
+    /// 泛型实参列表与闭包参数列表是值而不是字段列表：其中的逗号与 `name:` 都不该把
+    /// 字段切开。
+    #[test]
+    fn face_field_splitting_survives_generics_and_closures() {
+        let body: TokenStream = syn::parse_str(
+            "kind: Tool, preset: crate::P<u8, u16>, flow: |a: u32| a, needs_registry: true",
+        )
+        .expect("token stream");
+        let fields = split_face_fields(body);
+        let names = fields
+            .iter()
+            .map(|field| {
+                field
+                    .clone()
+                    .into_iter()
+                    .next()
+                    .map_or_else(String::new, |token| token.to_string())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["kind", "preset", "flow", "needs_registry"]);
+        assert!(
+            fields[1].to_string().contains("P < u8 , u16 >"),
+            "the generic comma stays in the value: {}",
+            fields[1]
+        );
+        assert!(
+            fields[2].to_string().contains("| a : u32 | a"),
+            "the closure parameter stays in the value: {}",
+            fields[2]
+        );
+        assert_eq!(
+            split_face_fields(syn::parse_str("kind: X;").expect("token stream")).len(),
+            1
         );
     }
 }
