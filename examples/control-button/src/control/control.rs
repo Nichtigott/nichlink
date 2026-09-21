@@ -3,6 +3,7 @@
 //! the rule kept beside it.
 
 use crate::control::registry_rule::REGISTRATION_RULE;
+use nichlink_run_method::{ContractId, FlowContract};
 
 /// 父注册面交给子对象的绘制结果。
 /// The frame a parent face hands to its children for painting.
@@ -23,4 +24,16 @@ crate::root_object! {
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
     registry_rule_path: "src/control/registry_rule/registry_rule.rs",
     registry_rule: REGISTRATION_RULE,
+    // A folder face may publish its own flow contract, so a `full` cut can
+    // replace the whole subtree only when the replacement agrees with it.
+    // 文件夹面也可以发布自己的数据流合同；因此只有替换端与之兼容时，`full`
+    // 切口才允许换掉整棵子树。
+    expected_output: "ControlFrame",
+    actual_output: "ControlFrame",
+    flow: FlowContract::new(
+        ContractId::new("control.frame.v1"),
+        1,
+        "ControlInput",
+        "ControlFrame",
+    ),
 }

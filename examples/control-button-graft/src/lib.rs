@@ -11,13 +11,19 @@ use nichlink_run_method::registry_core::{FrameworkId, Registry};
 pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
 
 pub mod button_fast;
+pub mod control_fast;
+pub mod slider_fast;
 
 /// 外部实现自己的注册机（项目外注册）。
 /// The external implementation's own registry (out-of-project registration).
 pub fn external_registry() -> Registry {
     let mut registry = Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"));
     registry
-        .register_all(&[button_fast::REGISTRATION])
+        .register_all(&[
+            button_fast::REGISTRATION,
+            control_fast::REGISTRATION,
+            slider_fast::REGISTRATION,
+        ])
         .expect("external face registers");
     registry
 }

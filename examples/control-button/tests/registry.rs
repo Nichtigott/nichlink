@@ -7,7 +7,8 @@
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
 use nichlink_run_method::registry_core::{
-    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, Registry,
+    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
+    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 };
 
 /// 读取某一逻辑路径上的 kind；找不到就失败。
@@ -51,6 +52,7 @@ fn built_in_tree_has_the_expected_paths_and_derived_sources() {
         [
             "root/control kind=Control source=control/control.rs",
             "root/control/button kind=Button source=control/object/button/button.rs",
+            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
         ]
     );
 }
@@ -237,7 +239,7 @@ fn graft_rejects_a_foreign_framework() {
 fn static_plan_carries_faces_and_the_declared_graft() {
     let plan = builtin_static_plan();
 
-    assert_eq!(plan.faces().len(), 2, "both built-in faces are retained");
+    assert_eq!(plan.faces().len(), 3, "every built-in face is retained");
     assert_eq!(plan.grafts().len(), 1, "the entry declared one graft");
     let cut = plan.grafts()[0];
     assert_eq!(
@@ -285,4 +287,206 @@ fn external_registry_with_flow(id: &str, version: u32) -> Registry {
         .register_snapshot_batch([snapshot])
         .expect("the modified external face registers");
     registry
+}
+
+// ---------------------------------------------------------------------------
+// Replacement granularity. The registry model addresses faces, and a plan can
+// replace one face, a contiguous range of siblings, a whole subtree, or several
+// boundaries at once.
+// 替换粒度。注册模型以注册面为寻址单位，一份计划可以替换单个面、一段连续兄弟、
+// 整棵子树，或一次改动多个边界。
+// ---------------------------------------------------------------------------
+
+/// One face: only the slot changes, its siblings and parent survive.
+/// 单个面：只换槽位，兄弟与父级保持不变。
+#[test]
+fn graft_replaces_one_face_only() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+
+    let effective = base
+        .overlay(&slot_plan(), &external)
+        .expect("the overlay publishes");
+
+    assert_eq!(kind_at(&effective, "root/control/button"), "ButtonFast");
+    assert_eq!(kind_at(&effective, "root/control/slider"), "Slider");
+}
+
+/// A contiguous sibling range: both ends of the range take the replacement,
+/// and the parent and any sibling outside the range survive.
+/// 连续兄弟区间：区间两端都被替换，父级与区间外的兄弟保持不变。
+#[test]
+fn graft_replaces_a_contiguous_sibling_range() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+    let plan = GraftPlan::command(
+        FRAMEWORK,
+        "cut [root/control/button to root/control/slider] graft slider_fast",
+    )
+    .expect("the range command parses");
+
+    let effective = base
+        .overlay(&plan, &external)
+        .expect("the overlay publishes");
+
+    assert_eq!(kind_at(&effective, "root/control/button"), "SliderFast");
+    assert_eq!(kind_at(&effective, "root/control/slider"), "SliderFast");
+    assert_eq!(kind_at(&effective, "root/control"), "Control");
+    // The base tree is untouched, so the original faces are still there.
+    // 原树未被修改，原始注册面仍然存在。
+    assert_eq!(kind_at(&base, "root/control/button"), "Button");
+}
+
+/// A whole subtree: `full` discards the original children and adopts the
+/// replacement's own subtree.
+/// 整棵子树：`full` 丢弃原子节点，改用替换实现自带的子树。
+#[test]
+fn graft_replaces_a_whole_subtree_with_full() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+    let plan = GraftPlan::command(FRAMEWORK, "cut root/control full graft control_fast")
+        .expect("the full-cut command parses");
+
+    let effective = base
+        .overlay(&plan, &external)
+        .expect("the overlay publishes");
+
+    assert_eq!(kind_at(&effective, "root/control"), "ControlFast");
+    // The original children belonged to the discarded subtree.
+    // 原来的子节点属于被丢弃的子树。
+    assert!(
+        effective
+            .depth_first()
+            .iter()
+            .all(|info| info.kind != "Button" && info.kind != "Slider"),
+        "a full cut must not keep the replaced subtree"
+    );
+    // Without `full` the same cut would have inherited them.
+    // 不加 `full` 时同一条切口会继承它们。
+    let inherited = base
+        .overlay(
+            &GraftPlan::command(FRAMEWORK, "cut root/control graft control_fast")
+                .expect("the plain command parses"),
+            &external,
+        )
+        .expect("the overlay publishes");
+    assert_eq!(kind_at(&inherited, "root/control/button"), "Button");
+}
+
+/// A chain: one plan changes several data boundaries together, and publishes
+/// all of them or none.
+/// 链条：一份计划同时改动多个数据边界，要么全部发布、要么一个都不发布。
+#[test]
+fn graft_applies_a_chain_of_cuts_in_one_plan() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+    let mut plan = GraftPlan::new(FRAMEWORK);
+    plan.push("root/control/button", "button_fast");
+    plan.push("root/control/slider", "slider_fast");
+
+    let effective = base
+        .overlay(&plan, &external)
+        .expect("the overlay publishes");
+
+    assert_eq!(kind_at(&effective, "root/control/button"), "ButtonFast");
+    assert_eq!(kind_at(&effective, "root/control/slider"), "SliderFast");
+    assert_eq!(kind_at(&base, "root/control/button"), "Button");
+}
+
+/// The typed range form reaches the same result without any selector string.
+/// 类型化区间形式在完全不使用选择器字符串的情况下得到同一结果。
+#[test]
+fn typed_range_cut_replaces_both_siblings() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+    let cuts = [StaticGraftCut::from_id_range(
+        control_button::control::object::button::NODE_ID,
+        control_button::control::object::slider::NODE_ID,
+        control_button_graft::slider_fast::NODE_ID,
+        false,
+    )];
+
+    let effective = base
+        .overlay_static(&cuts, &external)
+        .expect("the typed range overlay publishes");
+
+    assert_eq!(kind_at(&effective, "root/control/button"), "SliderFast");
+    assert_eq!(kind_at(&effective, "root/control/slider"), "SliderFast");
+}
+
+/// A chain fails as a whole: one unresolvable cut rejects the plan and leaves
+/// the base tree published unchanged.
+/// 链条整体失败：一条无法解析的切口就让整份计划被拒，原树保持不变。
+#[test]
+fn graft_chain_rejects_atomically() {
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+    let mut plan = GraftPlan::new(FRAMEWORK);
+    plan.push("root/control/button", "button_fast");
+    plan.push("root/control/missing", "slider_fast");
+
+    assert!(
+        base.overlay(&plan, &external).is_err(),
+        "an unresolvable cut must reject the whole plan"
+    );
+    assert_eq!(kind_at(&base, "root/control/button"), "Button");
+}
+
+// ---------------------------------------------------------------------------
+// Plugins. A plugin is the dynamically loaded form of the same thing a graft
+// names statically, so its bytes must clear the digest and trust policy before
+// they can reach the overlay.
+// 插件。插件是 graft 静态命名的同一件事的动态加载形式，因此它的字节必须先通过
+// 摘要与信任策略，才能走到 overlay。
+// ---------------------------------------------------------------------------
+
+/// A plugin whose bytes match its manifest is accepted; tampered bytes are
+/// rejected before any registry work happens.
+/// 字节与清单一致的插件被接受；被篡改的字节在任何注册工作之前就被拒绝。
+#[test]
+fn plugin_bytes_must_verify_before_they_can_replace_a_face() {
+    let payload = b"button_fast plugin payload";
+    // The manifest carries a `&'static str`, so the test leaks its computed
+    // digest the same way a build-time constant would already hold one.
+    // 清单持有 `&'static str`，因此测试把算出的摘要泄漏成静态串——构建期常量本来
+    // 就是静态的。
+    let checksum = Box::leak(
+        format!(
+            "sha256:{}",
+            nichlink_run_method::registry_core::sha256_hex(payload)
+        )
+        .into_boxed_str(),
+    );
+    let manifest = PluginManifest {
+        name: "button_fast",
+        crate_name: "control_button_graft",
+        version: "0.1.0",
+        framework: FRAMEWORK,
+        source: PluginSource::User,
+        mode: PluginMode::Replacement,
+        checksum,
+        signature: None,
+        public_key_fingerprint: None,
+        revocation_list: None,
+    };
+
+    // Provenance is checked separately from structure and flow.
+    // 来源校验与结构、数据流校验刻意分开。
+    assert!(manifest.targets(FRAMEWORK));
+    assert!(!manifest.targets(FrameworkId::new("other.framework")));
+
+    let policy = PluginTrustPolicy::open();
+    policy
+        .verify(manifest, payload, None)
+        .expect("matching bytes pass the open policy");
+    assert_eq!(
+        policy.verify(manifest, b"tampered", None),
+        Err(PluginTrustError::DigestMismatch),
+        "tampered bytes must be rejected before they reach the registry"
+    );
+
+    // Bytes that do pass still have to satisfy the destination rule and flow
+    // contract; the graft tests above exercise that through the same overlay.
+    // 通过校验的字节仍须满足目标规则与数据流合同；上面的 graft 测试已用同一套
+    // overlay 覆盖了这一步。
 }
