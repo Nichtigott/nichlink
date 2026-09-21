@@ -17,9 +17,32 @@ pub struct SourceLocation {
     pub function: &'static str,
 }
 
+/// Render a source path with `/` separators on every platform.
+/// 在任何平台上都以 `/` 分隔符渲染源码路径。
+///
+/// `file!()` records the platform separator, and a declaration cannot rewrite
+/// it at compile time without allocating, so the portable form is produced when
+/// a path is displayed or compared instead. Identity is unaffected: hashing
+/// folds both separators to the same byte.
+/// `file!()` 记录平台分隔符，而声明在编译期无法在不分配的前提下改写它，因此改为
+/// 在显示或比较时产出可移植形式。身份不受影响：哈希会把两种分隔符折叠为同一字节。
+pub fn portable_path(file: &str) -> String {
+    if file.contains('\\') {
+        file.replace('\\', "/")
+    } else {
+        file.to_owned()
+    }
+}
+
 impl fmt::Display for SourceLocation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}:{}:{}", self.file, self.line, self.column)
+        write!(
+            formatter,
+            "{}:{}:{}",
+            portable_path(self.file),
+            self.line,
+            self.column
+        )
     }
 }
 
@@ -35,18 +58,33 @@ impl SourceLocation {
     pub fn describe(self) -> String {
         format!(
             "{}:{}:{} function={}",
-            self.file, self.line, self.column, self.function
+            portable_path(self.file),
+            self.line,
+            self.column,
+            self.function
         )
     }
 }
 
 impl fmt::Display for OwnedSourceLocation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}:{}:{}", self.file, self.line, self.column)
+        write!(
+            formatter,
+            "{}:{}:{}",
+            portable_path(&self.file),
+            self.line,
+            self.column
+        )
     }
 }
 
 impl OwnedSourceLocation {
+    /// The declaration's source path with `/` separators on every platform.
+    /// 该声明的源码路径，在任何平台上都以 `/` 分隔。
+    pub fn portable_file(&self) -> String {
+        portable_path(&self.file)
+    }
+
     /// Render the source location with its logical function name.
     /// 渲染带逻辑函数名的源码位置。
     pub fn describe(&self) -> String {

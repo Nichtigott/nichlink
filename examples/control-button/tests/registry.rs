@@ -40,7 +40,7 @@ fn built_in_tree_has_the_expected_paths_and_derived_sources() {
                 "{} kind={} source={}",
                 registry.path_for(info.id).unwrap_or_default(),
                 info.kind,
-                info.source.file
+                info.source.portable_file()
             )
         })
         .collect::<Vec<_>>();
@@ -83,13 +83,17 @@ fn folder_face_items_stay_reachable() {
 #[test]
 fn face_sources_point_at_the_real_files() {
     let registry = base_registry();
-    let sources: Vec<&str> = registry
+    let sources = registry
         .depth_first()
         .iter()
-        .map(|info| info.source.file.as_str())
-        .collect();
-    assert!(sources.contains(&"control/control.rs"));
-    assert!(sources.contains(&"control/object/button/button.rs"));
+        .map(|info| info.source.portable_file())
+        .collect::<Vec<String>>();
+    assert!(sources.iter().any(|source| source == "control/control.rs"));
+    assert!(
+        sources
+            .iter()
+            .any(|source| source == "control/object/button/button.rs")
+    );
     assert!(
         !sources
             .iter()

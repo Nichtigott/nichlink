@@ -43,7 +43,7 @@ impl NodeId {
     /// Hash `relative_path + 0x00 + declared_name` during constant evaluation.
     /// 在常量求值期间散列“相对路径 + 0x00 + 声明名”。
     pub const fn from_path(relative_path: &str, declared_name: &str) -> Self {
-        Self(sha256_prefix(
+        Self(sha256_path_prefix(
             relative_path.as_bytes(),
             declared_name.as_bytes(),
             true,
@@ -60,7 +60,7 @@ impl NodeId {
         // Hashing the first two components and feeding that digest into the
         // final hash keeps the implementation const and allocation-free while
         // making the namespace part of the identity domain.
-        let scoped = sha256_prefix(namespace.as_bytes(), relative_path.as_bytes(), true);
+        let scoped = sha256_path_prefix(namespace.as_bytes(), relative_path.as_bytes(), true);
         Self(sha256_prefix(&scoped, declared_name.as_bytes(), true))
     }
 
@@ -206,7 +206,25 @@ pub fn hex_decode(value: &str) -> Option<Vec<u8>> {
 
 /// Compute SHA-256 over two slices, optionally separated by a zero byte.
 /// 对两个字节片段计算 SHA-256，可选地在中间加入零字节。
-const fn sha256_digest(first: &[u8], second: &[u8], separator: bool) -> [u8; 32] {
+/// One hashed byte, with path separators folded when this hash identifies a
+/// path. `file!()` records the platform separator, so folding here keeps a
+/// face's identity the same on every platform without allocating.
+/// 参与哈希的一个字节；当该哈希用于路径身份时折叠分隔符。`file!()` 记录的是
+/// 平台分隔符，在这里折叠就能在不分配的前提下让注册面的身份跨平台一致。
+const fn path_byte(value: u8, normalize_path: bool) -> u8 {
+    if normalize_path && value == b'\\' {
+        b'/'
+    } else {
+        value
+    }
+}
+
+const fn sha256_digest(
+    first: &[u8],
+    second: &[u8],
+    separator: bool,
+    normalize_path: bool,
+) -> [u8; 32] {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -245,11 +263,11 @@ const fn sha256_digest(first: &[u8], second: &[u8], separator: bool) -> [u8; 32]
                 let offset = block * 64 + i * 4 + byte;
                 let input = if offset < length {
                     if offset < first.len() {
-                        first[offset]
+                        path_byte(first[offset], normalize_path)
                     } else if separator && offset == first.len() {
                         0
                     } else {
-                        second[offset - first.len() - separator_len]
+                        path_byte(second[offset - first.len() - separator_len], normalize_path)
                     }
                 } else if offset == length {
                     0x80
@@ -329,7 +347,20 @@ const fn sha256_digest(first: &[u8], second: &[u8], separator: bool) -> [u8; 32]
 /// keep the first 128 bits.
 /// 对两个字节片段计算 SHA-256，可选地在中间加入零字节，并取前 128 位。
 const fn sha256_prefix(first: &[u8], second: &[u8], separator: bool) -> [u8; 16] {
-    let digest = sha256_digest(first, second, separator);
+    let digest = sha256_digest(first, second, separator, false);
+    sha256_prefix_of(digest)
+}
+
+/// Like [`sha256_prefix`], but `/` and `\` hash to the same byte so a path's
+/// identity does not depend on the platform separator.
+/// 与 [`sha256_prefix`] 相同，但 `/` 与 `\` 哈希为同一字节，路径身份因此不依赖
+/// 平台分隔符。
+const fn sha256_path_prefix(first: &[u8], second: &[u8], separator: bool) -> [u8; 16] {
+    let digest = sha256_digest(first, second, separator, true);
+    sha256_prefix_of(digest)
+}
+
+const fn sha256_prefix_of(digest: [u8; 32]) -> [u8; 16] {
     let mut output = [0_u8; 16];
     let mut i = 0;
     while i < 16 {
@@ -345,7 +376,7 @@ const fn sha256_prefix(first: &[u8], second: &[u8], separator: bool) -> [u8; 16]
 /// 不要再写第二份实现。
 pub fn sha256_hex(input: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = sha256_digest(input, &[], false);
+    let digest = sha256_digest(input, &[], false, false);
     let mut out = String::with_capacity(64);
     for byte in digest {
         out.push(HEX[(byte >> 4) as usize] as char);
@@ -594,6 +625,27 @@ mod tests {
                 "engine/role/style/object/composite_style/object/button/button.rs",
                 "Button",
             )
+        );
+    }
+
+    /// A face must keep one identity on every platform, so the two path
+    /// separators hash to the same bytes.
+    /// 注册面在每个平台上必须保持同一个身份，因此两种路径分隔符哈希为相同字节。
+    #[test]
+    fn path_identities_fold_platform_separators() {
+        assert_eq!(
+            NodeId::from_namespaced_path("app", "control\\control.rs", "Control"),
+            NodeId::from_namespaced_path("app", "control/control.rs", "Control")
+        );
+        assert_eq!(
+            NodeId::from_path("a\\b.rs", "A"),
+            NodeId::from_path("a/b.rs", "A")
+        );
+        // Folding must not merge genuinely different paths.
+        // 折叠不能把真正不同的路径混为一谈。
+        assert_ne!(
+            NodeId::from_path("a/b.rs", "A"),
+            NodeId::from_path("ab.rs", "A")
         );
     }
 
