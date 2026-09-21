@@ -1063,6 +1063,11 @@ macro_rules! __face_fields {
 /// explicitly; an external crate is not part of the host's generated tree.
 /// 与生成的父级专属宏不同，此形式显式接收源码路径；外部 crate 不在宿主
 /// 自动生成的模块树中。
+///
+/// An external face is written with braces like every other face, so the editor is
+/// told to insert them.
+/// 外部注册面与其它注册面一样用花括号书写，因此这里告诉编辑器插入花括号。
+#[rust_analyzer::macro_style(braces)]
 #[macro_export]
 macro_rules! external_object {
     { @tokens collector: $collector:ident, $($tokens:tt)* } => {

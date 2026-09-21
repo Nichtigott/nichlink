@@ -127,6 +127,17 @@ pub(crate) fn render_lib(
 /// 文档注释是编辑器悬停时展示的词表——宏体本身读不成字段列表。匹配器保持括号定界：
 /// 改成花括号会让 rust-analyzer 在 `kind: |` 这类空值位置失去补全，而那正是要填
 /// 字段值的地方。
+///
+/// The delimiter an editor *inserts* is a separate matter, and rust-analyzer
+/// decides it from the macro's own declaration: without a hint it inserts
+/// `name!($0)` — the `()` the author did not ask for — while
+/// `#[rust_analyzer::macro_style(braces)]` makes it insert `name!{$0}`, which is
+/// the form every face is written in. rustc accepts the tool attribute without a
+/// warning, so the hint costs nothing at build time.
+/// 编辑器**插入**哪种定界符是另一件事，由 rust-analyzer 依据宏自身的声明决定：没有提示
+/// 时它插入 `name!($0)`——作者并不想要的那个括号；而
+/// `#[rust_analyzer::macro_style(braces)]` 让它插入 `name!{$0}`，也就是每个注册面实际
+/// 使用的形式。rustc 接受这个工具属性且不报警告，因此这条提示不花构建期代价。
 fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     let mut names = BTreeSet::from(["root".to_owned()]);
     collect_object_aliases(src, nodes, &mut names);
@@ -134,7 +145,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -507,6 +518,14 @@ mod tests {
         assert!(
             output.contains("macro_rules! root_object {\n    ($($tokens:tt)*) => {"),
             "the alias must accept any delimiter: {output}"
+        );
+        // An editor inserts the delimiter the macro asks for, and every face is
+        // written with braces: without this hint rust-analyzer inserts `name!()`.
+        // 编辑器插入的是宏自己要求的定界符，而每个注册面都写成花括号：没有这条提示时
+        // rust-analyzer 会插入 `name!()`。
+        assert!(
+            output.contains("#[rust_analyzer::macro_style(braces)]\nmacro_rules! root_object"),
+            "the alias must ask for brace completion: {output}"
         );
         assert!(output.contains("#[allow(unused_macros)]"));
         assert!(output.contains("#[allow(unused_imports)]"));
