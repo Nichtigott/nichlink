@@ -446,24 +446,6 @@ macro_rules! __control_object {
         }
     };
 
-    // Custom handle with default preset and parts.
-    // 自定义 handle、默认 preset/parts 的精简写法。
-    {
-        collector: $collector:ident,
-        kind: $kind:ident,
-        handle: $handle:ident,
-        $($rest:tt)*
-    } => {
-        $crate::__control_object! {
-            collector: $collector,
-            kind: $kind,
-            preset: $crate::NoPreset,
-            parts: $crate::NoParts,
-            handle: $handle,
-            $($rest)*
-        }
-    };
-
     // Compact form. Fields are intentionally ordered like the generated
     // source, but every field after `kind` is optional and has a safe default.
     // 精简写法按生成源码顺序排列；除 kind 外均可省略，并使用安全默认值。

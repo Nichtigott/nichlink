@@ -4,7 +4,6 @@
 
 mod canonical {
     nichlink_run_method::__nichlink_object! {
-        collector: development,
         kind: Ordered,
         name: { zh: "有序", en: "Ordered" },
         needs_registry: true,
@@ -16,7 +15,6 @@ mod canonical {
 
 mod shuffled {
     nichlink_run_method::__nichlink_object! {
-        collector: development;
         registry_rule: nichlink_run_method::registry_core::RegistrationRule::ANY;
         kind: Ordered;
         parent: nichlink_run_method::registry_core::root_node_id("face-fields-test");

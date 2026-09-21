@@ -71,6 +71,12 @@ fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
             ));
         }
         if name == "collector" {
+            if collector.is_some() {
+                return Err(error_at(
+                    name.span(),
+                    "face field `collector` is given twice".to_owned(),
+                ));
+            }
             collector = Some(tokens[2].clone());
             continue;
         }
