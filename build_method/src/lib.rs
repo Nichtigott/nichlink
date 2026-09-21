@@ -197,17 +197,63 @@ impl SourceScope {
             // tree below, never to a wrong prune.
             // 类型化切口用指向真实注册面的 Rust 路径命名目标，因此可以精确匹配
             // 模块，而不必从注册路径猜测。匹配不到时回退全树，绝不错误裁剪。
-            let module = match &cut.expressions {
-                Some(expressions) => graft_expression_module(&expressions.cut, &faces),
-                None => graft_cut_module(&cut.cut),
-            };
-            let Some(module) = module else {
-                return Self {
-                    roots: None,
-                    reason: "graft-root-cut",
-                };
+            // A range cut names two targets, and both have to stay live: the
+            // overlay replaces everything between them. The string form used to
+            // hand the whole `"start to end"` text to the module mapper, so the
+            // module name contained a space, matched no face, and the cut pinned
+            // nothing — leaving its targets to be pruned and the overlay to fail
+            // with `UnknownTarget` later.
+            // 区间切口命名两个目标，两者都必须保持存活：覆盖层替换它们之间的全部内容。
+            // 字符串形式过去把整段 `"start to end"` 交给模块映射，于是模块名里带空格、
+            // 匹配不到任何面、切口什么也没钉住——目标随后被剪掉，overlay 再以
+            // `UnknownTarget` 失败。
+            //
+            // An endpoint the build cannot place means the range is not
+            // understood, so the whole tree is kept rather than pruned wrongly.
+            // 构建无法定位某个端点，说明这个区间没被读懂，因此保留整棵树而不是错剪。
+            let (module, end_module) = match &cut.expressions {
+                Some(expressions) => {
+                    let Some(module) = graft_expression_module(&expressions.cut, &faces) else {
+                        return Self {
+                            roots: None,
+                            reason: "graft-root-cut",
+                        };
+                    };
+                    let end_module = match expressions.cut_end.as_deref() {
+                        Some(end) => match graft_expression_module(end, &faces) {
+                            Some(module) => Some(module),
+                            None => {
+                                return Self {
+                                    roots: None,
+                                    reason: "graft-root-cut",
+                                };
+                            }
+                        },
+                        None => None,
+                    };
+                    (module, end_module)
+                }
+                None => {
+                    let (module, end_module) = string_cut_modules(&cut.cut);
+                    let Some(module) = module else {
+                        return Self {
+                            roots: None,
+                            reason: "graft-root-cut",
+                        };
+                    };
+                    if end_module.is_none() && cut.cut.contains(" to ") {
+                        return Self {
+                            roots: None,
+                            reason: "graft-root-cut",
+                        };
+                    }
+                    (module, end_module)
+                }
             };
             queue.extend(select_module_subtree(&faces, &module, &mut selected));
+            if let Some(end_module) = end_module {
+                queue.extend(select_module_subtree(&faces, &end_module, &mut selected));
+            }
         }
         for face in &faces {
             if face_declares_plugin(src, face)
@@ -461,6 +507,18 @@ fn path_mentions_module(path: &str, module: &str) -> bool {
 /// Map a graft cut path ("root/a/b") to its registration module ("a::b").
 /// A cut at the root itself forces the whole tree.
 /// 把嫁接切口路径映射为注册模块路径；根上的切口意味着保留全树。
+/// The two endpoints of a string cut, as modules.
+/// 字符串切口两个端点对应的模块。
+///
+/// `"a to b"` is a range, `"a"` a single target, and `"root"` the whole tree.
+/// `"a to b"` 是区间，`"a"` 是单个目标，`"root"` 是整棵树。
+fn string_cut_modules(cut: &str) -> (Option<String>, Option<String>) {
+    match cut.split_once(" to ") {
+        Some((start, end)) => (graft_cut_module(start), graft_cut_module(end)),
+        None => (graft_cut_module(cut), None),
+    }
+}
+
 fn graft_cut_module(cut: &str) -> Option<String> {
     if cut == "root" {
         return None;
@@ -914,6 +972,21 @@ mod tests {
         .expect("host main");
         assert_eq!(default_entry_source(&source), source.join("main.rs"));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A range cut has two endpoints and neither may be dropped.
+    /// 区间切口有两个端点，哪个都不能丢。
+    #[test]
+    fn a_range_cut_keeps_both_endpoints() {
+        assert_eq!(
+            super::string_cut_modules("root/a to root/b"),
+            (Some("a".to_owned()), Some("b".to_owned()))
+        );
+        assert_eq!(
+            super::string_cut_modules("root/a"),
+            (Some("a".to_owned()), None)
+        );
+        assert_eq!(super::string_cut_modules("root"), (None, None));
     }
 
     #[test]
