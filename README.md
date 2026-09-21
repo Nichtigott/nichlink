@@ -771,6 +771,7 @@ cli/          nichlink-cli: unified entry (nichlink new/check/build/studio/mcp, 
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries
 plugin-host/  optional Wasm/process adapters and atomic deployment
+examples/     runnable hosts: control-button plus its out-of-project graft
 ```
 
 The technical roadmap is in [`docs/ROADMAP.md`](docs/ROADMAP.md), with a Chinese

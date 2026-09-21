@@ -598,6 +598,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nichlink-example-control-button"
+version = "0.1.0"
+dependencies = [
+ "nichlink-build-method",
+ "nichlink-example-control-button-graft",
+ "nichlink-run-method",
+]
+
+[[package]]
+name = "nichlink-example-control-button-graft"
+version = "0.1.0"
+dependencies = [
+ "nichlink-run-method",
+]
+
+[[package]]
 name = "nichlink-mcp"
 version = "0.1.0"
 dependencies = [

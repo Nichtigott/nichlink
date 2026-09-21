@@ -24,6 +24,44 @@ free of inventory. Release applications must retain external faces through a
 verified plugin artifact or another explicit application-owned input; release
 builds do not create inventory linker sections.
 
+## Registration faces load in place
+
+Build-time rendering used to copy every face into
+`OUT_DIR/registration_sources` and `include!` that copy, so the module the
+compiler and editor tooling resolved was a build artefact rather than the file
+being edited. Faces are now loaded as real modules:
+
+- a **leaf face** (it owns no child registries) is declared as
+  `#[path = "..."] pub mod <name>;`, so its public module path and its
+  `type_name` are unchanged;
+- a **face that owns child registries** must also be their container, so it
+  loads into a same-named child module and re-exports
+  (`mod <name>; pub use <name>::*;`). Only that case gains a module-path
+  segment, for example `app::control::control::Control`.
+
+Two consequences:
+
+- A face file stays an ordinary module file, so it may keep opening with `//!`
+  or any other inner attribute. `include!` expansion cannot introduce them,
+  which is why the previous design had to rewrite `//!` into `//` in its copy.
+- Declaration macros now derive `source` from `file!()` and the registry name
+  from `module_path!()`, so the generated tree no longer injects
+  `__REGISTRATION_SOURCE` / `__REGISTRATION_MODULE_NAME`. A declaration outside
+  `src/` (an integration test, for example) keeps the path cargo recorded
+  instead of failing the manifest strip.
+
+Identities are unchanged: `source`, `registry_name`, and therefore `NodeId`,
+registry paths, and every graft selector keep the same values.
+
+A graft plan declared with `static_graft_plan!` is now captured from the host
+entry whether or not the host also declares `application!(entry = ...)`,
+matching how `SourceScope` already resolved the entry. Previously the plan was
+silently dropped without the `application!` declaration.
+
+See `examples/control-button/` for the README Control/Button tree as a real
+host, together with `examples/control-button-graft/` for an out-of-project
+implementation that grafts over it.
+
 ## Studio
 
 Run the standalone package with `cargo run --manifest-path studio/Cargo.toml`.

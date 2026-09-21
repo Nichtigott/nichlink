@@ -121,38 +121,6 @@ fn collect_object_aliases(src: &Path, nodes: &[Node], names: &mut BTreeSet<Strin
     }
 }
 
-pub(crate) fn materialize_sources(src: &Path, nodes: &[Node], out_dir: &Path) {
-    for node in nodes {
-        if let Some(file) = &node.file {
-            let relative = file
-                .strip_prefix(src)
-                .expect("registration source must be inside src");
-            let destination = out_dir.join("registration_sources").join(relative);
-            let source = fs::read_to_string(file).expect("read registration source");
-            let sanitized = source
-                .lines()
-                .map(|line| match line.strip_prefix("//!") {
-                    Some(rest) if rest.starts_with(' ') => format!("//{rest}"),
-                    Some(rest) => format!("// {rest}"),
-                    None => line.to_owned(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            // Keep the explicit crate-qualified macro path in generated
-            // sources. It works from nested modules and lets rust-analyzer
-            // resolve the registration declaration without a legacy
-            // `#[macro_use]` import.
-            // 保留 crate 限定的宏路径；嵌套模块可直接解析，也让 rust-analyzer
-            // 无需依赖旧式 `#[macro_use]` 导入即可提供补全。
-            if let Some(parent) = destination.parent() {
-                fs::create_dir_all(parent).expect("create generated source directory");
-            }
-            super::write_if_changed(&destination, &format!("{sanitized}\n"));
-        }
-        materialize_sources(src, &node.children, out_dir);
-    }
-}
-
 fn render_node(
     output: &mut String,
     src: &Path,
@@ -188,30 +156,46 @@ fn render_node(
     }
     writeln!(
         output,
-        "{indent}#[allow(dead_code, unused_imports, ambiguous_glob_reexports, clippy::items_after_test_module)]"
+        "{indent}#[allow(dead_code, unused_imports, ambiguous_glob_reexports, clippy::items_after_test_module, clippy::module_inception)]"
     )
     .unwrap();
+    // A face file is loaded as a real module through `#[path]`, never through
+    // `include!`. That is what lets rust-analyzer resolve the file the author
+    // edits, and it is why a face file may keep opening with `//!`: `include!`
+    // expansion cannot introduce inner attributes, and `#[path]` on a module
+    // with an inline body ignores the path.
+    // 注册面文件通过 `#[path]` 以真实模块载入，不再走 `include!`。这正是
+    // rust-analyzer 能解析作者正在编辑的文件的原因，也是面文件可以继续以
+    // `//!` 开头的原因：`include!` 展开无法引入 inner attribute，而带内联体的
+    // 模块上的 `#[path]` 会被忽略。
+    //
+    // The declaration macros derive `source` from `file!()` and the registry
+    // name from `module_path!()`, so no per-face constants are injected here.
+    // For a leaf face the file is loaded under its own name, which keeps the
+    // public module path unchanged. A face that owns child registries must also
+    // be their container, so it loads into a same-named child module and
+    // re-exports; only that case gains a module-path segment.
+    // 声明宏从 `file!()` 推导 `source`、从 `module_path!()` 推导注册机名，因此
+    // 这里不再注入逐面常量。叶子面以自身名字载入，公开模块路径保持不变；拥有
+    // 子注册机的面必须同时充当容器，于是载入到同名子模块再重导出——只有这种
+    // 情况会多出一段模块路径。
+    let absolute = node
+        .file
+        .as_ref()
+        .map(|file| file.to_string_lossy().replace('\\', "/"));
+    if let (true, Some(absolute)) = (include_source, absolute.as_ref())
+        && node.children.is_empty()
+    {
+        writeln!(output, "{indent}#[path = {absolute:?}]").unwrap();
+        writeln!(output, "{indent}pub mod {};", node.name).unwrap();
+        return;
+    }
     writeln!(output, "{indent}pub mod {} {{", node.name).unwrap();
-    if include_source && let Some(file) = &node.file {
+    if let (true, Some(absolute)) = (include_source, absolute.as_ref()) {
         let inner = "    ".repeat(depth + 1);
-        let relative = relative_display(src, file);
-        writeln!(
-            output,
-            "{inner}include!(concat!(env!(\"OUT_DIR\"), \"/registration_sources/{relative}\"));"
-        )
-        .unwrap();
-        writeln!(output, "{inner}#[rustfmt::skip]").unwrap();
-        writeln!(
-            output,
-            "{inner}pub const __REGISTRATION_SOURCE: &str = {relative:?};"
-        )
-        .unwrap();
-        writeln!(
-            output,
-            "{inner}pub const __REGISTRATION_MODULE_NAME: &str = {:?};",
-            node.name
-        )
-        .unwrap();
+        writeln!(output, "{inner}#[path = {absolute:?}]").unwrap();
+        writeln!(output, "{inner}mod {};", node.name).unwrap();
+        writeln!(output, "{inner}pub use {}::*;", node.name).unwrap();
     }
     for child in &node.children {
         render_node(
@@ -332,6 +316,86 @@ mod tests {
         assert!(output.contains("StaticPlan::with_grafts"));
         assert!(output.contains("StaticGraftCut::new(\"root/control/button\", \"button_fast\""));
         assert!(!output.contains("pub fn builtin_graft_plan"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    /// Faces load as real modules through `#[path]`, never as copies. A leaf
+    /// face keeps its own module name so the public path is unchanged; a face
+    /// that owns child registries must also be their container, so it loads
+    /// into a same-named child module and re-exports.
+    /// 注册面通过 `#[path]` 以真实模块载入，绝不是副本。叶子面保留自身模块名，
+    /// 公开路径不变；拥有子注册机的面必须同时充当容器，因此载入同名子模块再
+    /// 重导出。
+    #[test]
+    fn faces_load_by_path_without_copies_or_injected_constants() {
+        let root = temporary_directory("path-loaded-faces");
+        let control = root.join("control/control.rs");
+        let button = root.join("control/object/button/button.rs");
+        write_registry(&control, "root_object", "Control", "crate::ROOT_NODE_ID");
+        write_registry(
+            &button,
+            "control_object",
+            "Button",
+            "crate::control::NODE_ID",
+        );
+        let nodes = vec![Node {
+            name: "control".to_owned(),
+            file: Some(control.clone()),
+            children: vec![Node {
+                name: "object".to_owned(),
+                file: None,
+                children: vec![Node {
+                    name: "button".to_owned(),
+                    file: Some(button.clone()),
+                    children: Vec::new(),
+                }],
+            }],
+        }];
+
+        let output = render_lib(
+            &root,
+            &nodes,
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            &[],
+            &[],
+        );
+
+        let control_path = control.to_string_lossy().replace('\\', "/");
+        let button_path = button.to_string_lossy().replace('\\', "/");
+        assert!(
+            output.contains(&format!("#[path = {control_path:?}]")),
+            "folder face must load its real file: {output}"
+        );
+        assert!(
+            output.contains(&format!("#[path = {button_path:?}]")),
+            "leaf face must load its real file: {output}"
+        );
+        assert!(
+            !output.contains("include!("),
+            "faces must be modules, not included copies: {output}"
+        );
+        assert!(
+            !output.contains("__REGISTRATION_SOURCE")
+                && !output.contains("__REGISTRATION_MODULE_NAME"),
+            "identity is derived at the declaration site, so nothing is injected: {output}"
+        );
+        assert!(
+            output.contains("mod control;") && output.contains("pub use control::*;"),
+            "folder face loads into a same-named child module and re-exports: {output}"
+        );
+        assert!(
+            output.contains("pub mod button;"),
+            "leaf face keeps its own module name: {output}"
+        );
+        assert!(
+            !output.contains("pub mod button {"),
+            "leaf face must not gain a container module: {output}"
+        );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }
 

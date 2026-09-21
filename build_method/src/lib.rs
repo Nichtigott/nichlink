@@ -63,7 +63,7 @@ use manifests::{
     write_function_manifest, write_graft_manifest, write_pruning_manifest,
     write_source_scope_manifest,
 };
-use renderer::{materialize_sources, render_lib};
+use renderer::render_lib;
 use static_plan::static_plan;
 use types::{BuildInput, Node};
 use validation::{
@@ -346,15 +346,30 @@ fn application_entry_source(src: &Path, nodes: &[Node]) -> Option<PathBuf> {
 /// Read the host entry's graft declarations once for generated release metadata.
 /// 读取宿主入口中的 graft 声明，并生成正式构建可携带的静态选择器表。
 pub(crate) fn host_graft_entries(src: &Path, nodes: &[Node]) -> Vec<GraftSyntax> {
-    let Some(file) = application_entry_source(src, nodes) else {
+    // Same entry resolution as `SourceScope::auto`: an explicit
+    // `application!(entry = ...)` wins, otherwise the ordinary Cargo entry is
+    // the host entry. Requiring `application!` here would silently drop a plan
+    // declared where the documentation says to put it.
+    // 与 `SourceScope::auto` 使用同一套入口解析：显式 `application!(entry = ...)`
+    // 优先，否则按 Cargo 约定取普通入口。这里若强制要求 `application!`，就会
+    // 静默丢弃按文档写在宿主入口的计划。
+    let declared = application_entry_source(src, nodes);
+    let file = match &declared {
+        Some(file) => file.clone(),
+        None => default_entry_source(src),
+    };
+    let Ok(source) = fs::read_to_string(&file) else {
+        // A declared entry must exist, so failing to read it is an error. The
+        // default entry may simply be absent (a host without `src/main.rs` or
+        // `src/lib.rs`), which `SourceScope` already treats as "no scope".
+        // 声明的入口必须存在，读不到即是错误；默认入口可能本来就不存在
+        // （宿主既无 `src/main.rs` 也无 `src/lib.rs`），`SourceScope` 已把这种
+        // 情况视为"无作用域"。
+        if declared.is_some() {
+            panic!("failed to read graft entry source `{}`", file.display());
+        }
         return Vec::new();
     };
-    let source = fs::read_to_string(&file).unwrap_or_else(|error| {
-        panic!(
-            "failed to read graft entry source `{}`: {error}",
-            file.display()
-        )
-    });
     graft_entries(&source).unwrap_or_else(|error| {
         panic!("invalid graft declaration in `{}`: {error}", file.display())
     })

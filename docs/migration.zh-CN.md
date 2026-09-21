@@ -12,6 +12,24 @@
 
 跨 crate 声明使用 `nichlink::external_object!`，必须填写插件来源、版本、目标框架和父节点身份。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
 
+## 注册面按真实路径载入
+
+构建期渲染以前会把每个注册面复制到 `OUT_DIR/registration_sources`，再 `include!` 那份副本，于是编译器和编辑器解析到的模块是构建产物，而不是正在编辑的文件。现在注册面以真实模块载入：
+
+- **叶子面**（不拥有子注册机）写成 `#[path = "..."] pub mod <name>;`，公开模块路径与 `type_name` 完全不变；
+- **拥有子注册机的面**必须同时充当容器，因此载入同名子模块再重导出（`mod <name>; pub use <name>::*;`）。只有这一种情况会多一段模块路径，例如 `app::control::control::Control`。
+
+两个后果：
+
+- 面文件仍是普通模块文件，因此可以继续以 `//!` 或任何 inner attribute 开头。`include!` 展开无法引入它们——这正是旧设计必须在副本里把 `//!` 改写成 `//` 的原因。
+- 声明宏改为从 `file!()` 推导 `source`、从 `module_path!()` 推导注册机名，生成树因此不再注入 `__REGISTRATION_SOURCE` / `__REGISTRATION_MODULE_NAME`。不在 `src/` 下的声明（例如集成测试）保留 cargo 记录的路径，而不是让剥离失败。
+
+身份不变：`source`、`registry_name`，以及由此而来的 `NodeId`、注册路径和全部 graft 选择器都保持原值。
+
+用 `static_graft_plan!` 声明的 graft 计划现在无论宿主是否同时声明 `application!(entry = ...)`，都会从宿主入口被捕获——与 `SourceScope` 原有的入口解析保持一致。此前缺少 `application!` 时计划会被静默丢弃。
+
+示例见 `examples/control-button/`（README 那棵 Control/Button 树作为真实宿主）与 `examples/control-button-graft/`（在其上做 graft 的项目外实现）。
+
 ## Studio 与插件宿主
 
 使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`4` 切换 Search、Inspect、Data、Compare。`watch` 由 `nichlink-dev` 提供，会在源码、Cargo 或插件目录变化时重建子 Studio 进程。

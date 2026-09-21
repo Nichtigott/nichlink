@@ -703,6 +703,7 @@ cli/          nichlink-cli：统一入口（nichlink new/check/build/studio/mcp�
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的只读 MCP 桥
 plugin-host/  可选 Wasm/进程插件和原子部署
+examples/     可运行示例：control-button 宿主与其项目外 graft 实现
 ```
 
 技术路线见 [`docs/ROADMAP.zh-CN.md`](docs/ROADMAP.zh-CN.md)，英文版见

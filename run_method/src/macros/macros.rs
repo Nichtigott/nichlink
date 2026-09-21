@@ -410,7 +410,7 @@ macro_rules! __control_object {
         runtime_checks: [$($runtime_check:expr),* $(,)?] $(,)?
     } => {
         $crate::__registration_face! {
-            source: __REGISTRATION_SOURCE,
+            source: $crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()),
             collector: $collector,
             kind: $kind,
             preset: ($preset),
@@ -500,7 +500,7 @@ macro_rules! __control_object {
         $(,)?
     } => {
         $crate::__registration_face! {
-            source: __REGISTRATION_SOURCE,
+            source: $crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()),
             collector: $collector,
             kind: $kind,
             preset: $preset,
@@ -521,10 +521,10 @@ macro_rules! __control_object {
             handle_name: stringify!($handle),
             $(stable_name: $stable_name,)?
             needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
-            registry_name: $crate::__face_string_or!(__REGISTRATION_MODULE_NAME; [$($registry_name)?]),
+            registry_name: $crate::__face_string_or!($crate::registry_core::last_path_segment(module_path!()); [$($registry_name)?]),
             parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
-            registry_rule_path: $crate::__face_expr_or!(__REGISTRATION_SOURCE; $($rule_path)?),
+            registry_rule_path: $crate::__face_expr_or!($crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
             registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
             $(admission: $admission,)?
             $(handle_traits: [$($handle_trait),*],)?
@@ -637,7 +637,7 @@ macro_rules! __control_object {
         $(,)?
     } => {
         $crate::__registration_face! {
-            source: __REGISTRATION_SOURCE,
+            source: $crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()),
             collector: $collector,
             kind: $kind,
             preset: $crate::NoPreset,
@@ -658,10 +658,10 @@ macro_rules! __control_object {
             handle_name: stringify!($kind),
             $(stable_name: $stable_name,)?
             needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
-            registry_name: $crate::__face_string_or!(__REGISTRATION_MODULE_NAME; [$($registry_name)?]),
+            registry_name: $crate::__face_string_or!($crate::registry_core::last_path_segment(module_path!()); [$($registry_name)?]),
             parent: $crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
-            registry_rule_path: $crate::__face_expr_or!(__REGISTRATION_SOURCE; $($rule_path)?),
+            registry_rule_path: $crate::__face_expr_or!($crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
             registry_rule: $crate::__face_expr_or!($crate::RegistrationRule::ANY; $($rule)?),
             $(admission: $admission,)?
             $(handle_traits: [$($handle_trait),*],)?
@@ -687,7 +687,7 @@ macro_rules! __control_object {
         kind: $kind:ident $(,)?
     } => {
         $crate::__registration_face! {
-            source: __REGISTRATION_SOURCE,
+            source: $crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()),
             collector: $collector,
             kind: $kind,
             preset: ($crate::NoPreset),
@@ -704,7 +704,7 @@ macro_rules! __control_object {
             registry_name: stringify!($kind),
             parent: $crate::root_node_id(env!("CARGO_PKG_NAME")),
             getting_from_other_registry: None,
-            registry_rule_path: __REGISTRATION_SOURCE,
+            registry_rule_path: $crate::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()),
             registry_rule: $crate::RegistrationRule::ANY,
             requires: [],
             provides: [],

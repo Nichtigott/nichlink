@@ -1,0 +1,13 @@
+[package]
+name = "nichlink-example-control-button-graft"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "NichLink example: an out-of-project implementation that grafts over the Control/Button tree."
+
+[lib]
+name = "control_button_graft"
+path = "src/lib.rs"
+
+[dependencies]
+nichlink-run-method = { path = "../../run_method", version = "0.1.0" }

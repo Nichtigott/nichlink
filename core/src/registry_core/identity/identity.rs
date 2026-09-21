@@ -354,13 +354,153 @@ pub fn sha256_hex(input: &[u8]) -> String {
     out
 }
 
+/// Return the part of `value` after `prefix`, or `None` when it is not one.
+/// 返回 `value` 中 `prefix` 之后的部分；`prefix` 不匹配时返回 `None`。
+///
+/// Written with scalar indexing and `split_at` because range indexing and
+/// `slice::get` are not usable in constant functions on the supported
+/// toolchain. 使用标量索引与 `split_at`：在受支持的工具链上，范围索引和
+/// `slice::get` 无法用于常量函数。
+pub const fn strip_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    let value_bytes = value.as_bytes();
+    let prefix_bytes = prefix.as_bytes();
+    if prefix_bytes.len() > value_bytes.len() {
+        return None;
+    }
+    let mut index = 0;
+    while index < prefix_bytes.len() {
+        if value_bytes[index] != prefix_bytes[index] {
+            return None;
+        }
+        index += 1;
+    }
+    let (_, rest) = value_bytes.split_at(index);
+    match core::str::from_utf8(rest) {
+        Ok(text) => Some(text),
+        Err(_) => None,
+    }
+}
+
+/// Last `::`-separated segment of a module path.
+/// 模块路径中最后一段 `::` 分隔的分量。
+pub const fn last_path_segment(path: &str) -> &str {
+    let bytes = path.as_bytes();
+    let mut index = bytes.len();
+    while index > 0 {
+        index -= 1;
+        if bytes[index] == b':' {
+            let (_, rest) = bytes.split_at(index + 1);
+            return match core::str::from_utf8(rest) {
+                Ok(text) => text,
+                Err(_) => path,
+            };
+        }
+    }
+    path
+}
+
+/// Derive a declaration's `source` identity input from `file!()`.
+/// 从 `file!()` 推导声明的 `source` 身份输入。
+///
+/// Drops `manifest_dir` and one leading `src/` component so the value matches
+/// the repository-relative path the build step used to inject, which keeps
+/// `NodeId` stable across the generated and derived forms. The original value
+/// is returned when `file` is not under `manifest_dir` (an external crate, a
+/// `tests/` target, or a differently laid out package).
+/// 去掉 `manifest_dir` 与其后的一个 `src/` 分量，使结果与构建步骤原本注入的
+/// 仓库相对路径一致，从而让生成式与推导式产生相同的 `NodeId`。当 `file`
+/// 不在 `manifest_dir` 下（外部 crate、`tests/` 目标或其它布局）时返回原值。
+pub const fn manifest_relative_source<'a>(manifest_dir: &str, file: &'a str) -> &'a str {
+    let after_manifest = match strip_prefix(file, manifest_dir) {
+        Some(rest) => rest,
+        None => return file,
+    };
+    let after_separator = match strip_prefix(after_manifest, "/") {
+        Some(rest) => rest,
+        None => match strip_prefix(after_manifest, "\\") {
+            Some(rest) => rest,
+            None => after_manifest,
+        },
+    };
+    match strip_prefix(after_separator, "src/") {
+        Some(rest) => rest,
+        None => match strip_prefix(after_separator, "src\\") {
+            Some(rest) => rest,
+            None => after_separator,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{NodeId, ROOT_NODE_ID, root_node_id, sha256_hex};
+    use super::{
+        NodeId, ROOT_NODE_ID, last_path_segment, manifest_relative_source, root_node_id,
+        sha256_hex, strip_prefix,
+    };
 
     const ABC: NodeId = NodeId::from_bytes(b"abc");
     const MULTI_BLOCK: NodeId =
         NodeId::from_bytes(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+
+    /// The derived source must equal what the build step used to inject, so
+    /// identities survive the switch from injection to derivation.
+    /// 推导出的 source 必须等于构建步骤原先注入的值，身份才不受切换影响。
+    #[test]
+    fn manifest_relative_source_matches_the_injected_form() {
+        assert_eq!(
+            manifest_relative_source(
+                "/home/me/proj",
+                "/home/me/proj/src/control/object/button/button.rs"
+            ),
+            "control/object/button/button.rs"
+        );
+        // A manifest path that itself contains `src` must not confuse the strip.
+        // manifest 路径自身含 `src` 时不能被剥错。
+        assert_eq!(
+            manifest_relative_source("/home/me/src/proj", "/home/me/src/proj/src/a/b.rs"),
+            "a/b.rs"
+        );
+    }
+
+    /// Declarations outside `src/` keep a usable identity instead of panicking.
+    /// 不在 `src/` 下的声明保留一个可用的身份，而不是 panic。
+    #[test]
+    fn manifest_relative_source_falls_back_outside_src() {
+        assert_eq!(
+            manifest_relative_source("/home/me/proj", "/home/me/proj/tests/probe.rs"),
+            "tests/probe.rs"
+        );
+        // Not under the manifest at all: keep the original value.
+        // 完全不在 manifest 下：保留原值。
+        assert_eq!(
+            manifest_relative_source("/home/me/proj", "/elsewhere/face.rs"),
+            "/elsewhere/face.rs"
+        );
+        assert_eq!(manifest_relative_source("/home/me/proj", ""), "");
+    }
+
+    #[test]
+    fn last_path_segment_reads_the_module_name() {
+        assert_eq!(last_path_segment("myproj::control::control"), "control");
+        assert_eq!(
+            last_path_segment("myproj::control::object::button"),
+            "button"
+        );
+        // No separator at all is the whole value; a trailing separator is empty.
+        // 没有分隔符时返回原值；尾随分隔符返回空串。
+        assert_eq!(last_path_segment("button"), "button");
+        assert_eq!(last_path_segment("myproj::"), "");
+    }
+
+    #[test]
+    fn strip_prefix_reports_matches_honestly() {
+        assert_eq!(strip_prefix("/a/b/c", "/a"), Some("/b/c"));
+        assert_eq!(strip_prefix("/a/b/c", "/a/b/c"), Some(""));
+        assert_eq!(strip_prefix("/a/b/c", "/x"), None);
+        // A longer prefix than the value is not a match.
+        // 前缀比原值更长时不算匹配。
+        assert_eq!(strip_prefix("/a", "/a/b"), None);
+    }
 
     #[test]
     fn matches_the_standard_vector() {

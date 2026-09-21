@@ -19,13 +19,7 @@ pub struct SourceLocation {
 
 impl fmt::Display for SourceLocation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{}:{}:{}",
-            display_file(self.file),
-            self.line,
-            self.column
-        )
+        write!(formatter, "{}:{}:{}", self.file, self.line, self.column)
     }
 }
 
@@ -41,23 +35,14 @@ impl SourceLocation {
     pub fn describe(self) -> String {
         format!(
             "{}:{}:{} function={}",
-            display_file(self.file),
-            self.line,
-            self.column,
-            self.function
+            self.file, self.line, self.column, self.function
         )
     }
 }
 
 impl fmt::Display for OwnedSourceLocation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{}:{}:{}",
-            display_file(&self.file),
-            self.line,
-            self.column
-        )
+        write!(formatter, "{}:{}:{}", self.file, self.line, self.column)
     }
 }
 
@@ -67,15 +52,6 @@ impl OwnedSourceLocation {
     pub fn describe(&self) -> String {
         format!("{} function={}", self, self.function)
     }
-}
-
-/// `include!` expands source faces under Cargo's OUT_DIR. Keep diagnostics
-/// pointed at the repository-relative face path instead of the generated copy.
-/// `include!` 会把注册面展开到 Cargo 的 OUT_DIR；诊断仍显示仓库相对路径，
-/// 不把用户带到生成副本。
-fn display_file(file: &str) -> &str {
-    file.rsplit_once("/registration_sources/")
-        .map_or(file, |(_, relative)| relative)
 }
 
 /// Bilingual text kept on the registration face.
