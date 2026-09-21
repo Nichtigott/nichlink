@@ -91,7 +91,38 @@ pub fn parse_admission_expression(expression: &str) -> Result<String, String> {
     if !paths.is_empty() {
         return Ok(format!("deny:{}", paths.join(",")));
     }
+    // The editor writes the constructor form, because a face holds real Rust.
+    // Reading only the `allow_paths(`/`deny_paths(` spellings meant the editor
+    // could write a declaration it then refused to read back.
+    // 编辑器写下的是构造函数形式，因为注册面里放的是真实 Rust。只认
+    // `allow_paths(`/`deny_paths(` 会让编辑器写出自己读不回来的声明。
+    if let Some((_, rest)) = expression.split_once("Admission::new(") {
+        let mut parts = rest.split(']');
+        let allow = parts.next().map(quoted_strings).unwrap_or_default();
+        let deny = parts.next().map(quoted_strings).unwrap_or_default();
+        return match (allow.is_empty(), deny.is_empty()) {
+            (true, true) => Ok("ANY".to_owned()),
+            (false, _) => Ok(format!("allow:{}", allow.join(","))),
+            (true, false) => Ok(format!("deny:{}", deny.join(","))),
+        };
+    }
     Err("generated face has an invalid admission expression".to_owned())
+}
+
+/// The quoted strings of one bracketed fragment, e.g. `&["a", "b"`.
+/// 一个方括号片段里的字符串，例如 `&["a", "b"`。
+fn quoted_strings(fragment: &str) -> Vec<String> {
+    let fragment = fragment.rsplit_once('[').map_or(fragment, |(_, rest)| rest);
+    fragment
+        .split(',')
+        .filter_map(|value| {
+            let value = value.trim().trim_end_matches(']').trim();
+            value
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+                .map(str::to_owned)
+        })
+        .collect()
 }
 
 /// Reduce a registry-rule source text to its compact syntax form.
@@ -550,6 +581,31 @@ pub fn render_admission(value: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::parse_admission_expression;
+
+    /// The editor writes the constructor form and must be able to read it back;
+    /// both spellings describe the same admission.
+    /// 编辑器写下构造函数形式，也必须能读回来；两种写法描述同一个 admission。
+    #[test]
+    fn admission_round_trips_through_the_constructor_form() {
+        assert_eq!(
+            parse_admission_expression("crate::Admission::new(&[\"a\", \"b\"], &[])"),
+            Ok("allow:a,b".to_owned())
+        );
+        assert_eq!(
+            parse_admission_expression("crate::Admission::new(&[], &[\"c\"])"),
+            Ok("deny:c".to_owned())
+        );
+        assert_eq!(
+            parse_admission_expression("crate::Admission::new(&[], &[])"),
+            Ok("ANY".to_owned())
+        );
+        assert_eq!(
+            parse_admission_expression("crate::Admission::allow_paths(&[\"a\"])"),
+            Ok("allow:a".to_owned())
+        );
+    }
+
     use super::{parse_registration_rule_owned, render_registration_rule, trait_names_from_paths};
 
     #[test]
