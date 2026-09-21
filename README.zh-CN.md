@@ -532,7 +532,9 @@ NichLink 的两阶段修剪解决两个不同问题。
 
 1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-build-method`；
 2. 构建器读取目录注册面以及 `main.rs`、`lib.rs` 或 `application!` 指定的入口；
-3. 它保守推导本 crate 需要的注册面，只把这些面写入生成模块和 `StaticPlan`；
+3. 它保守推导本 crate 需要的注册面——入口可达的面，加上 `static_graft_plan!` 里
+   每个 `cut(` 命名的槽位——只把这些面写入生成模块和 `StaticPlan`；没有任何声明的
+   面不会发布（`NICH_LINK_SCOPE` 可刻意放宽作用域）；
 4. 遇到无法静态证明的动态分发、生成代码或路径时，回退全树，而不是误删代码。
 
 这一步能减少送进 rustc 的注册面和元数据，但它不是完整 rustc 调用图，也不裁剪

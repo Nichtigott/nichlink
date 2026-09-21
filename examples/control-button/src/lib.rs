@@ -33,6 +33,15 @@ pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-bu
 // faces, so the compiler and any editor resolve them. The cost is that the
 // external implementation must be linked in.
 //
+// 这里声明的每个 `cut(` 都是宿主交出去的槽位，而构建期作用域收窄到这些切口命名的
+// 子树：没有声明的注册面不会被这个应用发布。按钮和滑块都是可替换槽位，因此两条都写；
+// 漏写一条不是"少发布一个面"这么无害，而是让那个槽位在发布态计划里失去目标。
+// Every `cut(` declared here is a slot the host hands over, and the build-time
+// scope narrows to the subtrees these cuts name: a face nobody declared is not
+// shipped by this application. Button and slider are both replaceable slots, so
+// both are declared; leaving one out does not merely ship one face less, it
+// leaves that slot without a target in the release-time plan.
+//
 // 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 //   cut "root/control/button" graft "button_fast"
 // The string form still works and needs no link, but tooling cannot complete it.
@@ -40,6 +49,8 @@ nichlink_run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
+    cut(crate::control::object::slider::NODE_ID)
+        graft(control_button_graft::slider_fast::NODE_ID),
 );
 
 /// 按框架和包命名空间装配这个示例的注册机。

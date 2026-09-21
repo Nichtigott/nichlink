@@ -499,6 +499,15 @@ mod tests {
         assert!(output.contains("macro_rules! panel_object"));
         assert!(output.contains("macro_rules! control_object"));
         assert!(output.contains("::nichlink_run_method::__nichlink_object!"));
+        // An editor inserts the call with round brackets, so the alias matcher
+        // must be the delimiter-agnostic token tree and forward it verbatim: a
+        // `{ … }` matcher would reject `root_object!( … )` outright.
+        // 编辑器插入调用时用圆括号，因此别名的匹配器必须是与分隔符无关的 token 树，
+        // 并原样转发它：`{ … }` 匹配器会直接拒绝 `root_object!( … )`。
+        assert!(
+            output.contains("macro_rules! root_object {\n    ($($tokens:tt)*) => {"),
+            "the alias must accept any delimiter: {output}"
+        );
         assert!(output.contains("#[allow(unused_macros)]"));
         assert!(output.contains("#[allow(unused_imports)]"));
         fs::remove_dir_all(root).expect("temporary fixture cleanup");

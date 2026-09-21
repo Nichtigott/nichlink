@@ -239,8 +239,12 @@ fn graft_rejects_a_foreign_framework() {
 fn static_plan_carries_faces_and_the_declared_graft() {
     let plan = builtin_static_plan();
 
-    assert_eq!(plan.faces().len(), 3, "every built-in face is retained");
-    assert_eq!(plan.grafts().len(), 1, "the entry declared one graft");
+    assert_eq!(plan.faces().len(), 3, "every declared face is retained");
+    assert_eq!(
+        plan.grafts().len(),
+        2,
+        "the entry declares both replaceable slots"
+    );
     let cut = plan.grafts()[0];
     assert_eq!(
         cut.cut().id(),
@@ -253,6 +257,58 @@ fn static_plan_carries_faces_and_the_declared_graft() {
         "the typed graft names the external face by compile-time identity"
     );
     assert!(!cut.full(), "a plain cut keeps the target's children");
+    assert_eq!(
+        plan.grafts()[1].cut().id(),
+        Some(control_button::control::object::slider::NODE_ID),
+        "the sibling slot is declared too, not kept alive by accident"
+    );
+    assert_eq!(
+        plan.grafts()[1].graft().id(),
+        Some(control_button_graft::slider_fast::NODE_ID),
+        "each declared slot names the implementation that replaces it"
+    );
+}
+
+/// 构建期作用域收窄到宿主声明的槽位：切口命名的子树活着，没有声明的面不发布。
+/// The build-time scope narrows to the slots the host declared: the subtrees the
+/// cuts name stay live, and a face nobody declared is not shipped.
+#[test]
+fn the_declared_slots_define_the_build_time_scope() {
+    let scope = std::fs::read_to_string(concat!(env!("OUT_DIR"), "/source_scope.tsv"))
+        .expect("the build step publishes its source scope");
+    let selected = scope
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .collect::<Vec<_>>();
+
+    assert!(
+        scope.starts_with("# mode\tauto\n"),
+        "the scope is derived from the entry, not pinned by the environment: {scope}"
+    );
+    assert_eq!(
+        selected.len(),
+        2,
+        "the entry declares exactly two slots: {scope}"
+    );
+    assert!(
+        selected
+            .iter()
+            .any(|row| row.ends_with("control/object/button/button.rs\tcontrol::object::button")),
+        "the button slot stays live: {scope}"
+    );
+    assert!(
+        selected
+            .iter()
+            .any(|row| row.ends_with("control/object/slider/slider.rs\tcontrol::object::slider")),
+        "the slider slot stays live: {scope}"
+    );
+    // The parent `control` face is not a slot, so it is not a scope root; it
+    // survives because a selected face needs it and because the entry reaches
+    // it. That is the point of the narrow scope: it records what the
+    // declarations prove, not a whole tree left intact by a fallback.
+    // 父级 `control` 不是槽位，因此不是作用域根；它活着是因为被选中的面需要它、
+    // 而且入口能到达它。这正是收窄的意义：作用域记录的是声明证明的东西，而不是
+    // 回退保留下来的整棵树。
 }
 
 /// 发布路径用静态选择器 overlay，不需要构造动态计划。

@@ -576,8 +576,11 @@ a complete registration face:
 1. the host crate's thin `build.rs` calls `nichlink-build-method`;
 2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
    or `application!`;
-3. it conservatively derives the faces needed by this crate and emits only
-   those faces into the generated modules and `StaticPlan`;
+3. it conservatively derives the faces needed by this crate — what the entry
+   reaches plus the slot each `cut(` in `static_graft_plan!` names — and emits
+   only those faces into the generated modules and `StaticPlan`, so a face
+   nobody declared is not shipped (`NICH_LINK_SCOPE` widens that scope on
+   purpose);
 4. dynamic dispatch, generated code, or an unresolved path forces a full-tree
    fallback instead of an unsafe deletion.
 

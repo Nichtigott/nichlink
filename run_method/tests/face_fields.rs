@@ -80,6 +80,64 @@ fn a_reordered_face_reports_the_authors_lines() {
     assert_eq!(shuffled::REGISTRATION.source.column, 5);
 }
 
+/// An editor that inserts a macro call writes `name!(…)`, so the parenthesised
+/// form has to declare exactly the same face as the braced one — and it must
+/// accept `;` separators and any order just as well.
+///
+/// One `;` after the closing bracket is rustc's rule, not the front end's: a
+/// macro invocation in item position is only an item when it is brace-delimited,
+/// so `name!(…)` and `name![…]` must be followed by `;`. The alias matcher
+/// itself accepts any delimiter.
+/// 编辑器插入宏调用时写的是 `name!(…)`，因此括号形式必须声明与花括号形式完全相同的
+/// 注册面，并且同样接受 `;` 分隔与任意顺序。
+///
+/// 收尾的那一个 `;` 是 rustc 的规则、不是前端的：位于 item 位置的宏调用只有在花括号
+/// 分隔时才算 item，所以 `name!(…)` 与 `name![…]` 后面必须跟 `;`。别名匹配器本身
+/// 接受任何分隔符。
+mod parens {
+    nichlink_run_method::__nichlink_object!(
+        kind: Ordered;
+        registry_rule: nichlink_run_method::registry_core::RegistrationRule::ANY;
+        needs_registry: true;
+        registry_name: Ordered;
+        name: { zh: "有序", en: "Ordered" };
+        parent: nichlink_run_method::registry_core::root_node_id("face-fields-test")
+    );
+}
+
+/// Parens and braces are the same token tree, so they must declare one face.
+/// 括号与花括号是同一个 token 树，因此必须声明同一个注册面。
+#[test]
+fn the_parenthesised_form_declares_the_same_face() {
+    assert_eq!(canonical::NODE_ID, parens::NODE_ID);
+    assert_eq!(canonical::REGISTRATION.kind, parens::REGISTRATION.kind);
+    assert_eq!(
+        canonical::REGISTRATION.needs_registry,
+        parens::REGISTRATION.needs_registry
+    );
+    assert_eq!(
+        canonical::REGISTRATION.registry_name,
+        parens::REGISTRATION.registry_name
+    );
+    assert_eq!(
+        canonical::REGISTRATION.name.en,
+        parens::REGISTRATION.name.en
+    );
+    assert_eq!(canonical::REGISTRATION.parent, parens::REGISTRATION.parent);
+    // The declaration still reports the author's own line and column.
+    // 声明仍然报告作者自己的行与列。
+    let columns = [
+        canonical::REGISTRATION.source.column,
+        parens::REGISTRATION.source.column,
+    ];
+    assert_eq!(columns, [5, 5]);
+    let lines = [
+        canonical::REGISTRATION.source.line,
+        parens::REGISTRATION.source.line,
+    ];
+    assert!(lines.iter().all(|line| *line > 0), "lines: {lines:?}");
+}
+
 mod external_shuffled {
     use nichlink_run_method::registry_core::{
         ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,

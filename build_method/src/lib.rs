@@ -145,7 +145,17 @@ impl SourceScope {
     /// 逻辑放在构建步骤中，发现和身份计算共用同一套解析与 node identity 实现。源码扫描
     /// 不是完整 rustc 调用图；无法证明注册面或发现动态/生成代码时，安全结果是全树。
     fn auto(src: &Path, nodes: &[Node]) -> Self {
-        let entry = env::var_os("NICH_LINK_ENTRY")
+        let entry = Self::resolved_entry(src, nodes);
+        Self::auto_from_entry(src, nodes, &entry)
+    }
+
+    /// Resolve the host entry: `NICH_LINK_ENTRY` names it when set (a relative
+    /// path resolves against the package root), otherwise the file that calls
+    /// `host!()` wins over Cargo's `main.rs` preference.
+    /// 解析宿主入口：设置 `NICH_LINK_ENTRY` 时以它为准（相对路径相对包根解析），
+    /// 否则调用 `host!()` 的文件优先于 Cargo 对 `main.rs` 的偏好。
+    fn resolved_entry(src: &Path, nodes: &[Node]) -> PathBuf {
+        env::var_os("NICH_LINK_ENTRY")
             .map(PathBuf::from)
             .map_or_else(
                 || {
@@ -159,8 +169,14 @@ impl SourceScope {
                         src.parent().unwrap_or(src).join(path)
                     }
                 },
-            );
-        let Some(entry_source) = fs::read_to_string(&entry).ok() else {
+            )
+    }
+
+    /// Derive the scope from one explicit entry source, without reading the
+    /// environment, so the derivation can be pinned by a test.
+    /// 从一个明确的入口源码推导作用域，不读环境变量，因此推导过程可以被测试钉住。
+    fn auto_from_entry(src: &Path, nodes: &[Node], entry: &Path) -> Self {
+        let Some(entry_source) = fs::read_to_string(entry).ok() else {
             return Self {
                 roots: None,
                 reason: "missing-entry",
@@ -191,12 +207,21 @@ impl SourceScope {
         // 强制存活根：嫁接槽位与插件声明面是可替换的社区面，
         // minimal 树绝不能因可达源码未提及就把它们剪掉。
         for cut in &cuts {
-            // A typed cut names the target with a Rust path to a real face, so
-            // its module can be matched exactly instead of guessed from a
-            // registry path. An unmatched expression falls back to the whole
-            // tree below, never to a wrong prune.
-            // 类型化切口用指向真实注册面的 Rust 路径命名目标，因此可以精确匹配
-            // 模块，而不必从注册路径猜测。匹配不到时回退全树，绝不错误裁剪。
+            // A declared slot is a face the host lets someone else replace, and
+            // the scope keeps exactly the subtrees the cuts name plus the plugin
+            // faces below. A typed cut names its target with a Rust path to a
+            // real face, so its module is matched exactly instead of guessed from
+            // a registry path; a string cut names the same face by registry path.
+            // Both spellings narrow, and they must narrow identically: the
+            // spelling is not allowed to decide the policy. What a cut may never
+            // do is narrow by accident, so an endpoint the build cannot place
+            // keeps the whole tree and says why.
+            // 声明出来的槽位就是宿主允许别人替换的注册面，作用域保留的正是切口命名的子树
+            // （外加下面的插件面）。类型化切口用指向真实注册面的 Rust 路径命名目标，因此
+            // 精确匹配模块、不必从注册路径猜测；字符串切口用注册路径命名同一个面。
+            // 两种写法都收窄，而且必须收窄到同一结果：写法不允许决定策略。切口绝不允许
+            // 碰巧收窄，因此构建定位不到的端点保留整棵树并说明原因。
+            //
             // A range cut names two targets, and both have to stay live: the
             // overlay replaces everything between them. The string form used to
             // hand the whole `"start to end"` text to the module mapper, so the
@@ -207,57 +232,42 @@ impl SourceScope {
             // 字符串形式过去把整段 `"start to end"` 交给模块映射，于是模块名里带空格、
             // 匹配不到任何面、切口什么也没钉住——目标随后被剪掉，overlay 再以
             // `UnknownTarget` 失败。
-            //
-            // An endpoint the build cannot place means the range is not
-            // understood, so the whole tree is kept rather than pruned wrongly.
-            // 构建无法定位某个端点，说明这个区间没被读懂，因此保留整棵树而不是错剪。
-            let (module, end_module) = match &cut.expressions {
+            let resolved = match &cut.expressions {
                 Some(expressions) => {
-                    // A typed cut keeps the whole tree, and it does so
-                    // independently of how the expression is spelled. Narrowing
-                    // changes what a host ships — the example family grafts faces
-                    // outside its cut subtree — so it is a decision of its own,
-                    // recorded in `docs/audit-2026-09-21.md` (B3.6). What the
-                    // expression is *not* allowed to do is decide the policy by
-                    // accident: a `crate::…` spelling used to miss the module map
-                    // and report `graft-root-cut`, which reads like a broken
-                    // declaration.
-                    // 类型化切口保留整棵树，且与表达式的写法无关。收窄会改变宿主发布的
-                    // 内容——示例族会嫁接切口子树之外的注册面——因此那是独立的决定，记录在
-                    // `docs/audit-2026-09-21.md`（B3.6）。表达式不允许做的是"顺手决定
-                    // 策略"：`crate::…` 写法过去匹配不到模块表，却报成 `graft-root-cut`，
-                    // 读起来像声明坏了。
-                    let recognized = graft_expression_module(&expressions.cut, &faces).is_some()
-                        && expressions
-                            .cut_end
-                            .as_deref()
-                            .is_none_or(|end| graft_expression_module(end, &faces).is_some());
+                    let cut_end = expressions.cut_end.as_deref();
+                    let module = graft_expression_module(&expressions.cut, &faces);
+                    let end_module = cut_end.and_then(|end| graft_expression_module(end, &faces));
+                    match (module, cut_end.is_some() && end_module.is_none()) {
+                        (Some(module), false) => Ok((module, end_module)),
+                        // A typed cut names a real face, so a path the build
+                        // cannot place is an unreadable declaration, not a
+                        // smaller tree.
+                        // 类型化切口命名真实注册面，因此构建定位不到的路径是读不懂的
+                        // 声明，而不是一棵更小的树。
+                        _ => Err("graft-typed-cut-unrecognized"),
+                    }
+                }
+                None => match string_cut_modules(&cut.cut) {
+                    // A range whose far endpoint mapped to the whole tree is not
+                    // understood, so the whole tree is kept rather than pruned
+                    // wrongly.
+                    // 区间切口的远端映射到整棵树，说明这个区间没被读懂，因此保留整棵树
+                    // 而不是错剪。
+                    (Some(module), end) if !(cut.cut.contains(" to ") && end.is_none()) => {
+                        Ok((module, end))
+                    }
+                    _ => Err("graft-root-cut"),
+                },
+            };
+            let (module, end_module) = match resolved {
+                Ok(pair) => pair,
+                Err(reason) => {
                     return Self {
                         roots: None,
-                        reason: if recognized {
-                            "graft-typed-cut-whole-tree"
-                        } else {
-                            "graft-typed-cut-unrecognized"
-                        },
+                        reason,
                     };
                 }
-                None => string_cut_modules(&cut.cut),
             };
-            let (Some(module), end_module) = (module, end_module) else {
-                return Self {
-                    roots: None,
-                    reason: "graft-root-cut",
-                };
-            };
-            // A range whose far endpoint mapped to the whole tree is not
-            // understood, so the whole tree is kept rather than pruned wrongly.
-            // 区间切口的远端映射到整棵树，说明这个区间没被读懂，因此保留整棵树而不是错剪。
-            if cut.cut.contains(" to ") && end_module.is_none() {
-                return Self {
-                    roots: None,
-                    reason: "graft-root-cut",
-                };
-            }
             queue.extend(select_module_subtree(&faces, &module, &mut selected));
             if let Some(end_module) = end_module {
                 queue.extend(select_module_subtree(&faces, &end_module, &mut selected));
@@ -963,6 +973,23 @@ mod tests {
         }
     }
 
+    /// The face files the scope proved live, named relative to `src`.
+    /// 作用域证明存活的注册面文件，路径相对 `src`。
+    fn selected_sources(
+        src: &std::path::Path,
+        nodes: &[super::Node],
+        scope: &super::SourceScope,
+    ) -> Vec<String> {
+        let roots = scope.roots.as_ref().expect("the fixture narrows");
+        let mut sources = super::collect_faces(src, nodes)
+            .into_iter()
+            .filter(|face| roots.contains(&face.id))
+            .map(|face| super::relative_display(src, &face.source))
+            .collect::<Vec<_>>();
+        sources.sort();
+        sources
+    }
+
     /// A lib+bin host keeps `main.rs` as a stub and calls `host!()` in `lib.rs`.
     /// The declared graft plan lives at that call, so the entry must follow it
     /// instead of Cargo's `main.rs` preference.
@@ -1003,6 +1030,94 @@ mod tests {
             (Some("a".to_owned()), None)
         );
         assert_eq!(super::string_cut_modules("root"), (None, None));
+    }
+
+    /// A typed cut narrows the scope to the face it names, and a face nobody
+    /// declared is pruned: declaring the slot is what ships the face.
+    /// 类型化切口把作用域收窄到它命名的注册面，没人声明的面会被剪掉：
+    /// 声明槽位才是这个面被发布出来的原因。
+    #[test]
+    fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-scope-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let src = root.join("src");
+        let entry = src.join("lib.rs");
+        for module in ["a", "b"] {
+            std::fs::create_dir_all(src.join(module)).expect("fixture dir");
+        }
+        std::fs::write(
+            &entry,
+            "nichlink_run_method::host!();\n\
+             nichlink_run_method::static_graft_plan!(\n\
+                 FRAMEWORK,\n\
+                 cut(crate::a::NODE_ID) graft(\"a_fast\"),\n\
+             );\n",
+        )
+        .expect("host entry");
+        for (module, kind) in [("a", "A"), ("b", "B")] {
+            std::fs::write(
+                src.join(format!("{module}/{module}.rs")),
+                format!("crate::root_object! {{\n    kind: {kind},\n}}\n"),
+            )
+            .expect("face file");
+        }
+        let nodes = super::discover_root(&src);
+        let scope = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
+
+        assert_eq!(
+            selected_sources(&src, &nodes, &scope),
+            ["a/a.rs"],
+            "only the declared slot stays live"
+        );
+        assert_eq!(scope.reason, "auto", "the scope was narrowed, not given up");
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    /// A typed cut whose Rust path names no discovered face is an unreadable
+    /// declaration: the whole tree is kept rather than pruned wrongly.
+    /// 类型化切口的 Rust 路径指不到任何已发现注册面时，声明就是读不懂的：
+    /// 保留整棵树，而不是错误裁剪。
+    #[test]
+    fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-scope-unrecognized-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let src = root.join("src");
+        let entry = src.join("lib.rs");
+        std::fs::create_dir_all(src.join("a")).expect("fixture dir");
+        std::fs::write(
+            &entry,
+            "nichlink_run_method::host!();\n\
+             nichlink_run_method::static_graft_plan!(\n\
+                 FRAMEWORK,\n\
+                 cut(crate::missing::NODE_ID) graft(\"a_fast\"),\n\
+             );\n",
+        )
+        .expect("host entry");
+        std::fs::write(
+            src.join("a/a.rs"),
+            "crate::root_object! {\n    kind: A,\n}\n",
+        )
+        .expect("face file");
+        let nodes = super::discover_root(&src);
+        let scope = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
+
+        assert_eq!(scope.roots, None);
+        assert_eq!(scope.reason, "graft-typed-cut-unrecognized");
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
     }
 
     #[test]
