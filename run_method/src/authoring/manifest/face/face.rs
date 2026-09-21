@@ -76,7 +76,7 @@ impl FaceManifest {
                 .unwrap_or("ANY"),
         )?;
         Ok(Some(format!(
-            "//! Registry rule.\n//! 注册规范。\n\nuse crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = {rule};\n"
+            "use crate::RegistrationRule;\n\n/// Registry rule.\n/// 注册规范。\npub const REGISTRATION_RULE: RegistrationRule = {rule};\n"
         )))
     }
 
@@ -181,12 +181,19 @@ impl FaceManifest {
         } else {
             value("handle")
         };
-        let module_doc = if value("needs_registry") == "true" {
+        // A face file is included into the generated module tree with
+        // `include!`, and `include!` expansion cannot introduce inner doc
+        // comments or inner attributes. Generated docs therefore attach to the
+        // face struct as outer docs instead of opening the file with `//!`.
+        // 注册面文件由 `include!` 纳入生成模块树，而 `include!` 展开无法引入
+        // inner doc comment 或 inner attribute。因此生成的文档挂在 face 结构体
+        // 上作为 outer docs，文件不以 `//!` 开头。
+        let item_doc = if value("needs_registry") == "true" {
             format!(
-                "//! {kind} face and its recursively requested registry.\n//! {kind} 注册面及其递归申请的注册机。"
+                "/// {kind} face and its recursively requested registry.\n/// {kind} 注册面及其递归申请的注册机。"
             )
         } else {
-            format!("//! {kind} registration face.\n//! {kind} 注册面。")
+            format!("/// {kind} registration face.\n/// {kind} 注册面。")
         };
         let handle_doc = format!(
             "/// Registration-only handle marker for the {kind} face.\n/// 仅用于 {kind} 注册面的 handle 标记，不代表运行时 object 实现。"
@@ -397,7 +404,7 @@ impl FaceManifest {
             String::new()
         };
         let source = format!(
-            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
+            "use crate::{{NoParts, NoPreset}};\n\n{item_doc}\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

@@ -24,6 +24,27 @@ free of inventory. Release applications must retain external faces through a
 verified plugin artifact or another explicit application-owned input; release
 builds do not create inventory linker sections.
 
+## Registration faces are included in place
+
+Build-time rendering used to copy each face into
+`OUT_DIR/registration_sources` and `include!` that copy. The generated module
+tree now `include!`s the face file at its real path under `src/`, so the module
+rustc and editor tooling see is the file being edited. Navigation, completion,
+and diagnostics resolve to `src/` instead of a build artefact under `target/`.
+
+Because `include!` expansion cannot introduce inner attributes, a face file must
+not open with an inner doc comment (`//!`) or an inner attribute (`#![...]`);
+rustc reports `E0753`. Attach documentation to the item with `///` instead:
+
+```rust
+/// Button registration face.
+/// Button 注册面。
+pub struct Button;
+```
+
+The authoring renderer and Studio already emit item docs, so newly created faces
+need no change; a hand-written face that opened with `//!` needs that one edit.
+
 ## Studio
 
 Run the standalone package with `cargo run --manifest-path studio/Cargo.toml`.

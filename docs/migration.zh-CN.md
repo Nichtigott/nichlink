@@ -12,6 +12,20 @@
 
 跨 crate 声明使用 `nichlink::external_object!`，必须填写插件来源、版本、目标框架和父节点身份。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
 
+## 注册面按真实路径 include
+
+构建期渲染以前会把每个注册面复制到 `OUT_DIR/registration_sources`，再 `include!` 那份副本。现在生成的模块树直接 `include!` `src/` 下的真实文件，因此 rustc 和编辑器工具看到的模块就是正在编辑的文件：跳转、补全和诊断都指向 `src/`，而不是 `target/` 里的构建产物。
+
+由于 `include!` 展开无法引入 inner attribute，注册面文件不能以 inner doc comment（`//!`）或 inner attribute（`#![...]`）开头，否则 rustc 报 `E0753`。文档请以 `///` 挂在条目上：
+
+```rust
+/// Button 注册面。
+/// Button registration face。
+pub struct Button;
+```
+
+authoring 渲染器和 Studio 已经改用条目文档，新建注册面无需改动；手写注册面若以 `//!` 开头，改这一行即可。
+
 ## Studio 与插件宿主
 
 使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`4` 切换 Search、Inspect、Data、Compare。`watch` 由 `nichlink-dev` 提供，会在源码、Cargo 或插件目录变化时重建子 Studio 进程。

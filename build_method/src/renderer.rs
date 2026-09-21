@@ -121,38 +121,6 @@ fn collect_object_aliases(src: &Path, nodes: &[Node], names: &mut BTreeSet<Strin
     }
 }
 
-pub(crate) fn materialize_sources(src: &Path, nodes: &[Node], out_dir: &Path) {
-    for node in nodes {
-        if let Some(file) = &node.file {
-            let relative = file
-                .strip_prefix(src)
-                .expect("registration source must be inside src");
-            let destination = out_dir.join("registration_sources").join(relative);
-            let source = fs::read_to_string(file).expect("read registration source");
-            let sanitized = source
-                .lines()
-                .map(|line| match line.strip_prefix("//!") {
-                    Some(rest) if rest.starts_with(' ') => format!("//{rest}"),
-                    Some(rest) => format!("// {rest}"),
-                    None => line.to_owned(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            // Keep the explicit crate-qualified macro path in generated
-            // sources. It works from nested modules and lets rust-analyzer
-            // resolve the registration declaration without a legacy
-            // `#[macro_use]` import.
-            // 保留 crate 限定的宏路径；嵌套模块可直接解析，也让 rust-analyzer
-            // 无需依赖旧式 `#[macro_use]` 导入即可提供补全。
-            if let Some(parent) = destination.parent() {
-                fs::create_dir_all(parent).expect("create generated source directory");
-            }
-            super::write_if_changed(&destination, &format!("{sanitized}\n"));
-        }
-        materialize_sources(src, &node.children, out_dir);
-    }
-}
-
 fn render_node(
     output: &mut String,
     src: &Path,
@@ -195,9 +163,22 @@ fn render_node(
     if include_source && let Some(file) = &node.file {
         let inner = "    ".repeat(depth + 1);
         let relative = relative_display(src, file);
+        // Include the real source file, not a copy under OUT_DIR. The module
+        // the compiler sees is then the file the author edits, so editor
+        // tooling resolves faces, their `NODE_ID`, and their declarations
+        // without depending on a materialised duplicate.
+        // 直接 include 真实源文件而不是 OUT_DIR 里的副本：编译器看到的模块
+        // 就是作者正在编辑的文件，编辑器因此能解析注册面、它的 NODE_ID 和
+        // 声明，而不依赖一份物化副本。
+        //
+        // This is why a face file may not open with an inner doc comment or
+        // inner attribute: `include!` expansion cannot introduce them. See
+        // `docs/migration.md`.
+        // 这也是注册面文件不能以 inner doc comment 或 inner attribute 开头的
+        // 原因：`include!` 展开无法引入它们。见 `docs/migration.md`。
         writeln!(
             output,
-            "{inner}include!(concat!(env!(\"OUT_DIR\"), \"/registration_sources/{relative}\"));"
+            "{inner}include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/{relative}\"));"
         )
         .unwrap();
         writeln!(output, "{inner}#[rustfmt::skip]").unwrap();

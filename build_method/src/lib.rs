@@ -63,7 +63,7 @@ use manifests::{
     write_function_manifest, write_graft_manifest, write_pruning_manifest,
     write_source_scope_manifest,
 };
-use renderer::{materialize_sources, render_lib};
+use renderer::render_lib;
 use static_plan::static_plan;
 use types::{BuildInput, Node};
 use validation::{
