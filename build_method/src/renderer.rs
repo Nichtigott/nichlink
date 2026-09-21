@@ -134,7 +134,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\nmacro_rules! {name}_object {{\n    {{ $($tokens:tt)* }} => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }};\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }};\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
