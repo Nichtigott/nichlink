@@ -17,3 +17,11 @@ syn = { version = "2", features = ["full", "parsing", "visit"], optional = true 
 [lib]
 name = "nichlink_run_method"
 path = "src/lib.rs"
+
+# The IDE-only field splice carries `cfg(rust_analyzer)`, which belongs to the
+# crate being edited. A normal host declares it from its build script; this
+# crate has none, so it declares the name here.
+# 仅供 IDE 的字段拼接带 `cfg(rust_analyzer)`，它属于被编辑的那个 crate。普通宿主由
+# build script 声明；本 crate 没有 build script，因此在这里声明该名字。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }

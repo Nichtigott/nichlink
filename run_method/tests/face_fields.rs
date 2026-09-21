@@ -85,6 +85,7 @@ mod external_shuffled {
         ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
     };
 
+    #[allow(dead_code)]
     pub struct ExternalFast;
 
     // Same field set as any external face, but `;`-separated and in a different
@@ -122,7 +123,8 @@ mod external_shuffled {
 fn an_external_face_accepts_semicolons_and_any_order() {
     assert_eq!(external_shuffled::REGISTRATION.kind, "ExternalFast");
     assert_eq!(external_shuffled::REGISTRATION.name.en, "External");
-    assert!(!external_shuffled::REGISTRATION.needs_registry);
+    let registered = [external_shuffled::REGISTRATION.needs_registry];
+    assert_eq!(registered, [false]);
     assert_eq!(
         external_shuffled::REGISTRATION.source.file,
         "face_fields/external_fast.rs"
