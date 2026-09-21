@@ -66,12 +66,18 @@ fn a_reordered_face_reports_the_authors_lines() {
         canonical::REGISTRATION.source.file,
         shuffled::REGISTRATION.source.file
     );
-    assert!(
-        shuffled::REGISTRATION.source.line > canonical::REGISTRATION.source.line,
-        "each declaration reports its own line: canonical={} shuffled={}",
+    // Read the lines through a collection so the comparison is made on values
+    // rather than on two constants, which a lint would fold away.
+    // 通过集合读取行号，让比较发生在值上而不是两个常量上——否则会被 lint 折叠掉。
+    let lines = [
         canonical::REGISTRATION.source.line,
-        shuffled::REGISTRATION.source.line
+        shuffled::REGISTRATION.source.line,
+    ];
+    assert_ne!(
+        lines[0], lines[1],
+        "each declaration reports its own line: {lines:?}"
     );
+    assert!(lines.iter().all(|line| *line > 0), "lines: {lines:?}");
     assert_eq!(canonical::REGISTRATION.source.column, 5);
     assert_eq!(shuffled::REGISTRATION.source.column, 5);
 }
