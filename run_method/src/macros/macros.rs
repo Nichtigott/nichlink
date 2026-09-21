@@ -733,20 +733,25 @@ macro_rules! __control_object {
 /// The field vocabulary of the authoring macros, as real Rust fields.
 /// 作者侧宏的字段词表，以真实 Rust 字段表示。
 ///
-/// Nothing constructs this type, and `rustc` never even parses it: the face
-/// macros splice the author's own tokens into a literal of it under
-/// `cfg(rust_analyzer)`. That splice is what lets an editor complete the field
-/// names inside `crate::<name>_object! { … }` and list them in the order the
-/// macros accept, because an editor can only read a real field list — a macro's
-/// token tree is opaque to it. Every field is typed `()` on purpose: the literal
-/// is never type-checked, so a partial declaration costs nothing, and the
-/// editor still offers every name that is not written yet.
-/// 没有任何代码构造这个类型，`rustc` 甚至不会解析它：注册面宏在
-/// `cfg(rust_analyzer)` 下把作者写的 token 拼进它的一个字面量。正是这一步让编辑器
-/// 能在 `crate::<name>_object! { … }` 里补全字段名，并按宏接受的顺序列出候选——
-/// 编辑器读不了宏的 token 树，只能读真实的字段列表。字段一律写作 `()` 是有意的：
-/// 该字面量从不参与类型检查，因此部分声明没有代价，编辑器也照样把还没写的名字
-/// 全部列出。
+/// Nothing constructs this type. The face macros splice the author's own tokens
+/// into a literal of it under `cfg(rust_analyzer)`, which is what lets an editor
+/// complete the field names inside `crate::<name>_object! { … }` and list them in
+/// the order the macros accept, because an editor can only read a real field
+/// list — a macro's token tree is opaque to it.
+/// 没有任何代码构造这个类型。注册面宏在 `cfg(rust_analyzer)` 下把作者写的 token
+/// 拼进它的一个字面量，编辑器因此能在 `crate::<name>_object! { … }` 里补全字段名，
+/// 并按宏接受的顺序列出候选——编辑器读不了宏的 token 树，只能读真实的字段列表。
+///
+/// That literal is deliberately **not** valid, type-correct Rust, and it is not
+/// meant to be compiled: every field is typed `()` while the author writes real
+/// values, and spellings such as `name: { zh: "…", en: "…" }` are not
+/// expressions at all. It is gated behind `cfg(rust_analyzer)`, so an ordinary
+/// build never sees it, and `--cfg rust_analyzer` is an editor setting rather
+/// than a supported way to compile a host. Its only job is the field list.
+/// 那份字面量**故意**不是合法且类型正确的 Rust，也不打算被编译：字段一律写作 `()`
+/// 而作者写的是真实值，`name: { zh: "…", en: "…" }` 这类写法更不是表达式。它由
+/// `cfg(rust_analyzer)` 把关，普通构建看不到它；`--cfg rust_analyzer` 是编辑器设置，
+/// 不是受支持的编译宿主方式。它唯一的职责就是那张字段列表。
 ///
 /// The declaration order below is the order the compact macro arm accepts, and
 /// an editor lists fields in that order.
@@ -761,6 +766,7 @@ macro_rules! __control_object {
 /// 编译，而这个键仍需要被编辑器提示出来。
 #[doc(hidden)]
 pub struct FaceFields {
+    pub source: (),
     pub kind: (),
     pub preset: (),
     pub parts: (),

@@ -1663,6 +1663,13 @@ impl TraceMode {
 /// 这是词表顺序的唯一来源。注册面宏据此为编辑器声明字段，宏前端据此把作者写的
 /// 字段排成这个顺序——因此注册面可以用任意顺序书写，最终仍落到同一份声明。
 pub const FACE_FIELD_ORDER: &[&str] = &[
+    // `source` belongs to the external form only (`external_object!`), which
+    // names the file explicitly because an external crate is not part of the
+    // host's generated tree. It comes first because that matcher expects it
+    // right after `collector`.
+    // `source` 只属于外部形式（`external_object!`）：外部 crate 不在宿主的生成树里，
+    // 因此要显式指出文件。它排在首位，因为那个 matcher 期望它紧跟 `collector`。
+    "source",
     "kind",
     "preset",
     "parts",
