@@ -490,3 +490,45 @@ fn plugin_bytes_must_verify_before_they_can_replace_a_face() {
     // 通过校验的字节仍须满足目标规则与数据流合同；上面的 graft 测试已用同一套
     // overlay 覆盖了这一步。
 }
+
+// ---------------------------------------------------------------------------
+// Studio. The TUI cannot run headless here, so drive the entry point its `g`
+// key calls and check the artifact it leaves behind.
+// Studio。这里无法无头运行 TUI，因此直接驱动 `g` 键调用的入口，并检查它留下的
+// 产物。
+// ---------------------------------------------------------------------------
+
+/// Studio's graft flow writes an external plan and never edits host source.
+/// Studio 的 graft 流程写下外部计划，绝不改动宿主源码。
+#[test]
+fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // SAFETY: the authoring root is process-global and only this test reads it.
+    // 安全：创作根是进程级的，且只有本测试读取它。
+    unsafe { std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root) };
+
+    let registry = base_registry();
+    let target = control_button::control::object::button::NODE_ID;
+    let plan = nichlink_run_method::create_external_graft(&registry, target, "button_graft", false)
+        .expect("the studio graft flow creates a plan");
+
+    let plan_path = plan.plan_path();
+    let text = std::fs::read_to_string(&plan_path).expect("read the created plan");
+    assert!(
+        text.contains("target_path=root/control/button"),
+        "the plan addresses the logical slot: {text}"
+    );
+    assert!(text.contains("graft=button_graft"), "{text}");
+    assert!(text.contains("full=false"), "{text}");
+
+    // Host source is untouched: the selector lives in `.nichlink`, not in `src/`.
+    // 宿主源码未被改动：选择器只存在于 `.nichlink`，不在 `src/`。
+    let face = std::fs::read_to_string(root.join("src/control/object/button/button.rs"))
+        .expect("read the face");
+    assert!(
+        !face.contains("button_graft"),
+        "studio must not rewrite host source"
+    );
+
+    let _ = std::fs::remove_dir_all(root.join(".nichlink"));
+}
