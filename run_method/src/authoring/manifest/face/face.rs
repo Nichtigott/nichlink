@@ -158,6 +158,28 @@ impl FaceManifest {
         }
     }
 
+    /// Whether this face owns a generated registry-rule source file.
+    /// 该注册面是否拥有生成的注册规则源文件。
+    ///
+    /// A face that declares a rule of its own needs one even when it owns no
+    /// child registry. The two callers used to disagree — the renderer emitted
+    /// `registry_rule: <module>::REGISTRATION_RULE` for a custom rule while the
+    /// editor wrote the module only for a registry owner — so saving a leaf face
+    /// with a custom rule produced source that referenced a file nobody wrote.
+    /// 声明了自己规则的注册面即使不拥有子注册机也需要它。两个调用方过去口径不一致——
+    /// 渲染器会为自定义规则发射 `registry_rule: <模块>::REGISTRATION_RULE`，而编辑器
+    /// 只为拥有注册机的面写该模块——于是保存一个带自定义规则的叶子面会生成引用不存在
+    /// 文件的源码。
+    pub(crate) fn owns_rule_source(&self) -> bool {
+        let rule = self
+            .values
+            .get("registration_rule")
+            .map_or("", String::as_str)
+            .trim();
+        self.values.get("needs_registry").map(String::as_str) == Some("true")
+            || (!rule.is_empty() && rule != "ANY")
+    }
+
     pub(crate) fn render_source(&self) -> Result<String, String> {
         // Rebuilding the declaration would drop `plugin:`: the manifest layer
         // reads it, but nothing here can render its expression back, and the
@@ -206,9 +228,7 @@ impl FaceManifest {
         let handle_doc = format!(
             "/// Registration-only handle marker for the {kind} face.\n/// 仅用于 {kind} 注册面的 handle 标记，不代表运行时 object 实现。"
         );
-        let has_custom_rule = !value("registration_rule").trim().is_empty()
-            && value("registration_rule").trim() != "ANY";
-        let registration_rule = if value("needs_registry") == "true" || has_custom_rule {
+        let registration_rule = if self.owns_rule_source() {
             self.rule_module_path()?
         } else {
             "crate::RegistrationRule::ANY".to_owned()
@@ -364,7 +384,7 @@ impl FaceManifest {
             format!("    registry_name: {registry_name},\n")
         };
         let canonical_rule_path = rule_path_for_source(value("source"));
-        let registry_fields = if value("needs_registry") == "true" || has_custom_rule {
+        let registry_fields = if self.owns_rule_source() {
             let rule_path = if registry_rule_path == canonical_rule_path {
                 String::new()
             } else {
@@ -421,6 +441,40 @@ impl FaceManifest {
 fn is_default_type(value: &str, default: &str) -> bool {
     let value = value.trim();
     value == default || value.rsplit("::").next() == Some(default)
+}
+
+#[cfg(test)]
+mod rule_source_ownership_tests {
+    use super::super::FaceManifest;
+    use std::collections::BTreeMap;
+
+    /// The renderer and the editor must agree on when a face owns a generated
+    /// rule source: a custom rule needs one even for a leaf face, and a face that
+    /// owns a registry needs one even with `ANY`. They used to disagree, so
+    /// saving a leaf face with a custom rule wrote source referencing a module
+    /// nobody created.
+    /// 渲染器与编辑器必须对"何时拥有生成的规则源"口径一致：自定义规则即使在叶子面上也
+    /// 需要它，而拥有注册机的面即使规则是 `ANY` 也需要它。两者过去不一致，于是保存一个
+    /// 带自定义规则的叶子面会写出引用不存在模块的源码。
+    #[test]
+    fn a_custom_rule_makes_a_leaf_face_own_its_rule_source() {
+        let manifest = |needs_registry: &str, rule: &str| {
+            let mut manifest = FaceManifest {
+                values: BTreeMap::new(),
+            };
+            manifest
+                .values
+                .insert("needs_registry".to_owned(), needs_registry.to_owned());
+            manifest
+                .values
+                .insert("registration_rule".to_owned(), rule.to_owned());
+            manifest
+        };
+
+        assert!(!manifest("false", "ANY").owns_rule_source());
+        assert!(manifest("false", "parts:paint").owns_rule_source());
+        assert!(manifest("true", "ANY").owns_rule_source());
+    }
 }
 
 #[cfg(test)]

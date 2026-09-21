@@ -510,7 +510,7 @@ pub fn edit_module_face(
         let _ = atomic_write(&source, &old_source);
         return Err(error);
     }
-    if face.values.get("needs_registry").map(String::as_str) == Some("true") {
+    if face.owns_rule_source() {
         let rule_source = face
             .render_rule_source()?
             .ok_or_else(|| "registry rule source was unexpectedly omitted".to_owned())?;
