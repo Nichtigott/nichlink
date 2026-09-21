@@ -72,7 +72,7 @@ fn artifact(bytes: Vec<u8>, mode: PluginMode) -> nichlink_run_method::VerifiedPl
 #[cfg(feature = "wasm")]
 mod wasm_faults {
     use super::*;
-    use nichlink_host::{
+    use nichlink_plugin_host::{
         ValidationChannel, WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
     };
 
@@ -209,7 +209,7 @@ mod wasm_faults {
 #[cfg(feature = "process-tools")]
 mod process_faults {
     use super::*;
-    use nichlink_host::{PluginInstance, ProcessBackend, ProcessLimits, ProcessProgram};
+    use nichlink_plugin_host::{PluginInstance, ProcessBackend, ProcessLimits, ProcessProgram};
     use std::time::Duration;
 
     fn executable(script: &str) -> (tempfile::TempDir, std::path::PathBuf) {
@@ -241,7 +241,7 @@ mod process_faults {
         .unwrap();
         assert!(matches!(
             plugin.call("run", &[]),
-            Err(nichlink_host::HostError::Timeout)
+            Err(nichlink_plugin_host::HostError::Timeout)
         ));
         drop(dir);
 
@@ -255,7 +255,7 @@ mod process_faults {
             .unwrap();
         assert!(matches!(
             plugin.call("run", &[]),
-            Err(nichlink_host::HostError::Process(_))
+            Err(nichlink_plugin_host::HostError::Process(_))
         ));
         drop(dir);
     }

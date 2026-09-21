@@ -456,6 +456,31 @@ pub const fn strip_path_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a s
         index += 1;
     }
     let (_, rest) = value_bytes.split_at(index);
+    // The prefix has to end on a component boundary: `/work/app` is not a path
+    // prefix of `/work/application/src/a.rs`, and stripping it there would invent
+    // the identity `lication/src/a.rs` for a file that was never inside the
+    // project.
+    // 前缀必须结束在组件边界上：`/work/app` 不是 `/work/application/src/a.rs` 的路径
+    // 前缀，在那里剥离会为一个从来不在项目里的文件凭空造出身份
+    // `lication/src/a.rs`。
+    // A prefix that already ends with a separator is on a boundary by itself;
+    // otherwise the character after the prefix has to be one.
+    // 前缀本身以分隔符结尾时它已经落在边界上；否则前缀之后必须是分隔符。
+    // `slice::last`/`Option::is_some_and` are not const-stable here, so the last
+    // byte is read by index like the loop above does.
+    // `slice::last`/`Option::is_some_and` 在本工具链上不是 const 稳定的，因此像上面的
+    // 循环一样用下标读取最后一个字节。
+    let prefix_ends_on_separator = match prefix_bytes.len() {
+        0 => false,
+        length => is_separator(prefix_bytes[length - 1]),
+    };
+    if !prefix_ends_on_separator
+        && let Some(next) = rest.first()
+        && !is_separator(*next)
+    {
+        return None;
+    }
+
     match core::str::from_utf8(rest) {
         Ok(text) => Some(text),
         Err(_) => None,
@@ -578,6 +603,20 @@ mod tests {
             manifest_relative_source("C:/proj/", "C:/proj/src/a.rs"),
             "a.rs"
         );
+    }
+
+    #[test]
+    fn strip_path_prefix_stops_at_component_boundaries() {
+        assert_eq!(
+            strip_path_prefix("/work/app/x.rs", "/work/app"),
+            Some("/x.rs")
+        );
+        assert_eq!(
+            strip_path_prefix("/work/application/x.rs", "/work/app"),
+            None
+        );
+        assert_eq!(strip_path_prefix("C:/app2/a.rs", "C:/app"), None);
+        assert_eq!(strip_path_prefix("/work/app", "/work/app"), Some(""));
     }
 
     #[test]

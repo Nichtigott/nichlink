@@ -10,7 +10,7 @@ documentation = "https://docs.rs/nichlink-plugin-host"
 autobins = false
 
 [lib]
-name = "nichlink_host"
+name = "nichlink_plugin_host"
 path = "src/lib.rs"
 
 [features]

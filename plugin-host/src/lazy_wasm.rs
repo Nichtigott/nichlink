@@ -11,9 +11,9 @@ use crate::{HostError, PluginInstance, WasmBackend, WasmInstance};
 /// 运行时插件槽允许使用的信任通道。
 ///
 /// The definition lives in the kernel `plugin` module; this alias keeps the
-/// historical `nichlink_host::ValidationChannel` path.
+/// historical `nichlink_plugin_host::ValidationChannel` path.
 /// 定义本体在 kernel 的 `plugin` 模块；本别名保留
-/// `nichlink_host::ValidationChannel` 历史路径。
+/// `nichlink_plugin_host::ValidationChannel` 历史路径。
 pub use nichlink_run_method::PluginChannel as ValidationChannel;
 
 /// A release-time opening for one Wasm extension or replacement.
