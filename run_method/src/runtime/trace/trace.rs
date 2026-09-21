@@ -56,8 +56,6 @@ pub(super) struct TraceMark {
     frames: usize,
     locals: usize,
     edges: usize,
-    next_local_id: u64,
-    next_frame_id: u64,
 }
 
 impl Default for CallTrace {
@@ -137,8 +135,10 @@ impl CallTrace {
         self.edges.clear();
         self.outgoing_index.clear();
         self.incoming_index.clear();
-        self.next_local_id = 0;
-        self.next_frame_id = 0;
+        // The id counters deliberately keep their values: clearing evidence must
+        // not make an already-handed-out id describe new evidence.
+        // id 计数器刻意保留取值：清除证据不应让已经发放出去的 id 描述新的证据。
+        //
         // `error_scope_depth` counts the enclosing `with_result` scopes, which
         // clearing evidence does not close. Zeroing it here made the matching
         // decrement underflow, so a mode reset inside a scope panicked in debug
@@ -155,17 +155,23 @@ impl CallTrace {
             frames: self.frames.len(),
             locals: self.locals.len(),
             edges: self.edges.len(),
-            next_local_id: self.next_local_id,
-            next_frame_id: self.next_frame_id,
         }
     }
 
+    /// Discard the evidence a scope collected, without handing its ids out again.
+    /// 丢弃某个作用域收集的证据，但不把它的 id 再发一次。
+    ///
+    /// Rewinding the counters made an id that escaped the scope (`with_result`
+    /// returns one on success, then rolls the scope back) point at whatever
+    /// evidence took that number next — a silent alias. Ids are minted once per
+    /// trace and are never reused, so an escaped id simply resolves to nothing.
+    /// 回绕计数器会让逃出作用域的 id（`with_result` 成功时会返回它，随后回滚该作用域）
+    /// 指向下一个占用该编号的证据——一种静默别名。id 在一条 trace 里只发放一次、永不
+    /// 复用，因此逃出的 id 只会解析不到任何东西。
     pub(super) fn rollback(&mut self, mark: TraceMark) {
         self.frames.truncate(mark.frames);
         self.locals.truncate(mark.locals);
         self.edges.truncate(mark.edges);
-        self.next_local_id = mark.next_local_id;
-        self.next_frame_id = mark.next_frame_id;
         self.rebuild_indexes();
     }
 

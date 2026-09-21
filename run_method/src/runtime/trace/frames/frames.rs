@@ -368,6 +368,33 @@ mod tests {
         assert_eq!(trace.locals()[0].value, "2");
     }
 
+    /// An id that escaped a discarded scope must not describe later evidence.
+    /// 逃出被丢弃作用域的 id 不得描述后来的证据。
+    #[test]
+    fn an_id_from_a_discarded_scope_is_never_reused() {
+        let mut trace = CallTrace::errors_only();
+        let escaped: Result<LocalId, &str> =
+            trace.with_result(|trace| Ok(trace.local("discarded", "u32", 1, LocalKind::Binding)));
+        let escaped = escaped.expect("a successful scope returns its local id");
+
+        let mut kept = None;
+        let failed: Result<(), &str> = trace.with_result(|trace| {
+            kept = Some(trace.local("kept", "u32", 2, LocalKind::Binding));
+            Err("broken")
+        });
+        assert_eq!(failed, Err("broken"));
+        let kept = kept.expect("the failing scope keeps its local");
+        assert_ne!(escaped, kept, "the discarded scope's id came back");
+        assert!(
+            trace.find_local(escaped).is_none(),
+            "an id from discarded evidence must resolve to nothing"
+        );
+        assert_eq!(
+            trace.find_local(kept).map(|local| local.value.as_str()),
+            Some("2")
+        );
+    }
+
     #[test]
     fn resetting_the_mode_inside_a_scope_does_not_break_the_pairing() {
         let node = NodeId::from_raw([9; 16]);
