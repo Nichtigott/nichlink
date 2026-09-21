@@ -159,7 +159,22 @@ impl FaceManifest {
     }
 
     pub(crate) fn render_source(&self) -> Result<String, String> {
+        // Rebuilding the declaration would drop `plugin:`: the manifest layer
+        // reads it, but nothing here can render its expression back, and the
+        // snapshot models no plugin value. Refusing loudly beats silently
+        // deleting a field the author wrote — the editor can only rewrite a
+        // declaration it can reproduce in full.
+        // 重建声明会丢掉 `plugin:`：manifest 层读得到它，但这里无法把它的表达式渲染
+        // 回去，快照也不建模插件值。响亮拒绝胜过静默删掉作者写的字段——编辑器只应重写
+        // 自己能完整复现的声明。
         let value = |key| self.values.get(key).map(String::as_str).unwrap_or("");
+        if !value("plugin").is_empty() {
+            return Err(
+                "this face declares `plugin:`, which the editor cannot rewrite yet; \
+                 edit that line in the file by hand"
+                    .to_owned(),
+            );
+        }
         let registry_name = if value("registry_name").is_empty() {
             value("module")
         } else {
@@ -406,4 +421,38 @@ impl FaceManifest {
 fn is_default_type(value: &str, default: &str) -> bool {
     let value = value.trim();
     value == default || value.rsplit("::").next() == Some(default)
+}
+
+#[cfg(test)]
+mod plugin_preservation_tests {
+    use crate::authoring::manifest::parse;
+
+    /// Rebuilding a declaration must never delete a field it cannot reproduce:
+    /// a face carrying `plugin:` refuses the rewrite instead of losing it.
+    /// 重建声明绝不能删掉自己无法复现的字段：带 `plugin:` 的面拒绝重写，而不是把它
+    /// 弄丢。
+    #[test]
+    fn a_face_with_a_plugin_refuses_a_silent_rewrite() {
+        let root = std::env::temp_dir().join("nichlink-plugin-face-fixture");
+        let face = root.join("widget/widget.rs");
+        std::fs::create_dir_all(face.parent().expect("fixture parent")).expect("fixture dir");
+        std::fs::write(
+            &face,
+            "// generated-by=NichLink\n\
+             crate::root_object! {\n\
+                 kind: Widget,\n\
+                 parent: crate::ROOT_NODE_ID,\n\
+                 plugin: crate::PluginSpec::new(\"widget\"),\n\
+             }\n",
+        )
+        .expect("fixture face");
+
+        let manifest = parse::source(&face).expect("face manifest");
+        let error = manifest
+            .render_source()
+            .expect_err("a plugin field must refuse the rewrite")
+            .to_owned();
+        assert!(error.contains("plugin:"), "{error}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
