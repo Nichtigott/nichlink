@@ -1,0 +1,5 @@
+# schema	3
+# fingerprint	c8684c39918bfb68cc295b2e36b238ff
+# path	node	unit
+control/control.rs	fb97ddd5f2b803d1b7f40a776d8a22d9	660d047d9799f5ded6dd85f869e9d99e
+control/object/button/button.rs	ff1c57d9b110ef57eac134a3cb4e46b6	438963d5ae577fe78f90f5b137ced4e7

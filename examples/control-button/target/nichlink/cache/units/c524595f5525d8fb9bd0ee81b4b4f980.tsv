@@ -1,0 +1,12 @@
+# schema	3
+# fingerprint	c524595f5525d8fb9bd0ee81b4b4f980
+path	control/object/button/button.rs
+node	ff1c57d9b110ef57eac134a3cb4e46b6
+kind	Button
+handle	Button
+parent	fb97ddd5f2b803d1b7f40a776d8a22d9
+line	15
+contract	exports	["control.render"]
+contract	handle_traits	["ControlHandle"]
+contract	expected_output	"ControlFrame"
+contract	actual_output	"ControlFrame"

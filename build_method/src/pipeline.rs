@@ -2,9 +2,9 @@ use super::diagnostics::BuildDiagnostics;
 use super::{
     BuildInput, SourceScope, aggregate_contract_errors, aggregate_parent_macro_errors,
     aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root,
-    emit_rerun_paths, prime_node_id_cache, render_lib, static_plan,
-    update_discovery_cache, write_function_manifest, write_graft_manifest, write_if_changed,
-    write_pruning_manifest, write_source_scope_manifest,
+    emit_rerun_paths, prime_node_id_cache, render_lib, static_plan, update_discovery_cache,
+    write_function_manifest, write_graft_manifest, write_if_changed, write_pruning_manifest,
+    write_source_scope_manifest,
 };
 
 pub(crate) fn run(input: &BuildInput) -> Option<String> {

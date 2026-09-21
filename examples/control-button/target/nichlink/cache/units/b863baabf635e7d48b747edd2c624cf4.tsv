@@ -1,0 +1,8 @@
+# schema	3
+# fingerprint	b863baabf635e7d48b747edd2c624cf4
+path	control/control.rs
+node	fb97ddd5f2b803d1b7f40a776d8a22d9
+kind	Control
+handle	Control
+parent	b6a6bea94077152dbb7dd780a2708acf
+line	19
