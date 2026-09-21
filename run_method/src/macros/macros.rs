@@ -748,65 +748,210 @@ macro_rules! __control_object {
 /// 编译，而这个键仍需要被编辑器提示出来。
 #[doc(hidden)]
 pub struct FaceFields<
-    Source,
-    Kind,
-    Preset,
-    Parts,
-    Name,
-    Summary,
-    Params,
-    Exports,
-    Handle,
-    StableName,
-    NeedsRegistry,
-    RegistryName,
-    Parent,
-    GettingFromOtherRegistry,
-    RegistryRulePath,
-    RegistryRule,
-    Admission,
-    HandleTraits,
-    HandleContracts,
-    PartTraits,
-    PartContracts,
-    Requires,
-    Provides,
-    ExpectedOutput,
-    ActualOutput,
-    Flow,
-    FlowProvider,
-    Plugin,
-    RuntimeChecks,
+    SourceValue,
+    KindValue,
+    PresetValue,
+    PartsValue,
+    NameValue,
+    SummaryValue,
+    ParamsValue,
+    ExportsValue,
+    HandleValue,
+    StableNameValue,
+    NeedsRegistryValue,
+    RegistryNameValue,
+    ParentValue,
+    GettingFromOtherRegistryValue,
+    RegistryRulePathValue,
+    RegistryRuleValue,
+    AdmissionValue,
+    HandleTraitsValue,
+    HandleContractsValue,
+    PartTraitsValue,
+    PartContractsValue,
+    RequiresValue,
+    ProvidesValue,
+    ExpectedOutputValue,
+    ActualOutputValue,
+    FlowValue,
+    FlowProviderValue,
+    PluginValue,
+    RuntimeChecksValue,
 > {
-    pub source: Source,
-    pub kind: Kind,
-    pub preset: Preset,
-    pub parts: Parts,
-    pub name: Name,
-    pub summary: Summary,
-    pub params: Params,
-    pub exports: Exports,
-    pub handle: Handle,
-    pub stable_name: StableName,
-    pub needs_registry: NeedsRegistry,
-    pub registry_name: RegistryName,
-    pub parent: Parent,
-    pub getting_from_other_registry: GettingFromOtherRegistry,
-    pub registry_rule_path: RegistryRulePath,
-    pub registry_rule: RegistryRule,
-    pub admission: Admission,
-    pub handle_traits: HandleTraits,
-    pub handle_contracts: HandleContracts,
-    pub part_traits: PartTraits,
-    pub part_contracts: PartContracts,
-    pub requires: Requires,
-    pub provides: Provides,
-    pub expected_output: ExpectedOutput,
-    pub actual_output: ActualOutput,
-    pub flow: Flow,
-    pub flow_provider: FlowProvider,
-    pub plugin: Plugin,
-    pub runtime_checks: RuntimeChecks,
+    /// External form only: the file this declaration lives in.
+    /// 仅外部形式：声明所在的文件。
+    /// ```ignore
+    /// source: "widget/widget.rs"
+    /// ```
+    pub source: SourceValue,
+    /// The handle-marker type this file declares. Required.
+    /// 本文件声明的 handle 标记类型。必填。
+    /// ```ignore
+    /// kind: Widget
+    /// ```
+    pub kind: KindValue,
+    /// Preset contract; defaults to NoPreset.
+    /// preset 合同；默认 NoPreset。
+    /// ```ignore
+    /// preset: NoPreset
+    /// ```
+    pub preset: PresetValue,
+    /// Parts contract; defaults to NoParts.
+    /// parts 合同；默认 NoParts。
+    /// ```ignore
+    /// parts: NoParts
+    /// ```
+    pub parts: PartsValue,
+    /// Display name; defaults to the kind.
+    /// 显示名；默认取 kind。
+    /// ```ignore
+    /// name: { zh: "控件", en: "Widget" }
+    /// ```
+    pub name: NameValue,
+    /// One-line summary; defaults to empty.
+    /// 一句话摘要；默认空。
+    /// ```ignore
+    /// summary: { zh: "说明", en: "Summary" }
+    /// ```
+    pub summary: SummaryValue,
+    /// Free-form parameters description; defaults to the kind.
+    /// 参数描述，自由文本；默认取 kind。
+    /// ```ignore
+    /// params: "()"
+    /// ```
+    pub params: ParamsValue,
+    /// Capabilities this face exports for its children.
+    /// 本面向子级导出的能力。
+    /// ```ignore
+    /// exports: ["control.render"]
+    /// ```
+    pub exports: ExportsValue,
+    /// Handle type name; defaults to the kind.
+    /// handle 类型名；默认取 kind。
+    /// ```ignore
+    /// handle: Widget
+    /// ```
+    pub handle: HandleValue,
+    /// Frozen logical name; omit to derive it.
+    /// 固定的逻辑名；省略则自动推导。
+    /// ```ignore
+    /// stable_name: "widget"
+    /// ```
+    pub stable_name: StableNameValue,
+    /// Whether this face owns a child registry.
+    /// 本面是否拥有子注册机。
+    /// ```ignore
+    /// needs_registry: true
+    /// ```
+    pub needs_registry: NeedsRegistryValue,
+    /// Slot name children use as `parent`; defaults to the module.
+    /// 子级用 `parent` 指向它时的槽位名；默认取模块名。
+    /// ```ignore
+    /// registry_name: widget
+    /// ```
+    pub registry_name: RegistryNameValue,
+    /// Where this face hangs. Required.
+    /// 本面挂在谁下面。必填。
+    /// ```ignore
+    /// parent: crate::control::NODE_ID
+    /// ```
+    pub parent: ParentValue,
+    /// `Some("name")` when the implementation comes from another registry.
+    /// 实现来自另一个注册机时写 `Some("名字")`。
+    /// ```ignore
+    /// getting_from_other_registry: Some("engine")
+    /// ```
+    pub getting_from_other_registry: GettingFromOtherRegistryValue,
+    /// Rule file path; defaults to the canonical sibling path.
+    /// 规则文件路径；默认同目录规范路径。
+    /// ```ignore
+    /// registry_rule_path: "widget/registry_rule/registry_rule.rs"
+    /// ```
+    pub registry_rule_path: RegistryRulePathValue,
+    /// Rule this face enforces on its children.
+    /// 本面对子级执行的规则。
+    /// ```ignore
+    /// registry_rule: crate::widget::registry_rule::REGISTRATION_RULE
+    /// ```
+    pub registry_rule: RegistryRuleValue,
+    /// Which paths this face may reach.
+    /// 本面允许访问哪些路径。
+    /// ```ignore
+    /// admission: crate::Admission::new(&["control.*"], &[])
+    /// ```
+    pub admission: AdmissionValue,
+    /// Trait labels the handle promises, for search.
+    /// handle 承诺的 trait 标签，供检索。
+    /// ```ignore
+    /// handle_traits: ["ControlHandle"]
+    /// ```
+    pub handle_traits: HandleTraitsValue,
+    /// Compile-time contracts the handle must satisfy.
+    /// handle 必须在编译期满足的合同。
+    /// ```ignore
+    /// handle_contracts: [crate::ControlHandle]
+    /// ```
+    pub handle_contracts: HandleContractsValue,
+    /// Trait labels the parts promise, for search.
+    /// parts 承诺的 trait 标签，供检索。
+    /// ```ignore
+    /// part_traits: ["ActionParts"]
+    /// ```
+    pub part_traits: PartTraitsValue,
+    /// Compile-time contracts the parts must satisfy.
+    /// parts 必须在编译期满足的合同。
+    /// ```ignore
+    /// part_contracts: [crate::ActionParts]
+    /// ```
+    pub part_contracts: PartContractsValue,
+    /// Capabilities this face needs, as `"cap" => "Provider"`.
+    /// 本面需要的能力，写成 `"能力" => "提供者"`。
+    /// ```ignore
+    /// requires: ["layout.viewport" => "ControlRegistry"]
+    /// ```
+    pub requires: RequiresValue,
+    /// Capabilities this face provides upward.
+    /// 本面向上提供的能力。
+    /// ```ignore
+    /// provides: ["control.render"]
+    /// ```
+    pub provides: ProvidesValue,
+    /// Output type the flow contract expects.
+    /// 数据流合同期望的输出类型。
+    /// ```ignore
+    /// expected_output: "ControlFrame"
+    /// ```
+    pub expected_output: ExpectedOutputValue,
+    /// Output type this face actually produces.
+    /// 本面实际产出的输出类型。
+    /// ```ignore
+    /// actual_output: "ControlFrame"
+    /// ```
+    pub actual_output: ActualOutputValue,
+    /// Data-flow contract shared with a replacement.
+    /// 与替换件共享的数据流合同。
+    /// ```ignore
+    /// flow: FlowContract::new(ContractId::new("control.render.v1"), 1, "ControlInput", "ControlFrame")
+    /// ```
+    pub flow: FlowValue,
+    /// Type that supplies the flow contract.
+    /// 提供该数据流合同的类型。
+    /// ```ignore
+    /// flow_provider: crate::ControlHandle
+    /// ```
+    pub flow_provider: FlowProviderValue,
+    /// Plugin surface this face can be replaced by.
+    /// 本面可被哪个插件替换。
+    /// ```ignore
+    /// plugin: crate::PluginSpec::new("widget")
+    /// ```
+    pub plugin: PluginValue,
+    /// Checks run at registration time.
+    /// 注册时执行的运行时检查。
+    /// ```ignore
+    /// runtime_checks: []
+    /// ```
+    pub runtime_checks: RuntimeChecksValue,
 }
 
 /// Splice an author's face tokens into a real field list, for editors only.

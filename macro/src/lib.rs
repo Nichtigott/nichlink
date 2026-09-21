@@ -183,6 +183,46 @@ fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
     }
 
     let mut output = Tokens::new();
+    // The alias's own editor splice carries the author's tokens verbatim, which is
+    // right for a canonical declaration and impossible for one written with `;`
+    // or in another order: `FaceFields { kind: Tool; parent: … }` is a syntax
+    // error, so the editor loses every field candidate exactly where the front end
+    // exists to help. Re-emitting the canonical list here keeps the aid for those
+    // declarations too — the keys and values still carry the author's spans, so
+    // the editor maps the cursor into this list.
+    // 别名自带的编辑器拼接原样携带作者的 token：对规范声明是对的，对用 `;` 或乱序写成的
+    // 声明则不可能——`FaceFields { kind: Tool; parent: … }` 是语法错误，于是编辑器恰恰
+    // 在前端本该帮忙的地方失去全部字段候选。这里再发一份规范化列表，让这类声明也保住
+    // 该提示：键与值仍带作者的 span，编辑器因此能把光标映射进这份列表。
+    let mut normalized = Tokens::new();
+    for field in &fields {
+        normalized.extend(field.tokens.clone());
+        normalized.extend([punct(',', Spacing::Alone)]);
+    }
+    output.extend([
+        TokenTree::Punct(Punct::new('#', Spacing::Alone)),
+        TokenTree::Group(Group::new(
+            Delimiter::Bracket,
+            Tokens::from_iter([
+                TokenTree::Ident(Ident::new("cfg", Span::call_site())),
+                TokenTree::Group(Group::new(
+                    Delimiter::Parenthesis,
+                    Tokens::from_iter([TokenTree::Ident(Ident::new(
+                        "rust_analyzer",
+                        Span::call_site(),
+                    ))]),
+                )),
+            ]),
+        )),
+        punct(':', Spacing::Joint),
+        punct(':', Spacing::Alone),
+        TokenTree::Ident(Ident::new("nichlink_run_method", Span::call_site())),
+        punct(':', Spacing::Joint),
+        punct(':', Spacing::Alone),
+        TokenTree::Ident(Ident::new("__face_fields", Span::call_site())),
+        punct('!', Spacing::Alone),
+        TokenTree::Group(Group::new(Delimiter::Brace, normalized)),
+    ]);
     output.extend([
         punct(':', Spacing::Joint),
         punct(':', Spacing::Alone),
