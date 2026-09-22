@@ -680,7 +680,9 @@ build` validates the registration tree and then invokes `cargo build`,
 file, a LuaSnip file, or blink.cmp's snippet file (`new` writes the VS Code one
 too; `--editor vscode|nvim|blink` picks one, `--editor auto` installs every
 editor found on the machine in its user-level location, and `--stdout` prints
-any of them),
+any of them). An engine that matches snippets fuzzily also offers those triggers
+at value positions, so the file is optional: value completion needs no snippet,
+and deleting it restores a rust-analyzer-only list,
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
 mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
 remains the build validation command:

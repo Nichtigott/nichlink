@@ -618,7 +618,8 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
 build` 先校验注册树再调用 `cargo build`，`nichlink snippets` 把注册面字段的
 编辑器 snippet 注入项目或编辑器配置（`new` 也会写 VS Code 那份；`--editor
 vscode|nvim|blink` 指定一种，`--editor auto` 把本机探测到的编辑器全部装到各自的
-用户级位置，`--stdout` 打印任意一份），`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
+用户级位置，`--stdout` 打印任意一份）。模糊匹配 snippet 的引擎在值位也会命中这些 trigger，
+因此这份文件是可选的：值补全不需要它，删掉它即恢复"只有 rust-analyzer"的候选；`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
 check` 仍是构建校验命令：
 
