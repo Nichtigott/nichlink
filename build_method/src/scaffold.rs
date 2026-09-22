@@ -120,8 +120,18 @@ fn nvim_snippets() -> String {
          return {\n",
     );
     for field in FACE_FIELD_ORDER {
+        // The trigger *is* `field: ` on purpose: cmp_luasnip labels the item with
+        // the trigger, so a bare field name would be indistinguishable from
+        // rust-analyzer's own field item and would insert no colon. With the
+        // colon in the trigger the menu shows `field: ` and accepting it inserts
+        // exactly that, with the cursor after the colon; the priority keeps the
+        // snippet above rust-analyzer's bare field inside the snippet source.
+        // trigger 故意就是 `field: `：cmp_luasnip 用 trigger 当候选标签，只写字段名会和
+        // rust-analyzer 自带的字段项长得一模一样、也不会插冒号。把冒号写进 trigger 后，
+        // 菜单里显示 `field: `，选中即插入它并把光标停在冒号后；priority 让这条在 snippet
+        // 源里排在 rust-analyzer 的裸字段之前。
         output.push_str(&format!(
-            "  s({{ trig = \"{field}\", dscr = \"insert `{field}: ` and stop after the colon\" }}, {{ t(\"{field}: \"), i(0) }}),\n"
+            "  s({{ trig = \"{field}: \", dscr = \"insert `{field}: ` and stop after the colon / 插入 `{field}: ` 并把光标停在冒号后\", priority = 2000 }}, {{ t(\"{field}: \"), i(0) }}),\n"
         ));
     }
     output.push_str("}\n");
@@ -373,7 +383,10 @@ mod tests {
             "one snippet per field"
         );
         for field in FACE_FIELD_ORDER {
-            assert!(snippets.contains(&format!("trig = \"{field}\"")), "{field}");
+            assert!(
+                snippets.contains(&format!("trig = \"{field}: \"")),
+                "{field}"
+            );
             assert!(snippets.contains(&format!("t(\"{field}: \")")), "{field}");
         }
         assert!(
