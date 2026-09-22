@@ -129,10 +129,17 @@ pub enum Editor {
     /// Neovim with LuaSnip, as NvChad and most distributions configure it.
     /// 使用 LuaSnip 的 Neovim（NvChad 与多数发行版的默认装配）。
     Nvim,
+    /// Neovim with blink.cmp's default (native `vim.snippet`) provider, which is
+    /// what a Nix-packaged Neovim such as nvf ships. It reads VS Code-format
+    /// JSON from `<config>/snippets/<filetype>/`.
+    /// 使用 blink.cmp 默认（原生 `vim.snippet`）snippet 源的 Neovim，也就是 nvf 这类
+    /// Nix 打包 Neovim 的默认装配；它读 `<config>/snippets/<filetype>/` 下的 VS Code
+    /// 格式 JSON。
+    Blink,
 }
 
 impl Editor {
-    pub const ALL: [Editor; 2] = [Editor::Vscode, Editor::Nvim];
+    pub const ALL: [Editor; 3] = [Editor::Vscode, Editor::Nvim, Editor::Blink];
 
     /// The CLI spelling of an editor name.
     /// 编辑器名在命令行里的写法。
@@ -140,6 +147,7 @@ impl Editor {
         match name {
             "vscode" | "code" => Some(Editor::Vscode),
             "nvim" | "neovim" => Some(Editor::Nvim),
+            "blink" | "blink.cmp" => Some(Editor::Blink),
             _ => None,
         }
     }
@@ -150,6 +158,7 @@ impl Editor {
         match self {
             Editor::Vscode => "vscode",
             Editor::Nvim => "nvim",
+            Editor::Blink => "blink",
         }
     }
 
@@ -159,6 +168,7 @@ impl Editor {
         match self {
             Editor::Vscode => "nichlink-face.code-snippets",
             Editor::Nvim => "nichlink-face.lua",
+            Editor::Blink => "nichlink-face.json",
         }
     }
 }
@@ -182,6 +192,16 @@ pub const SNIPPET_FILE: &str = ".vscode/nichlink-face.code-snippets";
 /// 就能生效。
 pub const NVIM_SNIPPET_FILE: &str = "luasnippets/rust/nichlink-face.lua";
 
+/// Where blink.cmp's default snippet provider looks for Rust snippets, relative
+/// to the Neovim config directory.
+/// blink.cmp 默认 snippet 源寻找 Rust snippet 的相对路径（相对 Neovim 配置目录）。
+///
+/// Its registry takes the directory name under `snippets/` as the filetype and
+/// parses VS Code-format JSON, so the same file we write for VS Code works here.
+/// 它把 `snippets/` 下的目录名当作 filetype 并解析 VS Code 格式的 JSON，因此给 VS Code
+/// 写的那份文件在这里同样可用。
+pub const BLINK_SNIPPET_FILE: &str = "snippets/rust/nichlink-face.json";
+
 /// One snippet per face field: typing the field name offers an item that inserts
 /// `name: ` and leaves the cursor after the colon.
 /// 每个注册面字段一条 snippet：键入字段名时会出现一条插入 `name: ` 并把光标留在冒号后的候选。
@@ -193,6 +213,7 @@ pub fn editor_snippets(editor: Editor) -> String {
     match editor {
         Editor::Vscode => vscode_snippets(),
         Editor::Nvim => nvim_snippets(),
+        Editor::Blink => vscode_snippets(),
     }
 }
 
@@ -203,7 +224,7 @@ fn vscode_snippets() -> String {
             output.push_str(",\n");
         }
         output.push_str(&format!(
-            "  \"{field}: \": {{\n    \"prefix\": [\"{field}\"],\n    \"body\": [\"{body}\"],\n    \"scope\": \"rust\",\n    \"description\": \"插入 `{field}: ` 的定式并把光标停在值位 / insert the `{field}: ` shape and stop at its value\"\n  }}",
+            "  \"{field}: \": {{\n    \"prefix\": [\"{field}: \"],\n    \"body\": [\"{body}\"],\n    \"scope\": \"rust\",\n    \"description\": \"插入 `{field}: ` 的定式并把光标停在值位 / insert the `{field}: ` shape and stop at its value\"\n  }}",
             body = json_escape(&field_shape(field))
         ));
     }
@@ -249,6 +270,7 @@ pub fn write_editor_snippets(root: &Path, editor: Editor) -> Result<bool, String
     let relative = match editor {
         Editor::Vscode => SNIPPET_FILE,
         Editor::Nvim => NVIM_SNIPPET_FILE,
+        Editor::Blink => BLINK_SNIPPET_FILE,
     };
     write_snippets_file(&root.join(relative), &editor_snippets(editor))
 }
@@ -467,7 +489,7 @@ mod tests {
         for field in FACE_FIELD_ORDER {
             assert!(snippets.contains(&format!("\"{field}: \": {{")), "{field}");
             assert!(
-                snippets.contains(&format!("\"prefix\": [\"{field}\"]")),
+                snippets.contains(&format!("\"prefix\": [\"{field}: \"]")),
                 "{field}"
             );
             assert!(

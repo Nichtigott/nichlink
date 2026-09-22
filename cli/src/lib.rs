@@ -12,7 +12,7 @@ USAGE:
     nichlink new <name> [--lib] [--path <workspace> | --git <url>]
     nichlink check [path]
     nichlink build [path] [cargo options]
-    nichlink snippets [path] [--editor vscode|nvim] [--stdout]
+    nichlink snippets [path] [--editor vscode|nvim|blink] [--stdout]
     nichlink studio
     nichlink mcp
 
@@ -29,7 +29,8 @@ OPTIONS:
     --lib             Create a library project instead of a binary
     --path <dir>      Source nichlink-core/build from a local checkout
     --git <url>       Source nichlink-core/build from a Git repository
-    --editor <name>   Editor to write snippets for: vscode (default) or nvim
+    --editor <name>   Editor to write snippets for: vscode (default), nvim
+                      (LuaSnip) or blink (blink.cmp's default provider)
     --stdout          Print the snippets instead of writing them (any editor)
 ";
 
@@ -191,7 +192,7 @@ fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
                 .map_err(|error| format!("cannot resolve {directory}: {error}"))?
                 .join(scaffold::SNIPPET_FILE)
         }
-        scaffold::Editor::Nvim => {
+        scaffold::Editor::Nvim | scaffold::Editor::Blink => {
             if directory.is_some() {
                 return Err(
                     "nvim snippets live in the editor config; use --stdout to write them \
@@ -199,7 +200,11 @@ fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
                         .to_owned(),
                 );
             }
-            nvim_config_dir().join(scaffold::NVIM_SNIPPET_FILE)
+            let file = match editor {
+                scaffold::Editor::Blink => scaffold::BLINK_SNIPPET_FILE,
+                _ => scaffold::NVIM_SNIPPET_FILE,
+            };
+            nvim_config_dir().join(file)
         }
     };
     let written = scaffold::write_snippets_file(&path, &scaffold::editor_snippets(editor))?;
@@ -353,6 +358,12 @@ mod tests {
             target,
             PathBuf::from("/tmp/cfg/nvim/luasnippets/rust/nichlink-face.lua")
         );
+        let blink = nvim_config_dir_in(Path::new("/tmp/cfg"), "nvim")
+            .join(nichlink_build_method::scaffold::BLINK_SNIPPET_FILE);
+        assert_eq!(
+            blink,
+            PathBuf::from("/tmp/cfg/nvim/snippets/rust/nichlink-face.json")
+        );
     }
 
     /// An unknown editor, or a path next to a config-dir editor, is refused
@@ -368,7 +379,7 @@ mod tests {
         ])
         .expect_err("unknown editor");
         assert!(unknown.contains("unknown editor 'emacs'"), "{unknown}");
-        assert!(unknown.contains("vscode, nvim"), "{unknown}");
+        assert!(unknown.contains("vscode, nvim, blink"), "{unknown}");
 
         let stray = run([
             "nichlink".to_owned(),
@@ -411,7 +422,7 @@ mod tests {
             nichlink::registry_core::declaration::FACE_FIELD_ORDER.len()
         );
         let kind = snippets.get("kind: ").expect("the kind snippet");
-        assert_eq!(kind["prefix"][0], "kind");
+        assert_eq!(kind["prefix"][0], "kind: ");
         assert_eq!(kind["body"][0], "kind: $1,");
         assert_eq!(kind["scope"], "rust");
 
