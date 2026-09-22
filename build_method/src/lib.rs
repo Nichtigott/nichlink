@@ -1417,8 +1417,13 @@ mod tests {
     /// A throwaway package root for the entry-resolution fixtures.
     /// 入口解析夹具使用的临时包根。
     fn entry_fixture(name: &str) -> PathBuf {
+        // A counter keeps two fixtures apart even when the clock is too coarse
+        // to tell their two `now()` calls apart.
+        // 计数器让两个夹具彼此分开，即使时钟分不清它们两次 `now()` 的先后。
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-{name}-{}-{}",
+            "nichlink-{name}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

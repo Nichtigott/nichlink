@@ -217,12 +217,23 @@ mod tests {
 
     /// Run one plan test against a throwaway package root.
     /// 在一个临时包根上运行一条计划测试。
+    ///
+    /// The name carries a counter as well as the clock: two tests can start in
+    /// the same nanosecond on a platform with a coarse clock, and sharing one
+    /// root made them overwrite each other's plan.
+    /// 名字里除了时钟还有一个计数器：在时钟精度较粗的平台上两个测试可能落在同一纳秒，
+    /// 共用一个根目录就会互相覆盖对方的计划。
     fn with_temp_root<T>(operation: impl FnOnce(&Path) -> T) -> T {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("nichlink-external-graft-{stamp}"));
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-external-graft-{}-{stamp}-{sequence}",
+            std::process::id()
+        ));
         fs::create_dir_all(&root).expect("create root");
         let result =
             AuthoringContext::new(root.clone(), "nichlink.test").scope(|| operation(&root));
