@@ -616,8 +616,8 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
 命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
 项目，`nichlink check` 不做完整编译即可运行注册发现与校验，`nichlink
 build` 先校验注册树再调用 `cargo build`，`nichlink snippets` 把注册面字段的
-编辑器 snippet 注入项目（`new` 也会写；`--stdout` 为 VS Code 之外的编辑器打印
-同一份 JSON），`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
+编辑器 snippet 注入项目或编辑器配置（`new` 也会写 VS Code 那份；`--editor nvim`
+写 Neovim 的 LuaSnip 文件，`--stdout` 打印任意一份），`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
 check` 仍是构建校验命令：
 

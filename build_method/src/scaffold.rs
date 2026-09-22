@@ -8,28 +8,93 @@ use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
 
 const NICHLINK_REPOSITORY: &str = "https://github.com/Nichtigott/nichlink";
 
-/// Where an editor reads project-scoped snippets from.
-/// 编辑器读取项目级 snippet 的位置。
+/// Which editor the snippet file is written for.
+/// snippet 文件写给哪个编辑器。
 ///
-/// VS Code calls this format `.code-snippets`; the file is plain JSON, so any
-/// other editor can be fed the same object through `nichlink snippets --stdout`.
-/// VS Code 把这个格式叫 `.code-snippets`；文件就是普通 JSON，因此任何别的编辑器都可以
-/// 通过 `nichlink snippets --stdout` 拿到同一个对象。
+/// The file is the last resort for the `: ` after a face field name: every
+/// editor's field completion inserts the bare name (rust-analyzer does this for
+/// plain structs too), and a language-server snippet does not fire inside a
+/// macro call's token tree, so the colon only comes from the editor's own
+/// snippet layer — which speaks a different format per editor.
+/// 这份文件是注册面字段名后那个 `: ` 的最后办法：所有编辑器的字段补全都只插裸名字
+/// （rust-analyzer 对普通结构体也一样），而语言服务器的 snippet 在宏调用的 token 树里
+/// 不会触发，因此冒号只能来自编辑器自己的 snippet 层——而每个编辑器的格式不同。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Editor {
+    /// VS Code (and forks that read project-scoped `.vscode` files).
+    /// VS Code（以及读取项目级 `.vscode` 文件的衍生编辑器）。
+    Vscode,
+    /// Neovim with LuaSnip, as NvChad and most distributions configure it.
+    /// 使用 LuaSnip 的 Neovim（NvChad 与多数发行版的默认装配）。
+    Nvim,
+}
+
+impl Editor {
+    pub const ALL: [Editor; 2] = [Editor::Vscode, Editor::Nvim];
+
+    /// The CLI spelling of an editor name.
+    /// 编辑器名在命令行里的写法。
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "vscode" | "code" => Some(Editor::Vscode),
+            "nvim" | "neovim" => Some(Editor::Nvim),
+            _ => None,
+        }
+    }
+
+    /// The CLI spelling of this editor.
+    /// 该编辑器在命令行里的写法。
+    pub fn name(self) -> &'static str {
+        match self {
+            Editor::Vscode => "vscode",
+            Editor::Nvim => "nvim",
+        }
+    }
+
+    /// The file name inside the editor's snippet directory.
+    /// 编辑器 snippet 目录里的文件名。
+    pub fn file_name(self) -> &'static str {
+        match self {
+            Editor::Vscode => "nichlink-face.code-snippets",
+            Editor::Nvim => "nichlink-face.lua",
+        }
+    }
+}
+
+/// Where VS Code reads project-scoped snippets from, relative to the package.
+/// VS Code 从项目里读取项目级 snippet 的相对路径。
 pub const SNIPPET_FILE: &str = ".vscode/nichlink-face.code-snippets";
+
+/// Where Neovim's LuaSnip loader finds Rust snippets, relative to the nvim
+/// config directory.
+/// Neovim 的 LuaSnip 加载器寻找 Rust snippet 的相对路径（相对 nvim 配置目录）。
+///
+/// LuaSnip derives the filetype from the directory directly below `luasnippets`,
+/// so `luasnippets/rust/` is Rust-only and leaves a hand-written
+/// `luasnippets/rust.lua` untouched. NvChad already calls
+/// `luasnip.loaders.from_lua.load()`, which scans the runtimepath for exactly
+/// this directory, so no config change is needed to pick the file up.
+/// LuaSnip 用 `luasnippets` 下一层目录名作为 filetype，因此 `luasnippets/rust/`
+/// 只作用于 Rust，也不会碰到手写的 `luasnippets/rust.lua`。NvChad 启动时已经调用
+/// `luasnip.loaders.from_lua.load()`，它正是扫描 runtimepath 里的这个目录，因此无需改配置
+/// 就能生效。
+pub const NVIM_SNIPPET_FILE: &str = "luasnippets/rust/nichlink-face.lua";
 
 /// One snippet per face field: typing the field name offers an item that inserts
 /// `name: ` and leaves the cursor after the colon.
 /// 每个注册面字段一条 snippet：键入字段名时会出现一条插入 `name: ` 并把光标留在冒号后的候选。
 ///
-/// An editor's field completion inserts the bare name (rust-analyzer does this
-/// for every struct, macro or not), and a server-side snippet does not fire
-/// inside a macro call's token tree, so the colon has to come from the editor's
-/// own snippet layer. The names come from the kernel's `FACE_FIELD_ORDER`, so a
-/// new field reaches every project without this file drifting.
-/// 编辑器的字段补全插入的是裸名字（rust-analyzer 对任何结构体都如此，与是否宏无关），而
-/// 服务端 snippet 在宏调用的 token 树里不会触发，因此冒号只能由编辑器自己的 snippet 层
-/// 提供。字段名来自内核的 `FACE_FIELD_ORDER`，所以新增字段无需改这个文件就能到达每个项目。
-pub fn editor_snippets() -> String {
+/// The names come from the kernel's `FACE_FIELD_ORDER`, so a new field reaches
+/// every project without any of these files drifting.
+/// 字段名来自内核的 `FACE_FIELD_ORDER`，因此新增字段无需改这些文件就能到达每个项目。
+pub fn editor_snippets(editor: Editor) -> String {
+    match editor {
+        Editor::Vscode => vscode_snippets(),
+        Editor::Nvim => nvim_snippets(),
+    }
+}
+
+fn vscode_snippets() -> String {
     let mut output = String::from("{\n");
     for (index, field) in FACE_FIELD_ORDER.iter().enumerate() {
         if index > 0 {
@@ -43,20 +108,49 @@ pub fn editor_snippets() -> String {
     output
 }
 
-/// Write the editor snippets for an existing project, leaving the file alone
-/// when it already has the current content.
-/// 为已有项目写入编辑器 snippet；内容已经是最新时不改动文件。
-pub fn write_editor_snippets(root: &Path) -> Result<bool, String> {
-    let path = root.join(SNIPPET_FILE);
-    let content = editor_snippets();
-    if fs::read_to_string(&path).ok().as_deref() == Some(content.as_str()) {
+fn nvim_snippets() -> String {
+    let mut output = String::from(
+        "-- Generated by `nichlink snippets --editor nvim`; edit the face fields, not this file.\n\
+         -- 由 `nichlink snippets --editor nvim` 生成；要改字段请改注册面词表，不要改这个文件。\n\
+         local ls = require(\"luasnip\")\n\
+         local s = ls.snippet\n\
+         local t = ls.text_node\n\
+         local i = ls.insert_node\n\
+         \n\
+         return {\n",
+    );
+    for field in FACE_FIELD_ORDER {
+        output.push_str(&format!(
+            "  s({{ trig = \"{field}\", dscr = \"insert `{field}: ` and stop after the colon\" }}, {{ t(\"{field}: \"), i(0) }}),\n"
+        ));
+    }
+    output.push_str("}\n");
+    output
+}
+
+/// Write one editor's snippets, leaving the file alone when it already has the
+/// current content.
+/// 写入某个编辑器的 snippet；内容已经是最新时不改动文件。
+pub fn write_editor_snippets(root: &Path, editor: Editor) -> Result<bool, String> {
+    let relative = match editor {
+        Editor::Vscode => SNIPPET_FILE,
+        Editor::Nvim => NVIM_SNIPPET_FILE,
+    };
+    write_snippets_file(&root.join(relative), &editor_snippets(editor))
+}
+
+/// Write a snippet file, leaving it alone when it already has the current
+/// content.
+/// 写入 snippet 文件；内容已经是最新时不改动它。
+pub fn write_snippets_file(path: &Path, content: &str) -> Result<bool, String> {
+    if fs::read_to_string(path).ok().as_deref() == Some(content) {
         return Ok(false);
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
     }
-    fs::write(&path, content)
+    fs::write(path, content)
         .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
     Ok(true)
 }
@@ -199,7 +293,7 @@ pub fn create_project(
     // A new project gets the face-field snippets too, so `kind: ` is one pick
     // away from the first field the author writes.
     // 新项目同时得到注册面字段 snippet，因此作者写下的第一个字段就能一键得到 `kind: `。
-    write_editor_snippets(root)?;
+    write_editor_snippets(root, Editor::Vscode)?;
     Ok(())
 }
 
@@ -226,8 +320,8 @@ fn toml_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DependencySource, FACE_FIELD_ORDER, ProjectKind, SNIPPET_FILE, create_project,
-        editor_snippets, write_editor_snippets,
+        DependencySource, Editor, FACE_FIELD_ORDER, NVIM_SNIPPET_FILE, ProjectKind, SNIPPET_FILE,
+        create_project, editor_snippets, write_editor_snippets,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -249,7 +343,7 @@ mod tests {
     /// 每个声明的字段恰好得到一条 snippet，键与前缀都是字段名，因此编辑器文件跟随内核词表。
     #[test]
     fn the_editor_snippets_cover_every_declared_field() {
-        let snippets = editor_snippets();
+        let snippets = editor_snippets(Editor::Vscode);
         assert_eq!(
             snippets.matches("\"prefix\"").count(),
             FACE_FIELD_ORDER.len(),
@@ -268,16 +362,50 @@ mod tests {
         }
     }
 
+    /// The Neovim file carries the same fields in LuaSnip's Lua format.
+    /// Neovim 文件用 LuaSnip 的 Lua 格式承载同样的字段。
+    #[test]
+    fn the_luasnip_snippets_cover_every_declared_field() {
+        let snippets = editor_snippets(Editor::Nvim);
+        assert_eq!(
+            snippets.matches("trig = ").count(),
+            FACE_FIELD_ORDER.len(),
+            "one snippet per field"
+        );
+        for field in FACE_FIELD_ORDER {
+            assert!(snippets.contains(&format!("trig = \"{field}\"")), "{field}");
+            assert!(snippets.contains(&format!("t(\"{field}: \")")), "{field}");
+        }
+        assert!(
+            snippets.contains("i(0)"),
+            "the cursor lands after the colon"
+        );
+    }
+
+    /// The Neovim file lives in the rust-only directory LuaSnip already scans,
+    /// and the CLI spellings map to the two supported editors.
+    /// Neovim 文件位于 LuaSnip 本就会扫描的 rust 专属目录，命令行写法映射到两种受支持编辑器。
+    #[test]
+    fn the_nvim_file_is_rust_only_and_the_names_round_trip() {
+        assert!(NVIM_SNIPPET_FILE.starts_with("luasnippets/rust/"));
+        assert!(NVIM_SNIPPET_FILE.ends_with(Editor::Nvim.file_name()));
+        assert_eq!(Editor::parse("vscode").map(Editor::name), Some("vscode"));
+        assert_eq!(Editor::parse("code").map(Editor::name), Some("vscode"));
+        assert_eq!(Editor::parse("nvim").map(Editor::name), Some("nvim"));
+        assert_eq!(Editor::parse("neovim").map(Editor::name), Some("nvim"));
+        assert_eq!(Editor::parse("emacs"), None);
+    }
+
     /// Injecting twice leaves the second call with nothing to write.
     /// 注入两次时第二次无事可做。
     #[test]
     fn injecting_the_editor_snippets_is_idempotent() {
         let root = temporary_directory("snippets");
-        assert!(write_editor_snippets(&root).expect("first injection"));
+        assert!(write_editor_snippets(&root, Editor::Vscode).expect("first injection"));
         let path = root.join(SNIPPET_FILE);
         let first = fs::read_to_string(&path).expect("snippet file");
-        assert_eq!(first, editor_snippets());
-        assert!(!write_editor_snippets(&root).expect("second injection"));
+        assert_eq!(first, editor_snippets(Editor::Vscode));
+        assert!(!write_editor_snippets(&root, Editor::Vscode).expect("second injection"));
         assert_eq!(fs::read_to_string(&path).expect("snippet file"), first);
         fs::remove_dir_all(root).expect("cleanup");
     }
@@ -298,7 +426,7 @@ mod tests {
         )
         .expect("project");
         let snippets = fs::read_to_string(root.join(SNIPPET_FILE)).expect("snippet file");
-        assert_eq!(snippets, editor_snippets());
+        assert_eq!(snippets, editor_snippets(Editor::Vscode));
         fs::remove_dir_all(root.parent().expect("project parent")).expect("cleanup");
     }
 }

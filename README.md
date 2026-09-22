@@ -676,8 +676,9 @@ The command-line surface is intentionally small. `nichlink` is the unified
 entry point: `nichlink new` scaffolds host projects, `nichlink check` runs the
 registration discovery and validation pass without a full compile, `nichlink
 build` validates the registration tree and then invokes `cargo build`,
-`nichlink snippets` injects the face-field editor snippets into a project
-(`new` writes them too; `--stdout` prints them for editors other than VS Code),
+`nichlink snippets` injects the face-field editor snippets — a VS Code project
+file, or the LuaSnip file Neovim loads (`new` writes the VS Code one too;
+`--editor nvim` writes the Neovim one and `--stdout` prints either),
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
 mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
 remains the build validation command:

@@ -12,7 +12,7 @@ USAGE:
     nichlink new <name> [--lib] [--path <workspace> | --git <url>]
     nichlink check [path]
     nichlink build [path] [cargo options]
-    nichlink snippets [path] [--stdout]
+    nichlink snippets [path] [--editor vscode|nvim] [--stdout]
     nichlink studio
     nichlink mcp
 
@@ -20,7 +20,8 @@ COMMANDS:
     new       Create a NichLink host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
     build     Validate the registration tree, then run cargo build
-    snippets  Inject the face-field editor snippets into <path>/.vscode
+    snippets  Inject the face-field editor snippets (VS Code project file, or
+              the LuaSnip file Neovim loads)
     studio    Launch the Studio TUI for the current project
     mcp       Run the read-only MCP stdio bridge
 
@@ -28,8 +29,8 @@ OPTIONS:
     --lib             Create a library project instead of a binary
     --path <dir>      Source nichlink-core/build from a local checkout
     --git <url>       Source nichlink-core/build from a Git repository
-    --stdout          Print the snippets instead of writing them (for editors
-                      other than VS Code)
+    --editor <name>   Editor to write snippets for: vscode (default) or nvim
+    --stdout          Print the snippets instead of writing them (any editor)
 ";
 
 pub fn main() -> Result<(), String> {
@@ -143,42 +144,97 @@ fn build(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
     }
 }
 
-/// Inject the face-field editor snippets into a project.
-/// 把注册面字段的编辑器 snippet 注入项目。
+/// Inject the face-field editor snippets into a project or an editor config.
+/// 把注册面字段的编辑器 snippet 注入项目或编辑器配置。
 ///
 /// An editor's field completion inserts the bare name, and a language-server
 /// snippet does not fire inside a macro call's token tree, so the `: ` after a
-/// field name has to come from the editor's own snippet layer. This writes the
-/// project-scoped file VS Code reads; `--stdout` prints the same JSON for any
-/// other editor.
+/// field name has to come from the editor's own snippet layer — and that layer
+/// speaks a different format per editor. VS Code reads a project-scoped file
+/// next to the sources; Neovim's LuaSnip loader scans its config for
+/// `luasnippets/<filetype>/`, so nothing has to be wired up there either.
 /// 编辑器的字段补全插入的是裸名字，而语言服务器的 snippet 在宏调用的 token 树里不会
-/// 触发，因此字段名后的 `: ` 只能由编辑器自己的 snippet 层提供。本命令写入 VS Code 读取的
-/// 项目级文件；`--stdout` 则为其它编辑器打印同一份 JSON。
+/// 触发，因此字段名后的 `: ` 只能由编辑器自己的 snippet 层提供——而每个编辑器的格式不同。
+/// VS Code 读源码旁的项目级文件；Neovim 的 LuaSnip 加载器会扫描配置目录里的
+/// `luasnippets/<filetype>/`，因此那边同样无需额外接线。
 fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
     let mut directory: Option<String> = None;
+    let mut editor = scaffold::Editor::Vscode;
     let mut stdout = false;
-    for arg in args.by_ref() {
+    let args = args.by_ref();
+    while let Some(arg) = args.next() {
         match arg.as_str() {
             "--stdout" => stdout = true,
+            "--editor" => {
+                let name = args.next().ok_or("--editor requires a name")?;
+                let accepted = scaffold::Editor::ALL
+                    .iter()
+                    .map(|editor| editor.name())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                editor = scaffold::Editor::parse(&name)
+                    .ok_or_else(|| format!("unknown editor '{name}' (accepted: {accepted})"))?;
+            }
             _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
             _ if directory.is_none() => directory = Some(arg),
             _ => return Err("snippets accepts at most one path".to_owned()),
         }
     }
     if stdout {
-        print!("{}", scaffold::editor_snippets());
+        print!("{}", scaffold::editor_snippets(editor));
         return Ok(());
     }
-    let directory = directory.unwrap_or_else(|| ".".to_owned());
-    let root = std::fs::canonicalize(&directory)
-        .map_err(|error| format!("cannot resolve {directory}: {error}"))?;
-    let written = scaffold::write_editor_snippets(&root)?;
+    let path = match editor {
+        scaffold::Editor::Vscode => {
+            let directory = directory.unwrap_or_else(|| ".".to_owned());
+            std::fs::canonicalize(&directory)
+                .map_err(|error| format!("cannot resolve {directory}: {error}"))?
+                .join(scaffold::SNIPPET_FILE)
+        }
+        scaffold::Editor::Nvim => {
+            if directory.is_some() {
+                return Err(
+                    "nvim snippets live in the editor config; use --stdout to write them \
+                     somewhere else"
+                        .to_owned(),
+                );
+            }
+            nvim_config_dir().join(scaffold::NVIM_SNIPPET_FILE)
+        }
+    };
+    let written = scaffold::write_snippets_file(&path, &scaffold::editor_snippets(editor))?;
     println!(
         "nichlink snippets: {} {}",
         if written { "wrote" } else { "kept" },
-        root.join(scaffold::SNIPPET_FILE).display()
+        path.display()
     );
     Ok(())
+}
+
+/// The Neovim configuration directory: `$XDG_CONFIG_HOME` (or `~/.config`)
+/// followed by `$NVIM_APPNAME` (or `nvim`), which is how Neovim itself resolves
+/// it.
+/// Neovim 配置目录：`$XDG_CONFIG_HOME`（或 `~/.config`）加上 `$NVIM_APPNAME`
+/// （或 `nvim`），与 Neovim 自身的解析方式一致。
+fn nvim_config_dir() -> PathBuf {
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .unwrap_or_else(|| PathBuf::from(".config"));
+    let app_name = std::env::var("NVIM_APPNAME").unwrap_or_else(|_| "nvim".to_owned());
+    nvim_config_dir_in(&config_home, &app_name)
+}
+
+/// Resolve the Neovim config directory from explicit values, so the rule can be
+/// pinned by a test.
+/// 用显式值解析 Neovim 配置目录，使这条规则可以被测试钉住。
+fn nvim_config_dir_in(config_home: &Path, app_name: &str) -> PathBuf {
+    config_home.join(if app_name.is_empty() {
+        "nvim"
+    } else {
+        app_name
+    })
 }
 
 /// Split build args into an optional leading path and the remaining cargo
@@ -231,7 +287,8 @@ fn package_name(manifest: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{run, split_build_args};
+    use super::{nvim_config_dir_in, run, split_build_args};
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn help_and_missing_command_succeed() {
@@ -270,6 +327,58 @@ mod tests {
         let (path, rest) = split_build_args(&[]);
         assert_eq!(path, None);
         assert!(rest.is_empty());
+    }
+
+    /// The Neovim config directory follows Neovim's own rule, and the nvim
+    /// snippets land in the rust-only directory LuaSnip scans.
+    /// Neovim 配置目录遵循 Neovim 自身的规则，nvim snippet 落在 LuaSnip 扫描的 rust
+    /// 专属目录里。
+    #[test]
+    fn nvim_snippet_path_follows_the_editor_config() {
+        assert_eq!(
+            nvim_config_dir_in(Path::new("/home/x/.config"), "nvim"),
+            PathBuf::from("/home/x/.config/nvim")
+        );
+        assert_eq!(
+            nvim_config_dir_in(Path::new("/home/x/.config"), "nvchad"),
+            PathBuf::from("/home/x/.config/nvchad")
+        );
+        assert_eq!(
+            nvim_config_dir_in(Path::new("/home/x/.config"), ""),
+            PathBuf::from("/home/x/.config/nvim")
+        );
+        let target = nvim_config_dir_in(Path::new("/tmp/cfg"), "nvim")
+            .join(nichlink_build_method::scaffold::NVIM_SNIPPET_FILE);
+        assert_eq!(
+            target,
+            PathBuf::from("/tmp/cfg/nvim/luasnippets/rust/nichlink-face.lua")
+        );
+    }
+
+    /// An unknown editor, or a path next to a config-dir editor, is refused
+    /// before anything is written.
+    /// 未知编辑器，或给"写配置目录"的编辑器附带路径，都在写盘之前拒绝。
+    #[test]
+    fn snippets_refuses_an_unknown_editor_and_a_stray_path() {
+        let unknown = run([
+            "nichlink".to_owned(),
+            "snippets".to_owned(),
+            "--editor".to_owned(),
+            "emacs".to_owned(),
+        ])
+        .expect_err("unknown editor");
+        assert!(unknown.contains("unknown editor 'emacs'"), "{unknown}");
+        assert!(unknown.contains("vscode, nvim"), "{unknown}");
+
+        let stray = run([
+            "nichlink".to_owned(),
+            "snippets".to_owned(),
+            "--editor".to_owned(),
+            "nvim".to_owned(),
+            "/tmp/somewhere".to_owned(),
+        ])
+        .expect_err("stray path");
+        assert!(stray.contains("editor config"), "{stray}");
     }
 
     /// The command injects a parseable editor file covering the whole kernel
