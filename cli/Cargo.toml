@@ -27,3 +27,12 @@ doc = false
 name = "cargo-nichlink"
 path = "src/bin/cargo-nichlink.rs"
 doc = false
+
+[dev-dependencies]
+# The snippets command writes editor JSON; the test parses it back instead of
+# trusting a hand-rolled check.
+# snippets 命令写的是编辑器 JSON；测试把它解析回来，而不是靠手写检查。
+serde_json = "1"
+# The snippet set must follow the kernel vocabulary the build step reads.
+# snippet 集合必须跟随构建步骤读取的内核词表。
+nichlink-core = { path = "../core", version = "0.1.0" }

@@ -12,6 +12,7 @@ USAGE:
     nichlink new <name> [--lib] [--path <workspace> | --git <url>]
     nichlink check [path]
     nichlink build [path] [cargo options]
+    nichlink snippets [path] [--stdout]
     nichlink studio
     nichlink mcp
 
@@ -19,6 +20,7 @@ COMMANDS:
     new       Create a NichLink host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
     build     Validate the registration tree, then run cargo build
+    snippets  Inject the face-field editor snippets into <path>/.vscode
     studio    Launch the Studio TUI for the current project
     mcp       Run the read-only MCP stdio bridge
 
@@ -26,6 +28,8 @@ OPTIONS:
     --lib             Create a library project instead of a binary
     --path <dir>      Source nichlink-core/build from a local checkout
     --git <url>       Source nichlink-core/build from a Git repository
+    --stdout          Print the snippets instead of writing them (for editors
+                      other than VS Code)
 ";
 
 pub fn main() -> Result<(), String> {
@@ -47,6 +51,7 @@ pub fn run(argv: impl IntoIterator<Item = String>) -> Result<(), String> {
         Some("new") => new(&mut args),
         Some("check") => check(&mut args),
         Some("build") => build(&mut args),
+        Some("snippets") => snippets(&mut args),
         Some("studio") => nichlink_studio::launch().map_err(|error| error.to_string()),
         Some("mcp") => {
             nichlink_mcp::run();
@@ -138,6 +143,44 @@ fn build(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
     }
 }
 
+/// Inject the face-field editor snippets into a project.
+/// 把注册面字段的编辑器 snippet 注入项目。
+///
+/// An editor's field completion inserts the bare name, and a language-server
+/// snippet does not fire inside a macro call's token tree, so the `: ` after a
+/// field name has to come from the editor's own snippet layer. This writes the
+/// project-scoped file VS Code reads; `--stdout` prints the same JSON for any
+/// other editor.
+/// 编辑器的字段补全插入的是裸名字，而语言服务器的 snippet 在宏调用的 token 树里不会
+/// 触发，因此字段名后的 `: ` 只能由编辑器自己的 snippet 层提供。本命令写入 VS Code 读取的
+/// 项目级文件；`--stdout` 则为其它编辑器打印同一份 JSON。
+fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
+    let mut directory: Option<String> = None;
+    let mut stdout = false;
+    for arg in args.by_ref() {
+        match arg.as_str() {
+            "--stdout" => stdout = true,
+            _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
+            _ if directory.is_none() => directory = Some(arg),
+            _ => return Err("snippets accepts at most one path".to_owned()),
+        }
+    }
+    if stdout {
+        print!("{}", scaffold::editor_snippets());
+        return Ok(());
+    }
+    let directory = directory.unwrap_or_else(|| ".".to_owned());
+    let root = std::fs::canonicalize(&directory)
+        .map_err(|error| format!("cannot resolve {directory}: {error}"))?;
+    let written = scaffold::write_editor_snippets(&root)?;
+    println!(
+        "nichlink snippets: {} {}",
+        if written { "wrote" } else { "kept" },
+        root.join(scaffold::SNIPPET_FILE).display()
+    );
+    Ok(())
+}
+
 /// Split build args into an optional leading path and the remaining cargo
 /// options. The path must come first; anything after it is passed verbatim.
 /// 将 build 参数拆成可选的首个路径和其余 cargo 选项。路径必须在前，
@@ -227,5 +270,59 @@ mod tests {
         let (path, rest) = split_build_args(&[]);
         assert_eq!(path, None);
         assert!(rest.is_empty());
+    }
+
+    /// The command injects a parseable editor file covering the whole kernel
+    /// vocabulary, and refuses arguments it does not understand.
+    /// 该命令注入一个可解析、覆盖整个内核词表的编辑器文件，并拒绝看不懂的参数。
+    #[test]
+    fn snippets_injects_the_editor_file() {
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-cli-snippets-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("temporary directory");
+        run([
+            "nichlink".to_owned(),
+            "snippets".to_owned(),
+            root.display().to_string(),
+        ])
+        .expect("snippets command");
+
+        let path = root.join(nichlink_build_method::scaffold::SNIPPET_FILE);
+        let text = std::fs::read_to_string(&path).expect("editor file");
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
+        let snippets = parsed.as_object().expect("an object of snippets");
+        assert_eq!(
+            snippets.len(),
+            nichlink::registry_core::declaration::FACE_FIELD_ORDER.len()
+        );
+        let kind = snippets.get("kind: ").expect("the kind snippet");
+        assert_eq!(kind["prefix"][0], "kind");
+        assert_eq!(kind["body"][0], "kind: $0");
+        assert_eq!(kind["scope"], "rust");
+
+        assert!(
+            run([
+                "nichlink".to_owned(),
+                "snippets".to_owned(),
+                "--bogus".to_owned()
+            ])
+            .is_err()
+        );
+        assert!(
+            run([
+                "nichlink".to_owned(),
+                "snippets".to_owned(),
+                "a".to_owned(),
+                "b".to_owned()
+            ])
+            .is_err()
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

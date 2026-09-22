@@ -575,8 +575,10 @@ name = "nichlink-cli"
 version = "0.1.0"
 dependencies = [
  "nichlink-build-method",
+ "nichlink-core",
  "nichlink-mcp",
  "nichlink-studio",
+ "serde_json",
 ]
 
 [[package]]

@@ -676,6 +676,8 @@ The command-line surface is intentionally small. `nichlink` is the unified
 entry point: `nichlink new` scaffolds host projects, `nichlink check` runs the
 registration discovery and validation pass without a full compile, `nichlink
 build` validates the registration tree and then invokes `cargo build`,
+`nichlink snippets` injects the face-field editor snippets into a project
+(`new` writes them too; `--stdout` prints them for editors other than VS Code),
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
 mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
 remains the build validation command:
@@ -770,7 +772,8 @@ run_method/   nichlink-run-method: runtime trace state, host!/trace_call! macros
               authoring executor
 debug_method/ nichlink-debug-method: optional CallTrace adapters, MIR evidence,
               data-flow and graph models
-cli/          nichlink-cli: unified entry (nichlink new/check/build/studio/mcp, cargo-nichlink)
+cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/studio/mcp,
+              cargo-nichlink)
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries
 plugin-host/  optional Wasm/process adapters and atomic deployment

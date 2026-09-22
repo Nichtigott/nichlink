@@ -615,8 +615,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app \
 
 命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
 项目，`nichlink check` 不做完整编译即可运行注册发现与校验，`nichlink
-build` 先校验注册树再调用 `cargo build`，`nichlink studio` 负责交互式编辑
-和调试，`nichlink mcp` 是给 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
+build` 先校验注册树再调用 `cargo build`，`nichlink snippets` 把注册面字段的
+编辑器 snippet 注入项目（`new` 也会写；`--stdout` 为 VS Code 之外的编辑器打印
+同一份 JSON），`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
+AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
 check` 仍是构建校验命令：
 
 ```sh
@@ -700,7 +702,8 @@ build_method/ nichlink-build-method：构建期源码发现、缓存、第一阶
 run_method/   nichlink-run-method：运行期 trace 状态、host!/trace_call! 宏、
               authoring 执行器
 debug_method/ nichlink-debug-method：可选 CallTrace 适配、MIR 证据、数据流与图模型
-cli/          nichlink-cli：统一入口（nichlink new/check/build/studio/mcp、cargo-nichlink）
+cli/          nichlink-cli：统一入口（nichlink new/check/build/snippets/studio/mcp、
+              cargo-nichlink）
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的只读 MCP 桥
 plugin-host/  可选 Wasm/进程插件和原子部署
