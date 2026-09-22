@@ -8,6 +8,108 @@ use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
 
 const NICHLINK_REPOSITORY: &str = "https://github.com/Nichtigott/nichlink";
 
+/// The shape each face field is written in, as a snippet template.
+/// 每个注册面字段的书写形状，用 snippet 模板表示。
+///
+/// Every field has a fixed form — `parent: crate::…::NODE_ID,`, `exports:
+/// ["…"],`, `handle_contracts: [crate::…],` — so completing a field name should
+/// hand the author the whole line and leave the cursor where the value goes.
+/// `$1`/`$2` are tab stops; the trailing comma belongs to the shape because a
+/// declaration is a comma-separated list. The snippet layer is the only place
+/// this can happen: rust-analyzer inserts a bare field name, and its value
+/// completion (which does work for `crate::` paths) only runs once the colon is
+/// there.
+/// 每个字段都有固定写法——`parent: crate::…::NODE_ID,`、`exports: ["…"],`、
+/// `handle_contracts: [crate::…],`——因此补全字段名时应当把整行交给作者，并把光标留在值位。
+/// `$1`/`$2` 是跳转位；结尾逗号属于形状，因为声明本身是逗号分隔的列表。这件事只能由 snippet
+/// 层完成：rust-analyzer 只插裸字段名，而它的值补全（对 `crate::` 路径确实可用）要等冒号
+/// 写出来之后才会触发。
+const FIELD_SHAPES: &[(&str, &str)] = &[
+    ("source", "source: \"$1\","),
+    ("kind", "kind: $1,"),
+    ("preset", "preset: $1,"),
+    ("parts", "parts: $1,"),
+    ("name", "name: { zh: \"$1\", en: \"$2\" },"),
+    ("summary", "summary: { zh: \"$1\", en: \"$2\" },"),
+    ("params", "params: \"$1\","),
+    ("exports", "exports: [\"$1\"],"),
+    ("handle", "handle: $1,"),
+    ("stable_name", "stable_name: \"$1\","),
+    ("needs_registry", "needs_registry: $1,"),
+    ("registry_name", "registry_name: $1,"),
+    ("parent", "parent: $1,"),
+    (
+        "getting_from_other_registry",
+        "getting_from_other_registry: $1,",
+    ),
+    ("registry_rule_path", "registry_rule_path: \"$1\","),
+    ("registry_rule", "registry_rule: $1,"),
+    ("admission", "admission: $1,"),
+    ("handle_traits", "handle_traits: [\"$1\"],"),
+    ("handle_contracts", "handle_contracts: [$1],"),
+    ("part_traits", "part_traits: [\"$1\"],"),
+    ("part_contracts", "part_contracts: [$1],"),
+    ("requires", "requires: [\"$1\" => $2],"),
+    ("provides", "provides: [\"$1\"],"),
+    ("expected_output", "expected_output: \"$1\","),
+    ("actual_output", "actual_output: \"$1\","),
+    ("flow", "flow: $1,"),
+    ("flow_provider", "flow_provider: $1,"),
+    ("plugin", "plugin: $1,"),
+    ("runtime_checks", "runtime_checks: [$1],"),
+];
+
+/// The template for one field, with a permissive fallback so a field added to
+/// the kernel vocabulary still produces a usable snippet before its shape is
+/// spelled out here (the test below keeps that from going unnoticed).
+/// 某个字段的模板；若内核词表新增了字段而这里还没来得及写形状，则回退到一个可用形状
+/// （下面的测试会让这种遗漏无法悄悄存在）。
+fn field_shape(field: &str) -> String {
+    FIELD_SHAPES
+        .iter()
+        .find(|(name, _)| *name == field)
+        .map_or_else(|| format!("{field}: $1,"), |(_, shape)| (*shape).to_owned())
+}
+
+/// Escape a template for a JSON string in the VS Code file.
+/// 把模板转义成 VS Code 文件里的 JSON 字符串。
+fn json_escape(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Turn a template into LuaSnip nodes: literal text plus `i(n)` tab stops.
+/// 把模板转成 LuaSnip 节点：字面文本加 `i(n)` 跳转位。
+fn luasnip_body(shape: &str) -> String {
+    let mut nodes = Vec::new();
+    let mut literal = String::new();
+    let mut chars = shape.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character == '$' && chars.peek().is_some_and(char::is_ascii_digit) {
+            let mut digits = String::new();
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                digits.push(chars.next().expect("peeked digit"));
+            }
+            if !literal.is_empty() {
+                nodes.push(format!("t(\"{}\")", lua_escape(&literal)));
+                literal.clear();
+            }
+            nodes.push(format!("i({digits})"));
+        } else {
+            literal.push(character);
+        }
+    }
+    if !literal.is_empty() {
+        nodes.push(format!("t(\"{}\")", lua_escape(&literal)));
+    }
+    nodes.join(", ")
+}
+
+/// Escape literal text for a Lua string.
+/// 把字面文本转义成 Lua 字符串。
+fn lua_escape(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// Which editor the snippet file is written for.
 /// snippet 文件写给哪个编辑器。
 ///
@@ -101,7 +203,8 @@ fn vscode_snippets() -> String {
             output.push_str(",\n");
         }
         output.push_str(&format!(
-            "  \"{field}: \": {{\n    \"prefix\": [\"{field}\"],\n    \"body\": [\"{field}: $0\"],\n    \"scope\": \"rust\",\n    \"description\": \"插入 `{field}: `，光标停在冒号后 / insert `{field}: ` and stop after the colon\"\n  }}"
+            "  \"{field}: \": {{\n    \"prefix\": [\"{field}\"],\n    \"body\": [\"{body}\"],\n    \"scope\": \"rust\",\n    \"description\": \"插入 `{field}: ` 的定式并把光标停在值位 / insert the `{field}: ` shape and stop at its value\"\n  }}",
+            body = json_escape(&field_shape(field))
         ));
     }
     output.push_str("\n}\n");
@@ -122,16 +225,17 @@ fn nvim_snippets() -> String {
     for field in FACE_FIELD_ORDER {
         // The trigger *is* `field: ` on purpose: cmp_luasnip labels the item with
         // the trigger, so a bare field name would be indistinguishable from
-        // rust-analyzer's own field item and would insert no colon. With the
-        // colon in the trigger the menu shows `field: ` and accepting it inserts
-        // exactly that, with the cursor after the colon; the priority keeps the
-        // snippet above rust-analyzer's bare field inside the snippet source.
+        // rust-analyzer's own field item and would insert no colon. The body is
+        // the field's whole shape, so one pick writes `field: <value>,` and drops
+        // the cursor at the value — where rust-analyzer's own value completion
+        // (`crate::…`, `crate::…::NODE_ID`) takes over.
         // trigger 故意就是 `field: `：cmp_luasnip 用 trigger 当候选标签，只写字段名会和
-        // rust-analyzer 自带的字段项长得一模一样、也不会插冒号。把冒号写进 trigger 后，
-        // 菜单里显示 `field: `，选中即插入它并把光标停在冒号后；priority 让这条在 snippet
-        // 源里排在 rust-analyzer 的裸字段之前。
+        // rust-analyzer 自带的字段项长得一模一样、也不会插冒号。body 是字段的完整形状，
+        // 因此选中一次就写出 `field: <值>,` 并把光标放到值位——那里由 rust-analyzer 自己的
+        // 值补全（`crate::…`、`crate::…::NODE_ID`）接手。
         output.push_str(&format!(
-            "  s({{ trig = \"{field}: \", dscr = \"insert `{field}: ` and stop after the colon / 插入 `{field}: ` 并把光标停在冒号后\", priority = 2000 }}, {{ t(\"{field}: \"), i(0) }}),\n"
+            "  s({{ trig = \"{field}: \", dscr = \"write the `{field}: ` shape and stop at its value / 写出 `{field}: ` 的定式并把光标停在值位\", priority = 2000 }}, {{ {} }}),\n",
+            luasnip_body(&field_shape(field))
         ));
     }
     output.push_str("}\n");
@@ -330,8 +434,9 @@ fn toml_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DependencySource, Editor, FACE_FIELD_ORDER, NVIM_SNIPPET_FILE, ProjectKind, SNIPPET_FILE,
-        create_project, editor_snippets, write_editor_snippets,
+        DependencySource, Editor, FACE_FIELD_ORDER, FIELD_SHAPES, NVIM_SNIPPET_FILE, ProjectKind,
+        SNIPPET_FILE, create_project, editor_snippets, field_shape, json_escape, luasnip_body,
+        write_editor_snippets,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -349,8 +454,8 @@ mod tests {
     }
 
     /// Every declared field gets exactly one snippet, keyed and prefixed by its
-    /// own name, so the editor file follows the kernel vocabulary.
-    /// 每个声明的字段恰好得到一条 snippet，键与前缀都是字段名，因此编辑器文件跟随内核词表。
+    /// own name, whose body is that field's shape.
+    /// 每个声明的字段恰好得到一条 snippet，键与前缀都是字段名，body 是该字段的定式形状。
     #[test]
     fn the_editor_snippets_cover_every_declared_field() {
         let snippets = editor_snippets(Editor::Vscode);
@@ -366,14 +471,39 @@ mod tests {
                 "{field}"
             );
             assert!(
-                snippets.contains(&format!("\"body\": [\"{field}: $0\"]")),
+                snippets.contains(&format!(
+                    "\"body\": [\"{}\"],",
+                    json_escape(&field_shape(field))
+                )),
                 "{field}"
             );
         }
     }
 
-    /// The Neovim file carries the same fields in LuaSnip's Lua format.
-    /// Neovim 文件用 LuaSnip 的 Lua 格式承载同样的字段。
+    /// The shapes table covers the kernel vocabulary, and every shape is a
+    /// complete declaration line: at least one tab stop and the trailing comma
+    /// that a field list needs.
+    /// 形状表覆盖内核词表，且每个形状都是完整的一行声明：至少一个跳转位，以及字段列表
+    /// 需要的结尾逗号。
+    #[test]
+    fn every_declared_field_has_a_complete_shape() {
+        for field in FACE_FIELD_ORDER {
+            let shape = FIELD_SHAPES
+                .iter()
+                .find(|(name, _)| name == field)
+                .map(|(_, shape)| *shape)
+                .unwrap_or_else(|| panic!("no shape for `{field}`"));
+            assert!(shape.contains('$'), "{field}: {shape}");
+            assert!(shape.ends_with(','), "{field}: {shape}");
+            assert!(shape.starts_with(field), "{field}: {shape}");
+        }
+        assert_eq!(FIELD_SHAPES.len(), FACE_FIELD_ORDER.len());
+    }
+
+    /// The Neovim file carries the same shapes in LuaSnip's Lua format, with the
+    /// colon in the trigger so the menu shows what it will write.
+    /// Neovim 文件用 LuaSnip 的 Lua 格式承载同样的形状；trigger 带冒号，菜单里因此看得见
+    /// 它将写出什么。
     #[test]
     fn the_luasnip_snippets_cover_every_declared_field() {
         let snippets = editor_snippets(Editor::Nvim);
@@ -387,11 +517,14 @@ mod tests {
                 snippets.contains(&format!("trig = \"{field}: \"")),
                 "{field}"
             );
-            assert!(snippets.contains(&format!("t(\"{field}: \")")), "{field}");
+            assert!(
+                snippets.contains(&format!("{{ {} }}", luasnip_body(&field_shape(field)))),
+                "{field}"
+            );
         }
         assert!(
-            snippets.contains("i(0)"),
-            "the cursor lands after the colon"
+            snippets.contains("i(1)"),
+            "the cursor lands at the value position"
         );
     }
 

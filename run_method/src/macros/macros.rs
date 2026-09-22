@@ -735,37 +735,31 @@ macro_rules! __control_object {
 /// The field vocabulary of the authoring macros, as real Rust fields.
 /// 作者侧宏的字段词表，以真实 Rust 字段表示。
 ///
-/// Nothing constructs this type. The face macros splice the author's own tokens
-/// into a literal of it under `cfg(rust_analyzer)`, which is what lets an editor
-/// complete the field names inside `crate::<name>_object! { … }` and list them in
-/// the order the macros accept, because an editor can only read a real field
-/// list — a macro's token tree is opaque to it.
-/// 没有任何代码构造这个类型。注册面宏在 `cfg(rust_analyzer)` 下把作者写的 token
-/// 拼进它的一个字面量，编辑器因此能在 `crate::<name>_object! { … }` 里补全字段名，
-/// 并按宏接受的顺序列出候选——编辑器读不了宏的 token 树，只能读真实的字段列表。
-///
-/// That literal is deliberately **not** valid, type-correct Rust, and it is not
-/// meant to be compiled: every field is typed `()` while the author writes real
-/// values, and spellings such as `name: { zh: "…", en: "…" }` are not
-/// expressions at all. It is gated behind `cfg(rust_analyzer)`, so an ordinary
-/// build never sees it, and `--cfg rust_analyzer` is an editor setting rather
-/// than a supported way to compile a host. Its only job is the field list.
-/// 那份字面量**故意**不是合法且类型正确的 Rust，也不打算被编译：字段一律写作 `()`
-/// 而作者写的是真实值，`name: { zh: "…", en: "…" }` 这类写法更不是表达式。它由
-/// `cfg(rust_analyzer)` 把关，普通构建看不到它；`--cfg rust_analyzer` 是编辑器设置，
-/// 不是受支持的编译宿主方式。它唯一的职责就是那张字段列表。
-///
-/// The declaration order below is the order the compact macro arm accepts, and
-/// an editor lists fields in that order.
-/// 下面的声明顺序就是紧凑 arm 接受的顺序，编辑器也按这个顺序列出字段。
-///
-/// One authoring key is not a Rust expression — `requires: [a => b]` — so a
-/// declaration that uses it makes the IDE-only literal unparsable from that
-/// field on. That is deliberate: the splice only serves completion and is never
-/// compiled, and the key stays available for the editor to suggest.
-/// 有一个作者侧键不是 Rust 表达式——`requires: [a => b]`——因此用到它的声明会让这份
-/// 仅供 IDE 的字面量从该字段起无法解析。这是有意的：拼接只为补全服务、从不参与
-/// 编译，而这个键仍需要被编辑器提示出来。
+/// Nothing constructs this type; a face macro splices the author's own tokens
+/// into a literal of it under `cfg(rust_analyzer)` so an editor can complete the
+/// field names inside `crate::<name>_object! { … }`. Each field documents its
+/// meaning, its default and one example.
+/// 没有任何代码构造这个类型；注册面宏在 `cfg(rust_analyzer)` 下把作者的 token 拼进它的
+/// 字面量，编辑器因此能在 `crate::<name>_object! { … }` 里补全字段名。每个字段都写明含义、
+/// 默认值与一个示例。
+//
+// The splice is deliberately **not** valid, type-correct Rust and is never meant
+// to be compiled: the author writes real values into fields whose types are
+// per-field type parameters, and spellings such as `name: { zh: "…", en: "…" }`
+// are not expressions at all. It is gated behind `cfg(rust_analyzer)`, an editor
+// setting rather than a supported way to compile a host; its only job is the
+// field list. `requires: [a => b]` is not a Rust expression either, so a
+// declaration that uses it makes the rest of the IDE-only literal unparsable
+// from that field on — accepted, because the splice is never compiled.
+// 这份拼接**故意**不是合法且类型正确的 Rust，也从不打算被编译：作者往"每个字段一个类型
+// 参数"的字段里写真实值，而 `name: { zh: "…", en: "…" }` 这类写法根本不是表达式。它由
+// `cfg(rust_analyzer)` 把关（那是编辑器设置，不是受支持的编译方式），唯一职责是字段列表。
+// `requires: [a => b]` 同样不是 Rust 表达式，因此用到它的声明会让这份仅供 IDE 的字面量从
+// 该字段起无法解析——可以接受，因为它从不参与编译。
+//
+// The declaration order below is the order the compact macro arm accepts, and an
+// editor lists fields in that order.
+// 下面的声明顺序就是紧凑 arm 接受的顺序，编辑器也按这个顺序列出字段。
 #[doc(hidden)]
 pub struct FaceFields<
     SourceValue,

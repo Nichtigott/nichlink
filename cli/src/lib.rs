@@ -412,7 +412,7 @@ mod tests {
         );
         let kind = snippets.get("kind: ").expect("the kind snippet");
         assert_eq!(kind["prefix"][0], "kind");
-        assert_eq!(kind["body"][0], "kind: $0");
+        assert_eq!(kind["body"][0], "kind: $1,");
         assert_eq!(kind["scope"], "rust");
 
         assert!(
