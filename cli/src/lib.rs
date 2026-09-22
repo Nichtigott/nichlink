@@ -31,7 +31,8 @@ OPTIONS:
     --git <url>       Source nichlink-core/build from a Git repository
     --editor <name>   Editor to write snippets for: vscode (default), nvim
                       (LuaSnip), blink (blink.cmp) or auto (every editor
-                      installed on this machine, in its user-level location)
+                      installed on this machine, in its user-level location;
+                      fuzzy-matching engines need to be named explicitly)
     --stdout          Print the snippets instead of writing them (any editor)
 ";
 
@@ -250,21 +251,29 @@ fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
 /// 这些文件很小、由同一份词表生成、内容不变时不写盘，因此可以反复运行（检出钩子、shell
 /// 别名，或在 `FACE_FIELD_ORDER` 新增字段后手动跑一次）。
 fn install_everywhere() -> Result<(), String> {
-    let targets = snippet_targets(&config_home());
-    if targets.is_empty() {
+    let config_home = config_home();
+    let targets = snippet_targets(&config_home, false);
+    if targets.is_empty() && !has_nvim_config(&config_home) {
         return Err(
             "no VS Code, VSCodium, Cursor or Neovim configuration found; write the file \
              yourself with --editor <name> --stdout"
                 .to_owned(),
         );
     }
-    for (editor, path) in targets {
-        let written = scaffold::write_snippets_file(&path, &scaffold::editor_snippets(editor))?;
+    for (editor, path) in &targets {
+        let written = scaffold::write_snippets_file(path, &scaffold::editor_snippets(*editor))?;
         println!(
             "nichlink snippets: {} {} ({})",
             if written { "wrote" } else { "kept" },
             path.display(),
             editor.name()
+        );
+    }
+    if has_nvim_config(&config_home) {
+        println!(
+            "nichlink snippets: skipped Neovim — its snippet engines match fuzzily, so these \
+             triggers would also appear at value positions; run `--editor blink` or \
+             `--editor nvim` if you want them anyway"
         );
     }
     Ok(())
@@ -273,27 +282,38 @@ fn install_everywhere() -> Result<(), String> {
 /// Every editor snippet location this machine has.
 /// 本机具有的每个编辑器 snippet 位置。
 ///
-/// Neovim gets both files: blink.cmp's default provider reads VS Code-format JSON
-/// from `snippets/<filetype>/`, LuaSnip scans `luasnippets/<filetype>/`, and an
-/// editor that does not load one of them simply ignores that file. VS Code and
-/// its forks merge every `*.code-snippets` in their user snippets directory, so
-/// one file there is enough and cover all projects.
-/// Neovim 两个文件都写：blink.cmp 的默认源读 `snippets/<filetype>/` 里的 VS Code 格式
-/// JSON，LuaSnip 扫 `luasnippets/<filetype>/`，而没加载其中之一的编辑器只是忽略那个文件。
+/// Only editors that match a snippet **prefix by prefix** are installed by
+/// default. An engine that matches fuzzily — blink.cmp, LuaSnip through
+/// nvim-cmp — also offers a field trigger at a **value** position, so
+/// `crc` there matches `handle_contracts: ` and the field shapes pollute the
+/// value chain (measured; see `docs/audit-2026-09-21.md`). Those engines are
+/// skipped unless the caller asks for them by name, because the sentence a field
+/// shape really needs — `crate::…::NODE_ID`, the face's own marker type — is
+/// value completion, which rust-analyzer already provides.
+/// 默认只安装**按前缀**匹配 snippet 的编辑器。模糊匹配的引擎（blink.cmp、经 nvim-cmp 的
+/// LuaSnip）在**值位**也会命中字段 trigger，于是值位敲 `crc` 会命中 `handle_contracts: `、
+/// 字段定式污染值补全链（已实测，见 `docs/audit-2026-09-21.md`）。这类引擎只有在调用方显式
+/// 指名时才安装——因为字段定式真正需要的语句（`crate::…::NODE_ID`、本面自己的标记类型）
+/// 属于值补全，rust-analyzer 本来就提供。
+///
+/// VS Code and its forks merge every `*.code-snippets` in their user snippets
+/// directory, so one file there is enough and covers all projects.
 /// VS Code 及其衍生编辑器会合并用户 snippet 目录里所有 `*.code-snippets`，因此那边一个
 /// 文件就够，而且覆盖所有项目。
-fn snippet_targets(config_home: &Path) -> Vec<(scaffold::Editor, PathBuf)> {
+fn snippet_targets(config_home: &Path, fuzzy_engines: bool) -> Vec<(scaffold::Editor, PathBuf)> {
     let mut targets = Vec::new();
-    let nvim = config_home.join("nvim");
-    if nvim.is_dir() {
-        targets.push((
-            scaffold::Editor::Blink,
-            nvim.join(scaffold::BLINK_SNIPPET_FILE),
-        ));
-        targets.push((
-            scaffold::Editor::Nvim,
-            nvim.join(scaffold::NVIM_SNIPPET_FILE),
-        ));
+    if fuzzy_engines {
+        let nvim = config_home.join("nvim");
+        if nvim.is_dir() {
+            targets.push((
+                scaffold::Editor::Blink,
+                nvim.join(scaffold::BLINK_SNIPPET_FILE),
+            ));
+            targets.push((
+                scaffold::Editor::Nvim,
+                nvim.join(scaffold::NVIM_SNIPPET_FILE),
+            ));
+        }
     }
     for fork in ["Code", "VSCodium", "Cursor"] {
         let root = config_home.join(fork);
@@ -307,6 +327,13 @@ fn snippet_targets(config_home: &Path) -> Vec<(scaffold::Editor, PathBuf)> {
         }
     }
     targets
+}
+
+/// Whether a Neovim configuration exists, so the auto installer can say why it
+/// skipped it.
+/// 是否存在 Neovim 配置，好让自动安装说明它为什么跳过。
+fn has_nvim_config(config_home: &Path) -> bool {
+    config_home.join("nvim").is_dir()
 }
 
 /// The user configuration directory: `$XDG_CONFIG_HOME`, or `~/.config`.
@@ -390,7 +417,7 @@ fn package_name(manifest: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{nvim_config_dir_in, run, snippet_targets, split_build_args};
+    use super::{has_nvim_config, nvim_config_dir_in, run, snippet_targets, split_build_args};
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -481,23 +508,34 @@ mod tests {
         for dir in ["nvim", "Code", "VSCodium"] {
             std::fs::create_dir_all(root.join(dir)).expect("editor config");
         }
-        let targets = snippet_targets(&root);
-        let paths = targets
-            .iter()
-            .map(|(editor, path)| {
-                format!(
-                    "{} {}",
-                    editor.name(),
-                    path.strip_prefix(&root)
-                        .expect("under root")
-                        .display()
-                        .to_string()
-                        .replace('\\', "/")
-                )
-            })
-            .collect::<Vec<_>>();
+        let names = |fuzzy: bool| {
+            snippet_targets(&root, fuzzy)
+                .iter()
+                .map(|(editor, path)| {
+                    format!(
+                        "{} {}",
+                        editor.name(),
+                        path.strip_prefix(&root)
+                            .expect("under root")
+                            .display()
+                            .to_string()
+                            .replace('\\', "/")
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        // By default only the engines that match a snippet prefix as a prefix.
         assert_eq!(
-            paths,
+            names(false),
+            [
+                "vscode Code/User/snippets/nichlink-face.code-snippets",
+                "vscode VSCodium/User/snippets/nichlink-face.code-snippets",
+            ]
+        );
+        assert!(has_nvim_config(&root));
+        // Fuzzy-matching engines are installed only when asked for by name.
+        assert_eq!(
+            names(true),
             [
                 "blink nvim/snippets/rust/nichlink-face.json",
                 "nvim nvim/luasnippets/rust/nichlink-face.lua",
@@ -506,7 +544,8 @@ mod tests {
             ]
         );
         // No editor at all is reported rather than guessed.
-        assert!(snippet_targets(&root.join("missing")).is_empty());
+        assert!(snippet_targets(&root.join("missing"), true).is_empty());
+        assert!(!has_nvim_config(&root.join("missing")));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 

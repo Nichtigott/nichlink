@@ -678,11 +678,11 @@ registration discovery and validation pass without a full compile, `nichlink
 build` validates the registration tree and then invokes `cargo build`,
 `nichlink snippets` injects the face-field editor snippets — a VS Code project
 file, a LuaSnip file, or blink.cmp's snippet file (`new` writes the VS Code one
-too; `--editor vscode|nvim|blink` picks one, `--editor auto` installs every
-editor found on the machine in its user-level location, and `--stdout` prints
-any of them). An engine that matches snippets fuzzily also offers those triggers
-at value positions, so the file is optional: value completion needs no snippet,
-and deleting it restores a rust-analyzer-only list,
+too; `--editor vscode|nvim|blink` picks one, `--editor auto` installs the
+editors found on the machine in their user-level locations, skipping the ones
+that match snippets fuzzily — blink.cmp and LuaSnip also offer a field trigger
+at value positions, so those need `--editor blink`/`--editor nvim` explicitly —
+and `--stdout` prints any of them). Value completion needs no snippet at all,
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
 mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
 remains the build validation command:
