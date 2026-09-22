@@ -25,6 +25,9 @@ pub use nichlink::*;
 /// the proc-macro crate itself.
 /// 注册面字段前端；再导出后宿主无需自己依赖 proc-macro crate。
 pub use nichlink_macro::face_fields;
+/// The editor-only field mirror used by generated aliases.
+/// 生成的别名使用的、仅供编辑器的字段镜像。
+pub use nichlink_macro::face_fields_mirror;
 /// The default `registry_rule` resolver used by the declarative face arms.
 /// 声明式注册面分支使用的 `registry_rule` 默认值解析器。
 #[doc(hidden)]

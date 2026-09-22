@@ -13,3 +13,8 @@ proc-macro = true
 [dependencies]
 nichlink-core = { path = "../core", version = "0.1.0", features = ["syntax"] }
 proc-macro2 = "1"
+
+[dev-dependencies]
+# The mirror has to parse as the Rust an editor compiles it as.
+# 镜像必须能按编辑器编译它的那种 Rust 解析。
+syn = { version = "2", features = ["full", "parsing"] }

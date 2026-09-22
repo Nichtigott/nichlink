@@ -46,10 +46,10 @@
 
 宏的 token 树对编辑器是不透明的，因此 `crate::control_object! { … }` 的大括号里过去什么都补不出来——既没有字段名，连值位置的路径补全也没有。两处改动在不改变作者语法的前提下解决了它：
 
-- 每个生成的 `*_object!` 别名以及 `external_object!`，都会把作者的 token 再交给 `__face_fields!`，由它原样拼进一个真实字段列表；
-- 这次调用带 `#[cfg(rust_analyzer)]`，因此 `rustc` 从不展开它，也就永远不必解析那些并非 Rust 表达式的作者侧写法（例如 `name: { zh: "…", en: "…" }`）。
+- 每个生成的 `*_object!` 别名把作者的 token 交给 `face_fields_mirror!`，`external_object!` 则经 `face_fields!` 到达同一个发射器；两者都构造真实字段列表；
+- 这次调用带 `#[cfg(rust_analyzer)]`，而它展开出的镜像本身是合法且类型正确的 Rust，因此会编译镜像的编辑器不会在作者的行上报错：写成表达式的字段保留 token、由推导定型；命名类型的字段（`kind`、`preset`、`parts`、`handle`、`flow_provider`）移入类型注解；镜像无法定型的字段（`name: { zh: "…", en: "…" }`、`requires: [a => b]`、`registry_name: slot`、`getting_from_other_registry: None`、空列表）保留字段名，值改为 `loop {}`。
 
-`FaceFields` 是作者侧词表的隐藏镜像，字段按宏接受的顺序声明、类型一律写作 `()`——因为没有任何代码构造它。编辑器因此能按这个顺序列出还没写的字段名。
+`FaceFields` 是作者侧词表的隐藏镜像，按宏接受的顺序声明，每个字段各有一个类型参数。没有任何宿主代码构造它：镜像是一个 `fn`，编辑器在 `cfg(rust_analyzer)` 下编译它，`rustc` 从不展开它；列出还没写的字段名、回答值位的正是它。
 
 该 cfg 属于**被编辑的那个 crate**。宿主通过自己的 build script 声明它——`build_method` 会输出 `rustc-check-cfg`；没有 build script 的外部实现则在自己的 manifest 里声明：
 

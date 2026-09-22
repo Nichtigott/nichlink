@@ -95,16 +95,23 @@ used to offer nothing inside its braces — not the field names, not even path
 completion in value position. Two pieces fix that without changing the
 authoring syntax:
 
-- each generated `*_object!` alias, and `external_object!`, also hands the
-  author's tokens to `__face_fields!`, which splices them verbatim into a real
-  field list;
-- that call carries `#[cfg(rust_analyzer)]`, so `rustc` never expands it and
-  never has to parse an authoring spelling that is not a Rust expression
-  (`name: { zh: "…", en: "…" }`, for example).
+- each generated `*_object!` alias hands the author's tokens to
+  `face_fields_mirror!`, and `external_object!` reaches the same emitter through
+  `face_fields!`; both build a real field list;
+- that call carries `#[cfg(rust_analyzer)]`, and the mirror it expands to is
+  valid, type-correct Rust, so an editor that compiles the mirror reports no
+  errors on the author's lines: a field written as an expression keeps its
+  tokens and infers its type, a field that names a type (`kind`, `preset`,
+  `parts`, `handle`, `flow_provider`) moves into the annotation, and a field the
+  mirror cannot type (`name: { zh: "…", en: "…" }`, `requires: [a => b]`,
+  `registry_name: slot`, `getting_from_other_registry: None`, an empty list)
+  keeps its name while its value becomes `loop {}`.
 
-`FaceFields` is a hidden mirror of the authoring vocabulary whose fields are
-declared in the order the macros accept and typed `()` because nothing ever
-constructs it, so an editor lists the remaining names in that order.
+`FaceFields` is a hidden mirror of the authoring vocabulary, declared in the
+order the macros accept, with one type parameter per field. No host code
+constructs it: the mirror is a `fn` that an editor compiles under
+`cfg(rust_analyzer)` and `rustc` never expands, and it is what lists the
+remaining field names and answers the value position.
 
 The cfg belongs to the crate being edited. A host declares it from its build
 script — `build_method` emits `rustc-check-cfg` — and an external

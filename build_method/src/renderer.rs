@@ -145,7 +145,7 @@ fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     for name in names {
         writeln!(
             output,
-            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        ::nichlink_run_method::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        ::nichlink_run_method::face_fields_mirror! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -493,15 +493,15 @@ mod tests {
         render_object_aliases(&mut output, &root, &nodes);
 
         // Editors cannot read a macro's token tree, so every generated alias
-        // also hands the author's tokens to `__face_fields!`, which is what
+        // also hands the author's tokens to `face_fields_mirror!`, which is what
         // turns them into a field list an editor can complete. rustc never
         // expands that call: it carries `cfg(rust_analyzer)`.
         // 编辑器读不了宏的 token 树，因此每个生成的别名还把作者的 token 交给
-        // `__face_fields!`，由它变成编辑器能补全的字段列表。rustc 从不展开这次
+        // `face_fields_mirror!`，由它变成编辑器能补全的字段列表。rustc 从不展开这次
         // 调用：它带 `cfg(rust_analyzer)`。
         assert!(
             output.contains(
-                "#[cfg(rust_analyzer)]\n        ::nichlink_run_method::__face_fields! { $($tokens)* }"
+                "#[cfg(rust_analyzer)]\n        ::nichlink_run_method::face_fields_mirror! { $($tokens)* }"
             ),
             "aliases must expose the field vocabulary to an editor: {output}"
         );

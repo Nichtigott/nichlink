@@ -743,19 +743,24 @@ macro_rules! __control_object {
 /// 字面量，编辑器因此能在 `crate::<name>_object! { … }` 里补全字段名。每个字段都写明含义、
 /// 默认值与一个示例。
 //
-// The splice is deliberately **not** valid, type-correct Rust and is never meant
-// to be compiled: the author writes real values into fields whose types are
-// per-field type parameters, and spellings such as `name: { zh: "…", en: "…" }`
-// are not expressions at all. It is gated behind `cfg(rust_analyzer)`, an editor
-// setting rather than a supported way to compile a host; its only job is the
-// field list. `requires: [a => b]` is not a Rust expression either, so a
-// declaration that uses it makes the rest of the IDE-only literal unparsable
-// from that field on — accepted, because the splice is never compiled.
-// 这份拼接**故意**不是合法且类型正确的 Rust，也从不打算被编译：作者往"每个字段一个类型
-// 参数"的字段里写真实值，而 `name: { zh: "…", en: "…" }` 这类写法根本不是表达式。它由
-// `cfg(rust_analyzer)` 把关（那是编辑器设置，不是受支持的编译方式），唯一职责是字段列表。
-// `requires: [a => b]` 同样不是 Rust 表达式，因此用到它的声明会让这份仅供 IDE 的字面量从
-// 该字段起无法解析——可以接受，因为它从不参与编译。
+// The mirror that fills this type is *valid, type-correct Rust*: an editor that
+// turns `cfg(rust_analyzer)` on compiles it, and a mirror that only almost
+// compiles shows up as errors on the author's own lines. The front end
+// (`face_fields_mirror!` for generated aliases, `face_fields!` for
+// `external_object!`) therefore emits a function whose annotation is `_` for a
+// field the author wrote as an expression, the author's type for a field that
+// names a type (`kind`, `preset`, `parts`, `handle`, `flow_provider`), and the
+// rigid `__Any` parameter for everything else, with `loop {}` as the value.
+// `name: { zh: "…", en: "…" }` and `requires: [a => b]` are not expressions, so
+// their values are replaced; their names are what an editor needs from the
+// mirror, and the runtime macro chain is what reports a wrong shape.
+// 填充这个类型的镜像本身是**合法且类型正确**的 Rust：打开 `cfg(rust_analyzer)` 的编辑器
+// 会编译它，而一个差一点才编译得过的镜像会在作者自己的代码行上报错。因此前端（生成的别名
+// 用 `face_fields_mirror!`、`external_object!` 用 `face_fields!`）发出的函数：作者写成
+// 表达式的字段用 `_` 注解；命名类型的字段（`kind`、`preset`、`parts`、`handle`、
+// `flow_provider`）用作者的类型；其余字段用刚性参数 `__Any`，值写 `loop {}`。
+// `name: { zh: "…", en: "…" }` 与 `requires: [a => b]` 不是表达式，因此其值被替换——编辑器
+// 需要的是它们的字段名，而形状错误由运行期宏阶梯报告。
 //
 // The declaration order below is the order the compact macro arm accepts, and an
 // editor lists fields in that order.
@@ -976,58 +981,6 @@ pub struct FaceFields<
     pub runtime_checks: RuntimeChecksValue,
 }
 
-/// Splice an author's face tokens into a real field list, for editors only.
-/// 把作者写的注册面 token 拼进真实字段列表，仅供编辑器使用。
-///
-/// The face macros invoke this under `cfg(rust_analyzer)`. Expanding it is what
-/// turns an opaque macro token tree into a field list an editor can read, and
-/// rustc never expands it, so the authoring syntax stays free to use spellings
-/// that are not Rust expressions (`name: { zh: "…", en: "…" }`, for example).
-/// 注册面宏在 `cfg(rust_analyzer)` 下调用它。正是这次展开把不透明的宏 token 树变成
-/// 编辑器能读的字段列表；rustc 从不展开它，因此作者侧语法可以继续使用并非 Rust
-/// 表达式的写法（例如 `name: { zh: "…", en: "…" }`）。
-/// Splice an author's face tokens into a real field list, for editors only.
-/// 把作者写的注册面 token 拼进真实字段列表，仅供编辑器使用。
-///
-/// Face macros invoke it under `cfg(rust_analyzer)`, which belongs to the crate
-/// being analyzed: the author's own crate. Expanding it turns an opaque macro
-/// token tree into a field list an editor can read. `rustc` never expands it,
-/// so the authoring syntax stays free to use spellings that are not Rust
-/// expressions (`name: { zh: "…", en: "…" }`, for example).
-/// 注册面宏在 `cfg(rust_analyzer)` 下调用它——该 cfg 属于被分析的 crate，也就是
-/// 作者自己的 crate。正是这次展开把不透明的宏 token 树变成编辑器能读的字段列表；
-/// `rustc` 从不展开它，因此作者侧语法可以继续使用并非 Rust 表达式的写法（例如
-/// `name: { zh: "…", en: "…" }`）。
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __face_fields {
-    // The editor has to see the fields the author has not written yet, so the
-    // literal contains only the author's tokens; `..loop {}` supplies the rest.
-    // Without it rust-analyzer reports "missing structure fields" at the macro
-    // call site, and with `()`-typed fields it reports a type error per field —
-    // both landed in the author's editor. A never-returning base coerces to the
-    // struct's type and leaves the unwritten fields open for completion.
-    // 编辑器必须看到作者还没写的字段，因此字面量只包含作者的 token，其余由
-    // `..loop {}` 提供。没有它，rust-analyzer 会在宏调用处报 "missing structure
-    // fields"；而字段类型写成 `()` 时每个字段报一个类型错误——两者都会落到作者的编辑器
-    // 里。永不返回的基值可以强制转换成结构体类型，并让未写字段继续获得候选。
-    ($($tokens:tt)* ,) => {
-        const _: () = {
-            let _ = $crate::macros::FaceFields { $($tokens)* ..loop {} };
-        };
-    };
-    ($($tokens:tt)*) => {
-        const _: () = {
-            let _ = $crate::macros::FaceFields { $($tokens)* , ..loop {} };
-        };
-    };
-    () => {
-        const _: () = {
-            let _ = $crate::macros::FaceFields { ..loop {} };
-        };
-    };
-}
-
 /// `kind` is the handle-marker type this file declares (`pub struct <Kind>;`), so
 /// write that type first and reference it here: an editor cannot complete a name
 /// the author has not written yet, and `kind` is captured as an identifier
@@ -1072,13 +1025,9 @@ macro_rules! external_object {
         // 作者的字段与生成的别名走同一个前端，因此这里同样接受 `;` 与任意顺序；
         // 前端会回派到 `__external_object!`——它的 matcher 首要指出源文件。
         $crate::face_fields! { @external collector: $collector, $($tokens)* }
-        #[cfg(rust_analyzer)]
-        $crate::__face_fields! { $($tokens)* }
     };
     { @tokens $($tokens:tt)* } => {
         $crate::face_fields! { @external collector: linked, $($tokens)* }
-        #[cfg(rust_analyzer)]
-        $crate::__face_fields! { $($tokens)* }
     };
     { $($tokens:tt)* } => {
         $crate::external_object! { @tokens $($tokens)* }
