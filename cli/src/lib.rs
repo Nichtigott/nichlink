@@ -488,7 +488,11 @@ mod tests {
                 format!(
                     "{} {}",
                     editor.name(),
-                    path.strip_prefix(&root).expect("under root").display()
+                    path.strip_prefix(&root)
+                        .expect("under root")
+                        .display()
+                        .to_string()
+                        .replace('\\', "/")
                 )
             })
             .collect::<Vec<_>>();
