@@ -1,7 +1,6 @@
 //! Keyboard and overlay-key interaction.
 //! 键盘与浮层键盘交互。
 
-use super::support::with_authoring_context;
 use super::*;
 
 impl App {
@@ -120,31 +119,7 @@ impl App {
                     self.overlay = Some(Overlay::Edit(info.id, edit));
                 }
             }
-            KeyCode::Char('g') if self.selected != self.registry.id() => {
-                let selector = self
-                    .registry
-                    .find(self.selected)
-                    .map(|info| format!("{}_graft", info.registry_name))
-                    .unwrap_or_else(|| "replacement".to_owned());
-                match with_authoring_context(|| {
-                    nichlink_run_method::create_external_graft(
-                        &self.registry,
-                        self.selected,
-                        selector,
-                        false,
-                    )
-                }) {
-                    Ok(plan) => {
-                        let plan_path = plan.plan_path();
-                        self.open_editor_file(plan_path.clone(), 1);
-                        self.event = format!(
-                            "External graft plan created at {}; edit it, then reload",
-                            plan_path.display()
-                        );
-                    }
-                    Err(error) => self.event = format!("External graft failed: {error}"),
-                }
-            }
+            KeyCode::Char('g') if self.selected != self.registry.id() => self.open_graft(),
             KeyCode::Char('r') | KeyCode::F(5) => self.reload(),
             KeyCode::Char('b') | KeyCode::F(9) => self.build_all(),
             KeyCode::Tab => {

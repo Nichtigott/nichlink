@@ -7,9 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
 
-use super::support::{host_manifest, package_root, select_project};
+use super::support::{host_manifest, package_root, select_project, with_authoring_context};
 use super::{
-    AddState, App, Overlay, SearchState, StudioPage, advance_graph_focus,
+    AddState, App, GraftDeclaration, Overlay, SearchState, StudioPage, advance_graph_focus,
     app_function_source_range, body_calls, function_bodies, function_symbols, visible_search_rows,
 };
 
@@ -200,8 +200,12 @@ fn derived_storage_fields_do_not_open_a_fake_editor() {
     assert!(matches!(app.overlay, Some(Overlay::Add(ref add)) if !add.editing));
 }
 
+/// The graft screen composes a plan, shows the entry line, and never edits host
+/// source. A plan is a record; the overlay itself is applied by the host.
+/// graft 界面撰写计划、显示入口那一行，并且永不改动宿主源码。计划是记录，覆盖
+/// 本身由宿主应用。
 #[test]
-fn graft_creates_external_overlay_plan_without_touching_source() {
+fn graft_composes_an_external_overlay_plan_without_touching_source() {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -232,10 +236,37 @@ fn graft_creates_external_overlay_plan_without_touching_source() {
             .as_str(),
     );
     let before = std::fs::read(&source).expect("source exists");
+
+    // `g` opens the screen instead of writing a file nobody reads.
     app.handle_key(KeyEvent::from(KeyCode::Char('g')));
+    let Some(Overlay::Graft(state)) = app.overlay.clone() else {
+        panic!("g opens the graft screen: {}", app.event);
+    };
+    assert_eq!(state.target_path, "root/canvas");
+    assert_eq!(state.selector, "canvas_graft");
+    assert!(!state.full);
+    assert!(state.plans.is_empty());
+    assert_eq!(state.inherited_children, 0);
+    // This fixture has no host entry yet, and the screen says so.
+    assert!(
+        matches!(state.declaration, GraftDeclaration::Unknown { .. }),
+        "{:?}",
+        state.declaration
+    );
+
+    // Choose the subtree scope, then write the plan.
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Enter));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
     assert!(
         app.event.contains("External graft plan created"),
         "{}",
+        app.event
+    );
+    assert!(
+        app.event
+            .contains("cut \"root/canvas\" full graft \"canvas_graft\","),
+        "the event hands over the entry line: {}",
         app.event
     );
     let (plan_path, line) = app
@@ -243,10 +274,135 @@ fn graft_creates_external_overlay_plan_without_touching_source() {
         .expect("external plan editor request");
     assert!(plan_path.ends_with("external-grafts/canvas_graft/graft.plan"));
     assert_eq!(line, 1);
-    assert_eq!(std::fs::read(&source).expect("source remains"), before);
+    let plan_text = std::fs::read_to_string(&plan_path).expect("plan written");
     assert!(
-        root.join(".nichlink/external-grafts/canvas_graft/graft.plan")
-            .is_file()
+        plan_text.contains("target_path=root/canvas\n"),
+        "{plan_text}"
+    );
+    assert!(plan_text.contains("full=true\n"), "{plan_text}");
+    assert_eq!(std::fs::read(&source).expect("source remains"), before);
+
+    // The screen lists the record it just wrote.
+    let Some(Overlay::Graft(state)) = app.overlay.clone() else {
+        panic!("the graft screen stays open");
+    };
+    assert_eq!(state.plans.len(), 1);
+    assert_eq!(state.plans[0].selector, "canvas_graft");
+    assert!(state.plans[0].full);
+
+    // `f` rewrites the record, `d` moves it to the recoverable trash.
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('f')));
+    assert!(
+        !with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft"))
+            .expect("plan reads back")
+            .full()
+    );
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
+    assert!(
+        with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft"))
+            .is_err()
+    );
+    assert!(app.event.contains("moved to"), "{}", app.event);
+    assert_eq!(std::fs::read(&source).expect("source remains"), before);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Writing over an existing selector is refused; the screen points at it.
+/// 覆盖已存在的选择器会被拒绝；界面指向那一条计划。
+#[test]
+fn graft_refuses_a_selector_that_already_exists() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-graft-collision-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("create source root");
+    select_project(
+        root.clone(),
+        root.join("Cargo.toml"),
+        "external-graft-collision",
+    );
+
+    let mut app = App::load();
+    let mut add = AddState::new(app.registry.id());
+    add.values[1] = "canvas".to_owned();
+    add.values[8] = "Canvas".to_owned();
+    app.submit_add(&add);
+    app.selected = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|face| face.registry_name == "canvas")
+        .expect("canvas face")
+        .id;
+
+    // Write one plan, then ask for a different scope under the same selector.
+    app.handle_key(KeyEvent::from(KeyCode::Char('g')));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Enter));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
+    assert!(
+        app.event.contains("already exists"),
+        "a collision names the existing plan: {}",
+        app.event
+    );
+    assert!(
+        !with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft"))
+            .expect("the original plan is untouched")
+            .full()
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The screen reads the slot out of the host entry instead of guessing.
+/// 界面从宿主入口读出槽位声明，而不是猜。
+#[test]
+fn graft_reads_the_declared_slot_from_the_host_entry() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-graft-declared-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("create source root");
+    select_project(
+        root.clone(),
+        root.join("Cargo.toml"),
+        "external-graft-declared",
+    );
+
+    let mut app = App::load();
+    let mut add = AddState::new(app.registry.id());
+    add.values[1] = "canvas".to_owned();
+    add.values[8] = "Canvas".to_owned();
+    app.submit_add(&add);
+    app.selected = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|face| face.registry_name == "canvas")
+        .expect("canvas face")
+        .id;
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "nichlink_run_method::host!();\n\
+         nichlink_run_method::static_graft_plan!(FRAMEWORK, cut \"root/canvas\" graft \"canvas_fast\");\n",
+    )
+    .expect("host entry");
+
+    app.handle_key(KeyEvent::from(KeyCode::Char('g')));
+    let Some(Overlay::Graft(state)) = app.overlay.clone() else {
+        panic!("g opens the graft screen");
+    };
+    assert_eq!(
+        state.declaration,
+        GraftDeclaration::Declared {
+            expression: "cut \"root/canvas\" graft \"canvas_fast\"".to_owned(),
+            line: 2,
+            cfg: None,
+        }
     );
 
     let _ = std::fs::remove_dir_all(&root);

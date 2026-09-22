@@ -14,6 +14,7 @@ mod navigation;
 use navigation::*;
 mod sample;
 use sample::sample_live_trace;
+mod graft;
 mod graph_queries;
 mod interaction;
 mod keyboard;
@@ -68,6 +69,9 @@ pub struct App {
     pub action_edit_area: ratatui::layout::Rect,
     pub action_confirm_area: ratatui::layout::Rect,
     pub action_exit_area: ratatui::layout::Rect,
+    /// Clickable compose rows of the external-graft screen.
+    /// 外部 graft 界面可点击的撰写区行。
+    pub graft_compose_area: ratatui::layout::Rect,
     pub tree_offset: usize,
     pub split_percent: u16,
     pub graph_split_percent: u16,

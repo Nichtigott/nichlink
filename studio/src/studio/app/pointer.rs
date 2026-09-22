@@ -286,6 +286,29 @@ impl App {
                 return;
             }
         }
+        // The graft screen has two clickable panes: the compose rows focus a
+        // field, the plan list selects a plan.
+        // graft 界面有两个可点击面板：撰写区聚焦某一行，计划列表选中一条计划。
+        if matches!(self.overlay, Some(Overlay::Graft(_))) {
+            if self.graft_compose_area.contains(point) {
+                let field = row.saturating_sub(self.graft_compose_area.y) as usize;
+                if let Some(Overlay::Graft(graft)) = self.overlay.as_mut() {
+                    graft.pane = 0;
+                    graft.field = field.min(1);
+                }
+                return;
+            }
+            if self.overlay_list_area.contains(point) {
+                let index = row.saturating_sub(self.overlay_list_area.y.saturating_add(1)) as usize;
+                if let Some(Overlay::Graft(graft)) = self.overlay.as_mut()
+                    && index < graft.plans.len()
+                {
+                    graft.pane = 1;
+                    graft.plan_selected = index;
+                }
+                return;
+            }
+        }
         if self.action_cancel_area.contains(point) || self.action_exit_area.contains(point) {
             self.overlay = None;
             return;
@@ -300,6 +323,10 @@ impl App {
                 Some(Overlay::Add(add)) => self.submit_add(&add),
                 Some(Overlay::Edit(id, edit)) => self.submit_edit(id, &edit),
                 Some(Overlay::Plugin(plugin)) => self.submit_plugin(&plugin),
+                Some(Overlay::Graft(graft)) => {
+                    self.submit_graft(&graft);
+                    self.refresh_graft();
+                }
                 _ => {}
             }
             return;

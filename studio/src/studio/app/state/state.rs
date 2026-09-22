@@ -49,7 +49,85 @@ pub enum Overlay {
     Add(AddState),
     Edit(NodeId, AddState),
     Plugin(PluginState),
+    Graft(GraftState),
     Delete(NodeId),
+}
+
+/// Compose one external graft declaration and manage the plans already on disk.
+/// 撰写一条外部 graft 声明，并管理磁盘上已有的计划。
+///
+/// A plan is an authoring record, not the declaration the compiler reads and
+/// not the overlay itself: this screen writes the record, shows the entry line
+/// the host still has to declare, and never edits host source.
+/// 计划是创作记录，既不是编译器读取的声明，也不是覆盖应用本身：这个界面写记录、
+/// 显示宿主仍需声明的那一行，并且永不改动宿主源码。
+#[derive(Clone, Debug)]
+pub struct GraftState {
+    /// The selected face whose slot is handed over.
+    /// 交出去的槽位所属的、当前选中的注册面。
+    pub target: NodeId,
+    pub target_path: String,
+    /// Editable selector naming the external implementation.
+    /// 可编辑的选择器，命名外部实现。
+    pub selector: String,
+    /// Whether the whole subtree is replaced instead of only the node.
+    /// 是否替换整棵子树，而不是只替换节点。
+    pub full: bool,
+    /// Focused compose row: 0 selector, 1 scope.
+    /// 撰写区当前行：0 选择器，1 替换范围。
+    pub field: usize,
+    /// Focused pane: 0 compose, 1 the plans already on disk.
+    /// 当前面板：0 撰写区，1 磁盘上已有的计划。
+    pub pane: usize,
+    pub editing: bool,
+    pub plans: Vec<GraftPlanRow>,
+    pub plan_selected: usize,
+    /// What the host entry declares for this target.
+    /// 宿主入口为这个目标声明了什么。
+    pub declaration: GraftDeclaration,
+    /// Whether the target face declares a flow contract the overlay can check.
+    /// 目标注册面是否声明了 overlay 能校验的数据流合同。
+    pub flow_declared: bool,
+    /// Child faces a non-full cut inherits from the base registry.
+    /// 非整树切口从原注册机继承的子注册面数量。
+    pub inherited_children: usize,
+}
+
+/// One plan already written under `.nichlink/external-grafts/`.
+/// `.nichlink/external-grafts/` 下已写好的一个计划。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraftPlanRow {
+    pub selector: String,
+    pub target_path: String,
+    pub full: bool,
+    /// Why the plan could not be read, when it could not.
+    /// 计划读不懂时的原因。
+    pub error: Option<String>,
+}
+
+impl GraftPlanRow {
+    pub fn is_valid(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+/// What the host entry says about the selected slot.
+/// 宿主入口对当前槽位的说法。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GraftDeclaration {
+    /// A declared cut names this face; the build ships it.
+    /// 有一条声明命名了这个面；构建会发布它。
+    Declared {
+        expression: String,
+        line: usize,
+        cfg: Option<String>,
+    },
+    /// The entry was read and names other slots.
+    /// 入口读到了，但命名的是别的槽位。
+    Absent { entry: PathBuf },
+    /// The entry could not be resolved, read, or parsed.
+    /// 入口无法解析、读取或解析失败。
+    Unknown { reason: String },
 }
 
 /// Fields used by the New Project wizard.

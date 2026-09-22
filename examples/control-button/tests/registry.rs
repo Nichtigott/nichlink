@@ -269,6 +269,45 @@ fn static_plan_carries_faces_and_the_declared_graft() {
     );
 }
 
+/// 创作查询看到宿主声明的槽位，且与构建捕获到的是同一批切口。
+/// The authoring query sees the slots this host declares, and they are the same
+/// cuts the build captured — typed form included, through the same module
+/// mapping the scope uses.
+#[test]
+fn the_authoring_query_sees_the_declared_typed_slots() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let declared = nichlink_build_method::declared_grafts(&root).expect("the entry reads");
+    assert!(
+        declared.entry.ends_with("src/lib.rs"),
+        "the file calling host!() is the entry: {}",
+        declared.entry.display()
+    );
+    assert_eq!(declared.cuts.len(), 2);
+    let typed = |index: usize| {
+        declared.cuts[index]
+            .expressions
+            .as_ref()
+            .unwrap_or_else(|| panic!("cut {index} is written in the typed form"))
+    };
+    assert_eq!(
+        typed(0).cut,
+        "crate::control::object::button::NODE_ID",
+        "the authoring view keeps the expression that names the face"
+    );
+    assert_eq!(typed(1).cut, "crate::control::object::slider::NODE_ID");
+    assert!(
+        declared.cuts.iter().all(|cut| !cut.full),
+        "both example slots are plain cuts"
+    );
+    assert!(
+        declared
+            .cuts
+            .iter()
+            .all(|cut| cut.graft.contains("control_button_graft::")),
+        "the authoring view keeps the external expression too"
+    );
+}
+
 /// 构建期作用域收窄到宿主声明的槽位：切口命名的子树活着，没有声明的面不发布。
 /// The build-time scope narrows to the slots the host declared: the subtrees the
 /// cuts name stay live, and a face nobody declared is not shipped.

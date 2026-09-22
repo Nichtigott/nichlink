@@ -12,7 +12,7 @@ use ratatui::widgets::{
 mod graph;
 use graph::draw_search_graph;
 mod forms;
-use forms::{draw_add, draw_delete, draw_edit, draw_new_project, draw_plugin};
+use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
 mod search;
 use search::{draw_search, format_admission, format_registration_rule};
 mod search_detail;
@@ -280,6 +280,7 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
         app.action_cancel_area = Rect::default();
         app.action_confirm_area = Rect::default();
         app.action_exit_area = Rect::default();
+        app.graft_compose_area = Rect::default();
         app.graph_area = Rect::default();
         app.graph_detail_area = Rect::default();
         app.graph_provenance_area = Rect::default();
@@ -315,6 +316,7 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
     app.action_edit_area = Rect::default();
     app.action_confirm_area = Rect::default();
     app.action_exit_area = Rect::default();
+    app.graft_compose_area = Rect::default();
     app.graph_area = Rect::default();
     app.graph_detail_area = Rect::default();
     app.graph_provenance_area = Rect::default();
@@ -369,6 +371,14 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
             app.action_cancel_area = cancel;
             app.action_confirm_area = confirm;
             app.action_exit_area = exit;
+        }
+        Overlay::Graft(graft) => {
+            let (list, cancel, confirm, exit, compose) = draw_graft(frame, area, &graft);
+            app.overlay_list_area = list;
+            app.action_cancel_area = cancel;
+            app.action_confirm_area = confirm;
+            app.action_exit_area = exit;
+            app.graft_compose_area = compose;
         }
         Overlay::Delete(id) => {
             let (cancel, confirm) = draw_delete(frame, area, app, id);
@@ -477,5 +487,53 @@ mod tests {
         assert!(output.contains("FIELD GUIDE"));
         assert!(output.contains("DERIVED"));
         assert!(output.contains("<default: NoParts>"));
+    }
+
+    #[test]
+    fn graft_screen_shows_the_entry_line_the_slot_and_the_plans() {
+        let mut terminal = Terminal::new(TestBackend::new(160, 48)).unwrap();
+        let mut app = App::load();
+        app.overlay = Some(Overlay::Graft(super::super::app::GraftState {
+            target: nichlink_run_method::NodeId::from_path(
+                "control/object/button/button.rs",
+                "Button",
+            ),
+            target_path: "root/control/button".to_owned(),
+            selector: "button_fast".to_owned(),
+            full: false,
+            field: 0,
+            pane: 0,
+            editing: false,
+            plans: vec![super::super::app::GraftPlanRow {
+                selector: "button_fast".to_owned(),
+                target_path: "root/control/button".to_owned(),
+                full: false,
+                error: None,
+            }],
+            plan_selected: 0,
+            declaration: super::super::app::GraftDeclaration::Declared {
+                expression: "cut \"root/control/button\" graft \"button_fast\"".to_owned(),
+                line: 48,
+                cfg: None,
+            },
+            flow_declared: true,
+            inherited_children: 2,
+        }));
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let output = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(output.contains("COMPOSE EXTERNAL GRAFT"));
+        assert!(output.contains("DECLARED SLOT"));
+        assert!(output.contains("declared at line 48"));
+        assert!(output.contains("ENTRY DECLARATION"));
+        assert!(output.contains("cut \"root/control/button\" graft \"button_fast\","));
+        assert!(output.contains("EXISTING PLANS"));
+        assert!(output.contains("2 child face(s) are inherited by the overlay"));
     }
 }

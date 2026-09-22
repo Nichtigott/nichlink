@@ -550,10 +550,27 @@ The returned effective registry keeps the base tree and external tree
 unchanged, preserves the logical target path, inherits untouched siblings, and
 re-runs destination-rule, admission, and connector checks before publication.
 
-Studio's graft workflow uses `g`. It creates
-`.nichlink/external-grafts/<selector>/graft.plan`, opens that plan in the
-configured editor, and leaves the host source untouched. There is no
-source-copy or source-replacement graft path.
+Studio's graft workflow uses `g`. Three different things meet there, and the
+screen keeps them apart:
+
+* `static_graft_plan!` at the host entry is the **declaration** the build step
+  reads: it keeps the named slot alive through pruning and fills the
+  release-time static plan. It removes no code.
+* `Registry::overlay` is the **application**: it validates and returns the
+  effective tree at runtime, leaving both the base registry and the external
+  registry untouched.
+* `.nichlink/external-grafts/<selector>/graft.plan` is the **record** the screen
+  writes. It is not compiled and nothing else applies it; the screen reads it
+  back to list, open, re-scope, and delete plans.
+
+`g` opens the compose screen for the selected face. It shows the logical slot,
+lets you name the selector and choose `cut` (the overlay keeps the base node's
+children) or `full` (it replaces the subtree), checks the slot against the cuts
+the host entry declares — a face no `cut` names is not shipped — and prints the
+exact `static_graft_plan!` clause to paste into that entry, because Studio never
+rewrites host source. `s` writes the plan and opens it, `o` opens it again, `f`
+flips `full`, and `d` moves it to `.nichlink/trash/external-grafts/`. There is
+no source-copy or source-replacement graft path.
 
 NichLink does not prescribe the programming paradigm inside a face. Functions,
 traits, generics, closures, dependency injection, and message passing remain
@@ -656,7 +673,7 @@ on input, resize, or a file event.
 | --- | --- |
 | `n` | New binary/library project |
 | `a` / `e` / `d` | Add, edit, or delete a face |
-| `g` | Create and edit an external graft plan for the selected face |
+| `g` | Compose an external graft plan for the selected face |
 | `/` | Search files and functions |
 | `1`–`4` | Search, inspect, data, compare pages |
 | `Tab` | Move focus between tree and details |

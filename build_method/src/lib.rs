@@ -54,6 +54,10 @@ mod types;
 #[path = "validation.rs"]
 mod validation;
 
+/// The module path a registration source declares, for authoring surfaces.
+/// 注册面源码声明的模块路径，供创作界面使用。
+pub use static_plan::source_module_path;
+
 use contracts::aggregate_contract_errors;
 use discovery::{discover_root, discovery_fingerprint, emit_rerun_paths};
 use identity_cache::{
@@ -496,6 +500,206 @@ pub(crate) fn host_graft_entries(src: &Path, nodes: &[Node]) -> Vec<GraftSyntax>
             None => true,
         })
         .collect()
+}
+
+/// One graft declaration the build step found in the host entry.
+/// 构建步骤在宿主入口里发现的一条 graft 声明。
+///
+/// This is the authoring view of the same declaration the build captures into
+/// the static plan: it exists so a tool can tell an author whether the slot
+/// they are about to graft is shipped, without re-implementing the entry rule.
+/// 这是构建会捕获进静态计划的那条声明的创作视图：它存在的意义是让工具无需重新
+/// 实现入口规则，就能告诉作者准备嫁接的槽位会不会被发布。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeclaredGraft {
+    /// Logical path, or the Rust expression text of a typed cut.
+    /// 逻辑路径，或类型化切口的 Rust 表达式原文。
+    pub cut: String,
+    pub graft: String,
+    pub full: bool,
+    /// The `cfg` gate the declaration carries, exactly as written.
+    /// 声明携带的 `cfg` 门控（若有），按原文保留。
+    pub cfg: Option<String>,
+    /// Rust expressions, when the cut was written in the typed form.
+    /// 切口写成类型化形式时的 Rust 表达式。
+    pub expressions: Option<DeclaredGraftExpressions>,
+    /// 1-based line of the declaration in the entry.
+    /// 声明在入口中的 1 起始行号。
+    pub line: usize,
+}
+
+/// Rust expressions used by one typed graft cut, in source order.
+/// 一条类型化 graft 切口使用的 Rust 表达式，按源码顺序。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeclaredGraftExpressions {
+    pub cut: String,
+    pub cut_end: Option<String>,
+    pub graft: String,
+}
+
+/// The graft declarations one package's host entry declares.
+/// 一个包的宿主入口声明的 graft 切口。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeclaredGrafts {
+    /// The entry the build step would read.
+    /// 构建步骤会读取的入口。
+    pub entry: PathBuf,
+    pub cuts: Vec<DeclaredGraft>,
+}
+
+/// Resolve the host entry the build step reads graft declarations from.
+/// 解析构建步骤读取 graft 声明的宿主入口。
+///
+/// Resolution order matches the build: `NICH_LINK_ENTRY`, then a file declaring
+/// `application!(entry = …)`, then the file that calls `host!()`, then Cargo's
+/// `main.rs`/`lib.rs`. Unlike the build, a source tree it cannot represent is
+/// an `Err`, never a panic: an authoring surface has to stay alive to say so.
+/// 解析顺序与构建一致：`NICH_LINK_ENTRY`、声明 `application!(entry = …)` 的文件、
+/// 调用 `host!()` 的文件、最后按 Cargo 的 `main.rs`/`lib.rs` 约定。与构建不同的是，
+/// 无法表示的源码树返回 `Err` 而不是 panic：创作界面必须活着把问题说出来。
+pub fn host_entry_source(root: &Path) -> Result<PathBuf, String> {
+    let src = root.join("src");
+    if !src.is_dir() {
+        return Err(format!("no source tree at {}", src.display()));
+    }
+    if let Some(configured) = env::var_os("NICH_LINK_ENTRY") {
+        let path = PathBuf::from(configured);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        };
+        if !path.is_file() {
+            return Err(format!(
+                "NICH_LINK_ENTRY names `{}`, which is not a file",
+                path.display()
+            ));
+        }
+        return Ok(path);
+    }
+    if let Some(entry) = declaring_application_entry(&src)? {
+        return Ok(entry);
+    }
+    let entry = default_entry_source(&src);
+    if !entry.is_file() {
+        return Err(format!(
+            "no host entry at {}; expected a source file that calls `host!()`",
+            entry.display()
+        ));
+    }
+    Ok(entry)
+}
+
+/// Read the host entry and return the graft declarations it carries.
+/// 读取宿主入口并返回它携带的 graft 声明。
+///
+/// Feature gates are reported, not evaluated: the authoring surface shows the
+/// gate so the author can see that a feature decides, and the build remains the
+/// only place that follows it.
+/// 特性门控只上报、不求值：创作界面显示门控让作者知道"由特性决定"，而跟随门控
+/// 始终只发生在构建里。
+pub fn declared_grafts(root: &Path) -> Result<DeclaredGrafts, String> {
+    let entry = host_entry_source(root)?;
+    let source = fs::read_to_string(&entry)
+        .map_err(|error| format!("cannot read host entry {}: {error}", entry.display()))?;
+    let entries = graft_entries(&source)
+        .map_err(|error| format!("invalid graft declaration in {}: {error}", entry.display()))?;
+    Ok(DeclaredGrafts {
+        entry,
+        cuts: entries
+            .into_iter()
+            .map(|entry| DeclaredGraft {
+                cut: entry.cut,
+                graft: entry.graft,
+                full: entry.full,
+                cfg: entry.cfg,
+                expressions: entry
+                    .expressions
+                    .map(|expressions| DeclaredGraftExpressions {
+                        cut: expressions.cut,
+                        cut_end: expressions.cut_end,
+                        graft: expressions.graft,
+                    }),
+                line: entry.location.line,
+            })
+            .collect(),
+    })
+}
+
+/// The file declaring `application!(entry = …)`, if any.
+/// 声明 `application!(entry = …)` 的文件（若有）。
+///
+/// The build walks the discovered registration folders, which is what a host
+/// normally has. The authoring query walks the package's own Rust sources
+/// instead, so a declaration in `src/lib.rs` or `src/main.rs` is seen too; a
+/// tree the build would reject is reported rather than panicked on.
+/// 构建遍历已发现的注册目录（宿主通常如此）；创作查询改为遍历包自己的 Rust 源码，
+/// 因此写在 `src/lib.rs` 或 `src/main.rs` 里的声明也能看见；构建会拒绝的树在这里
+/// 只被上报，不会 panic。
+fn declaring_application_entry(src: &Path) -> Result<Option<PathBuf>, String> {
+    let mut files = Vec::new();
+    collect_rust_sources(src, &mut files)?;
+    files.sort();
+    let mut declarations = Vec::new();
+    for file in files {
+        let source = fs::read_to_string(&file)
+            .map_err(|error| format!("cannot read {}: {error}", file.display()))?;
+        for (path, location) in application_entries(&source).map_err(|error| {
+            format!(
+                "invalid application! declaration in {}: {error}",
+                file.display()
+            )
+        })? {
+            if !path.starts_with("crate::") {
+                return Err(format!(
+                    "application! entry `{path}` in {} must start with `crate::`",
+                    file.display()
+                ));
+            }
+            if !entry_path_exists(src, &path) {
+                return Err(format!(
+                    "application! entry `{path}` in {} does not resolve to a source module under `{}`",
+                    file.display(),
+                    src.display()
+                ));
+            }
+            declarations.push((file.clone(), path, location.line, location.column));
+        }
+    }
+    match declarations.as_slice() {
+        [] => Ok(None),
+        [(file, _, _, _)] => Ok(Some(file.clone())),
+        many => {
+            let details = many
+                .iter()
+                .map(|(file, path, line, column)| {
+                    format!("{path} at {}:{line}:{column}", file.display())
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(format!(
+                "multiple application! entry declarations found: {details}"
+            ))
+        }
+    }
+}
+
+/// Every `.rs` file under `directory`, following the crate's own layout.
+/// `directory` 下的每个 `.rs` 文件，遵循 crate 自己的布局。
+fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    for entry in fs::read_dir(directory)
+        .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
+    {
+        let path = entry
+            .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
+            .path();
+        if path.is_dir() {
+            collect_rust_sources(&path, files)?;
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+            files.push(path);
+        }
+    }
+    Ok(())
 }
 
 fn entry_path_exists(src: &Path, path: &str) -> bool {
@@ -1208,5 +1412,119 @@ mod tests {
         assert!(face_declares_plugin(&root, &face("c", plugin.clone())));
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A throwaway package root for the entry-resolution fixtures.
+    /// 入口解析夹具使用的临时包根。
+    fn entry_fixture(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("src")).expect("fixture dir");
+        root
+    }
+
+    /// The authoring query and the build capture must see the same cuts.
+    /// 创作查询与构建捕获必须看到同一批切口。
+    #[test]
+    fn the_authoring_query_reads_the_same_declarations_the_build_captures() {
+        let root = entry_fixture("declared-grafts");
+        let src = root.join("src");
+        std::fs::write(
+            src.join("lib.rs"),
+            "nichlink_run_method::host!();\n\
+             nichlink_run_method::static_graft_plan!(\n\
+                 FRAMEWORK,\n\
+                 cut \"root/control/button\" graft \"button_fast\",\n\
+                 cut(crate::control::object::slider::NODE_ID) full graft(crate::external::slider_fast::NODE_ID),\n\
+             );\n",
+        )
+        .expect("host entry");
+
+        assert_eq!(
+            super::host_entry_source(&root).expect("entry resolves"),
+            src.join("lib.rs")
+        );
+        let declared = super::declared_grafts(&root).expect("declarations parse");
+        assert_eq!(declared.entry, src.join("lib.rs"));
+        assert_eq!(declared.cuts.len(), 2);
+        assert_eq!(declared.cuts[0].cut, "root/control/button");
+        assert_eq!(declared.cuts[0].graft, "button_fast");
+        assert!(!declared.cuts[0].full);
+        assert_eq!(declared.cuts[0].expressions, None);
+        assert_eq!(
+            declared.cuts[1].expressions,
+            Some(super::DeclaredGraftExpressions {
+                cut: "crate::control::object::slider::NODE_ID".to_owned(),
+                cut_end: None,
+                graft: "crate::external::slider_fast::NODE_ID".to_owned(),
+            })
+        );
+        assert!(declared.cuts[1].full);
+
+        // The build capture is the same declaration set.
+        let nodes = super::discover_root(&src);
+        let captured = super::host_graft_entries(&src, &nodes);
+        assert_eq!(captured.len(), declared.cuts.len());
+        for (captured, declared) in captured.iter().zip(&declared.cuts) {
+            assert_eq!(captured.cut, declared.cut);
+            assert_eq!(captured.graft, declared.graft);
+            assert_eq!(captured.full, declared.full);
+            assert_eq!(captured.location.line, declared.line);
+        }
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    /// A feature gate is reported for the author to see, not evaluated here.
+    /// 特性门控只上报给作者看，不在这里求值。
+    #[test]
+    fn a_gated_declaration_reports_its_gate() {
+        let root = entry_fixture("declared-grafts-gated");
+        std::fs::write(
+            root.join("src/lib.rs"),
+            "nichlink_run_method::host!();\n\
+             #[cfg(feature = \"extra\")]\n\
+             nichlink_run_method::static_graft_plan!(FRAMEWORK, cut \"root/a\" graft \"a_fast\");\n",
+        )
+        .expect("host entry");
+
+        let declared = super::declared_grafts(&root).expect("declarations parse");
+        assert_eq!(declared.cuts.len(), 1);
+        assert_eq!(declared.cuts[0].cfg.as_deref(), Some("feature = \"extra\""));
+        assert_eq!(declared.cuts[0].line, 3);
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    /// `application!` names the entry, and a missing one is an error, not a panic.
+    /// `application!` 指定入口；入口缺失是错误而非 panic。
+    #[test]
+    fn the_authoring_query_follows_application_and_reports_a_missing_entry() {
+        let root = entry_fixture("declared-grafts-application");
+        let src = root.join("src");
+        std::fs::write(src.join("lib.rs"), "nichlink_run_method::host!();\n").expect("host entry");
+        std::fs::write(
+            src.join("app.rs"),
+            "nichlink_run_method::application!(entry = crate::app::run);\n",
+        )
+        .expect("application declaration");
+        assert_eq!(
+            super::host_entry_source(&root).expect("entry resolves"),
+            src.join("app.rs")
+        );
+
+        std::fs::remove_file(src.join("app.rs")).expect("drop declaration");
+        std::fs::remove_file(src.join("lib.rs")).expect("drop entry");
+        assert!(super::host_entry_source(&root).is_err());
+        assert!(super::declared_grafts(&root).is_err());
+        assert!(super::host_entry_source(&root.join("missing")).is_err());
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
     }
 }

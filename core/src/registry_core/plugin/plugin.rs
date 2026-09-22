@@ -13,6 +13,9 @@ pub use self::artifact::{
     PluginArtifact, PluginAssurance, PluginDecision, PluginRejectReason, VerifiedPluginArtifact,
 };
 pub use self::graft::{CutGraftCommand, GraftCut, GraftError, GraftPlan};
+pub use self::graft_document::{
+    GRAFT_PLAN_VERSION, GraftPlanDocument, GraftPlanDocumentError, validate_graft_selector,
+};
 pub use self::catalog::{PluginCatalog, PluginRecord};
 pub use self::manifest::PluginManifest;
 pub use self::slot::{

@@ -6,6 +6,8 @@ pub mod catalog;
 pub mod contracts;
 #[path = "graft/graft.rs"]
 pub mod graft;
+#[path = "graft/document.rs"]
+pub mod graft_document;
 #[path = "manifest/manifest.rs"]
 pub mod manifest;
 #[path = "plugin_policy/plugin_policy.rs"]

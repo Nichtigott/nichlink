@@ -21,7 +21,14 @@ pub(crate) struct StaticFaceRecord {
     pub(crate) module: String,
 }
 
-pub(crate) fn source_module_path(relative: &str) -> String {
+/// The module path a registration source declares, relative to the crate root.
+/// 注册面源码声明的模块路径，相对 crate 根。
+///
+/// Public so an authoring surface can compare a face with a typed graft cut
+/// exactly the way the build does, instead of re-deriving the mapping.
+/// 公开它，让创作界面能用与构建完全相同的方式把注册面和类型化 graft 切口对照，
+/// 而不必重新推导这套映射。
+pub fn source_module_path(relative: &str) -> String {
     relative
         .rsplit_once('/')
         .map_or_else(

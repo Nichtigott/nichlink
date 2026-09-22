@@ -18,3 +18,10 @@ nichlink-example-control-button-graft = { path = "../control-button-graft" }
 
 [build-dependencies]
 nichlink-build-method = { path = "../../build_method" }
+
+# The authoring query is the same crate the build script uses, so a test can
+# assert that Studio sees exactly the slots this host declares.
+# 创作查询与 build script 使用同一个 crate，测试因此可以断言 Studio 看到的槽位正是
+# 本宿主声明的那两个。
+[dev-dependencies]
+nichlink-build-method = { path = "../../build_method" }

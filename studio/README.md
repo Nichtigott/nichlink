@@ -13,3 +13,11 @@ catalog should be read or edited. Set `NICH_LINK_HOST_MANIFEST` when MIR
 inspection and release builds should target a manifest other than
 `<package-root>/Cargo.toml`. `NICH_LINK_NAMESPACE` isolates authored snapshots
 when several libraries share one process.
+
+`g` opens the external-graft screen for the selected face. It writes
+`.nichlink/external-grafts/<selector>/graft.plan`, never host source, and it
+keeps the three graft layers apart: the `static_graft_plan!` **declaration** the
+build reads (the screen shows whether the selected slot is declared and prints
+the clause to paste), the `Registry::overlay` **application** the host performs
+at runtime, and the plan **record** the screen lists, opens, re-scopes with `f`,
+and moves to `.nichlink/trash/external-grafts/` with `d`.

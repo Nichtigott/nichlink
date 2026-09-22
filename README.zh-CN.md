@@ -511,9 +511,20 @@ let effective = base.overlay(&plan, &external)?;
 返回的 effective registry 保留原树和外部树不变，维持目标的逻辑路径，自动继承
 未覆盖的兄弟，并在发布前重新执行目标注册规范、准入和连接器校验。
 
-Studio 的 graft 流程使用 `g`：它创建
-`.nichlink/external-grafts/<selector>/graft.plan`，并用默认编辑器打开计划，
-宿主源码不会被修改。系统不存在复制或替换宿主源码的 graft 路径。
+Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西，界面把它们分清楚：
+
+* 宿主入口的 `static_graft_plan!` 是构建步骤读取的**声明**：它让被命名的槽位穿过剪枝
+  存活下来，并填充发布态静态计划。它不删除任何代码。
+* `Registry::overlay` 是**应用**：它在运行期校验并返回有效树，原树与外部树都不被改动。
+* `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它不参与编译，
+  也没有别的消费者；界面读回它来列出、打开、改范围和删除计划。
+
+`g` 为选中注册面打开撰写界面：显示逻辑槽位，让你填写选择器并选择 `cut`（覆盖层保留原
+节点的子注册机）或 `full`（替换整棵子树）；用宿主入口已声明的切口校验这个槽位——没有
+任何 `cut` 命名的注册面不会被发布；最后给出可直接粘贴进入口的 `static_graft_plan!`
+子句，因为 Studio 永不重写宿主源码。`s` 写入计划并打开它，`o` 再次打开，`f` 切换
+`full`，`d` 把它移入 `.nichlink/trash/external-grafts/`。系统不存在复制或替换宿主源码
+的 graft 路径。
 
 NichLink 不限定对象内部采用哪种编程范式。普通函数、trait、泛型、闭包、
 依赖注入或消息传递都可以继续使用；注册面只约束它们对外暴露的边界。声明过

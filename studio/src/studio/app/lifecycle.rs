@@ -68,6 +68,7 @@ impl App {
             action_edit_area: ratatui::layout::Rect::default(),
             action_confirm_area: ratatui::layout::Rect::default(),
             action_exit_area: ratatui::layout::Rect::default(),
+            graft_compose_area: ratatui::layout::Rect::default(),
             tree_offset: 0,
             split_percent: 45,
             graph_split_percent: 44,
@@ -146,6 +147,7 @@ impl App {
                     .details_selected
                     .min(self.detail_field_count().saturating_sub(1));
                 self.event = "Hot reload: registration snapshot refreshed.".to_owned();
+                self.refresh_open_graft();
             }
             Err(error) => {
                 self.reload_error = Some(ReloadError {
@@ -184,6 +186,7 @@ impl App {
                     self.selected = self.registry.id();
                 }
                 self.event = "Registration snapshot reloaded from disk.".to_owned();
+                self.refresh_open_graft();
             }
             Err(error) => {
                 self.reload_error = Some(ReloadError {

@@ -89,3 +89,18 @@ let effective = base.overlay(&plan, &external)?;
 
 旧的 `Registry::graft` API 和 Studio 源码复制流程已经移除。公开执行路径统一为
 `GraftPlan`，再调用 `Registry::overlay`。
+
+## `graft.plan` 记录
+
+`.nichlink/external-grafts/<selector>/graft.plan` 是创作记录，既不是编译器读取的声明，
+也不是覆盖应用。它的版式未变（`version=1`、`target`、`target_path`、`graft`、`full`），
+但现在有了读取方：kernel 的 `GraftPlanDocument` 负责解析与渲染，遇到不认识的版本或键就
+拒绝而不是猜，并且是这套版式唯一的定义处。`nichlink-build` 新增
+`declared_grafts`/`host_entry_source`，供创作界面查询构建会发布哪些槽位。
+
+`nichlink_run_method::ExternalGraftPlanFile` 不再把 `target`、`graft`、`full`、`root`
+暴露为公开字段；它携带解析后的 `GraftPlanDocument` 与选择器，并通过 `target()`、
+`target_path()`、`graft()`、`full()`、`plan_path()`、`root` 回答。新增读取、列出、改范围
+和回收计划的函数：`read_external_graft`、`list_external_grafts`、
+`rewrite_external_graft`、`remove_external_graft`。`create_external_graft` 签名不变，
+但改为经 kernel 文档写入，因此写出的内容一定能读回。

@@ -166,3 +166,22 @@ and connector validation succeeds.
 
 The pre-overlay `Registry::graft` API and Studio source-copy workflow have been
 removed. The public execution path is `GraftPlan` followed by `Registry::overlay`.
+
+## `graft.plan` records
+
+A `.nichlink/external-grafts/<selector>/graft.plan` file is an authoring record,
+not a declaration the compiler sees and not an overlay application. Its layout
+is unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
+format now has a reader: `GraftPlanDocument` in the kernel parses and renders it,
+refuses an unknown version or key instead of guessing, and is the only place the
+layout is defined. `nichlink-build` gained `declared_grafts`/`host_entry_source`
+for authoring surfaces that need to know which slots the build ships.
+
+`nichlink_run_method::ExternalGraftPlanFile` no longer exposes `target`,
+`graft`, `full`, and `root` as public fields; it carries the parsed
+`GraftPlanDocument` and the selector, and answers through `target()`,
+`target_path()`, `graft()`, `full()`, `plan_path()`, and `root`. New sibling
+functions read, list, re-scope, and trash plans:
+`read_external_graft`, `list_external_grafts`, `rewrite_external_graft`, and
+`remove_external_graft`. `create_external_graft` keeps its signature and now
+writes through the kernel document, so everything it writes reads back.
