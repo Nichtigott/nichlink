@@ -8,13 +8,20 @@
 //! `SlotValidationError` 映射到各自的错误类型，并负责所有 I/O。
 
 use super::*;
+use crate::registry_core::declaration::{FlowContract, FrameworkId, PluginMode, PluginSource};
 
 /// Trust lane enabled for one runtime plugin slot.
 /// 运行时插件槽允许使用的信任通道。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PluginChannel {
+    /// Official lane: admits only official, signature-verified plugins.
+    /// 官方通道：只接纳官方且签名已验证的插件。
     Official,
+    /// Community lane: admits user-sourced plugins, with the same rule as `Local`.
+    /// 社区通道：接纳用户来源的插件，准入规则与 `Local` 相同。
     Community,
+    /// Local lane: admits user-sourced plugins, with the same rule as `Community`.
+    /// 本地通道：接纳用户来源的插件，准入规则与 `Community` 相同。
     Local,
 }
 

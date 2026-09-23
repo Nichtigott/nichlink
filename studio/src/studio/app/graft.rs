@@ -9,13 +9,16 @@
 //! * `Registry::overlay` is the **application** that produces the effective
 //!   tree at runtime; it never edits either registry.
 //! * `graft.plan` under `.nichlink/external-grafts/` is the **record** this
-//!   screen writes. It is consumed here and by nothing else.
+//!   screen writes. The screen consumes it here, and the runtime overlay path
+//!   (`run_method::apply_recorded_grafts` → `Registry::overlay_recorded`)
+//!   consumes it too.
 //!
 //! * 宿主入口的 `static_graft_plan!` 是构建读取的**声明**，用来保住槽位并填充发布态
 //!   静态计划。
 //! * `Registry::overlay` 是运行期产生有效树的**应用**；它不改动任何一棵树。
-//! * `.nichlink/external-grafts/` 下的 `graft.plan` 是本界面写下的**记录**，只在这里
-//!   被消费。
+//! * `.nichlink/external-grafts/` 下的 `graft.plan` 是本界面写下的**记录**：本界面在
+//!   这里消费它，运行期覆盖路径（`run_method::apply_recorded_grafts` →
+//!   `Registry::overlay_recorded`）也会消费它。
 
 use super::support::{package_root, with_authoring_context};
 use super::*;
@@ -114,12 +117,43 @@ impl App {
         match created {
             Ok(plan) => {
                 let path = plan.plan_path();
+                // The paste-ready line comes from the same kernel constructor and
+                // renderer the written record goes through. Hand-formatting a copy
+                // here is how the banner and the record start to disagree.
+                // 可粘贴的那一行由写出的记录所用的同一个内核构造器与渲染器生成。在这里
+                // 手写一份副本，正是横幅与记录开始不一致的原因。
                 let declaration = plan.document.declaration();
                 self.open_editor_file(path.clone(), 1);
-                self.event = format!(
-                    "External graft plan created at {}; declare the slot in the host entry: {declaration}",
-                    path.display()
-                );
+                self.event = match &state.declaration {
+                    // Writing the record first and declaring the slot afterwards is
+                    // a legitimate order, so the plan is still written. What the
+                    // banner must not do is let that order hide the consequence:
+                    // the release prunes a slot no declaration names, and the
+                    // runtime then skips this record as `UnkeptSlot` — no graft is
+                    // applied, and nothing fails loudly. So it is a warning, it
+                    // says which file is missing the declaration, and it carries
+                    // the exact clause to add.
+                    // 先写记录、后声明槽位是合法的顺序，因此计划照旧写入。横幅不能做的
+                    // 是让这个顺序掩盖后果：发布态会剪掉没有声明命名的槽位，运行期随后
+                    // 把这条记录当作 `UnkeptSlot` 跳过——不会应用任何嫁接，也不会有任何
+                    // 响亮的失败。因此它是一条警告，说明缺少声明的是哪个文件，并带上要补
+                    // 的那条子句。
+                    GraftDeclaration::Absent { entry } => format!(
+                        "Warning: External graft plan created at {}; the host entry {} declares no such slot, so the release prunes `{}` and the runtime skips this record (UnkeptSlot) instead of applying it. Add to static_graft_plan!:\n{declaration}",
+                        path.display(),
+                        entry.display(),
+                        state.target_path,
+                    ),
+                    GraftDeclaration::Unknown { reason } => format!(
+                        "Warning: External graft plan created at {}; the host entry could not be read ({reason}), so the release may prune `{}` and the runtime would skip this record (UnkeptSlot). Add to static_graft_plan!:\n{declaration}",
+                        path.display(),
+                        state.target_path,
+                    ),
+                    GraftDeclaration::Declared { line, .. } => format!(
+                        "External graft plan created at {}; the host entry already declares this slot at line {line}:\n{declaration}",
+                        path.display(),
+                    ),
+                };
             }
             Err(error) => self.event = format!("Graft failed: {error}"),
         }
@@ -223,19 +257,28 @@ fn graft_facts(registry: &Registry, state: &mut GraftState) {
 
     let module = registry
         .find(state.target)
-        .map(|info| nichlink_build_method::source_module_path(&info.source.file))
-        .unwrap_or_default();
+        .map(|info| nichlink_build_method::source_module_path(&info.source.file));
     state.declaration = match nichlink_build_method::declared_grafts(&package_root()) {
-        Ok(declared) => declaration_for(&state.target_path, &module, &declared),
+        Ok(declared) => declaration_for(&state.target_path, module.as_deref(), &declared),
         Err(reason) => GraftDeclaration::Unknown { reason },
     };
 }
 
 /// The declaration, if any, that names this face's slot.
 /// 命名这个注册面槽位的声明（若有）。
-fn declaration_for(path: &str, module: &str, declared: &DeclaredGrafts) -> GraftDeclaration {
+///
+/// The one cut/face matching rule lives in `DeclaredGraft::names_face`, the
+/// same rule the build uses; its `module` is the face's source module, or
+/// `None` when the target cannot be resolved in the current tree.
+/// 唯一的切口/注册面匹配规则位于 `DeclaredGraft::names_face`，与构建使用的是同一条
+/// 规则；其 `module` 是该注册面的源码模块，目标在当前树里解析不出来时为 `None`。
+fn declaration_for(
+    path: &str,
+    module: Option<&str>,
+    declared: &DeclaredGrafts,
+) -> GraftDeclaration {
     for cut in &declared.cuts {
-        if graft_names_face(cut, path, module) {
+        if cut.names_face(path, module) {
             return GraftDeclaration::Declared {
                 expression: describe_graft(cut),
                 line: cut.line,
@@ -245,41 +288,6 @@ fn declaration_for(path: &str, module: &str, declared: &DeclaredGrafts) -> Graft
     }
     GraftDeclaration::Absent {
         entry: declared.entry.clone(),
-    }
-}
-
-/// Whether one declared cut hands over exactly this face.
-/// 一条声明的切口是否正好交出这个注册面。
-///
-/// A typed cut names its target with a Rust path, so it is matched through the
-/// same module mapping the build uses; a string cut names the logical path, and
-/// a range names both of its endpoints.
-/// 类型化切口用 Rust 路径命名目标，因此通过与构建相同的模块映射来匹配；字符串切口
-/// 命名逻辑路径；区间切口命名它的两个端点。
-fn graft_names_face(cut: &DeclaredGraft, path: &str, module: &str) -> bool {
-    let normalized = |value: &str| {
-        value
-            .strip_prefix("crate::")
-            .or_else(|| value.strip_prefix("self::"))
-            .unwrap_or(value)
-            .to_owned()
-    };
-    match &cut.expressions {
-        Some(expressions) => {
-            let wanted = format!("{module}::NODE_ID");
-            normalized(&expressions.cut) == wanted
-                || expressions
-                    .cut_end
-                    .as_deref()
-                    .is_some_and(|end| normalized(end) == wanted)
-        }
-        None => {
-            cut.cut == path
-                || cut
-                    .cut
-                    .split_once(" to ")
-                    .is_some_and(|(start, end)| start.trim() == path || end.trim() == path)
-        }
     }
 }
 
@@ -299,28 +307,45 @@ fn describe_graft(cut: &DeclaredGraft) -> String {
                 expressions.graft
             )
         }
-        None => format!(
-            "cut \"{}\"{} graft \"{}\"",
-            cut.cut,
-            if cut.full { " full" } else { "" },
-            cut.graft
-        ),
+        None => match &cut.cut_end {
+            // A range is rendered in the bracketed two-literal form the macro
+            // grammar accepts, not as one quoted path: `cut "a to b"` is a
+            // single path that literally contains the range word, so echoing the
+            // endpoints as text would hand the author a clause that means
+            // something else.
+            // 区间渲染成宏语法接受的“两个带方括号字面量”形式，而不是一条带引号的路径：
+            // `cut "a to b"` 是字面含有区间词的单条路径，把端点当文本回显会给作者一句
+            // 含义不同的子句。
+            Some(end) => format!(
+                "cut [\"{}\" to \"{end}\"]{} graft \"{}\"",
+                cut.cut,
+                if cut.full { " full" } else { "" },
+                cut.graft
+            ),
+            None => format!(
+                "cut \"{}\"{} graft \"{}\"",
+                cut.cut,
+                if cut.full { " full" } else { "" },
+                cut.graft
+            ),
+        },
     }
 }
 
 /// A selector the filesystem and the plan format both accept.
 /// 文件系统与计划格式都能接受的选择器。
 fn graft_selector_error(selector: &str) -> Option<String> {
-    nichlink_run_method::validate_graft_selector(selector.trim()).err()
+    nichlink_run_method::validate_graft_selector(selector.trim())
+        .err()
+        .map(|error| error.to_string())
 }
 
 /// Where a plan by this selector lives, in the same layout the writer uses.
 /// 该选择器的计划所在位置，与写入方使用同一套布局。
 fn plan_path_for(selector: &str) -> PathBuf {
-    package_root()
-        .join(".nichlink/external-grafts")
+    nichlink_run_method::graft_record_root(&package_root())
         .join(selector.trim())
-        .join("graft.plan")
+        .join(nichlink_run_method::lexicon::GRAFT_PLAN_FILE)
 }
 
 #[cfg(test)]
@@ -337,6 +362,7 @@ mod tests {
     fn string_cut(path: &str) -> DeclaredGraft {
         DeclaredGraft {
             cut: path.to_owned(),
+            cut_end: None,
             graft: "button_fast".to_owned(),
             full: false,
             cfg: None,
@@ -349,7 +375,11 @@ mod tests {
     fn a_string_cut_names_the_logical_path() {
         let declared = declared(string_cut("root/control/button"));
         assert_eq!(
-            declaration_for("root/control/button", "control::object::button", &declared),
+            declaration_for(
+                "root/control/button",
+                Some("control::object::button"),
+                &declared
+            ),
             GraftDeclaration::Declared {
                 expression: "cut \"root/control/button\" graft \"button_fast\"".to_owned(),
                 line: 4,
@@ -357,7 +387,11 @@ mod tests {
             }
         );
         assert!(matches!(
-            declaration_for("root/control/slider", "control::object::slider", &declared),
+            declaration_for(
+                "root/control/slider",
+                Some("control::object::slider"),
+                &declared
+            ),
             GraftDeclaration::Absent { .. }
         ));
     }
@@ -366,6 +400,7 @@ mod tests {
     fn a_typed_cut_names_the_module_from_the_crate_root() {
         let declared = declared(DeclaredGraft {
             cut: "crate::control::object::button::NODE_ID".to_owned(),
+            cut_end: None,
             graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
             full: true,
             cfg: None,
@@ -377,7 +412,11 @@ mod tests {
             line: 7,
         });
         assert_eq!(
-            declaration_for("root/control/button", "control::object::button", &declared),
+            declaration_for(
+                "root/control/button",
+                Some("control::object::button"),
+                &declared
+            ),
             GraftDeclaration::Declared {
                 expression:
                     "cut(crate::control::object::button::NODE_ID) full graft(control_button_graft::button_fast::NODE_ID)"
@@ -388,23 +427,65 @@ mod tests {
         );
         // The build strips `crate::` before comparing; so does this check.
         assert!(matches!(
-            declaration_for("root/control/button", "other::module", &declared),
+            declaration_for("root/control/button", Some("other::module"), &declared),
             GraftDeclaration::Absent { .. }
         ));
     }
 
     #[test]
     fn a_range_cut_names_both_endpoints() {
-        let declared = declared(string_cut("root/a to root/c"));
+        let mut range = string_cut("root/a");
+        range.cut_end = Some("root/c".to_owned());
+        let declared = declared(range);
         for path in ["root/a", "root/c"] {
             assert!(matches!(
-                declaration_for(path, "a", &declared),
+                declaration_for(path, Some("a"), &declared),
                 GraftDeclaration::Declared { .. }
             ));
         }
         assert!(matches!(
-            declaration_for("root/b", "b", &declared),
+            declaration_for("root/b", Some("b"), &declared),
             GraftDeclaration::Absent { .. }
+        ));
+        // The rendered clause keeps the endpoints as two literals, so pasting it
+        // back declares a range instead of one path named `root/a to root/c`.
+        // 渲染出的子句把端点保持为两个字面量，粘回去声明的是区间，而不是一条名为
+        // `root/a to root/c` 的路径。
+        assert_eq!(
+            declaration_for("root/a", Some("a"), &declared),
+            GraftDeclaration::Declared {
+                expression: "cut [\"root/a\" to \"root/c\"] graft \"button_fast\"".to_owned(),
+                line: 4,
+                cfg: None,
+            }
+        );
+    }
+
+    /// A typed cut cannot match once the target module cannot be resolved.
+    /// 目标模块解析不出来时，类型化切口不再匹配。
+    #[test]
+    fn an_unresolved_module_only_matches_a_string_cut() {
+        let typed = declared(DeclaredGraft {
+            cut: "crate::control::object::button::NODE_ID".to_owned(),
+            cut_end: None,
+            graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
+            full: false,
+            cfg: None,
+            expressions: Some(nichlink_build_method::DeclaredGraftExpressions {
+                cut: "crate::control::object::button::NODE_ID".to_owned(),
+                cut_end: None,
+                graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
+            }),
+            line: 7,
+        });
+        assert!(matches!(
+            declaration_for("root/control/button", None, &typed),
+            GraftDeclaration::Absent { .. }
+        ));
+        let text = declared(string_cut("root/control/button"));
+        assert!(matches!(
+            declaration_for("root/control/button", None, &text),
+            GraftDeclaration::Declared { .. }
         ));
     }
 

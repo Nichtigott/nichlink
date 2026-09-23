@@ -27,6 +27,15 @@ pub(super) fn select_project(root: PathBuf, manifest: PathBuf, namespace: impl I
     });
 }
 
+/// The namespace Studio authors under: the selected project first, then the
+/// environment, then the documented default.
+/// Studio 创作所用的命名空间：先选中的项目，再环境变量，最后文档化的默认值。
+///
+/// Studio used to carry its own copy of this fallback chain and of
+/// `package_root`'s; both now come from `lexicon`, so the editor and the
+/// executor it calls cannot disagree about which project is open.
+/// Studio 此前自带这套回落链与 `package_root` 的副本；两者现在都来自 `lexicon`，因此
+/// 编辑器与它调用的执行器不会对"打开的是哪个项目"产生分歧。
 pub(super) fn package_namespace() -> String {
     PROJECT_CONTEXT
         .with(|current| {
@@ -35,8 +44,14 @@ pub(super) fn package_namespace() -> String {
                 .as_ref()
                 .map(|project| project.namespace.clone())
         })
-        .or_else(|| std::env::var("NICH_LINK_NAMESPACE").ok())
-        .unwrap_or_else(|| "nichlink.default".to_owned())
+        .unwrap_or_else(|| {
+            nichlink_run_method::lexicon::resolve_namespace(
+                std::env::var(nichlink_run_method::lexicon::NAMESPACE_ENV)
+                    .ok()
+                    .as_deref(),
+            )
+            .to_owned()
+        })
 }
 
 pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
@@ -44,6 +59,9 @@ pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
 }
 
 /// Resolve the project whose sources Studio reads and edits.
+///
+/// The rule is `lexicon`'s; only the last-resort fallback is Studio's own.
+/// 规则来自 `lexicon`；只有最后兜底属于 Studio 自己。
 pub(super) fn package_root() -> PathBuf {
     if let Some(root) = PROJECT_CONTEXT.with(|current| {
         current
@@ -53,28 +71,24 @@ pub(super) fn package_root() -> PathBuf {
     }) {
         return root;
     }
-    if let Some(configured) = std::env::var_os("NICH_LINK_PACKAGE_ROOT") {
-        let path = PathBuf::from(configured);
-        if path.is_absolute() {
-            return path;
-        }
-        return std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path);
-    }
+    let configured =
+        std::env::var_os(nichlink_run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let current = std::env::current_dir().ok();
     // When Studio is launched from a host project, that project is the natural
     // target. This keeps `cargo run --manifest-path .../studio/Cargo.toml`
     // useful without requiring an environment variable.
     // 从宿主项目目录启动 Studio 时，当前目录就是默认目标，无需额外环境变量。
-    if let Ok(current) = std::env::current_dir()
-        && current.join("Cargo.toml").is_file()
-    {
-        return current;
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let fallback = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .to_owned()
+        .unwrap_or_else(|| Path::new("."));
+    nichlink_run_method::lexicon::resolve_package_root(
+        configured.as_deref(),
+        current.as_deref(),
+        current
+            .as_ref()
+            .is_some_and(|directory| directory.join("Cargo.toml").is_file()),
+        fallback,
+    )
 }
 
 /// Resolve the Cargo manifest used for MIR inspection and rebuilds.
@@ -107,31 +121,31 @@ use super::*;
 
 impl App {
     pub(super) fn near_divider(&self, column: u16, row: u16) -> bool {
-        self.workspace_area.contains((column, row).into())
-            && column.abs_diff(self.tree_area.right()) <= 1
+        self.hot.workspace_area.contains((column, row).into())
+            && column.abs_diff(self.hot.tree_area.right()) <= 1
     }
 
     pub(super) fn near_graph_divider(&self, column: u16, row: u16) -> bool {
-        self.graph_area.contains((column, row).into())
-            && column.abs_diff(self.graph_callees_area.x) <= 1
+        self.hot.graph_area.contains((column, row).into())
+            && column.abs_diff(self.hot.graph_callees_area.x) <= 1
     }
 
     pub(super) fn resize_graph_split(&mut self, column: u16) {
-        if self.graph_area.width == 0 {
+        if self.hot.graph_area.width == 0 {
             return;
         }
-        let relative = column.saturating_sub(self.graph_area.x) as u32;
+        let relative = column.saturating_sub(self.hot.graph_area.x) as u32;
         self.graph_split_percent =
-            ((relative * 100) / u32::from(self.graph_area.width)).clamp(35, 65) as u16;
+            ((relative * 100) / u32::from(self.hot.graph_area.width)).clamp(35, 65) as u16;
     }
 
     pub(super) fn resize_split(&mut self, column: u16) {
-        if self.workspace_area.width == 0 {
+        if self.hot.workspace_area.width == 0 {
             return;
         }
-        let relative = column.saturating_sub(self.workspace_area.x) as u32;
+        let relative = column.saturating_sub(self.hot.workspace_area.x) as u32;
         self.split_percent =
-            ((relative * 100) / u32::from(self.workspace_area.width)).clamp(25, 70) as u16;
+            ((relative * 100) / u32::from(self.hot.workspace_area.width)).clamp(25, 70) as u16;
     }
 
     pub(super) fn move_selection(&mut self, delta: isize) {

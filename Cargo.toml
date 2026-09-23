@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "macro", "run_method", "build_method", "cli", "debug_method", "studio", "plugin-host", "mcp", "examples/control-button", "examples/control-button-graft"]
+members = ["core", "macro", "run_method", "build_method", "cli", "debug_method", "studio", "plugin-host", "mcp", "examples/control-button", "examples/control-button-graft", "conventions"]
 resolver = "2"
 
 

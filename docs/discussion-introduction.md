@@ -16,7 +16,7 @@ NichLink：面向 Rust 对象图的递归注册与原子嫁接
 - 子对象递归进入正确的 Registry；
 - 注册时检查 admission、结构 rule 和输入输出合同；
 - 在中间层进行原子 graft，而不要求重写整棵对象树；
-- 通过 Studio、CallTrace 和 MCP 查看真实调用和数据流。
+- 用 `CallTrace` 记录调用和数据流，并在 Studio 中查看（Studio 的 DATA 面板当前显示内置样例 trace，尚无真实 ingest 路径；MCP 目前只提供只读源码查询，不能查询注册树或合同）；
 
 最小声明可以很短：
 
@@ -38,6 +38,7 @@ NodeEditor -> Canvas2D -> WGPU
 当前仓库包含：
 
 - `nichlink-core`：Registry、合同、admission、graft 和事务；
+- `nichlink-macro`：编译期注册面字段前端（宽容的分隔符与顺序、带 span 的诊断、编辑器镜像）；
 - `nichlink-build-method`：目录发现、粗修和静态计划；
 - `nichlink-run-method`：运行期 trace 状态与 `host!`/`trace_call!` 宏；
 - `nichlink-cli`：统一命令行入口（`nichlink new/check/build/studio/mcp`）；
@@ -56,5 +57,5 @@ NodeEditor -> Canvas2D -> WGPU
 
 如果你愿意试用，请附上：项目类型、采用前的接线方式、最希望解决的替换或调试问题，以及没有采用的原因。反例和批评同样欢迎。
 
-仓库：<https://github.com/OWNER/NichLink>
-路线图：[`ROADMAP.md`](../ROADMAP.md)
+仓库：<https://github.com/Nichtigott/nichlink>
+路线图：[`ROADMAP.md`](ROADMAP.md)

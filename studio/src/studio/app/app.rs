@@ -16,6 +16,9 @@ mod sample;
 use sample::sample_live_trace;
 mod graft;
 mod graph_queries;
+#[path = "hot_zones.rs"]
+mod hot_zones;
+pub use hot_zones::HotZones;
 mod interaction;
 mod keyboard;
 mod keyboard_overlay;
@@ -35,8 +38,15 @@ use nichlink_run_method::{
     NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
 };
 
+/// Studio's top-level state: the loaded registry, active page, and UI cursors.
+/// Studio 的顶层状态：已加载的注册表、当前页面与界面游标。
+///
+/// `lifecycle` owns construction and reload; interactions mutate it in place.
+/// `lifecycle` 负责构造与重载；交互在原位修改它。
 #[derive(Debug)]
 pub struct App {
+    /// Loaded registration tree, replaced wholesale by every successful reload.
+    /// 已加载的注册树，每次成功重载时整体替换。
     pub registry: Registry,
     /// Values captured by the current live diagnostic sample.
     /// 当前运行诊断样本捕获的值。
@@ -44,53 +54,46 @@ pub struct App {
     /// Optional compiler snapshot, loaded only when requested from the graph.
     /// 可选的编译器快照，只在调用图中明确请求时加载。
     pub mir_graph: Option<MirGraph>,
+    /// Node currently highlighted in the tree and inspectors.
+    /// 当前在树与检视器中高亮的节点。
     pub selected: NodeId,
+    /// Active top-level workspace.
+    /// 当前顶层工作区。
     pub page: StudioPage,
     /// Selected field in the main face inspector.
     /// 主注册面检视器当前选中的字段。
     pub details_selected: usize,
+    /// Tree nodes whose children are hidden.
+    /// 子节点被隐藏的树节点。
     pub collapsed: BTreeSet<NodeId>,
+    /// Which Inspect pane owns keyboard focus.
+    /// 哪个 Inspect 面板拥有键盘焦点。
     pub focus: Focus,
+    /// Open modal screen, or `None` on the base workspace.
+    /// 当前打开的模态界面；基础工作区为 `None`。
     pub overlay: Option<Overlay>,
+    /// Latest status line shown in the event log.
+    /// 事件日志中显示的最新状态行。
     pub event: String,
+    /// Failure from the most recent reload, cleared on success.
+    /// 最近一次重载的失败信息，成功时清空。
     pub reload_error: Option<ReloadError>,
+    /// Set when the user asked to leave; the loop checks it after each draw.
+    /// 用户请求退出时置位；事件循环每次绘制后检查。
     pub should_quit: bool,
     editor_request: Option<(PathBuf, u32)>,
-    pub tree_area: ratatui::layout::Rect,
-    pub details_area: ratatui::layout::Rect,
-    pub workspace_area: ratatui::layout::Rect,
-    pub overlay_area: ratatui::layout::Rect,
-    pub overlay_list_area: ratatui::layout::Rect,
-    pub overlay_compare_list_area: ratatui::layout::Rect,
-    pub delete_cancel_area: ratatui::layout::Rect,
-    pub delete_confirm_area: ratatui::layout::Rect,
-    pub action_cancel_area: ratatui::layout::Rect,
-    pub action_validate_area: ratatui::layout::Rect,
-    pub action_edit_area: ratatui::layout::Rect,
-    pub action_confirm_area: ratatui::layout::Rect,
-    pub action_exit_area: ratatui::layout::Rect,
-    /// Clickable compose rows of the external-graft screen.
-    /// 外部 graft 界面可点击的撰写区行。
-    pub graft_compose_area: ratatui::layout::Rect,
+    /// Click hot-zones refreshed by every draw.
+    /// 每次绘制刷新的点击热区。
+    pub hot: HotZones,
+    /// Index of the first visible tree row.
+    /// 树中首个可见行的下标。
     pub tree_offset: usize,
+    /// Percentage of the Inspect workspace given to the tree pane.
+    /// Inspect 工作区中分给树面板的百分比。
     pub split_percent: u16,
+    /// Percentage of the graph page width given to its left column.
+    /// 调用图页面宽度中分给左侧列的百分比。
     pub graph_split_percent: u16,
-    pub graph_area: ratatui::layout::Rect,
-    pub graph_detail_area: ratatui::layout::Rect,
-    pub graph_provenance_area: ratatui::layout::Rect,
-    pub graph_callers_area: ratatui::layout::Rect,
-    pub graph_center_area: ratatui::layout::Rect,
-    pub graph_callees_area: ratatui::layout::Rect,
-    pub graph_tree_a_area: ratatui::layout::Rect,
-    pub graph_tree_b_area: ratatui::layout::Rect,
-    pub graph_data_a_area: ratatui::layout::Rect,
-    pub graph_data_b_area: ratatui::layout::Rect,
-    pub graph_a_input_area: ratatui::layout::Rect,
-    pub graph_a_center_area: ratatui::layout::Rect,
-    pub graph_a_output_area: ratatui::layout::Rect,
-    pub graph_b_input_area: ratatui::layout::Rect,
-    pub graph_b_center_area: ratatui::layout::Rect,
-    pub graph_b_output_area: ratatui::layout::Rect,
     graph_dragging_divider: bool,
     dragging_divider: bool,
     last_source_stamp: u128,
@@ -98,34 +101,6 @@ pub struct App {
 }
 
 impl App {
-    pub fn load_mir_snapshot(&mut self) -> Result<usize, String> {
-        let manifest = host_manifest();
-        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let output = Command::new(cargo)
-            .args(["rustc", "--manifest-path"])
-            .arg(&manifest)
-            .args(["--lib", "--quiet", "--", "-Zunpretty=mir"])
-            .output()
-            .map_err(|error| {
-                format!("cannot run cargo rustc for {}: {error}", manifest.display())
-            })?;
-        if !output.status.success() {
-            let detail = String::from_utf8_lossy(&output.stderr);
-            return Err(if detail.trim().is_empty() {
-                format!("cargo rustc exited with {}", output.status)
-            } else if detail.contains("option `Z` is only accepted") {
-                "MIR inspection requires a nightly rustc; normal Studio builds stay on stable."
-                    .to_owned()
-            } else {
-                detail.trim().to_owned()
-            });
-        }
-        let graph = MirGraph::from_mir_text(&String::from_utf8_lossy(&output.stdout));
-        let calls = graph.calls.len();
-        self.mir_graph = Some(graph);
-        Ok(calls)
-    }
-
     /// Static candidates whose caller or callee mentions a selected function.
     /// 返回涉及所选函数的静态候选调用。
     pub fn mir_candidates_for(&self, function: &str) -> Vec<&MirCall> {
@@ -144,18 +119,28 @@ impl App {
             .collect()
     }
 
+    /// Count MIR callers and callees of a function as `(callers, callees)`.
+    /// 统计一个函数在 MIR 中的调用者与被调用者，返回 `(调用者, 被调用者)`。
+    ///
+    /// Both counts are zero until a MIR snapshot has been loaded.
+    /// 在载入 MIR 快照之前，两个计数都为零。
     pub fn mir_relation_counts(&self, function: &str) -> (usize, usize) {
         let Some(graph) = self.mir_graph.as_ref() else {
             return (0, 0);
         };
         graph.calls.iter().fold((0, 0), |(callers, callees), edge| {
             (
-                callers + usize::from(mir_name_matches(&edge.callee, function)),
-                callees + usize::from(mir_name_matches(&edge.caller, function)),
+                callers + usize::from(same_symbol(&edge.callee, function)),
+                callees + usize::from(same_symbol(&edge.caller, function)),
             )
         })
     }
 
+    /// Visible tree rows and their depth, honoring the collapsed set.
+    /// 可见的树行及其深度，遵循折叠集合。
+    ///
+    /// The root is always first, so the list is never empty.
+    /// 根始终在首位，因此列表永不为空。
     pub fn visible_nodes(&self) -> Vec<(NodeId, usize)> {
         let root = self.registry.id();
         let mut nodes = vec![(root, 0)];
@@ -178,6 +163,8 @@ impl App {
         nodes
     }
 
+    /// Display name of a node: `root`, its registry name, or `<missing>`.
+    /// 节点的显示名：`root`、其注册名，或 `<missing>`。
     pub fn node_name(&self, id: NodeId) -> &str {
         if id == self.registry.id() {
             "root"

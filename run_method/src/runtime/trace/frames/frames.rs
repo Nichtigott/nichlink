@@ -35,6 +35,14 @@ impl<'a> Iterator for FramePath<'a> {
 }
 
 impl CallTrace {
+    /// Run `operation` inside a new frame for `node`/`function`.
+    /// 在 `node`/`function` 的新调用帧内执行 `operation`。
+    ///
+    /// The frame is pushed before the callback and popped afterwards, including
+    /// when it panics, so a stale frame never captures later values. `Off` mode
+    /// runs the callback without recording a frame.
+    /// 回调前压入该帧、之后弹出，panic 时同样弹出，陈旧帧不会捕获后续值。`Off` 模式只
+    /// 执行回调而不记录帧。
     #[track_caller]
     pub fn with<R>(
         &mut self,
@@ -220,6 +228,8 @@ impl CallTrace {
         visit(&frame.call)
     }
 
+    /// Clone the active root-to-leaf call path, outermost frame first.
+    /// 克隆当前活动的根到叶调用路径，最外层帧在前。
     pub fn current_path(&self) -> Vec<CallSite> {
         self.current
             .iter()
@@ -281,6 +291,8 @@ impl CallTrace {
             .map(|frame| self.path_for(frame.call.frame_id))
     }
 
+    /// Render every frame as one indented line, in recording order.
+    /// 按记录顺序把每个调用帧渲染成一行缩进文本。
     pub fn render_tree(&self) -> String {
         let mut output = String::new();
         for frame in &self.frames {

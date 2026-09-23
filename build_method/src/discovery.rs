@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use super::types::Node;
+use super::Node;
 
 pub(crate) fn discover_root(src: &Path) -> Vec<Node> {
     let mut nodes: Vec<Node> = fs::read_dir(src)

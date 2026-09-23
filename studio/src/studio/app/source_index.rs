@@ -94,83 +94,9 @@ pub(crate) fn function_line(file: &str, function: &str) -> Option<u32> {
 }
 
 #[cfg(test)]
-pub(super) fn visible_search_rows(lines: &[String], folded: &BTreeSet<usize>) -> Vec<SearchRow> {
-    let depths = lines
-        .iter()
-        .map(|line| {
-            line.chars()
-                .take_while(|character| character.is_whitespace())
-                .count()
-                / 2
-        })
-        .collect::<Vec<_>>();
-    let mut folded_ancestors = Vec::new();
-    let mut rows = Vec::new();
-    for (source_index, text) in lines.iter().enumerate() {
-        if text.trim().is_empty() {
-            folded_ancestors.clear();
-            continue;
-        }
-        let depth = depths[source_index];
-        folded_ancestors.retain(|ancestor_depth| *ancestor_depth < depth);
-        let hidden = !folded_ancestors.is_empty();
-        let has_children = lines
-            .get(source_index + 1)
-            .is_some_and(|next| !next.trim().is_empty() && depths[source_index + 1] > depth);
-        if !hidden {
-            let (node, path, function, line, display) = parse_search_line(text);
-            rows.push(SearchRow {
-                source_index,
-                depth,
-                has_children,
-                node,
-                path,
-                function,
-                line,
-                signature: String::new(),
-                text: display,
-            });
-        }
-        if folded.contains(&source_index) && has_children {
-            folded_ancestors.push(depth);
-        }
-    }
-    rows
-}
-
-#[cfg(test)]
 pub(super) fn function_bodies(source: &str) -> Vec<(String, String)> {
     function_symbols(source)
         .into_iter()
         .map(|function| (function.name, function.body))
         .collect()
-}
-
-/// Turn the verbose headless report into a human-readable search row.
-/// 将详细的无终端报告转换为人能快速扫描的搜索行。
-#[cfg(test)]
-fn parse_search_line(line: &str) -> (Option<NodeId>, String, String, Option<u32>, String) {
-    let trimmed = line.trim();
-    let mut tokens = trimmed.split_whitespace();
-    let _branch = tokens.next();
-    let node = tokens.next().and_then(|value| value.parse().ok());
-    let remainder = tokens.collect::<Vec<_>>().join(" ");
-    let (target, declaration) = remainder
-        .split_once(" declared-at=")
-        .map_or((remainder.as_str(), ""), |(target, rest)| {
-            (target, rest.split_whitespace().next().unwrap_or(""))
-        });
-    let line = declaration
-        .rsplit_once(':')
-        .and_then(|(_, line)| line.parse::<u32>().ok());
-    let (path, function) = target
-        .split_once("::")
-        .map(|(path, function)| (path.to_owned(), function.to_owned()))
-        .unwrap_or_else(|| (target.to_owned(), String::new()));
-    let display = if function.is_empty() {
-        path.clone()
-    } else {
-        format!("{path} -> fn {function}")
-    };
-    (node, path, function, line, display)
 }

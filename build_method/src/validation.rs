@@ -5,10 +5,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use super::Node;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registration_check;
 use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
-use super::types::Node;
 use super::{SourceScope, collect_active_ids, relative_display};
 
 pub(crate) fn aggregate_requirements(
@@ -136,7 +136,7 @@ fn collect_stable_names(
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/")
+            if !nichlink::lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
                 && let Some(stable_name) = face.string("stable_name")
@@ -174,7 +174,7 @@ pub(crate) fn parsed_face(source: &str, display_path: &str) -> Option<FaceSyntax
 #[cfg(test)]
 mod tests {
     use super::aggregate_parent_macro_errors;
-    use crate::types::Node;
+    use crate::Node;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};

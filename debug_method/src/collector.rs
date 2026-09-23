@@ -1,15 +1,9 @@
 //! Debug-only linker-section backend for NichLink declarations.
+//! 仅调试期使用的 NichLink 声明链接段后端。
 
-#[doc(hidden)]
-pub use inventory;
-
-#[macro_export]
-macro_rules! collect {
-    ($ty:ty) => {
-        $crate::inventory::collect!($ty);
-    };
-}
-
+/// Iterate every declaration that opted into the debug collector in this
+/// binary; outside debug builds the result is empty rather than absent.
+/// 遍历本二进制中选择加入调试收集器的所有声明；非调试构建下结果为空而非缺失。
 #[macro_export]
 macro_rules! registrations {
     ($ty:ty) => {{
@@ -26,6 +20,10 @@ macro_rules! registrations {
     }};
 }
 
+/// Submit one `'static` registration value to the debug collector; the value
+/// stays in the binary's inventory section and is only read in debug builds.
+/// 向调试收集器提交一个 `'static` 注册值；该值留在二进制的 inventory 段中，
+/// 仅在调试构建中被读取。
 #[macro_export]
 macro_rules! submit {
     ($value:expr) => {

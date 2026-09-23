@@ -1,41 +1,26 @@
-// Field dictionary shared by the Studio form and the file authoring API.
-// Studio 表单与文件创作 API 共用的字段词典。
-//
-// The field order mirrors every field accepted by a parent-specific object macro.
-// Keeping one shared order prevents Add/Edit from silently dropping metadata.
-// 字段顺序覆盖父级专属 object 宏的全部可编辑字段；统一顺序可避免
-// Add/Edit 静默丢失注册面信息。
-pub const FACE_FIELD_NAMES: [&str; 30] = [
-    "parent",
-    "module",
-    "needs registry",
-    "tree slot",
-    "child structure rule",
-    "allowed dependencies",
-    "parts type",
-    "exports",
-    "Rust type",
-    "display name zh",
-    "display name en",
-    "summary zh",
-    "summary en",
-    "preset type",
-    "parameter metadata",
-    "handle type",
-    "stable identity",
-    "external source note",
-    "rule source",
-    "handle trait labels",
-    "handle trait paths",
-    "parts trait labels",
-    "requires",
-    "provides",
-    "expected object output",
-    "actual object output",
-    "runtime checks",
-    "graft flow contract",
-    "flow provider type",
-    "parts trait paths",
-];
+//! Face authoring data, pure validation, and the parsing built on `syn`.
+//! 注册面创作数据、纯校验，以及建立在 `syn` 之上的解析。
+//!
+//! The name table and presentation metadata are plain data: they are useful to
+//! any surface that shows a face, whether or not the `syntax` feature is on, so
+//! they are not behind the gate. Only the parser — and the snapshot layer built
+//! on it — need `syn`. The file names say which is which.
+//! 名字表与展示元数据是纯数据：任何展示注册面的执行面都用得上，无论 `syntax` 特性是否
+//! 打开，因此不放在门控里。需要 `syn` 的只有解析器，以及建立在它之上的快照层。文件名
+//! 直接说明哪个是哪个。
 
-pub const FACE_FIELD_COUNT: usize = FACE_FIELD_NAMES.len();
+#[path = "field_names.rs"]
+mod field_names;
+pub use field_names::*;
+#[path = "field_presentation.rs"]
+mod field_presentation;
+pub use field_presentation::*;
+
+#[path = "parse/parse.rs"]
+#[cfg(feature = "syntax")]
+pub mod parse;
+#[path = "snapshot/snapshot.rs"]
+#[cfg(feature = "syntax")]
+pub mod snapshot;
+#[path = "validation/validation.rs"]
+pub mod validation;

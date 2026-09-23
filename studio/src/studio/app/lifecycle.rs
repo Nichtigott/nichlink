@@ -43,6 +43,17 @@ impl App {
             .map_or(registry.id(), |info| info.id);
         Self {
             registry,
+            // TODO(trace-ingest): `runtime_trace` is the built-in demo sample,
+            // not an observed run. Nothing loads a real `CallTrace` produced by
+            // a host (trace artifact file or `NICH_LINK_TRACE`-style variable)
+            // into Studio, so the LIVE legend and DATA panel are labelled as a
+            // sample. The missing ingest path is: host records a `CallTrace`
+            // and Studio reads it here before drawing data-flow values.
+            // TODO(trace-ingest)：`runtime_trace` 是内置演示样本，不是实测运行。
+            // 目前没有任何代码把宿主产生的真实 `CallTrace`（trace artifact 文件或
+            // `NICH_LINK_TRACE` 风格的环境变量）载入 Studio，因此 LIVE 图例与 DATA
+            // 面板都标注为样例。缺失的 ingest 路径是：宿主记录 `CallTrace`，Studio
+            // 在绘制数据流数值前在此处读入。
             runtime_trace: sample_live_trace(),
             mir_graph: None,
             selected,
@@ -55,39 +66,10 @@ impl App {
             reload_error: None,
             should_quit: false,
             editor_request: None,
-            tree_area: ratatui::layout::Rect::default(),
-            details_area: ratatui::layout::Rect::default(),
-            workspace_area: ratatui::layout::Rect::default(),
-            overlay_area: ratatui::layout::Rect::default(),
-            overlay_list_area: ratatui::layout::Rect::default(),
-            overlay_compare_list_area: ratatui::layout::Rect::default(),
-            delete_cancel_area: ratatui::layout::Rect::default(),
-            delete_confirm_area: ratatui::layout::Rect::default(),
-            action_cancel_area: ratatui::layout::Rect::default(),
-            action_validate_area: ratatui::layout::Rect::default(),
-            action_edit_area: ratatui::layout::Rect::default(),
-            action_confirm_area: ratatui::layout::Rect::default(),
-            action_exit_area: ratatui::layout::Rect::default(),
-            graft_compose_area: ratatui::layout::Rect::default(),
+            hot: HotZones::default(),
             tree_offset: 0,
             split_percent: 45,
             graph_split_percent: 44,
-            graph_area: ratatui::layout::Rect::default(),
-            graph_detail_area: ratatui::layout::Rect::default(),
-            graph_provenance_area: ratatui::layout::Rect::default(),
-            graph_callers_area: ratatui::layout::Rect::default(),
-            graph_center_area: ratatui::layout::Rect::default(),
-            graph_callees_area: ratatui::layout::Rect::default(),
-            graph_tree_a_area: ratatui::layout::Rect::default(),
-            graph_tree_b_area: ratatui::layout::Rect::default(),
-            graph_data_a_area: ratatui::layout::Rect::default(),
-            graph_data_b_area: ratatui::layout::Rect::default(),
-            graph_a_input_area: ratatui::layout::Rect::default(),
-            graph_a_center_area: ratatui::layout::Rect::default(),
-            graph_a_output_area: ratatui::layout::Rect::default(),
-            graph_b_input_area: ratatui::layout::Rect::default(),
-            graph_b_center_area: ratatui::layout::Rect::default(),
-            graph_b_output_area: ratatui::layout::Rect::default(),
             graph_dragging_divider: false,
             dragging_divider: false,
             last_source_stamp: source_stamp(),
@@ -95,6 +77,11 @@ impl App {
         }
     }
 
+    /// Build an app from the on-disk registration snapshot.
+    /// 从磁盘上的注册快照构建 App。
+    ///
+    /// A failed load keeps an empty root registry and reports the error in `event`.
+    /// 加载失败时保留一个空根注册表，并把错误写入 `event`。
     pub fn load() -> Self {
         let mut app = match load_registry() {
             Ok(registry) => Self::new(
@@ -159,6 +146,8 @@ impl App {
         }
     }
 
+    /// Registration snapshot of the currently selected node, if it still exists.
+    /// 当前选中节点的注册快照（若仍存在）。
     pub fn selected_info(&self) -> Option<&RegistrationSnapshot> {
         self.registry.find(self.selected)
     }
@@ -173,8 +162,8 @@ impl App {
         }
     }
 
-    /// Ask rustc for a one-shot in-memory MIR snapshot.
-    /// 直接请求 rustc 一次，将 MIR 快照留在内存中。
+    /// Reload the registration snapshot from disk.
+    /// 从磁盘重新加载注册快照。
     pub(super) fn reload(&mut self) {
         match load_registry() {
             Ok(registry) => {
@@ -196,6 +185,36 @@ impl App {
                 self.event = "Reload failed; keeping the last healthy snapshot.".to_owned();
             }
         }
+    }
+
+    /// Ask rustc for a one-shot in-memory MIR snapshot.
+    /// 直接请求 rustc 一次，将 MIR 快照留在内存中。
+    pub fn load_mir_snapshot(&mut self) -> Result<usize, String> {
+        let manifest = host_manifest();
+        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let output = Command::new(cargo)
+            .args(["rustc", "--manifest-path"])
+            .arg(&manifest)
+            .args(["--lib", "--quiet", "--", "-Zunpretty=mir"])
+            .output()
+            .map_err(|error| {
+                format!("cannot run cargo rustc for {}: {error}", manifest.display())
+            })?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(if detail.trim().is_empty() {
+                format!("cargo rustc exited with {}", output.status)
+            } else if detail.contains("option `Z` is only accepted") {
+                "MIR inspection requires a nightly rustc; normal Studio builds stay on stable."
+                    .to_owned()
+            } else {
+                detail.trim().to_owned()
+            });
+        }
+        let graph = MirGraph::from_mir_text(&String::from_utf8_lossy(&output.stdout));
+        let calls = graph.calls.len();
+        self.mir_graph = Some(graph);
+        Ok(calls)
     }
 
     pub(super) fn build_all(&mut self) {

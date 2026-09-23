@@ -118,8 +118,8 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| kind.clone()),
     );
-    if let Some(plugin) = face.field("plugin") {
-        values.insert("plugin".to_owned(), plugin);
+    if let Some(plugin) = face.field(nichlink::lexicon::FACE_FIELD_PLUGIN) {
+        values.insert(nichlink::lexicon::FACE_FIELD_PLUGIN.to_owned(), plugin);
     }
     values.insert(
         "getting_from_other_registry".to_owned(),

@@ -54,7 +54,8 @@ NichLink 目前处于早期阶段：核心协议已可用于真实工程，静�
 `StaticPlan`；之后交给正常的 rustc、LLVM 和链接器做最终代码/符号裁剪。
 前者减少注册元数据和编译范围，后者负责最终机器码体积，它们不是一件事。
 - **按需调试。** `off`、`errors-only`、`full` 三档追踪让发布路径默认不收集
-证据。Studio 和 MCP 使用同一套注册树、调用链和数据流模型。
+证据。Studio 消费这套注册树、调用链和数据流模型；MCP 桥目前只提供只读的
+Rust 源码查询。
 
 ## 开始使用
 
@@ -457,6 +458,12 @@ fn registry_for_this_run(base: &Registry, external: &Registry) -> Registry {
 }
 ```
 
+切口也可以用 Rust 表达式命名两侧：
+`cut(crate::control::object::button::NODE_ID) graft(button_fast::NODE_ID)`。
+类型化形式在编译期解析，并要求外部实现已链接，因此记录无法覆盖它；上面的字符串形式
+两者都不需要，在覆盖时按选择器名解析。两种形式的完整说明见
+[`docs/graft.zh-CN.md`](docs/graft.zh-CN.md)。
+
 `overlay` 返回一棵新的 effective Registry。`base` 和 `external` 都不会被修改；
 任一切口的 flow contract、目标父规则、admission 或连接器检查失败，整组计划
 都不会发布。`overlay_static` 省掉动态 `GraftPlan` 及其 selector 字符串分配；
@@ -508,6 +515,9 @@ let plan = nichlink_run_method::GraftPlan::command(
 let effective = base.overlay(&plan, &external)?;
 ```
 
+跨度是两个端点之间按 `registry_name` 顺序连续的那一段兄弟——不是文件顺序或注册
+顺序；端点写反的区间会被拒绝，而不是静默交换。
+
 返回的 effective registry 保留原树和外部树不变，维持目标的逻辑路径，自动继承
 未覆盖的兄弟，并在发布前重新执行目标注册规范、准入和连接器校验。
 
@@ -516,8 +526,11 @@ Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西�
 * 宿主入口的 `static_graft_plan!` 是构建步骤读取的**声明**：它让被命名的槽位穿过剪枝
   存活下来，并填充发布态静态计划。它不删除任何代码。
 * `Registry::overlay` 是**应用**：它在运行期校验并返回有效树，原树与外部树都不被改动。
-* `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它不参与编译，
-  也没有别的消费者；界面读回它来列出、打开、改范围和删除计划。
+* `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它是运行期
+  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_run_method::apply_recorded_grafts`
+  读取它，`Registry::overlay_recorded` 按 [`docs/graft.zh-CN.md`](docs/graft.zh-CN.md) 中的优先级规则
+  对账——记录覆盖字符串形式的 `static_graft_plan!` 切口，类型化切口保持最终，外部注册机
+  解析不出的记录选择器回退到声明。界面读回它来列出、打开、改范围和删除计划。
 
 `g` 为选中注册面打开撰写界面：显示逻辑槽位，让你填写选择器并选择 `cut`（覆盖层保留原
 节点的子注册机）或 `full`（替换整棵子树）；用宿主入口已声明的切口校验这个槽位——没有
@@ -541,7 +554,9 @@ NichLink 的两阶段修剪解决两个不同问题。
 第一阶段发生在 rustc 展开生成模块之前，颗粒度是整个注册面：
 
 1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-build-method`；
-2. 构建器读取目录注册面以及 `main.rs`、`lib.rs` 或 `application!` 指定的入口；
+2. 构建器读取目录注册面以及 `main.rs`、`lib.rs`、`application!(entry = …)` 或
+   `NICH_LINK_ENTRY` 指定的入口（指不到文件即构建失败；同一个入口同时喂给剪枝与
+   切口表）；
 3. 它保守推导本 crate 需要的注册面——入口可达的面，加上 `static_graft_plan!` 里
    每个 `cut(` 命名的槽位——只把这些面写入生成模块和 `StaticPlan`；没有任何声明的
    面不会发布（`NICH_LINK_SCOPE` 可刻意放宽作用域）；
@@ -560,13 +575,16 @@ NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
 `&'static [StaticFace]`，把编译前声明的 graft 固化成同一 `StaticPlan` 内的
 `&'static [StaticGraftCut]`。`builtin_static_plan()` 直接借用这些只读数据：没有
 堆分配、全局 constructor、inventory 遍历或启动时注册循环。构建期
-`registry_rule` 检查也不会变成每帧执行的运行时逻辑。
+`registry_rule` 检查也不会变成每帧执行的运行时逻辑。注册面自己声明的
+`runtime_checks` 是另一条、由宿主显式开启的路径：宿主在值的边界调用
+`Registry::health_check(node, value, call_path)`（未接 trace 时传空路径），该调用
+只执行这些声明过的检查。
 
 但“静态化”等于成本清楚，不等于所有场景绝对零成本：
 
 | 使用方式 | 运行时保留什么 | 成本边界 |
 | --- | --- | --- |
-| 只读内置拓扑 | `StaticFace` 静态切片 | 启动零分配；`find` 为二分查找 O(log n)，`children_of` 当前为 O(n) 过滤 |
+| 只读内置拓扑 | `StaticFace` 静态切片 | 启动零分配；`find` 与 `children_of` 都按注册树顺序线性扫描切片，均为 O(n) |
 | 开发态可变 Registry | `Arc` header、32 页 entries 和索引 | clone 只增加 `Arc` 引用；首次修改只复制命中的页，不复制整棵树 |
 | 编译前静态 graft | `StaticPlan` 内的静态 selector 切片 | 声明读取零分配；框架若已静态绑定实现，不需要构造 Registry overlay |
 | 发布后启用 plugin/graft | 所选动态元数据和 effective Registry | `overlay_static` 不分配计划，但仍要做一次合同、准入和连接器检查 |
@@ -621,8 +639,12 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-studio --bin nichlink-dev -- watch
+  cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch
 ```
+
+`nichlink-dev` **仅限工作区**：它从本检出重建 Studio，并启动该检出的 `target/debug`
+产物。`dev-supervisor` 特性默认关闭，因此 `cargo install nichlink-studio` 装的是 TUI，
+而不是一个没有东西可重建的监督器。
 
 命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
 项目，`nichlink check` 不做完整编译即可运行注册发现与校验，`nichlink
@@ -631,8 +653,11 @@ build` 先校验注册树再调用 `cargo build`，`nichlink snippets` 把注册
 vscode|nvim|blink` 指定一种，`--editor auto` 把本机探测到的编辑器装到各自的
 用户级位置，跳过模糊匹配 snippet 的引擎——blink.cmp 与 LuaSnip 在值位也会命中字段 trigger，
 需要显式 `--editor blink`/`--editor nvim`——`--stdout` 打印任意一份）。值补全本身不需要
-snippet；`nichlink studio` 负责交互式编辑和调试，`nichlink mcp` 是给
-AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
+snippet。`nichlink grafts` 列出 `.nichlink/external-grafts/` 记录以及宿主入口是否声明
+它们的槽位，`nichlink explain <node|path>` 报告单个节点的身份、构建作用域、剪枝状态与
+命名它的切口（`explain --overlay` 渲染构建的静态覆盖投影而不是活的树；真正的有效树是
+宿主侧的 `Registry::dump_effective`）。`nichlink studio` 负责交互式编辑和调试，
+`nichlink mcp` 是给 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
 check` 仍是构建校验命令：
 
 ```sh
@@ -642,7 +667,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 `nichlink.read` 和 `nichlink.status`。静态调用图会标为 heuristic；动态调用
-和运行时数值以 `CallTrace` 的现场证据为准。
+和运行时数值只有在宿主真实记录 `CallTrace` 后才具权威性。Studio 的 DATA
+面板当前渲染的是内置样例 trace，尚无 trace ingest 路径，因此不展示实测的
+运行时数值。
 
 ## 什么时候值得用 NichLink
 
@@ -659,7 +686,7 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 | `inventory` / `linkme` | 分布式收集静态条目 | 树语义、合同、溯源、原子嫁接 |
 | Bevy 风格插件 | 显式组合一个应用 | 通用源码路径和中间层合同校验 |
 | CodeGraph / CodeQL | 符号和调用证据 | 运行时注册与替换决策 |
-| NichLink | 被动递归注册树、合同、准入、嫁接校验、Studio/MCP 视图 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
+| NichLink | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与只读 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
 
 ## 边界
 
@@ -683,7 +710,7 @@ let detailed = nichlink_run_method::CallTrace::full();
 ```
 
 `errors-only` 只保留失败链路并丢弃成功证据；`full` 保留 frame、局部变量和
-数据边，供 Studio/MCP 查看。发布构建默认不收集，除非应用明确选择。
+数据边，供 Studio 查看。发布构建默认不收集，除非应用明确选择。
 
 ## Kernel 与执行面
 
@@ -706,22 +733,30 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 | `nichlink-mcp` | `mcp/` | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护 |
 | `nichlink-cli` | `cli/` | 进程胶水：argv 分发、cargo 子进程、子命令转发 |
 
+`nichlink-macro` 是第九个发布的 crate：一个在编译期归一化注册面字段的过程宏
+crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像）。它是构建期前端而不是
+执行面，因此不在上表。
+
 ## 工作区结构
 
 ```text
 core/         nichlink-core（kernel）：协议名词 + 纯方法全集——identity、
               declaration、diagnostic、tree、plugin、mir、requirements、
-              release、source、authoring、syntax
+              release、source、authoring、syntax、lexicon
+macro/        nichlink-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span
+              诊断、编辑器镜像）
 build_method/ nichlink-build-method：构建期源码发现、缓存、第一阶段 StaticPlan
 run_method/   nichlink-run-method：运行期 trace 状态、host!/trace_call! 宏、
               authoring 执行器
 debug_method/ nichlink-debug-method：可选 CallTrace 适配、MIR 证据、数据流与图模型
-cli/          nichlink-cli：统一入口（nichlink new/check/build/snippets/studio/mcp、
-              cargo-nichlink）
+cli/          nichlink-cli：统一入口（nichlink new/check/build/snippets/
+              explain/grafts/studio/mcp、cargo-nichlink）
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的只读 MCP 桥
 plugin-host/  可选 Wasm/进程插件和原子部署
 examples/     可运行示例：control-button 宿主与其项目外 graft 实现
+conventions/  nichlink-conventions：遍历本检出的门禁（内核纯净性、模块挂载、
+              尺寸棘轮、文档代码块）；不发布
 ```
 
 技术路线见 [`docs/ROADMAP.zh-CN.md`](docs/ROADMAP.zh-CN.md)，英文版见
@@ -738,4 +773,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 NichLink 使用 [MIT License](LICENSE)。欢迎提交真实项目中的失败案例、设计
 质疑和改进 PR，也欢迎在 GitHub Issues / Discussions 讨论边界问题。
 
-[English](README.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md)
+[English](README.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md) · [Graft 记录](docs/graft.zh-CN.md)

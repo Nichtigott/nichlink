@@ -3,10 +3,11 @@
 
 use std::collections::BTreeMap;
 
-use crate::{
-    NodeId, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
+use crate::registry_core::declaration::{
+    OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
     RegistrationSnapshot, RuntimeCheckSpec,
 };
+use crate::registry_core::identity::NodeId;
 
 use super::parse::{
     parse_admission_owned, parse_flow_value, parse_registration_rule_owned,

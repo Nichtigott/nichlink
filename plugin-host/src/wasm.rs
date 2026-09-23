@@ -1,3 +1,6 @@
+//! Fuel-metered, import-free Wasm plugin loading and invocation.
+//! 启用燃料计量、无导入的 Wasm 插件加载与调用。
+
 use std::sync::Mutex;
 
 use nichlink_run_method::{PluginAdapter, VerifiedPluginArtifact};
@@ -11,9 +14,26 @@ use crate::{HostError, PluginInstance};
 /// 每次 Wasm 调用使用的资源预算。
 #[derive(Clone, Copy, Debug)]
 pub struct WasmLimits {
+    /// Linear-memory ceiling per instance, in bytes; growth beyond it traps.
+    /// 每个实例的线性内存上限（字节）；超出即触发 trap。
     pub memory_bytes: usize,
+    /// Fuel granted to each call; an exhausted call traps.
+    /// 每次调用授予的燃料；燃料耗尽时调用触发 trap。
+    ///
+    /// The unit belongs to the engine, not to this host: it is a bound on how
+    /// much work a call may do, not a promise that a given number buys a given
+    /// amount of work. A major engine upgrade can re-scale it, so a host that
+    /// tuned this value against an older engine should re-measure rather than
+    /// assume the same number still fits.
+    /// 该单位属于引擎而不属于本宿主：它是"一次调用最多做多少工作"的上限，而不是"某个数值
+    /// 能买到多少工作"的承诺。引擎大版本升级可能重新标定它，因此针对旧引擎调过这个值的宿主
+    /// 应当重新实测，而不是假设同一个数字仍然够用。
     pub fuel_per_call: u64,
+    /// Largest request payload accepted, in bytes.
+    /// 接受的最大请求负载字节数。
     pub max_input_bytes: usize,
+    /// Largest response payload accepted, in bytes.
+    /// 接受的最大响应负载字节数。
     pub max_output_bytes: usize,
 }
 
@@ -36,10 +56,15 @@ pub struct WasmBackend {
 }
 
 impl WasmBackend {
+    /// Build a backend that applies `limits` to every loaded instance.
+    /// 构造一个对每个已加载实例施加 `limits` 的后端。
     pub const fn new(limits: WasmLimits) -> Self {
         Self { limits }
     }
 
+    /// Compile and instantiate the artifact, requiring the host ABI version and the
+    /// `nichlink_health` export to match before an instance is returned.
+    /// 编译并实例化工件；返回实例前要求宿主 ABI 版本与 `nichlink_health` 导出一致。
     pub fn load(&self, artifact: VerifiedPluginArtifact) -> Result<WasmInstance, HostError> {
         let (_, bytes) = artifact.into_parts();
         let mut config = Config::default();
@@ -60,9 +85,15 @@ impl WasmBackend {
             .set_fuel(self.limits.fuel_per_call)
             .map_err(|error| HostError::Limit(error.to_string()))?;
         let linker = Linker::new(&engine);
+        // `instantiate_and_start` is what `instantiate` plus `PreInstance::start`
+        // became in wasmi 1.x; it runs the module's `start` function, which is
+        // why the fuel above is set before it. A plugin cannot dodge its budget
+        // by doing work during instantiation.
+        // `instantiate_and_start` 就是 `instantiate` 加 `PreInstance::start` 在 wasmi 1.x
+        // 中的形态；它会运行模块的 `start` 函数，这也正是上面那笔燃料必须在此之前设定好的
+        // 原因。插件无法靠把工作放进实例化阶段来逃避预算。
         let instance = linker
-            .instantiate(&mut store, &module)
-            .and_then(|pre| pre.start(&mut store))
+            .instantiate_and_start(&mut store, &module)
             .map_err(|error| HostError::InvalidArtifact(error.to_string()))?;
         if let Ok(abi) = instance.get_typed_func::<(), i32>(&store, "nichlink_abi_version") {
             let version = abi

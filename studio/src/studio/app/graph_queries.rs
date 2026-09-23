@@ -4,6 +4,11 @@
 use super::*;
 
 impl App {
+    /// Flatten one function's call relations into callers, the center, then callees.
+    /// 把一个函数的调用关系展平成调用者、中心节点、被调用者。
+    ///
+    /// The center entry is always present, so a caller can rely on at least one row.
+    /// 中心条目始终存在，调用方可依赖至少有一行。
     pub fn call_chain(&self, center: NodeId, selected_function: Option<&str>) -> Vec<CallRef> {
         let default_function = self
             .registry
@@ -169,10 +174,10 @@ impl App {
         }
         if let Some(graph) = &self.mir_graph {
             for call in &graph.calls {
-                if mir_name_matches(&call.callee, target_name) {
+                if same_symbol(&call.callee, target_name) {
                     self.push_resolved_mir_refs(&mut callers, &definitions, &call.caller);
                 }
-                if mir_name_matches(&call.caller, target_name) {
+                if same_symbol(&call.caller, target_name) {
                     self.push_resolved_mir_refs(&mut callees, &definitions, &call.callee);
                 }
             }
@@ -187,12 +192,17 @@ impl App {
         symbol: &str,
     ) {
         for (name, node) in definitions {
-            if mir_name_matches(symbol, name) {
+            if same_symbol(symbol, name) {
                 push_call_ref(&self.registry, output, *node, name);
             }
         }
     }
 
+    /// Classify the strongest evidence behind a caller-to-callee edge.
+    /// 判定一条调用者到被调用者边的最强证据。
+    ///
+    /// Prefers a live trace edge, then a MIR call, and falls back to source.
+    /// 优先实时追踪边，其次 MIR 调用，最后退回源码。
     pub fn call_evidence(&self, caller: &CallRef, callee: &CallRef) -> CallEvidence {
         if self.runtime_trace.call_edges().iter().any(|edge| {
             edge.caller.node == caller.node
@@ -204,8 +214,8 @@ impl App {
         }
         if self.mir_graph.as_ref().is_some_and(|graph| {
             graph.calls.iter().any(|edge| {
-                mir_name_matches(&edge.caller, &caller.function)
-                    && mir_name_matches(&edge.callee, &callee.function)
+                same_symbol(&edge.caller, &caller.function)
+                    && same_symbol(&edge.callee, &callee.function)
             })
         }) {
             return CallEvidence::Mir;
@@ -213,6 +223,8 @@ impl App {
         CallEvidence::Source
     }
 
+    /// Whether the node declares a nested registry owned by that face.
+    /// 该节点是否声明了一个由该注册面拥有的嵌套注册表。
     pub fn owns_registry(&self, id: NodeId) -> bool {
         self.registry.registry(id).is_some()
     }

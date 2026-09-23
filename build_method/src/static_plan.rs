@@ -4,13 +4,13 @@
 use std::fs;
 use std::path::Path;
 
+use super::Node;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_identity;
-use super::types::Node;
 use super::{
     SourceScope, cached_parent_id, face_source_is_active, node_id, parsed_face, relative_display,
 };
-use nichlink::{TopologyRecord, validate_face_topology};
+use nichlink::{TopologyRecord, lexicon, validate_face_topology};
 
 #[derive(Clone, Debug)]
 pub(crate) struct StaticFaceRecord {
@@ -87,10 +87,10 @@ fn collect_static_faces(
                 .as_ref()
                 .expect("an active registration face has a source file");
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/")
+            if !lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
-                && face.field("plugin").is_none()
+                && face.field(lexicon::FACE_FIELD_PLUGIN).is_none()
             {
                 // A declaration the compiler drops must not keep a plan entry:
                 // the plan and the compiled crate have to agree on which faces

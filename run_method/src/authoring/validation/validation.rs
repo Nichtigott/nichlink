@@ -37,6 +37,13 @@ impl Drop for ContextRestore {
 }
 
 impl AuthoringContext {
+    /// Pair a package root with the namespace its faces are authored under.
+    /// 把一个包根与其注册面创作所用的命名空间配对。
+    ///
+    /// The values are inert until [`AuthoringContext::scope`] installs them, so
+    /// constructing one never touches process-global state.
+    /// 这些取值在 [`AuthoringContext::scope`] 安装之前不生效，因此构造本身不会触碰
+    /// 进程级状态。
     pub fn new(package_root: impl Into<PathBuf>, namespace: impl Into<String>) -> Self {
         Self {
             package_root: package_root.into(),
@@ -53,6 +60,14 @@ impl AuthoringContext {
     }
 }
 
+/// The namespace this operation authors under: the active context first, then
+/// the environment, then the documented default.
+/// 本次操作创作所用的命名空间：先活动上下文，再环境变量，最后文档化的默认值。
+///
+/// The decision itself is `nichlink::lexicon::resolve_namespace`, shared with
+/// Studio and the MCP bridge; this function only supplies what it reads.
+/// 决策本身是 `nichlink::lexicon::resolve_namespace`，与 Studio 和 MCP 桥共用；本函数
+/// 只负责提供它读取的东西。
 pub(super) fn authoring_namespace() -> String {
     ACTIVE_CONTEXT
         .with(|active| {
@@ -61,21 +76,14 @@ pub(super) fn authoring_namespace() -> String {
                 .as_ref()
                 .map(|context| context.namespace.clone())
         })
-        .or_else(|| std::env::var("NICH_LINK_NAMESPACE").ok())
-        .unwrap_or_else(|| "nichlink.default".to_owned())
-}
-
-pub(super) fn rust_type_name(name: &str) -> String {
-    name.split('_')
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut characters = part.chars();
-            characters
-                .next()
-                .map(|first| first.to_ascii_uppercase().to_string() + characters.as_str())
-                .unwrap_or_default()
+        .unwrap_or_else(|| {
+            nichlink::lexicon::resolve_namespace(
+                std::env::var(nichlink::lexicon::NAMESPACE_ENV)
+                    .ok()
+                    .as_deref(),
+            )
+            .to_owned()
         })
-        .collect()
 }
 
 /// Legacy layout kept readable so existing projects can migrate gradually.
@@ -85,6 +93,9 @@ pub(super) fn legacy_rule_path_for_source(source: &str) -> String {
     format!("src/{}/registry/rules/rules.rs", normalized_path(directory))
 }
 
+/// The package this operation writes into: the active context first, then the
+/// shared `lexicon` rule over the environment and the working directory.
+/// 本次操作写入的包：先活动上下文，再对环境和当前目录套用共用的 `lexicon` 规则。
 pub(super) fn package_root() -> PathBuf {
     if let Some(root) = ACTIVE_CONTEXT.with(|active| {
         active
@@ -94,22 +105,16 @@ pub(super) fn package_root() -> PathBuf {
     }) {
         return root;
     }
-    if let Some(configured) = std::env::var_os("NICH_LINK_PACKAGE_ROOT") {
-        let path = PathBuf::from(configured);
-        return if path.is_absolute() {
-            path
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(path)
-        };
-    }
-    if let Ok(current) = std::env::current_dir()
-        && current.join("Cargo.toml").is_file()
-    {
-        return current;
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let configured = std::env::var_os(nichlink::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let current = std::env::current_dir().ok();
+    nichlink::lexicon::resolve_package_root(
+        configured.as_deref(),
+        current.as_deref(),
+        current
+            .as_ref()
+            .is_some_and(|directory| directory.join("Cargo.toml").is_file()),
+        Path::new(env!("CARGO_MANIFEST_DIR")),
+    )
 }
 
 pub(super) fn source_root() -> PathBuf {

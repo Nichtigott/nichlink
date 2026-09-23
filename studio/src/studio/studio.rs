@@ -20,6 +20,12 @@ use ratatui::backend::CrosstermBackend;
 use app::App;
 use terminal::{install_panic_restore, open_editor_in_terminal};
 
+/// Run Studio's terminal event loop until the user quits or the terminal fails.
+/// 运行 Studio 终端事件循环，直到用户退出或终端出错。
+///
+/// Raw mode, the alternate screen, and mouse capture are installed here and
+/// restored on return as well as on panic.
+/// 原始模式、备用屏幕与鼠标捕获都在此安装，并在返回和 panic 时恢复。
 pub fn launch() -> io::Result<()> {
     install_panic_restore();
     enable_raw_mode()?;
@@ -77,32 +83,5 @@ fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result
             };
             redraw = true;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::terminal::editor_script;
-    use std::path::Path;
-
-    #[test]
-    fn editor_script_keeps_nvim_command_plain() {
-        let script = editor_script("nvim --clean", Path::new("src/thing's.rs"), 12);
-        assert!(script.contains("nvim --clean +12 'src/thing'\\''s.rs'"));
-        assert!(!script.contains("vim.treesitter"));
-        assert!(!script.contains("syntax=rust"));
-    }
-
-    #[test]
-    fn editor_script_passes_unknown_editors_a_single_safe_path() {
-        let script = editor_script("my-editor --wait", Path::new("src/a b.rs"), 7);
-        assert_eq!(script, "exec my-editor --wait 'src/a b.rs'");
-    }
-
-    #[test]
-    fn vim_script_is_plain_too() {
-        let script = editor_script("vim", Path::new("src/main.rs"), 3);
-        assert!(script.contains("vim +3 'src/main.rs'"));
-        assert!(!script.contains("vim.treesitter"));
     }
 }

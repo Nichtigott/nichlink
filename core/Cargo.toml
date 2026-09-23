@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Registry, transaction, contracts, grafts, and diagnostics for NichLink"
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-core"
@@ -16,6 +18,21 @@ syntax = ["dep:proc-macro2", "dep:syn"]
 proc-macro2 = { version = "1", features = ["span-locations"], optional = true }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
 
+# Test-only oracle for the hand-written SHA-256. `sha2` 0.10.9 is already in
+# `Cargo.lock` through `ed25519-dalek`, so this resolves offline and adds no new
+# package; a dev-dependency never enters the published dependency graph.
+# 手写 SHA-256 的仅测试用预言机。`sha2` 0.10.9 已经经 `ed25519-dalek` 存在于
+# `Cargo.lock`，因此可离线解析且不新增包；dev-dependency 永不进入发布依赖图。
+[dev-dependencies]
+sha2 = "0.10"
+
 [lib]
 name = "nichlink"
 path = "src/lib.rs"
+
+# `syntax` gates the registration-face parser and the application/graft entry
+# discovery, both public API; docs.rs must build them.
+# `syntax` 门控注册面解析器与应用/graft 入口发现，二者都是公开 API；docs.rs
+# 必须构建它们。
+[package.metadata.docs.rs]
+all-features = true

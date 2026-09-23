@@ -6,9 +6,9 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::Node;
 use super::discovery::collect_source_files;
 use super::registry_identity::NodeId;
-use super::types::Node;
 
 pub(crate) fn prime_node_id_cache(manifest: &Path, src: &Path, nodes: &[Node]) {
     let target = env::var_os("CARGO_TARGET_DIR")

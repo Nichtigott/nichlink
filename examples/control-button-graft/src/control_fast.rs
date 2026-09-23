@@ -15,7 +15,7 @@ nichlink_run_method::external_object! {
     kind: ControlFast,
     preset: NoPreset,
     parts: NoParts,
-    name: { zh: "快速控制", en: "Fast control" },
+    name: { zh: "快速控件", en: "Fast control" },
     summary: { zh: "整体替换", en: "Whole-subtree replacement" },
     params: "ControlFast",
     exports: ["control.render"],

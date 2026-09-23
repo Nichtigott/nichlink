@@ -1,6 +1,15 @@
 //! Resident rebuild supervisor for NichLink Studio.
 //! NichLink Studio 的常驻重建监督器。
+//!
+//! This binary is **workspace-only** (feature `dev-supervisor`): it rebuilds
+//! Studio from a checkout and launches that checkout's `target/debug` binary, so
+//! an installed copy has neither a source tree to rebuild nor a workspace build
+//! to launch. It is therefore not installed by `cargo install nichlink-studio`.
+//! 本二进制**仅限工作区**（特性 `dev-supervisor`）：它从检出重建 Studio 并启动该检出的
+//! `target/debug` 产物，而安装副本既没有可重建的源码树，也没有可启动的工作区构建，因此
+//! `cargo install nichlink-studio` 不会安装它。
 
+use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, Stdio};
@@ -21,18 +30,34 @@ fn main() -> ExitCode {
 
 fn supervise(query: Option<&str>) -> Result<(), String> {
     let studio_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // The baked manifest path is the reason this tool cannot be installed: it
+    // names the machine that compiled it. Failing here, with the fix in the
+    // message, beats letting Cargo report "manifest not found" as if the user's
+    // project were broken.
+    // 编译期烧进来的清单路径正是本工具无法安装的原因：它指的是编译它的那台机器。在这里
+    // 失败、并把修法写进消息，好过让 Cargo 报"找不到清单"、看起来像用户的项目坏了。
+    if !studio_root.join("Cargo.toml").is_file() {
+        return Err(format!(
+            "this `nichlink-dev` was built from `{}`, which no longer exists; it rebuilds Studio \
+             from that checkout, so run it from one instead of an installed copy: \
+             `cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`",
+            studio_root.display()
+        ));
+    }
     let workspace_root = studio_root
         .parent()
         .ok_or_else(|| "Studio manifest has no package parent".to_owned())?;
     let package_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| workspace_root.to_owned());
-    let executable = workspace_root.join("target/debug/nichlink-studio");
+    let current_exe = std::env::current_exe().ok();
+    let path_env = std::env::var_os("PATH");
+    let executable = resolve_studio(current_exe.as_deref(), path_env.as_deref(), workspace_root);
     let mut watcher = SourceWatcher::new(&package_root).map_err(|error| error.to_string())?;
 
     rebuild(&studio_root)?;
     watcher.drain();
-    let mut child = spawn(&executable, query).map_err(|error| error.to_string())?;
+    let mut child = spawn(&executable, query)?;
 
     loop {
         match child.try_wait() {
@@ -47,7 +72,7 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
                 match rebuild(&studio_root) {
                     Ok(()) => {
                         stop(&mut child).map_err(|error| error.to_string())?;
-                        child = spawn(&executable, query).map_err(|error| error.to_string())?;
+                        child = spawn(&executable, query)?;
                     }
                     Err(error) => eprintln!(
                         "NichLink Studio: build failed; keeping the last good process\n{error}"
@@ -56,6 +81,40 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
             }
         }
     }
+}
+
+/// The child Studio binary, in the order a checkout and an installed sibling both
+/// work.
+/// 子 Studio 二进制，按"检出与已安装同级副本都能用"的顺序解析。
+///
+/// The sibling next to the running executable is checked first because that is
+/// where Cargo puts both binaries — in the workspace's `target/debug` and in an
+/// installed `~/.cargo/bin` — so a normal build is found without trusting `PATH`.
+/// `PATH` is the second answer for a supervisor started from somewhere else, and
+/// the workspace path stays last because older builds of this tool only ever
+/// looked there (and it is still the right answer when the sibling binary has not
+/// been built yet but `cargo build` has been run for another target).
+/// 先检查与当前可执行文件同级的目录，因为 Cargo 正是把两个二进制放在一起的——工作区的
+/// `target/debug` 与安装后的 `~/.cargo/bin` 都是如此——因此正常构建无需相信 `PATH` 就能
+/// 找到。`PATH` 是"监督器从别处启动"时的第二个答案；工作区路径留在最后，因为本工具早期
+/// 的构建只看那里（而且当同级二进制尚未构建、但已为其他 target 跑过 `cargo build` 时，
+/// 它仍然是正确答案）。
+fn resolve_studio(exe: Option<&Path>, path_env: Option<&OsStr>, workspace_root: &Path) -> PathBuf {
+    let name = format!("nichlink-studio{}", std::env::consts::EXE_SUFFIX);
+    if let Some(candidate) = exe.and_then(Path::parent).map(|dir| dir.join(&name))
+        && candidate.is_file()
+    {
+        return candidate;
+    }
+    if let Some(path_env) = path_env {
+        for dir in std::env::split_paths(path_env) {
+            let candidate = dir.join(&name);
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    workspace_root.join("target/debug").join(name)
 }
 
 fn rebuild(studio_root: &Path) -> Result<(), String> {
@@ -73,7 +132,7 @@ fn rebuild(studio_root: &Path) -> Result<(), String> {
     }
 }
 
-fn spawn(executable: &Path, query: Option<&str>) -> io::Result<Child> {
+fn spawn(executable: &Path, query: Option<&str>) -> Result<Child, String> {
     let mut command = Command::new(executable);
     command
         .stdin(Stdio::inherit())
@@ -82,7 +141,12 @@ fn spawn(executable: &Path, query: Option<&str>) -> io::Result<Child> {
     if let Some(query) = query.filter(|query| !query.is_empty() && *query != "watch") {
         command.arg(query);
     }
-    command.spawn()
+    command.spawn().map_err(|error| {
+        format!(
+            "cannot start `{}`: {error}; build it first with `cargo build -p nichlink-studio --bin nichlink-studio`",
+            executable.display()
+        )
+    })
 }
 
 fn stop(child: &mut Child) -> io::Result<()> {
@@ -200,7 +264,92 @@ fn relevant_event(event: &notify::Event) -> bool {
 mod tests {
     use notify::{Event, EventKind, event::CreateKind};
 
-    use super::relevant_event;
+    use super::{relevant_event, resolve_studio};
+
+    /// A throwaway directory for the resolution fixtures, unique per call.
+    /// 解析夹具使用的一次性目录，每次调用唯一。
+    fn fixture_dir(label: &str) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "nichlink-dev-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("fixture dir");
+        dir
+    }
+
+    fn studio_name() -> String {
+        format!("nichlink-studio{}", std::env::consts::EXE_SUFFIX)
+    }
+
+    fn dev_name() -> String {
+        format!("nichlink-dev{}", std::env::consts::EXE_SUFFIX)
+    }
+
+    /// The binary Cargo built next to the supervisor is the one it should start:
+    /// that is true in `target/debug` and in an installed `bin` directory, and it
+    /// needs no `PATH` at all.
+    /// Cargo 放在监督器旁边的那份二进制才是它该启动的：`target/debug` 与安装后的 `bin`
+    /// 目录都是如此，而且完全不需要 `PATH`。
+    #[test]
+    fn the_sibling_binary_wins_over_path_and_the_workspace() {
+        let sibling = fixture_dir("sibling");
+        std::fs::write(sibling.join(studio_name()), "").expect("sibling binary");
+        let on_path = fixture_dir("path");
+        std::fs::write(on_path.join(studio_name()), "").expect("path binary");
+        let workspace = fixture_dir("workspace");
+        let path_env = std::env::join_paths([on_path.as_path()]).expect("join PATH");
+
+        assert_eq!(
+            resolve_studio(Some(&sibling.join(dev_name())), Some(&path_env), &workspace),
+            sibling.join(studio_name())
+        );
+
+        let _ = std::fs::remove_dir_all(&sibling);
+        let _ = std::fs::remove_dir_all(&on_path);
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    /// With no sibling built, `PATH` decides before the workspace path is guessed.
+    /// 同级目录没有构建产物时，先由 `PATH` 决定，再去猜工作区路径。
+    #[test]
+    fn path_is_searched_when_there_is_no_sibling() {
+        let empty = fixture_dir("empty");
+        let on_path = fixture_dir("path-only");
+        std::fs::write(on_path.join(studio_name()), "").expect("path binary");
+        let workspace = fixture_dir("workspace-fallback");
+        let path_env = std::env::join_paths([on_path.as_path()]).expect("join PATH");
+
+        assert_eq!(
+            resolve_studio(Some(&empty.join(dev_name())), Some(&path_env), &workspace),
+            on_path.join(studio_name())
+        );
+
+        let _ = std::fs::remove_dir_all(&empty);
+        let _ = std::fs::remove_dir_all(&on_path);
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    /// The workspace path stays the last answer, so a supervisor started from a
+    /// build directory that has no sibling yet keeps working.
+    /// 工作区路径仍是最后一个答案，因此从"尚无同级产物"的构建目录启动的监督器依然可用。
+    #[test]
+    fn the_workspace_target_is_the_last_resort() {
+        let exe_dir = fixture_dir("no-sibling");
+        let empty_path = fixture_dir("empty-path");
+        let workspace = fixture_dir("workspace-last");
+        let path_env = std::env::join_paths([empty_path.as_path()]).expect("join PATH");
+
+        assert_eq!(
+            resolve_studio(Some(&exe_dir.join(dev_name())), Some(&path_env), &workspace),
+            workspace.join("target/debug").join(studio_name())
+        );
+
+        let _ = std::fs::remove_dir_all(&exe_dir);
+        let _ = std::fs::remove_dir_all(&empty_path);
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
 
     #[test]
     fn filters_generated_files_and_accepts_sources() {

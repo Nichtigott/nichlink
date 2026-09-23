@@ -9,16 +9,84 @@
 //! （`kind_from_source_path` 与 `rule_syntax_for_source`）留在 run_method
 //! 的 authoring shim 中，作为 `kind_from_source_text` 与
 //! `rule_syntax_from_text` 的薄包装。
+//!
+//! The field families are split by concern: `flow` translates flow contracts,
+//! `admission` the dependency gate, and `rules` the registration rule. This
+//! page keeps the shared error type plus the generic list, path, and module
+//! helpers, and re-exports every field family so `parse::*` is unchanged.
+//! 字段族按关注点拆分：`flow` 转换数据流合同，`admission` 处理依赖门禁，`rules`
+//! 处理注册规范。本页保留共用的错误类型以及通用的列表、路径与模块辅助函数，并再
+//! 导出每个字段族，因此 `parse::*` 保持不变。
 
+use std::fmt;
 use std::path::PathBuf;
 
-use crate::{
-    OwnedAdmission, OwnedFlowContract, OwnedRegistrationRule, OwnedRequirementSpec,
-    RuntimeCheckSpec, parse_face as parse_face_syntax,
-};
+use crate::registry_core::declaration::RuntimeCheckSpec;
+use crate::registry_core::syntax::parse_face as parse_face_syntax;
 
 use super::validation::{normalized_path, rust_string};
 
+#[path = "flow.rs"]
+mod flow;
+pub use flow::*;
+#[path = "admission.rs"]
+mod admission;
+pub use admission::*;
+#[path = "rules.rs"]
+mod rules;
+pub use rules::*;
+
+/// Why authored face text was refused.
+/// 创作注册面文本被拒绝的原因。
+///
+/// The parser used to answer with a bare `String`; an error type keeps the
+/// message a caller renders while still telling a parse failure apart from any
+/// other string that happens to travel through the same code.
+/// 解析器过去用裸 `String` 作答；有了错误类型，调用方既能渲染消息，又能把解析失败与
+/// 恰好流经同一段代码的其它字符串区分开。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FaceParseError {
+    /// Human-readable reason, rendered verbatim by `Display`.
+    /// 人类可读的原因，`Display` 原样渲染。
+    pub message: String,
+}
+
+impl FaceParseError {
+    /// A refusal with its human-readable reason.
+    /// 带人类可读理由的拒绝。
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for FaceParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for FaceParseError {}
+
+impl From<String> for FaceParseError {
+    fn from(message: String) -> Self {
+        Self { message }
+    }
+}
+
+/// The historical string form, for callers that only render the failure.
+/// 历史字符串形式，供只做渲染的调用方使用。
+impl From<FaceParseError> for String {
+    fn from(error: FaceParseError) -> Self {
+        error.message
+    }
+}
+
+/// The source file a `crate::…` module path names, in this crate's
+/// `<dir>/<name>.rs` layout; `None` when the path cannot name a file at all.
+/// `crate::…` 模块路径在本 crate 的 `<dir>/<name>.rs` 布局下指向的源文件；该路径根本无法
+/// 命名文件时为 `None`。
 pub fn module_source_from_node_path(module: &str) -> Option<String> {
     let module = module.strip_prefix("crate::").unwrap_or(module);
     let mut segments = module.split("::").filter(|segment| !segment.is_empty());
@@ -41,6 +109,8 @@ pub fn kind_from_source_text(text: &str) -> Option<String> {
         .and_then(|face| face.path("kind"))
 }
 
+/// Read the quoted strings of one bracketed field, e.g. `marker: ["a", "b"]`.
+/// 读取一个方括号字段里的引号字符串，例如 `marker: ["a", "b"]`。
 pub fn quoted_list_field(text: &str, marker: &str) -> Vec<String> {
     let Some(start) = text.find(marker) else {
         return Vec::new();
@@ -64,13 +134,9 @@ pub fn quoted_list_field(text: &str, marker: &str) -> Vec<String> {
         .collect()
 }
 
-fn quoted_value_field(text: &str, marker: &str) -> Option<String> {
-    let rest = text.split_once(marker)?.1;
-    let start = rest.find('"')? + 1;
-    let end = rest[start..].find('"')? + start;
-    Some(rest[start..end].to_owned())
-}
-
+/// The module name implied by a source file path: its file stem, or `module`
+/// when the stem is not valid UTF-8.
+/// 源文件路径隐含的模块名：文件主干名；主干不是合法 UTF-8 时为 `module`。
 pub fn module_name_from_path(path: &std::path::Path) -> String {
     path.file_stem()
         .and_then(|stem| stem.to_str())
@@ -78,117 +144,16 @@ pub fn module_name_from_path(path: &std::path::Path) -> String {
         .to_owned()
 }
 
-pub fn parse_admission_expression(expression: &str) -> Result<String, String> {
-    let expression = expression.trim().trim_end_matches(',');
-    if expression.is_empty() || expression.contains("Admission::ANY") {
-        return Ok("ANY".to_owned());
-    }
-    let paths = quoted_list_field(expression, "allow_paths(");
-    if !paths.is_empty() {
-        return Ok(format!("allow:{}", paths.join(",")));
-    }
-    let paths = quoted_list_field(expression, "deny_paths(");
-    if !paths.is_empty() {
-        return Ok(format!("deny:{}", paths.join(",")));
-    }
-    // The editor writes the constructor form, because a face holds real Rust.
-    // Reading only the `allow_paths(`/`deny_paths(` spellings meant the editor
-    // could write a declaration it then refused to read back.
-    // 编辑器写下的是构造函数形式，因为注册面里放的是真实 Rust。只认
-    // `allow_paths(`/`deny_paths(` 会让编辑器写出自己读不回来的声明。
-    if let Some((_, rest)) = expression.split_once("Admission::new(") {
-        let mut parts = rest.split(']');
-        let allow = parts.next().map(quoted_strings).unwrap_or_default();
-        let deny = parts.next().map(quoted_strings).unwrap_or_default();
-        return match (allow.is_empty(), deny.is_empty()) {
-            (true, true) => Ok("ANY".to_owned()),
-            (false, _) => Ok(format!("allow:{}", allow.join(","))),
-            (true, false) => Ok(format!("deny:{}", deny.join(","))),
-        };
-    }
-    Err("generated face has an invalid admission expression".to_owned())
-}
-
-/// The quoted strings of one bracketed fragment, e.g. `&["a", "b"`.
-/// 一个方括号片段里的字符串，例如 `&["a", "b"`。
-fn quoted_strings(fragment: &str) -> Vec<String> {
-    let fragment = fragment.rsplit_once('[').map_or(fragment, |(_, rest)| rest);
-    fragment
-        .split(',')
-        .filter_map(|value| {
-            let value = value.trim().trim_end_matches(']').trim();
-            value
-                .strip_prefix('"')
-                .and_then(|value| value.strip_suffix('"'))
-                .map(str::to_owned)
-        })
-        .collect()
-}
-
-/// Reduce a registry-rule source text to its compact syntax form.
-/// 将注册规则源码文本化简为紧凑语法形式。
-pub fn rule_syntax_from_text(text: &str) -> String {
-    let expression = text
-        .split_once('=')
-        .map(|(_, value)| value.trim().trim_end_matches(';'))
-        .unwrap_or("");
-    if expression.contains("RegistrationRule::ANY") {
-        return "ANY".to_owned();
-    }
-    let mut clauses = Vec::new();
-    if let Some(preset) = quoted_value_field(expression, ".require_preset(") {
-        clauses.push(format!("preset:{preset}"));
-    }
-    for (marker, key) in [
-        (".require_parts(", "parts"),
-        (".require_exports(", "exports"),
-        (".require_handle_traits(", "handle"),
-        (".require_part_traits(", "part_trait"),
-    ] {
-        let values = quoted_list_field(expression, marker);
-        if !values.is_empty() {
-            clauses.push(format!("{key}:{}", values.join(",")));
-        }
-    }
-    if clauses.is_empty() {
-        "ANY".to_owned()
-    } else {
-        clauses.join(";")
-    }
-}
-
-/// Render the compact registration-rule syntax as a const Rust expression.
-/// 将紧凑注册规范语法渲染成 const Rust 表达式。
-pub fn render_registration_rule(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("any") {
-        return Ok("crate::RegistrationRule::ANY".to_owned());
-    }
-    let rule = parse_registration_rule_owned(value)?;
-    let render_values = |values: &[String]| {
-        values
-            .iter()
-            .map(|value| format!("\"{}\"", rust_string(value)))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let mut expression = "crate::RegistrationRule::new()".to_owned();
-    if let Some(preset) = rule.required_preset {
-        expression.push_str(&format!(".require_preset(\"{}\")", rust_string(&preset)));
-    }
-    for (method, values) in [
-        ("require_parts", &rule.required_parts),
-        ("require_exports", &rule.required_exports),
-        ("require_handle_traits", &rule.required_handle_traits),
-        ("require_part_traits", &rule.required_part_traits),
-    ] {
-        if !values.is_empty() {
-            expression.push_str(&format!(".{method}(&[{}])", render_values(values)));
-        }
-    }
-    Ok(expression)
-}
-
+/// Render one comma-separated value as a quoted list field, indented and
+/// newline-terminated; an empty value renders as nothing at all.
+/// 把一个逗号分隔的取值渲染成带引号的列表字段（缩进且以换行结尾）；取值为空时不渲染任何
+/// 内容。
+///
+/// The empty case is the point: a field with no entries must disappear from the
+/// macro rather than appear as `field: []`, because the authoring writer diffs
+/// the rendered text and an empty-but-present field would look like an edit.
+/// 空取值这一点是关键：没有条目的字段必须从宏里消失，而不是写成 `field: []`——创作写入方
+/// 会对渲染文本做差异比较，"存在但为空"的字段会被当成一次修改。
 pub fn render_face_list(field: &str, value: &str) -> String {
     let values = value
         .split(',')
@@ -203,6 +168,9 @@ pub fn render_face_list(field: &str, value: &str) -> String {
     }
 }
 
+/// Render a comma-separated value as quoted literals joined by `, `, for
+/// inlining inside a bracketed list.
+/// 把逗号分隔的取值渲染成以 `, ` 连接的带引号字面量，供内联进方括号列表。
 pub fn render_literal_list(value: &str) -> String {
     value
         .split(',')
@@ -213,6 +181,9 @@ pub fn render_literal_list(value: &str) -> String {
         .join(", ")
 }
 
+/// Render a comma-separated value as Rust paths joined by `, `, keeping the
+/// author's spelling because the compiler resolves it.
+/// 把逗号分隔的取值渲染成以 `, ` 连接的 Rust 路径，保留作者的写法，因为由编译器解析。
 pub fn render_path_list(value: &str) -> String {
     value
         .split(',')
@@ -222,6 +193,10 @@ pub fn render_path_list(value: &str) -> String {
         .join(", ")
 }
 
+/// Render one `impl <trait> for <kind> {}` line per comma-separated trait path,
+/// which is what turns a declared handle trait into a compile-time check.
+/// 为每个逗号分隔的 trait 路径渲染一行 `impl <trait> for <kind> {}`——这正是把声明的
+/// handle trait 变成编译期检查的东西。
 pub fn render_impls(kind: &str, value: &str) -> String {
     value
         .split(',')
@@ -233,191 +208,42 @@ pub fn render_impls(kind: &str, value: &str) -> String {
 
 /// Derive the human-facing trait labels from compiler-checked Rust paths.
 /// 从参与编译检查的 Rust 路径派生人类可读的 trait 名称。
-pub fn trait_names_from_paths(value: &str) -> Result<String, String> {
+pub fn trait_names_from_paths(value: &str) -> Result<String, FaceParseError> {
     value
         .split(',')
         .map(str::trim)
         .filter(|path| !path.is_empty())
         .map(|source| {
             let path = syn::parse_str::<syn::Path>(source)
-                .map_err(|_| format!("`{source}` is not a Rust trait path"))?;
+                .map_err(|_| FaceParseError::new(format!("`{source}` is not a Rust trait path")))?;
             path.segments
                 .last()
                 .map(|segment| segment.ident.to_string())
-                .ok_or_else(|| format!("`{source}` has no trait name"))
+                .ok_or_else(|| FaceParseError::new(format!("`{source}` has no trait name")))
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|names| names.join(","))
 }
 
-pub fn render_requirements(value: &str) -> String {
-    value
-        .split(',')
-        .filter_map(|item| {
-            let (capability, provider) = item.split_once("=>")?;
-            Some(format!(
-                "\"{}\" => \"{}\"",
-                rust_string(capability.trim()),
-                rust_string(provider.trim())
-            ))
+/// Render a runtime-check list back to the expression text the macro takes,
+/// refusing anything `RuntimeCheckSpec` cannot parse.
+/// 把运行期检查列表渲染回宏接受的表达式文本；`RuntimeCheckSpec` 解析不了的一律拒绝。
+pub fn render_expression_list(value: &str) -> Result<String, FaceParseError> {
+    RuntimeCheckSpec::parse_list(value)
+        .map_err(FaceParseError::from)
+        .map(|checks| {
+            checks
+                .into_iter()
+                .map(RuntimeCheckSpec::expression)
+                .collect::<Vec<_>>()
+                .join(", ")
         })
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
-pub fn render_expression_list(value: &str) -> Result<String, String> {
-    RuntimeCheckSpec::parse_list(value).map(|checks| {
-        checks
-            .into_iter()
-            .map(RuntimeCheckSpec::expression)
-            .collect::<Vec<_>>()
-            .join(", ")
-    })
-}
-
-/// Render the editor's `id|version|input|output` form as a Rust expression.
-/// 将编辑器中的 `id|version|input|output` 形式渲染为 Rust 表达式。
-pub fn render_flow_expression(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("none") {
-        return Ok(String::new());
-    }
-    let mut fields = value.split('|');
-    let id = fields.next().unwrap_or_default().trim();
-    let version = fields.next().unwrap_or_default().trim();
-    let input = fields.next().unwrap_or_default().trim();
-    let output = fields.next().unwrap_or_default().trim();
-    if fields.next().is_some() || id.is_empty() || input.is_empty() || output.is_empty() {
-        return Err("flow must use id|version|input|output syntax".to_owned());
-    }
-    let version = version
-        .parse::<u32>()
-        .map_err(|_| "flow version must be an unsigned integer".to_owned())?;
-    Ok(format!(
-        "    flow: crate::FlowContract::new(crate::ContractId::new(\"{}\"), {version}, \"{}\", \"{}\"),\n",
-        rust_string(id),
-        rust_string(input),
-        rust_string(output),
-    ))
-}
-
-/// Parse the compact flow value into an owned contract for a reload snapshot.
-/// 将紧凑 flow 值解析为热重载快照使用的拥有型合同。
-pub fn parse_flow_value(value: &str) -> Result<Option<OwnedFlowContract>, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("none") {
-        return Ok(None);
-    }
-    let mut fields = value.split('|');
-    let id = fields.next().unwrap_or_default().trim();
-    let version = fields.next().unwrap_or_default().trim();
-    let input = fields.next().unwrap_or_default().trim();
-    let output = fields.next().unwrap_or_default().trim();
-    if fields.next().is_some() || id.is_empty() || input.is_empty() || output.is_empty() {
-        return Err("flow must use id|version|input|output syntax".to_owned());
-    }
-    let version = version
-        .parse::<u32>()
-        .map_err(|_| "flow version must be an unsigned integer".to_owned())?;
-    Ok(Some(OwnedFlowContract {
-        id: id.to_owned(),
-        version,
-        input: input.to_owned(),
-        output: output.to_owned(),
-    }))
-}
-
-/// Render an explicitly selected flow provider type.
-/// 渲染显式选择的数据流合同提供者类型。
-pub fn render_flow_provider(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() {
-        return Ok(String::new());
-    }
-    syn::parse_str::<syn::Path>(value)
-        .map_err(|_| "flow_provider must be a Rust type path".to_owned())?;
-    Ok(format!("    flow_provider: {value},\n"))
-}
-
-/// Parse a flow expression back into the editor's compact form.
-/// 将 flow 表达式解析回编辑器使用的紧凑形式。
-pub fn parse_flow_expression(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() || value.ends_with("FlowContract::NONE") {
-        return Ok(String::new());
-    }
-    let expression = syn::parse_str::<syn::Expr>(value)
-        .map_err(|_| "generated face has an invalid flow expression".to_owned())?;
-    let syn::Expr::Call(call) = expression else {
-        return Err("generated face has an invalid flow expression".to_owned());
-    };
-    if !path_ends_with(&call.func, "FlowContract::new") || call.args.len() != 4 {
-        return Err("generated face has an invalid flow expression".to_owned());
-    }
-    let mut args = call.args.iter();
-    let id_call = args
-        .next()
-        .ok_or_else(|| "generated face has an invalid flow id".to_owned())?;
-    let syn::Expr::Call(id_call) = id_call else {
-        return Err("generated face has an invalid flow id".to_owned());
-    };
-    if !path_ends_with(&id_call.func, "ContractId::new") || id_call.args.len() != 1 {
-        return Err("generated face has an invalid flow id".to_owned());
-    }
-    let id = literal_string_expr(
-        id_call
-            .args
-            .first()
-            .ok_or_else(|| "generated face has an invalid flow id".to_owned())?,
-    )?;
-    let version = match args
-        .next()
-        .ok_or_else(|| "generated face has an invalid flow version".to_owned())?
-    {
-        syn::Expr::Lit(literal) => match &literal.lit {
-            syn::Lit::Int(value) => value
-                .base10_parse::<u32>()
-                .map_err(|_| "generated face has an invalid flow version".to_owned())?,
-            _ => return Err("generated face has an invalid flow version".to_owned()),
-        },
-        _ => return Err("generated face has an invalid flow version".to_owned()),
-    };
-    let input = literal_string_expr(
-        args.next()
-            .ok_or_else(|| "generated face has an invalid flow input".to_owned())?,
-    )?;
-    let output = literal_string_expr(
-        args.next()
-            .ok_or_else(|| "generated face has an invalid flow output".to_owned())?,
-    )?;
-    Ok(format!("{id}|{version}|{input}|{output}"))
-}
-
-pub fn path_ends_with(expression: &syn::Expr, suffix: &str) -> bool {
-    let syn::Expr::Path(path) = expression else {
-        return false;
-    };
-    let actual = path
-        .path
-        .segments
-        .iter()
-        .map(|segment| segment.ident.to_string())
-        .collect::<Vec<_>>()
-        .join("::");
-    actual.ends_with(suffix)
-}
-
-pub fn literal_string_expr(expression: &syn::Expr) -> Result<String, String> {
-    let syn::Expr::Lit(literal) = expression else {
-        return Err("generated face expects a string literal".to_owned());
-    };
-    let syn::Lit::Str(value) = &literal.lit else {
-        return Err("generated face expects a string literal".to_owned());
-    };
-    Ok(value.value())
-}
-
-pub fn render_optional_source(value: &str) -> Result<String, String> {
+/// Render an optional string field: an empty value or `none` becomes `None`,
+/// anything else becomes `Some("…")` with the text escaped.
+/// 渲染可选字符串字段：空值或 `none` 变成 `None`，其余变成转义后的 `Some("…")`。
+pub fn render_optional_source(value: &str) -> Result<String, FaceParseError> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         Ok("None".to_owned())
@@ -426,6 +252,8 @@ pub fn render_optional_source(value: &str) -> Result<String, String> {
     }
 }
 
+/// Split a comma-separated list into trimmed, non-empty owned strings.
+/// 把逗号分隔的列表切成去空白、去空项的自有字符串。
 pub fn split_csv_owned(value: &str) -> Vec<String> {
     value
         .split(',')
@@ -435,205 +263,26 @@ pub fn split_csv_owned(value: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec> {
-    value
-        .split(',')
-        .filter_map(|item| {
-            let (capability, provider) = item.split_once("=>")?;
-            Some(OwnedRequirementSpec {
-                capability: capability.trim().to_owned(),
-                provider: provider.trim().to_owned(),
-            })
-        })
-        .collect()
-}
-
-pub fn parse_requirements(value: &str) -> Result<(), String> {
-    if value.trim().is_empty() {
-        return Ok(());
-    }
-    for item in value.split(',') {
-        let (capability, provider) = item
-            .split_once("=>")
-            .ok_or_else(|| "requires entries must use capability=>provider syntax".to_owned())?;
-        if capability.trim().is_empty() || provider.trim().is_empty() {
-            return Err("requires entries cannot be empty".to_owned());
-        }
-    }
-    Ok(())
-}
-
-pub fn parse_optional_source(value: &str) -> Result<(), String> {
+/// Accept or refuse an optional string field's text, which is the same rule
+/// `render_optional_source` applies — minus the rendering.
+/// 接受或拒绝可选字符串字段的文本，与 `render_optional_source` 用的是同一条规则——只是
+/// 不做渲染。
+pub fn parse_optional_source(value: &str) -> Result<(), FaceParseError> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
         return Ok(());
     }
     if value.contains(['\n', '\r']) {
-        return Err("getting_from_other_registry cannot contain a newline".to_owned());
+        return Err("getting_from_other_registry cannot contain a newline"
+            .to_owned()
+            .into());
     }
     Ok(())
 }
 
-pub fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRule, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("any") {
-        return Ok(OwnedRegistrationRule {
-            required_preset: None,
-            required_parts: Vec::new(),
-            required_exports: Vec::new(),
-            required_handle_traits: Vec::new(),
-            required_part_traits: Vec::new(),
-        });
-    }
-    let mut rule = OwnedRegistrationRule {
-        required_preset: None,
-        required_parts: Vec::new(),
-        required_exports: Vec::new(),
-        required_handle_traits: Vec::new(),
-        required_part_traits: Vec::new(),
-    };
-    for clause in value
-        .split(';')
-        .map(str::trim)
-        .filter(|clause| !clause.is_empty())
-    {
-        let (key, body) = clause
-            .split_once(':')
-            .ok_or_else(|| "registration_rule clauses must use key:value syntax".to_owned())?;
-        let values = split_csv_owned(body);
-        if values.is_empty() && key.trim() != "preset" {
-            return Err("registration_rule clauses must list at least one value".to_owned());
-        }
-        match key.trim().to_ascii_lowercase().as_str() {
-            "parts" => rule.required_parts.extend(values),
-            "exports" => rule.required_exports.extend(values),
-            "handle" | "handle_trait" | "handle_traits" => {
-                rule.required_handle_traits.extend(values)
-            }
-            "part_trait" | "part_traits" => rule.required_part_traits.extend(values),
-            "preset" if body.trim().is_empty() => {
-                return Err("registration_rule preset cannot be empty".to_owned());
-            }
-            "preset" => rule.required_preset = Some(body.trim().to_owned()),
-            key => return Err(format!("unknown registration_rule clause `{key}`")),
-        }
-    }
-    Ok(rule)
-}
-
-pub fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("any") {
-        return Ok(OwnedAdmission {
-            allowed_paths: Vec::new(),
-            denied_paths: Vec::new(),
-        });
-    }
-    let (mode, paths) = value.split_once(':').ok_or_else(|| {
-        "admission must be ANY, allow:path/prefix, or deny:path/prefix".to_owned()
-    })?;
-    let paths = split_csv_owned(paths);
-    if paths.is_empty() {
-        return Err("admission must list at least one path".to_owned());
-    }
-    match mode.trim().to_ascii_lowercase().as_str() {
-        "allow" => Ok(OwnedAdmission {
-            allowed_paths: paths,
-            denied_paths: Vec::new(),
-        }),
-        "deny" => Ok(OwnedAdmission {
-            allowed_paths: Vec::new(),
-            denied_paths: paths,
-        }),
-        _ => Err("admission must be ANY, allow:path/prefix, or deny:path/prefix".to_owned()),
-    }
-}
-
-pub fn render_admission(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() || value.eq_ignore_ascii_case("any") {
-        return Ok("crate::Admission::ANY".to_owned());
-    }
-    let (mode, kinds) = value.split_once(':').ok_or_else(|| {
-        "admission must be ANY, allow:path/prefix, or deny:path/prefix".to_owned()
-    })?;
-    let rendered = kinds
-        .split(',')
-        .map(str::trim)
-        .filter(|kind| !kind.is_empty())
-        .map(|kind| format!("\"{}\"", rust_string(kind)))
-        .collect::<Vec<_>>();
-    if rendered.is_empty() {
-        return Err("admission must list at least one path".to_owned());
-    }
-    match mode.to_ascii_lowercase().as_str() {
-        "allow" => Ok(format!(
-            "crate::Admission::new(&[{}], &[])",
-            rendered.join(", ")
-        )),
-        "deny" => Ok(format!(
-            "crate::Admission::new(&[], &[{}])",
-            rendered.join(", ")
-        )),
-        _ => Err("admission must be ANY, allow:path/prefix, or deny:path/prefix".to_owned()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::parse_admission_expression;
-
-    /// The editor writes the constructor form and must be able to read it back;
-    /// both spellings describe the same admission.
-    /// 编辑器写下构造函数形式，也必须能读回来；两种写法描述同一个 admission。
-    #[test]
-    fn admission_round_trips_through_the_constructor_form() {
-        assert_eq!(
-            parse_admission_expression("crate::Admission::new(&[\"a\", \"b\"], &[])"),
-            Ok("allow:a,b".to_owned())
-        );
-        assert_eq!(
-            parse_admission_expression("crate::Admission::new(&[], &[\"c\"])"),
-            Ok("deny:c".to_owned())
-        );
-        assert_eq!(
-            parse_admission_expression("crate::Admission::new(&[], &[])"),
-            Ok("ANY".to_owned())
-        );
-        assert_eq!(
-            parse_admission_expression("crate::Admission::allow_paths(&[\"a\"])"),
-            Ok("allow:a".to_owned())
-        );
-    }
-
-    use super::{parse_registration_rule_owned, render_registration_rule, trait_names_from_paths};
-
-    #[test]
-    fn registration_rules_only_describe_minimum_structure() {
-        let rule = parse_registration_rule_owned(
-            "preset:ActionParts;parts:paint;exports:control.render;handle:ControlHandle;part_trait:ActionParts",
-        )
-        .unwrap();
-        assert_eq!(rule.required_preset.as_deref(), Some("ActionParts"));
-        assert_eq!(rule.required_parts, ["paint"]);
-        assert_eq!(rule.required_exports, ["control.render"]);
-        assert_eq!(rule.required_handle_traits, ["ControlHandle"]);
-        assert_eq!(rule.required_part_traits, ["ActionParts"]);
-
-        let source = render_registration_rule(
-            "preset:ActionParts;parts:paint;exports:control.render;handle:ControlHandle;part_trait:ActionParts",
-        )
-        .unwrap();
-        assert!(source.contains("RegistrationRule::new()"));
-        assert!(source.contains("require_parts(&[\"paint\"])"));
-        assert!(!source.contains("allow"));
-    }
-
-    #[test]
-    fn kind_filters_are_not_registration_rules() {
-        let error = parse_registration_rule_owned("allow:Button").unwrap_err();
-        assert!(error.contains("unknown registration_rule clause `allow`"));
-    }
+    use super::trait_names_from_paths;
 
     #[test]
     fn compiler_checked_trait_paths_supply_searchable_labels() {

@@ -76,10 +76,16 @@ impl CallGraph {
         index
     }
 
+    /// Number of distinct logical functions currently in the graph; parallel
+    /// invocations never add a second node.
+    /// 图中当前不同逻辑函数的数量；同一次调用的多次执行不会新增第二个节点。
     pub fn node_count(&self) -> usize {
         self.graph.node_count()
     }
 
+    /// Number of distinct logical edges in the graph; repeated invocations
+    /// between the same pair collapse into one edge.
+    /// 图中不同逻辑边的数量；同一对函数间的多次调用会合并为一条边。
     pub fn edge_count(&self) -> usize {
         self.graph.edge_count()
     }

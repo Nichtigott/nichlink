@@ -19,7 +19,8 @@ NichLink 的 kernel：协议名词 + 纯方法——无 I/O、无环境绑定。
 | `release` | 零分配发布拓扑（`StaticPlan`）与编译期注册断言 |
 | `diagnostic` | `RegistryError` 树、`BuildDiagnostic` 模型、注册面拓扑校验 |
 | `syntax`（feature `syntax`） | 注册面解析器、应用/graft 入口发现 |
-| `authoring`（feature `syntax`） | 纯 authoring 计划/渲染 helper、命名校验、`FACE` 字段词典 |
+| `authoring` | 始终可用的注册面创作数据：字段名表、展示元数据与纯 `validation`；只有其 `parse` 与 `snapshot` 子模块由 feature `syntax` 门控 |
+| `lexicon` | 共享文本契约：生成入口文件名、运行期 crate 名、环境变量、`.nichlink` 路径、范围豁免表 |
 
 分界规则：无 I/O、无 `std::env`/时间/进程绑定的代码属于这里；执行面
 （`nichlink-build-method`、`nichlink-run-method`、`nichlink-debug-method`、

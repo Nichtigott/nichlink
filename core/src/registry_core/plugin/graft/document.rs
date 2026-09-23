@@ -4,13 +4,14 @@
 //! A plan file records one external overlay declaration: which logical slot a
 //! host hands over, which external implementation is meant to take it, and
 //! whether the whole subtree or only the node is replaced. It is a declaration,
-//! not an application: parsing it produces a [`GraftCut`] for
-//! [`Registry::overlay`](crate::Registry::overlay), and it never touches the
-//! base tree or the external tree.
+//! not an application: the runtime record resolver
+//! ([`Registry::overlay_recorded`](crate::Registry::overlay_recorded)) is what
+//! turns it into an overlay cut, and this document never touches the base tree
+//! or the external tree.
 //! 计划文件记录一条外部覆盖声明：宿主交出哪个逻辑槽位、打算由哪个外部实现接管、
-//! 是整棵子树替换还是只替换节点。它是声明而不是应用：解析得到可交给
-//! [`Registry::overlay`](crate::Registry::overlay) 的 [`GraftCut`]，永不改动原树
-//! 或外部树。
+//! 是整棵子树替换还是只替换节点。它是声明而不是应用：把它变成覆盖切口的是运行期记录
+//! 解析器（[`Registry::overlay_recorded`](crate::Registry::overlay_recorded)），本文档
+//! 永不改动原树或外部树。
 //!
 //! The format is versioned so a reader can refuse a document it does not
 //! understand instead of guessing at it.
@@ -18,8 +19,6 @@
 
 use std::fmt;
 
-use super::super::contracts::FrameworkId;
-use super::{GraftCut, GraftPlan};
 use crate::registry_core::identity::NodeId;
 
 /// The only `graft.plan` layout this build understands.
@@ -30,6 +29,8 @@ pub const GRAFT_PLAN_VERSION: u32 = 1;
 /// 写进 `graft.plan` 的一条外部覆盖声明。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GraftPlanDocument {
+    /// Layout version; must equal `GRAFT_PLAN_VERSION`.
+    /// 版式版本；必须等于 `GRAFT_PLAN_VERSION`。
     pub version: u32,
     /// Compile-time identity of the target face in the base tree.
     /// 原树中目标注册面的编译期身份。
@@ -148,25 +149,6 @@ impl GraftPlanDocument {
         )
     }
 
-    /// The cut this declaration applies to a base registry.
-    /// 这条声明施加到原树上的切口。
-    pub fn cut(&self) -> GraftCut {
-        if self.full {
-            GraftCut::subtree(self.target_path.clone(), self.graft.clone())
-        } else {
-            GraftCut::new(self.target_path.clone(), self.graft.clone())
-        }
-    }
-
-    /// A one-cut plan, for a host that applies this declaration at runtime.
-    /// 只含一条切口的计划，供运行期应用这条声明的宿主使用。
-    pub fn plan(&self, framework: FrameworkId) -> GraftPlan {
-        GraftPlan {
-            framework,
-            cuts: vec![self.cut()],
-        }
-    }
-
     /// The `cut … graft …` clause a host entry writes inside
     /// `static_graft_plan!`.
     /// 宿主入口写在 `static_graft_plan!` 里的 `cut … graft …` 子句。
@@ -203,15 +185,21 @@ fn validate_path(value: &str, line: usize) -> Result<String, GraftPlanDocumentEr
 /// One rule, shared by the file writer and the parser, so a plan this crate
 /// writes is always a plan this crate can read back.
 /// 写入方与解析方共用同一条规则，因此本 crate 写出的计划永远读得回来。
-pub fn validate_graft_selector(selector: &str) -> Result<(), String> {
+pub fn validate_graft_selector(selector: &str) -> Result<(), GraftPlanDocumentError> {
     if selector.trim().is_empty() {
-        return Err("external graft name must be a non-empty selector".to_owned());
+        return Err(GraftPlanDocumentError::InvalidSelector(
+            "external graft name must be a non-empty selector".to_owned(),
+        ));
     }
     if selector.contains(['/', '\\']) {
-        return Err("external graft name must not contain path separators".to_owned());
+        return Err(GraftPlanDocumentError::InvalidSelector(
+            "external graft name must not contain path separators".to_owned(),
+        ));
     }
     if selector.chars().any(char::is_whitespace) || selector.contains('"') {
-        return Err("external graft name must be one word without quotes".to_owned());
+        return Err(GraftPlanDocumentError::InvalidSelector(
+            "external graft name must be one word without quotes".to_owned(),
+        ));
     }
     Ok(())
 }
@@ -228,10 +216,28 @@ fn validate_selector(value: &str, line: usize) -> Result<String, GraftPlanDocume
 /// `graft.plan` 文档被拒绝的原因。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GraftPlanDocumentError {
+    /// Document declares a layout this build cannot read.
+    /// 文档声明的版式是本构建读不懂的。
     UnsupportedVersion(u32),
+    /// The selector names something the plan format cannot store.
+    /// 选择器命名了计划格式存不下的东西。
+    InvalidSelector(String),
+    /// Document omitted a required key.
+    /// 文档缺少一个必需的键。
     MissingKey(&'static str),
+    /// Document carried a key this format does not define.
+    /// 文档带有本格式未定义的键。
     UnknownKey(String),
-    Malformed { line: usize, message: String },
+    /// Document had a line the format cannot read.
+    /// 文档中存在本格式读不懂的行。
+    Malformed {
+        /// 1-based line the failure was found on.
+        /// 发现失败的行号，从 1 起。
+        line: usize,
+        /// What was wrong with that line.
+        /// 该行错在哪里。
+        message: String,
+    },
 }
 
 impl fmt::Display for GraftPlanDocumentError {
@@ -241,6 +247,7 @@ impl fmt::Display for GraftPlanDocumentError {
                 formatter,
                 "graft plan version `{version}` is not supported (expected {GRAFT_PLAN_VERSION})"
             ),
+            Self::InvalidSelector(message) => write!(formatter, "{message}"),
             Self::MissingKey(key) => write!(formatter, "graft plan is missing `{key}`"),
             Self::UnknownKey(key) => write!(formatter, "graft plan has an unknown key `{key}`"),
             Self::Malformed { line, message } => {
@@ -251,6 +258,12 @@ impl fmt::Display for GraftPlanDocumentError {
 }
 
 impl std::error::Error for GraftPlanDocumentError {}
+
+impl From<GraftPlanDocumentError> for String {
+    fn from(error: GraftPlanDocumentError) -> Self {
+        error.to_string()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -291,21 +304,24 @@ mod tests {
             document.declaration(),
             "cut \"root/control/button\" full graft \"button_fast\","
         );
-        assert!(document.cut().subtree);
+        assert!(document.full);
     }
 
+    /// The partial form renders without the `full` clause; the granularity now
+    /// lives only in `full`, because the cut builder moved to the record
+    /// resolver.
+    /// 普通形式渲染时不带 `full` 子句；粒度现在只存在于 `full` 字段，因为切口构造器
+    /// 已移入记录解析器。
     #[test]
-    fn a_partial_cut_keeps_the_base_children() {
+    fn a_partial_document_omits_the_full_clause() {
         let document = document();
         assert_eq!(
             document.declaration(),
             "cut \"root/control/button\" graft \"button_fast\","
         );
-        let cut = document.cut();
-        assert_eq!(cut.cut, "root/control/button");
-        assert_eq!(cut.graft, "button_fast");
-        assert!(!cut.subtree);
-        assert_eq!(cut.end, None);
+        assert_eq!(document.target_path, "root/control/button");
+        assert_eq!(document.graft, "button_fast");
+        assert!(!document.full);
     }
 
     #[test]
@@ -362,13 +378,5 @@ mod tests {
             GraftPlanDocument::parse(&path),
             Err(GraftPlanDocumentError::Malformed { line: 3, .. })
         ));
-    }
-
-    #[test]
-    fn a_document_builds_the_runtime_plan_for_its_framework() {
-        let framework = FrameworkId::new("nichlink.example.control-button");
-        let plan = document().plan(framework);
-        assert_eq!(plan.framework, framework);
-        assert_eq!(plan.cuts, vec![document().cut()]);
     }
 }

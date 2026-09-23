@@ -6,6 +6,6 @@
 
 ## Wasm ABI 握手
 
-Wasm 插件可以导出 `nichlink_abi_version() -> i32`。宿主会在接受实例前与 `nichlink::PLUGIN_ABI_VERSION` 比较。缺少导出视为旧插件并保持兼容；导出但版本不同则返回 `HostError::Abi`。
+Wasm 插件可以导出 `nichlink_abi_version() -> i32`。宿主会在接受实例前与 `nichlink::plugin::PLUGIN_ABI_VERSION` 比较。缺少导出视为旧插件并保持兼容；导出但版本不同则返回 `HostError::Abi`。
 
 ABI 版本只描述线协议。资源限制、健康检查和操作名称仍会独立校验，握手不能绕过这些检查。

@@ -4,12 +4,17 @@
 use super::*;
 
 impl App {
-    /// Folded-set filtering is not wired in yet; the parameter is accepted to
-    /// keep the call sites stable.
-    /// 折叠集合过滤尚未接入；为保持调用点稳定先保留该参数。
-    pub fn search_rows(&self, query: &str, folded: &BTreeSet<usize>) -> Vec<SearchRow> {
+    /// Flat, deduplicated rows for one search query.
+    /// 一次搜索查询的扁平、已去重结果行。
+    ///
+    /// The list is intentionally flat: there is no hierarchy to fold, so the
+    /// caller has no fold state and `Enter` promotes a row straight into the
+    /// call graph. The fold keys and `▸/▾` markers that used to be advertised
+    /// were removed rather than implemented.
+    /// 结果是刻意扁平的：没有可折叠的层级，因此调用方不持有折叠状态，`Enter`
+    /// 直接把选中行推进调用图。此前展示的折叠键与 `▸/▾` 标记已删除，而非实现。
+    pub fn search_rows(&self, query: &str) -> Vec<SearchRow> {
         let mut rows = self.source_symbol_rows(query);
-        let _ = folded;
         rows.dedup_by(|left, right| {
             left.node == right.node && left.function == right.function && left.line == right.line
         });
@@ -36,9 +41,7 @@ impl App {
             };
             if file_match {
                 rows.push(SearchRow {
-                    source_index: usize::MAX - rows.len(),
                     depth: 0,
-                    has_children: false,
                     node: Some(info.id),
                     path: info.source.file.to_owned(),
                     function: String::new(),
@@ -57,9 +60,7 @@ impl App {
                     continue;
                 }
                 rows.push(SearchRow {
-                    source_index: usize::MAX - rows.len(),
                     depth: 1,
-                    has_children: false,
                     node: Some(info.id),
                     path: info.source.file.to_owned(),
                     function: function.name.clone(),
@@ -112,9 +113,7 @@ impl App {
                     continue;
                 }
                 rows.push(SearchRow {
-                    source_index: usize::MAX - rows.len(),
                     depth: 1,
-                    has_children: false,
                     node: Some(info.id),
                     path: info.source.file.to_owned(),
                     function: name.to_owned(),

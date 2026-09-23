@@ -66,7 +66,8 @@ explicitly.
   less registration metadata first, smaller machine code at the end.
 - **Debug only when requested.** `off`, `errors-only`, and `full` tracing keep
   the release path free of evidence collection unless an application opts in.
-  Studio and the MCP bridge consume the same registry and call/data-flow model.
+  Studio consumes that registry and call/data-flow model; the MCP bridge
+  currently serves read-only Rust source queries.
 
 ## Get started
 
@@ -492,6 +493,13 @@ fn registry_for_this_run(base: &Registry, external: &Registry) -> Registry {
 }
 ```
 
+A cut can also name both sides with Rust expressions:
+`cut(crate::control::object::button::NODE_ID) graft(button_fast::NODE_ID)`. The
+typed form resolves at compile time and requires the external implementation to
+be linked, so a record cannot override it; the string form above needs neither
+and is resolved by selector name at overlay time. Both forms are described in
+[`docs/graft.md`](docs/graft.md).
+
 `overlay` returns a new effective Registry. Neither `base` nor `external` is
 modified. If any cut fails its flow contract, destination parent rule,
 admission, or connector check, none of the plan is published. `overlay_static`
@@ -546,6 +554,11 @@ let plan = nichlink_run_method::GraftPlan::command(
 let effective = base.overlay(&plan, &external)?;
 ```
 
+The span is the contiguous run of siblings between the two endpoints in
+`registry_name` order — not file order or registration order — and a range whose
+endpoints are written the other way round is refused instead of silently
+swapped.
+
 The returned effective registry keeps the base tree and external tree
 unchanged, preserves the logical target path, inherits untouched siblings, and
 re-runs destination-rule, admission, and connector checks before publication.
@@ -560,8 +573,13 @@ screen keeps them apart:
   effective tree at runtime, leaving both the base registry and the external
   registry untouched.
 * `.nichlink/external-grafts/<selector>/graft.plan` is the **record** the screen
-  writes. It is not compiled and nothing else applies it; the screen reads it
-  back to list, open, re-scope, and delete plans.
+  writes: the authoring input the runtime can now apply over the declaration.
+  It is not compiled; `nichlink_run_method::apply_recorded_grafts` loads it and
+  `Registry::overlay_recorded` reconciles it under the precedence rule in
+  [`docs/graft.md`](docs/graft.md) — a record overrides a string-form
+  `static_graft_plan!` cut, a typed-form cut stays final, and a record selector
+  the external registry cannot resolve falls back to the declaration. The screen
+  reads it back to list, open, re-scope, and delete plans.
 
 `g` opens the compose screen for the selected face. It shows the logical slot,
 lets you name the selector and choose `cut` (the overlay keeps the base node's
@@ -592,7 +610,9 @@ a complete registration face:
 
 1. the host crate's thin `build.rs` calls `nichlink-build-method`;
 2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
-   or `application!`;
+   `application!(entry = …)`, or whatever `NICH_LINK_ENTRY` names (a value that
+   names no file fails the build; the same entry feeds pruning and the cut
+   table);
 3. it conservatively derives the faces needed by this crate — what the entry
    reaches plus the slot each `cut(` in `static_graft_plan!` names — and emits
    only those faces into the generated modules and `StaticPlan`, so a face
@@ -618,7 +638,11 @@ Generated code stores checked topology as `&'static [StaticFace]` and
 build-declared grafts as `&'static [StaticGraftCut]` in the same `StaticPlan`.
 `builtin_static_plan()` borrows that read-only data directly. There is no heap
 allocation, global constructor, inventory walk, or startup registration loop.
-Build-time `registry_rule` checks do not become per-frame runtime checks.
+Build-time `registry_rule` checks do not become per-frame runtime checks. The
+per-face `runtime_checks` list is a separate, opt-in host API: a host that has
+an observed value calls `Registry::health_check(node, value, call_path)` at the
+value boundary — passing an empty path when no trace is attached — and that
+call runs exactly the checks the face declared.
 
 Static does not mean every operation in every configuration is free. It means
 the costs are explicit:
@@ -686,8 +710,13 @@ For source-driven hot rebuild while working on Studio itself:
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-studio --bin nichlink-dev -- watch
+  cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch
 ```
+
+`nichlink-dev` is **workspace-only**: it rebuilds Studio from this checkout and
+launches that checkout's `target/debug` binary. The `dev-supervisor` feature is
+not enabled by default, so `cargo install nichlink-studio` installs the TUI and
+not a supervisor that would have nothing to rebuild.
 
 The command-line surface is intentionally small. `nichlink` is the unified
 entry point: `nichlink new` scaffolds host projects, `nichlink check` runs the
@@ -699,7 +728,12 @@ too; `--editor vscode|nvim|blink` picks one, `--editor auto` installs the
 editors found on the machine in their user-level locations, skipping the ones
 that match snippets fuzzily — blink.cmp and LuaSnip also offer a field trigger
 at value positions, so those need `--editor blink`/`--editor nvim` explicitly —
-and `--stdout` prints any of them). Value completion needs no snippet at all,
+and `--stdout` prints any of them). Value completion needs no snippet at all.
+`nichlink grafts` lists the `.nichlink/external-grafts/` records and whether the
+host entry declares their slots, and `nichlink explain <node|path>` reports one
+node's identity, build scope, pruning state, and naming cuts (`explain
+--overlay` renders the build's static overlay projection, not a live tree;
+the live effective tree is the host-side `Registry::dump_effective`).
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
 mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
 remains the build validation command:
@@ -711,7 +745,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
 `nichlink.read`, and `nichlink.status`. Static call-graph answers are labelled
-heuristic; live `CallTrace` evidence is authoritative for dynamic calls and
+heuristic; dynamic calls and runtime values are authoritative only when a host
+records a real `CallTrace`. Studio currently renders a built-in sample trace in
+its data panel and has no trace-ingest path yet, so it does not show observed
 runtime values.
 
 ## When NichLink is worth it
@@ -731,7 +767,7 @@ choice.
 | `inventory` / `linkme` | Distributed collection of static items | Tree semantics, contracts, provenance, atomic grafts |
 | Bevy-style plugins | Explicit composition of an application | Generic source paths and middle-layer contract checks |
 | CodeGraph / CodeQL | Symbol and call evidence | Runtime registration and replacement decisions |
-| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio/MCP views | Rust's own rules for dynamic dispatch and optimised values |
+| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio views, and read-only MCP source queries | Rust's own rules for dynamic dispatch and optimised values |
 
 ## Boundaries
 
@@ -756,7 +792,7 @@ let detailed = nichlink_run_method::CallTrace::full();
 ```
 
 `errors-only` keeps failed chains and discards successful evidence. `full` keeps
-frames, locals, and data edges for Studio/MCP inspection. The default release
+frames, locals, and data edges for Studio inspection. The default release
 path collects nothing unless the application opts in.
 
 ## Kernel and execution surfaces
@@ -783,23 +819,32 @@ same methods.
 | `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |
 | `nichlink-cli` | `cli/` | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding |
 
+`nichlink-macro` is the ninth published crate: a proc-macro crate that
+normalises face fields at compile time (tolerant separators and order, spanned
+diagnostics, editor mirror). It is a build-time front end rather than an
+execution surface, so it has no row above.
+
 ## Workspace layout
 
 ```text
 core/         nichlink-core (kernel): protocol vocabulary and pure methods — identity,
               declaration, diagnostic, tree, plugin, mir, requirements, release,
-              source, authoring, syntax
+              source, authoring, syntax, lexicon
+macro/        nichlink-macro: compile-time face-field front end (tolerant
+              separators and order, spanned diagnostics, editor mirror)
 build_method/ nichlink-build-method: build-time discovery, cache, coarse StaticPlan
 run_method/   nichlink-run-method: runtime trace state, host!/trace_call! macros,
               authoring executor
 debug_method/ nichlink-debug-method: optional CallTrace adapters, MIR evidence,
               data-flow and graph models
-cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/studio/mcp,
-              cargo-nichlink)
+cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/
+              explain/grafts/studio/mcp, cargo-nichlink)
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          read-only MCP bridge for AI-assisted queries
 plugin-host/  optional Wasm/process adapters and atomic deployment
 examples/     runnable hosts: control-button plus its out-of-project graft
+conventions/  nichlink-conventions: gates that walk this checkout (kernel
+              purity, module mounting, size ratchet, doc blocks); not published
 ```
 
 The technical roadmap is in [`docs/ROADMAP.md`](docs/ROADMAP.md), with a Chinese
@@ -818,4 +863,4 @@ NichLink is released under the [MIT License](LICENSE). Contributions, design
 critique, and real-world failure reports are welcome in GitHub Issues and
 Discussions.
 
-[简体中文](README.zh-CN.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md) · [Graft records](docs/graft.md)

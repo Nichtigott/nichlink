@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Ratatui Studio for NichLink registry authoring and diagnostics"
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-studio"
@@ -11,6 +13,20 @@ default-run = "nichlink-studio"
 
 [features]
 prototype-fixtures = []
+# `nichlink-dev` rebuilds Studio from this checkout and launches the workspace's
+# `target/debug` build, so an installed copy can do neither. Gating the bin keeps
+# `cargo install nichlink-studio` from shipping a tool that cannot run; a
+# maintainer opts in explicitly:
+# `cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`.
+# `nichlink-dev` 从本检出重建 Studio 并启动工作区的 `target/debug` 产物，安装副本这两件
+# 事都做不到。给这个 bin 加门控，`cargo install nichlink-studio` 就不会带出一个跑不起来
+# 的工具；维护者显式启用它：
+# `cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`。
+dev-supervisor = []
+
+[lib]
+name = "nichlink_studio"
+path = "src/lib.rs"
 
 [dependencies]
 crossterm = "0.28"
@@ -25,7 +41,20 @@ name = "nichlink-studio"
 path = "src/main.rs"
 doc = false
 
+# Workspace-only: `required-features` is what `publish = false` would be if Cargo
+# had it per target. See the `dev-supervisor` comment above.
+# 仅限工作区：Cargo 没有按 target 的 `publish = false`，`required-features` 就是它的
+# 等价物。见上面 `dev-supervisor` 的说明。
 [[bin]]
 name = "nichlink-dev"
 path = "src/bin/nichlink-dev.rs"
 doc = false
+required-features = ["dev-supervisor"]
+
+# `prototype-fixtures` gates test-only fixtures rather than public API, but it
+# is the feature CI compiles `--all-features`, so docs.rs builds the same set
+# and cannot silently diverge from the tested configuration.
+# `prototype-fixtures` 门控的是测试用 fixture 而非公开 API，但它正是 CI 用
+# `--all-features` 编译的那一套；docs.rs 构建同一集合，就不会与受测配置悄悄分叉。
+[package.metadata.docs.rs]
+all-features = true

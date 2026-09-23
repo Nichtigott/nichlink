@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use super::Node;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::registry_syntax::{FaceSyntax, ParentSyntax};
-use super::types::Node;
 use super::{SourceScope, cached_parent_id, node_id, parsed_face, relative_display};
 
 type ParentRules = BTreeMap<super::registry_identity::NodeId, String>;
@@ -89,7 +89,7 @@ fn collect_contract_errors(
             });
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !relative.starts_with("registry_core/")
+            if !nichlink::lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
             {

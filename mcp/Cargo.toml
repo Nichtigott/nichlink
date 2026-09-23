@@ -4,9 +4,15 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "MCP stdio bridge for compact NichLink code and contract queries"
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
+description = "MCP stdio bridge for the five compact NichLink Rust source queries"
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-mcp"
+
+[lib]
+name = "nichlink_mcp"
+path = "src/lib.rs"
 
 [dependencies]
 nichlink-core = { path = "../core", version = "0.1.0" }

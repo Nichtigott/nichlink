@@ -66,7 +66,9 @@ fn collect(
         let path = entry.path();
         if path.is_dir() {
             let named = path.file_name().and_then(|name| name.to_str());
-            if named != Some("registry_core") && named.is_some_and(crate::discovery::valid_name) {
+            if named != Some(nichlink::lexicon::SCOPE_REGISTRATION_MODULE)
+                && named.is_some_and(crate::discovery::valid_name)
+            {
                 collect(
                     root,
                     &path,

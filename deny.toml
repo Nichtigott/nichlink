@@ -1,0 +1,96 @@
+# cargo-deny policy for the NichLink workspace.
+# The licence list is derived from Cargo.lock; every crate in the graph resolves
+# to one of the allowed identifiers or to a disjunction one of them satisfies.
+# NichLink 工作区的 cargo-deny 策略。许可证清单从 Cargo.lock 推导：图中每个 crate
+# 都落在允许的标识符内，或落在被其中之一满足的析取式内。
+
+[advisories]
+version = 2
+# A yanked release is a supply-chain mistake we can still act on, so it fails.
+# 被 yank 的版本是我们还能处理的供应链错误，因此直接失败。
+yanked = "deny"
+# Only our own direct dependencies gate the job. Transitive "unmaintained"
+# notices are informational and would otherwise make the job fail on crates we
+# cannot replace; the security-relevant vulnerability advisories still fail.
+# 只有本工作区直接依赖才卡任务。传递依赖的 "unmaintained" 提示仅供参考，否则任务会
+# 因为无法替换的 crate 失败；真正与安全相关的漏洞通告仍然失败。
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+# The workspace itself is MIT. The rest are the licences the Cargo.lock graph
+# actually uses; they are permissive and mutually compatible.
+# 工作区自身是 MIT。其余是 Cargo.lock 图实际使用的许可证；它们都是宽松许可且互相兼容。
+allow = [
+    # The workspace licence plus the bulk of the ecosystem (proc-macro2, syn,
+    # serde, ratatui, crossterm, tracing, wasmi, ...).
+    # 工作区自身的许可证，也是生态里最常见的一档。
+    "MIT",
+    # The other half of the Rust ecosystem's dual MIT/Apache-2.0 default.
+    # Rust 生态 MIT/Apache-2.0 双许可中的另一半。
+    "Apache-2.0",
+    # rustix, linux-raw-sys, wasmparser, wast and wat offer the LLVM exception
+    # form; it is a permissive variant of Apache-2.0.
+    # rustix、linux-raw-sys、wasmparser、wast、wat 提供 LLVM 例外形式；它是
+    # Apache-2.0 的宽松变体。
+    "Apache-2.0 WITH LLVM-exception",
+    # ed25519-dalek, curve25519-dalek, subtle and instant are BSD-3-Clause.
+    # ed25519-dalek、curve25519-dalek、subtle、instant 使用 BSD-3-Clause。
+    "BSD-3-Clause",
+    # inotify / inotify-sys back the Linux notify watcher.
+    # inotify / inotify-sys 是 Linux 上 notify 文件监听的底层实现。
+    "ISC",
+    # unicode-ident is "(MIT OR Apache-2.0) AND Unicode-3.0": the AND means the
+    # Unicode-3.0 term must be allowed as well.
+    # unicode-ident 是 "(MIT OR Apache-2.0) AND Unicode-3.0"：AND 意味着
+    # Unicode-3.0 这一项也必须允许。
+    "Unicode-3.0",
+    # foldhash (hashbrown's hasher) is Zlib.
+    # foldhash（hashbrown 的哈希器）使用 Zlib。
+    "Zlib",
+    # notify 7.0.0 ships as CC0-1.0; the later crates relicense to MIT.
+    # notify 7.0.0 以 CC0-1.0 发布，之后的版本改为 MIT。
+    "CC0-1.0",
+    # memchr, walkdir, same-file and winapi-util are Unlicense OR MIT.
+    # memchr、walkdir、same-file、winapi-util 是 Unlicense OR MIT。
+    "Unlicense",
+]
+# Two identifiers in the graph are deliberately absent because they only appear
+# as alternatives that an allowed licence already satisfies: ryu is
+# "Apache-2.0 OR BSL-1.0" and r-efi is
+# "MIT OR Apache-2.0 OR LGPL-2.1-or-later". Allowing them globally would be a
+# wider grant than the graph needs.
+# 图中有两个标识符有意不列入，因为它们只作为已被允许许可证满足的备选项出现：
+# ryu 是 "Apache-2.0 OR BSL-1.0"，r-efi 是
+# "MIT OR Apache-2.0 OR LGPL-2.1-or-later"。全局允许它们会给出比依赖图实际需要
+# 更宽的授权。
+confidence-threshold = 0.9
+unused-allowed-license = "warn"
+
+[licenses.private]
+# The two example hosts set `publish = false` and carry no `license` field;
+# they are never distributed, so the licence check ignores unpublished members.
+# The nine published crates still have their MIT expression checked.
+# 两个示例宿主设置了 `publish = false` 且没有 `license` 字段；它们从不分发，因此
+# 许可证检查忽略未发布的成员。九个已发布的 crate 仍会检查其 MIT 表达式。
+ignore = true
+
+[bans]
+version = 2
+# Duplicate versions are reported but do not fail: wasmparser, rustix and
+# linux-raw-sys legitimately appear twice through different dependency lines.
+# 重复版本会报告但不失败：wasmparser、rustix、linux-raw-sys 经不同依赖线各出现两次。
+multiple-versions = "warn"
+# A wildcard requirement (`"*"`) in a published crate is not reproducible.
+# 已发布 crate 里的通配版本要求（`"*"`）不可复现。
+wildcards = "deny"
+# Path-only dependencies are allowed in the `publish = false` example crates,
+# which never reach a registry and so cannot pin a registry version.
+# `publish = false` 的示例 crate 允许只用 path 的依赖：它们不发布，无法固定 registry 版本。
+allow-wildcard-paths = true
+highlight = "all"
+# No crate is banned today; the list stays explicit so a future ban is a
+# one-line, reviewable change.
+# 目前没有禁用任何 crate；保留显式列表，让以后新增禁令成为一行可审阅的改动。
+deny = []

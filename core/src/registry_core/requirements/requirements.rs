@@ -15,9 +15,17 @@ use crate::registry_core::identity::NodeId;
 /// 一条可能向子树提供能力的注册声明。
 #[derive(Clone, Debug)]
 pub struct CapabilityDeclaration {
+    /// Identity of the declaring face.
+    /// 作出声明的注册面身份。
     pub id: NodeId,
+    /// Face this declaration registers under; `None` for a root declaration.
+    /// 该声明所挂载的父面；根声明为 `None`。
     pub parent: Option<NodeId>,
+    /// Registration kind a requirement's expected provider must match.
+    /// 需求所期望的提供者必须匹配的注册类型。
     pub kind: String,
+    /// Capability names this declaration offers to its subtree.
+    /// 该声明向其子树提供的能力名称。
     pub provides: Vec<String>,
 }
 
@@ -25,14 +33,33 @@ pub struct CapabilityDeclaration {
 /// 从注册面收集到的一条 `requires = ...` 需求。
 #[derive(Clone, Debug)]
 pub struct CapabilityRequirement {
+    /// Identity of the face that declares the requirement.
+    /// 声明该需求的注册面身份。
     pub node: NodeId,
+    /// Registration kind of the requiring face.
+    /// 需求方注册面的注册类型。
     pub kind: String,
+    /// Logical function or handle the requirement was written in.
+    /// 书写该需求所在的逻辑函数或 handle。
     pub function: String,
+    /// Graft branch the requirement was collected under.
+    /// 收集该需求时所在的 graft 分支。
     pub branch: String,
+    /// Capability name the face needs from an ancestor.
+    /// 该注册面需要祖先提供的能力名称。
     pub capability: String,
+    /// Expected registration kind of the ancestor that must provide it.
+    /// 必须提供该能力的祖先的期望注册类型。
     pub provider: String,
+    /// Where the ancestor search starts; `None` means no ancestor can satisfy
+    /// it, so the requirement is always reported.
+    /// 祖先搜索的起点；`None` 表示没有祖先能满足它，因此该需求总会被报告。
     pub parent: Option<NodeId>,
+    /// Source file the requirement was written in.
+    /// 书写该需求的源文件。
     pub source: String,
+    /// 1-based line inside `source`.
+    /// `source` 内以 1 起始的行号。
     pub line: usize,
 }
 

@@ -13,6 +13,9 @@ pub struct StaticFace {
 }
 
 impl StaticFace {
+    /// Create a face record from its already-checked identity, parent, and
+    /// registry ownership; nothing is validated here.
+    /// 用已校验的身份、父级与注册表归属创建注册面记录；此处不做校验。
     pub const fn new(id: NodeId, parent: NodeId, owns_registry: bool) -> Self {
         Self {
             id,
@@ -21,14 +24,20 @@ impl StaticFace {
         }
     }
 
+    /// The face's compile-time identity.
+    /// 该注册面的编译期身份。
     pub const fn id(self) -> NodeId {
         self.id
     }
 
+    /// The face this one registers under.
+    /// 本注册面所挂载的父面。
     pub const fn parent(self) -> NodeId {
         self.parent
     }
 
+    /// Whether this face provides a registry its children may register into.
+    /// 该注册面是否提供可供子级注册的注册表。
     pub const fn owns_registry(self) -> bool {
         self.owns_registry
     }
@@ -45,29 +54,36 @@ pub struct StaticPlan {
 /// How a release-time graft selector addresses a face.
 /// 发布态 graft 选择器如何寻址一个注册面。
 ///
-/// `Path` is the human-written selector (`root/control/button`, or a `a to b`
-/// range) parsed from the host entry. `Id` is a compile-time node identity, so
-/// a host can write the target as a Rust path
-/// (`crate::control::object::button::NODE_ID`) and let the compiler and editor
-/// resolve it instead of spelling a string.
-/// `Path` 是从宿主入口解析出的手写选择器（`root/control/button`，或 `a to b`
-/// 区间）。`Id` 是编译期节点身份，宿主因此可以把目标写成 Rust 路径
+/// `Path` is the human-written single-node selector (`root/control/button`)
+/// parsed from the host entry; a range keeps its far endpoint in
+/// [`StaticGraftCut`]'s separate `cut_end` field, so a path never encodes a
+/// range. `Id` is a compile-time node identity, so a host can write the target
+/// as a Rust path (`crate::control::object::button::NODE_ID`) and let the
+/// compiler and editor resolve it instead of spelling a string.
+/// `Path` 是从宿主入口解析出的手写单节点选择器（`root/control/button`）；区间的
+/// 远端端点保存在 [`StaticGraftCut`] 独立的 `cut_end` 字段里，因此路径永远不编码
+/// 区间。`Id` 是编译期节点身份，宿主因此可以把目标写成 Rust 路径
 /// （`crate::control::object::button::NODE_ID`），由编译器和编辑器解析，而不必
 /// 手写字符串。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CutTarget {
+    /// A human-written single-node path selector from the host entry.
+    /// 来自宿主入口的手写单节点路径选择器。
     Path(&'static str),
+    /// A compile-time node identity, so tools can resolve the target as a path.
+    /// 编译期节点身份，工具因此可把目标解析为 Rust 路径。
     Id(NodeId),
 }
 
 impl CutTarget {
-    pub const fn path(self) -> Option<&'static str> {
-        match self {
-            Self::Path(path) => Some(path),
-            Self::Id(_) => None,
-        }
-    }
-
+    /// The compile-time identity this selector addresses, when it is an `Id`.
+    /// 该选择器寻址的编译期身份——当它是 `Id` 时。
+    ///
+    /// Kept by B3a: `examples/control-button/tests/registry.rs` asserts the
+    /// generated static plan carries typed cuts through this accessor, so it is
+    /// not zero-caller even though no in-workspace library code uses it.
+    /// B3a 保留：`examples/control-button/tests/registry.rs` 通过该访问器断言生成的
+    /// 静态计划携带类型化切口；因此尽管工作区内没有库代码使用它，它也不是零调用者。
     pub const fn id(self) -> Option<NodeId> {
         match self {
             Self::Id(id) => Some(id),
@@ -151,28 +167,33 @@ impl StaticGraftCut {
         }
     }
 
+    /// The selector for the slot this graft replaces; for a range, the first
+    /// sibling.
+    /// 该 graft 所替换槽位的选择器；区间时为起始兄弟。
     pub const fn cut(self) -> CutTarget {
         self.cut
     }
 
+    /// The last sibling of a range, or `None` when the cut is a single slot.
+    /// 区间的最后一个兄弟；切口为单个槽位时为 `None`。
     pub const fn cut_end(self) -> Option<CutTarget> {
         self.cut_end
     }
 
+    /// The selector for the external implementation that replaces the cut.
+    /// 替换该切口的外部实现选择器。
     pub const fn graft(self) -> CutTarget {
         self.graft
     }
 
+    /// Whether the whole subtree rooted at the cut is replaced.
+    /// 是否替换切口根节点下的整棵子树。
     pub const fn full(self) -> bool {
         self.full
     }
 }
 
 impl StaticPlan {
-    pub const fn new(faces: &'static [StaticFace]) -> Self {
-        Self { faces, grafts: &[] }
-    }
-
     /// Build a release plan whose graft selectors are stored in read-only data.
     /// 构造把 graft selector 直接保存在只读数据中的发布计划。
     pub const fn with_grafts(
@@ -182,6 +203,9 @@ impl StaticPlan {
         Self { faces, grafts }
     }
 
+    /// The built-in faces in registry-tree order, so a parent precedes its
+    /// children.
+    /// 按注册树顺序排列的内置注册面，父级先于子级。
     pub const fn faces(self) -> &'static [StaticFace] {
         self.faces
     }
@@ -192,10 +216,14 @@ impl StaticPlan {
         self.grafts
     }
 
+    /// How many faces the plan carries.
+    /// 该计划携带的注册面数量。
     pub const fn len(self) -> usize {
         self.faces.len()
     }
 
+    /// Whether the plan carries no faces.
+    /// 该计划是否不携带任何注册面。
     pub const fn is_empty(self) -> bool {
         self.faces.is_empty()
     }
@@ -216,6 +244,12 @@ impl StaticPlan {
         self.faces.iter().find(|face| face.id == id)
     }
 
+    /// The faces whose parent is `parent`, in table order.
+    /// 父级为 `parent` 的注册面，按表顺序。
+    ///
+    /// The table is emitted in traversal order, not identity order, so this is
+    /// a linear filter rather than a range lookup.
+    /// 该表按遍历顺序而非身份顺序发射，因此这里用线性过滤而不是区间查找。
     pub fn children_of(self, parent: NodeId) -> impl Iterator<Item = &'static StaticFace> {
         self.faces.iter().filter(move |face| face.parent == parent)
     }

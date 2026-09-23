@@ -5,10 +5,10 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
+use super::Node;
 use super::registry_identity::NodeId;
 use super::registry_syntax::GraftSyntax;
 use super::static_plan::source_module_path;
-use super::types::Node;
 use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
 pub(crate) fn write_pruning_manifest(src: &Path, nodes: &[Node], out_dir: &Path) {
@@ -73,10 +73,14 @@ pub(crate) fn write_source_scope_manifest(
 pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) {
     let mut output = String::from("# cut\tgraft\tfull\tline\tcolumn\n");
     for graft in grafts {
+        // The manifest is human-facing audit text, so a range is rendered back
+        // to `"start to end"` here through the one rule that owns it.
+        // 清单是给人看的审计文本，因此区间在这里经那条唯一的规则渲染回 `"start to end"`。
+        let cut = super::graft_view::graft_cut_label(&graft.cut, graft.cut_end.as_deref());
         writeln!(
             output,
-            "{}\t{}\t{}\t{}\t{}",
-            graft.cut, graft.graft, graft.full, graft.location.line, graft.location.column
+            "{cut}\t{}\t{}\t{}\t{}",
+            graft.graft, graft.full, graft.location.line, graft.location.column
         )
         .unwrap();
     }
@@ -98,7 +102,7 @@ fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, 
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !relative.starts_with("registry_core/")
+                && !nichlink::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let id = super::registry_identity::package_node_id(
@@ -160,7 +164,7 @@ fn collect_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, S
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !relative.starts_with("registry_core/")
+                && !nichlink::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let id = super::registry_identity::package_node_id(

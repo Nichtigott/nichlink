@@ -1,3 +1,6 @@
+//! Atomic deployment of registration metadata plus executable code.
+//! 注册元数据与可执行代码的原子部署。
+
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
@@ -8,8 +11,14 @@ use crate::{HostError, PluginInstance};
 /// One consistent view of registration metadata and executable code.
 /// 注册元数据与可执行代码的一致视图。
 pub struct Deployment<I> {
+    /// Monotonic counter; compare successive snapshots to notice a swap. Starts at 0.
+    /// 单调递增的计数器；比较前后快照即可察觉替换。初始为 0。
     pub generation: u64,
+    /// Registry snapshot that matches `plugin`.
+    /// 与 `plugin` 相匹配的注册树快照。
     pub registry: Registry,
+    /// Plugin instance serving this snapshot; the `Arc` keeps it alive for readers.
+    /// 服务该快照的插件实例；`Arc` 让读者持有期间其保持存活。
     pub plugin: Arc<I>,
 }
 
@@ -21,6 +30,8 @@ pub struct HotDeployment<I> {
 }
 
 impl<I: PluginInstance> HotDeployment<I> {
+    /// Install generation 0 after the plugin passes its health probe.
+    /// 在插件通过健康探针后安装第 0 代。
     pub fn new(registry: Registry, plugin: I) -> Result<Self, HostError> {
         plugin.health_check()?;
         Ok(Self {
@@ -33,6 +44,8 @@ impl<I: PluginInstance> HotDeployment<I> {
         })
     }
 
+    /// Return the current snapshot; readers never block a writer.
+    /// 返回当前快照；读者不会阻塞写者。
     pub fn load(&self) -> Arc<Deployment<I>> {
         self.current.load_full()
     }

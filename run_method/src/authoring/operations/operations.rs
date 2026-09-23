@@ -2,162 +2,214 @@
 //! 文件化的新增、编辑和删除操作。
 
 use super::*;
+#[path = "create.rs"]
+mod create;
+use create::create_module;
+#[path = "face_values.rs"]
+mod face_values;
+use face_values::ModuleFaceValues;
+#[path = "face_write.rs"]
+mod face_write;
+use face_write::{FaceWrite, apply_module_face_values};
 #[path = "migration.rs"]
 mod migration;
-use migration::migrate_module_subtree;
+use migration::{migrate_kind_subtree, migrate_module_subtree};
 #[path = "paths.rs"]
 mod paths;
 use paths::generated_paths;
 
+/// The outcome of one file-backed authoring operation.
+/// 一次文件化创作操作的结果。
 pub struct AuthoringChange {
+    /// A human-readable summary of what changed.
+    /// 描述改动内容的人类可读摘要。
     pub message: String,
+    /// The source file the change was written to.
+    /// 改动写入的源码文件。
     pub source: PathBuf,
 }
 
+/// The complete field set for creating one module registration face.
+/// 创建一个模块注册面所需的完整字段集合。
 #[derive(Clone, Copy, Debug)]
 pub struct NewModuleFace<'a> {
+    /// New module directory and file name, and the face's identity path segment.
+    /// 新模块的目录与文件名，同时是该注册面身份路径的一段。
     pub module: &'a str,
+    /// Face kind name, for example `Button`.
+    /// 注册面种类名，例如 `Button`。
     pub kind: &'a str,
+    /// Preset type path that constructs this face.
+    /// 构造本注册面的 preset 类型路径。
     pub preset: &'a str,
+    /// Parts type path that supplies this face's construction parts.
+    /// 提供本注册面构造 parts 的 parts 类型路径。
     pub parts: &'a str,
+    /// Localized display name, Chinese half.
+    /// 本地化显示名称的中文部分。
     pub name_zh: &'a str,
+    /// Localized display name, English half.
+    /// 本地化显示名称的英文部分。
     pub name_en: &'a str,
+    /// Localized one-line description, Chinese half.
+    /// 本地化单行描述的中文部分。
     pub summary_zh: &'a str,
+    /// Localized one-line description, English half.
+    /// 本地化单行描述的英文部分。
     pub summary_en: &'a str,
+    /// Parameter type path declared for this face's construction input.
+    /// 本注册面为其构造输入声明的参数类型路径。
     pub params: &'a str,
+    /// Export names this face declares, as manifest text.
+    /// 本注册面声明的导出名称，以清单文本给出。
     pub exports: &'a str,
+    /// Handle type path that exposes this face to its owner.
+    /// 向其拥有者暴露本注册面的 handle 类型路径。
     pub handle: &'a str,
+    /// Optional author-owned identity that survives source moves; empty means none.
+    /// 可选的作者逻辑身份，可跨源码移动保持不变；为空表示没有。
     pub stable_name: &'a str,
+    /// Node identity of the face this one registers under.
+    /// 本注册面所挂载到的父节点身份。
     pub parent: NodeId,
+    /// Whether this face owns a child Registry.
+    /// 本注册面是否拥有一个子注册机。
     pub needs_registry: bool,
+    /// Name of that child Registry, used to build its path.
+    /// 子注册机的名称，用于生成其路径。
     pub registry_name: &'a str,
+    /// External registry this face is provisioned from; empty means none.
+    /// 本注册面从其获取内容的外部注册机；为空表示没有。
     pub getting_from_other_registry: &'a str,
-    pub registry_rule_path: &'a str,
+    /// Rule for faces entering the Registry this face owns.
+    /// 进入本注册面所拥有 Registry 的注册规范。
     pub registration_rule: &'a str,
+    /// External dependency gate for this face's registry.
+    /// 本注册面所属注册机对外部依赖的门禁。
     pub admission: &'a str,
+    /// Interface names declared by the handle type.
+    /// handle 类型声明实现的接口名称。
     pub handle_traits: &'a str,
+    /// Contract types the handle type must implement.
+    /// handle 类型必须实现的合同类型。
     pub handle_contracts: &'a str,
+    /// Interface names declared by the parts type.
+    /// parts 类型声明实现的接口名称。
     pub part_traits: &'a str,
+    /// Contract types the parts type must implement.
+    /// parts 类型必须实现的合同类型。
     pub part_contracts: &'a str,
+    /// Capability requirements this face declares.
+    /// 本注册面声明的能力需求。
     pub requires: &'a str,
+    /// Capability names this face makes available to other faces.
+    /// 本注册面向其他注册面提供的能力名称。
     pub provides: &'a str,
+    /// Output type name the preset expects.
+    /// preset 期望的输出类型名。
     pub expected_output: &'a str,
+    /// Output type name the parts type actually produces.
+    /// parts 类型实际产出的输出类型名。
     pub actual_output: &'a str,
+    /// Runtime value checks the host applies; empty accepts any value.
+    /// 宿主执行的运行期取值校验；为空时接受任何取值。
     pub runtime_checks: &'a str,
+    /// Explicit flow contract for grafting; empty selects the default.
+    /// 供嫁接使用的显式数据流合同；为空时选用默认值。
     pub flow: &'a str,
+    /// Type that supplies the compile-time flow contract, when explicit.
+    /// 显式提供编译期数据流合同的类型路径（如果显式给出）。
     pub flow_provider: &'a str,
 }
 
+/// The complete field set for editing one module registration face in place.
+/// 原地编辑一个模块注册面所需的完整字段集合。
 #[derive(Clone, Copy, Debug)]
 pub struct ModuleFacePatch<'a> {
     /// New module directory/file name. Changing it migrates the whole subtree.
     /// 新模块目录和文件名；修改它会迁移整棵子树。
     pub module: &'a str,
+    /// Face kind name, for example `Button`.
+    /// 注册面种类名，例如 `Button`。
     pub kind: &'a str,
+    /// Preset type path that constructs this face.
+    /// 构造本注册面的 preset 类型路径。
     pub preset: &'a str,
+    /// Parts type path that supplies this face's construction parts.
+    /// 提供本注册面构造 parts 的 parts 类型路径。
     pub parts: &'a str,
+    /// Localized display name, Chinese half.
+    /// 本地化显示名称的中文部分。
     pub name_zh: &'a str,
+    /// Localized display name, English half.
+    /// 本地化显示名称的英文部分。
     pub name_en: &'a str,
+    /// Localized one-line description, Chinese half.
+    /// 本地化单行描述的中文部分。
     pub summary_zh: &'a str,
+    /// Localized one-line description, English half.
+    /// 本地化单行描述的英文部分。
     pub summary_en: &'a str,
+    /// Parameter type path declared for this face's construction input.
+    /// 本注册面为其构造输入声明的参数类型路径。
     pub params: &'a str,
+    /// Export names this face declares, as manifest text.
+    /// 本注册面声明的导出名称，以清单文本给出。
     pub exports: &'a str,
+    /// Handle type path that exposes this face to its owner.
+    /// 向其拥有者暴露本注册面的 handle 类型路径。
     pub handle: &'a str,
+    /// Optional author-owned identity that survives source moves; empty means none.
+    /// 可选的作者逻辑身份，可跨源码移动保持不变；为空表示没有。
     pub stable_name: &'a str,
+    /// Whether this face owns a child Registry.
+    /// 本注册面是否拥有一个子注册机。
     pub needs_registry: bool,
+    /// Name of that child Registry, used to build its path.
+    /// 子注册机的名称，用于生成其路径。
     pub registry_name: &'a str,
+    /// External registry this face is provisioned from; empty means none.
+    /// 本注册面从其获取内容的外部注册机；为空表示没有。
     pub getting_from_other_registry: &'a str,
-    pub registry_rule_path: &'a str,
+    /// Rule for faces entering the Registry this face owns.
+    /// 进入本注册面所拥有 Registry 的注册规范。
     pub registration_rule: &'a str,
+    /// External dependency gate for this face's registry.
+    /// 本注册面所属注册机对外部依赖的门禁。
     pub admission: &'a str,
+    /// Interface names declared by the handle type.
+    /// handle 类型声明实现的接口名称。
     pub handle_traits: &'a str,
+    /// Contract types the handle type must implement.
+    /// handle 类型必须实现的合同类型。
     pub handle_contracts: &'a str,
+    /// Interface names declared by the parts type.
+    /// parts 类型声明实现的接口名称。
     pub part_traits: &'a str,
+    /// Contract types the parts type must implement.
+    /// parts 类型必须实现的合同类型。
     pub part_contracts: &'a str,
+    /// Capability requirements this face declares.
+    /// 本注册面声明的能力需求。
     pub requires: &'a str,
+    /// Capability names this face makes available to other faces.
+    /// 本注册面向其他注册面提供的能力名称。
     pub provides: &'a str,
+    /// Output type name the preset expects.
+    /// preset 期望的输出类型名。
     pub expected_output: &'a str,
+    /// Output type name the parts type actually produces.
+    /// parts 类型实际产出的输出类型名。
     pub actual_output: &'a str,
+    /// Runtime value checks the host applies; empty accepts any value.
+    /// 宿主执行的运行期取值校验；为空时接受任何取值。
     pub runtime_checks: &'a str,
+    /// Explicit flow contract for grafting; empty selects the default.
+    /// 供嫁接使用的显式数据流合同；为空时选用默认值。
     pub flow: &'a str,
+    /// Type that supplies the compile-time flow contract, when explicit.
+    /// 显式提供编译期数据流合同的类型路径（如果显式给出）。
     pub flow_provider: &'a str,
-}
-
-pub(super) fn apply_new_face_values(
-    face: &mut FaceManifest,
-    configured: &NewModuleFace<'_>,
-) -> Result<(), String> {
-    for (field, value) in [
-        ("preset", configured.preset),
-        ("parts", configured.parts),
-        ("name_zh", configured.name_zh),
-        ("name_en", configured.name_en),
-        ("summary_zh", configured.summary_zh),
-        ("summary_en", configured.summary_en),
-        ("params", configured.params),
-        ("exports", configured.exports),
-        ("handle", configured.handle),
-        ("stable_name", configured.stable_name),
-        (
-            "getting_from_other_registry",
-            configured.getting_from_other_registry,
-        ),
-        ("handle_contracts", configured.handle_contracts),
-        ("part_contracts", configured.part_contracts),
-        ("requires", configured.requires),
-        ("provides", configured.provides),
-        ("expected_output", configured.expected_output),
-        ("actual_output", configured.actual_output),
-        ("runtime_checks", configured.runtime_checks),
-        ("flow", configured.flow),
-        ("flow_provider", configured.flow_provider),
-    ] {
-        if !value.trim().is_empty() {
-            face.edit(field, value.trim())?;
-        }
-    }
-    apply_trait_contract(
-        face,
-        "handle_traits",
-        configured.handle_traits,
-        configured.handle_contracts,
-    )?;
-    apply_trait_contract(
-        face,
-        "part_traits",
-        configured.part_traits,
-        configured.part_contracts,
-    )?;
-    face.edit("needs_registry", &configured.needs_registry.to_string())?;
-    if !configured.registry_name.trim().is_empty() {
-        face.edit("registry_name", configured.registry_name.trim())?;
-    }
-    face.edit("registration_rule", configured.registration_rule.trim())?;
-    face.edit("admission", configured.admission.trim())?;
-    // The rule file lives beside the face. Keep this path derived from the
-    // source tree; accepting an arbitrary path would split one face across two
-    // unrelated directories.
-    // 规则文件固定与注册面同目录派生；不接受任意路径，避免一个注册面被拆到
-    // 两个无关目录。
-    let _ = configured.registry_rule_path;
-    Ok(())
-}
-
-fn apply_trait_contract(
-    face: &mut FaceManifest,
-    label_field: &str,
-    labels: &str,
-    contract_paths: &str,
-) -> Result<(), String> {
-    if labels.trim().is_empty() && contract_paths.trim().is_empty() {
-        return Ok(());
-    }
-    let labels = if contract_paths.trim().is_empty() {
-        labels.trim().to_owned()
-    } else {
-        trait_names_from_paths(contract_paths)?
-    };
-    face.edit(label_field, &labels)
 }
 
 /// Create the standard `<parent>/object/<name>/<name>.rs` registration face.
@@ -196,8 +248,9 @@ pub fn add_module_from_face(
     registry: &Registry,
     spec: &NewModuleFace<'_>,
 ) -> Result<(AuthoringChange, RegistrationSnapshot), String> {
-    validate_name(spec.module)?;
-    create_module(registry, spec.module, spec.parent, Some(spec))
+    let values = ModuleFaceValues::from_new(spec);
+    validate_name(values.module)?;
+    create_module(registry, values.module, spec.parent, Some(&values))
 }
 
 /// Load authored faces into an owned snapshot that can be dropped after a reload.
@@ -221,209 +274,67 @@ pub fn generated_snapshots_from(root: &Path) -> Result<Vec<RegistrationSnapshot>
         .collect()
 }
 
+/// The filesystem facts the kernel's source walk asks this surface for.
+/// 内核源码遍历向本执行面索取的文件系统事实。
+struct StdSourceTree;
+
+impl nichlink::source::SourceTree for StdSourceTree {
+    fn is_directory(&self, path: &Path) -> bool {
+        path.is_dir()
+    }
+
+    fn entries(&self, path: &Path) -> Result<Vec<PathBuf>, String> {
+        fs::read_dir(path)
+            .map_err(|error| format!("cannot scan {}: {error}", path.display()))?
+            .map(|entry| {
+                entry
+                    .map(|entry| entry.path())
+                    .map_err(|error| format!("cannot scan {}: {error}", path.display()))
+            })
+            .collect()
+    }
+
+    fn read_text(&self, path: &Path) -> Result<String, String> {
+        fs::read_to_string(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
+    }
+}
+
 fn collect_face_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<(), String> {
-    let entries = fs::read_dir(directory)
-        .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?;
-    for entry in entries {
-        let path = entry
-            .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
-            .path();
-        if path.is_dir() {
-            collect_face_sources(&path, sources)?;
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs")
-            && !path
-                .components()
-                .any(|component| component.as_os_str() == "registry_core")
-            && !path
-                .components()
-                .any(|component| component.as_os_str() == "compile_error_demo")
-            && fs::read_to_string(&path)
-                .map(|source| {
-                    source.lines().any(|line| line == GENERATED_MARKER)
-                        || parse_face_syntax(&source).ok().flatten().is_some()
-                })
-                .unwrap_or(false)
-        {
-            sources.push(path);
-        }
-    }
-    Ok(())
-}
-
-fn create_module(
-    registry: &Registry,
-    name: &str,
-    parent: NodeId,
-    configured: Option<&NewModuleFace<'_>>,
-) -> Result<(AuthoringChange, RegistrationSnapshot), String> {
-    // The legacy root token means "this Registry's root". Studio uses a
-    // package namespace, so its concrete root identity is intentionally not
-    // the process-wide legacy constant.
-    // 旧根标识表示“当前 Registry 的根”。Studio 使用包命名空间，因此具体根
-    // 标识不会等于进程级旧常量。
-    let parent = if parent == ROOT_NODE_ID {
-        registry.id()
-    } else {
-        parent
-    };
-    let parent_face = if parent == registry.id() {
-        None
-    } else {
-        let face = registry
-            .find(parent)
-            .ok_or_else(|| format!("parent `{parent}` is not registered"))?;
-        if !face.needs_registry {
-            return Err(format!("parent `{parent}` does not own a Registry"));
-        }
-        Some(face)
-    };
-
-    let relative_dir = match parent_face {
-        None => PathBuf::from(name),
-        Some(face) => {
-            let source = Path::new(&face.source.file);
-            if source.is_absolute() || source.components().any(is_parent_component) {
-                return Err("external parent source cannot be authored by this package".to_owned());
-            }
-            source
-                .parent()
-                .unwrap_or_else(|| Path::new(""))
-                .join("object")
-                .join(name)
-        }
-    };
-    let source_relative = relative_dir.join(format!("{name}.rs"));
-    let source = source_root().join(&source_relative);
-    if source.exists() {
-        return Err(format!(
-            "module `{}` already exists",
-            source_relative.display()
-        ));
-    }
-
-    let kind = rust_type_name(name);
-    let (parent_source, parent_kind) = parent_face
-        .map(|face| (face.source.file.as_str(), face.kind.as_str()))
-        .unwrap_or(("<root>", "root"));
-    let mut face = FaceManifest::new(
-        name,
-        &kind,
-        parent,
-        parent_source,
-        parent_kind,
-        &normalized_path(&source_relative),
-    );
-    if let Some(configured) = configured {
-        if !configured.kind.trim().is_empty() {
-            let normalized_kind = normalize_kind_name(configured.kind.trim());
-            face.edit("kind", &normalized_kind)?;
-        }
-        apply_new_face_values(&mut face, configured)?;
-    }
-    let info = face.to_snapshot()?;
-
-    // Validate against a staged registry before touching the source tree. This
-    // keeps an invalid add from leaving half-written files behind.
-    // 写入源码树前先在暂存注册机中校验，避免失败的 add 留下半成品文件。
-    registry
-        .clone()
-        .register_snapshot_batch([info.clone()])
-        .map_err(|error| format!("registration rejected:\n{error}"))?;
-
-    fs::create_dir_all(source.parent().expect("source has a parent"))
-        .map_err(|error| format!("cannot create module directory: {error}"))?;
-    let rule_source = face.render_rule_source()?;
-    let rule = face.rule_source_path()?;
-    if rule_source.is_some() {
-        fs::create_dir_all(rule.parent().expect("rule source has a parent"))
-            .map_err(|error| format!("cannot create registry rule directory: {error}"))?;
-    }
-    let source_text = face.render_source()?;
-    let mut rule_created = false;
-    if let Some(rule_source) = rule_source {
-        create_new(&rule, &rule_source)?;
-        rule_created = true;
-    }
-    if let Err(error) = create_new(&source, &source_text) {
-        if rule_created {
-            let _ = fs::remove_file(&rule);
-        }
-        return Err(error);
-    }
-
-    Ok((
-        AuthoringChange {
-            message: format!(
-                "created `{}` under parent {}",
-                source_relative.display(),
-                parent
-            ),
-            source,
+    nichlink::source::collect_rust_sources(
+        &StdSourceTree,
+        directory,
+        nichlink::source::SourceWalk {
+            skip_target: false,
+            skip_registry_core: true,
+            skip_compile_error_demo: true,
         },
-        info,
-    ))
-}
-
-/// Edit one field in a NichLink-generated registration face.
-/// 编辑由 NichLink 生成的注册面中的一个字段。
-pub fn edit_module(registry: &Registry, spec: &str) -> Result<AuthoringChange, String> {
-    let mut fields = spec.splitn(3, char::is_whitespace);
-    let id = fields
-        .next()
-        .ok_or_else(|| "usage: edit <node> <field> <value>".to_owned())?
-        .parse::<NodeId>()
-        .map_err(|_| "edit requires a 32-digit node identity".to_owned())?;
-    let field = fields
-        .next()
-        .ok_or_else(|| "usage: edit <node> <field> <value>".to_owned())?;
-    let value = fields
-        .next()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "usage: edit <node> <field> <value>".to_owned())?;
-
-    let (_, source) = generated_paths(registry, id)?;
-    let mut face = FaceManifest::parse_source(&source)?;
-    let normalized_kind = (field == "kind").then(|| normalize_kind_name(value));
-    let kind_changed = if let Some(next_kind) = normalized_kind.as_ref() {
-        let current_kind = face.values.get("kind").cloned().unwrap_or_default();
-        next_kind != &current_kind
-    } else {
-        false
-    };
-    face.edit(field, normalized_kind.as_deref().unwrap_or(value))?;
-    if kind_changed {
-        return migrate_kind_subtree(registry, id, source, face);
-    }
-    let authored = face.to_snapshot()?;
-    let existing = registry
-        .find(id)
-        .ok_or_else(|| format!("node `{id}` is not registered"))?;
-    registry
-        .validate_snapshot_replacement(id, existing.clone().merge_authored(authored))
-        .map_err(|error| format!("registration rejected:\n{error}"))?;
-    let old_source = fs::read_to_string(&source)
-        .map_err(|error| format!("cannot read {}: {error}", source.display()))?;
-    if let Err(error) = face
-        .render_source()
-        .and_then(|source_text| atomic_write(&source, &source_text))
-    {
-        // A face spans two files. Restore the manifest if the source write
-        // fails, so a failed edit never leaves the pair out of sync.
-        // 一个注册面跨越两个文件；源文件写入失败时恢复 manifest，避免
-        // 编辑失败后两份文件内容不一致。
-        let _ = atomic_write(&source, &old_source);
-        return Err(error);
-    }
-
-    Ok(AuthoringChange {
-        message: format!("updated `{field}` in {}", source.display()),
-        source,
-    })
+        |_, source| match source {
+            None => nichlink::source::Keep::NeedSource,
+            Some(text) if crate::syntax::is_face_source(text, GENERATED_MARKER) => {
+                nichlink::source::Keep::Yes
+            }
+            Some(_) => nichlink::source::Keep::No,
+        },
+        sources,
+    )
 }
 
 /// Edit all Studio-owned face fields in one filesystem transaction.
 /// 在一次文件事务中编辑 Studio 管理的全部注册面字段。
+///
+/// This is the only authored-face edit entry point. The string-parsing
+/// `edit_module` was deleted in B3a: it edited the manifest but never wrote or
+/// removed the registry-rule source, so `edit <id> needs_registry true` left a
+/// face referencing a `super::registry_rule` module it did not own. The doctest
+/// below pins the deletion at compile time.
+/// 这是唯一的注册面编辑入口。字符串解析式的 `edit_module` 已在 B3a 删除：它只改清单，
+/// 从不写入或删除注册规则源，于是 `edit <id> needs_registry true` 会留下一个引用着
+/// 自己并不拥有的 `super::registry_rule` 模块的注册面。下面的 doctest 在编译期钉住
+/// 这次删除。
+///
+/// ```compile_fail,E0433
+/// let _ = nichlink_run_method::edit_module;
+/// ```
 pub fn edit_module_face(
     registry: &Registry,
     id: NodeId,
@@ -431,54 +342,15 @@ pub fn edit_module_face(
 ) -> Result<AuthoringChange, String> {
     let (_, source) = generated_paths(registry, id)?;
     let mut face = FaceManifest::parse_source(&source)?;
+    let values = ModuleFaceValues::from_patch(patch);
     let old_module = face.values.get("module").cloned().unwrap_or_default();
-    let requested_module = patch.module.trim();
+    let requested_module = values.module.trim();
     validate_name(requested_module)?;
     let module_changed = requested_module != old_module;
     let original_kind = face.values.get("kind").cloned().unwrap_or_default();
-    let normalized_kind = normalize_kind_name(patch.kind.trim());
-    let kind_changed = normalized_kind != original_kind;
-    face.edit("kind", &normalized_kind)?;
-    face.edit("preset", patch.preset)?;
-    face.edit("parts", patch.parts)?;
-    face.edit("name_zh", patch.name_zh)?;
-    face.edit("name_en", patch.name_en)?;
-    face.edit("summary_zh", patch.summary_zh)?;
-    face.edit("summary_en", patch.summary_en)?;
-    face.edit("params", patch.params)?;
-    face.edit("exports", patch.exports)?;
-    face.edit("handle", patch.handle)?;
-    face.edit("stable_name", patch.stable_name)?;
-    face.edit("needs_registry", &patch.needs_registry.to_string())?;
-    face.edit("registry_name", patch.registry_name)?;
-    face.edit(
-        "getting_from_other_registry",
-        patch.getting_from_other_registry,
-    )?;
-    face.edit("registration_rule", patch.registration_rule)?;
-    face.edit("admission", patch.admission)?;
-    face.edit("handle_contracts", patch.handle_contracts)?;
-    face.edit("part_contracts", patch.part_contracts)?;
-    apply_trait_contract(
-        &mut face,
-        "handle_traits",
-        patch.handle_traits,
-        patch.handle_contracts,
-    )?;
-    apply_trait_contract(
-        &mut face,
-        "part_traits",
-        patch.part_traits,
-        patch.part_contracts,
-    )?;
-    face.edit("requires", patch.requires)?;
-    face.edit("provides", patch.provides)?;
-    face.edit("expected_output", patch.expected_output)?;
-    face.edit("actual_output", patch.actual_output)?;
-    face.edit("runtime_checks", patch.runtime_checks)?;
-    face.edit("flow", patch.flow)?;
-    face.edit("flow_provider", patch.flow_provider)?;
-    if !patch.needs_registry
+    let kind_changed = normalize_kind_name(values.kind.trim()) != original_kind;
+    apply_module_face_values(&mut face, &values, FaceWrite::Edit)?;
+    if !values.needs_registry
         && registry
             .registry(id)
             .is_some_and(|owned_registry| !owned_registry.is_empty())
@@ -546,68 +418,6 @@ pub fn edit_module_face(
     }
     Ok(AuthoringChange {
         message: format!("updated registration face {}", source.display()),
-        source,
-    })
-}
-
-/// Change a face kind by migrating its identity in one validated transaction.
-/// 修改注册面的 kind，并在一次校验事务中迁移其身份。
-///
-/// `kind` participates in `NodeId`, so changing it cannot use an in-place
-/// replacement. The source file stays where it is; descendants are reparsed
-/// so their parent IDs follow the new kind, then the complete subtree is
-/// validated before the caller reloads the live registry.
-/// `kind` 是 `NodeId` 的组成部分，不能原地替换。源码文件位置保持不变，
-/// 重新解析后代以跟随新的父级身份，并在刷新实时注册树前校验整棵子树。
-fn migrate_kind_subtree(
-    registry: &Registry,
-    id: NodeId,
-    source: PathBuf,
-    face: FaceManifest,
-) -> Result<AuthoringChange, String> {
-    let old_source = fs::read_to_string(&source)
-        .map_err(|error| format!("cannot read {}: {error}", source.display()))?;
-    let rendered = face.render_source()?;
-    atomic_write(&source, &rendered)?;
-
-    let source_root = source_root();
-    let relative = source
-        .strip_prefix(&source_root)
-        .map_err(|_| "generated module is outside the package source tree".to_owned())?;
-    let relative = normalized_path(relative);
-    let directory = Path::new(&relative)
-        .parent()
-        .map(normalized_path)
-        .unwrap_or_default();
-    let prefix = if directory.is_empty() {
-        String::new()
-    } else {
-        format!("{directory}/")
-    };
-    let snapshots = match generated_snapshots() {
-        Ok(snapshots) => snapshots
-            .into_iter()
-            .filter(|snapshot| {
-                snapshot.source.file == relative
-                    || (!prefix.is_empty() && snapshot.source.file.starts_with(&prefix))
-            })
-            .collect::<Vec<_>>(),
-        Err(error) => {
-            let _ = atomic_write(&source, &old_source);
-            return Err(error);
-        }
-    };
-    if snapshots.is_empty() {
-        let _ = atomic_write(&source, &old_source);
-        return Err("kind migration produced no registration face".to_owned());
-    }
-    if let Err(error) = registry.validate_snapshot_migration(id, snapshots) {
-        let _ = atomic_write(&source, &old_source);
-        return Err(format!("registration rejected after kind change:\n{error}"));
-    }
-
-    Ok(AuthoringChange {
-        message: format!("updated kind in {}", source.display()),
         source,
     })
 }

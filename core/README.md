@@ -20,7 +20,8 @@ Modules under `registry_core`:
 | `release` | Zero-allocation release topology (`StaticPlan`) and compile-time registration assertions |
 | `diagnostic` | `RegistryError` tree, `BuildDiagnostic` model, face topology validation |
 | `syntax` (feature `syntax`) | Registration face parser, application/graft entry discovery |
-| `authoring` (feature `syntax`) | Pure authoring plan/render helpers, name validation, the `FACE` field dictionary |
+| `authoring` | Face authoring data that is always available: the field-name table, presentation metadata, and pure `validation`; only its `parse` and `snapshot` submodules are behind feature `syntax` |
+| `lexicon` | Shared text contracts: generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions |
 
 The boundary rule: anything with no I/O and no `std::env`/time/process binding
 belongs here; execution surfaces (`nichlink-build-method`, `nichlink-run-method`,

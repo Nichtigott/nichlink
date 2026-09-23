@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use super::Registry;
-use super::pages_impl::RegisteredEntry;
+use super::entry_pages::RegisteredEntry;
 
 impl Registry {
     pub(super) fn registry_mut(&mut self, wanted: NodeId) -> Option<&mut Registry> {
@@ -47,6 +47,8 @@ impl Registry {
         }
     }
 
+    /// Find the registry with this identity anywhere in the subtree.
+    /// 在本子树中查找具有该身份的注册机。
     pub fn registry(&self, wanted: NodeId) -> Option<&Registry> {
         if self.header.id == wanted {
             return Some(self);
@@ -73,14 +75,14 @@ impl Registry {
         None
     }
 
-    pub fn get(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
-        self.entries.get(&id).map(|entry| entry.info.as_ref())
-    }
-
+    /// Look up the registration snapshot of one face by identity.
+    /// 按身份查找某个注册面的注册快照。
     pub fn find(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
         self.entry_at(id).map(|entry| entry.info.as_ref())
     }
 
+    /// Return the current logical path of a face, derived from the live tree.
+    /// 返回某个注册面的当前逻辑路径，由现存树推导。
     pub fn path_for(&self, id: NodeId) -> Option<String> {
         if let Some(entry) = self.entries.get(&id) {
             return Some(format!("{}/{}", self.header.path, entry.info.registry_name));
@@ -93,6 +95,8 @@ impl Registry {
         None
     }
 
+    /// Return the identity chain from this registry's root down to a face.
+    /// 返回从本注册机根到某个注册面的身份链。
     pub fn node_path(&self, id: NodeId) -> Option<Vec<NodeId>> {
         let mut path = vec![self.header.id];
         self.collect_node_path(id, &mut path).then_some(path)
@@ -137,12 +141,16 @@ impl Registry {
         }
     }
 
+    /// Collect every face of one kind, in depth-first order.
+    /// 按深度优先顺序收集某一 kind 的全部注册面。
     pub fn find_kind(&self, kind: &str) -> Vec<&RegistrationSnapshot> {
         let mut found = Vec::new();
         self.collect_kind(kind, &mut found);
         found
     }
 
+    /// Collect every face the predicate accepts, in depth-first order.
+    /// 按深度优先顺序收集谓词接受的全部注册面。
     pub fn find_where(
         &self,
         predicate: impl Fn(&RegistrationSnapshot) -> bool,
@@ -164,6 +172,8 @@ impl Registry {
         }
     }
 
+    /// Flatten the subtree into a depth-first list of registration snapshots.
+    /// 把子树展平成深度优先的注册快照列表。
     pub fn depth_first(&self) -> Vec<&RegistrationSnapshot> {
         let mut entries = Vec::new();
         self.collect_depth_first(&mut entries);

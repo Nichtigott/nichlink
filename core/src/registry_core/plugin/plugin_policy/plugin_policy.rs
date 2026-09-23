@@ -1,11 +1,14 @@
 //! Plugin execution policy and adapter contracts.
 //! 插件执行策略与适配器合同。
 //!
-//! `PluginMode` and `PluginSource` live in the kernel crate because
-//! registration declarations carry them; they are re-exported here.
-//! PluginMode 与 PluginSource 定义在 kernel，此处为兼容而重导出。
+//! `PluginMode`, `PluginSource` and `PluginManifest` live in `declaration`
+//! because registration declarations carry them; this module imports them from
+//! there instead of re-exporting them, so the plugin namespace does not become
+//! a second home for the same item.
+//! `PluginMode`、`PluginSource` 与 `PluginManifest` 住在 `declaration`——注册声明持有
+//! 它们；本模块从那里导入而不是再导出，插件命名空间因此不会成为同一个 item 的第二个家。
 
-pub use nichlink::{PluginMode, PluginSource};
+use crate::registry_core::declaration::{FrameworkId, PluginManifest, PluginSource};
 
 use super::*;
 
@@ -14,15 +17,15 @@ use super::*;
 /// 插件代码的执行隔离方式。Native 与宿主同进程；另外两种是明确的隔离选项。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PluginAdapter {
+    /// Native adapter: plugin code runs in the host process and is trusted.
+    /// Native 适配器：插件代码在宿主进程内运行，视为可信。
     Native,
+    /// Wasm adapter: plugin code runs inside a Wasm sandbox.
+    /// Wasm 适配器：插件代码在 Wasm 沙箱内运行。
     Wasm,
+    /// Process adapter: plugin code runs in a separate OS process.
+    /// 进程适配器：插件代码在独立操作系统进程中运行。
     Process,
-}
-
-impl PluginAdapter {
-    pub const fn requires_isolation(self) -> bool {
-        !matches!(self, Self::Native)
-    }
 }
 
 /// Generic execution backend for a plugin artifact.
@@ -34,19 +37,36 @@ impl PluginAdapter {
 /// 使用关联类型保持静态分发：宿主可以选择 native、WASM 或进程适配器，
 /// 不必把所有插件实现塞进一个全局 trait object。
 pub trait PluginRuntime {
+    /// The loaded form a caller drives once `load` has succeeded.
+    /// `load` 成功后调用方驱动的已加载实例类型。
     type Instance;
 
+    /// Why loading failed. Structured so an adapter reports its own error type
+    /// instead of flattening every failure into a string.
+    /// 加载失败的原因。结构化后适配器报告自己的错误类型，而不必把每种失败压平成字符串。
+    type Error: std::error::Error;
+
+    /// Report which isolation mode this runtime provides.
+    /// 报告本运行时所提供的隔离方式。
     fn adapter(&self) -> PluginAdapter;
 
-    fn load(&self, manifest: PluginManifest, bytes: &[u8]) -> Result<Self::Instance, String>;
+    /// Load one manifest's bytes, surfacing the adapter's own failure type.
+    /// 加载某个 manifest 的字节，失败时给出适配器自己的错误类型。
+    fn load(&self, manifest: PluginManifest, bytes: &[u8]) -> Result<Self::Instance, Self::Error>;
 }
 
 /// Host policy for selecting which linked plugin manifests may participate.
 /// 宿主选择已链接插件是否参与的策略。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PluginPolicy {
+    /// Framework whose manifests this policy governs.
+    /// 本策略所管辖 manifest 的目标框架。
     pub framework: FrameworkId,
+    /// Whether official-sourced manifests may be selected.
+    /// 是否允许选中官方来源的 manifest。
     pub allow_official: bool,
+    /// Whether user-sourced manifests may be selected.
+    /// 是否允许选中用户来源的 manifest。
     pub allow_user: bool,
     /// Reject manifests whose checksum is not a cryptographic digest.
     /// 拒绝不是密码学摘要的插件 manifest。
@@ -54,6 +74,8 @@ pub struct PluginPolicy {
 }
 
 impl PluginPolicy {
+    /// Deny every source; for hosts that link no external plugin.
+    /// 拒绝所有来源；供不链接外部插件的宿主使用。
     pub const fn local(framework: FrameworkId) -> Self {
         Self {
             framework,
@@ -63,6 +85,8 @@ impl PluginPolicy {
         }
     }
 
+    /// Admit both official and user sources without a digest requirement.
+    /// 同时接受官方与用户来源，且不要求密码学摘要。
     pub const fn open(framework: FrameworkId) -> Self {
         Self {
             framework,
@@ -83,6 +107,8 @@ impl PluginPolicy {
         }
     }
 
+    /// Whether the manifest is admitted, collapsing the reason to a boolean.
+    /// 该 manifest 是否被接纳；原因被折叠成一个布尔值。
     pub fn accepts(self, plugin: PluginManifest) -> bool {
         matches!(self.decision(plugin, None), PluginDecision::Accepted)
     }
@@ -122,20 +148,12 @@ impl PluginPolicy {
         }
         PluginDecision::Accepted
     }
-
-    /// Apply source/framework policy and, for official plugins, a lock file.
-    /// 同时应用来源/框架策略，并对官方插件校验锁文件。
-    pub fn accepts_with_catalog(self, plugin: PluginManifest, catalog: &PluginCatalog) -> bool {
-        matches!(
-            self.decision(plugin, Some(catalog)),
-            PluginDecision::Accepted
-        )
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::registry_core::declaration::{ContractId, FlowContract, PluginMode};
 
     #[test]
     fn flow_contracts_compare_without_runtime_hashing() {
@@ -208,105 +226,6 @@ mod tests {
     }
 
     #[test]
-    fn trust_policy_checks_bytes_key_and_revocation() {
-        const DIGEST: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        const KEYS: &[&str] = &[KEY];
-        const REVOKED: &[PluginRevocation] = &[];
-        let manifest = PluginManifest {
-            name: "official.canvas",
-            crate_name: "official_canvas",
-            version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
-            source: PluginSource::Official,
-            mode: PluginMode::Replacement,
-            checksum: DIGEST,
-            signature: Some("adapter-verified-signature"),
-            public_key_fingerprint: Some(KEY),
-            revocation_list: Some("official-2026-09"),
-        };
-        let policy = PluginTrustPolicy::official(KEYS, REVOKED);
-        assert_eq!(policy.verify(manifest, b"abc", Some(KEY)), Ok(()));
-        assert_eq!(
-            policy.verify(
-                PluginManifest {
-                    public_key_fingerprint: None,
-                    ..manifest
-                },
-                b"abc",
-                None,
-            ),
-            Err(PluginTrustError::MissingOfficialKey)
-        );
-        assert_eq!(
-            policy.verify(
-                PluginManifest {
-                    revocation_list: None,
-                    ..manifest
-                },
-                b"abc",
-                Some(KEY),
-            ),
-            Err(PluginTrustError::MissingRevocationList)
-        );
-        let revoked = PluginTrustPolicy::official(
-            KEYS,
-            &[PluginRevocation {
-                package: "official.canvas",
-                version: "1.0.0",
-            }],
-        );
-        assert_eq!(
-            revoked.verify(manifest, b"abc", Some(KEY)),
-            Err(PluginTrustError::Revoked)
-        );
-    }
-
-    struct AcceptingVerifier;
-
-    impl PluginSignatureVerifier for AcceptingVerifier {
-        fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool {
-            manifest.signature == Some("adapter-verified-signature")
-                && bytes == b"abc"
-                && key_fingerprint.len() == 64
-        }
-    }
-
-    #[test]
-    fn trust_policy_can_delegate_signature_verification() {
-        const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        let manifest = PluginManifest {
-            name: "official.canvas",
-            crate_name: "official_canvas",
-            version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
-            source: PluginSource::Official,
-            mode: PluginMode::Extension,
-            checksum: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-            signature: Some("adapter-verified-signature"),
-            public_key_fingerprint: Some(KEY),
-            revocation_list: Some("official-2026"),
-        };
-        let policy = PluginTrustPolicy::official(&[KEY], &[]);
-        assert_eq!(
-            policy.verify_with(manifest, b"abc", Some(KEY), &AcceptingVerifier),
-            Ok(())
-        );
-        assert_eq!(
-            policy.verify_with(manifest, b"abc", Some(KEY), &RejectingVerifier),
-            Err(PluginTrustError::SignatureNotVerified)
-        );
-    }
-
-    struct RejectingVerifier;
-
-    impl PluginSignatureVerifier for RejectingVerifier {
-        fn verify(&self, _: PluginManifest, _: &[u8], _: &str) -> bool {
-            false
-        }
-    }
-
-    #[test]
     fn strict_policy_accepts_prefixed_sha256_checksums() {
         let framework = FrameworkId::new("nichlink.default");
         let manifest = PluginManifest {
@@ -346,43 +265,5 @@ mod tests {
             PluginPolicy::strict(framework).decision(manifest, None),
             PluginDecision::Rejected(PluginRejectReason::MissingSignature)
         );
-    }
-
-    #[test]
-    fn plugin_lock_parser_keeps_official_and_user_records_typed() {
-        let catalog = PluginCatalog::parse(
-            "# source|framework|package|version|crate|checksum|mode|signature|key|revocations\n\
-             official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|replacement|sig-v1|key-v1|official-2026\n\
-             user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
-        )
-        .expect("lock should parse");
-        assert_eq!(catalog.records().len(), 2);
-        assert_eq!(catalog.records()[0].source, PluginSource::Official);
-        assert_eq!(catalog.records()[0].signature.as_deref(), Some("sig-v1"));
-        assert_eq!(
-            catalog.records()[0].revocation_list.as_deref(),
-            Some("official-2026")
-        );
-        assert_eq!(catalog.records()[1].mode, PluginMode::Extension);
-    }
-
-    #[test]
-    fn plugin_lock_parser_rejects_ambiguous_duplicate_identity() {
-        let lock = "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n\
-                    official|com.nichui.editor|canvas|1.0.0|canvas|sha256:b|extension\n";
-        let error = PluginCatalog::parse(lock).unwrap_err();
-        assert!(error.contains("line 2"));
-        assert!(error.contains("duplicates package identity"));
-    }
-
-    #[test]
-    fn plugin_lock_parser_rejects_unknown_identity_schema() {
-        let error = PluginCatalog::parse(
-            "# nichlink-schema=2\n\
-             user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
-        )
-        .unwrap_err();
-        assert!(error.contains("identity schema 2"));
-        assert!(error.contains("expected 3"));
     }
 }

@@ -18,11 +18,18 @@ use nichlink_run_method::{CallEdge, CallTrace};
 /// 静态 MIR 候选边与一次运行中真实观察到的调用边。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UnifiedCallGraph {
+    /// Calls the static MIR parse proposed, none of them confirmed as executed.
+    /// 静态 MIR 解析提出的调用，均未确认为已执行。
     pub static_calls: Vec<MirCall>,
+    /// Calls actually observed during the live run, i.e. confirmed evidence.
+    /// 实时运行中真正观察到的调用，即已确认的证据。
     pub runtime_calls: Vec<CallEdge>,
 }
 
 impl UnifiedCallGraph {
+    /// Pair one static MIR graph with one live trace into a single evidence
+    /// set; neither input is mutated.
+    /// 将一个静态 MIR 图与一次实时 trace 配对为一份证据集合；两侧输入都不被修改。
     pub fn new(static_graph: &MirGraph, trace: &CallTrace) -> Self {
         Self {
             static_calls: static_graph.calls.clone(),
@@ -48,6 +55,9 @@ impl UnifiedCallGraph {
         merge_call_relations(&self.static_calls, &self.runtime_calls)
     }
 
+    /// Render the merged relations as human-readable lines, one per relation,
+    /// each carrying its evidence marker, source location, and frame ids.
+    /// 将合并后的关系渲染为人类可读的行，每行一条，带证据标记、源码位置与帧 id。
     pub fn render(&self) -> String {
         let mut output = String::new();
         let relations = self.relations();

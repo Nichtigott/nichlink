@@ -1,7 +1,11 @@
 //! Registration connector and dependency admission checks.
 //! 注册连接器与依赖准入检查。
 
-use super::*;
+use super::Registry;
+use crate::registry_core::declaration::{RegistrationSnapshot, SourceLocation};
+use crate::registry_core::diagnostic::{DiagnosticSource, RegistrationState, RegistryError};
+use crate::registry_core::identity::NodeId;
+use crate::registry_core::lexicon::path_is_strictly_under;
 
 impl Registry {
     pub(super) fn registration_chain(&self, wanted: NodeId) -> Vec<RegistrationState> {
@@ -153,8 +157,21 @@ impl Registry {
         let provider_path = root.path_for(provider.id)?;
         let owner = root.registry(owner_id)?;
         let owner_path = owner.path();
-        let is_external =
-            provider_path != owner_path && !provider_path.starts_with(&format!("{owner_path}/"));
+        // Why equality counts as external here: the provider may be the owner's
+        // own parent face. `ancestor_providers` returns the face whose child
+        // registry *is* the owner, and a child registry's path equals its owning
+        // face's path, so the shared equality-inclusive `path_is_under` would
+        // call that provider "internal" and skip the owner's admission gate. The
+        // pre-B2 spelling `starts_with("{owner_path}/")` was false at equality,
+        // so the gate stayed on; `path_is_strictly_under` keeps that meaning.
+        // Pinned by `an_ancestor_provider_is_still_gated_by_the_owner_admission`.
+        // 为什么相等在这里算外部：提供者可能是拥有者自己的父面。`ancestor_providers`
+        // 返回的那个面，其子注册机**正是**拥有者，而子注册机的路径等于拥有它的面的路径，
+        // 因此共享的“含相等”`path_is_under` 会把该提供者当作“内部”并跳过拥有者的准入
+        // 检查。B2 之前的写法 `starts_with("{owner_path}/")` 在相等时为假，门禁因此仍
+        // 生效；`path_is_strictly_under` 保留这一含义。
+        // 由 `an_ancestor_provider_is_still_gated_by_the_owner_admission` 钉住。
+        let is_external = !path_is_strictly_under(&provider_path, owner_path);
         if is_external && !owner.header.admission.accepts(&provider_path) {
             Some(provider_path)
         } else {
@@ -181,24 +198,23 @@ impl Registry {
         if failures.is_empty() {
             None
         } else {
-            Some(RegistryError {
-                node: self.header.id,
-                path: self.header.path.clone(),
-                source: DiagnosticSource::from(SourceLocation {
-                    file: "<registry-connector>",
-                    line: 0,
-                    column: 0,
-                    function: "Registry::connector_error",
-                }),
-                message: format!(
-                    "registration connector rejected ({} face(s))",
-                    failures.len()
-                ),
-                source_chain: Vec::new(),
-                call_path: Vec::new(),
-                registration_chain: Vec::new(),
-                children: failures,
-            })
+            Some(
+                RegistryError::new(
+                    self.header.id,
+                    self.header.path.clone(),
+                    DiagnosticSource::from(SourceLocation {
+                        file: "<registry-connector>",
+                        line: 0,
+                        column: 0,
+                        function: "Registry::connector_error",
+                    }),
+                    format!(
+                        "registration connector rejected ({} face(s))",
+                        failures.len()
+                    ),
+                )
+                .with_children(failures),
+            )
         }
     }
 
@@ -260,8 +276,12 @@ impl Registry {
                             return true;
                         };
                         let owner_path = owner.path();
-                        let is_external = provider_path != owner_path
-                            && !provider_path.starts_with(&format!("{owner_path}/"));
+                        // Same strict classification as `external_provider_rejected`:
+                        // an ancestor provider with the owner's own path is still
+                        // external, so the gate applies. See the comment there.
+                        // 与 `external_provider_rejected` 相同的严格分类：路径等于拥有者
+                        // 的祖先提供者仍算外部，门禁照常生效。理由见那处注释。
+                        let is_external = !path_is_strictly_under(provider_path, owner_path);
                         is_external && !owner.header.admission.accepts(provider_path)
                     }) {
                         failures.push(RegistryError::new(
@@ -348,8 +368,8 @@ impl Registry {
                         entry.info.kind
                     ),
                 );
-                error.registration_chain = root.registration_chain(entry.info.id);
-                error.children = failures;
+                *error.registration_chain_mut() = root.registration_chain(entry.info.id);
+                *error.children_mut() = failures;
                 errors.push(error);
             }
             if let Some(child) = entry.child.as_ref() {
@@ -357,5 +377,130 @@ impl Registry {
             }
         }
         errors
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::registry_core::declaration::{
+        Admission, FrameworkId, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
+        OwnedRequirementSpec, OwnedSourceLocation, RegistrationRule,
+    };
+    use crate::registry_core::identity::root_node_id;
+
+    /// One minimal owned face. Mirrors the transaction tests' builder so the
+    /// connector test does not need a second production entry point.
+    /// 一条最小的 owned 注册面。与 transaction 测试的构建器一致，连接器测试因此不需要
+    /// 额外的生产入口。
+    fn snapshot(
+        namespace: &str,
+        source: &str,
+        kind: &str,
+        registry_name: &str,
+    ) -> RegistrationSnapshot {
+        RegistrationSnapshot {
+            namespace: namespace.to_owned(),
+            id: NodeId::from_namespaced_path(namespace, source, kind),
+            parent: root_node_id(namespace),
+            kind: kind.to_owned(),
+            preset: "NoPreset".to_owned(),
+            parts: "NoParts".to_owned(),
+            params: kind.to_owned(),
+            handle: kind.to_owned(),
+            stable_name: None,
+            name: OwnedLocalizedText {
+                zh: kind.to_owned(),
+                en: kind.to_owned(),
+            },
+            summary: OwnedLocalizedText {
+                zh: String::new(),
+                en: String::new(),
+            },
+            exports: Vec::new(),
+            needs_registry: false,
+            registry_name: registry_name.to_owned(),
+            getting_from_other_registry: None,
+            registry_rule_path: "<test>".to_owned(),
+            registry_rule: RegistrationRule::ANY.into_owned(),
+            admission: Admission::ANY.into_owned(),
+            requires: Vec::new(),
+            provides: Vec::new(),
+            contract: OwnedObjectContract {
+                required_parts: Vec::new(),
+                provided_parts: Vec::new(),
+                expected_output: "()".to_owned(),
+                actual_output: "()".to_owned(),
+            },
+            flow: OwnedFlowContract::none(),
+            flow_provider: None,
+            handle_traits: Vec::new(),
+            part_traits: Vec::new(),
+            runtime_checks: Vec::new(),
+            plugin: None,
+            source: OwnedSourceLocation {
+                file: source.to_owned(),
+                line: 1,
+                column: 1,
+                function: kind.to_owned(),
+            },
+        }
+    }
+
+    /// The audit's counterexample. Face `P` owns a registry, provides `cap`, and
+    /// its admission allows only the unrelated path `allowed`; its child registry
+    /// `RP` copies that admission; leaf `L` under `RP` requires `cap` from `P`.
+    /// `P`'s path `root/p` is exactly `RP`'s path, the ancestor-provider case, so
+    /// the connector must treat the provider as external and let the gate reject
+    /// it — as the pre-B2 `starts_with("{owner_path}/")` spelling did. The
+    /// equality-inclusive `path_is_under` would classify it as internal and drop
+    /// the gate silently.
+    /// 审计给出的反例。注册面 `P` 拥有一个注册机、提供 `cap`，其准入只允许无关路径
+    /// `allowed`；它的子注册机 `RP` 复制该准入；`RP` 下的叶子 `L` 要求 `P` 提供
+    /// `cap`。`P` 的路径 `root/p` 恰好就是 `RP` 的路径，即“祖先提供者”情形，因此连接器
+    /// 必须把该提供者当作外部、让门禁拒绝它——B2 之前的 `starts_with("{owner_path}/")`
+    /// 写法正是如此。含相等的 `path_is_under` 会把它当成内部并静默跳过门禁。
+    #[test]
+    fn an_ancestor_provider_is_still_gated_by_the_owner_admission() {
+        let namespace = "connector-ancestor-provider";
+        let mut registry = Registry::root_for_namespace(FrameworkId::new("test"), namespace);
+
+        let mut owner = snapshot(namespace, "src/owner.rs", "Owner", "p");
+        owner.needs_registry = true;
+        owner.provides = vec!["cap".to_owned()];
+        owner.admission = Admission::new(&["allowed"], &[]).into_owned();
+        let owner_id = owner.id;
+        let owner_kind = owner.kind.clone();
+        registry
+            .register_snapshot_batch([owner])
+            .expect("the providing owner registers without requirements");
+
+        // The fixture must actually exercise equality; otherwise the test would
+        // pass for the wrong reason.
+        // fixture 必须真的走到“相等”，否则测试会因为错误的原因通过。
+        assert_eq!(registry.path_for(owner_id).as_deref(), Some("root/p"));
+        assert_eq!(
+            registry
+                .registry(owner_id)
+                .expect("the owner's child registry exists")
+                .path(),
+            "root/p"
+        );
+
+        let mut leaf = snapshot(namespace, "src/leaf.rs", "Leaf", "leaf");
+        leaf.parent = owner_id;
+        leaf.requires = vec![OwnedRequirementSpec {
+            capability: "cap".to_owned(),
+            provider: owner_kind,
+        }];
+
+        let error = registry
+            .register_snapshot_batch([leaf])
+            .expect_err("an ancestor provider equal to the owner's path must not be internal")
+            .to_string();
+        assert!(
+            error.contains("admission gate rejects"),
+            "the owner's gate must reject the provider at its own path: {error}"
+        );
     }
 }

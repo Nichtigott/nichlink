@@ -1,7 +1,7 @@
 //! Plugin trust policy and verification errors.
 //! 插件信任策略与验证错误。
 
-use super::*;
+use crate::registry_core::declaration::{PluginManifest, PluginSource};
 use std::fmt;
 
 /// A small, dependency-free trust policy for plugin bytes.
@@ -15,8 +15,14 @@ use std::fmt;
 /// adapter 完成，NichLink 只判断已校验身份是否可以进入注册树。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PluginTrustPolicy {
+    /// SHA-256 fingerprints of keys trusted to sign official plugins.
+    /// 被信任可为官方插件签名的密钥 SHA-256 指纹。
     pub official_key_fingerprints: &'static [&'static str],
+    /// Revocations that refuse a package/version pair outright.
+    /// 直接拒绝某个包/版本组合的撤销条目。
     pub revoked: &'static [PluginRevocation],
+    /// Whether the manifest checksum must be a SHA-256 digest.
+    /// manifest 摘要是否必须是 SHA-256 值。
     pub require_digest: bool,
 }
 
@@ -29,6 +35,8 @@ pub struct PluginTrustPolicy {
 /// NichLink 刻意不实现具体签名算法。宿主可以接入现有的 Ed25519、平台密钥库或
 /// 隔离进程验证器，而不让注册机依赖这些实现。
 pub trait PluginSignatureVerifier {
+    /// Return whether the host accepts this signature for the given bytes and key.
+    /// 宿主是否接受该签名用于给定字节与密钥。
     fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool;
 }
 
@@ -42,6 +50,8 @@ where
 }
 
 impl PluginTrustPolicy {
+    /// Development policy: no trusted keys and no digest requirement.
+    /// 开发态策略：没有信任密钥，也不强制摘要。
     pub const fn open() -> Self {
         Self {
             official_key_fingerprints: &[],
@@ -50,6 +60,8 @@ impl PluginTrustPolicy {
         }
     }
 
+    /// Policy that requires a digest and trusts only the listed official keys.
+    /// 强制摘要、且只信任所列官方密钥的策略。
     pub const fn official(
         keys: &'static [&'static str],
         revoked: &'static [PluginRevocation],
@@ -61,6 +73,8 @@ impl PluginTrustPolicy {
         }
     }
 
+    /// Run the checksum, revocation, and official-key checks; does no signature work.
+    /// 执行摘要、撤销与官方密钥检查；本身不做签名运算。
     pub fn verify(
         self,
         manifest: PluginManifest,
@@ -138,34 +152,54 @@ impl PluginTrustPolicy {
     }
 }
 
+/// A withdrawn package version, matched exactly by package and version.
+/// 已撤销的包版本，按包名与版本精确匹配。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PluginRevocation {
+    /// Package name being withdrawn.
+    /// 被撤销的包名。
     pub package: &'static str,
+    /// Version being withdrawn.
+    /// 被撤销的版本。
     pub version: &'static str,
 }
 
+/// Why plugin trust verification refused an artifact.
+/// 插件信任校验拒绝某个工件的原因。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PluginTrustError {
-    /// Production loading was attempted without a cryptographic trust root.
-    /// 生产加载没有配置密码学信任根。
-    ProductionPolicyNotStrict,
+    /// Artifact carried no plugin manifest.
+    /// 工件没有携带插件 manifest。
     MissingManifest,
+    /// Checksum is not a SHA-256 digest while a digest is required.
+    /// 要求摘要时，校验和却不是 SHA-256 值。
     InvalidDigest,
+    /// Bytes do not hash to the manifest checksum.
+    /// 字节的散列与 manifest 摘要不符。
     DigestMismatch,
+    /// Official plugin has no non-empty signature.
+    /// 官方插件没有非空签名。
     MissingSignature,
+    /// Official plugin has no revocation-list snapshot.
+    /// 官方插件没有撤销列表快照。
     MissingRevocationList,
+    /// No signing-key fingerprint was available to check.
+    /// 没有可用于校验的签名密钥指纹。
     MissingOfficialKey,
+    /// Signing key is not in the policy's trusted list.
+    /// 签名密钥不在策略的信任列表中。
     UntrustedOfficialKey,
+    /// Host verifier rejected the signature.
+    /// 宿主验证器拒绝了该签名。
     SignatureNotVerified,
+    /// Package version appears in the revocation list.
+    /// 包版本出现在撤销列表中。
     Revoked,
 }
 
 impl fmt::Display for PluginTrustError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::ProductionPolicyNotStrict => {
-                "production plugin loading requires digest and trusted signing keys"
-            }
             Self::MissingManifest => "plugin artifact has no manifest",
             Self::InvalidDigest => "plugin checksum is not a SHA-256 digest",
             Self::DigestMismatch => "plugin bytes do not match the manifest checksum",
@@ -180,3 +214,108 @@ impl fmt::Display for PluginTrustError {
 }
 
 impl std::error::Error for PluginTrustError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::registry_core::declaration::{FrameworkId, PluginMode};
+
+    #[test]
+    fn trust_policy_checks_bytes_key_and_revocation() {
+        const DIGEST: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        const KEYS: &[&str] = &[KEY];
+        const REVOKED: &[PluginRevocation] = &[];
+        let manifest = PluginManifest {
+            name: "official.canvas",
+            crate_name: "official_canvas",
+            version: "1.0.0",
+            framework: FrameworkId::new("nichlink.default"),
+            source: PluginSource::Official,
+            mode: PluginMode::Replacement,
+            checksum: DIGEST,
+            signature: Some("adapter-verified-signature"),
+            public_key_fingerprint: Some(KEY),
+            revocation_list: Some("official-2026-09"),
+        };
+        let policy = PluginTrustPolicy::official(KEYS, REVOKED);
+        assert_eq!(policy.verify(manifest, b"abc", Some(KEY)), Ok(()));
+        assert_eq!(
+            policy.verify(
+                PluginManifest {
+                    public_key_fingerprint: None,
+                    ..manifest
+                },
+                b"abc",
+                None,
+            ),
+            Err(PluginTrustError::MissingOfficialKey)
+        );
+        assert_eq!(
+            policy.verify(
+                PluginManifest {
+                    revocation_list: None,
+                    ..manifest
+                },
+                b"abc",
+                Some(KEY),
+            ),
+            Err(PluginTrustError::MissingRevocationList)
+        );
+        let revoked = PluginTrustPolicy::official(
+            KEYS,
+            &[PluginRevocation {
+                package: "official.canvas",
+                version: "1.0.0",
+            }],
+        );
+        assert_eq!(
+            revoked.verify(manifest, b"abc", Some(KEY)),
+            Err(PluginTrustError::Revoked)
+        );
+    }
+
+    struct AcceptingVerifier;
+
+    impl PluginSignatureVerifier for AcceptingVerifier {
+        fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool {
+            manifest.signature == Some("adapter-verified-signature")
+                && bytes == b"abc"
+                && key_fingerprint.len() == 64
+        }
+    }
+
+    #[test]
+    fn trust_policy_can_delegate_signature_verification() {
+        const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let manifest = PluginManifest {
+            name: "official.canvas",
+            crate_name: "official_canvas",
+            version: "1.0.0",
+            framework: FrameworkId::new("nichlink.default"),
+            source: PluginSource::Official,
+            mode: PluginMode::Extension,
+            checksum: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            signature: Some("adapter-verified-signature"),
+            public_key_fingerprint: Some(KEY),
+            revocation_list: Some("official-2026"),
+        };
+        let policy = PluginTrustPolicy::official(&[KEY], &[]);
+        assert_eq!(
+            policy.verify_with(manifest, b"abc", Some(KEY), &AcceptingVerifier),
+            Ok(())
+        );
+        assert_eq!(
+            policy.verify_with(manifest, b"abc", Some(KEY), &RejectingVerifier),
+            Err(PluginTrustError::SignatureNotVerified)
+        );
+    }
+
+    struct RejectingVerifier;
+
+    impl PluginSignatureVerifier for RejectingVerifier {
+        fn verify(&self, _: PluginManifest, _: &[u8], _: &str) -> bool {
+            false
+        }
+    }
+}

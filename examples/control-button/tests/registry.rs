@@ -6,9 +6,13 @@
 
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
+use nichlink_run_method::registry_core::lexicon;
 use nichlink_run_method::registry_core::{
     FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
     PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
+};
+use nichlink_run_method::{
+    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 
 /// 读取某一逻辑路径上的 kind；找不到就失败。
@@ -54,6 +58,35 @@ fn built_in_tree_has_the_expected_paths_and_derived_sources() {
             "root/control/button kind=Button source=control/object/button/button.rs",
             "root/control/slider kind=Slider source=control/object/slider/slider.rs",
         ]
+    );
+}
+
+/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
+/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
+/// 出厂的那条路径，而不只是单元测试里的形状。
+/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
+/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
+/// All three built-in faces take that shape, so this pins the shipped path, not
+/// only a shape in a unit test.
+#[test]
+fn handle_faces_record_plain_default_preset_and_parts_names() {
+    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
+    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
+    assert_eq!(
+        control_button::control::object::button::REGISTRATION.preset,
+        "NoPreset"
+    );
+    assert_eq!(
+        control_button::control::object::button::REGISTRATION.parts,
+        "NoParts"
+    );
+    assert_eq!(
+        control_button::control::object::slider::REGISTRATION.preset,
+        "NoPreset"
+    );
+    assert_eq!(
+        control_button::control::object::slider::REGISTRATION.parts,
+        "NoParts"
     );
 }
 
@@ -626,4 +659,85 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
     );
 
     let _ = std::fs::remove_dir_all(root.join(".nichlink"));
+}
+
+// ---------------------------------------------------------------------------
+// Records. A `.nichlink` record is runtime input: it can move the effective
+// tree away from `overlay_static`, while the build-captured typed plan stays
+// exactly what the host declared.
+// 记录。`.nichlink` 记录是运行期输入：它能让有效树偏离 `overlay_static`，而构建
+// 捕获的类型化计划仍与宿主声明的一模一样。
+// ---------------------------------------------------------------------------
+
+/// 一条记录覆盖**字符串**声明时会改变有效树，但绝不会改写发布态静态计划；同一条记录
+/// 覆盖本示例的**类型化**声明时被忽略，因为类型化声明是最终裁决。
+/// A record over a **string** declaration changes the effective tree but never
+/// rewrites the release-time static plan; the same record over this example's
+/// **typed** declaration is ignored, because a typed declaration is final.
+#[test]
+fn a_record_moves_the_effective_tree_but_not_the_static_plan() {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-control-button-record-{}-{sequence}",
+        std::process::id()
+    ));
+    // The directory is the record's selector and must equal the document's
+    // `graft`; naming it after the slot instead is now refused.
+    // 目录就是记录的选择器，必须等于文档里的 `graft`；按槽位命名会被拒绝。
+    let record_directory = graft_record_root(&root).join("slider_fast");
+    std::fs::create_dir_all(&record_directory).expect("create the record directory");
+    let document = GraftPlanDocument::new(
+        control_button::control::object::button::NODE_ID,
+        "root/control/button",
+        "slider_fast",
+        false,
+    );
+    std::fs::write(
+        record_directory.join(lexicon::GRAFT_PLAN_FILE),
+        document.render(),
+    )
+    .expect("write the record");
+
+    let base = base_registry();
+    let external = control_button_graft::external_registry();
+
+    // The shipped declaration is typed, so the record is reported and ignored.
+    // 出厂声明是类型化的，因此记录被报告并忽略。
+    let typed = apply_recorded_grafts(&base, &external, builtin_static_plan().grafts(), &root)
+        .expect("the typed declaration still publishes");
+    assert_eq!(
+        kind_at(&typed.effective, "root/control/button"),
+        "ButtonFast"
+    );
+    assert!(typed.reports.iter().any(|report| matches!(
+        report,
+        RecordReport::TypedDeclarationKept { recorded, .. } if recorded == "slider_fast"
+    )));
+
+    // The same record over a string declaration wins, and the effective tree
+    // diverges from `overlay_static` on purpose.
+    // 同一条记录覆盖字符串声明时获胜，有效树因此有意偏离 `overlay_static`。
+    let string_declared = [StaticGraftCut::new(
+        "root/control/button",
+        "button_fast",
+        false,
+    )];
+    let recorded = apply_recorded_grafts(&base, &external, &string_declared, &root)
+        .expect("the string declaration yields");
+    assert_eq!(
+        kind_at(&recorded.effective, "root/control/button"),
+        "SliderFast"
+    );
+
+    // Neither the base tree nor the build-captured plan moved.
+    // 原树与构建捕获的计划都没有动。
+    assert_eq!(kind_at(&base, "root/control/button"), "Button");
+    assert_eq!(
+        builtin_static_plan().grafts()[0].graft().id(),
+        Some(control_button_graft::button_fast::NODE_ID),
+        "the static plan keeps the typed graft the host declared"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }

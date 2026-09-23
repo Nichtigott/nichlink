@@ -1,0 +1,264 @@
+#!/bin/sh
+set -eu
+
+# Publish the nine crates in dependency order, one level at a time.
+# 按依赖顺序、一层一层地发布九个 crate。
+#
+# Why a script and not nine hand-typed commands: every dependent writes its
+# internal requirement as caret `0.1.0` (`docs/roadmap-1.0.md` decision 1), so
+# publishing `run_method` before the index serves `nichlink-core 0.1.0` fails
+# resolution. The order below is that dependency chain, and the script waits for
+# each level to appear in the index before starting the next one — the wait is
+# the part a human forgets.
+# 为什么要脚本而不是手敲九条命令：每个依赖方都把内部依赖写成 caret `0.1.0`
+# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供 `nichlink-core 0.1.0` 之前发布
+# `run_method` 会解析失败。下面的顺序就是那条依赖链，脚本会在开始下一层之前等待上一层出现
+# 在 index 里——这个等待正是人容易忘掉的部分。
+#
+# Safety: the default mode is a dry run. Nothing is uploaded unless both
+# `--publish` and `--yes` are given, because a published version is immutable on
+# crates.io — it can only be yanked, never replaced.
+# 安全：默认是 dry-run。只有同时给出 `--publish` 与 `--yes` 才会真的上传，因为 crates.io
+# 上已发布的版本不可变——只能 yank，不能替换。
+#
+# Dry-run behaviour before the first release: a crate whose versioned
+# `nichlink-*` dependency is not on the index yet is *skipped with a warning*
+# instead of failing, exactly like `tools/nichlink-package-audit`. So today the
+# dry run verifies `nichlink-core` in full and reports the other eight as
+# waiting; after core is published it verifies the next level, and so on.
+# 首次发布之前的 dry-run 行为：带版本号的 `nichlink-*` 依赖尚未出现在 index 上的 crate
+# 会被**跳过并警告**，而不是失败，与 `tools/nichlink-package-audit` 一致。因此今天 dry-run
+# 会完整校验 `nichlink-core`、把其余八个报成"等待中"；core 发布之后就会校验下一层，依此类推。
+#
+# Real publish:
+#   CARGO_REGISTRY_TOKEN=... tools/nichlink-publish --publish --yes
+#   tools/nichlink-publish --publish --yes --allow-dirty   # from a dirty tree
+#
+# The index probe below is deliberately duplicated from
+# `tools/nichlink-package-audit` rather than shared: both tools must stay
+# runnable on their own from any directory (CI runs the audit, a maintainer runs
+# this one), and the probe is the only thing they have in common.
+# 下面的 index 探针刻意与 `tools/nichlink-package-audit` 各留一份而不共用：两个工具都必须
+# 能从任意目录独立运行（CI 跑审计，维护者跑本脚本），而探针是它们唯一共通的东西。
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+index_url="https://index.crates.io"
+wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
+
+# One level per line, in dependency order. Crates on the same line are
+# independent of each other.
+# 每行一层，按依赖顺序。同一行内的 crate 互不依赖。
+levels='
+nichlink-core
+nichlink-macro nichlink-build-method nichlink-mcp
+nichlink-run-method
+nichlink-debug-method nichlink-plugin-host
+nichlink-studio
+nichlink-cli
+'
+
+publish=false
+yes=false
+allow_dirty=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --publish) publish=true ;;
+    --yes) yes=true ;;
+    --allow-dirty) allow_dirty=true ;;
+    -h|--help)
+      sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument '$arg' (see --help)" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ "$publish" = true ] && [ "$yes" != true ]; then
+  echo "error: --publish also needs --yes; publishing is irreversible" >&2
+  exit 2
+fi
+
+if [ "$publish" = true ]; then
+  if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
+    # `cargo publish` can also read the token from ~/.cargo/credentials.toml, so
+    # an unset variable is a warning rather than an error.
+    # `cargo publish` 也能从 ~/.cargo/credentials.toml 读 token，因此变量未设置只是警告。
+    echo "note: CARGO_REGISTRY_TOKEN is unset; Cargo will use its credentials file" >&2
+  fi
+  if [ "$allow_dirty" != true ] && [ -n "$(git status --porcelain)" ]; then
+    echo "error: the working tree has uncommitted changes; commit them first," \
+      "or pass --allow-dirty if the published content is exactly what you mean" >&2
+    exit 1
+  fi
+fi
+
+# Sparse-index path for a crate name: 1/<n>, 2/<n>, 3/<c>/<n>, else
+# <first two>/<next two>/<n>.
+# crate 名的 sparse index 路径：1/<n>、2/<n>、3/<c>/<n>，其余为
+# <前两个字符>/<后两个字符>/<n>。
+index_path() {
+  name=$1
+  length=${#name}
+  if [ "$length" -eq 1 ]; then
+    printf '1/%s' "$name"
+  elif [ "$length" -eq 2 ]; then
+    printf '2/%s' "$name"
+  elif [ "$length" -eq 3 ]; then
+    printf '3/%s/%s' "$(printf '%s' "$name" | cut -c1)" "$name"
+  else
+    printf '%s/%s/%s' \
+      "$(printf '%s' "$name" | cut -c1-2)" \
+      "$(printf '%s' "$name" | cut -c3-4)" \
+      "$name"
+  fi
+}
+
+# Whether one exact version is served by the index; a network failure counts as
+# "not published" so the caller waits rather than publishing into a bad order.
+# 某个精确版本是否已由 index 提供；网络失败按"未发布"处理，使调用方等待，而不是按错误顺序
+# 发布。
+is_published() {
+  name=$1
+  version=$2
+  path=$(index_path "$name")
+  if command -v curl >/dev/null 2>&1; then
+    body=$(curl -fsS --max-time 20 "$index_url/$path" 2>/dev/null) || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    body=$(wget -q -O - --timeout=20 "$index_url/$path" 2>/dev/null) || return 1
+  else
+    return 1
+  fi
+  printf '%s\n' "$body" | grep -F "\"vers\":\"$version\"" >/dev/null 2>&1
+}
+
+workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+if [ -z "$workspace_version" ]; then
+  echo "error: could not read [workspace.package] version from Cargo.toml" >&2
+  exit 1
+fi
+
+# "<crate>:<space-separated versioned nichlink-* dependencies>"
+# "<crate>:<以空格分隔的带版本号 nichlink-* 依赖>"
+dependencies='
+nichlink-core:
+nichlink-macro:nichlink-core
+nichlink-build-method:nichlink-core
+nichlink-mcp:nichlink-core
+nichlink-run-method:nichlink-core nichlink-macro
+nichlink-debug-method:nichlink-run-method
+nichlink-plugin-host:nichlink-run-method
+nichlink-studio:nichlink-run-method nichlink-debug-method nichlink-build-method
+nichlink-cli:nichlink-build-method nichlink-mcp nichlink-studio
+'
+
+# The internal dependencies of one crate, read from the table above.
+deps_of() {
+  for entry in $dependencies; do
+    if [ "${entry%%:*}" = "$1" ]; then
+      printf '%s' "${entry#*:}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# `cargo publish` flags that do not depend on the mode.
+cargo_flags="--locked"
+if [ "$allow_dirty" = true ] || [ "$publish" != true ]; then
+  # A dry run verifies packaging, not provenance; a dirty tree is the normal
+  # state while preparing a release.
+  # dry-run 校验的是打包而不是来源；准备发布期间工作区通常就是脏的。
+  cargo_flags="$cargo_flags --allow-dirty"
+fi
+
+published=""
+skipped=""
+failed=""
+
+for level in $levels; do
+  pending=""
+  for crate in $level; do
+    deps=$(deps_of "$crate")
+    missing=""
+    for dep in $deps; do
+      if ! is_published "$dep" "$workspace_version"; then
+        missing="$missing $dep"
+      fi
+    done
+    if [ -n "$missing" ]; then
+      if [ "$publish" = true ]; then
+        echo "error: cannot publish $crate: waiting for$missing" >&2
+        exit 1
+      fi
+      printf 'warn: skipping %s: versioned dependency not on %s yet:%s\n' \
+        "$crate" "$index_url" "$missing" >&2
+      skipped="$skipped $crate"
+      continue
+    fi
+    pending="$pending $crate"
+  done
+
+  for crate in $pending; do
+    if [ "$publish" = true ]; then
+      printf 'publishing %s %s\n' "$crate" "$workspace_version"
+      # shellcheck disable=SC2086
+      if ! cargo publish -p "$crate" $cargo_flags; then
+        printf 'error: cargo publish failed for %s\n' "$crate" >&2
+        failed="$failed $crate"
+      fi
+    else
+      printf 'verifying %s %s\n' "$crate" "$workspace_version"
+      # shellcheck disable=SC2086
+      if cargo publish -p "$crate" --dry-run $cargo_flags; then
+        published="$published $crate"
+      else
+        printf 'error: cargo publish --dry-run failed for %s\n' "$crate" >&2
+        failed="$failed $crate"
+      fi
+    fi
+  done
+
+  # Wait for this level to be visible before the next one resolves against it.
+  # 等这一层在 index 里可见，下一层才能解析到它。
+  if [ "$publish" = true ] && [ "$failed" = "" ]; then
+    for crate in $pending; do
+      waited=0
+      while ! is_published "$crate" "$workspace_version"; do
+        if [ "$waited" -ge "$wait_seconds" ]; then
+          printf 'error: %s %s did not appear in %s within %ss; stopping before the next level\n' \
+            "$crate" "$workspace_version" "$index_url" "$wait_seconds" >&2
+          exit 1
+        fi
+        sleep 5
+        waited=$((waited + 5))
+      done
+    done
+    published="$published $pending"
+  fi
+done
+
+cat <<EOF
+Publish summary (version $workspace_version)
+  mode:      $([ "$publish" = true ] && echo publish || echo 'dry run')
+  verified:${published:- none}
+  skipped:${skipped:- none}
+  failed:${failed:- none}
+Skipped crates have a versioned nichlink-* dependency that is not on
+$index_url yet; run this again after that dependency lands. After the real
+publish, re-run tools/nichlink-package-audit: every crate becomes checkable, and
+the CI step keeps validating all nine from then on.
+跳过的 crate 有尚未发布到 $index_url 的 nichlink-* 版本依赖；该依赖上线后重跑本脚本。
+真正发布之后重跑 tools/nichlink-package-audit：所有 crate 都变为可检查，CI 步骤从此持续
+校验全部九个。
+EOF
+
+if [ -n "$failed" ]; then
+  exit 1
+fi
+exit 0

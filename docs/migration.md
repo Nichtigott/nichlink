@@ -16,13 +16,24 @@ generated `StaticPlan`; this workspace does not ship a concrete `root_registry`.
 
 ## External declarations
 
-Use `nichlink::external_object!` for declarations owned by another crate. A
-linked declaration must include plugin provenance, version, target framework,
-and a parent node identity. Development builds discover these declarations when
-the host explicitly opts into `collector: debug`; the core crate itself remains
-free of inventory. Release applications must retain external faces through a
-verified plugin artifact or another explicit application-owned input; release
-builds do not create inventory linker sections.
+Use `nichlink_run_method::external_object!` for declarations owned by another
+crate. After B3b only `kind` is required; every other field is optional and
+defaults the way the generated compact form defaults it: `source` to the
+declaring file, `registry_name` to the module's last segment, `parent` to the
+package root, `handle` to `kind`, `preset`/`parts` to `NoPreset`/`NoParts`,
+`plugin` to `None`, and `exports`/`requires`/`provides`/`runtime_checks` to
+empty. There is no version or target-framework field to fill: the framework
+belongs to the registry, not to the face. `registry_rule` defaults to
+`RegistrationRule::ANY` rather than the host's sibling-rule resolver, because
+that resolver (`super::registry_rule::REGISTRATION_RULE`) is a relative path the
+build generates only beside a face inside the host's own tree; an external
+crate has no such sibling, so an external face that owns a registry gets the
+permissive `ANY` and must name its rule explicitly to narrow it. Development
+builds discover these declarations when the host explicitly opts into
+`collector: debug`; the core crate itself remains free of inventory. Release
+applications must retain external faces through a verified plugin artifact or
+another explicit application-owned input; release builds do not create
+inventory linker sections.
 
 ## Registration faces load in place
 
@@ -143,8 +154,11 @@ implementation that grafts over it.
 
 Run the standalone package with `cargo run --manifest-path studio/Cargo.toml`.
 Use `1` through `4` to select Search, Inspect, Data, or Compare. `watch` is
-provided by `nichlink-dev` and rebuilds the child Studio process after source,
-Cargo, or plugin catalog changes.
+provided by `nichlink-dev`, a workspace-only binary behind the non-default
+`dev-supervisor` feature: it rebuilds the child Studio process after source,
+Cargo, or plugin catalog changes, so it needs this checkout
+(`cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`)
+and is not installed by `cargo install nichlink-studio`.
 
 ## Plugin host
 
@@ -158,7 +172,7 @@ The current graft model is an immutable overlay. A host keeps its original
 source tree and declares the external implementation at its entry point:
 
 ```rust
-let plan = nichlink::graft_plan!(framework,
+let plan = nichlink_run_method::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -177,18 +191,24 @@ removed. The public execution path is `GraftPlan` followed by `Registry::overlay
 ## `graft.plan` records
 
 A `.nichlink/external-grafts/<selector>/graft.plan` file is an authoring record,
-not a declaration the compiler sees and not an overlay application. Its layout
-is unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
+not a declaration the compiler sees and not an `overlay` call. Its layout is
+unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
 format now has a reader: `GraftPlanDocument` in the kernel parses and renders it,
 refuses an unknown version or key instead of guessing, and is the only place the
-layout is defined. `nichlink-build` gained `declared_grafts`/`host_entry_source`
+layout is defined. The record is also now the **input** to an overlay:
+`nichlink_run_method::apply_recorded_grafts` loads `.nichlink/external-grafts/`
+and `Registry::overlay_recorded` reconciles each record against the static
+declarations, applies it, and reports every adjustment; see [`graft.md`](graft.md)
+for the precedence policy and which reports are fatal.
+`nichlink-build-method` gained `declared_grafts`/`host_entry_source`
 for authoring surfaces that need to know which slots the build ships.
 
 `nichlink_run_method::ExternalGraftPlanFile` no longer exposes `target`,
-`graft`, `full`, and `root` as public fields; it carries the parsed
-`GraftPlanDocument` and the selector, and answers through `target()`,
-`target_path()`, `graft()`, `full()`, `plan_path()`, and `root`. New sibling
-functions read, list, re-scope, and trash plans:
+`graft`, and `full` as public fields; it carries the parsed `GraftPlanDocument`
+and the selector, and answers through `target()`, `target_path()`, `graft()`,
+`full()`, and `plan_path()`. `root` is still a public `PathBuf` field — there is
+no `root()` method — alongside the public `selector` and `document` fields. New
+sibling functions read, list, re-scope, and trash plans:
 `read_external_graft`, `list_external_grafts`, `rewrite_external_graft`, and
 `remove_external_graft`. `create_external_graft` keeps its signature and now
 writes through the kernel document, so everything it writes reads back.

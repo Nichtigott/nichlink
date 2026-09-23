@@ -1,7 +1,15 @@
 //! Atomic registration batches.
 //! 原子注册批次。
 
-use super::*;
+use super::entry_pages::RegisteredEntry;
+use std::sync::Arc;
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use super::Registry;
+use crate::registry_core::declaration::{RegistrationInfo, RegistrationSnapshot, SourceLocation};
+use crate::registry_core::diagnostic::{DiagnosticSource, RegistryError, RegistryResult};
+use crate::registry_core::identity::{NodeId, StableFaceId};
 
 impl Registry {
     /// Submit one batch atomically. Failure leaves the receiver unchanged.
@@ -47,20 +55,20 @@ impl Registry {
             }
             pending = waiting;
         }
-        for snapshot in pending {
-            failures.push(RegistryError::new(
-                snapshot.id,
-                format!(
-                    "<missing-parent:{}>/{}",
-                    snapshot.parent, snapshot.registry_name
-                ),
-                snapshot.source,
-                format!(
-                    "parent registry `{}` was not found for `{}`",
-                    snapshot.parent, snapshot.kind
-                ),
-            ));
-        }
+        // `plan_batch` above is the authoritative missing-parent check: it walks
+        // every snapshot's parent chain against the *base* tree and rejects a
+        // chain that never reaches a registered registry, all before any staging
+        // happens. Because every snapshot in `pending` therefore has its parent
+        // in the base tree or in an earlier-registered batch entry, the loop can
+        // always make progress and cannot leave `pending` non-empty. The
+        // historical trailing loop rebuilt the same `<missing-parent:…>` error
+        // and was unreachable; keeping two copies risked the two drifting apart,
+        // so it was removed.
+        // 上面的 `plan_batch` 是缺父检查的权威：它在任何暂存之前，沿每个快照的父链对照
+        // **基树**走一遍，拒绝走不到已注册注册机的链。因此 `pending` 里每个快照的父级要么
+        // 在基树里、要么在更早注册的批次条目里，循环总能推进，不可能留下非空的 `pending`。
+        // 历史上重建同一 `<missing-parent:…>` 错误的尾部循环因此不可达；留两份副本只会让
+        // 它们彼此漂移，故删除。
         if failures.is_empty() {
             if let Some(error) = staged.connector_error() {
                 return Err(error.into());
@@ -68,21 +76,20 @@ impl Registry {
             *self = staged;
             Ok(())
         } else {
-            Err(Box::new(RegistryError {
-                node: self.header.id,
-                path: self.header.path.clone(),
-                source: DiagnosticSource::from(SourceLocation {
-                    file: "<owned-snapshot-batch>",
-                    line: 0,
-                    column: 0,
-                    function: "Registry::register_snapshot_batch",
-                }),
-                message: format!("snapshot batch rejected ({} error(s))", failures.len()),
-                source_chain: Vec::new(),
-                call_path: Vec::new(),
-                registration_chain: Vec::new(),
-                children: failures,
-            }))
+            Err(Box::new(
+                RegistryError::new(
+                    self.header.id,
+                    self.header.path.clone(),
+                    DiagnosticSource::from(SourceLocation {
+                        file: "<owned-snapshot-batch>",
+                        line: 0,
+                        column: 0,
+                        function: "Registry::register_snapshot_batch",
+                    }),
+                    format!("snapshot batch rejected ({} error(s))", failures.len()),
+                )
+                .with_children(failures),
+            ))
         }
     }
 
@@ -209,7 +216,7 @@ impl Registry {
                 snapshot.source.clone(),
                 "construction contract rejected registration",
             );
-            error.children = contract_failures
+            *error.children_mut() = contract_failures
                 .into_iter()
                 .map(|failure| {
                     RegistryError::new(
@@ -240,7 +247,6 @@ impl Registry {
             Arc::new(Registry::new(
                 framework,
                 snapshot.namespace.clone(),
-                &segment,
                 &format!("{target_path}/{segment}"),
                 snapshot.id,
                 snapshot.registry_rule.clone(),
@@ -262,10 +268,11 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation,
-        root_node_id,
+    use crate::registry_core::declaration::{
+        Admission, FrameworkId, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
+        OwnedSourceLocation, RegistrationRule,
     };
+    use crate::registry_core::identity::root_node_id;
 
     fn snapshot(namespace: &str, kind: &str) -> RegistrationSnapshot {
         RegistrationSnapshot {

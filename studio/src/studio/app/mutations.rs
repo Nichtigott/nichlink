@@ -61,6 +61,11 @@ impl App {
         self.overlay = None;
     }
 
+    /// Take the pending editor handoff, leaving none queued behind it.
+    /// 取走待处理的编辑器交接请求，取走后不再有排队项。
+    ///
+    /// Returns the file and the 1-based line to open; `None` when nothing is pending.
+    /// 返回要打开的文件与从 1 开始的行号；没有待处理请求时为 `None`。
     pub fn take_editor_request(&mut self) -> Option<(PathBuf, u32)> {
         self.editor_request.take()
     }
@@ -119,7 +124,6 @@ impl App {
             needs_registry,
             registry_name: &add.values[3],
             getting_from_other_registry: &add.values[17],
-            registry_rule_path: &add.values[18],
             registration_rule: &add.values[4],
             admission: &add.values[5],
             handle_traits: &add.values[19],
@@ -173,7 +177,6 @@ impl App {
             needs_registry,
             registry_name: &edit.values[3],
             getting_from_other_registry: &edit.values[17],
-            registry_rule_path: &edit.values[18],
             registration_rule: &edit.values[4],
             admission: &edit.values[5],
             handle_traits: &edit.values[19],

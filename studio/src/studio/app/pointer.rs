@@ -12,18 +12,18 @@ impl App {
                     let graph = matches!(self.overlay, Some(Overlay::Search(ref search)) if search.graph_mode);
                     if graph {
                         let point = (column, row).into();
-                        let in_a = self.graph_a_input_area.contains(point)
-                            || self.graph_a_center_area.contains(point)
-                            || self.graph_a_output_area.contains(point);
-                        let in_b = self.graph_b_input_area.contains(point)
-                            || self.graph_b_center_area.contains(point)
-                            || self.graph_b_output_area.contains(point);
-                        let in_tree = self.graph_tree_a_area.contains(point)
-                            || self.graph_tree_b_area.contains(point);
-                        let in_data = self.graph_data_a_area.contains(point)
-                            || self.graph_data_b_area.contains(point);
-                        let tree_b = self.graph_tree_b_area.contains((column, row).into());
-                        let data_b = self.graph_data_b_area.contains((column, row).into());
+                        let in_a = self.hot.graph_a_input_area.contains(point)
+                            || self.hot.graph_a_center_area.contains(point)
+                            || self.hot.graph_a_output_area.contains(point);
+                        let in_b = self.hot.graph_b_input_area.contains(point)
+                            || self.hot.graph_b_center_area.contains(point)
+                            || self.hot.graph_b_output_area.contains(point);
+                        let in_tree = self.hot.graph_tree_a_area.contains(point)
+                            || self.hot.graph_tree_b_area.contains(point);
+                        let in_data = self.hot.graph_data_a_area.contains(point)
+                            || self.hot.graph_data_b_area.contains(point);
+                        let tree_b = self.hot.graph_tree_b_area.contains((column, row).into());
+                        let data_b = self.hot.graph_data_b_area.contains((column, row).into());
                         if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
                             if in_a {
                                 search.graph_focus = 0;
@@ -99,7 +99,7 @@ impl App {
         }
         match kind {
             MouseEventKind::ScrollUp => {
-                if self.details_area.contains((column, row).into()) {
+                if self.hot.details_area.contains((column, row).into()) {
                     self.focus = Focus::Details;
                     self.details_selected = self.details_selected.saturating_sub(1);
                 } else {
@@ -108,7 +108,7 @@ impl App {
                 }
             }
             MouseEventKind::ScrollDown => {
-                if self.details_area.contains((column, row).into()) {
+                if self.hot.details_area.contains((column, row).into()) {
                     self.focus = Focus::Details;
                     self.details_selected = (self.details_selected + 1)
                         .min(self.detail_field_count().saturating_sub(1));
@@ -122,10 +122,10 @@ impl App {
                 self.resize_split(column);
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.tree_area.contains((column, row).into()) =>
+                if self.hot.tree_area.contains((column, row).into()) =>
             {
                 let index = self.tree_offset
-                    + row.saturating_sub(self.tree_area.y.saturating_add(1)) as usize;
+                    + row.saturating_sub(self.hot.tree_area.y.saturating_add(1)) as usize;
                 if let Some((id, _)) = self.visible_nodes().get(index) {
                     let clicked = *id;
                     if clicked == self.selected {
@@ -137,10 +137,10 @@ impl App {
                 }
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.details_area.contains((column, row).into()) =>
+                if self.hot.details_area.contains((column, row).into()) =>
             {
                 self.focus = Focus::Details;
-                let index = row.saturating_sub(self.details_area.y.saturating_add(1)) as usize;
+                let index = row.saturating_sub(self.hot.details_area.y.saturating_add(1)) as usize;
                 self.details_selected = index.min(self.detail_field_count().saturating_sub(1));
             }
             MouseEventKind::Drag(MouseButton::Left) if self.dragging_divider => {
@@ -153,15 +153,15 @@ impl App {
 
     pub(super) fn handle_overlay_click(&mut self, column: u16, row: u16) {
         let point = (column, row).into();
-        if !self.overlay_area.contains(point) {
+        if !self.hot.overlay_area.contains(point) {
             self.overlay = None;
             return;
         }
-        if self.delete_cancel_area.contains(point) {
+        if self.hot.delete_cancel_area.contains(point) {
             self.overlay = None;
             return;
         }
-        if self.delete_confirm_area.contains(point) {
+        if self.hot.delete_confirm_area.contains(point) {
             self.handle_overlay_key(KeyEvent::from(KeyCode::Enter));
             return;
         }
@@ -170,18 +170,18 @@ impl App {
         if let Some(Overlay::Search(search)) = self.overlay.as_ref()
             && search.graph_mode
         {
-            let in_a_input = self.graph_a_input_area.contains(point);
-            let in_a_center = self.graph_a_center_area.contains(point);
-            let in_a_output = self.graph_a_output_area.contains(point);
-            let in_b_input = self.graph_b_input_area.contains(point);
-            let in_b_center = self.graph_b_center_area.contains(point);
-            let in_b_output = self.graph_b_output_area.contains(point);
-            let in_tree =
-                self.graph_tree_a_area.contains(point) || self.graph_tree_b_area.contains(point);
-            let in_data =
-                self.graph_data_a_area.contains(point) || self.graph_data_b_area.contains(point);
-            let tree_b = self.graph_tree_b_area.contains(point);
-            let data_b = self.graph_data_b_area.contains(point);
+            let in_a_input = self.hot.graph_a_input_area.contains(point);
+            let in_a_center = self.hot.graph_a_center_area.contains(point);
+            let in_a_output = self.hot.graph_a_output_area.contains(point);
+            let in_b_input = self.hot.graph_b_input_area.contains(point);
+            let in_b_center = self.hot.graph_b_center_area.contains(point);
+            let in_b_output = self.hot.graph_b_output_area.contains(point);
+            let in_tree = self.hot.graph_tree_a_area.contains(point)
+                || self.hot.graph_tree_b_area.contains(point);
+            let in_data = self.hot.graph_data_a_area.contains(point)
+                || self.hot.graph_data_b_area.contains(point);
+            let tree_b = self.hot.graph_tree_b_area.contains(point);
+            let data_b = self.hot.graph_data_b_area.contains(point);
             if in_a_input || in_a_center || in_a_output || in_b_input || in_b_center || in_b_output
             {
                 let side = if in_b_input || in_b_center || in_b_output {
@@ -193,20 +193,20 @@ impl App {
                 let center = if side == 0 { in_a_center } else { in_b_center };
                 let area = if input {
                     if side == 0 {
-                        self.graph_a_input_area
+                        self.hot.graph_a_input_area
                     } else {
-                        self.graph_b_input_area
+                        self.hot.graph_b_input_area
                     }
                 } else if center {
                     if side == 0 {
-                        self.graph_a_center_area
+                        self.hot.graph_a_center_area
                     } else {
-                        self.graph_b_center_area
+                        self.hot.graph_b_center_area
                     }
                 } else if side == 0 {
-                    self.graph_a_output_area
+                    self.hot.graph_a_output_area
                 } else {
-                    self.graph_b_output_area
+                    self.hot.graph_b_output_area
                 };
                 let item = self.graph_item(search, side);
                 let (caller_len, callee_len) = item
@@ -245,14 +245,14 @@ impl App {
                 };
                 let top = if in_tree {
                     if tree_b {
-                        self.graph_tree_b_area.y
+                        self.hot.graph_tree_b_area.y
                     } else {
-                        self.graph_tree_a_area.y
+                        self.hot.graph_tree_a_area.y
                     }
                 } else if data_b {
-                    self.graph_data_b_area.y
+                    self.hot.graph_data_b_area.y
                 } else {
-                    self.graph_data_a_area.y
+                    self.hot.graph_data_a_area.y
                 };
                 let raw_selected = row.saturating_sub(top.saturating_add(1)) as usize;
                 let selected = self
@@ -290,16 +290,17 @@ impl App {
         // field, the plan list selects a plan.
         // graft 界面有两个可点击面板：撰写区聚焦某一行，计划列表选中一条计划。
         if matches!(self.overlay, Some(Overlay::Graft(_))) {
-            if self.graft_compose_area.contains(point) {
-                let field = row.saturating_sub(self.graft_compose_area.y) as usize;
+            if self.hot.graft_compose_area.contains(point) {
+                let field = row.saturating_sub(self.hot.graft_compose_area.y) as usize;
                 if let Some(Overlay::Graft(graft)) = self.overlay.as_mut() {
                     graft.pane = 0;
                     graft.field = field.min(1);
                 }
                 return;
             }
-            if self.overlay_list_area.contains(point) {
-                let index = row.saturating_sub(self.overlay_list_area.y.saturating_add(1)) as usize;
+            if self.hot.overlay_list_area.contains(point) {
+                let index =
+                    row.saturating_sub(self.hot.overlay_list_area.y.saturating_add(1)) as usize;
                 if let Some(Overlay::Graft(graft)) = self.overlay.as_mut()
                     && index < graft.plans.len()
                 {
@@ -309,11 +310,12 @@ impl App {
                 return;
             }
         }
-        if self.action_cancel_area.contains(point) || self.action_exit_area.contains(point) {
+        if self.hot.action_cancel_area.contains(point) || self.hot.action_exit_area.contains(point)
+        {
             self.overlay = None;
             return;
         }
-        if self.action_confirm_area.contains(point) {
+        if self.hot.action_confirm_area.contains(point) {
             // A button click is a submit action even while a text field owns
             // keyboard input. Routing it through `s` used to type into the
             // field instead of saving.
@@ -331,16 +333,16 @@ impl App {
             }
             return;
         }
-        if !self.overlay_list_area.contains(point)
-            && !self.overlay_compare_list_area.contains(point)
+        if !self.hot.overlay_list_area.contains(point)
+            && !self.hot.overlay_compare_list_area.contains(point)
         {
             return;
         }
-        let clicked_compare = self.overlay_compare_list_area.contains(point);
+        let clicked_compare = self.hot.overlay_compare_list_area.contains(point);
         let visible_row = if clicked_compare {
-            row.saturating_sub(self.overlay_compare_list_area.y.saturating_add(1)) as usize
+            row.saturating_sub(self.hot.overlay_compare_list_area.y.saturating_add(1)) as usize
         } else {
-            row.saturating_sub(self.overlay_list_area.y.saturating_add(1)) as usize
+            row.saturating_sub(self.hot.overlay_list_area.y.saturating_add(1)) as usize
         };
         let search_target = match self.overlay.as_ref() {
             Some(Overlay::Search(search)) => {
@@ -349,10 +351,7 @@ impl App {
                 } else {
                     &search.query
                 };
-                let last = self
-                    .search_rows(query, &search.folded)
-                    .len()
-                    .saturating_sub(1);
+                let last = self.search_rows(query).len().saturating_sub(1);
                 Some(
                     (if clicked_compare {
                         search.compare_offset
@@ -388,7 +387,7 @@ impl App {
             }
             Some(Overlay::Add(add)) => {
                 let fields = face_field_indices(add);
-                let offset = face_form_offset(add, self.overlay_list_area.height);
+                let offset = face_form_offset(add, self.hot.overlay_list_area.height);
                 let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };
@@ -401,7 +400,7 @@ impl App {
             }
             Some(Overlay::Edit(_, edit)) => {
                 let fields = face_field_indices(edit);
-                let offset = face_form_offset(edit, self.overlay_list_area.height);
+                let offset = face_form_offset(edit, self.hot.overlay_list_area.height);
                 let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };

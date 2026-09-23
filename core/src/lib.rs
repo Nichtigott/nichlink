@@ -1,11 +1,58 @@
 //! NichLink's registry protocol and runtime core.
+//! NichLink 的注册协议与运行期内核。
+//!
+//! The official path of a protocol noun is its module path
+//! (`nichlink::identity::NodeId`). The crate root re-exports the module
+//! hierarchy plus a whitelist of vocabulary that host code, the build step and
+//! the runtime-check surfaces write as a bare name; anything not on the list is
+//! reached through its module.
+//! 协议名词的官方路径就是它的模块路径（`nichlink::identity::NodeId`）。crate 根部重导出
+//! 模块层级，外加一份白名单词汇——宿主代码、构建步骤与运行期校验面会以裸名书写它们；
+//! 不在表上的名字一律经模块取得。
 
-// Allow moved plugin shell modules to keep their self-referential
-// `pub use nichlink::...` compatibility re-exports.
-// 让迁移过来的插件壳模块保留自引用的 `pub use nichlink::...` 兼容重导出。
-extern crate self as nichlink;
+// The kernel is the crate every host links, so its public surface is the one that
+// has to be readable on docs.rs without leaving the page. The lint is on for the
+// whole crate rather than the roadmap's original per-module whitelist: the debt
+// was paid down in one pass, and a crate-wide lint is what keeps it from coming
+// back. `clippy -D warnings` turns every new undocumented public item into a
+// failure.
+// 内核是每个宿主都会链接的 crate，因此它的公开面正是必须在 docs.rs 上不必跳页就能读懂的那
+// 一份。lint 开在整个 crate 上，而不是路线图最初计划的逐模块白名单：这笔文档债已一次还清，
+// 而只有 crate 级别的 lint 才能防止它卷土重来。`clippy -D warnings` 会把每一个新增的、没有
+// 文档的公开项变成失败。
+#![warn(missing_docs)]
 
 #[path = "registry_core.rs"]
 pub mod registry_core;
 
-pub use registry_core::*;
+// The module hierarchy is the official surface.
+// 模块层级就是官方表面。
+#[cfg(feature = "syntax")]
+pub use registry_core::syntax;
+pub use registry_core::{
+    authoring, declaration, diagnostic, identity, json, lexicon, mir, plugin, release,
+    requirements, source, tree,
+};
+
+// Identity, registration and the contract/plugin records declarations carry.
+// 身份、注册，以及注册声明携带的合同与插件记录。
+pub use registry_core::{
+    Admission, ContractId, FlowContract, FrameworkId, NodeId, OwnedFlowContract, PartsContract,
+    PluginManifest, PluginMode, PluginSource, PresetContract, ROOT_NODE_ID, RegistrationInfo,
+    RegistrationRule, Registry, assert_contract, root_node_id, sha256_hex,
+};
+
+// Runtime-check and call-evidence nouns the tracing surfaces name directly.
+// 追踪面直接命名的运行期校验与调用证据名词。
+pub use registry_core::{
+    COORDINATES_IN_VIEWPORT, CallEdge, CallSite, Coordinates, EvidenceKind, FINITE_NUMBER,
+    LogicalCallEdge, NON_EMPTY_TEXT, Provenance, ProvenanceStep, RuntimeCheckFailure,
+    RuntimeCheckSpec, RuntimeValue, TraceMode,
+};
+
+// Build-side diagnostics and capability checks.
+// 构建侧诊断与能力检查。
+pub use registry_core::{
+    BuildDiagnostic, BuildDiagnostics, CapabilityDeclaration, CapabilityRequirement, StaticFace,
+    TopologyRecord, missing_capabilities, validate_face_topology,
+};

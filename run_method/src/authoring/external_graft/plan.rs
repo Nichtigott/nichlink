@@ -15,43 +15,66 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::runtime::{LoadedGraft, graft_record_root, load_graft_record, load_graft_records};
 use crate::{GraftPlanDocument, NodeId, Registry};
+use nichlink::lexicon;
 
 use super::super::filesystem::atomic_write;
 use super::super::validation::package_root;
 
 /// The directory that owns every external graft plan.
 /// 拥有全部外部 graft 计划的目录。
+///
+/// The layout lives in the non-gated runtime loader now, so Studio and a
+/// runtime host resolve the same path from the same constant list.
+/// 版式现在住在不受门控的运行期加载器里，因此 Studio 与运行期宿主按同一份常量表解析
+/// 同一条路径。
 pub fn external_graft_root() -> PathBuf {
-    package_root().join(".nichlink/external-grafts")
+    graft_record_root(&package_root())
 }
 
 /// An external overlay declaration owned by the host package.
 /// 宿主包拥有的外部覆盖声明。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalGraftPlanFile {
+    /// The plan's directory name under `.nichlink/external-grafts/`.
+    /// 计划在 `.nichlink/external-grafts/` 下的目录名。
     pub selector: String,
+    /// The parsed plan body.
+    /// 解析后的计划主体。
     pub document: GraftPlanDocument,
+    /// The plan directory itself.
+    /// 该计划所在目录。
     pub root: PathBuf,
 }
 
 impl ExternalGraftPlanFile {
+    /// The path of the plan file inside `root`.
+    /// `root` 内计划文件的路径。
     pub fn plan_path(&self) -> PathBuf {
-        self.root.join("graft.plan")
+        self.root.join(lexicon::GRAFT_PLAN_FILE)
     }
 
+    /// The identity of the base face this plan replaces.
+    /// 该计划所替换原注册面的身份。
     pub fn target(&self) -> NodeId {
         self.document.target
     }
 
+    /// The logical slot path this plan replaces.
+    /// 该计划替换的逻辑槽位路径。
     pub fn target_path(&self) -> &str {
         &self.document.target_path
     }
 
+    /// The selector naming the external implementation.
+    /// 命名外部实现的选择器。
     pub fn graft(&self) -> &str {
         &self.document.graft
     }
 
+    /// Whether the whole subtree is replaced rather than only the node.
+    /// 替换整棵子树还是仅替换该节点。
     pub fn full(&self) -> bool {
         self.document.full
     }
@@ -65,16 +88,26 @@ impl ExternalGraftPlanFile {
 /// 读得懂与读不懂的计划都会被列出：坏文件是作者必须看见的东西，不该被藏起来。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalGraftPlanEntry {
+    /// The plan's directory name under `.nichlink/external-grafts/`.
+    /// 计划在 `.nichlink/external-grafts/` 下的目录名。
     pub selector: String,
+    /// The plan directory itself.
+    /// 该计划所在目录。
     pub root: PathBuf,
+    /// The parsed plan, or the reason it could not be read.
+    /// 解析后的计划，或无法读取的原因。
     pub document: Result<GraftPlanDocument, String>,
 }
 
 impl ExternalGraftPlanEntry {
+    /// The path of the plan file inside `root`.
+    /// `root` 内计划文件的路径。
     pub fn plan_path(&self) -> PathBuf {
-        self.root.join("graft.plan")
+        self.root.join(lexicon::GRAFT_PLAN_FILE)
     }
 
+    /// Borrow the parsed plan, or the stored reason it is unusable.
+    /// 借出解析后的计划，或它不可用的已存原因。
     pub fn document(&self) -> Result<&GraftPlanDocument, &str> {
         self.document.as_ref().map_err(String::as_str)
     }
@@ -105,13 +138,13 @@ pub fn create_external_graft(
     if root.exists() {
         return Err(format!(
             "external graft `{selector}` already exists at {}",
-            root.join("graft.plan").display()
+            root.join(lexicon::GRAFT_PLAN_FILE).display()
         ));
     }
     let document = GraftPlanDocument::new(target, target_path, selector.clone(), full);
     fs::create_dir_all(&root)
         .map_err(|error| format!("cannot create external graft directory: {error}"))?;
-    if let Err(error) = atomic_write(&root.join("graft.plan"), &document.render()) {
+    if let Err(error) = atomic_write(&root.join(lexicon::GRAFT_PLAN_FILE), &document.render()) {
         let _ = fs::remove_dir_all(&root);
         return Err(format!("cannot write external graft plan: {error}"));
     }
@@ -125,18 +158,17 @@ pub fn create_external_graft(
 
 /// Read one plan back, so an authoring surface can show and edit it.
 /// 读回一条计划，供创作界面显示与编辑。
+///
+/// The read and parse go through the runtime loader, so Studio and a host refuse
+/// exactly the same documents.
+/// 读取与解析都走运行期加载器，因此 Studio 与宿主拒绝的文档完全相同。
 pub fn read_external_graft(selector: &str) -> Result<ExternalGraftPlanFile, String> {
     let selector = checked_selector(selector)?;
-    let root = external_graft_root().join(selector);
-    let path = root.join("graft.plan");
-    let text = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let document =
-        GraftPlanDocument::parse(&text).map_err(|error| format!("{}: {error}", path.display()))?;
+    let document = load_graft_record(&package_root(), selector)?;
     Ok(ExternalGraftPlanFile {
         selector: selector.to_owned(),
         document,
-        root,
+        root: external_graft_root().join(selector),
     })
 }
 
@@ -144,30 +176,22 @@ pub fn read_external_graft(selector: &str) -> Result<ExternalGraftPlanFile, Stri
 /// 列出全部计划目录，包括解析失败的。
 pub fn list_external_grafts() -> Result<Vec<ExternalGraftPlanEntry>, String> {
     let root = external_graft_root();
-    let entries = match fs::read_dir(&root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("cannot scan {}: {error}", root.display())),
-    };
-    let mut plans = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|error| format!("cannot scan {}: {error}", root.display()))?;
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let selector = entry.file_name().to_string_lossy().into_owned();
-        let path = entry.path().join("graft.plan");
-        let document = fs::read_to_string(&path)
-            .map_err(|error| format!("cannot read {}: {error}", path.display()))
-            .and_then(|text| GraftPlanDocument::parse(&text).map_err(|error| format!("{error}")));
-        plans.push(ExternalGraftPlanEntry {
-            selector,
-            root: entry.path(),
-            document,
-        });
-    }
-    plans.sort_by(|left, right| left.selector.cmp(&right.selector));
-    Ok(plans)
+    let loaded = load_graft_records(&package_root())?;
+    Ok(loaded
+        .into_iter()
+        .map(|entry| match entry {
+            LoadedGraft::Record(record) => ExternalGraftPlanEntry {
+                root: root.join(&record.selector),
+                selector: record.selector.clone(),
+                document: Ok(record.document),
+            },
+            LoadedGraft::Unreadable { selector, reason } => ExternalGraftPlanEntry {
+                root: root.join(&selector),
+                selector,
+                document: Err(reason),
+            },
+        })
+        .collect())
 }
 
 /// Change whether a plan replaces the whole subtree.
@@ -192,9 +216,9 @@ pub fn remove_external_graft(selector: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("clock error: {error}"))?
         .as_nanos();
     let trash = package_root()
-        .join(".nichlink")
+        .join(lexicon::NICHLINK_DIR)
         .join("trash")
-        .join("external-grafts")
+        .join(lexicon::EXTERNAL_GRAFT_DIR)
         .join(format!("{}-{stamp}", plan.selector));
     fs::create_dir_all(trash.parent().expect("trash has a parent"))
         .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
@@ -361,8 +385,14 @@ mod tests {
             );
 
             let trash = remove_external_graft("button_graft").expect("remove");
-            assert!(trash.starts_with(root.join(".nichlink/trash/external-grafts")));
-            assert!(trash.join("graft.plan").is_file());
+            assert!(
+                trash.starts_with(
+                    root.join(lexicon::NICHLINK_DIR)
+                        .join("trash")
+                        .join(lexicon::EXTERNAL_GRAFT_DIR),
+                )
+            );
+            assert!(trash.join(lexicon::GRAFT_PLAN_FILE).is_file());
             assert!(list_external_grafts().expect("list plans").is_empty());
         });
     }
@@ -376,7 +406,7 @@ mod tests {
             let error = create_external_graft(&registry, target, "button_graft", true)
                 .expect_err("duplicate selector is refused");
             assert!(error.contains("already exists"), "{error}");
-            assert!(error.contains("graft.plan"), "{error}");
+            assert!(error.contains(lexicon::GRAFT_PLAN_FILE), "{error}");
         });
     }
 
@@ -401,7 +431,7 @@ mod tests {
             let broken = external_graft_root().join("broken");
             fs::create_dir_all(&broken).expect("create directory");
             fs::write(
-                broken.join("graft.plan"),
+                broken.join(lexicon::GRAFT_PLAN_FILE),
                 "version=9\ntarget_path=root\ngraft=x\nfull=false\n",
             )
             .expect("write");

@@ -4,16 +4,35 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Optional MIR, CallTrace, data-flow, and graph evidence for NichLink"
 readme = "README.md"
-documentation = "https://docs.rs/nichlink-debug"
+documentation = "https://docs.rs/nichlink-debug-method"
 
 [dependencies]
 nichlink-run-method = { path = "../run_method", version = "0.1.0" }
-petgraph = "0.6"
+# `petgraph` backs `CallGraph`'s private fields only, so a major bump is not a
+# change to this crate's public API; the fourth audit round moved it off the
+# 0.6 line, which was two majors behind.
+# `petgraph` 只支撑 `CallGraph` 的私有字段，因此大版本升级不是本 crate 公开 API 的改动；
+# 第四轮审计把它从落后两个大版本的 0.6 线移开。
+petgraph = "0.8"
 tracing = "0.1"
+# `inventory` carries a patch floor while its siblings do not; it is pinned to
+# the version this workspace is verified against.
+# `inventory` 带补丁版本下限，而同级依赖没有；固定在当前工作区已验证的版本上。
 inventory = "0.3.24"
 
 [lib]
 name = "nichlink_debug_method"
 path = "src/lib.rs"
+
+# The face macros emit an IDE-only splice behind `cfg(rust_analyzer)`; a crate
+# that invokes them without a build script has to declare the name here or
+# `unexpected_cfgs` fires. Hosts get it from build.rs instead.
+# 注册面宏会发射挂在 `cfg(rust_analyzer)` 下的、仅供 IDE 的拼接；没有 build
+# script 却调用它们的 crate 必须在这里声明该名字，否则 `unexpected_cfgs` 报警。
+# 宿主的声明来自 build.rs。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }

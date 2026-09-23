@@ -1,16 +1,218 @@
 #!/bin/sh
 set -eu
 
+# Local package audit for the nine publishable crates.
+# 九个待发布 crate 的本地打包审计。
+#
+# The audit has two halves, and only one of them waits for the first publish.
+# 审计有两半，只有一半需要等首次发布。
+#
+# Contents are checked for all nine crates today. `cargo package --list` needs no
+# registry, so every source module under a crate's `src/` and the README its
+# manifest declares must appear in the package or the audit fails. This matters
+# more here than in most workspaces: modules are mounted with
+# `#[path = "..."]`, so a file cargo did not pick up is a crate that does not
+# compile for anyone, and it would compile fine locally where the file exists.
+# 内容检查今天对九个 crate 全部生效。`cargo package --list` 不需要 registry，因此每个
+# crate `src/` 下的每个源码模块、以及清单声明的 README 都必须出现在包里，否则审计失败。
+# 这在本工作区比在多数工作区更重要：模块是用 `#[path = "..."]` 挂载的，因此 cargo 没收进去
+# 的文件等于一个对任何人都编译不过的 crate，而在文件存在的本地它编译得好好的。
+#
+# A crate can only be *packaged* (built from the tarball in isolation, which is
+# what `cargo package` verifies) once every versioned `nichlink-*` dependency it
+# names is resolvable on the target registry. Before the first publish those
+# dependencies are absent, so this script warns about the affected crate and
+# skips that half, then exits 0. Every crate whose dependencies are already
+# published is still checked in full: core is checked from today, and the rest
+# start being checked automatically as they land on crates.io. A packaging
+# failure in a checkable crate is a real error and makes the script exit
+# non-zero; the CI step that calls it no longer sets continue-on-error.
+# 只有当某个 crate 写下的每个带版本号的 `nichlink-*` 依赖都能在目标 registry 上解析
+# 时，它才能被打包（从 tarball 隔离构建，也就是 `cargo package` 所校验的事）。首次发布
+# 之前这些依赖都不存在，因此脚本会警告受影响的 crate、跳过这一半，然后以 0 退出。依赖
+# 已经发布的 crate 仍会被完整检查：core 从今天起就被检查，其余 crate 上线后自动开始被
+# 检查。可检查的 crate 若打包失败就是真实错误，脚本以非零退出——调用它的 CI 步骤已不再
+# 设置 continue-on-error。
+#
+# The order below mirrors docs/roadmap-1.0.md decision 1:
+#   core -> macro / build_method / mcp -> run_method -> debug_method /
+#   plugin-host -> studio -> cli
+# 下面的顺序与 docs/roadmap-1.0.md 决策 1 一致。
+#
+# Each entry is "<crate>:<directory>:<comma-separated versioned nichlink-* deps>".
+# The directory is spelled out rather than derived because the mapping is not a
+# rule: `nichlink-build-method` lives in `build_method/` while
+# `nichlink-plugin-host` lives in `plugin-host/`. Dependencies are comma
+# separated, not space separated: the entries are read by `for entry in $crates`,
+# so a space inside one would split it into several and silently evaluate a crate
+# with only its first dependency.
+# 每项形如 "<crate>:<目录>:<以逗号分隔的带版本号 nichlink-* 依赖>"。目录是写出来的而不是
+# 推导的，因为映射不是一条规则：`nichlink-build-method` 在 `build_method/`，而
+# `nichlink-plugin-host` 在 `plugin-host/`。依赖用逗号而不是空格分隔：这些项由
+# `for entry in $crates` 读取，项内的空格会把它拆成多项，并静默地只按第一个依赖去评估
+# 一个 crate。
+
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
-cargo package -p nichlink-core --locked --allow-dirty --offline
-cargo package -p nichlink-build --locked --allow-dirty --offline
-cargo package -p nichlink-mcp --locked --allow-dirty --offline
+index_url="https://index.crates.io"
 
-cat <<'EOF'
-Core, build, and MCP packages passed local verification.
-The debug, studio, and plugin-host packages depend on the published
-nichlink-core version. After publishing core, run cargo package for them in
-dependency order against the target registry.
+# The version every internal dependency requires (caret `0.1.0`).
+# 所有内部依赖要求的版本（caret `0.1.0`）。
+workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+if [ -z "$workspace_version" ]; then
+  echo "error: could not read [workspace.package] version from Cargo.toml" >&2
+  exit 1
+fi
+
+crates='
+nichlink-core:core:
+nichlink-macro:macro:nichlink-core
+nichlink-build-method:build_method:nichlink-core
+nichlink-mcp:mcp:nichlink-core
+nichlink-run-method:run_method:nichlink-core,nichlink-macro
+nichlink-debug-method:debug_method:nichlink-run-method
+nichlink-plugin-host:plugin-host:nichlink-run-method
+nichlink-studio:studio:nichlink-run-method,nichlink-debug-method,nichlink-build-method
+nichlink-cli:cli:nichlink-build-method,nichlink-mcp,nichlink-studio
+'
+
+if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+  echo "warn: neither curl nor wget is available; cannot probe $index_url," \
+    "so every crate with an internal dependency is skipped" >&2
+fi
+
+# Sparse-index path for a crate name: 1/<n>, 2/<n>, 3/<c>/<n>, else
+# <first two>/<next two>/<n>.
+# crate 名的 sparse index 路径：1/<n>、2/<n>、3/<c>/<n>，其余为
+# <前两个字符>/<后两个字符>/<n>。
+index_path() {
+  name=$1
+  length=${#name}
+  if [ "$length" -eq 1 ]; then
+    printf '1/%s' "$name"
+  elif [ "$length" -eq 2 ]; then
+    printf '2/%s' "$name"
+  elif [ "$length" -eq 3 ]; then
+    printf '3/%s/%s' "$(printf '%s' "$name" | cut -c1)" "$name"
+  else
+    printf '%s/%s/%s' \
+      "$(printf '%s' "$name" | cut -c1-2)" \
+      "$(printf '%s' "$name" | cut -c3-4)" \
+      "$name"
+  fi
+}
+
+# The index serves one JSON object per published version, so an exact version
+# match is the publication test. Returns non-zero when the crate version is not
+# published or the endpoint cannot be reached.
+# index 为每个已发布版本提供一行 JSON，因此精确匹配版本号就是发布判定。crate 版本未
+# 发布或端点不可达时返回非零。
+is_published() {
+  name=$1
+  version=$2
+  path=$(index_path "$name")
+  if command -v curl >/dev/null 2>&1; then
+    body=$(curl -fsS --max-time 20 "$index_url/$path" 2>/dev/null) || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    body=$(wget -q -O - --timeout=20 "$index_url/$path" 2>/dev/null) || return 1
+  else
+    return 1
+  fi
+  printf '%s\n' "$body" | grep -F "\"vers\":\"$version\"" >/dev/null 2>&1
+}
+
+# Every source module and the declared README must be in the package. Runs for
+# every crate, published or not, because the listing needs no registry.
+# 每个源码模块与清单声明的 README 都必须在包里。对每个 crate 都运行，无论是否已发布，
+# 因为列清单不需要 registry。
+check_contents() {
+  crate=$1
+  directory=$2
+  if ! listing=$(cargo package --list -p "$crate" --locked --allow-dirty 2>/dev/null); then
+    printf 'error: cargo package --list failed for %s:\n' "$crate" >&2
+    cargo package --list -p "$crate" --locked --allow-dirty >&2 || true
+    return 1
+  fi
+  status=0
+  modules=$(find "$directory/src" -name '*.rs' | sort)
+  for module in $modules; do
+    relative=${module#"$directory"/}
+    if ! printf '%s\n' "$listing" | grep -Fx "$relative" >/dev/null; then
+      printf 'error: %s does not package %s\n' "$crate" "$relative" >&2
+      status=1
+    fi
+  done
+  readme=$(sed -n 's/^readme = "\(.*\)"/\1/p' "$directory/Cargo.toml" | head -n 1)
+  if [ -n "$readme" ] &&
+    ! printf '%s\n' "$listing" | grep -Fx "$readme" >/dev/null; then
+    printf 'error: %s does not package its declared readme %s\n' "$crate" "$readme" >&2
+    status=1
+  fi
+  return $status
+}
+
+verified=""
+skipped=""
+failed=""
+content_failed=""
+
+for entry in $crates; do
+  crate=${entry%%:*}
+  rest=${entry#*:}
+  directory=${rest%%:*}
+  deps=${rest#*:}
+
+  printf 'checking contents of %s\n' "$crate"
+  if check_contents "$crate" "$directory"; then
+    :
+  else
+    content_failed="$content_failed $crate"
+  fi
+
+  missing=""
+  for dep in $(printf '%s' "$deps" | tr ',' ' '); do
+    if ! is_published "$dep" "$workspace_version"; then
+      missing="$missing $dep"
+    fi
+  done
+  if [ -n "$missing" ]; then
+    printf 'warn: skipping packaging %s: versioned dependency not on %s yet:%s\n' \
+      "$crate" "$index_url" "$missing" >&2
+    skipped="$skipped $crate"
+    continue
+  fi
+  printf 'checking package of %s\n' "$crate"
+  if cargo package -p "$crate" --locked --allow-dirty; then
+    verified="$verified $crate"
+  else
+    printf 'error: cargo package failed for %s\n' "$crate" >&2
+    failed="$failed $crate"
+  fi
+done
+
+cat <<EOF
+Package audit summary
+  contents checked: all nine crates
+  contents failed:${content_failed:- none}
+  verified:${verified:- none}
+  skipped:${skipped:- none}
+  failed:${failed:- none}
+Contents are checked for every crate from today. Skipped crates have a
+versioned nichlink-* dependency that is not on $index_url yet; they become
+checkable automatically once that dependency is published. See
+docs/roadmap-1.0.md decision 1 for the publish order.
+内容检查从今天起对每个 crate 生效。跳过的 crate 有尚未发布到 $index_url 的
+nichlink-* 版本依赖；该依赖发布后它们会自动变为可检查。发布顺序见
+docs/roadmap-1.0.md 决策 1。
 EOF
+
+if [ -n "$content_failed" ]; then
+  echo "one or more packages are missing files they need" >&2
+  exit 1
+fi
+if [ -n "$failed" ]; then
+  echo "one or more checkable packages failed" >&2
+  exit 1
+fi
+exit 0

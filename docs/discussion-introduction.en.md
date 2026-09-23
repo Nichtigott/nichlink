@@ -10,7 +10,7 @@ NichLink: declarative recursive registration and atomic grafting for Rust object
 
 Hi everyone. I am open-sourcing NichLink, a Rust-first infrastructure project for large object graphs.
 
-It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. Studio, `CallTrace`, and MCP make the resulting calls and data flow inspectable.
+It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. A host records its calls with `CallTrace`, and Studio exposes the registry tree that results. (MCP currently serves read-only Rust source queries; it has no registry or contract query yet.) Studio's DATA panel currently renders a built-in sample trace: there is no real trace-ingest path yet.
 
 ```rust
 crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_NAME")), }
@@ -18,7 +18,7 @@ crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_
 
 A typical replacement looks like `NodeEditor -> Canvas2D -> WGPU`: a new `Canvas2D` must satisfy the old input, output, and structural contracts before the graft is published.
 
-The repository contains `nichlink-core`, `nichlink-build-method`, `nichlink-run-method`, `nichlink-debug-method`, `nichlink-cli`, `nichlink-studio`, `nichlink-mcp`, and `nichlink-plugin-host`.
+The repository contains `nichlink-core`, `nichlink-macro`, `nichlink-build-method`, `nichlink-run-method`, `nichlink-debug-method`, `nichlink-cli`, `nichlink-studio`, `nichlink-mcp`, and `nichlink-plugin-host`.
 
 I would value feedback on three points:
 
@@ -28,5 +28,5 @@ I would value feedback on three points:
 
 Known limits are explicit: static calls are heuristic around dynamic dispatch and FFI; uninstrumented locals may be unavailable; process plugins are not security sandboxes; and Cargo build scripts cannot read a consuming `main.rs` from a dependency crate.
 
-Repository: <https://github.com/OWNER/NichLink>  
-Roadmap: [`ROADMAP.md`](../ROADMAP.md)
+Repository: <https://github.com/Nichtigott/nichlink>  
+Roadmap: [`ROADMAP.md`](ROADMAP.md)

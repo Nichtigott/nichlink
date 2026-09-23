@@ -1,11 +1,18 @@
+//! Lazy, slot-scoped activation of verified Wasm plugins.
+//! 已验证 Wasm 插件的懒加载、按槽激活。
+
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwapOption;
 use nichlink_run_method::{FlowContract, FrameworkId, PluginMode, VerifiedPluginArtifact};
 
-use crate::{HostError, PluginInstance, WasmBackend, WasmInstance};
+use crate::{HostError, PluginInstance, WasmBackend};
+
+#[path = "lazy_wasm/slot_state.rs"]
+mod slot_state;
+use slot_state::SlotState;
 
 /// Trust lane enabled for one runtime plugin slot.
 /// 运行时插件槽允许使用的信任通道。
@@ -20,14 +27,26 @@ pub use nichlink_run_method::PluginChannel as ValidationChannel;
 /// 正式发布时保留的一个 Wasm 扩展或替换入口。
 #[derive(Clone, Copy, Debug)]
 pub struct WasmPluginSlot {
+    /// Slot name, unique within one table and used to address installs and calls.
+    /// 槽名，在单个表内唯一，用于寻址安装与调用。
     pub name: &'static str,
+    /// Framework whose artifacts this slot admits.
+    /// 该槽接纳的 framework。
     pub framework: FrameworkId,
+    /// Whether the plugin extends or replaces the framework.
+    /// 插件是扩展还是替换该 framework。
     pub mode: PluginMode,
+    /// Flow contract the artifact must match before activation.
+    /// 激活前工件必须匹配的数据流合同。
     pub contract: FlowContract,
+    /// Trust lanes allowed to install into this slot; must be non-empty.
+    /// 允许安装进该槽的信任通道；不得为空。
     pub channels: &'static [ValidationChannel],
 }
 
 impl WasmPluginSlot {
+    /// Build a slot definition; `const` so tables can live in static storage.
+    /// 构造槽定义；为 `const`，便于把表放在静态存储中。
     pub const fn new(
         name: &'static str,
         framework: FrameworkId,
@@ -45,78 +64,6 @@ impl WasmPluginSlot {
     }
 }
 
-struct PendingPlugin {
-    generation: u64,
-    artifact: VerifiedPluginArtifact,
-}
-
-struct LoadedPlugin {
-    generation: u64,
-    instance: WasmInstance,
-}
-
-struct SlotState {
-    definition: WasmPluginSlot,
-    active: ArcSwapOption<LoadedPlugin>,
-    pending: Mutex<Option<PendingPlugin>>,
-    has_pending: AtomicBool,
-    next_generation: AtomicU64,
-}
-
-impl SlotState {
-    fn install(
-        &self,
-        channel: ValidationChannel,
-        artifact: VerifiedPluginArtifact,
-    ) -> Result<u64, HostError> {
-        validate_artifact(self.definition, channel, &artifact)?;
-        let generation = self.next_generation.fetch_add(1, Ordering::Relaxed) + 1;
-        let mut pending = self
-            .pending
-            .lock()
-            .map_err(|_| HostError::State("plugin slot lock was poisoned".to_owned()))?;
-        *pending = Some(PendingPlugin {
-            generation,
-            artifact,
-        });
-        self.has_pending.store(true, Ordering::Release);
-        Ok(generation)
-    }
-
-    fn activate(&self, backend: WasmBackend) -> Result<(), HostError> {
-        if !self.has_pending.load(Ordering::Acquire) {
-            return Ok(());
-        }
-        let mut pending = self
-            .pending
-            .lock()
-            .map_err(|_| HostError::State("plugin slot lock was poisoned".to_owned()))?;
-        let Some(candidate) = pending.take() else {
-            self.has_pending.store(false, Ordering::Release);
-            return Ok(());
-        };
-
-        let loaded = backend.load(candidate.artifact).and_then(|instance| {
-            instance.health_check()?;
-            Ok(LoadedPlugin {
-                generation: candidate.generation,
-                instance,
-            })
-        });
-        match loaded {
-            Ok(loaded) => {
-                self.active.store(Some(Arc::new(loaded)));
-                self.has_pending.store(false, Ordering::Release);
-                Ok(())
-            }
-            Err(error) => {
-                self.has_pending.store(false, Ordering::Release);
-                Err(error)
-            }
-        }
-    }
-}
-
 /// Lazily activates verified Wasm plugins in explicitly retained slots.
 /// 仅在显式保留的槽中懒加载已验证 Wasm 插件。
 pub struct WasmPluginTable {
@@ -125,10 +72,14 @@ pub struct WasmPluginTable {
 }
 
 impl WasmPluginTable {
+    /// Build a table over the default backend, rejecting malformed slot definitions.
+    /// 在默认后端上建表，并拒绝非法的槽定义。
     pub fn new(slots: &'static [WasmPluginSlot]) -> Result<Self, HostError> {
         Self::with_backend(slots, WasmBackend::default())
     }
 
+    /// Build a table with an explicit backend so callers can supply their own limits.
+    /// 用显式后端建表，便于调用方提供自己的限制。
     pub fn with_backend(
         slots: &'static [WasmPluginSlot],
         backend: WasmBackend,
@@ -192,11 +143,15 @@ impl WasmPluginTable {
         active.instance.call(operation, input)
     }
 
+    /// Report whether the slot has an active generation and nothing pending.
+    /// 报告该槽是否已有激活代际且没有待处理代际。
     pub fn is_loaded(&self, slot: &str) -> Result<bool, HostError> {
         let state = self.slot(slot)?;
         Ok(!state.has_pending.load(Ordering::Acquire) && state.active.load().is_some())
     }
 
+    /// Return the active generation, or `None` while the slot is not yet activated.
+    /// 返回激活代际；槽尚未激活时返回 `None`。
     pub fn generation(&self, slot: &str) -> Result<Option<u64>, HostError> {
         Ok(self
             .slot(slot)?

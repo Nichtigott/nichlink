@@ -21,11 +21,21 @@
 可选的宿主入口按 Rust 语法解析，而不是文本搜索：
 
 ```rust
-nichlink::application!(entry = crate::main);
+nichlink_run_method::application!(entry = crate::main);
 ```
 
 必须有且仅有一条声明，其首个模块必须解析到 `src/`（含 `src/bin/`）下
 的源文件。损坏、重复或不可解析的入口会让构建失败并给出声明位置。
 
+设置 `NICH_LINK_ENTRY` 时它胜过以上全部：相对值相对包根解析，指不到文件时
+构建失败而不是回退。构建只解析入口一次，并把同一个值交给 `SourceScope` 剪枝
+与生成的 `BUILTIN_GRAFT_CUTS` 表，因此两者绝不可能描述不同的文件。
+
 `SourceScope` 修剪保证社区面存活：graft 切口目标与插件声明面被强制
 计为存活根，minimal 树绝不会剪掉 graft 计划稍后替换的槽位。
+
+构建不应用的 `.nichlink/external-grafts/` 计划无法靠自己保活槽位。当存在
+一条计划而**没有**任何声明可能命名其目标时，构建**失败**，并交出可直接粘贴的
+`static_graft_plan!` 子句：这条记录永远无法生效，而发布一个嫁接静默不发生的二进制，
+正是绝不能离开构建的东西。本次构建里 `#[cfg]` 关掉的声明也算数，因此合法门控的槽位
+不会报错。记录→覆盖层见 [`docs/graft.md`](../docs/graft.md)。

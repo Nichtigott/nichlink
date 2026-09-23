@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Verified WASM/process plugin adapters and atomic deployment for NichLink"
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-plugin-host"
@@ -19,11 +21,37 @@ wasm = ["dep:wasmi"]
 process-tools = ["dep:tempfile"]
 
 [dependencies]
+# `arc-swap`, `tempfile`, and `wasmi` carry minor/patch floors that are tighter
+# than the major-only pins used elsewhere in the workspace; they are pinned to
+# the versions this workspace is verified against.
+# `arc-swap`、`tempfile`、`wasmi` 使用次版本/补丁下限，比工作区其他位置只锁主版本的
+# 写法更紧；它们固定在当前工作区已验证的版本上。
 arc-swap = "1.9"
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 nichlink-run-method = { path = "../run_method", version = "0.1.0" }
 tempfile = { version = "3.22", optional = true }
-wasmi = { version = "0.42.1", default-features = false, features = ["std"], optional = true }
+# The sandbox engine, and the floor is deliberate: 1.0.9 is the first release
+# carrying the whole set of fixes the 0.42.1 pin lacked — the memory read/write
+# integer overflow, growing memory past the system limit, `rem_s(MAX, -1)`
+# trapping where the spec demands 0, and the loop-local and wide-arithmetic
+# miscompilations — while keeping the fuel semantics `WasmLimits::fuel_per_call`
+# is expressed in. Wasmi 2.0 ties fuel to the input bytecode instead, which is a
+# separate change. A 0.x caret requirement can never reach any of these, so the
+# floor has to move for users to receive them. The lock resolves to the latest
+# 1.x (1.1.0 today).
+# 沙箱引擎；下限是有意的：1.0.9 是第一个带着 0.42.1 所缺全部修复的版本——内存读写的整数
+# 溢出、内存增长越过系统上限、`rem_s(MAX, -1)` 在本该返回 0 时 trap、以及 loop 局部变量与
+# wide-arithmetic 的错误编译——同时保留 `WasmLimits::fuel_per_call` 所表达的燃料语义。
+# wasmi 2.0 改为把燃料绑定到输入字节码，那是另一件事。0.x 的 caret 要求永远到不了这些版本，
+# 因此必须抬下限，用户才拿得到它们。锁文件解析到最新的 1.x（今天是 1.1.0）。
+wasmi = { version = "1.0.9", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 wat = "1"
+
+# `process-tools` is not default, so without this docs.rs would document only
+# the `wasm` surface and hide the process adapters, which are public API.
+# `process-tools` 不是默认特性；没有这一段，docs.rs 只会文档化 `wasm` 表面而隐藏
+# 进程适配器，而后者是公开 API。
+[package.metadata.docs.rs]
+all-features = true

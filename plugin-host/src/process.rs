@@ -1,8 +1,11 @@
+//! Process-isolated plugin execution with a hard per-call deadline.
+//! 带单次调用硬超时的进程隔离插件执行。
+
 use std::{
     fs,
-    io::{Read, Write},
+    io::Write,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    sync::mpsc::{self, TryRecvError},
     thread,
     time::{Duration, Instant},
 };
@@ -12,12 +15,24 @@ use tempfile::{Builder, TempPath};
 
 use crate::{HostError, PluginInstance};
 
+#[path = "process/child.rs"]
+mod child;
+
+use child::{POLL_INTERVAL, kill_and_reap, read_frame, read_stderr, spawn_staged};
+
 /// Limits for one isolated process call.
 /// 单次隔离进程调用的限制。
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessLimits {
+    /// Wall-clock deadline for one call; on expiry the host kills the child.
+    /// 单次调用的挂钟超时；到期即由宿主终止子进程。
     pub timeout: Duration,
+    /// Largest request payload accepted, in bytes.
+    /// 接受的最大请求负载字节数。
     pub max_input_bytes: usize,
+    /// Largest response payload accepted, in bytes. Checked against the length
+    /// the child declares, before the host allocates the buffer.
+    /// 接受的最大响应负载字节数。以子进程声明的长度为准，在宿主分配缓冲区之前检查。
     pub max_output_bytes: usize,
 }
 
@@ -40,6 +55,8 @@ pub struct ProcessProgram {
 }
 
 impl ProcessProgram {
+    /// Start a program specification with no fixed arguments.
+    /// 以无固定参数开始描述一个程序。
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
             executable: executable.into(),
@@ -47,11 +64,15 @@ impl ProcessProgram {
         }
     }
 
+    /// Append one fixed argument, passed before every operation name.
+    /// 追加一个固定参数，它排在每个操作名之前。
     pub fn argument(mut self, argument: impl Into<String>) -> Self {
         self.arguments.push(argument.into());
         self
     }
 
+    /// The configured executable path, before staging.
+    /// 配置的可执行文件路径，尚未暂存。
     pub fn executable(&self) -> &Path {
         &self.executable
     }
@@ -65,10 +86,17 @@ pub struct ProcessBackend {
 }
 
 impl ProcessBackend {
+    /// Build a backend that applies `limits` to every loaded instance.
+    /// 构造一个对每个已加载实例施加 `limits` 的后端。
     pub const fn new(limits: ProcessLimits) -> Self {
         Self { limits }
     }
 
+    /// Stage the binary privately and require it to equal the artifact bytes.
+    /// The returned instance runs that staged copy, so later edits to the original path
+    /// cannot change what executes.
+    /// 把二进制暂存到私有位置并要求它与工件字节相等。返回的实例运行该暂存副本，
+    /// 因此之后改动原路径不会改变实际执行的内容。
     pub fn load(
         &self,
         artifact: VerifiedPluginArtifact,
@@ -148,7 +176,57 @@ impl PluginInstance for ProcessInstance {
         PluginAdapter::Process
     }
 
+    /// Run one operation in a fresh child process.
+    /// 在全新的子进程中执行一次操作。
     fn call(&self, operation: &str, input: &[u8]) -> Result<Vec<u8>, HostError> {
+        // Why the direct implementation is wrong, and where the boundary is:
+        // 直白实现为什么是错的，以及边界在哪里：
+        //
+        // The direct shape is "write stdin, poll `try_wait`, then read stdout".
+        // That shape has two unbounded blocks. Both were measured against this
+        // crate before this comment was written, and both are pinned by tests in
+        // `plugin-host/tests/fault_matrix.rs`:
+        // 直白写法是"写 stdin、轮询 `try_wait`、再读 stdout"。它有两处无界阻塞。两处都
+        // 在写下这段注释之前对本 crate 实测过，并都由 `plugin-host/tests/fault_matrix.rs`
+        // 的测试钉住：
+        //
+        // 1. A pipe holds only about 64 KiB. A poll loop that never drains stdout
+        //    lets the child block inside `write`, so it never exits, so the host
+        //    kills a healthy child and reports `Timeout`. Measured: a 65_536-byte
+        //    frame succeeded and a 65_537-byte frame timed out, while
+        //    `max_output_bytes` claimed 1 MiB. The real ceiling was the pipe
+        //    buffer, and the reported failure had the wrong kind.
+        // 1. 管道只有约 64 KiB。不排空 stdout 的轮询循环会让子进程阻塞在 `write` 里，
+        //    永不退出，于是宿主杀掉一个健康的子进程并报 `Timeout`。实测：65_536 字节的
+        //    帧成功、65_537 字节的帧超时，而 `max_output_bytes` 声称 1 MiB。真实上限是
+        //    管道缓冲，且报告出来的失败种类是错的。
+        // 2. Writing stdin happened before the deadline was armed, so a child that
+        //    does not read stdin pinned the caller with no timeout at all.
+        //    Measured: a 1 MiB input (exactly `max_input_bytes`) to a child that
+        //    never reads blocked for that child's whole lifetime.
+        // 2. 写 stdin 发生在超时启动之前，因此不读 stdin 的子进程会把调用方无限期钉住。
+        //    实测：1 MiB 输入（正好等于 `max_input_bytes`）写给一个从不读 stdin 的子
+        //    进程，阻塞了整个子进程生存期。
+        //
+        // Both are pipe-capacity problems, not timeout problems, so the fix is to
+        // stop using the pipes as synchronization points: input is written from
+        // its own thread, stdout and stderr are drained from their own threads,
+        // and the deadline bounds the whole call. The declared limits become the
+        // real limits.
+        // 两者都是管道容量问题而不是超时问题，因此修法是让管道不再承担同步职责：输入在
+        // 自己的线程里写，stdout 与 stderr 各自有线程排空，超时覆盖整个调用。声明的限制
+        // 由此成为真实的限制。
+        //
+        // Residual boundary, stated rather than hidden: `Child::kill` kills only
+        // the direct child. A plugin that forks a grandchild inheriting the pipes
+        // can keep one open; the call still returns at the deadline, but that
+        // call's detached writer or reader thread can stay blocked until the
+        // grandchild exits. Killing the whole process group would need `libc`,
+        // which this crate does not depend on.
+        // 仍然存在的边界，明说而不隐藏：`Child::kill` 只杀直接子进程。插件若派生继承了
+        // 管道的孙进程，该孙进程可以让管道保持打开；调用仍会在超时点返回，但这次调用的
+        // 写入或读取线程可能一直阻塞到孙进程退出。要连进程组一起杀就需要 `libc`，而本
+        // crate 没有该依赖。
         validate_operation(operation)?;
         if input.len() > self.limits.max_input_bytes || input.len() > u32::MAX as usize {
             return Err(HostError::Limit(format!(
@@ -157,51 +235,127 @@ impl PluginInstance for ProcessInstance {
                 self.limits.max_input_bytes
             )));
         }
-        let mut child = Command::new(&self.program.executable)
-            .args(&self.program.arguments)
-            .arg(operation)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let mut child = spawn_staged(&self.program, operation)?;
+
+        // One frame, built once: the 4-byte little-endian length prefix followed
+        // by the payload. Moving it into the writer thread is also what lets the
+        // caller's slice end with this call.
+        // 一次构造完整帧：4 字节小端长度前缀加负载。把它移动进写入线程，也正是调用方的
+        // 切片可以随这次调用结束而失效的原因。
+        let mut request = Vec::with_capacity(4 + input.len());
+        request.extend_from_slice(&(input.len() as u32).to_le_bytes());
+        request.extend_from_slice(input);
 
         let mut stdin = child
             .stdin
             .take()
             .ok_or_else(|| HostError::Process("child stdin was unavailable".to_owned()))?;
-        stdin.write_all(&(input.len() as u32).to_le_bytes())?;
-        stdin.write_all(input)?;
-        drop(stdin);
+        // The writer runs on its own thread so a child that never reads stdin
+        // cannot pin the caller. Once the child dies the pending write fails with
+        // a broken pipe and this thread ends.
+        // 写入放在自己的线程上，不读 stdin 的子进程因此无法钉住调用方。子进程死后挂起的
+        // 写入会以 broken pipe 失败，该线程随之结束。
+        thread::spawn(move || {
+            let _ = stdin.write_all(&request);
+            // Closing stdin is what tells a reading child the request ended.
+            // 关闭 stdin 是告诉正在读取的子进程"请求结束"的方式。
+            drop(stdin);
+        });
 
-        let max_output = self.limits.max_output_bytes;
-        let deadline = Instant::now() + self.limits.timeout;
-        let status = loop {
-            if let Some(status) = child.try_wait()? {
-                break status;
-            }
-            if Instant::now() >= deadline {
-                child.kill()?;
-                let _ = child.wait();
-                return Err(HostError::Timeout);
-            }
-            thread::sleep(Duration::from_millis(2));
-        };
-        if !status.success() {
-            let mut error = String::new();
-            if let Some(stderr) = child.stderr.take() {
-                let _ = stderr.take(4096).read_to_string(&mut error);
-            }
-            return Err(HostError::Process(if error.trim().is_empty() {
-                format!("child exited with {status}")
-            } else {
-                error.trim().to_owned()
-            }));
-        }
         let mut stdout = child
             .stdout
             .take()
             .ok_or_else(|| HostError::Process("child stdout was unavailable".to_owned()))?;
-        read_frame(&mut stdout, max_output)
+        let max_output = self.limits.max_output_bytes;
+        let (frames, received) = mpsc::channel();
+        // Draining stdout for the child's whole life is what removes the pipe
+        // buffer from the contract. `read_frame` rejects an over-limit declared
+        // length before it allocates, so the cap also bounds memory.
+        // 在整个子进程生存期内排空 stdout，正是把管道缓冲从契约里移除的那一步。
+        // `read_frame` 在分配之前就拒绝超过上限的声明长度，因此该上限同时约束内存。
+        thread::spawn(move || {
+            let _ = frames.send(read_frame(&mut stdout, max_output));
+        });
+
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| HostError::Process("child stderr was unavailable".to_owned()))?;
+        let (messages, message_text) = mpsc::channel();
+        // stderr is drained for the same reason, and the thread keeps reading to
+        // EOF after the retained prefix fills so that no child can block on it.
+        // stderr 因同样原因被排空；保留的前缀写满之后线程仍继续读到 EOF，因此没有子进程
+        // 会因它阻塞。
+        thread::spawn(move || {
+            let _ = messages.send(read_stderr(&mut stderr));
+        });
+
+        let deadline = Instant::now() + self.limits.timeout;
+        let mut frame: Option<Vec<u8>> = None;
+        let mut refusal: Option<HostError> = None;
+        let status = loop {
+            if frame.is_none() && refusal.is_none() {
+                match received.try_recv() {
+                    Ok(Ok(bytes)) => frame = Some(bytes),
+                    // An over-limit declared length is final: the reader has
+                    // stopped reading, so waiting for a child that may now be
+                    // blocked on a full pipe would degrade `Limit` into a
+                    // misleading `Timeout`.
+                    // 超过上限的声明长度是最终结论：读取线程已经停止读取，此时去等一个可能
+                    // 正阻塞在满管道上的子进程，只会把 `Limit` 降级成误导性的 `Timeout`。
+                    Ok(Err(error @ HostError::Limit(_))) => {
+                        kill_and_reap(&mut child);
+                        return Err(error);
+                    }
+                    // Any other reader failure is only remembered, because the
+                    // usual cause is a child that wrote no frame at all: it is
+                    // about to be reported as `Process` with its stderr, and a
+                    // broken frame would be the wrong diagnosis.
+                    // 其他读取失败只被记下，因为常见原因是子进程根本没写帧：它马上会被以
+                    // `Process` 连同 stderr 上报，而"坏帧"会是错误的诊断。
+                    Ok(Err(error)) => refusal = Some(error),
+                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Disconnected) => {
+                        refusal = Some(HostError::Process(
+                            "the child stdout reader stopped".to_owned(),
+                        ));
+                    }
+                }
+            }
+            if let Some(status) = child.try_wait()? {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                kill_and_reap(&mut child);
+                return Err(HostError::Timeout);
+            }
+            thread::sleep(POLL_INTERVAL);
+        };
+        if !status.success() {
+            let detail = message_text
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap_or_default();
+            let detail = detail.trim();
+            return Err(HostError::Process(if detail.is_empty() {
+                format!("child exited with {status}")
+            } else {
+                detail.to_owned()
+            }));
+        }
+        if let Some(bytes) = frame {
+            return Ok(bytes);
+        }
+        if let Some(error) = refusal {
+            return Err(error);
+        }
+        // The child is gone, so the reader is at EOF and returns without further
+        // blocking. The wait can expire only when a grandchild still holds the
+        // write end open, and then the deadline is the honest answer.
+        // 子进程已消失，读取线程已到 EOF，不会再阻塞。只有当孙进程仍持有写端时这个等待
+        // 才会到期，此时返回超时才是诚实的答案。
+        received
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .map_err(|_| HostError::Timeout)?
     }
 }
 
@@ -210,18 +364,4 @@ fn validate_operation(operation: &str) -> Result<(), HostError> {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(())
-}
-
-fn read_frame(reader: &mut impl Read, max_output: usize) -> Result<Vec<u8>, HostError> {
-    let mut encoded_length = [0; 4];
-    reader.read_exact(&mut encoded_length)?;
-    let length = u32::from_le_bytes(encoded_length) as usize;
-    if length > max_output {
-        return Err(HostError::Limit(format!(
-            "output is {length} bytes; limit is {max_output}"
-        )));
-    }
-    let mut output = vec![0; length];
-    reader.read_exact(&mut output)?;
-    Ok(output)
 }

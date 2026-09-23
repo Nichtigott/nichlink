@@ -9,9 +9,8 @@ pub(super) fn draw_search_detail(
     app: &App,
     query: &str,
     selected: usize,
-    folded: &std::collections::BTreeSet<usize>,
 ) {
-    let rows = app.search_rows(query, folded);
+    let rows = app.search_rows(query);
     let Some(row) = rows.get(selected) else {
         frame.render_widget(
             Paragraph::new("No matching registration face.").block(panel(" DETAILS ", MUTED)),

@@ -20,6 +20,11 @@ The server exposes compact, read-only tools:
 - `nichlink.read`: read a bounded source window.
 - `nichlink.status`: report the indexed source root and counts.
 
+All five tools index Rust source text only. There is no registry or contract
+query yet: an earlier description advertised one, but no tool loads a
+registry snapshot or reports contract, admission, or registration-rule data.
+`TODO(registry-tool)` in `src/tools.rs` records what such a tool would need.
+
 Call-graph results are labelled `static-heuristic`. They intentionally do not
 claim to resolve dynamic dispatch, function pointers, FFI, or runtime-selected
 calls; use `nichlink-debug-method` and a live `CallTrace` for those edges.

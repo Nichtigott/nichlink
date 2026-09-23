@@ -54,10 +54,6 @@ impl EntryPages {
             .flat_map(|page| Arc::make_mut(page).values_mut())
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = (&NodeId, &RegisteredEntry)> {
-        self.pages.iter().flat_map(|page| page.iter())
-    }
-
     pub(super) fn len(&self) -> usize {
         self.len
     }

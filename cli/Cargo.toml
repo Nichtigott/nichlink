@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "NichLink command-line interface: project scaffolding, Studio, and the MCP bridge"
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-cli"
@@ -13,6 +15,19 @@ autobins = false
 nichlink-build-method = { path = "../build_method", version = "0.1.0" }
 nichlink-mcp = { path = "../mcp", version = "0.1.0" }
 nichlink-studio = { path = "../studio", version = "0.1.0" }
+# The kernel owns the vocabulary the operator commands read at runtime: the
+# structured `BuildDiagnostics` that `check --json` serializes, the
+# `GraftPlanDocument` parser `grafts` reuses instead of adding a run_method
+# dependency, and `NodeId`/`lexicon` for resolving and locating a host's data.
+# 内核拥有操作命令在运行期读取的词表：`check --json` 序列化的结构化
+# `BuildDiagnostics`、`grafts` 复用（以免新增 run_method 依赖）的
+# `GraftPlanDocument` 解析器，以及用于解析节点身份、定位宿主数据的
+# `NodeId`/`lexicon`。
+nichlink-core = { path = "../core", version = "0.1.0" }
+# The package name decides the NodeId namespace, so it is read from
+# `cargo metadata` instead of a hand-rolled manifest scan.
+# 包名决定 NodeId 命名空间，因此改从 `cargo metadata` 读取，而不是手写扫描 manifest。
+serde_json = "1"
 
 [lib]
 name = "nichlink_cli"
@@ -27,12 +42,3 @@ doc = false
 name = "cargo-nichlink"
 path = "src/bin/cargo-nichlink.rs"
 doc = false
-
-[dev-dependencies]
-# The snippets command writes editor JSON; the test parses it back instead of
-# trusting a hand-rolled check.
-# snippets 命令写的是编辑器 JSON；测试把它解析回来，而不是靠手写检查。
-serde_json = "1"
-# The snippet set must follow the kernel vocabulary the build step reads.
-# snippet 集合必须跟随构建步骤读取的内核词表。
-nichlink-core = { path = "../core", version = "0.1.0" }

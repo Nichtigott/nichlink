@@ -8,528 +8,15 @@ use std::str::FromStr;
 /// 身份输入与持久化目录格式的版本。
 pub const IDENTITY_SCHEMA: &str = "3";
 
-/// Stable source identity shared by registration, diagnostics, and pruning.
-/// 注册、诊断和修剪共用的稳定源码身份。
-///
-/// This is a compact 128-bit prefix of SHA-256 for indexing and diagnostics,
-/// not a cryptographic signature. Plugin trust must use the full digest and a
-/// signature verifier.
-/// 这是用于索引和诊断的 SHA-256 128 位短标识，不是密码学签名。插件信任必须
-/// 使用完整摘要和签名验证器。
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NodeId([u8; 16]);
-
-/// A logical face identity that can survive a source-file move.
-/// 可跨源码文件移动保持不变的逻辑注册面身份。
-///
-/// `NodeId` is the source-instance identity used by the tree and pruning.
-/// `StableFaceId` is opt-in and survives a source-file move.
-/// `NodeId` 是注册树和修剪使用的源码实例身份；`StableFaceId` 可跨文件移动保持不变。
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StableFaceId([u8; 16]);
-
-/// The only node not registered through an object declaration.
-/// 唯一不通过对象声明注册的节点。
-pub const ROOT_NODE_ID: NodeId = NodeId::from_path("<root>", "root");
-
-impl NodeId {
-    /// Rebuild an identity emitted by NichLink's build step.
-    /// 从 NichLink 构建步骤生成的字节恢复身份。
-    #[doc(hidden)]
-    pub const fn from_raw(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-
-    /// Hash `relative_path + 0x00 + declared_name` during constant evaluation.
-    /// 在常量求值期间散列“相对路径 + 0x00 + 声明名”。
-    pub const fn from_path(relative_path: &str, declared_name: &str) -> Self {
-        Self(sha256_path_prefix(
-            relative_path.as_bytes(),
-            declared_name.as_bytes(),
-            true,
-        ))
-    }
-
-    /// Hash a declaration together with the package namespace that owns it.
-    /// 将声明与拥有它的包命名空间一起散列，避免不同库的相对路径串库。
-    pub const fn from_namespaced_path(
-        namespace: &str,
-        relative_path: &str,
-        declared_name: &str,
-    ) -> Self {
-        // Hashing the first two components and feeding that digest into the
-        // final hash keeps the implementation const and allocation-free while
-        // making the namespace part of the identity domain.
-        let scoped = sha256_path_prefix(namespace.as_bytes(), relative_path.as_bytes(), true);
-        Self(sha256_prefix(&scoped, declared_name.as_bytes(), true))
-    }
-
-    /// Hash one byte slice; primarily useful for standard-vector tests.
-    /// 散列单个字节切片，主要用于标准向量测试。
-    pub const fn from_bytes(input: &[u8]) -> Self {
-        Self(sha256_prefix(input, &[], false))
-    }
-
-    pub const fn into_bytes(self) -> [u8; 16] {
-        self.0
-    }
-
-    /// Produce a node-specific compile-time payload for pruning verification.
-    /// 为修剪验证生成节点专属的编译期负载。
-    ///
-    /// The table is emitted only when the owning node's probe is reached.
-    /// 只有触达所属节点探针时，这张表才会进入最终产物。
-    pub const fn pruning_table(self) -> [u64; 4096] {
-        let bytes = self.0;
-        let mut state = u64::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]);
-        let mut table = [0_u64; 4096];
-        let mut index = 0;
-        while index < table.len() {
-            state ^= state << 13;
-            state ^= state >> 7;
-            state ^= state << 17;
-            table[index] = state.wrapping_add(index as u64);
-            index += 1;
-        }
-        table
-    }
-}
-
-/// Return the root identity for one isolated package namespace.
-pub const fn root_node_id(namespace: &str) -> NodeId {
-    NodeId::from_namespaced_path(namespace, "<root>", "root")
-}
-
-impl StableFaceId {
-    /// Hash an author-owned logical name, independent of its source path.
-    /// 对作者拥有的逻辑名称做哈希，与源码路径无关。
-    pub const fn from_name(name: &str) -> Self {
-        Self(sha256_prefix(name.as_bytes(), &[], false))
-    }
-
-    pub const fn into_bytes(self) -> [u8; 16] {
-        self.0
-    }
-}
-
-impl fmt::Display for NodeId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in self.0 {
-            write!(formatter, "{byte:02x}")?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for StableFaceId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in self.0 {
-            write!(formatter, "{byte:02x}")?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Debug for StableFaceId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, formatter)
-    }
-}
-
-impl fmt::Debug for NodeId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, formatter)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ParseNodeIdError;
-
-impl fmt::Display for ParseNodeIdError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("node identity must contain exactly 32 hexadecimal digits")
-    }
-}
-
-impl std::error::Error for ParseNodeIdError {}
-
-impl FromStr for NodeId {
-    type Err = ParseNodeIdError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if value.len() != 32 {
-            return Err(ParseNodeIdError);
-        }
-        let bytes = value.as_bytes();
-        let mut id = [0_u8; 16];
-        for index in 0..16 {
-            let high = hex_nibble(bytes[index * 2]).ok_or(ParseNodeIdError)?;
-            let low = hex_nibble(bytes[index * 2 + 1]).ok_or(ParseNodeIdError)?;
-            id[index] = (high << 4) | low;
-        }
-        Ok(Self(id))
-    }
-}
-
-/// Decode one hexadecimal digit (0-9, a-f, A-F).
-/// 解码一个十六进制数字符（0-9、a-f、A-F）。
-pub const fn hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-/// Decode a whole even-length hexadecimal string.
-/// 解码完整偶数长度的十六进制字符串。
-///
-/// Returns `None` for odd lengths or any non-hex digit.
-/// 长度为奇数或含有非十六进制字符时返回 `None`。
-pub fn hex_decode(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) {
-        return None;
-    }
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len() / 2);
-    let chunk = bytes.as_chunks::<2>().0;
-    for pair in chunk {
-        let high = hex_nibble(pair[0])?;
-        let low = hex_nibble(pair[1])?;
-        decoded.push((high << 4) | low);
-    }
-    Some(decoded)
-}
-
-/// Compute SHA-256 over two slices, optionally separated by a zero byte.
-/// 对两个字节片段计算 SHA-256，可选地在中间加入零字节。
-/// One hashed byte, with path separators folded when this hash identifies a
-/// path. `file!()` records the platform separator, so folding here keeps a
-/// face's identity the same on every platform without allocating.
-/// 参与哈希的一个字节；当该哈希用于路径身份时折叠分隔符。`file!()` 记录的是
-/// 平台分隔符，在这里折叠就能在不分配的前提下让注册面的身份跨平台一致。
-const fn path_byte(value: u8, normalize_path: bool) -> u8 {
-    if normalize_path && value == b'\\' {
-        b'/'
-    } else {
-        value
-    }
-}
-
-const fn sha256_digest(
-    first: &[u8],
-    second: &[u8],
-    separator: bool,
-    normalize_path: bool,
-) -> [u8; 32] {
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let separator_len = if separator { 1 } else { 0 };
-    let length = first.len() + separator_len + second.len();
-    let blocks = (length + 9).div_ceil(64);
-    let padded = blocks * 64;
-    let bits = (length as u64) * 8;
-    let mut state = [
-        0x6a09e667_u32,
-        0xbb67ae85,
-        0x3c6ef372,
-        0xa54ff53a,
-        0x510e527f,
-        0x9b05688c,
-        0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    let mut block = 0;
-    while block < blocks {
-        let mut words = [0_u32; 64];
-        let mut i = 0;
-        while i < 16 {
-            let mut value = 0_u32;
-            let mut byte = 0;
-            while byte < 4 {
-                let offset = block * 64 + i * 4 + byte;
-                let input = if offset < length {
-                    if offset < first.len() {
-                        path_byte(first[offset], normalize_path)
-                    } else if separator && offset == first.len() {
-                        0
-                    } else {
-                        path_byte(second[offset - first.len() - separator_len], normalize_path)
-                    }
-                } else if offset == length {
-                    0x80
-                } else if offset >= padded - 8 {
-                    ((bits >> ((padded - 1 - offset) * 8)) & 0xff) as u8
-                } else {
-                    0
-                };
-                value |= (input as u32) << (24 - byte * 8);
-                byte += 1;
-            }
-            words[i] = value;
-            i += 1;
-        }
-        while i < 64 {
-            let a = words[i - 15].rotate_right(7)
-                ^ words[i - 15].rotate_right(18)
-                ^ (words[i - 15] >> 3);
-            let b = words[i - 2].rotate_right(17)
-                ^ words[i - 2].rotate_right(19)
-                ^ (words[i - 2] >> 10);
-            words[i] = words[i - 16]
-                .wrapping_add(a)
-                .wrapping_add(words[i - 7])
-                .wrapping_add(b);
-            i += 1;
-        }
-        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h) = (
-            state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7],
-        );
-        i = 0;
-        while i < 64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let t1 = h
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(words[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = s0.wrapping_add(maj);
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
-            i += 1;
-        }
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
-        state[4] = state[4].wrapping_add(e);
-        state[5] = state[5].wrapping_add(f);
-        state[6] = state[6].wrapping_add(g);
-        state[7] = state[7].wrapping_add(h);
-        block += 1;
-    }
-    let mut output = [0_u8; 32];
-    let mut i = 0;
-    while i < 8 {
-        let bytes = state[i].to_be_bytes();
-        output[i * 4] = bytes[0];
-        output[i * 4 + 1] = bytes[1];
-        output[i * 4 + 2] = bytes[2];
-        output[i * 4 + 3] = bytes[3];
-        i += 1;
-    }
-    output
-}
-
-/// Compute SHA-256 over two slices, optionally separated by a zero byte, and
-/// keep the first 128 bits.
-/// 对两个字节片段计算 SHA-256，可选地在中间加入零字节，并取前 128 位。
-const fn sha256_prefix(first: &[u8], second: &[u8], separator: bool) -> [u8; 16] {
-    let digest = sha256_digest(first, second, separator, false);
-    sha256_prefix_of(digest)
-}
-
-/// Like [`sha256_prefix`], but `/` and `\` hash to the same byte so a path's
-/// identity does not depend on the platform separator.
-/// 与 [`sha256_prefix`] 相同，但 `/` 与 `\` 哈希为同一字节，路径身份因此不依赖
-/// 平台分隔符。
-const fn sha256_path_prefix(first: &[u8], second: &[u8], separator: bool) -> [u8; 16] {
-    let digest = sha256_digest(first, second, separator, true);
-    sha256_prefix_of(digest)
-}
-
-const fn sha256_prefix_of(digest: [u8; 32]) -> [u8; 16] {
-    let mut output = [0_u8; 16];
-    let mut i = 0;
-    while i < 16 {
-        output[i] = digest[i];
-        i += 1;
-    }
-    output
-}
-
-/// Dependency-free SHA-256, hex-encoded. Shares the digest core with
-/// `sha256_prefix`; do not add a second implementation.
-/// 零依赖 SHA-256，输出十六进制。与 `sha256_prefix` 共用同一个摘要核心，
-/// 不要再写第二份实现。
-pub fn sha256_hex(input: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = sha256_digest(input, &[], false, false);
-    let mut out = String::with_capacity(64);
-    for byte in digest {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
-}
-
-/// Whether a byte is a path separator on either supported platform.
-/// 该字节是否是两个受支持平台上的路径分隔符。
-const fn is_separator(byte: u8) -> bool {
-    byte == b'/' || byte == b'\\'
-}
-
-/// Drop one leading path separator, when present.
-/// 存在时去掉一个前导路径分隔符。
-const fn strip_leading_separator(value: &str) -> &str {
-    let bytes = value.as_bytes();
-    if bytes.is_empty() || !is_separator(bytes[0]) {
-        return value;
-    }
-    let (_, rest) = bytes.split_at(1);
-    match core::str::from_utf8(rest) {
-        Ok(text) => text,
-        Err(_) => value,
-    }
-}
-
-/// Return the part of `value` after `prefix`, or `None` when it is not one.
-/// 返回 `value` 中 `prefix` 之后的部分；`prefix` 不匹配时返回 `None`。
-///
-/// Written with scalar indexing and `split_at` because range indexing and
-/// `slice::get` are not usable in constant functions on the supported
-/// toolchain. 使用标量索引与 `split_at`：在受支持的工具链上，范围索引和
-/// `slice::get` 无法用于常量函数。
-pub const fn strip_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    let value_bytes = value.as_bytes();
-    let prefix_bytes = prefix.as_bytes();
-    if prefix_bytes.len() > value_bytes.len() {
-        return None;
-    }
-    let mut index = 0;
-    while index < prefix_bytes.len() {
-        if value_bytes[index] != prefix_bytes[index] {
-            return None;
-        }
-        index += 1;
-    }
-    let (_, rest) = value_bytes.split_at(index);
-    match core::str::from_utf8(rest) {
-        Ok(text) => Some(text),
-        Err(_) => None,
-    }
-}
-
-/// Like [`strip_prefix`], but `/` and `\` count as the same separator.
-/// 与 [`strip_prefix`] 相同，但 `/` 与 `\` 视为同一分隔符。
-///
-/// Cargo reports `CARGO_MANIFEST_DIR` with backslashes on Windows while the
-/// build step writes `#[path]` literals with forward slashes, so an exact
-/// comparison would fail there and leave the absolute path as the identity.
-/// Cargo 在 Windows 上以反斜杠给出 `CARGO_MANIFEST_DIR`，而构建步骤写出的
-/// `#[path]` 字面量用正斜杠；精确比较在那边会失败，身份会退化成绝对路径。
-pub const fn strip_path_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    let value_bytes = value.as_bytes();
-    let prefix_bytes = prefix.as_bytes();
-    if prefix_bytes.len() > value_bytes.len() {
-        return None;
-    }
-    let mut index = 0;
-    while index < prefix_bytes.len() {
-        let left = value_bytes[index];
-        let right = prefix_bytes[index];
-        if left != right && !(is_separator(left) && is_separator(right)) {
-            return None;
-        }
-        index += 1;
-    }
-    let (_, rest) = value_bytes.split_at(index);
-    // The prefix has to end on a component boundary: `/work/app` is not a path
-    // prefix of `/work/application/src/a.rs`, and stripping it there would invent
-    // the identity `lication/src/a.rs` for a file that was never inside the
-    // project.
-    // 前缀必须结束在组件边界上：`/work/app` 不是 `/work/application/src/a.rs` 的路径
-    // 前缀，在那里剥离会为一个从来不在项目里的文件凭空造出身份
-    // `lication/src/a.rs`。
-    // A prefix that already ends with a separator is on a boundary by itself;
-    // otherwise the character after the prefix has to be one.
-    // 前缀本身以分隔符结尾时它已经落在边界上；否则前缀之后必须是分隔符。
-    // `slice::last`/`Option::is_some_and` are not const-stable here, so the last
-    // byte is read by index like the loop above does.
-    // `slice::last`/`Option::is_some_and` 在本工具链上不是 const 稳定的，因此像上面的
-    // 循环一样用下标读取最后一个字节。
-    let prefix_ends_on_separator = match prefix_bytes.len() {
-        0 => false,
-        length => is_separator(prefix_bytes[length - 1]),
-    };
-    if !prefix_ends_on_separator
-        && let Some(next) = rest.first()
-        && !is_separator(*next)
-    {
-        return None;
-    }
-
-    match core::str::from_utf8(rest) {
-        Ok(text) => Some(text),
-        Err(_) => None,
-    }
-}
-
-/// Last `::`-separated segment of a module path.
-/// 模块路径中最后一段 `::` 分隔的分量。
-pub const fn last_path_segment(path: &str) -> &str {
-    let bytes = path.as_bytes();
-    let mut index = bytes.len();
-    while index > 0 {
-        index -= 1;
-        if bytes[index] == b':' {
-            let (_, rest) = bytes.split_at(index + 1);
-            return match core::str::from_utf8(rest) {
-                Ok(text) => text,
-                Err(_) => path,
-            };
-        }
-    }
-    path
-}
-
-/// Derive a declaration's `source` identity input from `file!()`.
-/// 从 `file!()` 推导声明的 `source` 身份输入。
-///
-/// Drops `manifest_dir` and one leading `src/` component so the value matches
-/// the repository-relative path the build step used to inject, which keeps
-/// `NodeId` stable across the generated and derived forms. The original value
-/// is returned when `file` is not under `manifest_dir` (an external crate, a
-/// `tests/` target, or a differently laid out package).
-/// 去掉 `manifest_dir` 与其后的一个 `src/` 分量，使结果与构建步骤原本注入的
-/// 仓库相对路径一致，从而让生成式与推导式产生相同的 `NodeId`。当 `file`
-/// 不在 `manifest_dir` 下（外部 crate、`tests/` 目标或其它布局）时返回原值。
-pub const fn manifest_relative_source<'a>(manifest_dir: &str, file: &'a str) -> &'a str {
-    let after_manifest = match strip_path_prefix(file, manifest_dir) {
-        Some(rest) => rest,
-        None => return file,
-    };
-    let after_separator = strip_leading_separator(after_manifest);
-    match strip_prefix(after_separator, "src/") {
-        Some(rest) => rest,
-        None => match strip_prefix(after_separator, "src\\") {
-            Some(rest) => rest,
-            None => after_separator,
-        },
-    }
-}
+#[path = "node_id.rs"]
+mod node_id;
+pub use node_id::*;
+#[path = "sha256.rs"]
+mod sha256;
+pub use sha256::*;
+#[path = "path_text.rs"]
+mod path_text;
+pub use path_text::*;
 
 #[cfg(test)]
 mod tests {
@@ -709,6 +196,52 @@ mod tests {
     fn namespaced_roots_are_distinct_and_legacy_root_remains_stable() {
         assert_ne!(root_node_id("library-a"), root_node_id("library-b"));
         assert_ne!(ROOT_NODE_ID, root_node_id("library-a"));
+    }
+
+    /// Identities are persisted: `.nichlink/external-grafts/<selector>/graft.plan`
+    /// stores a `NodeId` and parses it back, and a mismatch only warns. These
+    /// literals are therefore a COMPATIBILITY PIN, not a snapshot. Relational
+    /// assertions cannot replace them — swapping the two digest inputs in
+    /// `from_path`, or toggling its `separator` flag, moves both sides of an
+    /// `assert_eq!`/`assert_ne!` together and passes. Only a literal catches it.
+    /// Do not edit a literal to make this test green unless the identity format
+    /// is being deliberately migrated and every recorded plan is re-derived.
+    /// 身份会被持久化：`.nichlink/external-grafts/<selector>/graft.plan` 存有
+    /// `NodeId` 并在读回时解析，不匹配只会给出警告。因此这些字面量是兼容性钉，而不是
+    /// 快照。关系型断言无法取代它们——交换 `from_path` 的两个摘要输入，或翻转它的
+    /// `separator` 标志，会让 `assert_eq!`/`assert_ne!` 的两侧一起移动并通过。只有
+    /// 字面量才能发现。除非是有意迁移身份格式并重新推导每一份已记录的 plan，否则不要
+    /// 为了让本测试变绿而改字面量。
+    #[test]
+    fn pinned_identities_are_an_on_disk_compatibility_contract() {
+        let path_id = NodeId::from_path("control/control.rs", "Control");
+        let namespaced_id = NodeId::from_namespaced_path("app", "control/control.rs", "Control");
+        // The Windows spelling must fold onto the same identity as its slash
+        // twin, so it is pinned to the same literal rather than a second value.
+        // Windows 写法必须折叠到与其正斜杠孪生相同的身份，因此钉的是同一个字面量，
+        // 而不是第二个值。
+        let namespaced_windows_id =
+            NodeId::from_namespaced_path("app", "control\\control.rs", "Control");
+        assert_eq!(namespaced_windows_id, namespaced_id);
+
+        assert_eq!(
+            [
+                path_id.to_string(),
+                namespaced_id.to_string(),
+                namespaced_windows_id.to_string(),
+                ROOT_NODE_ID.to_string(),
+            ],
+            [
+                // `NodeId::from_path("control/control.rs", "Control")`
+                "b7f058b83908f5b3603201bf030674c7",
+                // `NodeId::from_namespaced_path("app", "control/control.rs", "Control")`
+                "3ba6f15f11b62ea433f6f16acea3512a",
+                // the same call with `control\control.rs`
+                "3ba6f15f11b62ea433f6f16acea3512a",
+                // `ROOT_NODE_ID` = `from_path("<root>", "root")`
+                "33515c0bbbf5082cb760eca7c48ff9b6",
+            ]
+        );
     }
 
     #[test]

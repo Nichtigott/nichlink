@@ -10,7 +10,7 @@
 
 ## 外部声明
 
-跨 crate 声明使用 `nichlink::external_object!`，必须填写插件来源、版本、目标框架和父节点身份。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
+跨 crate 声明使用 `nichlink_run_method::external_object!`。B3b 之后只有 `kind` 必填，其余字段全部可选，并按生成的紧凑形式取默认值：`source` 取声明文件、`registry_name` 取模块名末段、`parent` 取包根、`handle` 取 `kind`、`preset`/`parts` 取 `NoPreset`/`NoParts`、`plugin` 取 `None`、`exports`/`requires`/`provides`/`runtime_checks` 取空。没有版本字段，也没有目标框架字段：框架属于注册机而不属于注册面。`registry_rule` 默认取 `RegistrationRule::ANY`，而不是宿主的兄弟规则解析器——该解析器（`super::registry_rule::REGISTRATION_RULE`）是构建只会在宿主自己的生成树里、注册面旁边生成的相对路径；外部 crate 没有这个兄弟模块，因此拥有注册机的外部面得到宽松的 `ANY`，要收窄必须显式写出规则。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
 
 ## 注册面按真实路径载入
 
@@ -68,7 +68,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
 
 ## Studio 与插件宿主
 
-使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`4` 切换 Search、Inspect、Data、Compare。`watch` 由 `nichlink-dev` 提供，会在源码、Cargo 或插件目录变化时重建子 Studio 进程。
+使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`4` 切换 Search、Inspect、Data、Compare。`watch` 由 `nichlink-dev` 提供，它是非默认 `dev-supervisor` 特性下的工作区专用二进制：会在源码、Cargo 或插件目录变化时重建子 Studio 进程，因此需要本检出（`cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`），`cargo install nichlink-studio` 也不会安装它。
 
 插件宿主只接受 `VerifiedPluginArtifact`。Wasm slot 在编译期声明；进程适配器需显式启用 `process-tools`。现有 `PluginManifest` 流程合同和 lock 记录保持兼容。
 # Graft overlay 迁移
@@ -76,7 +76,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
 当前 graft 模型是不可变覆盖层。宿主保留原始源码，只在入口声明外部实现：
 
 ```rust
-let plan = nichlink::graft_plan!(framework,
+let plan = nichlink_run_method::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -93,14 +93,18 @@ let effective = base.overlay(&plan, &external)?;
 ## `graft.plan` 记录
 
 `.nichlink/external-grafts/<selector>/graft.plan` 是创作记录，既不是编译器读取的声明，
-也不是覆盖应用。它的版式未变（`version=1`、`target`、`target_path`、`graft`、`full`），
-但现在有了读取方：kernel 的 `GraftPlanDocument` 负责解析与渲染，遇到不认识的版本或键就
-拒绝而不是猜，并且是这套版式唯一的定义处。`nichlink-build` 新增
+也不是一次 `overlay` 调用。它的版式未变（`version=1`、`target`、`target_path`、`graft`、
+`full`），但现在有了读取方：kernel 的 `GraftPlanDocument` 负责解析与渲染，遇到不认识的
+版本或键就拒绝而不是猜，并且是这套版式唯一的定义处。记录现在也是覆盖的**输入**：
+`nichlink_run_method::apply_recorded_grafts` 读取 `.nichlink/external-grafts/`，
+`Registry::overlay_recorded` 把每条记录与静态声明对账、施加，并报告每一处调整；优先级
+策略与哪些报告是致命错误见 [`graft.zh-CN.md`](graft.zh-CN.md)。`nichlink-build-method` 新增
 `declared_grafts`/`host_entry_source`，供创作界面查询构建会发布哪些槽位。
 
-`nichlink_run_method::ExternalGraftPlanFile` 不再把 `target`、`graft`、`full`、`root`
-暴露为公开字段；它携带解析后的 `GraftPlanDocument` 与选择器，并通过 `target()`、
-`target_path()`、`graft()`、`full()`、`plan_path()`、`root` 回答。新增读取、列出、改范围
-和回收计划的函数：`read_external_graft`、`list_external_grafts`、
+`nichlink_run_method::ExternalGraftPlanFile` 不再把 `target`、`graft`、`full` 暴露为
+公开字段；它携带解析后的 `GraftPlanDocument` 与选择器，并通过 `target()`、
+`target_path()`、`graft()`、`full()`、`plan_path()` 回答。`root` 仍是公开的 `PathBuf`
+字段（没有 `root()` 方法），`selector` 与 `document` 同样是公开字段。新增读取、列出、
+改范围和回收计划的函数：`read_external_graft`、`list_external_grafts`、
 `rewrite_external_graft`、`remove_external_graft`。`create_external_graft` 签名不变，
 但改为经 kernel 文档写入，因此写出的内容一定能读回。

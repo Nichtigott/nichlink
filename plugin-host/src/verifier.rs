@@ -4,24 +4,36 @@
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use nichlink_run_method::{PluginManifest, PluginSignatureVerifier};
 
+/// One public key the host will trust, named by its SHA-256 fingerprint.
+/// 宿主愿意信任的一个公钥，以它的 SHA-256 指纹命名。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TrustedPublicKey {
+    /// SHA-256 hex of `bytes`; a key whose bytes do not hash to it is rejected.
+    /// `bytes` 的 SHA-256 十六进制；字节哈希对不上的公钥会被拒绝。
     pub fingerprint: &'static str,
+    /// Raw 32-byte Ed25519 public key.
+    /// 32 字节的 Ed25519 原始公钥。
     pub bytes: [u8; 32],
 }
 
 impl TrustedPublicKey {
+    /// Pair a fingerprint with the key bytes it must name.
+    /// 把指纹与它必须指称的公钥字节配对。
     pub const fn new(fingerprint: &'static str, bytes: [u8; 32]) -> Self {
         Self { fingerprint, bytes }
     }
 }
 
+/// Verifies plugin signatures against a fixed set of trusted public keys.
+/// 用一组固定可信公钥验证插件签名。
 #[derive(Clone, Copy, Debug)]
 pub struct Ed25519Verifier {
     keys: &'static [TrustedPublicKey],
 }
 
 impl Ed25519Verifier {
+    /// Trust exactly the listed keys for the lifetime of the verifier.
+    /// 在验证器生命周期内只信任列出的公钥。
     pub const fn new(keys: &'static [TrustedPublicKey]) -> Self {
         Self { keys }
     }

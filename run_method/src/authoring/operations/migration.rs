@@ -224,3 +224,65 @@ fn rollback_migration(
         old_dir.join(format!("{old_name}.rs")),
     );
 }
+
+/// Change a face kind by migrating its identity in one validated transaction.
+/// 修改注册面的 kind，并在一次校验事务中迁移其身份。
+///
+/// `kind` participates in `NodeId`, so changing it cannot use an in-place
+/// replacement. The source file stays where it is; descendants are reparsed
+/// so their parent IDs follow the new kind, then the complete subtree is
+/// validated before the caller reloads the live registry.
+/// `kind` 是 `NodeId` 的组成部分，不能原地替换。源码文件位置保持不变，
+/// 重新解析后代以跟随新的父级身份，并在刷新实时注册树前校验整棵子树。
+pub(super) fn migrate_kind_subtree(
+    registry: &Registry,
+    id: NodeId,
+    source: PathBuf,
+    face: FaceManifest,
+) -> Result<AuthoringChange, String> {
+    let old_source = fs::read_to_string(&source)
+        .map_err(|error| format!("cannot read {}: {error}", source.display()))?;
+    let rendered = face.render_source()?;
+    atomic_write(&source, &rendered)?;
+
+    let source_root = source_root();
+    let relative = source
+        .strip_prefix(&source_root)
+        .map_err(|_| "generated module is outside the package source tree".to_owned())?;
+    let relative = normalized_path(relative);
+    let directory = Path::new(&relative)
+        .parent()
+        .map(normalized_path)
+        .unwrap_or_default();
+    let prefix = if directory.is_empty() {
+        String::new()
+    } else {
+        format!("{directory}/")
+    };
+    let snapshots = match generated_snapshots() {
+        Ok(snapshots) => snapshots
+            .into_iter()
+            .filter(|snapshot| {
+                snapshot.source.file == relative
+                    || (!prefix.is_empty() && snapshot.source.file.starts_with(&prefix))
+            })
+            .collect::<Vec<_>>(),
+        Err(error) => {
+            let _ = atomic_write(&source, &old_source);
+            return Err(error);
+        }
+    };
+    if snapshots.is_empty() {
+        let _ = atomic_write(&source, &old_source);
+        return Err("kind migration produced no registration face".to_owned());
+    }
+    if let Err(error) = registry.validate_snapshot_migration(id, snapshots) {
+        let _ = atomic_write(&source, &old_source);
+        return Err(format!("registration rejected after kind change:\n{error}"));
+    }
+
+    Ok(AuthoringChange {
+        message: format!("updated kind in {}", source.display()),
+        source,
+    })
+}

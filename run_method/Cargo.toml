@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Runtime registry trees, transactions, tracing, plugins, and authoring for NichLink"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-run-method"
 
 [features]
 authoring = ["nichlink-core/syntax", "dep:syn"]
@@ -25,3 +29,9 @@ path = "src/lib.rs"
 # build script 声明；本 crate 没有 build script，因此在这里声明该名字。
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
+
+# `authoring` gates the authoring executor, which is public API; docs.rs must
+# build it.
+# `authoring` 门控 authoring 执行器，它是公开 API；docs.rs 必须构建它。
+[package.metadata.docs.rs]
+all-features = true

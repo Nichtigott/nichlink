@@ -5,6 +5,18 @@
 //! MIR and source candidates are informative only; `Live` is the sole
 //! confirmed execution evidence. Locals marked `unobserved` have no runtime
 //! value and must not be treated as observed data.
+//! 可选的运行期证据模型。
+//!
+//! `EvidenceKind` 从 core 再导出，是 MIR、实时 trace、源码扫描、图适配器与 Studio
+//! 共用的唯一证据类型。MIR 与源码候选只是提示；只有 `Live` 是已确认的执行证据。
+//! 标记为 `unobserved` 的局部值没有运行期取值，不得当作已观测数据。
+
+// The published surface must be readable on docs.rs without leaving the page,
+// so the lint is on for the whole crate; `clippy -D warnings` makes a new
+// undocumented public item a failure.
+// 发布表面必须能在 docs.rs 上不跳页读懂，因此 lint 开在整个 crate 上；
+// `clippy -D warnings` 会让新增的、没有文档的公开项变成失败。
+#![warn(missing_docs)]
 
 pub mod adapters;
 pub mod collector;

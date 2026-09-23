@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
 description = "Face field normalisation and diagnostics for NichLink's authoring macros"
+readme = "README.md"
+documentation = "https://docs.rs/nichlink-macro"
 
 [lib]
 name = "nichlink_macro"

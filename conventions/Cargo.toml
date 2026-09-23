@@ -1,0 +1,28 @@
+[package]
+name = "nichlink-conventions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Repository-convention gates that prose alone cannot enforce"
+# The gates walk the whole checkout, so this crate is never distributed: an
+# unpacked copy would see no siblings to check.
+# 这些门禁遍历整个检出，因此本 crate 从不分发：解包出来的副本看不到要检查的兄弟目录。
+publish = false
+autobins = false
+
+[lib]
+name = "nichlink_conventions"
+path = "src/lib.rs"
+
+[dependencies]
+# C6's doc-block gate parses fenced Rust from markdown, which needs a real
+# parser. `syn` is already in the lock through the kernel's `syntax` feature.
+# C6 的文档代码块门禁要解析 markdown 围栏里的 Rust，需要真正的解析器。
+# `syn` 已通过内核的 `syntax` 特性存在于锁文件中。
+syn = { version = "2", features = ["full", "parsing"] }
+
+[dev-dependencies]
+# The doc-block gate proves it can fail against a synthetic README, so that the
+# demonstration never has to break a real one.
+# 文档代码块门禁用一份合成的 README 证明自己会失败，这样演示就不必去破坏真的 README。
+tempfile = "3"

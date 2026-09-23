@@ -40,6 +40,61 @@ jobs:
         # Add `cargo package -p nichlink-build-method --locked --allow-dirty`
         # after the first crates.io release.
         run: cargo package -p nichlink-core --locked --allow-dirty
+      - name: Package audit (nine crates, skipping unpublished dependencies)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # Runs tools/nichlink-package-audit beside the core-only package step.
+        # The script verifies every crate whose versioned NichLink dependencies
+        # are already resolvable on crates.io, warns about and skips the ones
+        # whose dependency has not been published yet, and exits 0 in both
+        # cases. A packaging regression in a crate that could be checked still
+        # fails the step: unlike the earlier continue-on-error version, silence
+        # no longer hides a failure.
+        # 与仅打包 core 的步骤并列运行 tools/nichlink-package-audit。脚本校验所有
+        # 版本依赖已能在 crates.io 上解析的 crate；对依赖尚未发布的包给出警告并跳过，
+        # 两种情况都以 0 退出。真正可检查的 crate 若打包回归仍会让本步骤失败：与早先
+        # 带 continue-on-error 的版本不同，这里不再用容忍掩盖失败。
+        run: tools/nichlink-package-audit
+
+  features:
+    # The verify matrix only ever builds each crate's default features, so
+    # studio's `prototype-fixtures` tests are not compiled anywhere today
+    # (plugin-host's `process-tools` has its own job below). This job covers
+    # the all-features set and the feature-less surface on one runner instead
+    # of duplicating it across six matrix cells.
+    # verify 矩阵只构建各 crate 的默认特性，因此 studio 的 `prototype-fixtures`
+    # 测试目前在任何地方都不会被编译（plugin-host 的 `process-tools` 另有任务）。
+    # 本任务在一个 runner 上覆盖全特性集与无特性表面，而不是在六个矩阵单元里重复。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Tests (all features)
+        run: cargo test --workspace --all-features --all-targets
+      - name: Doctests (all features)
+        # `--all-targets` suppresses doctests entirely, so a `compile_fail` pin
+        # gated behind a non-default feature is compiled by no other command:
+        # `run_method`'s `authoring` gate holds the `edit_module` deletion pin at
+        # `authoring/operations/operations.rs:335`. Without this step that pin is
+        # a comment, and the release-audit job's `cargo test --workspace` cannot
+        # see it either because it runs default features.
+        # `--all-targets` 会完全跳过 doctest，因此门控在非默认特性之后的 `compile_fail`
+        # 钉子没有任何其他命令会编译它：`run_method` 的 `authoring` 门控持有
+        # `edit_module` 的删除钉子，位于 `authoring/operations/operations.rs:335`。
+        # 没有这一步，那个钉子只是一段注释；release-audit 任务的
+        # `cargo test --workspace` 也看不到它，因为那条命令跑的是默认特性。
+        run: cargo test --workspace --all-features --doc
+      - name: Check (no default features)
+        run: cargo check --workspace --no-default-features --all-targets
+
+  deny:
+    # advisories / licenses / bans are configured in deny.toml.
+    # advisories / licenses / bans 的策略在 deny.toml。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses
 
   release-audit:
     runs-on: ubuntu-latest
