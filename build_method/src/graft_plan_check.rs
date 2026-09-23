@@ -80,17 +80,17 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
         let Ok(document) = GraftPlanDocument::parse(&text) else {
             continue;
         };
+        // `/` on every platform through the kernel's portable-path rule: the
+        // layout is documented with `/` and Windows reported `\` without it.
+        // 经内核的可移植路径规则在任何平台都用 `/`：布局按 `/` 记录，不加则会报 `\`。
+        let relative_plan = plan_file.strip_prefix(root).unwrap_or(&plan_file);
         slots.push(PlannedSlot {
             selector: entry.file_name().to_string_lossy().into_owned(),
             target: document.target,
             target_path: document.target_path.clone(),
             graft: document.graft.clone(),
             full: document.full,
-            plan_file: plan_file
-                .strip_prefix(root)
-                .unwrap_or(&plan_file)
-                .display()
-                .to_string(),
+            plan_file: nichlink::declaration::portable_path(&relative_plan.to_string_lossy()),
         });
     }
     slots.sort_by(|left, right| left.selector.cmp(&right.selector));

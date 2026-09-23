@@ -3,9 +3,18 @@
 # to one of the allowed identifiers or to a disjunction one of them satisfies.
 # NichLink 工作区的 cargo-deny 策略。许可证清单从 Cargo.lock 推导：图中每个 crate
 # 都落在允许的标识符内，或落在被其中之一满足的析取式内。
+#
+# This file tracks the schema of the cargo-deny that CI installs, which is the
+# latest for the action's major tag. The `version = 2` field each section used to
+# carry is gone: the current schema has no such key, and `version = 2` under
+# `[bans]` was a hard parse error ("found 1 unexpected keys"), which is how CI
+# caught it. The v2 semantics are the only ones now, so nothing else changes.
+# 本文件跟踪 CI 所安装的 cargo-deny 的 schema，也就是该 action 主标签对应的最新版。
+# 各节过去携带的 `version = 2` 字段已删除：当前 schema 没有这个键，而 `[bans]` 下的
+# `version = 2` 是硬解析错误（"found 1 unexpected keys"）——CI 正是这样发现的。现在只有 v2
+# 语义，因此其余内容不变。
 
 [advisories]
-version = 2
 # A yanked release is a supply-chain mistake we can still act on, so it fails.
 # 被 yank 的版本是我们还能处理的供应链错误，因此直接失败。
 yanked = "deny"
@@ -18,7 +27,6 @@ unmaintained = "workspace"
 ignore = []
 
 [licenses]
-version = 2
 # The workspace itself is MIT. The rest are the licences the Cargo.lock graph
 # actually uses; they are permissive and mutually compatible.
 # 工作区自身是 MIT。其余是 Cargo.lock 图实际使用的许可证；它们都是宽松许可且互相兼容。
@@ -77,7 +85,6 @@ unused-allowed-license = "warn"
 ignore = true
 
 [bans]
-version = 2
 # Duplicate versions are reported but do not fail: wasmparser, rustix and
 # linux-raw-sys legitimately appear twice through different dependency lines.
 # 重复版本会报告但不失败：wasmparser、rustix、linux-raw-sys 经不同依赖线各出现两次。
