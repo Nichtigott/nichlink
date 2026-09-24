@@ -93,7 +93,6 @@ fn collect_contract_errors(
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
             {
-                check_output(&face, &relative, src, node, errors);
                 check_parent_rule(&face, &relative, src, node, parent_rules, errors);
             }
         }
@@ -107,40 +106,6 @@ fn collect_contract_errors(
             errors,
         );
     }
-}
-
-fn check_output(
-    face: &FaceSyntax,
-    relative: &str,
-    src: &Path,
-    node: &Node,
-    errors: &mut BuildDiagnostics,
-) {
-    let (Some(expected), Some(actual)) =
-        (face.string("expected_output"), face.string("actual_output"))
-    else {
-        return;
-    };
-    if expected == actual {
-        return;
-    }
-    let kind = face.path("kind").unwrap_or_else(|| "<unknown>".to_owned());
-    let handle = face
-        .path("handle")
-        .unwrap_or_else(|| "<unknown>".to_owned());
-    let line = face
-        .field_location("actual_output")
-        .map_or(face.location.line, |location| location.line);
-    let id = node_id(src, node).map_or_else(|| "<unknown>".to_owned(), |id| id.to_string());
-    errors.push(
-        BuildDiagnostic::new("contract", "output contract does not match")
-            .node(id, kind)
-            .at(relative, line)
-            .function(handle)
-            .field("output")
-            .expected(expected)
-            .actual(actual),
-    );
 }
 
 fn check_parent_rule(

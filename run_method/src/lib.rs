@@ -47,6 +47,7 @@ pub use nichlink_macro::face_fields_mirror;
 /// 声明式注册面分支使用的 `registry_rule` 默认值解析器。
 #[doc(hidden)]
 pub use nichlink_macro::face_rule_or as __face_rule_or;
+pub use nichlink_macro::face_trait_labels_or as __face_trait_labels_or;
 
 #[cfg(feature = "authoring")]
 #[allow(ambiguous_glob_reexports)]

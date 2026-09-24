@@ -429,8 +429,6 @@ mod tests {
             contract: OwnedObjectContract {
                 required_parts: Vec::new(),
                 provided_parts: Vec::new(),
-                expected_output: "()".to_owned(),
-                actual_output: "()".to_owned(),
             },
             flow: OwnedFlowContract::none(),
             flow_provider: None,

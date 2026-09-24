@@ -26,7 +26,7 @@ impl App {
                 let mut add = AddState::new(parent);
                 // Keep the default parent readable; the resolver still accepts node identity.
                 // 默认父节点显示可读名称；解析器仍接受 node identity。
-                add.values[0] = self
+                add.values[face_field::PARENT] = self
                     .registry
                     .path_for(parent)
                     .unwrap_or_else(|| "root".to_owned());
@@ -43,14 +43,21 @@ impl App {
             }
             KeyCode::Char('e') if self.selected != self.registry.id() => {
                 if let Some(info) = self.selected_info() {
+                    // The form shows the paths, not the labels: the labels follow
+                    // them, in the file and in the compiled registration alike.
+                    // `params` and `handle` are not shown at all — both are the
+                    // kind by rule, so a row for either would only repeat it.
+                    // 表单展示路径而不是标签：标签跟随路径——文件里与编译后的注册信息里
+                    // 都是如此。`params` 与 `handle` 完全不展示：按规则两者都等于 kind，
+                    // 任何一行的存在都只是重复它。
                     let (handle_contracts, part_contracts) =
                         std::fs::read_to_string(source_path_for(&info.source.file))
                             .ok()
                             .map(|source| declaration_contract_paths(&source))
                             .unwrap_or_default();
                     let mut edit = AddState::new(info.parent);
-                    edit.locked_fields.insert(0);
-                    edit.values[0] = self
+                    edit.locked_fields.insert(face_field::PARENT);
+                    edit.values[face_field::PARENT] = self
                         .registry
                         .path_for(info.parent)
                         .unwrap_or_else(|| "root".to_owned());
@@ -60,33 +67,35 @@ impl App {
                     // make the editor appear to revert after reload.
                     // `module` 表示源码目录/文件名，`registry_name` 表示注册树
                     // 中的槽位名。两者初始值可能相同，但重命名后必须分别读取。
-                    edit.values[1] = std::path::Path::new(&info.source.file)
+                    edit.values[face_field::MODULE] = std::path::Path::new(&info.source.file)
                         .file_stem()
                         .and_then(|stem| stem.to_str())
                         .filter(|stem| !stem.is_empty())
                         .unwrap_or(info.registry_name.as_str())
                         .to_owned();
-                    edit.values[2] = info.needs_registry.to_string();
-                    edit.values[3] = info.registry_name.to_owned();
-                    edit.values[4] = registration_rule_text(&info.registry_rule);
-                    edit.values[5] = admission_text(&info.admission);
-                    edit.values[6] = info.parts.to_owned();
-                    edit.values[7] = info.exports.join(",");
-                    edit.values[8] = info.kind.to_owned();
-                    edit.values[9] = info.name.zh.to_owned();
-                    edit.values[10] = info.name.en.to_owned();
-                    edit.values[11] = info.summary.zh.to_owned();
-                    edit.values[12] = info.summary.en.to_owned();
-                    edit.values[13] = info.preset.to_owned();
-                    edit.values[14] = info.params.to_owned();
-                    edit.values[15] = info.handle.to_owned();
-                    edit.values[16] = info.stable_name.clone().unwrap_or_default();
-                    edit.values[17] = info.getting_from_other_registry.clone().unwrap_or_default();
-                    edit.values[18] = info.registry_rule_path.to_owned();
-                    edit.values[19] = info.handle_traits.join(",");
-                    edit.values[20] = handle_contracts;
-                    edit.values[21] = info.part_traits.join(",");
-                    edit.values[22] = info
+                    edit.values[face_field::NEEDS_REGISTRY] = info.needs_registry.to_string();
+                    edit.values[face_field::TREE_SLOT] = info.registry_name.to_owned();
+                    edit.values[face_field::REGISTRY_RULE] =
+                        registration_rule_text(&info.registry_rule);
+                    edit.values[face_field::ADMISSION] = admission_text(&info.admission);
+                    edit.values[face_field::PARTS] = info.parts.to_owned();
+                    edit.values[face_field::EXPORTS] = info.exports.join(",");
+                    edit.values[face_field::KIND] = info.kind.to_owned();
+                    edit.values[face_field::NAME_ZH] = info.name.zh.to_owned();
+                    edit.values[face_field::NAME_EN] = info.name.en.to_owned();
+                    edit.values[face_field::SUMMARY_ZH] = info.summary.zh.to_owned();
+                    edit.values[face_field::SUMMARY_EN] = info.summary.en.to_owned();
+                    edit.values[face_field::PRESET] = info.preset.to_owned();
+                    edit.values[face_field::STABLE_NAME] =
+                        info.stable_name.clone().unwrap_or_default();
+                    edit.values[face_field::GETTING_FROM_OTHER_REGISTRY] =
+                        info.getting_from_other_registry.clone().unwrap_or_default();
+                    edit.values[face_field::REGISTRY_RULE_PATH] =
+                        info.registry_rule_path.to_owned();
+                    edit.values[face_field::HANDLE_TRAITS] = info.handle_traits.join(",");
+                    edit.values[face_field::HANDLE_CONTRACTS] = handle_contracts;
+                    edit.values[face_field::PART_TRAITS] = info.part_traits.join(",");
+                    edit.values[face_field::REQUIRES] = info
                         .requires
                         .iter()
                         .map(|requirement| {
@@ -94,16 +103,14 @@ impl App {
                         })
                         .collect::<Vec<_>>()
                         .join(",");
-                    edit.values[23] = info.provides.join(",");
-                    edit.values[24] = info.contract.expected_output.to_owned();
-                    edit.values[25] = info.contract.actual_output.to_owned();
-                    edit.values[26] = info
+                    edit.values[face_field::PROVIDES] = info.provides.join(",");
+                    edit.values[face_field::RUNTIME_CHECKS] = info
                         .runtime_checks
                         .iter()
                         .map(|check| check.name())
                         .collect::<Vec<_>>()
                         .join(",");
-                    edit.values[27] = if info.flow.is_declared() {
+                    edit.values[face_field::FLOW] = if info.flow.is_declared() {
                         format!(
                             "{}|{}|{}|{}",
                             info.flow.id, info.flow.version, info.flow.input, info.flow.output
@@ -111,8 +118,9 @@ impl App {
                     } else {
                         String::new()
                     };
-                    edit.values[28] = info.flow_provider.as_deref().unwrap_or_default().to_owned();
-                    edit.values[29] = part_contracts;
+                    edit.values[face_field::FLOW_PROVIDER] =
+                        info.flow_provider.as_deref().unwrap_or_default().to_owned();
+                    edit.values[face_field::PART_CONTRACTS] = part_contracts;
                     if let Some(parent_face) = self.registry.find(info.parent) {
                         edit.apply_parent_rule(&parent_face.registry_rule);
                     }

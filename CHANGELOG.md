@@ -107,6 +107,52 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   loader's `graft_record_root`), the PascalCase kind derivation (the kernel's
   `pascal_case`) and the `::`-bounded symbol match (the kernel's `same_symbol`,
   now public). Two of those had already diverged.
+- **The registration-face authoring surface is now the size of what an author
+  actually decides.** `handle` and `params` are the kind by rule and
+  `registry_name` is the declaring module's last path segment, so
+  `__control_object!` and `__external_object!` keep one arm each and the three
+  spellings of one type are gone from declaration files; the minimum face is
+  `control_object! { kind: Button }`. Trait labels are derived from the
+  compiler-checked contract paths by one rule shared by all three readers (the
+  file view in `FaceSyntax::string_list`, the proc macro
+  `__face_trait_labels_or!`, and the applier `apply_trait_contract`), so a label
+  can no longer disagree with the path the compiler checks. `FACE_FIELD_ORDER`
+  went from 29 accepted keys to 24.
+- **Studio's add/edit form is 26 slots, not 30**: 22 author rows followed by one
+  read-only machine-value strip, with the slots named in `authoring::face_field`
+  so the Studio write paths no longer index the array with bare literals. Four
+  slots left with the fields they described. Help text was corrected wherever it
+  contradicted the code: the tree slot claimed an override that the
+  registry-name rule forbids, `external source note` said "provenance only" for
+  a field registry resolution reads (it is now labelled `dependency registry`),
+  and the kind/parts rows were marked derived while the form edits them.
+- A typed graft cut now proves the output types across the two faces it joins:
+  the build emits `assert_contract::<{cut}::__Preset, {graft}::__Parts>()` beside
+  `BUILTIN_GRAFT_CUTS`, so a replacement face whose parts do not supply the
+  preset's parts fails the build. String and selector cuts emit no assertion, and
+  the code says so where the accumulator is filled rather than falling back to
+  the deleted string comparison.
+
+### Removed
+
+- The author-written `expected_output` / `actual_output` pair. It was compared
+  only with itself in two places (`release.rs` and
+  `build_method::check_output`) and never described the real types: the button
+  face declared `"ControlFrame"` while its `NoPreset`/`NoParts` output is `()`.
+  The type-level fact it pretended to state is now proven by the per-face
+  `assert_contract` and by the per-cut assertion above. The fields, both
+  comparisons, the cache keys, the authoring plumbing and the Studio slots are
+  gone.
+- `authoring::FACE_FIELD_NAMES`: a 30-label table read only by tests and a
+  near-duplicate of the presentation labels. The layout's names live in
+  `authoring::face_field` now, and the tests that used the table assert the
+  stronger property instead: the slots are dense and each has presentation
+  metadata.
+- Rows Studio printed more than once for one fact: a `values` runtime-snapshot
+  row and a `declared` file:line:function row in the search details panel (the
+  file is already the `path` row), plus the `params`/`handle` rows that repeated
+  the `kind` row in both details panels. `params`, `handle` and `kind` are one
+  string: both macros expand them from `stringify!($kind)`.
 
 ### Fixed
 
@@ -273,6 +319,37 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   文档与命令错误文本、Studio 的计划路径（改用运行期加载器的 `graft_record_root`）、PascalCase
   的 kind 推导（改用内核的 `pascal_case`）以及按 `::` 边界匹配符号（改用内核的 `same_symbol`，
   现已公开）。其中两条此前已经分叉。
+- **注册面作者面现在只有作者真正要决定的东西那么大。** `handle` 与 `params` 按规则就是
+  kind，`registry_name` 就是声明模块路径的末段，因此 `__control_object!` 与
+  `__external_object!` 各自只剩一条 arm，同一个类型的三种拼写从声明文件里消失；最小注册面
+  是 `control_object! { kind: Button }`。trait 标签改由"编译器检查的契约路径"按**一条规则**
+  推导，三个读取方共用它（`FaceSyntax::string_list` 的文件视图、过程宏
+  `__face_trait_labels_or!`、写入方 `apply_trait_contract`），因此标签不可能与编译器检查的
+  路径不一致。`FACE_FIELD_ORDER` 从 29 个可接受键收到 24 个。
+- **Studio 新增/编辑表单是 26 格而不是 30 格**：22 行作者输入，加上收尾的一条只读"机器取值"；
+  槽位在 `authoring::face_field` 具名，因此 Studio 的写入路径不再用裸字面量索引数组。有四个
+  槽位随它们描述的字段一起消失。凡是与代码相反的帮助文本都已改正：树槽位声称可以覆盖，而
+  registry_name 规则不允许；`external source note` 对一个人人参与注册机解析的字段写"仅来源
+  元数据"（现改名为 `dependency registry`）；kind/parts 两行标着"推导"却可编辑。
+- 有类型的嫁接切口现在跨它连接的两个面证明输出类型：构建会在 `BUILTIN_GRAFT_CUTS` 旁发出
+  `assert_contract::<{cut}::__Preset, {graft}::__Parts>()`，因此替换面的 parts 若不提供 preset
+  要求的 parts，构建就会失败。字符串与选择器切口不发断言，这一点写在填充累加器的地方，而不是
+  退回已删除的字符串比较。
+
+移除：
+
+- 作者书写的 `expected_output` / `actual_output` 对。它只在两处与**自己**比较过
+  （`release.rs` 与 `build_method::check_output`），从未描述真实类型：button 面写着
+  `"ControlFrame"`，而它的 `NoPreset`/`NoParts` 输出是 `()`。它假装陈述的类型事实现在由按面的
+  `assert_contract` 与上面的按切口断言证明。字段、两处比较、缓存键、创作侧管线与 Studio 槽位
+  一并删除。
+- `authoring::FACE_FIELD_NAMES`：一张只有测试读、且与展示标签近乎重复的 30 行标签表。布局的
+  名字现在住在 `authoring::face_field`，原来用这张表的测试改为断言更强的性质：槽位稠密，且每个
+  都有展示元数据。
+- Studio 为同一个事实打印多遍的行：搜索详情面板里的 `values` 运行期快照行与 `declared`
+  file:line:function 行（文件已经由 `path` 行给出），以及两个详情面板里重复 `kind` 行的
+  `params`/`handle` 行。`params`、`handle` 与 `kind` 是同一个字符串：两个宏都用
+  `stringify!($kind)` 展开它们。
 
 修复：
 

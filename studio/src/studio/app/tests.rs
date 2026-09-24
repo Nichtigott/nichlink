@@ -25,15 +25,23 @@ pub(super) use super::{
 // The prototype-fixture tests read call relations and build a compiler snapshot
 // directly, so they name these instead of reaching them through `app`'s private
 // imports. Gated with the tests that use them: with the feature off they would be
-// unused imports, which the `-D warnings` gate refuses.
+// unused imports, which the `-D warnings` gate refuses. The call-tree tests are
+// fixture-gated too — a call graph needs a project with one — so the names they
+// bring in stay in this group.
 // 原型夹具测试直接读取调用关系并构造编译器快照，因此它们直接命名这些名字，而不是经由
 // `app` 的私有导入取得。门控与使用它们的测试相同：特性关闭时它们就是未使用导入，会被
-// `-D warnings` 门禁拒绝。
+// `-D warnings` 门禁拒绝。调用树测试同样门控在夹具上——调用图需要一个有图的工程——因此
+// 它们引入的名字留在这一组。
 #[cfg(feature = "prototype-fixtures")]
-pub(super) use super::{CallRef, source_path_for};
+pub(super) use super::{CallRef, CallTreeView, same_symbol, source_path_for};
 #[cfg(feature = "prototype-fixtures")]
 pub(super) use nichlink_debug_method::{CallEvidence, MirGraph};
 
+// The call-tree tests read a real call graph, so they need the fixture project.
+// 调用树测试要读真实调用图，因此需要夹具项目。
+#[cfg(feature = "prototype-fixtures")]
+#[path = "tests/call_tree.rs"]
+mod call_tree;
 #[path = "tests/edit.rs"]
 mod edit;
 // The live trace the prototype-fixture tests install: mounted only with them, so

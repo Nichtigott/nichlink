@@ -2,6 +2,7 @@
 //! 项目根、清单与新项目向导测试。
 
 use super::*;
+use nichlink_run_method::face_field;
 
 #[test]
 fn standalone_studio_resolves_one_project_root_and_manifest() {
@@ -71,11 +72,11 @@ fn new_project_and_explicit_root_face_compile() {
 
     let root_id = app.registry.id();
     let mut owner = AddState::new(root_id);
-    owner.values[0] = root_id.to_string();
-    owner.values[1] = "workspace".to_owned();
-    owner.values[2] = "true".to_owned();
-    owner.values[3] = "workspace".to_owned();
-    owner.values[8] = "Workspace".to_owned();
+    owner.values[face_field::PARENT] = root_id.to_string();
+    owner.values[face_field::MODULE] = "workspace".to_owned();
+    owner.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    owner.values[face_field::TREE_SLOT] = "workspace".to_owned();
+    owner.values[face_field::KIND] = "Workspace".to_owned();
     app.submit_add(&owner);
     assert!(
         root.join("src/workspace/registry_rule/registry_rule.rs")
@@ -95,11 +96,11 @@ fn new_project_and_explicit_root_face_compile() {
         .unwrap_or_else(|| panic!("explicit workspace registry; event={}", app.event))
         .id;
     let mut child = AddState::new(workspace_id);
-    child.values[0] = workspace_id.to_string();
-    child.values[1] = "panel".to_owned();
-    child.values[2] = "true".to_owned();
-    child.values[3] = "panel".to_owned();
-    child.values[8] = "Panel".to_owned();
+    child.values[face_field::PARENT] = workspace_id.to_string();
+    child.values[face_field::MODULE] = "panel".to_owned();
+    child.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    child.values[face_field::TREE_SLOT] = "panel".to_owned();
+    child.values[face_field::KIND] = "Panel".to_owned();
     app.submit_add(&child);
     assert!(
         root.join("src/workspace/object/panel/registry_rule/registry_rule.rs")
@@ -126,9 +127,9 @@ fn new_project_and_explicit_root_face_compile() {
         .expect("panel registry")
         .id;
     let mut leaf = AddState::new(panel_id);
-    leaf.values[0] = panel_id.to_string();
-    leaf.values[1] = "button".to_owned();
-    leaf.values[8] = "Button".to_owned();
+    leaf.values[face_field::PARENT] = panel_id.to_string();
+    leaf.values[face_field::MODULE] = "button".to_owned();
+    leaf.values[face_field::KIND] = "Button".to_owned();
     app.submit_add(&leaf);
     let button =
         std::fs::read_to_string(root.join("src/workspace/object/panel/object/button/button.rs"))
@@ -140,10 +141,10 @@ fn new_project_and_explicit_root_face_compile() {
     // generated only as the declaration name for children of `control`.
     // `control_object!` 不再是通用实现，只作为 control 子对象的声明名生成。
     let mut control = AddState::new(root_id);
-    control.values[0] = root_id.to_string();
-    control.values[1] = "control".to_owned();
-    control.values[2] = "true".to_owned();
-    control.values[8] = "Control".to_owned();
+    control.values[face_field::PARENT] = root_id.to_string();
+    control.values[face_field::MODULE] = "control".to_owned();
+    control.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    control.values[face_field::KIND] = "Control".to_owned();
     app.submit_add(&control);
     let control_id = app
         .registry
@@ -153,9 +154,9 @@ fn new_project_and_explicit_root_face_compile() {
         .expect("control registry")
         .id;
     let mut control_child = AddState::new(control_id);
-    control_child.values[0] = control_id.to_string();
-    control_child.values[1] = "slider".to_owned();
-    control_child.values[8] = "Slider".to_owned();
+    control_child.values[face_field::PARENT] = control_id.to_string();
+    control_child.values[face_field::MODULE] = "slider".to_owned();
+    control_child.values[face_field::KIND] = "Slider".to_owned();
     app.submit_add(&control_child);
     let slider = std::fs::read_to_string(root.join("src/control/object/slider/slider.rs"))
         .expect("control child face");

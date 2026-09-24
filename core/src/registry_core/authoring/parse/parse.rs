@@ -193,21 +193,14 @@ pub fn render_path_list(value: &str) -> String {
         .join(", ")
 }
 
-/// Render one `impl <trait> for <kind> {}` line per comma-separated trait path,
-/// which is what turns a declared handle trait into a compile-time check.
-/// 为每个逗号分隔的 trait 路径渲染一行 `impl <trait> for <kind> {}`——这正是把声明的
-/// handle trait 变成编译期检查的东西。
-pub fn render_impls(kind: &str, value: &str) -> String {
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(|trait_path| format!("impl {trait_path} for {kind} {{}}\n"))
-        .collect()
-}
-
 /// Derive the human-facing trait labels from compiler-checked Rust paths.
 /// 从参与编译检查的 Rust 路径派生人类可读的 trait 名称。
+///
+/// This is the authoring side of the same rule the macro applies through
+/// `__face_trait_labels_or!`: a path decides the label, and a label without a
+/// path stands alone as the unchecked claim it is.
+/// 这是宏经 `__face_trait_labels_or!` 施加的同一条规则在创作侧的写法：有路径时由路径决定
+/// 标签，没有路径的标签则独立成立——它本来就是一条未经检查的声明。
 pub fn trait_names_from_paths(value: &str) -> Result<String, FaceParseError> {
     value
         .split(',')

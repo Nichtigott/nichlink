@@ -18,14 +18,11 @@ pub struct Control;
 
 crate::root_object! {
     kind: Control,
-    handle: Control,
     needs_registry: true,
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
     // 省略 `registry_rule:` 时，拥有注册机的面解析到注册面旁边那份规范规则。
     // An omitted `registry_rule:` resolves to the canonical rule beside the face.
     registry_rule_path: "src/control/registry_rule/registry_rule.rs",
-    expected_output: "ControlFrame",
-    actual_output: "ControlFrame",
     flow: FlowContract::new(
         ContractId::new("control.frame.v1"),
         1,

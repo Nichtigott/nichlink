@@ -2,6 +2,7 @@
 //! 编辑往返回归测试。
 
 use super::*;
+use nichlink_run_method::face_field;
 
 #[test]
 fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
@@ -15,7 +16,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
     std::fs::write(
         &control,
-        "pub struct ControlRegistry;\n\ncrate::control_object! {\n    kind: ControlRegistry,\n    needs_registry: true,\n    registry_name: control,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n}\n",
+        "pub struct ControlRegistry;\n\ncrate::control_object! {\n    kind: ControlRegistry,\n    needs_registry: true,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n}\n",
     )
     .expect("write legacy control");
     std::fs::write(
@@ -32,7 +33,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
         panic!("e should open the Edit form");
     };
     edit.field = 11;
-    edit.values[11] = "已保存的摘要。".to_owned();
+    edit.values[face_field::SUMMARY_ZH] = "已保存的摘要。".to_owned();
     edit.editing = true;
     app.overlay = Some(Overlay::Edit(id, edit));
     app.hot.overlay_area = Rect::new(5, 5, 70, 18);
@@ -87,9 +88,9 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     let mut app = App::load();
     let root_id = app.registry.id();
     let mut add = AddState::new(root_id);
-    add.values[1] = "test".to_owned();
-    add.values[2] = "true".to_owned();
-    add.values[8] = "Test".to_owned();
+    add.values[face_field::MODULE] = "test".to_owned();
+    add.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    add.values[face_field::KIND] = "Test".to_owned();
     app.submit_add(&add);
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
     let old_source = root.join("src/test/test.rs");
@@ -111,9 +112,9 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .expect("new face in registry")
         .id;
     let mut child = AddState::new(id);
-    child.values[1] = "child".to_owned();
-    child.values[2] = "true".to_owned();
-    child.values[8] = "Child".to_owned();
+    child.values[face_field::MODULE] = "child".to_owned();
+    child.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    child.values[face_field::KIND] = "Child".to_owned();
     app.submit_add(&child);
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
     let child_id = app
@@ -124,8 +125,8 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .expect("child registry in tree")
         .id;
     let mut leaf = AddState::new(child_id);
-    leaf.values[1] = "leaf".to_owned();
-    leaf.values[8] = "Leaf".to_owned();
+    leaf.values[face_field::MODULE] = "leaf".to_owned();
+    leaf.values[face_field::KIND] = "Leaf".to_owned();
     app.submit_add(&leaf);
     assert!(!app.event.starts_with("Add failed"), "{}", app.event);
     assert!(
@@ -135,10 +136,10 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     );
 
     let mut edit = AddState::new(root_id);
-    edit.values[1] = "panel".to_owned();
-    edit.values[2] = "true".to_owned();
-    edit.values[3] = "test".to_owned();
-    edit.values[8] = "Test".to_owned();
+    edit.values[face_field::MODULE] = "panel".to_owned();
+    edit.values[face_field::NEEDS_REGISTRY] = "true".to_owned();
+    edit.values[face_field::TREE_SLOT] = "test".to_owned();
+    edit.values[face_field::KIND] = "Test".to_owned();
     app.submit_edit(id, &edit);
 
     assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
@@ -165,17 +166,21 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         app.selected_info().map(|info| info.source.file.as_str()),
         Some("panel/panel.rs")
     );
-    // Re-opening Edit after reload must derive module from the source path,
-    // not from registry_name. This guards against a rename being displayed as
-    // the old module and then moved back on the next save.
-    // reload 后重新打开编辑表单时，module 必须来自源码路径，而不是
-    // registry_name；这样不会把已重命名的模块显示成旧名称并移回去。
+    // Re-opening Edit after reload must derive module from the source path.
+    // Since the slot now follows the module, the form cannot show a stale slot
+    // either: there is no second name left to go stale.
+    // reload 后重新打开编辑表单时，module 必须来自源码路径。由于槽位现在跟随模块，
+    // 表单也不可能显示过期的槽位：已经没有第二个名字可以过期了。
     app.handle_key(KeyEvent::from(KeyCode::Char('e')));
     let Some(Overlay::Edit(_, reopened)) = app.overlay.take() else {
         panic!("e should reopen the Edit form after module migration");
     };
-    assert_eq!(reopened.values[1], "panel");
-    assert_eq!(reopened.values[3], "test");
+    assert_eq!(reopened.values[face_field::MODULE], "panel");
+    assert_eq!(
+        reopened.values[face_field::TREE_SLOT],
+        "panel",
+        "the tree slot follows the module instead of keeping the old name"
+    );
     // Kind is an identity field too, but it is migrated atomically instead of
     // being silently ignored by the form.
     // kind 同样属于身份字段；它应通过原子迁移生效，而不是被表单静默忽略。
@@ -184,7 +189,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .expect("renamed face remains selected")
         .id;
     let mut kind_edit = reopened;
-    kind_edit.values[8] = "Panel".to_owned();
+    kind_edit.values[face_field::KIND] = "Panel".to_owned();
     app.submit_edit(migrated_id, &kind_edit);
     assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
     assert_eq!(

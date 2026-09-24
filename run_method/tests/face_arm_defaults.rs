@@ -1,8 +1,10 @@
-//! A face that writes `handle:` must record the same default `preset`/`parts`
-//! names as a face that omits `handle:`, and it must be able to state either
-//! binding alone.
-//! 写了 `handle:` 的注册面必须与省略 `handle:` 的注册面记录相同的默认
-//! `preset`/`parts` 名字，并且必须能单独写出其中任意一个绑定。
+//! Every shape of `preset:`/`parts:` must record the same defaults: neither
+//! binding, either one alone, or both. Since `handle` is derived from `kind`,
+//! the shape that used to distinguish the arms no longer exists, and these cases
+//! now pin the one arm's defaulting instead.
+//! `preset:`/`parts:` 的每一种形态都必须记录相同的默认值：都不写、只写其一、或都写。
+//! 由于 `handle` 由 `kind` 派生，过去用来区分 arm 的形态已不存在，这些用例现在钉住
+//! 那唯一一条 arm 的默认行为。
 
 /// A custom preset whose recorded name is distinguishable from the default.
 /// 一个自定义 preset，其记录名可与默认值区分。
@@ -22,12 +24,12 @@ impl nichlink_run_method::PartsContract for ProbeParts {
     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 }
 
-/// `handle:` with neither `preset:` nor `parts:`. This is the shape all three
-/// example faces take, and the one that used to record `"$crate :: NoPreset"`
-/// and `"$crate :: NoParts"`: the defaulting arm re-dispatched those literal
-/// tokens and the arm that received them `stringify!`-ed the tokens instead of
-/// naming the default.
-/// 写了 `handle:`、既没写 `preset:` 也没写 `parts:`。三个例子面都是这个形态，也是
+/// No `preset:` and no `parts:`. This is the shape all three example faces take,
+/// and the one that used to record `"$crate :: NoPreset"` and
+/// `"$crate :: NoParts"`: the defaulting arm re-dispatched those literal tokens
+/// and the arm that received them `stringify!`-ed the tokens instead of naming
+/// the default.
+/// 既没写 `preset:` 也没写 `parts:`。三个例子面都是这个形态，也是
 /// 过去记录成 `"$crate :: NoPreset"` 与 `"$crate :: NoParts"` 的形态：取默认的 arm
 /// 把这两个字面 token 回派出去，接住它们的 arm 对 token 做了 `stringify!`，而不是命名
 /// 默认值。
@@ -35,7 +37,6 @@ mod handle_without_preset_or_parts {
     nichlink_run_method::__control_object! {
         collector: development,
         kind: HandleDefaults,
-        handle: HandleDefaults,
     }
 }
 
@@ -51,9 +52,9 @@ mod without_handle_defaults {
     }
 }
 
-/// `handle:` with `preset:` only: the written name survives and `parts` falls
+/// `preset:` only: the written name survives and `parts` falls
 /// back to the default.
-/// 写了 `handle:` 且只写 `preset:`：写下的名字保留，`parts` 回退到默认值。
+/// 只写 `preset:`：写下的名字保留，`parts` 回退到默认值。
 mod handle_with_preset_only {
     use super::ProbePreset;
 
@@ -61,12 +62,11 @@ mod handle_with_preset_only {
         collector: development,
         kind: HandlePresetOnly,
         preset: ProbePreset,
-        handle: HandlePresetOnly,
     }
 }
 
-/// `handle:` with `parts:` only, the mirror of the shape above.
-/// 写了 `handle:` 且只写 `parts:`，是上一形态的镜像。
+/// `parts:` only, the mirror of the shape above.
+/// 只写 `parts:`，是上一形态的镜像。
 mod handle_with_parts_only {
     use super::ProbeParts;
 
@@ -74,12 +74,11 @@ mod handle_with_parts_only {
         collector: development,
         kind: HandlePartsOnly,
         parts: ProbeParts,
-        handle: HandlePartsOnly,
     }
 }
 
-/// `handle:` with both bindings written.
-/// 写了 `handle:` 且两个绑定都写下。
+/// Both bindings written.
+/// 两个绑定都写下。
 mod handle_with_preset_and_parts {
     use super::{ProbeParts, ProbePreset};
 
@@ -88,7 +87,6 @@ mod handle_with_preset_and_parts {
         kind: HandleBoth,
         preset: ProbePreset,
         parts: ProbeParts,
-        handle: HandleBoth,
     }
 }
 

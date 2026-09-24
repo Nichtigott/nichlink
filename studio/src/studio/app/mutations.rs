@@ -71,24 +71,24 @@ impl App {
     }
 
     pub(super) fn submit_add(&mut self, add: &AddState) {
-        let parent = match self.resolve_parent(&add.values[0]) {
+        let parent = match self.resolve_parent(&add.values[face_field::PARENT]) {
             Ok(parent) => parent,
             Err(error) => {
                 self.event = format!("Add failed: {error}");
                 return;
             }
         };
-        let kind_fallback = pascal_case(&add.values[1]);
-        let kind = if add.values[8].trim().is_empty() {
+        let kind_fallback = pascal_case(&add.values[face_field::MODULE]);
+        let kind = if add.values[face_field::KIND].trim().is_empty() {
             kind_fallback.as_str()
         } else {
-            add.values[8].trim()
+            add.values[face_field::KIND].trim()
         };
-        if add.values[1].is_empty() {
+        if add.values[face_field::MODULE].is_empty() {
             self.event = "Add failed: module name is required".to_owned();
             return;
         }
-        let needs_registry = match add.values[2].parse::<bool>() {
+        let needs_registry = match add.values[face_field::NEEDS_REGISTRY].parse::<bool>() {
             Ok(value) => value,
             Err(_) => {
                 self.event = "Add failed: needs registry must be true or false".to_owned();
@@ -96,47 +96,38 @@ impl App {
             }
         };
         let face = nichlink_run_method::NewModuleFace {
-            module: &add.values[1],
+            module: &add.values[face_field::MODULE],
             kind,
-            preset: &add.values[13],
-            parts: &add.values[6],
-            name_zh: if add.values[9].trim().is_empty() {
+            preset: &add.values[face_field::PRESET],
+            parts: &add.values[face_field::PARTS],
+            name_zh: if add.values[face_field::NAME_ZH].trim().is_empty() {
                 kind
             } else {
-                &add.values[9]
+                &add.values[face_field::NAME_ZH]
             },
-            name_en: if add.values[10].trim().is_empty() {
+            name_en: if add.values[face_field::NAME_EN].trim().is_empty() {
                 kind
             } else {
-                &add.values[10]
+                &add.values[face_field::NAME_EN]
             },
-            summary_zh: &add.values[11],
-            summary_en: &add.values[12],
-            params: &add.values[14],
-            exports: &add.values[7],
-            handle: if add.values[15].trim().is_empty() {
-                kind
-            } else {
-                &add.values[15]
-            },
-            stable_name: &add.values[16],
+            summary_zh: &add.values[face_field::SUMMARY_ZH],
+            summary_en: &add.values[face_field::SUMMARY_EN],
+            exports: &add.values[face_field::EXPORTS],
+            stable_name: &add.values[face_field::STABLE_NAME],
             parent,
             needs_registry,
-            registry_name: &add.values[3],
-            getting_from_other_registry: &add.values[17],
-            registration_rule: &add.values[4],
-            admission: &add.values[5],
-            handle_traits: &add.values[19],
-            handle_contracts: &add.values[20],
-            part_traits: &add.values[21],
-            part_contracts: &add.values[29],
-            requires: &add.values[22],
-            provides: &add.values[23],
-            expected_output: &add.values[24],
-            actual_output: &add.values[25],
-            runtime_checks: &add.values[26],
-            flow: &add.values[27],
-            flow_provider: &add.values[28],
+            getting_from_other_registry: &add.values[face_field::GETTING_FROM_OTHER_REGISTRY],
+            registration_rule: &add.values[face_field::REGISTRY_RULE],
+            admission: &add.values[face_field::ADMISSION],
+            handle_traits: &add.values[face_field::HANDLE_TRAITS],
+            handle_contracts: &add.values[face_field::HANDLE_CONTRACTS],
+            part_traits: &add.values[face_field::PART_TRAITS],
+            part_contracts: &add.values[face_field::PART_CONTRACTS],
+            requires: &add.values[face_field::REQUIRES],
+            provides: &add.values[face_field::PROVIDES],
+            runtime_checks: &add.values[face_field::RUNTIME_CHECKS],
+            flow: &add.values[face_field::FLOW],
+            flow_provider: &add.values[face_field::FLOW_PROVIDER],
         };
         match with_authoring_context(|| {
             nichlink_run_method::add_module_from_face(&self.registry, &face)
@@ -154,7 +145,7 @@ impl App {
     }
 
     pub(super) fn submit_edit(&mut self, id: NodeId, edit: &AddState) {
-        let needs_registry = match edit.values[2].parse::<bool>() {
+        let needs_registry = match edit.values[face_field::NEEDS_REGISTRY].parse::<bool>() {
             Ok(value) => value,
             Err(_) => {
                 self.event = "Edit failed: needs registry must be true or false".to_owned();
@@ -162,34 +153,29 @@ impl App {
             }
         };
         let patch = nichlink_run_method::ModuleFacePatch {
-            module: &edit.values[1],
-            kind: &edit.values[8],
-            preset: &edit.values[13],
-            parts: &edit.values[6],
-            name_zh: &edit.values[9],
-            name_en: &edit.values[10],
-            summary_zh: &edit.values[11],
-            summary_en: &edit.values[12],
-            params: &edit.values[14],
-            exports: &edit.values[7],
-            handle: &edit.values[15],
-            stable_name: &edit.values[16],
+            module: &edit.values[face_field::MODULE],
+            kind: &edit.values[face_field::KIND],
+            preset: &edit.values[face_field::PRESET],
+            parts: &edit.values[face_field::PARTS],
+            name_zh: &edit.values[face_field::NAME_ZH],
+            name_en: &edit.values[face_field::NAME_EN],
+            summary_zh: &edit.values[face_field::SUMMARY_ZH],
+            summary_en: &edit.values[face_field::SUMMARY_EN],
+            exports: &edit.values[face_field::EXPORTS],
+            stable_name: &edit.values[face_field::STABLE_NAME],
             needs_registry,
-            registry_name: &edit.values[3],
-            getting_from_other_registry: &edit.values[17],
-            registration_rule: &edit.values[4],
-            admission: &edit.values[5],
-            handle_traits: &edit.values[19],
-            handle_contracts: &edit.values[20],
-            part_traits: &edit.values[21],
-            part_contracts: &edit.values[29],
-            requires: &edit.values[22],
-            provides: &edit.values[23],
-            expected_output: &edit.values[24],
-            actual_output: &edit.values[25],
-            runtime_checks: &edit.values[26],
-            flow: &edit.values[27],
-            flow_provider: &edit.values[28],
+            getting_from_other_registry: &edit.values[face_field::GETTING_FROM_OTHER_REGISTRY],
+            registration_rule: &edit.values[face_field::REGISTRY_RULE],
+            admission: &edit.values[face_field::ADMISSION],
+            handle_traits: &edit.values[face_field::HANDLE_TRAITS],
+            handle_contracts: &edit.values[face_field::HANDLE_CONTRACTS],
+            part_traits: &edit.values[face_field::PART_TRAITS],
+            part_contracts: &edit.values[face_field::PART_CONTRACTS],
+            requires: &edit.values[face_field::REQUIRES],
+            provides: &edit.values[face_field::PROVIDES],
+            runtime_checks: &edit.values[face_field::RUNTIME_CHECKS],
+            flow: &edit.values[face_field::FLOW],
+            flow_provider: &edit.values[face_field::FLOW_PROVIDER],
         };
         match with_authoring_context(|| {
             nichlink_run_method::edit_module_face(&self.registry, id, &patch)

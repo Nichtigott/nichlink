@@ -87,7 +87,7 @@ fn every_kernel_module_page_still_resolves() {
     assert_eq!(nichlink::lexicon::GENERATED_LIB_FILE, "generated_lib.rs");
     assert_eq!(
         nichlink::authoring::FACE_FIELD_COUNT,
-        nichlink::authoring::FACE_FIELD_NAMES.len()
+        nichlink::authoring::face_field::FACE_FIELD_COUNT
     );
 }
 
@@ -164,9 +164,9 @@ fn the_public_macro_names_still_resolve() {
 fn the_authoring_surface_still_resolves() {
     #[allow(unused_imports)]
     use nichlink_run_method::authoring::{
-        AuthoringChange, AuthoringContext, FACE_FIELD_COUNT, FACE_FIELD_NAMES, ModuleFacePatch,
-        NewModuleFace, add_module, add_module_from_face, add_module_with_registration,
-        delete_module, edit_module_face, generated_snapshots, generated_snapshots_from,
+        AuthoringChange, AuthoringContext, FACE_FIELD_COUNT, ModuleFacePatch, NewModuleFace,
+        add_module, add_module_from_face, add_module_with_registration, delete_module,
+        edit_module_face, generated_snapshots, generated_snapshots_from,
     };
     #[allow(unused_imports)]
     use nichlink_run_method::authoring::{
@@ -174,6 +174,6 @@ fn the_authoring_surface_still_resolves() {
     };
     assert_eq!(
         nichlink_run_method::authoring::FACE_FIELD_COUNT,
-        nichlink_run_method::authoring::FACE_FIELD_NAMES.len()
+        nichlink_run_method::authoring::face_field::FACE_FIELD_COUNT
     );
 }

@@ -129,8 +129,11 @@ pub(super) fn draw_details(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 "preset / parts",
                 format!("{} / {}", info.preset, info.parts),
             ),
-            ("params", info.params.to_owned()),
-            ("handle", info.handle.to_owned()),
+            // `params` and `handle` are `kind` by rule (both macros expand them
+            // from `stringify!($kind)`), so only the interfaces they must carry
+            // are worth a row of their own.
+            // `params` 与 `handle` 按规则就是 `kind`（两个宏都用 `stringify!($kind)`
+            // 展开它们），因此只有它们必须携带的接口值得单独占一行。
             ("handle interfaces", info.handle_traits.join(", ")),
             ("parts interfaces", info.part_traits.join(", ")),
             ("declared", info.source.describe()),

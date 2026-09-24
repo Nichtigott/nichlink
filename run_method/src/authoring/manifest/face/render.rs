@@ -26,11 +26,6 @@ impl FaceManifest {
                     .to_owned(),
             );
         }
-        let registry_name = if value("registry_name").is_empty() {
-            value("module")
-        } else {
-            value("registry_name")
-        };
         let kind = value("kind");
         let preset = if value("preset").is_empty() {
             "NoPreset"
@@ -42,11 +37,6 @@ impl FaceManifest {
         } else {
             value("parts")
         };
-        let handle = if value("handle").is_empty() {
-            value("kind")
-        } else {
-            value("handle")
-        };
         let module_doc = if value("needs_registry") == "true" {
             format!(
                 "//! {kind} face and its recursively requested registry.\n//! {kind} 注册面及其递归申请的注册机。"
@@ -55,7 +45,7 @@ impl FaceManifest {
             format!("//! {kind} registration face.\n//! {kind} 注册面。")
         };
         let handle_doc = format!(
-            "/// Registration-only handle marker for the {kind} face.\n/// 仅用于 {kind} 注册面的 handle 标记，不代表运行时 object 实现。"
+            "/// Registration-only marker for the {kind} face.\n/// 仅用于 {kind} 注册面的 handle 标记，不代表运行时 object 实现。"
         );
         let registration_rule = if self.owns_rule_source() {
             self.rule_module_path()?
@@ -106,7 +96,6 @@ impl FaceManifest {
         } else {
             format!("    handle_contracts: [{handle_contracts}],\n")
         };
-        let handle_impls = render_impls(kind, value("handle_contracts"));
         let part_traits = render_face_list("part_traits", value("part_traits"));
         let part_contracts = render_path_list(value("part_contracts"));
         let part_contracts_decl = if part_contracts.is_empty() {
@@ -186,16 +175,6 @@ impl FaceManifest {
         } else {
             parts_decl
         };
-        let params_decl = if !value("params").is_empty() && value("params") != kind {
-            format!("    params: \"{}\",\n", rust_string(value("params")))
-        } else {
-            String::new()
-        };
-        let handle_decl = if handle != kind || custom_shape {
-            format!("    handle: {handle},\n")
-        } else {
-            String::new()
-        };
         let needs_decl = if value("needs_registry") == "true" {
             "    needs_registry: true,\n".to_owned()
         } else {
@@ -207,11 +186,6 @@ impl FaceManifest {
         // 即使父级是 root 也保留 parent 字段。手写声明仍可使用宏的 root
         // 默认值，但生成注册面应明确展示自己的挂载目标。
         let parent_decl = format!("    parent: {parent},\n");
-        let registry_decl = if registry_name == value("module") {
-            String::new()
-        } else {
-            format!("    registry_name: {registry_name},\n")
-        };
         let canonical_rule_path = rule_path_for_source(value("source"));
         let registry_fields = if self.owns_rule_source() {
             let canonical = registry_rule_path == canonical_rule_path;
@@ -261,22 +235,13 @@ impl FaceManifest {
         } else {
             String::new()
         };
-        let output_decl = if value("expected_output") != "()" || value("actual_output") != "()" {
-            format!(
-                "    expected_output: \"{}\",\n    actual_output: \"{}\",\n",
-                rust_string(value("expected_output")),
-                rust_string(value("actual_output"))
-            )
-        } else {
-            String::new()
-        };
         let runtime_decl = if !runtime_checks.is_empty() {
             format!("    runtime_checks: [{runtime_checks}],\n")
         } else {
             String::new()
         };
         let source = format!(
-            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\n{handle_impls}crate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{params_decl}{exports_decl}{handle_decl}{stable_decl}{needs_decl}{registry_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{output_decl}{flow}{flow_provider}{runtime_decl}}}\n"
+            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\ncrate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{exports_decl}{stable_decl}{needs_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{flow}{flow_provider}{runtime_decl}}}\n"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

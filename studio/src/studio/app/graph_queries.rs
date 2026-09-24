@@ -1,5 +1,11 @@
 //! Call graph and evidence queries owned by App.
 //! App 所有的调用图与证据查询。
+//!
+//! The three-column view and the spatial call tree are built from the same
+//! `call_relations`, so they cannot disagree about who calls whom; the tree
+//! itself lives in `call_tree_queries`.
+//! 三列视图与空间调用树由同一个 `call_relations` 构建，因此它们在"谁调用谁"上不可能不一致；
+//! 调用树本身位于 `call_tree_queries`。
 
 use super::*;
 
@@ -33,30 +39,6 @@ impl App {
             }))
             .chain(callees)
             .collect()
-    }
-
-    /// Return the navigable entries in the call-tree preview.
-    /// 返回调用树预览中可以跳转的条目。
-    ///
-    /// Non-node rows (section headers and transforms) are represented by
-    /// `None`, so the UI can keep selection and Enter navigation in lockstep.
-    pub(crate) fn call_tree_targets(&self, item: &CallRef) -> Vec<Option<CallRef>> {
-        let (callers, callees) = self.call_relations(item.node, &item.function);
-        let mut targets = vec![Some(item.clone()), None];
-        if callers.is_empty() {
-            targets.push(None);
-        } else {
-            targets.extend(callers.into_iter().map(Some));
-        }
-        targets.push(None);
-        targets.extend(self.call_tree_transforms(item).into_iter().map(|_| None));
-        targets.push(None);
-        if callees.is_empty() {
-            targets.push(None);
-        } else {
-            targets.extend(callees.into_iter().map(Some));
-        }
-        targets
     }
 
     /// Extract a few value-changing statements for the compact call tree.

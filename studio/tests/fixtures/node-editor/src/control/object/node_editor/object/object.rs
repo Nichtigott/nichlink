@@ -38,12 +38,8 @@ pub fn accept_canvas(canvas_name: &str, requested: u32) -> u32 {
 crate::node_editor_object! {
     kind: Canvas,
     exports: ["node_editor.render"],
-    handle: Canvas,
     parent: crate::control::object::node_editor::NODE_ID,
-    handle_traits: ["NodeEditorHandle"],
     handle_contracts: [crate::control::object::node_editor::NodeEditorHandle],
-    expected_output: "NodeEditorFrame",
-    actual_output: "NodeEditorFrame",
     flow: FlowContract::new(
         ContractId::new("node_editor.render.v1"),
         1,

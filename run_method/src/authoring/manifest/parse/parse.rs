@@ -51,17 +51,12 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
         );
     }
 
-    for key in ["kind", "preset", "parts", "handle", "registry_name"] {
+    for key in ["kind", "preset", "parts"] {
         if let Some(value) = face.path(key) {
             values.insert(key.to_owned(), value);
         }
     }
-    for key in [
-        "params",
-        "registry_rule_path",
-        "expected_output",
-        "actual_output",
-    ] {
+    for key in ["registry_rule_path"] {
         if let Some(value) = face.string(key) {
             values.insert(key.to_owned(), value);
         }
@@ -135,16 +130,14 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             .unwrap_or_else(|| "false".to_owned()),
     );
     values.insert(
-        "registry_name".to_owned(),
-        values
-            .get("registry_name")
-            .cloned()
-            .unwrap_or_else(|| values.get("module").cloned().unwrap_or_default()),
-    );
-    values.insert(
         "admission".to_owned(),
         parse_admission_expression(face.field("admission").as_deref().unwrap_or(""))?,
     );
+    // The view derives the labels from the paths when there are paths
+    // (`FaceSyntax::string_list`), so this reader states nothing twice and cannot
+    // disagree with the build-time contract check that reads the same view.
+    // 有路径时视图会从路径推导标签（`FaceSyntax::string_list`），因此本读取器不重复声明
+    // 任何东西，也不可能与读同一视图的构建期合同检查分歧。
     values.insert(
         "handle_traits".to_owned(),
         face.string_list("handle_traits")
@@ -198,11 +191,6 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
         "flow_provider".to_owned(),
         face.path("flow_provider").unwrap_or_default(),
     );
-    for key in ["expected_output", "actual_output"] {
-        values
-            .entry(key.to_owned())
-            .or_insert_with(|| "()".to_owned());
-    }
 
     values.insert(
         "declaration_line".to_owned(),

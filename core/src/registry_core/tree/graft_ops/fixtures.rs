@@ -55,8 +55,6 @@ pub(super) fn face(namespace: &str, source: &str, kind: &str, slot: &str) -> Reg
         contract: OwnedObjectContract {
             required_parts: Vec::new(),
             provided_parts: Vec::new(),
-            expected_output: "()".to_owned(),
-            actual_output: "()".to_owned(),
         },
         flow: flow("render.v1"),
         flow_provider: None,

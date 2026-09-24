@@ -57,15 +57,9 @@ pub struct NewModuleFace<'a> {
     /// Localized one-line description, English half.
     /// 本地化单行描述的英文部分。
     pub summary_en: &'a str,
-    /// Parameter type path declared for this face's construction input.
-    /// 本注册面为其构造输入声明的参数类型路径。
-    pub params: &'a str,
     /// Export names this face declares, as manifest text.
     /// 本注册面声明的导出名称，以清单文本给出。
     pub exports: &'a str,
-    /// Handle type path that exposes this face to its owner.
-    /// 向其拥有者暴露本注册面的 handle 类型路径。
-    pub handle: &'a str,
     /// Optional author-owned identity that survives source moves; empty means none.
     /// 可选的作者逻辑身份，可跨源码移动保持不变；为空表示没有。
     pub stable_name: &'a str,
@@ -75,9 +69,6 @@ pub struct NewModuleFace<'a> {
     /// Whether this face owns a child Registry.
     /// 本注册面是否拥有一个子注册机。
     pub needs_registry: bool,
-    /// Name of that child Registry, used to build its path.
-    /// 子注册机的名称，用于生成其路径。
-    pub registry_name: &'a str,
     /// External registry this face is provisioned from; empty means none.
     /// 本注册面从其获取内容的外部注册机；为空表示没有。
     pub getting_from_other_registry: &'a str,
@@ -105,12 +96,6 @@ pub struct NewModuleFace<'a> {
     /// Capability names this face makes available to other faces.
     /// 本注册面向其他注册面提供的能力名称。
     pub provides: &'a str,
-    /// Output type name the preset expects.
-    /// preset 期望的输出类型名。
-    pub expected_output: &'a str,
-    /// Output type name the parts type actually produces.
-    /// parts 类型实际产出的输出类型名。
-    pub actual_output: &'a str,
     /// Runtime value checks the host applies; empty accepts any value.
     /// 宿主执行的运行期取值校验；为空时接受任何取值。
     pub runtime_checks: &'a str,
@@ -150,24 +135,15 @@ pub struct ModuleFacePatch<'a> {
     /// Localized one-line description, English half.
     /// 本地化单行描述的英文部分。
     pub summary_en: &'a str,
-    /// Parameter type path declared for this face's construction input.
-    /// 本注册面为其构造输入声明的参数类型路径。
-    pub params: &'a str,
     /// Export names this face declares, as manifest text.
     /// 本注册面声明的导出名称，以清单文本给出。
     pub exports: &'a str,
-    /// Handle type path that exposes this face to its owner.
-    /// 向其拥有者暴露本注册面的 handle 类型路径。
-    pub handle: &'a str,
     /// Optional author-owned identity that survives source moves; empty means none.
     /// 可选的作者逻辑身份，可跨源码移动保持不变；为空表示没有。
     pub stable_name: &'a str,
     /// Whether this face owns a child Registry.
     /// 本注册面是否拥有一个子注册机。
     pub needs_registry: bool,
-    /// Name of that child Registry, used to build its path.
-    /// 子注册机的名称，用于生成其路径。
-    pub registry_name: &'a str,
     /// External registry this face is provisioned from; empty means none.
     /// 本注册面从其获取内容的外部注册机；为空表示没有。
     pub getting_from_other_registry: &'a str,
@@ -195,12 +171,6 @@ pub struct ModuleFacePatch<'a> {
     /// Capability names this face makes available to other faces.
     /// 本注册面向其他注册面提供的能力名称。
     pub provides: &'a str,
-    /// Output type name the preset expects.
-    /// preset 期望的输出类型名。
-    pub expected_output: &'a str,
-    /// Output type name the parts type actually produces.
-    /// parts 类型实际产出的输出类型名。
-    pub actual_output: &'a str,
     /// Runtime value checks the host applies; empty accepts any value.
     /// 宿主执行的运行期取值校验；为空时接受任何取值。
     pub runtime_checks: &'a str,

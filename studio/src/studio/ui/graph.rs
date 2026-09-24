@@ -9,6 +9,8 @@
 
 use super::*;
 
+#[path = "graph/cells.rs"]
+mod cells;
 #[path = "graph/data.rs"]
 mod data;
 #[path = "graph/edges.rs"]

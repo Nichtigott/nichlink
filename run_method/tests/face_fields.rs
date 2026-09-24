@@ -7,7 +7,6 @@ mod canonical {
         kind: Ordered,
         name: { zh: "有序", en: "Ordered" },
         needs_registry: true,
-        registry_name: Ordered,
         parent: nichlink_run_method::registry_core::root_node_id("face-fields-test"),
         registry_rule: nichlink_run_method::registry_core::RegistrationRule::ANY,
     }
@@ -20,7 +19,6 @@ mod shuffled {
         parent: nichlink_run_method::registry_core::root_node_id("face-fields-test");
         needs_registry: true;
         name: { zh: "有序", en: "Ordered" };
-        registry_name: Ordered
     }
 }
 
@@ -39,10 +37,14 @@ fn any_order_and_separator_declares_the_same_face() {
         canonical::REGISTRATION.parent,
         shuffled::REGISTRATION.parent
     );
-    assert_eq!(
-        canonical::REGISTRATION.registry_name,
-        shuffled::REGISTRATION.registry_name
-    );
+    // The slot now follows the declaring module, so two spellings in two modules
+    // agree on everything *except* the slot they derive from where they live;
+    // for a generated face that module is the file, which is why the author no
+    // longer states it.
+    // 槽位现在跟随声明所在的模块，因此两种写法在两个模块里除了"各自从所在位置推导出的
+    // 槽位"之外全都一致；对生成注册面而言那个模块就是文件本身，这也是作者不再声明它的原因。
+    assert_eq!(canonical::REGISTRATION.registry_name, "canonical");
+    assert_eq!(shuffled::REGISTRATION.registry_name, "shuffled");
     assert_eq!(
         canonical::REGISTRATION.name.zh,
         shuffled::REGISTRATION.name.zh
@@ -99,7 +101,6 @@ mod parens {
         kind: Ordered;
         registry_rule: nichlink_run_method::registry_core::RegistrationRule::ANY;
         needs_registry: true;
-        registry_name: Ordered;
         name: { zh: "有序", en: "Ordered" };
         parent: nichlink_run_method::registry_core::root_node_id("face-fields-test")
     );
@@ -115,10 +116,8 @@ fn the_parenthesised_form_declares_the_same_face() {
         canonical::REGISTRATION.needs_registry,
         parens::REGISTRATION.needs_registry
     );
-    assert_eq!(
-        canonical::REGISTRATION.registry_name,
-        parens::REGISTRATION.registry_name
-    );
+    assert_eq!(canonical::REGISTRATION.registry_name, "canonical");
+    assert_eq!(parens::REGISTRATION.registry_name, "parens");
     assert_eq!(
         canonical::REGISTRATION.name.en,
         parens::REGISTRATION.name.en
@@ -159,7 +158,6 @@ mod omitted_rule {
         kind: RuleOmitted,
         name: { zh: "省略规则", en: "Rule omitted" },
         needs_registry: true,
-        registry_name: omitted_rule,
         parent: nichlink_run_method::registry_core::root_node_id("face-fields-test"),
     }
 }
@@ -170,7 +168,6 @@ mod omitted_rule {
 mod leaf_no_rule {
     nichlink_run_method::__nichlink_object! {
         kind: LeafNoRule,
-        registry_name: leaf_no_rule,
     }
 }
 
@@ -215,23 +212,18 @@ mod external_shuffled {
         kind: ExternalFast;
         flow: FlowContract::new(ContractId::new("t.v1"), 1, "In", "Out");
         source: "face_fields/external_fast.rs";
-        handle: ExternalFast;
-        params: "ExternalFast";
         parts: NoParts;
         preset: NoPreset;
         name: { zh: "外部", en: "External" };
         summary: { zh: "外部实现", en: "External implementation" };
         exports: ["t.out"];
         needs_registry: false;
-        registry_name: external_shuffled;
         parent: root_node_id(env!("CARGO_PKG_NAME"));
         getting_from_other_registry: None;
         registry_rule_path: "face_fields/external_fast.rs";
         registry_rule: RegistrationRule::ANY;
         requires: [];
         provides: [];
-        expected_output: "Out";
-        actual_output: "Out";
         runtime_checks: [];
     }
 }

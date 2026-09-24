@@ -51,12 +51,9 @@ pub struct FaceFields<
     PartsValue,
     NameValue,
     SummaryValue,
-    ParamsValue,
     ExportsValue,
-    HandleValue,
     StableNameValue,
     NeedsRegistryValue,
-    RegistryNameValue,
     ParentValue,
     GettingFromOtherRegistryValue,
     RegistryRulePathValue,
@@ -68,8 +65,6 @@ pub struct FaceFields<
     PartContractsValue,
     RequiresValue,
     ProvidesValue,
-    ExpectedOutputValue,
-    ActualOutputValue,
     FlowValue,
     FlowProviderValue,
     PluginValue,
@@ -111,24 +106,12 @@ pub struct FaceFields<
     /// summary: { zh: "说明", en: "Summary" }
     /// ```
     pub summary: SummaryValue,
-    /// Free-form parameters description; defaults to the kind.
-    /// 参数描述，自由文本；默认取 kind。
-    /// ```ignore
-    /// params: "()"
-    /// ```
-    pub params: ParamsValue,
     /// Capabilities this face exports for its children.
     /// 本面向子级导出的能力。
     /// ```ignore
     /// exports: ["control.render"]
     /// ```
     pub exports: ExportsValue,
-    /// Handle type name; defaults to the kind.
-    /// handle 类型名；默认取 kind。
-    /// ```ignore
-    /// handle: Widget
-    /// ```
-    pub handle: HandleValue,
     /// Frozen logical name; omit to derive it.
     /// 固定的逻辑名；省略则自动推导。
     /// ```ignore
@@ -141,12 +124,6 @@ pub struct FaceFields<
     /// needs_registry: true
     /// ```
     pub needs_registry: NeedsRegistryValue,
-    /// Slot name children use as `parent`; defaults to the module.
-    /// 子级用 `parent` 指向它时的槽位名；默认取模块名。
-    /// ```ignore
-    /// registry_name: widget
-    /// ```
-    pub registry_name: RegistryNameValue,
     /// Where this face hangs. Required.
     /// 本面挂在谁下面。必填。
     /// ```ignore
@@ -192,7 +169,7 @@ pub struct FaceFields<
     /// ```
     pub handle_traits: HandleTraitsValue,
     /// Compile-time contracts the handle must satisfy.
-    /// handle 必须在编译期满足的合同。
+    /// handle 必须满足的编译期契约。
     /// ```ignore
     /// handle_contracts: [crate::ControlHandle]
     /// ```
@@ -204,7 +181,7 @@ pub struct FaceFields<
     /// ```
     pub part_traits: PartTraitsValue,
     /// Compile-time contracts the parts must satisfy.
-    /// parts 必须在编译期满足的合同。
+    /// parts 必须满足的编译期契约。
     /// ```ignore
     /// part_contracts: [crate::ActionParts]
     /// ```
@@ -221,18 +198,6 @@ pub struct FaceFields<
     /// provides: ["control.render"]
     /// ```
     pub provides: ProvidesValue,
-    /// Output type the flow contract expects.
-    /// 数据流合同期望的输出类型。
-    /// ```ignore
-    /// expected_output: "ControlFrame"
-    /// ```
-    pub expected_output: ExpectedOutputValue,
-    /// Output type this face actually produces.
-    /// 本面实际产出的输出类型。
-    /// ```ignore
-    /// actual_output: "ControlFrame"
-    /// ```
-    pub actual_output: ActualOutputValue,
     /// Data-flow contract shared with a replacement.
     /// 与替换件共享的数据流合同。
     /// ```ignore

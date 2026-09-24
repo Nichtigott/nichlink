@@ -107,8 +107,6 @@ impl FaceManifest {
             | "part_contracts"
             | "requires"
             | "provides"
-            | "expected_output"
-            | "actual_output"
             | "runtime_checks"
             | "flow"
             | "flow_provider" => {

@@ -45,14 +45,10 @@ pub fn preview_canvas_width_traced(requested: u32) -> u32 {
 crate::control_object! {
     kind: NodeEditor,
     exports: ["control.render"],
-    handle: NodeEditor,
     needs_registry: true,
     parent: crate::control::NODE_ID,
-    handle_traits: ["ControlHandle"],
     handle_contracts: [crate::control::ControlHandle],
     registry_rule_path: "src/control/object/node_editor/registry_rule/registry_rule.rs",
-    expected_output: "ControlFrame",
-    actual_output: "ControlFrame",
     flow: FlowContract::new(
         ContractId::new("control.render.v1"),
         1,

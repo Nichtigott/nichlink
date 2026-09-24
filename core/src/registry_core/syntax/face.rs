@@ -430,20 +430,20 @@ crate::control_object! {
 impl Button { pub fn paint(&self) -> u32 { 7 } }
 crate::control_object! {
     kind: Button,
-    registry_name: button,
+    stable_name: "button",
 }
 #[test] fn paints() { assert_eq!(Button.paint(), 7); }
 "#;
         let replacement = r#"crate::control_object! {
     kind: Button,
-    registry_name: button_graft,
+    stable_name: "button_graft",
 }"#;
 
         let copied = replace_face_macro(source, replacement).unwrap();
 
         assert!(copied.contains("pub fn paint(&self) -> u32 { 7 }"));
-        assert!(copied.contains("registry_name: button_graft"));
-        assert!(!copied.contains("registry_name: button,"));
+        assert!(copied.contains("stable_name: \"button_graft\""));
+        assert!(!copied.contains("stable_name: \"button\","));
         assert!(copied.contains("#[test] fn paints()"));
     }
 

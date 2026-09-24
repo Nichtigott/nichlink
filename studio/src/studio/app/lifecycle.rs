@@ -73,6 +73,7 @@ impl App {
             graph_dragging_divider: false,
             dragging_divider: false,
             last_source_stamp: source_stamp(),
+            tree_cache: RefCell::new(Vec::new()),
             last_source_check: Instant::now(),
         }
     }

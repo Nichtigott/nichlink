@@ -19,6 +19,21 @@ use crate::registry_syntax::GraftSyntax;
 use crate::static_plan::StaticFaceRecord;
 use crate::{Node, SourceScope};
 
+/// The module a typed graft expression names, i.e. everything before the
+/// `::NODE_ID` the expression has to end with.
+/// 类型化 graft 表达式所命名的模块，即表达式结尾那个 `::NODE_ID` 之前的全部内容。
+///
+/// `None` means the expression does not end in `NODE_ID`, so there is no module
+/// to name and no assertion to emit. That is a boundary, not a fallback: a cut
+/// that cannot name both types is a cut whose substitution nothing checks, and
+/// the caller is expected to say so rather than guess.
+/// 返回 `None` 表示该表达式不以 `NODE_ID` 结尾，因此没有可命名的模块，也没有断言可发射。
+/// 这是边界而不是兜底：命名不出两端类型的切口，其替换没有任何东西检查，调用方应当如实
+/// 说明，而不是猜。
+fn face_module(expression: &str) -> Option<&str> {
+    expression.trim().strip_suffix("::NODE_ID")
+}
+
 pub(crate) fn render_lib(
     src: &Path,
     nodes: &[Node],
@@ -63,6 +78,7 @@ pub(crate) fn render_lib(
     output.push_str(&format!(
         "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[{registry}::StaticGraftCut] = &[\n",
     ));
+    let mut cut_contracts = String::new();
     for graft in grafts {
         // A typed cut is emitted verbatim, so the compiler resolves the Rust
         // expressions the author wrote instead of a selector string. A string
@@ -95,8 +111,32 @@ pub(crate) fn render_lib(
             },
         };
         writeln!(output, "    {constructor},").unwrap();
+        // A typed cut names both endpoints as expressions, so the compiler can
+        // also check the one thing a selector cannot: that the replacement's
+        // parts construct exactly what the cut object's preset expects. The
+        // assertion is an item, so it leaves this array literal for the block
+        // below; a cut written as a logical path or a selector contributes
+        // nothing, because the build step has no module to name for it and
+        // inventing one would assert about a guess.
+        // 类型化切口把两端写成表达式，因此编译器还能检查选择器检查不了的那件事：替换面的
+        // parts 构造出来的东西，正好是切口对象的 preset 所期望的。断言是一个条目，因此它
+        // 离开这个数组字面量、写到下面的块里；写成逻辑路径或选择器的切口什么也不贡献——
+        // 构建步骤没有可命名的模块，编一个出来等于对猜测做断言。
+        if let Some(expressions) = &graft.expressions
+            && let (Some(cut), Some(graft_module)) = (
+                face_module(&expressions.cut),
+                face_module(&expressions.graft),
+            )
+        {
+            writeln!(
+                cut_contracts,
+                "#[cfg(not(rust_analyzer))]\nconst _: () = {registry}::assert_contract::<{cut}::__Preset, {graft_module}::__Parts>();"
+            )
+            .unwrap();
+        }
     }
     output.push_str("];\n\n");
+    output.push_str(&cut_contracts);
     // The host may have `#![warn(missing_docs)]` on, and it cannot edit this
     // generated file — so the raw static stays hidden plumbing the way
     // `BUILTIN_STATIC_FACES`/`BUILTIN_GRAFT_CUTS` do, while the two functions a

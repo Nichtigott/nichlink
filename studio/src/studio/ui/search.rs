@@ -52,8 +52,14 @@ pub(super) fn draw_search(
         // `search.graph_mode` 分支匹配：Tab/BackTab 切换焦点、↑↓ 移动选择、
         // Enter 跟随或打开、`m` 载入 MIR 快照、Esc 返回。刻意不写 `Ctrl-W`，
         // 因为它只在下面的列表分支匹配。
+        let single = search.compare_query.is_none() && search.compare_center.is_none();
+        let footer = if single {
+            "← upstream   → downstream   ↑↓ select   Enter re-centre/open   Tab focus   m MIR   Esc back"
+        } else {
+            "A/B: input ↓ center ↓ output   Tab focus   ←→ side   ↑↓ select   Enter follow/open   m MIR   Esc back"
+        };
         frame.render_widget(
-            Paragraph::new("A/B: input ↓ center ↓ output   Tab focus   ↑↓ select   Enter follow/open   m MIR   Esc back")
+            Paragraph::new(footer)
                 .alignment(Alignment::Center)
                 .style(Style::default().fg(MUTED)),
             inner[2],

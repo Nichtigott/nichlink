@@ -78,6 +78,31 @@ pub struct CallRelation {
     pub callee_frame: Option<u64>,
 }
 
+impl CallRelation {
+    /// A relation whose two ends are known but whose provenance is only the text
+    /// of the call site: no MIR record, no runtime frame.
+    /// 两端已知、但来源只是调用点文本的关系：没有 MIR 记录，也没有运行期帧。
+    ///
+    /// Studio's source scan produces these, which is why the type has to be
+    /// constructible without inventing a MIR line or a frame id.
+    /// Studio 的源码扫描产生的正是它们，因此该类型必须能在不编造 MIR 行号或帧 id 的情况下构造。
+    pub fn from_symbols(
+        caller: impl Into<String>,
+        callee: impl Into<String>,
+        evidence: EvidenceKind,
+    ) -> Self {
+        Self {
+            caller: caller.into(),
+            callee: callee.into(),
+            evidence,
+            source: None,
+            mir_line: None,
+            caller_frame: None,
+            callee_frame: None,
+        }
+    }
+}
+
 /// Every candidate one MIR artifact offered, before any merge.
 /// 一份 MIR artifact 提供的全部候选，尚未归并。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

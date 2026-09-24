@@ -19,15 +19,19 @@ mod search;
 
 pub use forms::{AddState, NewProjectState, PluginState};
 pub use graft::{GraftDeclaration, GraftPlanRow, GraftState};
-pub use misc::{CallRef, Overlay, ReloadError};
+pub use misc::{CallRef, CallTreeView, Overlay, ReloadError};
 pub use pages::{Focus, StudioPage};
 pub use search::{SearchRow, SearchState};
 
 pub(crate) use forms::{face_field_indices, move_face_field};
-pub(crate) use misc::{push_call_ref, source_path_for};
+pub(crate) use misc::{CallTreeMemo, push_call_ref, source_path_for};
 // The kernel owns the one `::`-bounded name match. Studio used to carry a
 // one-directional copy that also allocated a `format!` per comparison, which
 // let the graph it draws disagree with the evidence the kernel merged.
 // 内核拥有唯一的"按 `::` 边界匹配名字"规则。Studio 曾带一份单向副本，而且每次比较都会
 // 分配一个 `format!`，这会让它画出的图与内核归并的证据不一致。
 pub(crate) use nichlink_run_method::mir::same_symbol;
+// The layered call tree is kernel vocabulary too: Studio builds the relation
+// list, the kernel decides the levels, lanes and cuts.
+// 分层调用树同样是内核词汇：Studio 提供关系列表，内核决定层、车道与裁剪。
+pub(crate) use nichlink_run_method::mir::{CallRelation, CallTreeNode, call_tree};

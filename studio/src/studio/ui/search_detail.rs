@@ -28,20 +28,18 @@ pub(super) fn draw_search_detail(
     let Some(info) = app.registry.find(node) else {
         return;
     };
-    let declared = format!(
-        "{}:{}:{} function={}",
-        info.source.file,
-        row.line.unwrap_or(info.source.line),
-        info.source.column,
-        row.function
-    );
+    // One row per fact. `path` is already the source file, so a combined
+    // file:line:function row would only repeat it; and `kind`, its handle and
+    // its parameter metadata are one string — both macros expand `params` and
+    // `handle` from `stringify!($kind)` — so three rows stated it three times.
+    // 一个事实一行。`path` 本身就是源文件，再拼一行 file:line:function 只是重复它；
+    // 而 `kind`、它的 handle 与参数元数据是同一个字符串——两个宏都用
+    // `stringify!($kind)` 展开 `params` 与 `handle`——三行说了三遍同一件事。
     let values = [
         ("path", row.path.clone()),
         ("function", row.function.clone()),
         ("face node", info.id.to_string()),
         ("kind", info.kind.clone()),
-        ("type", info.handle.to_owned()),
-        ("params", info.params.to_owned()),
         (
             "preset / parts",
             format!("{} / {}", info.preset, info.parts),
@@ -52,7 +50,6 @@ pub(super) fn draw_search_detail(
             super::format_registration_rule(&info.registry_rule),
         ),
         ("admission", super::format_admission(&info.admission)),
-        ("declared", declared),
         ("summary", info.summary.en.to_owned()),
         (
             "other registry",
@@ -70,14 +67,6 @@ pub(super) fn draw_search_detail(
                 .join(", "),
         ),
         ("provides", info.provides.join(", ")),
-        (
-            "values",
-            if row.signature.is_empty() {
-                "runtime snapshot: unavailable".to_owned()
-            } else {
-                row.signature.clone()
-            },
-        ),
     ];
     let lines = values
         .iter()

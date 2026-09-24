@@ -85,7 +85,52 @@ impl FaceSyntax {
 
     /// One bracketed list field as strings, in the written order.
     /// 某个方括号列表字段的字符串，按书写顺序。
+    ///
+    /// Two names answer a *derived* value rather than the literal one:
+    /// `handle_traits` and `part_traits` are the searchable labels of the
+    /// compiler-checked paths in `handle_contracts` and `part_contracts`. A face
+    /// that states a path therefore does not state the label a second time, and
+    /// every reader of a parsed face — the build-time contract check, the
+    /// authoring parser, Studio — agrees by construction instead of by
+    /// convention. A face that states only a label keeps it: that is the
+    /// unchecked claim it always was.
+    /// 有两个名字返回的是**推导**值而不是字面值：`handle_traits` 与 `part_traits` 是
+    /// `handle_contracts` 与 `part_contracts` 里那些参与编译检查的路径的可检索标签。
+    /// 因此写了路径的注册面不必再写一遍标签，而每个读取已解析注册面的地方——构建期合同
+    /// 检查、创作解析器、Studio——是构造上一致，而不是靠约定一致。只写标签的注册面则保留
+    /// 标签：它本来就是一条未经检查的声明。
     pub fn string_list(&self, name: &str) -> Option<Vec<String>> {
+        match name {
+            "handle_traits" => return self.trait_labels("handle_contracts", "handle_traits"),
+            "part_traits" => return self.trait_labels("part_contracts", "part_traits"),
+            _ => {}
+        }
+        self.written_string_list(name)
+    }
+
+    /// The labels a bracketed trait-path list names, or the labels written beside
+    /// it when it names nothing.
+    /// 某个方括号 trait 路径列表所命名的标签；它一个路径都没有时，用它旁边写下的标签。
+    fn trait_labels(&self, path_field: &str, label_field: &str) -> Option<Vec<String>> {
+        let paths = self.path_list(path_field).unwrap_or_default();
+        if paths.is_empty() {
+            return self.written_string_list(label_field);
+        }
+        crate::authoring::parse::trait_names_from_paths(&paths.join(","))
+            .ok()
+            .map(|labels| {
+                labels
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|label| !label.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+    }
+
+    /// One bracketed list field exactly as written, with no derivation.
+    /// 某个方括号列表字段按原文读出，不做任何推导。
+    fn written_string_list(&self, name: &str) -> Option<Vec<String>> {
         let field = self.fields.get(name)?;
         let group = only_group(&field.tokens, Delimiter::Bracket)?;
         split_top_level(group.stream())

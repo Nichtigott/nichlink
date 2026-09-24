@@ -20,12 +20,14 @@
 //!
 //! The normalised declaration goes back through `__nichlink_object!`, the
 //! exported entry point of the runtime crate, so the collector mode the caller
-//! chose survives the round trip. This front end is only reached when every
-//! strict arm of `__control_object!` has already declined the declaration, so a
-//! well-formed face expands exactly as it did before.
+//! chose survives the round trip. This front end is only reached when
+//! `__control_object!`'s single arm has already declined the declaration — a
+//! field out of order, `;` separators, a misspelled name — so a well-formed face
+//! expands exactly as it did before.
 //! 归一化后的声明经 `__nichlink_object!`（运行时 crate 的公开入口）回到宏阶梯，
-//! 调用方选择的 collector 模式因此得以保留。只有当 `__control_object!` 的全部严格
-//! arm 都不接受时才会走到本前端，因此合法注册面的展开与从前完全一致。
+//! 调用方选择的 collector 模式因此得以保留。只有当 `__control_object!` 那唯一一条 arm
+//! 不接受时（字段顺序不同、用 `;` 分隔、字段名拼错）才会走到本前端，因此合法注册面的展开
+//! 与从前完全一致。
 //!
 //! The proc-macro entry points plus `normalise` stay on this page; the mirror
 //! emitter lives in `mirror` and the field/argument parsing helpers in
@@ -113,6 +115,85 @@ pub fn face_rule_or(input: TokenStream) -> TokenStream {
             .into();
     }
     fallback.into()
+}
+
+/// Labels for the traits a face declares, derived from the paths it wrote.
+/// 注册面声明实现的 trait 标签，从其写下的路径派生。
+///
+/// `face_trait_labels_or!([path, …]; [label, …])` answers with the last path
+/// segment of every path when at least one path was given, and with the labels
+/// verbatim when none was. That is the same rule the authoring applier
+/// (`apply_trait_contract`) already implements, so the file form and the compiled
+/// form cannot answer "which interfaces does this face implement" differently —
+/// and a face that states a compiler-checked path never has to state the label
+/// twice.
+/// `face_trait_labels_or!([路径, …]; [标签, …])`：只要给出至少一个路径，就用每个路径的
+/// 最后一段作答；一个路径都没有时，原样交回标签。这与创作应用器
+/// （`apply_trait_contract`）已经实现的规则相同，因此文件形式与编译形式对"本注册面实现了
+/// 哪些接口"不可能给出不同答案——写了参与编译检查的路径的注册面也不必再写一遍标签。
+#[proc_macro]
+pub fn face_trait_labels_or(input: TokenStream) -> TokenStream {
+    let mut parts = split_semicolons(Tokens::from(input)).into_iter();
+    let paths = parts.next().unwrap_or_default();
+    let labels = parts.next().unwrap_or_default();
+    let derived = bracket_items(&paths)
+        .and_then(|items| items.iter().map(last_segment).collect::<Option<Vec<_>>>())
+        .filter(|names| !names.is_empty());
+    let Some(derived) = derived else {
+        // No compiler-checked path: the author's labels stand as written, which
+        // is what `__string_list!` produced before this macro existed.
+        // 没有参与编译检查的路径：作者的标签原样成立，这正是本宏出现之前
+        // `__string_list!` 产出的东西。
+        let fallback = format!("&{labels}");
+        return fallback
+            .parse::<Tokens>()
+            .map_or_else(|_| labels.into(), TokenStream::from);
+    };
+    let literal = format!(
+        "&[{}]",
+        derived
+            .iter()
+            .map(|name| format!("{name:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    literal
+        .parse::<Tokens>()
+        .map_or_else(|_| labels.into(), TokenStream::from)
+}
+
+/// The comma-separated items of the first bracketed group, if there is one.
+/// 第一个方括号分组里以逗号分隔的条目（若有）。
+fn bracket_items(tokens: &Tokens) -> Option<Vec<Tokens>> {
+    let group = tokens.clone().into_iter().find_map(|token| match token {
+        TokenTree::Group(group) if group.delimiter() == Delimiter::Bracket => Some(group),
+        _ => None,
+    })?;
+    let mut items = vec![Tokens::new()];
+    for token in group.stream() {
+        let separator = matches!(&token, TokenTree::Punct(punct) if punct.as_char() == ',');
+        if separator {
+            items.push(Tokens::new());
+        } else {
+            items.last_mut()?.extend([token]);
+        }
+    }
+    Some(items.into_iter().filter(|item| !item.is_empty()).collect())
+}
+
+/// The last `::`-separated segment of a path, when it is a plain identifier.
+/// 路径最后一段 `::` 之后的名字，且它必须是普通标识符。
+fn last_segment(path: &Tokens) -> Option<String> {
+    let text = path.to_string().replace(' ', "");
+    let name = text.rsplit("::").next()?.to_owned();
+    let mut characters = name.chars();
+    let first = characters.next()?;
+    if !(first.is_alphabetic() || first == '_')
+        || !characters.all(|c| c.is_alphanumeric() || c == '_')
+    {
+        return None;
+    }
+    Some(name)
 }
 
 /// Which macro the normalised declaration goes back to.

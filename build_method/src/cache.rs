@@ -149,14 +149,7 @@ pub(crate) fn update_discovery_cache(
                 for provide in face.string_list("provides").unwrap_or_default() {
                     writeln!(unit_content, "provides\t{provide}").unwrap();
                 }
-                for name in [
-                    "parts",
-                    "exports",
-                    "handle_traits",
-                    "part_traits",
-                    "expected_output",
-                    "actual_output",
-                ] {
+                for name in ["parts", "exports", "handle_traits", "part_traits"] {
                     if let Some(value) = face.field(name) {
                         writeln!(unit_content, "contract\t{name}\t{value}").unwrap();
                     }

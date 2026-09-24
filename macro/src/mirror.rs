@@ -30,27 +30,27 @@ use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
 ///   `flow: FlowContract::new(…)`), so the mirror echoes them and lets `_` infer
 ///   the type. Path completion inside them, and the type candidates at an empty
 ///   value position, both keep working.
-/// * `Type` fields (`kind`, `preset`, `parts`, `handle`, `flow_provider`) name a
+/// * `Type` fields (`kind`, `preset`, `parts`, `flow_provider`) name a
 ///   type, and a type is not a value: the mirror moves the author's tokens into
 ///   the annotation and writes `loop {}` as the value, which coerces to whatever
 ///   the type is. A unit marker type still completes at `kind: `, and a non-unit
 ///   preset type no longer produces `expected (), found …`.
 /// * `Replace` fields are braced localized text (`name`, `summary`), arrow lists
-///   (`requires`), trait-path lists (`handle_contracts`), a bare slot identifier
-///   (`registry_name`), `None` (whose `Option<T>` cannot be inferred), or an
+///   (`requires`), trait-path lists (`handle_contracts`), `None` (whose
+///   `Option<T>` cannot be inferred), or an
 ///   aggregate list that may be empty (whose element type cannot be inferred).
 ///   The mirror keeps their names and replaces their values.
 ///
 /// * `Value` 字段写成表达式（`parent: crate::control::NODE_ID`、
 ///   `flow: FlowContract::new(…)`），镜像原样回写、由 `_` 推导类型：值内部的路径补全与
 ///   空值位的类型候选都不受影响。
-/// * `Type` 字段（`kind`、`preset`、`parts`、`handle`、`flow_provider`）命名的是类型，
+/// * `Type` 字段（`kind`、`preset`、`parts`、`flow_provider`）命名的是类型，
 ///   而类型不是值：镜像把作者的 token 放进类型注解，值写 `loop {}`（可强制转换成该类型）。
 ///   单元标记类型在 `kind: ` 处照旧有候选，而非单元的 preset 类型也不会再报
 ///   `expected (), found …`。
 /// * `Replace` 字段是花括号本地化文本（`name`、`summary`）、箭头列表（`requires`）、
-///   trait 路径列表（`handle_contracts`）、裸槽位标识符（`registry_name`）、`None`
-///   （`Option<T>` 推导不出来），或可能为空的聚合列表（元素类型推导不出来）。镜像保留
+///   trait 路径列表（`handle_contracts`）、`None`（`Option<T>` 推导不出来），
+///   或可能为空的聚合列表（元素类型推导不出来）。镜像保留
 ///   它们的字段名，替换它们的值。
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum MirrorField {
@@ -63,7 +63,7 @@ enum MirrorField {
 /// 一个注册面字段属于三种写法中的哪一种。
 fn mirror_field(key: &str) -> MirrorField {
     match key {
-        "kind" | "preset" | "parts" | "handle" | "flow_provider" => MirrorField::Type,
+        "kind" | "preset" | "parts" | "flow_provider" => MirrorField::Type,
         "source"
         | "params"
         | "stable_name"
@@ -72,11 +72,9 @@ fn mirror_field(key: &str) -> MirrorField {
         | "registry_rule_path"
         | "registry_rule"
         | "admission"
-        | "expected_output"
-        | "actual_output"
         | "flow"
         | lexicon::FACE_FIELD_PLUGIN => MirrorField::Value,
-        // `name`, `summary`, `exports`, `registry_name`,
+        // `name`, `summary`, `exports`,
         // `getting_from_other_registry`, `handle_traits`, `handle_contracts`,
         // `part_traits`, `part_contracts`, `requires`, `provides`,
         // `runtime_checks` — and any field added later, which defaults to the
@@ -333,7 +331,7 @@ mod tests {
     fn the_mirror_translates_each_field_shape() {
         let output = compact(&mirror(
             "kind: Tool, preset: NoPreset, name: { zh: \"控件\", en: \"Widget\" }, \
-             parent: crate::a::NODE_ID, exports: [], provides: [\"x\"], registry_name: tool,",
+             parent: crate::a::NODE_ID, exports: [], provides: [\"x\"],",
         ));
         // kind/preset name types: the author's type goes into the annotation and
         // the value coerces to it.
@@ -342,12 +340,7 @@ mod tests {
         // An expression keeps its own tokens so paths inside it complete.
         assert!(output.contains("parent:crate::a::NODE_ID"), "{output}");
         // Braced text, a bare slot ident, and aggregate lists are replaced.
-        for replaced in [
-            "name:loop{}",
-            "registry_name:loop{}",
-            "exports:loop{}",
-            "provides:loop{}",
-        ] {
+        for replaced in ["name:loop{}", "exports:loop{}", "provides:loop{}"] {
             assert!(output.contains(replaced), "{replaced} missing in {output}");
         }
         assert!(output.contains("..loop{}"), "{output}");
@@ -362,13 +355,9 @@ mod tests {
             "preset names a type: {arguments:?}"
         );
         assert_eq!(arguments[4], "__Any", "name is replaced: {arguments:?}");
-        assert_eq!(arguments[7], "__Any", "exports is replaced: {arguments:?}");
+        assert_eq!(arguments[6], "__Any", "exports is replaced: {arguments:?}");
         assert_eq!(
-            arguments[11], "__Any",
-            "registry_name is replaced: {arguments:?}"
-        );
-        assert_eq!(
-            arguments[12], "_",
+            arguments[9], "_",
             "parent is inferred from its value: {arguments:?}"
         );
     }

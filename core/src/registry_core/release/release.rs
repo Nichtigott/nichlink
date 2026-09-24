@@ -276,13 +276,19 @@ pub const fn assert_static_registration(rule: RegistrationRule, info: Registrati
     if !contains_all(info.part_traits, rule.required_part_traits) {
         panic!("static registration failed: missing parts interface; see declaration source");
     }
+    // The output contract used to be compared here, as two strings the author
+    // wrote beside each other. It is checked by types now: `assert_contract`
+    // inside every face, and `assert_contract::<cut::__Preset, graft::__Parts>`
+    // for every typed graft cut. A string comparison could not catch a wrong
+    // claim; the type system cannot fail to.
+    // 输出合同过去在这里比较——比较的是作者并排写下的两个字符串。现在由类型检查：
+    // 每个面内的 `assert_contract`，以及每个类型化 graft 切口的
+    // `assert_contract::<cut::__Preset, graft::__Parts>`。字符串比较抓不到错误声明，
+    // 类型系统则不可能漏掉。
     if !contains_all(info.contract.provided_parts, info.contract.required_parts) {
         panic!(
             "static registration failed: preset parts are not satisfied; see declaration source"
         );
-    }
-    if !str_eq(info.contract.expected_output, info.contract.actual_output) {
-        panic!("static registration failed: output contract mismatch; see declaration source");
     }
 }
 

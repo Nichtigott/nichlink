@@ -386,27 +386,29 @@ impl App {
                 }
             }
             Some(Overlay::Add(add)) => {
-                let fields = face_field_indices(add);
+                let fields = face_field_indices();
                 let offset = face_form_offset(add, self.hot.overlay_list_area.height);
                 let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };
                 add.field = field;
-                if field == 2 {
-                    add.values[2] = (add.values[2] != "true").to_string();
+                if field == face_field::NEEDS_REGISTRY {
+                    add.values[face_field::NEEDS_REGISTRY] =
+                        (add.values[face_field::NEEDS_REGISTRY] != "true").to_string();
                 } else if add.is_editable(field) {
                     add.editing = true;
                 }
             }
             Some(Overlay::Edit(_, edit)) => {
-                let fields = face_field_indices(edit);
+                let fields = face_field_indices();
                 let offset = face_form_offset(edit, self.hot.overlay_list_area.height);
                 let Some(field) = fields.get(offset + visible_row).copied() else {
                     return;
                 };
                 edit.field = field;
-                if field == 2 {
-                    edit.values[2] = (edit.values[2] != "true").to_string();
+                if field == face_field::NEEDS_REGISTRY {
+                    edit.values[face_field::NEEDS_REGISTRY] =
+                        (edit.values[face_field::NEEDS_REGISTRY] != "true").to_string();
                 } else if edit.is_editable(field) {
                     edit.editing = true;
                 }
@@ -430,7 +432,7 @@ impl App {
 }
 
 fn face_form_offset(form: &AddState, height: u16) -> usize {
-    let fields = face_field_indices(form);
+    let fields = face_field_indices();
     let selected = fields
         .iter()
         .position(|field| *field == form.field)

@@ -40,8 +40,6 @@ macro_rules! __registration_face {
         $(part_contracts: [$($part_contract:path),* $(,)?],)?
         requires: [$($require:expr => $provider:expr),* $(,)?],
         provides: [$($provide:expr),* $(,)?],
-        expected_output: $expected_output:expr,
-        actual_output: $actual_output:expr,
         $(flow: $flow:expr,)?
         $(flow_provider: $flow_provider:path,)?
         $(plugin: $plugin:expr,)?
@@ -76,6 +74,20 @@ macro_rules! __registration_face {
             stringify!($kind),
         );
 
+        /// The preset type this face was declared with, for a graft cut's
+        /// compile-time output check. Hidden because the author names the preset
+        /// once, in the declaration, and never needs this alias by name.
+        /// 本注册面声明时使用的 preset 类型，供 graft 切口的编译期输出检查使用。隐藏，
+        /// 因为作者只在声明里写一次 preset，从不需要按名字引用这个别名。
+        #[doc(hidden)]
+        pub type __Preset = $preset;
+
+        /// The parts type this face was declared with, for a graft cut's
+        /// compile-time output check.
+        /// 本注册面声明时使用的 parts 类型，供 graft 切口的编译期输出检查使用。
+        #[doc(hidden)]
+        pub type __Parts = $parts;
+
         /// The same declaration in the owned form registration consumes.
         /// 同一份声明的拥有型快照，注册过程消费它。
         pub const REGISTRATION: $crate::RegistrationInfo = $crate::RegistrationInfo {
@@ -102,16 +114,32 @@ macro_rules! __registration_face {
                 provider: $provider,
             }),*],
             provides: &[$($provide),*],
+            // The construction contract keeps what the types say: the parts the
+            // preset requires and the parts the parts type supplies, both read
+            // straight off the traits. The output names the author used to write
+            // beside them were compared only with each other, so they are gone;
+            // `assert_contract` proves that fact with types, per face, and a graft
+            // cut proves it across two faces.
+            // 构造合同只保留类型说了算的东西：preset 要求的 parts 与 parts 类型提供的
+            // parts，两者都直接从 trait 读出。作者过去写在旁边的那对输出名只互相比较过，
+            // 因此删除；同一件事由 `assert_contract` 按面用类型证明，嫁接切口则跨两个面证明。
             contract: $crate::ObjectContract {
                 required_parts: <$preset as $crate::PresetContract>::REQUIRED_PARTS,
                 provided_parts: <$parts as $crate::PartsContract>::PROVIDED_PARTS,
-                expected_output: $expected_output,
-                actual_output: $actual_output,
             },
             flow: $crate::__flow_select!($($flow)?; $($flow_provider)?),
             flow_provider: $crate::__flow_provider!($($flow_provider)?),
-            handle_traits: $crate::__string_list!($($($handle_trait),*)?),
-            part_traits: $crate::__string_list!($($($part_trait),*)?),
+            // The label follows the path: a face that states a compiler-checked
+            // contract does not state its name a second time, and a face that
+            // states only a label keeps it as the unchecked claim it is.
+            // 标签跟随路径：写了参与编译检查的契约的注册面不再写第二遍名字；只写了标签的
+            // 注册面则保留它——那本来就是一条未经检查的声明。
+            handle_traits: $crate::__face_trait_labels_or!(
+                [$($($handle_contract),*)?]; [$($($handle_trait),*)?]
+            ),
+            part_traits: $crate::__face_trait_labels_or!(
+                [$($($part_contract),*)?]; [$($($part_trait),*)?]
+            ),
             runtime_checks: &[$($runtime_check),*],
             plugin: $crate::__plugin!($($plugin)?),
             source: $crate::SourceLocation {

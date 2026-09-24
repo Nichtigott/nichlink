@@ -15,12 +15,8 @@ impl ControlHandle for Button {
 crate::control_object! {
     kind: Button,
     exports: ["control.render"],
-    handle: Button,
     parent: crate::control::NODE_ID,
-    handle_traits: ["ControlHandle"],
     handle_contracts: [crate::control::ControlHandle],
-    expected_output: "ControlFrame",
-    actual_output: "ControlFrame",
     flow: FlowContract::new(
         ContractId::new("control.render.v1"),
         1,

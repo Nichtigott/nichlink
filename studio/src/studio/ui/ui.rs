@@ -38,9 +38,13 @@ mod status;
 use status::{draw_event, draw_keys};
 
 use super::app::{
-    AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
-    face_field_indices, function_line, source_path_for,
+    AddState, App, CallRef, CallTreeNode, CallTreeView, Focus, Overlay, SearchState,
+    app_function_source_range, face_field_indices, source_path_for,
 };
+// The authoring layout's slot names: the form, the appliers and the tests index
+// one array, so they all read the same constants.
+// 创作布局的槽位名：表单、写入方与测试索引同一个数组，因此都读同一批常量。
+use nichlink_run_method::face_field;
 
 const INK: Color = Color::Rgb(214, 225, 231);
 const MUTED: Color = Color::Rgb(112, 132, 143);
@@ -175,8 +179,25 @@ mod tests {
         assert!(output.contains("module name"));
         assert!(output.contains("* required"));
         assert!(output.contains("FIELD GUIDE"));
-        assert!(output.contains("DERIVED"));
+        assert!(output.contains("derived, or fixed after creation"));
         assert!(output.contains("<default: NoParts>"));
+
+        // Moving the guide to a machine row reports it read-only, which is the
+        // half of the form the author only reviews.
+        // 把指南移到机器取值行会报告它为只读，这正是作者只查看的那一半表单。
+        if let Some(Overlay::Add(ref mut add)) = app.overlay {
+            add.field = face_field::TREE_SLOT;
+        }
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let output = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(output.contains("DERIVED / READ ONLY"));
+        assert!(output.contains("tree slot"));
     }
 
     #[test]

@@ -91,23 +91,23 @@ impl ObjectContract {
                 .iter()
                 .map(|value| (*value).to_owned())
                 .collect(),
-            expected_output: self.expected_output.to_owned(),
-            actual_output: self.actual_output.to_owned(),
         }
     }
 
-    /// Return one message per unmet part or output requirement; an empty result
-    /// means the contract holds. `object` names the face being checked.
-    /// 每个未满足的 part 或输出要求各返回一条消息；结果为空表示合同成立。
+    /// Return one message per unmet part requirement; an empty result means the
+    /// contract holds. `object` names the face being checked.
+    /// 每个未满足的 part 要求各返回一条消息；结果为空表示合同成立。
     /// `object` 是被检查的注册面名称。
+    ///
+    /// The output half of this check is gone with the two names it compared: a
+    /// type-level `assert_contract` proves the same fact at compile time, per
+    /// face, and a graft cut proves it across two faces. This method now reports
+    /// only what the trait constants say, which is the part no compiler can see.
+    /// 本检查的输出那一半随它比较的那两个名字一起删除：同一件事由编译期
+    /// `assert_contract` 按面证明、由嫁接切口跨两个面证明。本方法现在只报告 trait 常量
+    /// 说了算的东西——那是编译器看不到的部分。
     pub fn validate(&self, object: &str) -> Vec<String> {
-        validate_object_contract(
-            self.required_parts,
-            self.provided_parts,
-            self.expected_output,
-            self.actual_output,
-            object,
-        )
+        validate_object_contract(self.required_parts, self.provided_parts, object)
     }
 }
 
@@ -121,10 +121,4 @@ pub struct ObjectContract {
     /// Part names the parts type supplied.
     /// parts 类型实际提供的 part 名称。
     pub provided_parts: &'static [&'static str],
-    /// Output type name the preset expects.
-    /// preset 期望的输出类型名。
-    pub expected_output: &'static str,
-    /// Output type name the parts type actually produces.
-    /// parts 类型实际产出的输出类型名。
-    pub actual_output: &'static str,
 }

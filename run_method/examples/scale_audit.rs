@@ -49,8 +49,6 @@ fn snapshot(namespace: &str, index: usize, parent: NodeId) -> RegistrationSnapsh
         contract: OwnedObjectContract {
             required_parts: Vec::new(),
             provided_parts: Vec::new(),
-            expected_output: String::new(),
-            actual_output: String::new(),
         },
         flow: OwnedFlowContract::none(),
         flow_provider: None,

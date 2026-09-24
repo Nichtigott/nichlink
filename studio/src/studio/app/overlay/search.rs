@@ -96,6 +96,27 @@ impl App {
                         search.compare_offset = 0;
                     }
                 }
+                // In the single-pane graph the arrows are free, so they mean what
+                // the drawing says: ← walks upstream (who calls this), → walks
+                // downstream (what this calls). With a comparison pane the same
+                // keys keep switching sides, because there is no room for both.
+                // 单面板调用图里方向键是空闲的，因此它们表示画面上写着的东西：← 走上游
+                // （谁在调它），→ 走下游（它调用了谁）。开了对比面板时这两个键仍用于切换
+                // 左右侧，因为放不下两种含义。
+                KeyCode::Left
+                    if search.graph_focus == 2
+                        && search.compare_query.is_none()
+                        && search.compare_center.is_none() =>
+                {
+                    self.hop_call_tree(&mut search, false)
+                }
+                KeyCode::Right
+                    if search.graph_focus == 2
+                        && search.compare_query.is_none()
+                        && search.compare_center.is_none() =>
+                {
+                    self.hop_call_tree(&mut search, true)
+                }
                 KeyCode::Up => match search.graph_focus {
                     0 => search.graph_selected = search.graph_selected.saturating_sub(1),
                     1 => {
@@ -205,13 +226,21 @@ impl App {
                     } else {
                         search.outline_selected
                     };
-                    let target = self.graph_tree_item(&search, search.graph_side, outline_index);
-                    if let Some(target) = target {
-                        let line = self.source_function_line(target.node, &target.function);
-                        self.selected = target.node;
-                        self.open_editor_at(target.node, line);
-                        self.overlay = None;
-                        return;
+                    if let Some(target) =
+                        self.graph_tree_item(&search, search.graph_side, outline_index)
+                    {
+                        // Enter on a tree node means "now show me the tree around
+                        // this one"; at the focus itself it opens the editor,
+                        // which is the gesture the three-column view uses too.
+                        // 在树节点上按 Enter 表示"现在给我看围绕它的那棵树"；在焦点本身
+                        // 上则打开编辑器，三列视图的手势也是如此。
+                        if !self.recentre_call_tree(&mut search, target.clone()) {
+                            let line = self.source_function_line(target.node, &target.function);
+                            self.selected = target.node;
+                            self.open_editor_at(target.node, line);
+                            self.overlay = None;
+                            return;
+                        }
                     }
                 }
                 KeyCode::Enter if search.graph_focus == 3 => {

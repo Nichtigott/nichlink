@@ -21,6 +21,8 @@ pub mod index;
 pub mod inspection;
 #[path = "metadata/metadata.rs"]
 pub mod metadata;
+#[path = "ports/ports.rs"]
+pub mod ports;
 #[path = "query/query.rs"]
 pub mod query;
 #[path = "transaction/transaction.rs"]

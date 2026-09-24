@@ -94,13 +94,13 @@ pub fn install_everywhere() -> Result<InstallReport, String> {
 /// Only editors that match a snippet **prefix by prefix** are installed by
 /// default. An engine that matches fuzzily — blink.cmp, LuaSnip through
 /// nvim-cmp — also offers a field trigger at a **value** position, so
-/// `crc` there matches `handle_contracts: ` and the field shapes pollute the
+/// `crc` there matches `parent: ` and the field shapes pollute the
 /// value chain (measured; see `docs/audit-2026-09-21.md`). Those engines are
 /// skipped unless the caller asks for them by name, because the sentence a field
 /// shape really needs — `crate::…::NODE_ID`, the face's own marker type — is
 /// value completion, which rust-analyzer already provides.
 /// 默认只安装**按前缀**匹配 snippet 的编辑器。模糊匹配的引擎（blink.cmp、经 nvim-cmp 的
-/// LuaSnip）在**值位**也会命中字段 trigger，于是值位敲 `crc` 会命中 `handle_contracts: `、
+/// LuaSnip）在**值位**也会命中字段 trigger，于是值位敲 `crc` 会命中 `parent: `、
 /// 字段定式污染值补全链（已实测，见 `docs/audit-2026-09-21.md`）。这类引擎只有在调用方显式
 /// 指名时才安装——因为字段定式真正需要的语句（`crate::…::NODE_ID`、本面自己的标记类型）
 /// 属于值补全，rust-analyzer 本来就提供。

@@ -118,8 +118,6 @@ pub fn snapshot_from_values(
         contract: OwnedObjectContract {
             required_parts: split_csv_owned(value("required_parts")),
             provided_parts: split_csv_owned(value("provided_parts")),
-            expected_output: value("expected_output").to_owned(),
-            actual_output: value("actual_output").to_owned(),
         },
         flow: parse_flow_value(value("flow"))?.unwrap_or_else(OwnedFlowContract::none),
         flow_provider: (!value("flow_provider").is_empty())

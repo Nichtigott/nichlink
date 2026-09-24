@@ -22,8 +22,9 @@ impl App {
             match key.code {
                 KeyCode::Up => move_face_field(&mut add, -1),
                 KeyCode::Down | KeyCode::Tab => move_face_field(&mut add, 1),
-                KeyCode::Enter | KeyCode::Char(' ') if add.field == 2 => {
-                    add.values[2] = (add.values[2] != "true").to_string();
+                KeyCode::Enter | KeyCode::Char(' ') if add.field == face_field::NEEDS_REGISTRY => {
+                    add.values[face_field::NEEDS_REGISTRY] =
+                        (add.values[face_field::NEEDS_REGISTRY] != "true").to_string();
                 }
                 KeyCode::Enter if add.is_editable(add.field) => add.editing = true,
                 KeyCode::Char('s') => {

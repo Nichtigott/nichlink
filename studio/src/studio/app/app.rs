@@ -14,6 +14,7 @@ mod navigation;
 use navigation::*;
 mod sample;
 use sample::sample_live_trace;
+mod call_tree_queries;
 mod graft;
 mod graph_queries;
 #[path = "hot_zones.rs"]
@@ -32,10 +33,13 @@ mod support;
 pub use state::*;
 use support::host_manifest;
 
+use std::cell::RefCell;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use nichlink_debug_method::{CallEvidence, CallTrace, MirCall, MirGraph};
 use nichlink_run_method::{
     NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
+    face_field,
 };
 
 /// Studio's top-level state: the loaded registry, active page, and UI cursors.
@@ -97,6 +101,9 @@ pub struct App {
     graph_dragging_divider: bool,
     dragging_divider: bool,
     last_source_stamp: u128,
+    /// Memoised call trees, newest first; see `CallTreeMemo`.
+    /// 被备忘的调用树，最新的在前；见 `CallTreeMemo`。
+    tree_cache: RefCell<Vec<CallTreeMemo>>,
     last_source_check: Instant,
 }
 

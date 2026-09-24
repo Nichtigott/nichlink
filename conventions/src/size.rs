@@ -10,10 +10,10 @@
 //! 审计实测源码树，发现 15 个文件超过它，最大 751 行。没有东西去量的上限不是上限，因此本
 //! 模块去量它，并把当前的例外显式钉住。
 //!
-//! The list holds fourteen today: moving the shared JSON encoder out of
+//! The list holds twelve today: moving the shared JSON encoder out of
 //! `diagnostic/build.rs` brought that file back under the ceiling, and the
 //! ratchet made removing its entry mandatory rather than optional.
-//! 这份清单今天有 14 项：把共用的 JSON 编码器移出 `diagnostic/build.rs` 让该文件缩回上限
+//! 这份清单今天有 12 项：把共用的 JSON 编码器移出 `diagnostic/build.rs` 让该文件缩回上限
 //! 之内，而棘轮让删除对应项成为必然而不是可选。
 //!
 //! The ratchet has two teeth, and both matter. A newly oversized file fails the
@@ -52,17 +52,15 @@ pub const BASELINE: &[(&str, usize)] = &[
     ("core/src/registry_core/declaration/runtime_checks.rs", 751),
     ("core/src/registry_core/plugin/contracts/contracts.rs", 645),
     ("build_method/src/entry.rs", 572),
-    ("core/src/registry_core/tree/connector/connector.rs", 506),
+    ("core/src/registry_core/tree/connector/connector.rs", 504),
     ("core/src/registry_core/syntax/entries/graft.rs", 503),
     ("studio/src/studio/app/graft.rs", 499),
     ("core/src/registry_core/syntax/face.rs", 484),
     ("build_method/src/scope.rs", 480),
-    ("core/src/registry_core/declaration/registration.rs", 465),
+    ("core/src/registry_core/declaration/registration.rs", 460),
     ("build_method/src/graft_plan_check.rs", 465),
     ("core/src/registry_core/tree/graft_ops/overlay.rs", 463),
-    ("run_method/src/authoring/operations/operations.rs", 459),
     ("run_method/src/runtime/trace/frames/frames.rs", 452),
-    ("run_method/src/authoring/external_graft/plan.rs", 452),
 ];
 
 /// Whether a path is a test-only source file.

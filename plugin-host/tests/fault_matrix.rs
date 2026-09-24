@@ -47,8 +47,6 @@ fn artifact(bytes: Vec<u8>, mode: PluginMode) -> nichlink_run_method::VerifiedPl
         contract: ObjectContract {
             required_parts: &[],
             provided_parts: &[],
-            expected_output: "",
-            actual_output: "",
         },
         flow: FlowContract::NONE,
         flow_provider: None,

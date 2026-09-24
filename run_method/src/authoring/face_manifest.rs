@@ -51,8 +51,6 @@ impl FaceManifest {
             ("part_traits", ""),
             ("part_contracts", ""),
             ("requires", ""),
-            ("expected_output", "()"),
-            ("actual_output", "()"),
             ("runtime_checks", ""),
             ("flow", ""),
             ("flow_provider", ""),
@@ -84,8 +82,8 @@ pub use super::operations::{
 };
 pub use super::validation::AuthoringContext;
 
-// Field dictionary shared by the Studio form and the file authoring API.
-// The definitions live in the kernel `authoring` module.
-// Studio 表单与文件创作 API 共用的字段词典；定义位于 kernel 的
+// Field dictionary and slot names shared by the Studio form and the file
+// authoring API. The definitions live in the kernel `authoring` module.
+// Studio 表单与文件创作 API 共用的字段词典与槽位名；定义位于 kernel 的
 // `authoring` 模块。
-pub use nichlink::authoring::{FACE_FIELD_COUNT, FACE_FIELD_NAMES};
+pub use nichlink::authoring::{FACE_FIELD_COUNT, face_field};

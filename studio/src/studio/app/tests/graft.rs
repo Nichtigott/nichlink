@@ -2,6 +2,7 @@
 //! 外部 graft 组合回归测试。
 
 use super::*;
+use nichlink_run_method::face_field;
 
 /// The graft screen composes a plan, shows the entry line, and never edits host
 /// source. A plan is a record; the overlay itself is applied by the host.
@@ -19,8 +20,8 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
 
     let mut app = App::load();
     let mut add = AddState::new(app.registry.id());
-    add.values[1] = "canvas".to_owned();
-    add.values[8] = "Canvas".to_owned();
+    add.values[face_field::MODULE] = "canvas".to_owned();
+    add.values[face_field::KIND] = "Canvas".to_owned();
     app.submit_add(&add);
     let target = app
         .registry
@@ -129,8 +130,8 @@ fn graft_refuses_a_selector_that_already_exists() {
 
     let mut app = App::load();
     let mut add = AddState::new(app.registry.id());
-    add.values[1] = "canvas".to_owned();
-    add.values[8] = "Canvas".to_owned();
+    add.values[face_field::MODULE] = "canvas".to_owned();
+    add.values[face_field::KIND] = "Canvas".to_owned();
     app.submit_add(&add);
     app.selected = app
         .registry
@@ -181,8 +182,8 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
 
     let mut app = App::load();
     let mut add = AddState::new(app.registry.id());
-    add.values[1] = "canvas".to_owned();
-    add.values[8] = "Canvas".to_owned();
+    add.values[face_field::MODULE] = "canvas".to_owned();
+    add.values[face_field::KIND] = "Canvas".to_owned();
     app.submit_add(&add);
     app.selected = app
         .registry
@@ -245,8 +246,8 @@ fn graft_reads_the_declared_slot_from_the_host_entry() {
 
     let mut app = App::load();
     let mut add = AddState::new(app.registry.id());
-    add.values[1] = "canvas".to_owned();
-    add.values[8] = "Canvas".to_owned();
+    add.values[face_field::MODULE] = "canvas".to_owned();
+    add.values[face_field::KIND] = "Canvas".to_owned();
     app.submit_add(&add);
     app.selected = app
         .registry

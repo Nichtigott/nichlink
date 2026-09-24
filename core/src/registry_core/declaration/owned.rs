@@ -97,12 +97,6 @@ pub struct OwnedObjectContract {
     /// Construction parts the parts type supplies.
     /// parts 类型实际提供的构造 parts。
     pub provided_parts: Vec<String>,
-    /// Output type name the preset expects.
-    /// preset 期望的输出类型名。
-    pub expected_output: String,
-    /// Output type name the parts type actually returns.
-    /// parts 类型实际返回的输出类型名。
-    pub actual_output: String,
 }
 
 impl OwnedAdmission {
@@ -149,13 +143,7 @@ impl OwnedObjectContract {
     /// Validate the relationship between required and supplied parts.
     /// 校验所需 parts、实际提供 parts 以及返回值合同。
     pub fn validate(&self, object: &str) -> Vec<String> {
-        validate_object_contract(
-            &self.required_parts,
-            &self.provided_parts,
-            &self.expected_output,
-            &self.actual_output,
-            object,
-        )
+        validate_object_contract(&self.required_parts, &self.provided_parts, object)
     }
 }
 
@@ -313,8 +301,6 @@ impl RegistrationSnapshot {
         // the editable output labels.
         // part 列表来自已编译 trait 的关联常量；只读源码的热刷新无法可靠重建，
         // 因此保留这份可执行证据，只更新可编辑的输出标签。
-        self.contract.expected_output = authored.contract.expected_output;
-        self.contract.actual_output = authored.contract.actual_output;
         if authored.flow.is_declared() {
             self.flow = authored.flow;
         }

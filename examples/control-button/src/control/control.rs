@@ -18,7 +18,6 @@ pub struct Control;
 
 crate::root_object! {
     kind: Control,
-    handle: Control,
     needs_registry: true,
     parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
     // 规则不再重复写第二遍：`needs_registry: true` 的面省略 `registry_rule:` 时，
@@ -31,8 +30,6 @@ crate::root_object! {
     // replace the whole subtree only when the replacement agrees with it.
     // 文件夹面也可以发布自己的数据流合同；因此只有替换端与之兼容时，`full`
     // 切口才允许换掉整棵子树。
-    expected_output: "ControlFrame",
-    actual_output: "ControlFrame",
     flow: FlowContract::new(
         ContractId::new("control.frame.v1"),
         1,

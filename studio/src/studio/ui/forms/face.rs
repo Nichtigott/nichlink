@@ -35,7 +35,7 @@ fn draw_face_form(
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
         .split(inner[0]);
-    let fields = face_field_indices(add);
+    let fields = face_field_indices();
     let name_width = fields
         .iter()
         .map(|index| face_field_presentation(*index).label.len())
@@ -54,10 +54,16 @@ fn draw_face_form(
             };
             let presentation = face_field_presentation(*index);
             let value = face_field_value(add, *index);
+            // The read-only rows close the list and print muted, so the whole
+            // block reads as one machine-value strip rather than as rows the
+            // author forgot to fill in.
+            // 只读行收尾并以暗色打印，使整块读起来像一条机器取值，而不是作者忘了填的几行。
             let style = if selected {
                 Style::default().fg(Color::Black).bg(CYAN)
-            } else {
+            } else if add.is_editable(*index) {
                 Style::default().fg(INK)
+            } else {
+                Style::default().fg(MUTED)
             };
             let role = if add.locked_fields.contains(index) {
                 face_fields::FaceFieldRole::ReadOnly
@@ -83,7 +89,15 @@ fn draw_face_form(
         .with_selected(selected_row)
         .with_offset(offset);
     frame.render_stateful_widget(
-        List::new(rows).block(panel(title, GREEN)),
+        List::new(rows).block(
+            panel(title, GREEN).title_bottom(
+                Line::from(Span::styled(
+                    " ↳ derived, or fixed after creation: shown, not typed ",
+                    Style::default().fg(MUTED),
+                ))
+                .alignment(Alignment::Center),
+            ),
+        ),
         body[0],
         &mut state,
     );

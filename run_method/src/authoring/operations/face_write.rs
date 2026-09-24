@@ -37,24 +37,19 @@ const CREATE_FIELD_ORDER: &[&str] = &[
     "name_en",
     "summary_zh",
     "summary_en",
-    "params",
     "exports",
-    "handle",
     "stable_name",
     "getting_from_other_registry",
-    "handle_contracts",
-    "part_contracts",
     "requires",
     "provides",
-    "expected_output",
-    "actual_output",
     "runtime_checks",
     "flow",
     "flow_provider",
     "handle_traits",
+    "handle_contracts",
     "part_traits",
+    "part_contracts",
     "needs_registry",
-    "registry_name",
     "registration_rule",
     "admission",
 ];
@@ -69,32 +64,25 @@ const EDIT_FIELD_ORDER: &[&str] = &[
     "name_en",
     "summary_zh",
     "summary_en",
-    "params",
     "exports",
-    "handle",
     "stable_name",
     "needs_registry",
-    "registry_name",
     "getting_from_other_registry",
     "registration_rule",
     "admission",
-    "handle_contracts",
-    "part_contracts",
     "handle_traits",
     "part_traits",
     "requires",
     "provides",
-    "expected_output",
-    "actual_output",
     "runtime_checks",
     "flow",
     "flow_provider",
 ];
 
-/// Write all 28 shared fields into `face`. Both public entry points reach the
+/// Write all 27 shared fields into `face`. Both public entry points reach the
 /// field-by-field handling below through this one loop, so a new field is wired
 /// once instead of once per struct.
-/// 将全部 28 个共用字段写入 `face`。两个公开入口都经由这一个循环抵达下面的逐字段
+/// 将全部 27 个共用字段写入 `face`。两个公开入口都经由这一个循环抵达下面的逐字段
 /// 处理，因此新增字段只需接一次线，而不是每个结构体各接一次。
 pub(super) fn apply_module_face_values(
     face: &mut FaceManifest,
@@ -118,9 +106,12 @@ pub(super) fn apply_face_value(
     match field {
         "kind" => edit_kind(face, values.kind, write),
         "needs_registry" => face.edit("needs_registry", &values.needs_registry.to_string()),
-        // Trait labels are derived from contract paths, and both paths share the
-        // same editing rule, so the contract helper is the whole handling.
-        // trait 标签由契约路径推导；两条路径的编辑规则相同，因此契约辅助函数
+        // Trait labels follow the compiler-checked paths when there are any, and
+        // stand alone when there are none — the same rule the macro applies
+        // through `__face_trait_labels_or!`. Both paths therefore keep the same
+        // editing rule, and the helper is the whole handling.
+        // trait 标签在有参与编译检查的路径时跟随路径，没有时独立成立——与宏经
+        // `__face_trait_labels_or!` 施加的规则相同。两条路径的编辑规则因此一致，辅助函数
         // 就是全部处理。
         "handle_traits" => apply_trait_contract(
             face,
@@ -193,6 +184,9 @@ pub(super) fn edit_required(
     }
 }
 
+/// Write the label field from the paths when there are paths, and from the
+/// author's labels when there are none.
+/// 有路径时由路径写标签字段，没有路径时由作者的标签写入。
 pub(super) fn apply_trait_contract(
     face: &mut FaceManifest,
     label_field: &str,
@@ -244,12 +238,9 @@ mod tests {
             name_en = "Widget",
             summary_zh = "摘要",
             summary_en = "Summary",
-            params = "WidgetParams",
             exports = "a,b",
-            handle = "Widget",
             stable_name = "widget",
             needs_registry = false,
-            registry_name = "widget",
             getting_from_other_registry = "",
             registration_rule = "ANY",
             admission = "ANY",
@@ -259,8 +250,6 @@ mod tests {
             part_contracts = "",
             requires = "",
             provides = "widget",
-            expected_output = "()",
-            actual_output = "()",
             runtime_checks = "",
             flow = "",
             flow_provider = "",

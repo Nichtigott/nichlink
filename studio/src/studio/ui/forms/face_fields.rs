@@ -13,12 +13,11 @@ pub(super) use nichlink_run_method::{FaceFieldRole, face_field_default, face_fie
 pub(super) fn face_field_value(add: &AddState, index: usize) -> String {
     let stored = add.values[index].trim();
     match (index, stored) {
-        (2, "true") => "[x]".to_owned(),
-        (2, "false" | "") => "[ ] <default>".to_owned(),
-        (4 | 5, "ANY") => "<default: ANY>".to_owned(),
-        (6, "NoParts") => "<default: NoParts>".to_owned(),
-        (13, "NoPreset") => "<default: NoPreset>".to_owned(),
-        (24 | 25, "()") => "<default: ()>".to_owned(),
+        (face_field::NEEDS_REGISTRY, "true") => "[x]".to_owned(),
+        (face_field::NEEDS_REGISTRY, "false" | "") => "[ ] <default>".to_owned(),
+        (face_field::REGISTRY_RULE | face_field::ADMISSION, "ANY") => "<default: ANY>".to_owned(),
+        (face_field::PARTS, "NoParts") => "<default: NoParts>".to_owned(),
+        (face_field::PRESET, "NoPreset") => "<default: NoPreset>".to_owned(),
         (_, "") => face_field_default(&add.values, index),
         _ => stored.to_owned(),
     }

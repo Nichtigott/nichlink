@@ -156,8 +156,6 @@ pub(crate) fn validate_registration_requirements<S: AsRef<str>>(
 pub(crate) fn validate_object_contract<S: AsRef<str>>(
     required_parts: &[S],
     provided_parts: &[S],
-    expected_output: &str,
-    actual_output: &str,
     object: &str,
 ) -> Vec<String> {
     let mut failures = Vec::new();
@@ -168,11 +166,6 @@ pub(crate) fn validate_object_contract<S: AsRef<str>>(
                 required.as_ref()
             ));
         }
-    }
-    if expected_output != actual_output {
-        failures.push(format!(
-            "`{object}` returns `{actual_output}`, expected `{expected_output}`"
-        ));
     }
     failures
 }
@@ -213,8 +206,6 @@ mod tests {
             contract: ObjectContract {
                 required_parts: &["paint"],
                 provided_parts: &[],
-                expected_output: "()",
-                actual_output: "()",
             },
             flow: FlowContract::NONE,
             flow_provider: None,
@@ -270,8 +261,6 @@ mod tests {
             contract: OwnedObjectContract {
                 required_parts: vec!["paint".to_owned()],
                 provided_parts: Vec::new(),
-                expected_output: "()".to_owned(),
-                actual_output: "()".to_owned(),
             },
             flow: OwnedFlowContract::none(),
             flow_provider: None,
@@ -322,21 +311,21 @@ mod tests {
     }
 
     /// The same construction-contract failure must read identically on both
-    /// storage shapes.
-    /// 同一条构造合同失败在两种存储形态上必须读起来完全一致。
+    /// storage shapes. Only the part relation is left to report: the output half
+    /// compared two author-written names with each other and said nothing about
+    /// the types, so it was replaced by `assert_contract` at compile time.
+    /// 同一条构造合同失败在两种存储形态上必须读起来完全一致。现在只剩 part 关系可报告：
+    /// 输出那一半只是把作者写下的两个名字互相比较、对类型什么都没说，因此已由编译期的
+    /// `assert_contract` 取代。
     #[test]
     fn object_contract_twins_report_identical_failures() {
         let compiled_contract = ObjectContract {
             required_parts: &["paint", "layout"],
             provided_parts: &["layout"],
-            expected_output: "Frame",
-            actual_output: "RawFrame",
         };
         let owned_contract = OwnedObjectContract {
             required_parts: vec!["paint".to_owned(), "layout".to_owned()],
             provided_parts: vec!["layout".to_owned()],
-            expected_output: "Frame".to_owned(),
-            actual_output: "RawFrame".to_owned(),
         };
 
         let compiled = compiled_contract.validate("Button");
@@ -344,10 +333,7 @@ mod tests {
         assert_eq!(compiled, owned, "compiled and owned disagree");
         assert_eq!(
             compiled,
-            [
-                "`Button` is missing construction part `paint`".to_owned(),
-                "`Button` returns `RawFrame`, expected `Frame`".to_owned(),
-            ]
+            ["`Button` is missing construction part `paint`".to_owned()]
         );
     }
 

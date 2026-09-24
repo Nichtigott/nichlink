@@ -1,11 +1,16 @@
 //! Registration-face field presentation metadata.
 // 注册面字段的展示元数据。
 //
-// The 30-field table describes the registration-face protocol itself, shared
-// by the Studio form and the file authoring API. Values stay in the caller;
-// only static labels, roles, defaults, and help text live here.
-// 30 字段表描述注册面协议本身，Studio 表单与文件创作 API 共用。取值留在
-// 调用方，这里只有静态标签、角色、默认值与帮助文本。
+// One row per slot of the authoring layout (`super::face_field`), shared by the
+// Studio form and the file authoring API. Values stay in the caller; only static
+// labels, roles, defaults, and help text live here. The help text states what
+// the field does, not what it sounds like it should do: a row whose sentence
+// contradicts the code is worse than no row.
+// 创作布局（`super::face_field`）每个槽位一行，Studio 表单与文件创作 API 共用。取值留在
+// 调用方，这里只有静态标签、角色、默认值与帮助文本。帮助文本陈述字段实际做什么，而不是
+// 听起来像做什么：一句与代码相反的说明比没有说明更糟。
+
+use super::face_field::*;
 
 /// Field role shown next to each label in the field guide.
 /// 字段指南中标签旁展示的角色。
@@ -75,8 +80,8 @@ pub struct FaceFieldPresentation {
     pub help: &'static str,
 }
 
-/// Presentation metadata for the 30 registration-face fields, by index.
-/// 按索引返回 30 个注册面字段的展示元数据。
+/// Presentation metadata for the authoring layout, by slot index.
+/// 按槽位下标返回创作布局的展示元数据。
 pub fn face_field_presentation(index: usize) -> FaceFieldPresentation {
     let field = |group, label, role, default, help| FaceFieldPresentation {
         group,
@@ -86,210 +91,182 @@ pub fn face_field_presentation(index: usize) -> FaceFieldPresentation {
         help,
     };
     match index {
-        0 => field(
+        PARENT => field(
             "IDENTITY",
             "parent registry",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Required,
             "selected tree node",
-            "Registry that receives this face. A readable path or node identity is accepted.",
+            "Registry that receives this face: the selected tree node, or a path/node identity typed here.",
         ),
-        1 => field(
+        MODULE => field(
             "IDENTITY",
             "module name",
             FaceFieldRole::Required,
             "none",
             "Rust module directory and file name. Use snake_case.",
         ),
-        2 => field(
+        NEEDS_REGISTRY => field(
             "REGISTRY",
             "owns child registry",
             FaceFieldRole::Optional,
             "false",
             "Create the same Registry type below this face so children can register recursively.",
         ),
-        3 => field(
+        TREE_SLOT => field(
             "REGISTRY",
             "tree slot",
-            FaceFieldRole::Derived,
+            FaceFieldRole::ReadOnly,
             "module name",
-            "Name shown in the registration tree. Override only when it must differ from the source module.",
+            "Name this face shows in the registration tree. It follows the declaring module, so it is shown rather than authored.",
         ),
-        4 => field(
+        REGISTRY_RULE => field(
             "REGISTRY",
             "child structure rule",
             FaceFieldRole::Conditional,
             "ANY",
             "Minimum structure required from children. Used only when this face owns a Registry.",
         ),
-        5 => field(
+        ADMISSION => field(
             "REGISTRY",
             "allowed dependencies",
             FaceFieldRole::Conditional,
             "ANY",
             "External registration branches that descendants may consume. This is not a construction rule.",
         ),
-        6 => field(
+        PARTS => field(
             "IMPLEMENTATION",
             "parts type",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Optional,
             "NoParts",
             "Concrete state/parts type supplied by this face.",
         ),
-        7 => field(
+        EXPORTS => field(
             "CAPABILITIES",
             "exports",
             FaceFieldRole::Optional,
             "none",
             "Interfaces exposed at the registration seam. A parent structure rule may require them.",
         ),
-        8 => field(
+        KIND => field(
             "IDENTITY",
             "Rust type",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Optional,
             "PascalCase(module)",
             "Kind used by Rust and registration identity. It is derived from module name unless overridden.",
         ),
-        9 => field(
+        NAME_ZH => field(
             "IDENTITY",
             "display name zh",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Optional,
             "Rust type",
             "Chinese display name. It defaults to the Rust type.",
         ),
-        10 => field(
+        NAME_EN => field(
             "IDENTITY",
             "display name en",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Optional,
             "Rust type",
             "English display name. It defaults to the Rust type.",
         ),
-        11 => field(
+        SUMMARY_ZH => field(
             "IDENTITY",
             "summary zh",
             FaceFieldRole::Optional,
             "none",
             "Short Chinese description shown to people and AI tools.",
         ),
-        12 => field(
+        SUMMARY_EN => field(
             "IDENTITY",
             "summary en",
             FaceFieldRole::Optional,
             "none",
             "Short English description shown to people and AI tools.",
         ),
-        13 => field(
+        PRESET => field(
             "IMPLEMENTATION",
             "preset type",
-            FaceFieldRole::Derived,
+            FaceFieldRole::Optional,
             "NoPreset",
             "Preset contract that states which parts the implementation expects.",
         ),
-        14 => field(
-            "IMPLEMENTATION",
-            "parameter metadata",
-            FaceFieldRole::Derived,
-            "Rust type",
-            "Searchable parameter name or schema. This is metadata, not a Rust type assertion.",
-        ),
-        15 => field(
-            "IMPLEMENTATION",
-            "handle type",
-            FaceFieldRole::Derived,
-            "Rust type",
-            "Rust type that implements the face contract.",
-        ),
-        16 => field(
+        STABLE_NAME => field(
             "IDENTITY",
             "stable identity",
             FaceFieldRole::Optional,
             "source identity",
             "Explicit identity preserved across source moves. Leave empty unless external plans must survive a move.",
         ),
-        17 => field(
+        GETTING_FROM_OTHER_REGISTRY => field(
             "REGISTRY",
-            "external source note",
+            "dependency registry",
             FaceFieldRole::Optional,
             "none",
-            "Provenance metadata only. Admission grants access; requires selects a dependency provider.",
+            "Registry whose providers this face's requires edges may draw on. It names a resolution source; admission is what grants the access.",
         ),
-        18 => field(
+        REGISTRY_RULE_PATH => field(
             "REGISTRY",
             "rule source",
-            FaceFieldRole::Derived,
+            FaceFieldRole::ReadOnly,
             "registry_rule/registry_rule.rs",
-            "Canonical rule file beside a face that owns a Registry.",
+            "Canonical rule file beside a face that owns a Registry. It follows the face's own location.",
         ),
-        19 => field(
+        HANDLE_TRAITS => field(
             "CONTRACTS",
             "handle trait labels",
-            FaceFieldRole::Derived,
+            FaceFieldRole::ReadOnly,
             "trait path names",
-            "Searchable trait labels. Studio derives them when compiler-checked paths are provided.",
+            "Searchable trait labels derived from the handle contract paths. They are not typed separately.",
         ),
-        20 => field(
+        HANDLE_CONTRACTS => field(
             "CONTRACTS",
             "handle trait paths",
             FaceFieldRole::Optional,
             "none",
             "Rust trait paths implemented by the handle and checked by the compiler.",
         ),
-        21 => field(
+        PART_TRAITS => field(
             "CONTRACTS",
             "parts trait labels",
-            FaceFieldRole::Derived,
+            FaceFieldRole::ReadOnly,
             "trait path names",
-            "Searchable parts-trait labels. Studio derives them from compiler-checked paths.",
+            "Searchable parts-trait labels derived from the parts contract paths. They are not typed separately.",
         ),
-        22 => field(
+        REQUIRES => field(
             "CAPABILITIES",
             "requires",
             FaceFieldRole::Optional,
             "none",
             "Capabilities consumed from named providers, written as capability=>provider.",
         ),
-        23 => field(
+        PROVIDES => field(
             "CAPABILITIES",
             "provides",
             FaceFieldRole::Optional,
             "none",
             "Capabilities advertised to dependency resolution. Unlike exports, these satisfy requires edges.",
         ),
-        24 => field(
-            "DATA FLOW",
-            "expected object output",
-            FaceFieldRole::Derived,
-            "()",
-            "Object-construction output expected at registration. Grafts use the flow contract below.",
-        ),
-        25 => field(
-            "DATA FLOW",
-            "actual object output",
-            FaceFieldRole::Derived,
-            "()",
-            "Object-construction output declared by this implementation. It must match the expected output.",
-        ),
-        26 => field(
+        RUNTIME_CHECKS => field(
             "DEBUG",
             "runtime checks",
             FaceFieldRole::Optional,
             "none",
             "Value checks retained according to the selected trace mode.",
         ),
-        27 => field(
+        FLOW => field(
             "DATA FLOW",
             "graft flow contract",
             FaceFieldRole::Optional,
             "none",
             "Versioned input/output seam used to validate replacement grafts.",
         ),
-        28 => field(
+        FLOW_PROVIDER => field(
             "DATA FLOW",
             "flow provider type",
             FaceFieldRole::Conditional,
             "none",
             "Rust provider type for the declared flow contract.",
         ),
-        29 => field(
+        PART_CONTRACTS => field(
             "CONTRACTS",
             "parts trait paths",
             FaceFieldRole::Optional,
@@ -309,22 +286,23 @@ pub fn face_field_presentation(index: usize) -> FaceFieldPresentation {
 /// Effective default shown for one field, derived from the sibling values.
 /// 按同排其他取值推导某个字段的默认展示值。
 pub fn face_field_default(values: &[String], index: usize) -> String {
-    let module = values.get(1).map_or("", String::as_str).trim();
-    let rust_type = values.get(8).map_or("", String::as_str).trim();
+    let module = values.get(MODULE).map_or("", String::as_str).trim();
+    let rust_type = values.get(KIND).map_or("", String::as_str).trim();
     let kind = if rust_type.is_empty() {
         pascal_case(module)
     } else {
         rust_type.to_owned()
     };
     match index {
-        1 => "<required>".to_owned(),
-        3 => auto_value(module),
-        8 => auto_value(&kind),
-        9 | 10 | 14 | 15 => auto_value(&kind),
-        16 => "<source identity>".to_owned(),
-        18 => "<canonical beside face>".to_owned(),
-        19 => derived_trait_names(values.get(20).map_or("", String::as_str)),
-        21 => derived_trait_names(values.get(29).map_or("", String::as_str)),
+        MODULE => "<required>".to_owned(),
+        TREE_SLOT => auto_value(module),
+        KIND | NAME_ZH | NAME_EN => auto_value(&kind),
+        STABLE_NAME => "<source identity>".to_owned(),
+        REGISTRY_RULE_PATH => "<canonical beside face>".to_owned(),
+        HANDLE_TRAITS => {
+            derived_trait_names(values.get(HANDLE_CONTRACTS).map_or("", String::as_str))
+        }
+        PART_TRAITS => derived_trait_names(values.get(PART_CONTRACTS).map_or("", String::as_str)),
         index => {
             let default = face_field_presentation(index).default;
             if default == "none" {
