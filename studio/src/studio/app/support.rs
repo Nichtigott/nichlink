@@ -127,7 +127,7 @@ impl App {
 
     pub(super) fn near_graph_divider(&self, column: u16, row: u16) -> bool {
         self.hot.graph_area.contains((column, row).into())
-            && column.abs_diff(self.hot.graph_callees_area.x) <= 1
+            && column.abs_diff(self.hot.graph_tree_area.right()) <= 1
     }
 
     pub(super) fn resize_graph_split(&mut self, column: u16) {

@@ -45,6 +45,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the READMEs and living docs. Each gate was shown to fail on a real violation
   before being kept.
 - A CI step running `cargo test --workspace --all-features --doc`.
+- `tools/nichlink-visual`: a visual check that runs the real Studio binary in a
+  fixed-size tmux pane, drives it with keys, and saves what the terminal actually
+  shows — plain text and, with `-e`, the SGR escapes. Scenes cover the home page,
+  the search overlay, the add form, the call graph, the focused call tree, an
+  arrow walk through that tree, and the data-flow panel; each scene waits for the
+  app and then for its own screen before capturing, because capturing between the
+  two sometimes saves the previous one. Output goes to `target/visual`, so a run
+  leaves nothing in the checkout.
+- A rendered call-tree test asserts the picture instead of the model: it renders
+  Studio with the graph overlay open, cuts the call-tree panel out of the page by
+  the corners that panel drew, and checks that every node inside the drawn window
+  has its label on screen, that two nodes in one column do not overlap, that a
+  higher level is drawn to the right of a lower one, that every one-column hop
+  has its arrow on the callee's row, and that the header counts what the model
+  holds. It prints the panel it checked, so the shape can be read as well as
+  asserted.
 - One JSON string encoder in the kernel, `nichlink::json`, shared by the build
   diagnostics document, the MIR JSONL artifact and the generated editor
   snippets. It escapes exactly what RFC 8259 requires, and its tests assert the
@@ -61,6 +77,87 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The graph page is the call tree and the values its cursor's function ran with,
+  two panes and nothing else: the relation column that listed callers and callees
+  beside the tree is gone (the tree draws those as edges), and the side-by-side
+  comparison page went with it, along with its `Ctrl-W` binding, its second search
+  field, its `SearchState` fields and the `4` page key. `[` and `]` now move the
+  tree's share of the page, and the divider drag clamps in the same range.
+- Edges leave the caller's **bottom** and enter the callee's **top**, which is
+  what makes the picture a tree: side ports had turned every hop into a sideways
+  shuffle. The focus sits in the middle of the picture whenever anything in the
+  tree calls it, and at the top only when nothing does — which is what the kernel's
+  tree actually says.
+- The graph page's letters are commands and its text is not: typing a letter used
+  to edit the query from a page where `m`, `v`, `g` and `e` are commands, and the
+  catch-all typing arm sat in front of `e`, so that key could never fire (rustc
+  cannot see that conflict, because the arm it shadowed carries a guard). One stale
+  `graph_focus == 2` arm, left over from the removed comparison pane, went with it.
+  The query is edited in the list page, which `/` returns to, and the footer names
+  every key of both pages.
+- The fixture's call graph now has a tree in it — `paint_node_editor` fans out to
+  `layout_panels`, `clamp_canvas_width` and `preview_canvas_width_traced`, and the
+  panel measurers meet again at the clamp — so the visual check has a fork, a depth
+  and a fan-in to show; `tools/nichlink-visual tree-demo` draws it.
+- The widget is told what the kernel knows, and keeps its own viewport. Node text
+  carries the cut counts the budgets left out (`←n`/`→n`), a `▶` for the cursor and
+  a `◆` for the focus — marks, not only colours, because the report that started
+  this was a cursor whose movement was invisible in a terminal with no colour —
+  while each edge carries its evidence kind as a label. The widget is now cached on
+  the app: rebuilt when the focus changes (then fitted), re-stamped when the cursor
+  moves while its viewport and pan/zoom travel with it, and untouched in between, so
+  a drag is not interrupted. Mouse events over its tree go to it, which is what
+  gives the panel wheel zoom, drag panning and click-to-select; its nodes are not
+  draggable, because the tree is a view of the model and a node must not drift away
+  from the level and lane it stands for.
+- Boxes are given the room their own labels need: a lane is as wide as its widest
+  box and a band as tall as its tallest, and each box is centred in that cell.
+  Fixed pitches could not survive the names — a 27-character symbol was drawn
+  across its neighbour, which is the crowding that made the tree hard to read —
+  and the widget's layout has a regression test that fails on any pitch that
+  ignores the content (checked against a fixed one: the long box overlaps).
+- The four arrow keys follow the **drawn** grid instead of the model's own axes, so
+  they keep their printed meaning in both drawers: with the calls running down the
+  screen `↓` steps toward a callee and `↑` back toward the callers, with them
+  running across it those two roles go to `→` and `←`, a level step follows an edge
+  that actually exists (and prefers the lane it is already in), and a sideways
+  press takes the nearest lane of the same band. A press with nothing in that
+  direction says so instead of moving somewhere else.
+- The call tree is drawn by the `rataflow` node-editor widget by default, with the
+  hand-drawn canvases one key (`g`) away and still compiled in: the `node-graph`
+  feature is a default feature now, so the crate ships the widget look, and the
+  canvases remain the ones that draw the kernel's own facts (evidence kinds, cut
+  counts, cursor versus focus) and fit a seven-cell column.
+- The call tree can also be drawn **top-down**, and a narrow panel switches to it
+  automatically: the horizontal canvas needs one column per hop and an 80-column
+  pane gives the tree 19 cells, so two boxes shrank to seven cells each and their
+  names to tails — while the same tree laid out downwards spends one margin column
+  on the edges and then gives every box the panel's full width, one band per hop,
+  callers above and callees below. The switch is automatic below the width where
+  the horizontal layout can still give two columns a readable box, `v` cycles
+  panel-decides / top-down / left-to-right, and the title names the mode.
+- The call tree is drawn as node boxes instead of a ledger. Each function is a
+  bordered cell whose content wraps its **whole** name — the ledger clipped a long
+  name to 15 cells and kept only its tail, so `preview_canvas_width` read as
+  `…w_canvas_width` — the cursor's box takes the heavier border and the focus's
+  the green one, cut counts are badges on the box, and edges leave a port on the
+  caller's border, bend through the gap and end in `▶` with their evidence mark
+  beside it. Columns are as wide as the widest name in them and are narrowed
+  rather than dropped when the panel is one cell short, so the callers of the
+  function being read stay on screen. A legend on the bottom border names the
+  markers, and clicking a box selects that node. The packing reserves room for a
+  neighbour before the cursor's own column takes its width, tightens the gap from
+  five cells to three when that is what buys the second column, and abbreviates a
+  name to its tail with `…` rather than wrapping it into a five-row sliver — all
+  three because a tree drawn as one box has no edges, which is exactly what a
+  narrow terminal used to show. `[` and `]` move the same split the divider drags,
+  and a panel too narrow even for the tight packing says `[ ] widens` in its title
+  instead of letting the reader believe the function has no neighbours.
+- The New Project and plugin forms name their rows too:
+  `app::state::new_project_field` and `app::state::plugin_field` hold one constant
+  per row beside the label the form prints, so a `values[0]` at a call site became
+  `values[new_project_field::DIRECTORY]`, and the two label tables the renderers
+  carried are gone with them.
 - Package READMEs, `docs/discussion-introduction*.md`, and the workspace
   layout in the root README were corrected to describe the current nine-crate
   workspace.
@@ -126,6 +223,11 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   registry-name rule forbids, `external source note` said "provenance only" for
   a field registry resolution reads (it is now labelled `dependency registry`),
   and the kind/parts rows were marked derived while the form edits them.
+- The call report states one fact once: `handle=` sat next to `kind=` on every
+  reported function, and the search matched `params` as a second key for the
+  same string. Both are the kind by rule, so only the kind is printed and only
+  the kind is searched; `RegistrationInfo` keeps both fields for hosts that read
+  them.
 - A typed graft cut now proves the output types across the two faces it joins:
   the build emits `assert_contract::<{cut}::__Preset, {graft}::__Parts>()` beside
   `BUILTIN_GRAFT_CUTS`, so a replacement face whose parts do not supply the
@@ -276,6 +378,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   形式：内核纯净性、模块挂载、450 行棘轮、`missing_docs` 属性与 `#[allow(missing_docs)]` 禁令、
   以及 README 与活文档里 Rust 围栏的可解析性。每道门禁在保留之前都实测过"制造违规即失败"。
 - CI 新增 `cargo test --workspace --all-features --doc` 步骤。
+- 新增 `tools/nichlink-visual`：视觉检查脚本，在固定尺寸的 tmux 面板里运行真实 Studio 二进制、
+  用按键驱动它，并保存终端实际显示的内容——纯文本，以及加 `-e` 时带 SGR 转义的版本。场景覆盖首页、
+  搜索浮层、新增表单、调用图、聚焦的调用树、在树上用方向键走动的过程，以及数据流面板；每个场景先等
+  程序起来、再等它自己那一屏出现，然后才抓屏，因为在两者之间抓屏有时会存下上一屏。输出写到
+  `target/visual`，因此一次运行不会往检出里写东西。
+- 新增"渲染出的调用树"测试，断言的是**图**而不是模型：它带图浮层渲染 Studio，按调用树面板自己
+  画出的四角把该面板从页面里裁出，然后检查窗口内每个节点都在屏幕上有标签、同一列的两个节点不重叠、
+  层号更大的画在更小的右边、每一跳一列的边都在被调用者那一行有箭头、表头数出的数量与模型一致。
+  它会把检查过的面板打印出来，因此这个形状既可断言也可阅读。
 - 内核新增唯一的 JSON 字符串编码器 `nichlink::json`，由构建诊断文档、MIR JSONL 工件与
   生成的编辑器片段共用。它只转义 RFC 8259 要求的那一份；其测试断言"不存在原样控制字符"
   而不是做往返，因为本工作区自己的解析器宽松到会接受非法输出。
@@ -288,6 +399,52 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
+- 调用图页现在只有调用树与"树游标所在函数运行时的取值"两块面板，别无他物：曾经与树并排的
+  "调用者/被调用者"关系栏已删除（树把那些画成了边），左右对比页也随之删除，连同它的 `Ctrl-W`
+  绑定、第二个搜索框、它的 `SearchState` 字段以及 `4` 页面键。`[` 与 `]` 现在移动树在页面上的
+  份额，分隔线拖动使用同一范围。
+- 边从调用者的**底边**离开、进入被调用者的**顶边**，这正是让这张图成为一棵树的东西：侧边端口
+  把每一跳都变成了横着挪一步。只要树里有东西调用焦点，焦点就画在图的中间；只有确实没有调用者时
+  才在顶部——那正是内核的树实际说的话。
+- 调用图页的字母是命令、文本不是：以前在这个页面上输入字母会编辑查询，而这里 `m`、`v`、`g`、`e`
+  都是命令，且兜底的输入分支排在 `e` 之前，于是那个键永远触发不了（rustc 看不见这种冲突，因为它
+  遮蔽的那条 arm 带着守卫）。一条从已删除的对比面板遗留下来的 `graph_focus == 2` arm 也一并清除。
+  查询在列表页编辑，`/` 回到那里，页脚把两页的按键都列出来。
+- 夹具的调用图里现在有一棵树了——`paint_node_editor` 分叉到 `layout_panels`、
+  `clamp_canvas_width` 与 `preview_canvas_width_traced`，而两个测量函数又在钳制处汇合——因此视觉
+  检查有分叉、有深度、也有扇入可看；`tools/nichlink-visual tree-demo` 画的正是它。
+- 控件现在被告知内核知道的事情，并且保留自己的视口。节点文本带上预算漏掉的裁剪计数
+  （`←n`/`→n`）、游标的 `▶` 与焦点的 `◆`——是**标记**而不只是颜色，因为引出这一轮的反馈正是
+  "游标移动在没有颜色的终端里看不见"——而每条边带着自己的证据种类作为标签。控件现在缓存在 App
+  上：焦点变化时重建（并重新铺满），游标移动时重盖标记而视口随行，其余情况下原样复用，因此拖动
+  不会被打断。落在它那棵树上的鼠标事件交给它，这正是本面板获得滚轮缩放、拖拽平移与点击选中的
+  方式；它的节点不可拖动，因为这棵树是模型的视图，节点不能偏离它所代表的层与车道。
+- 盒子拿到自己标签所需的宽度：车道取其中最宽盒子的宽度，带取其中最高盒子的高度，每个盒子在该格里
+  居中。固定间距扛不住名字——一个 27 字符的符号会画到邻列身上，这正是让树读不懂的拥挤——控件绘制方
+  的排版现在有一条回归测试，任何无视内容的间距都会让它失败（已用固定列宽验证过：长盒子确实重叠）。
+- 四个方向键跟随**画出来的**网格，而不是模型自己的轴，因此它们在两种绘制方里都保持字面含义：调用沿
+  屏幕向下时 `↓` 走向被调用者、`↑` 回到调用者，沿屏幕横向时这两个角色交给 `→` 与 `←`；沿层的移动走
+  的是确实存在的那条边（并优先留在原车道），横向则取同一条带内最近的车道。该方向没有节点时状态行会
+  说出来，而不是挪到别处去。
+- 调用树默认由 `rataflow` 节点编辑器控件绘制，手绘画布只差一个按键（`g`）且仍然编入：`node-graph`
+  现在是默认特性，因此 crate 出厂即是控件的样子，而画布仍保留着画内核自身事实（证据种类、裁剪计数、
+  游标与焦点的区分）以及塞得进七格宽列的那一份。
+- 调用树也可以**自上而下**画，并且窄面板会自动改用这种画法：横向画布每一跳要占一整列，而 80 列
+  的面板只给树 19 格，于是两个盒子各缩到七格、名字只剩尾部——而同一棵树向下排只需为边花掉一列边距，
+  然后让每个盒子都拿到面板整宽，一跳一条带，调用者在上、被调用者在下。当面板窄到横向画布无法再给
+  两列各一个可读盒子时自动切换，`v` 在"跟随面板 / 自上而下 / 从左到右"之间循环，标题写出当前模式。
+- 调用树改为画**节点盒**，不再是账本。每个函数是一个带边框的单元格，内容按**整名**换行——
+  账本把长名字裁到 15 格且只留尾部，因此 `preview_canvas_width` 读作 `…w_canvas_width`——游标的
+  盒子用更重的边框、焦点的盒子是绿色，裁剪计数是盒子上的徽标，边在调用者边框上留下端口、在空隙里
+  转折、以 `▶` 收尾并在旁边带证据标记。列宽取该列最宽的名字，而面板小一格时列是被**收窄**而不是
+  被丢弃，因此正在阅读的函数的调用者仍留在屏幕上。底边图例列出各标记，点击盒子即选中该节点。
+  打包会先给邻列留出位置再让游标列取宽，在"这样能换来第二列"时把空隙从五格收到三格，并在名字放不进
+  两行时改为保留尾部加 `…`，而不是折成五行窄条——这三条都因为画成一个盒子的树没有边，而窄终端过去
+  显示的正是那个。`[` 与 `]` 移动分隔线拖动用的同一个比例，而连窄空隙都放不下的面板会在标题里写
+  `[ ] widens`，而不是让读者以为这个函数没有邻居。
+- 新建项目与插件表单的行也具名了：`app::state::new_project_field` 与
+  `app::state::plugin_field` 每行一个常量，并挨着表单打印的标签，因此调用点上的 `values[0]`
+  变成 `values[new_project_field::DIRECTORY]`，渲染器原先各自携带的两张标签表也随之消失；
 - 包 README、`docs/discussion-introduction*.md` 与根 README 的工作区结构已更正为当前
   的九 crate 工作区；
 - `NICH_LINK_ENTRY` 现在每次构建只解析一次，同时驱动作用域剪枝与生成的
@@ -331,6 +488,9 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   槽位随它们描述的字段一起消失。凡是与代码相反的帮助文本都已改正：树槽位声称可以覆盖，而
   registry_name 规则不允许；`external source note` 对一个人人参与注册机解析的字段写"仅来源
   元数据"（现改名为 `dependency registry`）；kind/parts 两行标着"推导"却可编辑。
+- call report 对同一个事实只说一次：`handle=` 曾与 `kind=` 并排在每个函数上打印，搜索也曾把
+  `params` 当作同一字符串的第二个键。按规则两者都是 kind，因此现在只打印 kind、只搜索 kind；
+  `RegistrationInfo` 为读取它的宿主保留这两个字段。
 - 有类型的嫁接切口现在跨它连接的两个面证明输出类型：构建会在 `BUILTIN_GRAFT_CUTS` 旁发出
   `assert_contract::<{cut}::__Preset, {graft}::__Parts>()`，因此替换面的 parts 若不提供 preset
   要求的 parts，构建就会失败。字符串与选择器切口不发断言，这一点写在填充累加器的地方，而不是

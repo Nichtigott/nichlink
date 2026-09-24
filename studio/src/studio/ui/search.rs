@@ -1,17 +1,13 @@
 //! Search result and source preview rendering.
 //! 搜索结果与源码预览渲染。
 //!
-//! This root owns the `draw_search` layout and re-exports the pieces: the
-//! query bar in `query`, the result lists in `results`, and the selected
-//! symbol preview and call lane in `detail`. The source-detail page stays in
-//! `super::search_detail`.
-//! 本模块根承载 `draw_search` 布局并重导出各部分：查询栏在 `query`，
-//! 结果列表在 `results`，选中符号预览与调用关系栏在 `detail`。
-//! 源码详情页仍位于 `super::search_detail`。
+//! This root owns the `draw_search` layout and re-exports the pieces: the query
+//! bar in `query`, the result list in `results`, and the selected symbol preview
+//! and call lane in `detail`.
+//! 本模块根承载 `draw_search` 布局并重导出各部分：查询栏在 `query`，结果列表在
+//! `results`，选中符号预览与调用关系栏在 `detail`。
 
 use super::*;
-
-use super::search_detail::draw_search_detail;
 
 #[path = "search/detail.rs"]
 mod detail;
@@ -28,7 +24,7 @@ pub(super) fn draw_search(
     area: Rect,
     app: &mut App,
     search: &SearchState,
-) -> (Rect, usize, usize) {
+) -> (Rect, usize) {
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -44,111 +40,59 @@ pub(super) fn draw_search(
     if search.graph_mode {
         draw_search_graph(frame, inner[1], app, search);
         // Graph-mode footer. Every key below is matched in the `search.graph_mode`
-        // branch of `handle_search_overlay_key`: Tab/BackTab move focus, ↑↓ move
-        // the selection, Enter follows or opens, `m` loads the MIR snapshot, Esc
-        // goes back. `Ctrl-W` is deliberately absent because it is only matched
-        // in the list branch below.
+        // branch of `handle_search_overlay_key`: Tab moves focus, ↑↓ move the
+        // selection, Enter re-centres or opens, `m` loads the MIR snapshot, `v`
+        // cycles the tree's layout, `g` swaps its drawer, `[`/`]` move the split,
+        // and Esc goes back.
         // 调用图页脚。下列按键都在 `handle_search_overlay_key` 的
-        // `search.graph_mode` 分支匹配：Tab/BackTab 切换焦点、↑↓ 移动选择、
-        // Enter 跟随或打开、`m` 载入 MIR 快照、Esc 返回。刻意不写 `Ctrl-W`，
-        // 因为它只在下面的列表分支匹配。
-        let single = search.compare_query.is_none() && search.compare_center.is_none();
-        let footer = if single {
-            "← upstream   → downstream   ↑↓ select   Enter re-centre/open   Tab focus   m MIR   Esc back"
-        } else {
-            "A/B: input ↓ center ↓ output   Tab focus   ←→ side   ↑↓ select   Enter follow/open   m MIR   Esc back"
-        };
+        // `search.graph_mode` 分支匹配：Tab 切换焦点、↑↓ 移动选择、Enter 重新居中或打开、
+        // `m` 载入 MIR 快照、`v` 循环切换树的排布、`g` 换它的绘制方、`[`/`]` 移动分栏，
+        // Esc 返回。
+        let footer = "↑↓ select   ←→ hop   Enter re-centre/open   e source   Tab pane   wheel zoom   v layout   g drawer   [ ] split   m MIR   / search field   Esc back";
         frame.render_widget(
             Paragraph::new(footer)
                 .alignment(Alignment::Center)
                 .style(Style::default().fg(MUTED)),
             inner[2],
         );
-        return (inner[1], search.offset, search.compare_offset);
+        return (inner[1], search.offset);
     }
     let body = inner[1];
-    let (list_area, compare_area, detail_area) = if search.compare_query.is_some() {
-        let columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(56), Constraint::Percentage(44)])
-            .split(body);
-        let lists = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(columns[0]);
-        (lists[0], Some(lists[1]), columns[1])
-    } else {
-        let columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(31),
-                Constraint::Percentage(23),
-                Constraint::Percentage(46),
-            ])
-            .split(body);
-        draw_search_lane(frame, columns[1], app, search);
-        (columns[0], None, columns[2])
-    };
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(31),
+            Constraint::Percentage(23),
+            Constraint::Percentage(46),
+        ])
+        .split(body);
+    draw_search_lane(frame, columns[1], app, search);
     let offset = draw_search_list(
         frame,
-        list_area,
+        columns[0],
         app,
         SearchListOptions {
             query: &search.query,
             selected: search.selected,
             offset: search.offset,
-            active: search.active_pane == 0,
-            title: " SEARCH A ",
+            active: true,
+            title: " SEARCH ",
         },
     );
-    let compare_offset = compare_area.map_or(0, |area| {
-        app.hot.overlay_compare_list_area = area;
-        let query = search.compare_query.as_deref().unwrap_or("");
-        draw_search_list(
-            frame,
-            area,
-            app,
-            SearchListOptions {
-                query,
-                selected: search.compare_selected,
-                offset: search.compare_offset,
-                active: search.active_pane == 1,
-                title: " SEARCH B ",
-            },
-        )
-    });
-    let active_query = if search.active_pane == 1 {
-        search.compare_query.as_deref().unwrap_or("")
-    } else {
-        &search.query
-    };
-    let active_selected = if search.active_pane == 1 {
-        search.compare_selected
-    } else {
-        search.selected
-    };
-    if search.compare_query.is_some() {
-        draw_search_detail(frame, detail_area, app, active_query, active_selected);
-    } else {
-        draw_search_preview(frame, detail_area, app, active_query, active_selected);
-    }
-    // List-mode footer (this branch is only reached when `search.graph_mode`
-    // is false). Ctrl-W is matched in the list branch of
-    // `handle_search_overlay_key` and opens the second pane; Enter promotes the
-    // selected row into the call graph (`graph_mode = true`), so it is not an
-    // edit binding. There is no `←→ fold`: `search_rows` returns a flat list
-    // with no fold state, so those keys are intentionally unbound.
-    // 列表页脚（只有 `search.graph_mode` 为 false 时才走到这里）。Ctrl-W 在
-    // `handle_search_overlay_key` 的列表分支匹配，用于打开第二个窗格；Enter 把
-    // 选中行推进调用图（`graph_mode = true`），因此不是编辑键。这里没有
+    draw_search_preview(frame, columns[2], app, &search.query, search.selected);
+    // List-mode footer. Enter promotes the selected row into the call graph
+    // (`graph_mode = true`), so it is not an edit binding. There is no `←→ fold`:
+    // `search_rows` returns a flat list with no fold state, so those keys are
+    // intentionally unbound.
+    // 列表页脚。Enter 把选中行推进调用图（`graph_mode = true`），因此不是编辑键。这里没有
     // `←→ fold`：`search_rows` 返回无折叠状态的扁平列表，这两个键有意不绑定。
     frame.render_widget(
-        Paragraph::new("type to filter   Ctrl-W second pane   Tab switch   ↑↓ select   Enter call graph   Esc close")
+        Paragraph::new("type to filter   ↑↓ select   Enter call graph   Esc close")
             .alignment(Alignment::Center)
             .style(Style::default().fg(MUTED)),
         inner[2],
     );
-    (list_area, offset, compare_offset)
+    (columns[0], offset)
 }
 
 pub(super) use crate::studio::app::{

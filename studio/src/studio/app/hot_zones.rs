@@ -11,7 +11,7 @@ use ratatui::layout::Rect;
 /// unchanged, so a read or write site only gains one `hot.` hop.
 /// 每次绘制都会根据当前帧重新计算它们，因此它们是同一份缓存，而不是 `App` 上的
 /// 三十个独立字段。矩形名称保持不变，读写点只多一跳 `hot.`。
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct HotZones {
     /// Click area of the registry-tree pane.
     /// 注册树面板的点击区域。
@@ -28,9 +28,6 @@ pub struct HotZones {
     /// Click rows of the overlay's primary list.
     /// 浮层主列表的点击行区域。
     pub overlay_list_area: Rect,
-    /// Click rows of the overlay's comparison list.
-    /// 浮层对比列表的点击行区域。
-    pub overlay_compare_list_area: Rect,
     /// Click target of the delete screen's Cancel button.
     /// 删除界面 Cancel 按钮的点击目标。
     pub delete_cancel_area: Rect,
@@ -64,43 +61,16 @@ pub struct HotZones {
     /// Click area of the graph page's provenance pane.
     /// 调用图页溯源面板的点击区域。
     pub graph_provenance_area: Rect,
-    /// Click area of the callers column.
-    /// 调用者列的点击区域。
-    pub graph_callers_area: Rect,
-    /// Click area of the center column.
-    /// 中心列的点击区域。
-    pub graph_center_area: Rect,
-    /// Click area of the callees column.
-    /// 被调用者列的点击区域。
-    pub graph_callees_area: Rect,
-    /// Click area of side A's call-tree column.
-    /// A 侧调用树列的点击区域。
-    pub graph_tree_a_area: Rect,
-    /// Click area of side B's call-tree column.
-    /// B 侧调用树列的点击区域。
-    pub graph_tree_b_area: Rect,
-    /// Click area of side A's data-flow column.
-    /// A 侧数据流列的点击区域。
-    pub graph_data_a_area: Rect,
-    /// Click area of side B's data-flow column.
-    /// B 侧数据流列的点击区域。
-    pub graph_data_b_area: Rect,
-    /// Click area of side A's input rows.
-    /// A 侧输入行的点击区域。
-    pub graph_a_input_area: Rect,
-    /// Click area of side A's center row.
-    /// A 侧中心行的点击区域。
-    pub graph_a_center_area: Rect,
-    /// Click area of side A's output rows.
-    /// A 侧输出行的点击区域。
-    pub graph_a_output_area: Rect,
-    /// Click area of side B's input rows.
-    /// B 侧输入行的点击区域。
-    pub graph_b_input_area: Rect,
-    /// Click area of side B's center row.
-    /// B 侧中心行的点击区域。
-    pub graph_b_center_area: Rect,
-    /// Click area of side B's output rows.
-    /// B 侧输出行的点击区域。
-    pub graph_b_output_area: Rect,
+    /// Click area of the call-tree pane.
+    /// 调用树面板的点击区域。
+    pub graph_tree_area: Rect,
+    /// The tree's drawn boxes with the node each one shows, for click hit testing.
+    /// The canvas publishes these as it draws, so a click lands on the same
+    /// rectangles the reader sees.
+    /// 树画出的盒子及各自展示的节点，供点击命中测试。画布在绘制时公布它们，因此点击落在读者
+    /// 看到的同一批矩形上。
+    pub graph_tree_boxes: Vec<(Rect, usize)>,
+    /// Click area of the data-flow pane.
+    /// 数据流面板的点击区域。
+    pub graph_data_area: Rect,
 }

@@ -27,11 +27,12 @@ impl App {
                 KeyCode::Up => project.field = project.field.saturating_sub(1),
                 KeyCode::Down | KeyCode::Tab => project.field = (project.field + 1).min(2),
                 KeyCode::Enter if project.field == 2 => {
-                    project.values[2] = if project.values[2] == "binary" {
-                        "library".to_owned()
-                    } else {
-                        "binary".to_owned()
-                    };
+                    project.values[new_project_field::KIND] =
+                        if project.values[new_project_field::KIND] == "binary" {
+                            "library".to_owned()
+                        } else {
+                            "binary".to_owned()
+                        };
                 }
                 KeyCode::Enter => project.editing = true,
                 KeyCode::Char('s') => {

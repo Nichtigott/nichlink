@@ -1,0 +1,183 @@
+#!/bin/sh
+# Visual check for Studio: run the real binary in a fixed-size tmux pane, drive it
+# with keys, and save what the terminal actually shows.
+# Studio 的视觉检查：在固定尺寸的 tmux 面板里运行真实二进制，用按键驱动它，并把终端
+# 实际显示的内容存下来。
+#
+#   tools/nichlink-visual                 # every scene
+#   tools/nichlink-visual tree add-form   # named scenes only
+#   tools/nichlink-visual --list
+#   NICHLINK_VISUAL_X=240 NICHLINK_VISUAL_Y=60 tools/nichlink-visual graph
+#   NICHLINK_VISUAL_STDOUT=1 tools/nichlink-visual tree
+#
+# Each scene writes two files into `target/visual` (override with
+# `NICHLINK_VISUAL_DIR`): `<scene>.txt` is the pane as plain text — the layout,
+# which is what a diff should watch — and `<scene>.ansi.txt` keeps whatever SGR
+# attributes tmux stored. Measured caveat: tmux stores 24-bit RGB only when its
+# own `default-terminal` supports it, so on a plain `screen` server the colour
+# escapes are missing and only bold survives. Colour is therefore checked on a
+# real terminal; these files are for shape and regression. The default directory
+# is build output, so a run leaves nothing in the checkout.
+# 每个场景在 `target/visual`（可用 `NICHLINK_VISUAL_DIR` 覆盖）写两个文件：`<scene>.txt`
+# 是面板的纯文本——布局，也正是 diff 应当盯的东西；`<scene>.ansi.txt` 保留 tmux 存下的
+# SGR 属性。实测的注意点：只有 tmux 自己的 `default-terminal` 支持 24 位色时它才会存下
+# RGB，因此在朴素的 `screen` 服务端上颜色转义会缺失、只剩粗体。颜色请在真实终端里看；这些
+# 文件用于形状与回归。默认目录属于构建输出，因此一次运行不会往检出里写东西。
+#
+# Why tmux: ratatui renders through a real terminal, so the honest visual check
+# runs the real binary in a real pty at a fixed size instead of trusting a test
+# backend. tmux is the pty, the keyboard, and the camera.
+# 为什么用 tmux：ratatui 是经真实终端渲染的，因此诚实的视觉检查是在固定尺寸的真实 pty 里跑
+# 真实二进制，而不是相信测试后端。tmux 同时充当 pty、键盘和相机。
+
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+FIXTURE="$ROOT/studio/tests/fixtures/node-editor"
+NAMESPACE="nichlink.fixture.node-editor"
+QUERY="${NICHLINK_VISUAL_QUERY:-preview_canvas_width}"
+TREE_DEMO_QUERY="paint_node_editor"
+SESSION="nichlink-visual"
+BIN="$ROOT/target/debug/nichlink-studio"
+OUT_DIR="${NICHLINK_VISUAL_DIR:-$ROOT/target/visual}"
+COLUMNS="${NICHLINK_VISUAL_X:-300}"
+ROWS="${NICHLINK_VISUAL_Y:-60}"
+
+# Scenes: name, the marker that proves the screen we asked for is up, the keys.
+# 场景：名字、证明"我们要的屏幕已经出来"的标记、按键。
+scene_marker() {
+    case "$1" in
+        home) echo "FACE INSPECTOR" ;;
+        search) echo "/ $QUERY" ;;
+        graph) echo "CALL TREE" ;;
+        graph-canvas) echo "CALL TREE" ;;
+        tree-demo) echo "CALL TREE" ;;
+        tree-steps) echo "CALL TREE" ;;
+        tree) echo "CALL TREE" ;;
+        data) echo "DATA FLOW" ;;
+        add-form) echo "ADD REGISTRATION FACE" ;;
+        *) echo "NICH LINK" ;;
+    esac
+}
+
+scene_query() {
+    case "$1" in
+        home | add-form) echo "" ;;
+        tree-demo | tree-steps) echo "$TREE_DEMO_QUERY" ;;
+        *) echo "$QUERY" ;;
+    esac
+}
+
+scene_keys() {
+    case "$1" in
+        home | search) echo "" ;;
+        graph) echo "Enter" ;;
+        graph-canvas) echo "Enter g" ;;
+        tree-demo) echo "Enter" ;;
+        tree-steps) echo "Enter Down Down Right" ;;
+        tree) echo "Enter Tab" ;;
+        data) echo "Enter Tab Tab" ;;
+        add-form) echo "a" ;;
+    esac
+}
+
+scenes() {
+    echo "home search add-form graph graph-canvas tree-demo tree-steps tree data"
+}
+
+usage() {
+    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    printf '\nAvailable scenes: %s\n' "$(scenes)"
+    printf 'Pane size: %sx%s (NICHLINK_VISUAL_X / NICHLINK_VISUAL_Y)\n' "$COLUMNS" "$ROWS"
+}
+
+build() {
+    printf 'building nichlink-studio\n'
+    (cd "$ROOT" && cargo build -p nichlink-studio --offline)
+}
+
+cleanup() {
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Wait until the pane shows the marker, or fail loudly instead of saving the
+# wrong screen.
+# 等待面板出现标记；否则明确失败，而不是把错误的屏幕存下来。
+wait_for() {
+    marker="$1"
+    tries=0
+    while [ "$tries" -lt 150 ]; do
+        if tmux capture-pane -p -t "$SESSION" 2>/dev/null | grep -q "$marker"; then
+            return 0
+        fi
+        tries=$((tries + 1))
+        sleep 0.2
+    done
+    printf 'scene did not reach "%s" in time; pane followed:\n' "$marker" >&2
+    tmux capture-pane -p -t "$SESSION" 2>/dev/null >&2 || true
+    return 1
+}
+
+run_scene() {
+    name="$1"
+    query=$(scene_query "$name")
+    marker=$(scene_marker "$name")
+    mkdir -p "$OUT_DIR"
+    # An empty query must leave the variable unset: Studio opens the search
+    # overlay for an empty value too, which would hide the screen this scene is
+    # about.
+    # 空查询必须让该变量不存在：Studio 对空值也会打开搜索浮层，那会挡住本场景要看的屏幕。
+    if [ -n "$query" ]; then
+        command="NICH_LINK_INITIAL_QUERY='$query' '$BIN'"
+    else
+        command="'$BIN'"
+    fi
+    tmux new-session -d -s "$SESSION" -x "$COLUMNS" -y "$ROWS" \
+        "cd '$FIXTURE' && NICH_LINK_PACKAGE_ROOT='$FIXTURE' NICH_LINK_NAMESPACE='$NAMESPACE' $command 2>'$OUT_DIR/$name.stderr'"
+    # Two waits, because a scene has two things to prove: the app came up, and
+    # the keys produced the screen this scene is about. Capturing between them
+    # would sometimes save the previous screen.
+    # 两次等待，因为一个场景要证明两件事：程序起来了，以及按键产生了本场景要看的那一屏。
+    # 在两者之间抓屏有时会存下上一屏。
+    wait_for "NICH LINK"
+    for key in $(scene_keys "$name"); do
+        tmux send-keys -t "$SESSION" "$key"
+        sleep 0.4
+    done
+    wait_for "$marker"
+    tmux capture-pane -p -t "$SESSION" >"$OUT_DIR/$name.txt"
+    tmux capture-pane -p -e -t "$SESSION" >"$OUT_DIR/$name.ansi.txt"
+    cleanup
+    printf '%-9s %s\n' "$name" "$OUT_DIR/$name.txt"
+    if [ "${NICHLINK_VISUAL_STDOUT:-}" = "1" ]; then
+        cat "$OUT_DIR/$name.txt"
+    fi
+}
+
+case "${1:-}" in
+    --help | -h)
+        usage
+        exit 0
+        ;;
+    --list)
+        scenes
+        exit 0
+        ;;
+    --no-build)
+        shift
+        ;;
+    *)
+        build
+        ;;
+esac
+
+if [ "$#" -eq 0 ]; then
+    for name in $(scenes); do
+        run_scene "$name"
+    done
+else
+    for name in "$@"; do
+        run_scene "$name"
+    done
+fi

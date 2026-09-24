@@ -18,7 +18,6 @@ impl App {
             KeyCode::Char('1') => self.open_page(StudioPage::Search),
             KeyCode::Char('2') => self.open_page(StudioPage::Inspect),
             KeyCode::Char('3') => self.open_page(StudioPage::Data),
-            KeyCode::Char('4') => self.open_page(StudioPage::Compare),
             KeyCode::Char('/') => self.overlay = Some(Overlay::Search(SearchState::default())),
             KeyCode::Char('n') => self.overlay = Some(Overlay::NewProject(NewProjectState::new())),
             KeyCode::Char('a') => {

@@ -89,6 +89,24 @@ pub struct App {
     /// Click hot-zones refreshed by every draw.
     /// 每次绘制刷新的点击热区。
     pub hot: HotZones,
+    /// The `rataflow` widget that draws the call tree, kept between frames
+    /// because pan and zoom are *its* state: rebuilding it every frame would
+    /// reset the viewport every frame. The key names the tree it was built from,
+    /// and the cursor it marks, so a re-centred focus rebuilds it, a moved cursor
+    /// re-stamps the mark while keeping the viewport, and a frame that changes
+    /// neither reuses it untouched (which is what lets a drag run).
+    /// 绘制调用树的 `rataflow` 控件，跨帧保留：平移与缩放是**它**的状态，每帧重建就等于每帧
+    /// 重置视口。键记录它是从哪棵树构建的，因此重新居中会重建它，而游标移动不会。
+    #[cfg(feature = "node-graph")]
+    pub graph_flow: Option<(String, usize, rataflow::Flow)>,
+    /// Which model axis the call tree was last drawn down the screen: `true` when
+    /// levels run downwards (the widget, or the top-down canvas), `false` when
+    /// they run across it. The arrow keys read this, so they mean what the picture
+    /// shows instead of what the model is called.
+    /// 调用树上次把哪个模型轴画在屏幕向下的方向：`true` 表示层向下延伸（控件，或自上而下的
+    /// 画布），`false` 表示层横着延伸。方向键读它，因此键的含义与图一致，而不是与模型的叫法
+    /// 一致。
+    pub tree_top_down: bool,
     /// Index of the first visible tree row.
     /// 树中首个可见行的下标。
     pub tree_offset: usize,
@@ -124,23 +142,6 @@ impl App {
                     || call.callee.ends_with(&format!("::{function}"))
             })
             .collect()
-    }
-
-    /// Count MIR callers and callees of a function as `(callers, callees)`.
-    /// 统计一个函数在 MIR 中的调用者与被调用者，返回 `(调用者, 被调用者)`。
-    ///
-    /// Both counts are zero until a MIR snapshot has been loaded.
-    /// 在载入 MIR 快照之前，两个计数都为零。
-    pub fn mir_relation_counts(&self, function: &str) -> (usize, usize) {
-        let Some(graph) = self.mir_graph.as_ref() else {
-            return (0, 0);
-        };
-        graph.calls.iter().fold((0, 0), |(callers, callees), edge| {
-            (
-                callers + usize::from(same_symbol(&edge.callee, function)),
-                callees + usize::from(same_symbol(&edge.caller, function)),
-            )
-        })
     }
 
     /// Visible tree rows and their depth, honoring the collapsed set.
@@ -197,31 +198,21 @@ impl App {
         format!("{name}  <- {owner}")
     }
 
-    pub(super) fn graph_item(&self, search: &SearchState, side: usize) -> Option<CallRef> {
-        let (node, function) = if side == 0 {
-            (search.center, search.center_function.as_deref())
-        } else {
-            (
-                search.compare_center,
-                search.compare_center_function.as_deref(),
-            )
-        };
-        let node = node?;
+    pub(super) fn graph_item(&self, search: &SearchState) -> Option<CallRef> {
+        let node = search.center?;
         let info = self.registry.find(node)?;
         Some(CallRef {
             node,
-            function: function.unwrap_or(&info.source.function).to_owned(),
+            function: search
+                .center_function
+                .clone()
+                .unwrap_or_else(|| info.source.function.to_owned()),
             file: info.source.file.to_owned(),
         })
     }
 
-    pub(crate) fn graph_tree_item(
-        &self,
-        search: &SearchState,
-        side: usize,
-        cursor: usize,
-    ) -> Option<CallRef> {
-        let center = self.graph_item(search, side)?;
+    pub(crate) fn graph_tree_item(&self, search: &SearchState, cursor: usize) -> Option<CallRef> {
+        let center = self.graph_item(search)?;
         self.call_tree_targets(&center).get(cursor)?.clone()
     }
 }

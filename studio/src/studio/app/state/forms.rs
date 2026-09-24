@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::{new_project_field, plugin_field};
 use nichlink_run_method::authoring::face_field;
 use nichlink_run_method::{FACE_FIELD_COUNT, NodeId};
 
@@ -10,9 +11,9 @@ use nichlink_run_method::{FACE_FIELD_COUNT, NodeId};
 /// New Project 向导使用的字段。
 #[derive(Clone, Debug)]
 pub struct NewProjectState {
-    /// Raw wizard input: directory, then package name, then project kind.
-    /// 向导原始输入：目录，然后是包名，最后是项目类型。
-    pub values: [String; 3],
+    /// Raw wizard input, one value per [`new_project_field`] row.
+    /// 向导原始输入，每个 [`new_project_field`] 行一个值。
+    pub values: [String; new_project_field::COUNT],
     /// Index of the focused row, matching `values`.
     /// 当前聚焦行在 `values` 中的下标。
     pub field: usize,
@@ -23,13 +24,13 @@ pub struct NewProjectState {
 
 impl NewProjectState {
     pub(crate) fn new() -> Self {
+        let mut values: [String; new_project_field::COUNT] = std::array::from_fn(|_| String::new());
+        values[new_project_field::DIRECTORY] = "./nichlink-app".to_owned();
+        values[new_project_field::PACKAGE] = "nichlink-app".to_owned();
+        values[new_project_field::KIND] = "binary".to_owned();
         Self {
-            values: [
-                "./nichlink-app".to_owned(),
-                "nichlink-app".to_owned(),
-                "binary".to_owned(),
-            ],
-            field: 0,
+            values,
+            field: new_project_field::DIRECTORY,
             editing: false,
         }
     }
@@ -114,9 +115,9 @@ pub(crate) fn move_face_field(add: &mut AddState, step: isize) {
 /// 插件选择表单。界面只写入一个 crate 锚点，不维护对象清单。
 #[derive(Clone, Debug)]
 pub struct PluginState {
-    /// Raw plugin input: source, framework, package, version, crate, checksum, mode.
-    /// 插件原始输入：source、framework、package、version、crate、checksum、mode。
-    pub values: [String; 7],
+    /// Raw plugin input, one value per [`plugin_field`] row.
+    /// 插件原始输入，每个 [`plugin_field`] 行一个值。
+    pub values: [String; plugin_field::COUNT],
     /// Index of the focused row, matching `values`.
     /// 当前聚焦行在 `values` 中的下标。
     pub field: usize,
@@ -127,17 +128,13 @@ pub struct PluginState {
 
 impl PluginState {
     pub(crate) fn new() -> Self {
+        let mut values: [String; plugin_field::COUNT] = std::array::from_fn(|_| String::new());
+        values[plugin_field::SOURCE] = "official".to_owned();
+        values[plugin_field::FRAMEWORK] = "nichlink.default".to_owned();
+        values[plugin_field::MODE] = "extension".to_owned();
         Self {
-            values: [
-                "official".to_owned(),
-                "nichlink.default".to_owned(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                "extension".to_owned(),
-            ],
-            field: 0,
+            values,
+            field: plugin_field::SOURCE,
             editing: false,
         }
     }

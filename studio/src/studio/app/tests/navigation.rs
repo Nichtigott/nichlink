@@ -20,11 +20,14 @@ fn workspace_page_shortcuts_route_to_the_expected_mode() {
 
     app.handle_key(KeyEvent::from(KeyCode::Esc));
     app.handle_key(KeyEvent::from(KeyCode::Esc));
+    // There is no fourth page: the side-by-side comparison was removed, and the
+    // key that opened it with it, so `4` leaves the page where it was.
+    // 没有第四个页面：并排对比已删除，打开它的那个按键也一并删除，因此 `4` 不会换页。
+    // The two Escs above already backed out to the inspect page, and `4` leaves
+    // the page there because it opens nothing.
+    // 上面两次 Esc 已经退回检视页，而 `4` 什么都没打开，因此页面停在那里。
     app.handle_key(KeyEvent::from(KeyCode::Char('4')));
-    assert_eq!(app.page, StudioPage::Compare);
-    assert!(
-        matches!(app.overlay, Some(Overlay::Search(ref search)) if search.compare_query.is_some())
-    );
+    assert_eq!(app.page, StudioPage::Inspect);
 }
 
 #[test]

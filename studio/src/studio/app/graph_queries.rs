@@ -1,46 +1,15 @@
 //! Call graph and evidence queries owned by App.
 //! App 所有的调用图与证据查询。
 //!
-//! The three-column view and the spatial call tree are built from the same
-//! `call_relations`, so they cannot disagree about who calls whom; the tree
-//! itself lives in `call_tree_queries`.
-//! 三列视图与空间调用树由同一个 `call_relations` 构建，因此它们在"谁调用谁"上不可能不一致；
-//! 调用树本身位于 `call_tree_queries`。
+//! The tree and the value pane are built from the same `call_relations`, so they
+//! cannot disagree about who calls whom; the tree itself lives in
+//! `call_tree_queries`.
+//! 树与取值面板由同一个 `call_relations` 构建，因此它们在"谁调用谁"上不可能不一致；调用树
+//! 本身位于 `call_tree_queries`。
 
 use super::*;
 
 impl App {
-    /// Flatten one function's call relations into callers, the center, then callees.
-    /// 把一个函数的调用关系展平成调用者、中心节点、被调用者。
-    ///
-    /// The center entry is always present, so a caller can rely on at least one row.
-    /// 中心条目始终存在，调用方可依赖至少有一行。
-    pub fn call_chain(&self, center: NodeId, selected_function: Option<&str>) -> Vec<CallRef> {
-        let default_function = self
-            .registry
-            .find(center)
-            .map(|info| info.source.function.as_str())
-            .unwrap_or("");
-        let function = selected_function
-            .filter(|name| !name.is_empty())
-            .unwrap_or(default_function);
-        let (callers, callees) = self.call_relations(center, function);
-        callers
-            .into_iter()
-            .chain(std::iter::once(CallRef {
-                node: center,
-                function: function.to_owned(),
-                file: self
-                    .registry
-                    .find(center)
-                    .map(|info| info.source.file.as_str())
-                    .unwrap_or("")
-                    .to_owned(),
-            }))
-            .chain(callees)
-            .collect()
-    }
-
     /// Extract a few value-changing statements for the compact call tree.
     /// 提取紧凑调用树中少量改变值的语句。
     pub(crate) fn call_tree_transforms(&self, item: &CallRef) -> Vec<String> {

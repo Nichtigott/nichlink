@@ -11,70 +11,35 @@ impl App {
                     let up = matches!(kind, MouseEventKind::ScrollUp);
                     let graph = matches!(self.overlay, Some(Overlay::Search(ref search)) if search.graph_mode);
                     if graph {
+                        // The widget's own gesture first: over its tree the wheel
+                        // zooms, which is what a node editor does. Everywhere else
+                        // the wheel steps the cursor of whichever pane it is over.
+                        // 先给控件自己的手势：在它的树上滚轮是缩放，节点编辑器都这么做。其余位置
+                        // 滚轮使它所在那块面板的游标走一步。
+                        #[cfg(feature = "node-graph")]
+                        if self.forward_mouse_to_flow(kind, column, row) {
+                            return;
+                        }
                         let point = (column, row).into();
-                        let in_a = self.hot.graph_a_input_area.contains(point)
-                            || self.hot.graph_a_center_area.contains(point)
-                            || self.hot.graph_a_output_area.contains(point);
-                        let in_b = self.hot.graph_b_input_area.contains(point)
-                            || self.hot.graph_b_center_area.contains(point)
-                            || self.hot.graph_b_output_area.contains(point);
-                        let in_tree = self.hot.graph_tree_a_area.contains(point)
-                            || self.hot.graph_tree_b_area.contains(point);
-                        let in_data = self.hot.graph_data_a_area.contains(point)
-                            || self.hot.graph_data_b_area.contains(point);
-                        let tree_b = self.hot.graph_tree_b_area.contains((column, row).into());
-                        let data_b = self.hot.graph_data_b_area.contains((column, row).into());
+                        let tree = self.hot.graph_tree_area.contains(point);
+                        let data = self.hot.graph_data_area.contains(point);
                         if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                            if in_a {
+                            if tree {
                                 search.graph_focus = 0;
-                                search.graph_side = 0;
-                                search.selected = if up {
-                                    search.selected.saturating_sub(1)
+                                search.outline_selected = if up {
+                                    search.outline_selected.saturating_sub(1)
                                 } else {
-                                    search.selected.saturating_add(1)
+                                    search.outline_selected.saturating_add(1)
                                 };
-                            } else if in_b {
+                            } else if data {
                                 search.graph_focus = 1;
-                                search.graph_side = 1;
-                                search.compare_selected = if up {
-                                    search.compare_selected.saturating_sub(1)
+                                search.data_selected = if up {
+                                    search.data_selected.saturating_sub(1)
                                 } else {
-                                    search.compare_selected.saturating_add(1)
+                                    search.data_selected.saturating_add(1)
                                 };
-                            } else if in_tree {
-                                search.graph_focus = 2;
-                                search.graph_side = if tree_b { 1 } else { 0 };
-                                if search.graph_side == 1 {
-                                    search.compare_outline_selected = if up {
-                                        search.compare_outline_selected.saturating_sub(1)
-                                    } else {
-                                        search.compare_outline_selected.saturating_add(1)
-                                    };
-                                } else {
-                                    search.outline_selected = if up {
-                                        search.outline_selected.saturating_sub(1)
-                                    } else {
-                                        search.outline_selected.saturating_add(1)
-                                    };
-                                }
-                            } else if in_data {
-                                search.graph_focus = 3;
-                                search.graph_side = if data_b { 1 } else { 0 };
-                                if search.graph_side == 1 {
-                                    search.compare_data_selected = if up {
-                                        search.compare_data_selected.saturating_sub(1)
-                                    } else {
-                                        search.compare_data_selected.saturating_add(1)
-                                    };
-                                } else {
-                                    search.data_selected = if up {
-                                        search.data_selected.saturating_sub(1)
-                                    } else {
-                                        search.data_selected.saturating_add(1)
-                                    };
-                                }
                             }
-                            search.outline_focus = search.graph_focus == 2;
+                            search.outline_focus = search.graph_focus == 0;
                         }
                     } else {
                         self.handle_overlay_key(KeyEvent::from(if up {
@@ -151,6 +116,53 @@ impl App {
         }
     }
 
+    /// Hand a mouse event to the call tree's widget when it is the drawer, and
+    /// turn the widget's own `NodeClicked` into a cursor move.
+    /// 当调用树由控件绘制时，把鼠标事件交给它，并把控件自己的 `NodeClicked` 变成游标移动。
+    ///
+    /// The widget owns its viewport, so pan and zoom are its gestures, not ours;
+    /// what stays ours is what the cursor *means*, which is why a click comes
+    /// back as an event instead of moving the widget's selection directly.
+    /// 控件拥有自己的视口，因此平移与缩放是它的手势而不是我们的；仍然属于我们的是"游标意味着
+    /// 什么"，这正是点击以事件形式回来、而不是直接移动控件选中项的原因。
+    #[cfg(feature = "node-graph")]
+    fn forward_mouse_to_flow(&mut self, kind: MouseEventKind, column: u16, row: u16) -> bool {
+        let Some(Overlay::Search(search)) = self.overlay.as_ref() else {
+            return false;
+        };
+        if !search.graph_mode
+            || search.tree_canvas
+            || !self.hot.graph_tree_area.contains((column, row).into())
+        {
+            return false;
+        }
+        let event = crossterm::event::MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        };
+        let Some((_, _, flow)) = self.graph_flow.as_mut() else {
+            return false;
+        };
+        let clicked = flow
+            .handle_mouse_event(event)
+            .into_events()
+            .filter_map(|event| match event {
+                rataflow::FlowEvent::NodeClicked { node_id } => node_id.parse::<usize>().ok(),
+                _ => None,
+            })
+            .next_back();
+        if let Some(index) = clicked
+            && let Some(Overlay::Search(search)) = self.overlay.as_mut()
+        {
+            search.graph_focus = 0;
+            search.outline_focus = true;
+            search.outline_selected = index;
+        }
+        true
+    }
+
     pub(super) fn handle_overlay_click(&mut self, column: u16, row: u16) {
         let point = (column, row).into();
         if !self.hot.overlay_area.contains(point) {
@@ -165,123 +177,52 @@ impl App {
             self.handle_overlay_key(KeyEvent::from(KeyCode::Enter));
             return;
         }
-        // Every graph column has its own focus and selection.
-        // 调用图的每一列都有独立焦点和选择项。
+        // The widget's own gesture first: when it draws the tree, a click on a
+        // node is the widget's event to report, and it knows which node.
+        // 先给控件自己的手势：当它绘制这棵树时，落在节点上的点击是它要报告的事件，而它知道是哪个
+        // 节点。
+        #[cfg(feature = "node-graph")]
+        if self.forward_mouse_to_flow(MouseEventKind::Down(MouseButton::Left), column, row) {
+            return;
+        }
+        // The graph page has two panes: the call tree, and the values the tree
+        // cursor's function ran with. A click lands on the box or the row the
+        // reader aimed at, and focuses the pane it landed in.
+        // 调用图页有两块面板：调用树，以及树游标所在函数运行时的取值。点击落在读者瞄准的盒子
+        // 或那一行上，并把焦点给它落进的那块面板。
         if let Some(Overlay::Search(search)) = self.overlay.as_ref()
             && search.graph_mode
         {
-            let in_a_input = self.hot.graph_a_input_area.contains(point);
-            let in_a_center = self.hot.graph_a_center_area.contains(point);
-            let in_a_output = self.hot.graph_a_output_area.contains(point);
-            let in_b_input = self.hot.graph_b_input_area.contains(point);
-            let in_b_center = self.hot.graph_b_center_area.contains(point);
-            let in_b_output = self.hot.graph_b_output_area.contains(point);
-            let in_tree = self.hot.graph_tree_a_area.contains(point)
-                || self.hot.graph_tree_b_area.contains(point);
-            let in_data = self.hot.graph_data_a_area.contains(point)
-                || self.hot.graph_data_b_area.contains(point);
-            let tree_b = self.hot.graph_tree_b_area.contains(point);
-            let data_b = self.hot.graph_data_b_area.contains(point);
-            if in_a_input || in_a_center || in_a_output || in_b_input || in_b_center || in_b_output
-            {
-                let side = if in_b_input || in_b_center || in_b_output {
-                    1
-                } else {
-                    0
-                };
-                let input = if side == 0 { in_a_input } else { in_b_input };
-                let center = if side == 0 { in_a_center } else { in_b_center };
-                let area = if input {
-                    if side == 0 {
-                        self.hot.graph_a_input_area
-                    } else {
-                        self.hot.graph_b_input_area
-                    }
-                } else if center {
-                    if side == 0 {
-                        self.hot.graph_a_center_area
-                    } else {
-                        self.hot.graph_b_center_area
-                    }
-                } else if side == 0 {
-                    self.hot.graph_a_output_area
-                } else {
-                    self.hot.graph_b_output_area
-                };
-                let item = self.graph_item(search, side);
-                let (caller_len, callee_len) = item
-                    .as_ref()
-                    .map(|item| {
-                        let (callers, callees) = self.call_relations(item.node, &item.function);
-                        (callers.len(), callees.len())
-                    })
-                    .unwrap_or((0, 0));
-                let relation_index = row.saturating_sub(area.y.saturating_add(1)) as usize / 2;
-                let selected = if input {
-                    relation_index.min(caller_len.saturating_sub(1))
-                } else if center {
-                    caller_len
-                } else {
-                    (caller_len + 1 + relation_index).min(caller_len + callee_len)
-                };
+            if self.hot.graph_tree_area.contains(point) {
+                // The tree is a canvas, not a list: a click lands on the box the
+                // reader aimed at, which the drawing published as it drew.
+                // 调用树是画布而不是清单：点击落在读者瞄准的那个盒子上，而该矩形由绘制时公布。
+                let landed = self
+                    .hot
+                    .graph_tree_boxes
+                    .iter()
+                    .find(|(rect, _)| rect.contains(point))
+                    .map(|(_, index)| *index);
                 if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                    search.graph_focus = side;
-                    search.graph_side = side;
-                    if side == 0 {
-                        search.graph_selected = selected;
-                    } else {
-                        search.compare_graph_selected = selected;
+                    search.graph_focus = 0;
+                    search.outline_focus = true;
+                    if let Some(index) = landed {
+                        search.outline_selected = index;
                     }
                 }
                 return;
             }
-            if in_tree || in_data {
-                let side = if in_tree {
-                    if tree_b { 1 } else { 0 }
-                } else if data_b {
-                    1
-                } else {
-                    0
-                };
-                let top = if in_tree {
-                    if tree_b {
-                        self.hot.graph_tree_b_area.y
-                    } else {
-                        self.hot.graph_tree_a_area.y
-                    }
-                } else if data_b {
-                    self.hot.graph_data_b_area.y
-                } else {
-                    self.hot.graph_data_a_area.y
-                };
+            if self.hot.graph_data_area.contains(point) {
+                let top = self.hot.graph_data_area.y;
                 let raw_selected = row.saturating_sub(top.saturating_add(1)) as usize;
                 let selected = self
-                    .graph_item(search, side)
-                    .map(|item| {
-                        if in_tree {
-                            raw_selected.min(self.call_tree_targets(&item).len().saturating_sub(1))
-                        } else {
-                            raw_selected.min(self.graph_locals(&item).len().saturating_sub(1))
-                        }
-                    })
+                    .graph_tree_item(search, search.outline_selected)
+                    .map(|item| raw_selected.min(self.graph_locals(&item).len().saturating_sub(1)))
                     .unwrap_or_default();
                 if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
-                    search.graph_focus = if in_tree { 2 } else { 3 };
-                    search.graph_side = side;
-                    search.outline_focus = in_tree;
-                    if in_tree {
-                        if search.graph_side == 1 {
-                            search.compare_outline_selected = selected;
-                        } else {
-                            search.outline_selected = selected;
-                        }
-                    } else {
-                        if search.graph_side == 1 {
-                            search.compare_data_selected = selected;
-                        } else {
-                            search.data_selected = selected;
-                        }
-                    }
+                    search.graph_focus = 1;
+                    search.outline_focus = false;
+                    search.data_selected = selected;
                 }
                 return;
             }
@@ -333,54 +274,31 @@ impl App {
             }
             return;
         }
-        if !self.hot.overlay_list_area.contains(point)
-            && !self.hot.overlay_compare_list_area.contains(point)
-        {
+        if !self.hot.overlay_list_area.contains(point) {
             return;
         }
-        let clicked_compare = self.hot.overlay_compare_list_area.contains(point);
-        let visible_row = if clicked_compare {
-            row.saturating_sub(self.hot.overlay_compare_list_area.y.saturating_add(1)) as usize
-        } else {
-            row.saturating_sub(self.hot.overlay_list_area.y.saturating_add(1)) as usize
-        };
+        let visible_row =
+            row.saturating_sub(self.hot.overlay_list_area.y.saturating_add(1)) as usize;
         let search_target = match self.overlay.as_ref() {
             Some(Overlay::Search(search)) => {
-                let query = if clicked_compare {
-                    search.compare_query.as_deref().unwrap_or("")
-                } else {
-                    &search.query
-                };
-                let last = self.search_rows(query).len().saturating_sub(1);
-                Some(
-                    (if clicked_compare {
-                        search.compare_offset
-                    } else {
-                        search.offset
-                    } + visible_row)
-                        .min(last),
-                )
+                let last = self.search_rows(&search.query).len().saturating_sub(1);
+                Some((search.offset + visible_row).min(last))
             }
             _ => None,
         };
         match self.overlay.as_mut() {
             Some(Overlay::Search(search)) => {
-                if clicked_compare {
-                    search.compare_selected = search_target.unwrap_or_default();
-                    search.active_pane = 1;
-                } else {
-                    search.selected = search_target.unwrap_or_default();
-                    search.active_pane = 0;
-                }
+                search.selected = search_target.unwrap_or_default();
             }
             Some(Overlay::NewProject(project)) if visible_row < project.values.len() => {
                 project.field = visible_row;
                 if visible_row == 2 {
-                    project.values[2] = if project.values[2] == "binary" {
-                        "library".to_owned()
-                    } else {
-                        "binary".to_owned()
-                    };
+                    project.values[new_project_field::KIND] =
+                        if project.values[new_project_field::KIND] == "binary" {
+                            "library".to_owned()
+                        } else {
+                            "binary".to_owned()
+                        };
                 } else {
                     project.editing = true;
                 }
@@ -417,9 +335,15 @@ impl App {
                 plugin.field = visible_row;
                 if visible_row == 0 || visible_row == 6 {
                     plugin.values[visible_row] = match visible_row {
-                        0 if plugin.values[0] == "official" => "user".to_owned(),
+                        plugin_field::SOURCE
+                            if plugin.values[plugin_field::SOURCE] == "official" =>
+                        {
+                            "user".to_owned()
+                        }
                         0 => "official".to_owned(),
-                        6 if plugin.values[6] == "extension" => "replacement".to_owned(),
+                        plugin_field::MODE if plugin.values[plugin_field::MODE] == "extension" => {
+                            "replacement".to_owned()
+                        }
                         _ => "extension".to_owned(),
                     };
                 } else {

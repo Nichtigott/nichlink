@@ -24,9 +24,15 @@ impl App {
                 KeyCode::Down | KeyCode::Tab => plugin.field = (plugin.field + 1).min(6),
                 KeyCode::Enter if plugin.field == 0 || plugin.field == 6 => {
                     plugin.values[plugin.field] = match plugin.field {
-                        0 if plugin.values[0] == "official" => "user".to_owned(),
+                        plugin_field::SOURCE
+                            if plugin.values[plugin_field::SOURCE] == "official" =>
+                        {
+                            "user".to_owned()
+                        }
                         0 => "official".to_owned(),
-                        6 if plugin.values[6] == "extension" => "replacement".to_owned(),
+                        plugin_field::MODE if plugin.values[plugin_field::MODE] == "extension" => {
+                            "replacement".to_owned()
+                        }
                         _ => "extension".to_owned(),
                     };
                 }

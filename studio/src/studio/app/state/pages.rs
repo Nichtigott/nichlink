@@ -26,9 +26,6 @@ pub enum StudioPage {
     /// Data workspace: provenance graph over the selected face.
     /// 数据工作区：围绕所选注册面的溯源图。
     Data,
-    /// Compare workspace: two searches side by side.
-    /// 对比工作区：并排显示两组搜索。
-    Compare,
 }
 
 impl StudioPage {
@@ -39,7 +36,6 @@ impl StudioPage {
             Self::Search => "SEARCH",
             Self::Inspect => "INSPECT",
             Self::Data => "DATA",
-            Self::Compare => "COMPARE",
         }
     }
 }

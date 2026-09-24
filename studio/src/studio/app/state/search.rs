@@ -7,6 +7,21 @@ use nichlink_run_method::NodeId;
 /// 一次或两次查询的搜索会话状态，含调用图导航。
 #[derive(Clone, Debug, Default)]
 pub struct SearchState {
+    /// How the call tree is drawn: `None` follows the panel's shape,
+    /// `Some(true)` forces the top-down layout and `Some(false)` forces
+    /// left-to-right. A narrow pane fits one column horizontally, and one column
+    /// has no edges, so the default falls back to top-down there.
+    /// 调用树怎么画：`None` 跟随面板形状，`Some(true)` 强制自上而下，`Some(false)` 强制
+    /// 从左到右。窄面板横向只放得下一列，而一列没有边，因此默认在那里回退为自上而下。
+    pub tree_vertical: Option<bool>,
+    /// Whether the call tree is drawn by the hand-drawn canvas rather than the
+    /// `rataflow` widget, and only when the `node-graph` feature is linked. The
+    /// canvases are the exception because they draw what the kernel knows and fit
+    /// the narrowest column; the widget is what a reader sees first.
+    /// 调用树是否由手绘画布而不是 `rataflow` 控件绘制；仅在链接 `node-graph` 特性时存在。
+    /// 画布是例外，因为它画的正是内核知道的东西、也塞得进最窄的列；读者首先看到的是控件。
+    #[cfg(feature = "node-graph")]
+    pub tree_canvas: bool,
     /// Primary search text.
     /// 主搜索文本。
     pub query: String,
@@ -16,18 +31,7 @@ pub struct SearchState {
     /// First visible row of the primary result list.
     /// 主结果列表首个可见行的下标。
     pub offset: usize,
-    /// Secondary search text; `None` while the comparison pane is closed.
-    /// 第二路搜索文本；对比面板关闭时为 `None`。
-    pub compare_query: Option<String>,
-    /// Highlighted row in the comparison result list.
-    /// 对比结果列表中高亮的行。
-    pub compare_selected: usize,
-    /// First visible row of the comparison result list.
-    /// 对比结果列表首个可见行的下标。
-    pub compare_offset: usize,
-    /// Which pane takes input: 0 primary, 1 comparison.
-    /// 接收输入的面板：0 主面板，1 对比面板。
-    pub active_pane: usize,
+
     /// When true, the search result is shown as a navigable provenance graph.
     /// 为 true 时，搜索结果显示为可导航的溯源图。
     pub graph_mode: bool,
@@ -40,9 +44,7 @@ pub struct SearchState {
     /// Source line of the center function.
     /// 中心函数所在的源码行。
     pub center_line: Option<u32>,
-    /// Highlighted row in the graph's relation list.
-    /// 调用图关系列表中高亮的行。
-    pub graph_selected: usize,
+
     /// Highlighted row in the call-tree outline.
     /// 调用树大纲中高亮的行。
     pub outline_selected: usize,
@@ -52,30 +54,10 @@ pub struct SearchState {
     /// Focused column on the four-column graph page: A, B, call tree, data.
     /// 四列调用页当前焦点：A、B、调用树、数据流。
     pub graph_focus: usize,
-    /// Active graph column set: 0 side A, 1 side B.
-    /// 当前调用图列组：0 为 A 侧，1 为 B 侧。
-    pub graph_side: usize,
+
     /// Highlighted row in the data-flow list.
     /// 数据流列表中高亮的行。
     pub data_selected: usize,
-    /// Side B's graph center node.
-    /// B 侧调用图的中心节点。
-    pub compare_center: Option<NodeId>,
-    /// Side B's graph center function.
-    /// B 侧调用图的中心函数。
-    pub compare_center_function: Option<String>,
-    /// Side B's center function source line.
-    /// B 侧中心函数所在的源码行。
-    pub compare_center_line: Option<u32>,
-    /// Side B's highlighted graph relation row.
-    /// B 侧调用图关系列表中高亮的行。
-    pub compare_graph_selected: usize,
-    /// Side B's highlighted call-tree outline row.
-    /// B 侧调用树大纲中高亮的行。
-    pub compare_outline_selected: usize,
-    /// Side B's highlighted data-flow row.
-    /// B 侧数据流列表中高亮的行。
-    pub compare_data_selected: usize,
 }
 
 /// One rendered search result row, before it becomes a Ratatui list item.

@@ -121,7 +121,9 @@ nichlink_run_method::__control_object! { collector: development, kind: KindOnlyF
 
 计划中的"12 行"是**把相关字段并成一行**的估算(名字两行并一行、摘要并一行、preset/parts 并
 一行……)。合并意味着键盘表单要多一层"行内选格",因此按"作者面的行 = 作者真能决定的字段"做完,
-实测是 22+4。裸下标已全部清零(见 §8)。
+实测是 22+4。裸下标已全部清零:注册面在 `authoring::face_field`,两个向导表单在
+`app::state::new_project_field` / `app::state::plugin_field`,每行一个常量并挨着表单打印的
+标签,因此渲染器原先各自携带的标签表也一并消失。
 
 ## 6. 六项决定与落地位置
 
@@ -148,16 +150,16 @@ nichlink_run_method::__control_object! { collector: development, kind: KindOnlyF
    而规则不允许;`external source note` 说"仅来源元数据"而它参与注册机解析。三条都已改正,后者
    的标签改为 `dependency registry`。
 
-## 8. 显式记录的未做完部分
+## 8. 显式记录:有意保留与仍可收口的部分
 
-- **New Project 与 Plugin 向导**仍有 25 处裸行位置(`project.values[0..2]`、
-  `plugin.values[0..6]`)。它们是向导行号而不是注册面布局,未纳入 `face_field`;要收口应当各自
-  具名。
-- **`RegistrationInfo.params` / `handle` 字段仍在**(公开 API),值恒等于 `kind`。删字段是
-  breaking change,本轮只删了展示与作者面。
+- **`RegistrationInfo.params` / `handle` 字段保留**(公开 API:宿主可读,`owned.rs` 的重载
+  路径复制它们,`declaration.rs` 的合同失败消息点名 handle)。它们按规则等于 `kind`,因此它们的
+  **重复展示与重复搜索键**已清掉:call report 曾把 `handle=` 与 `kind=` 并排打印,搜索曾把
+  `params` 当作同一字符串的第二个键。删字段本身是 breaking change,留给版本策略决定。
 - **示例声明仍逐条写出默认值**(`getting_from_other_registry: None`、`requires: []`、
-  `registry_rule_path: "…"` 等)。宏允许省略(§1 的测试钉住),删这些行是风格选择,不属于本轮
-  六项。
+  `registry_rule_path: "…"` 等)。宏允许省略(§1 的测试钉住),删这些行是风格选择;其中
+  `examples/control-button-graft/src/control_fast.rs` 是用户的手写文件,只做过本轮要求的键删除,
+  因此不为了统一而重排它。
 - **`docs/` 里的历史文档**(`audit-*.md`、`migration*.md`)仍提到 `registry_name: slot`、
   `expected_output` 之类的旧字段。它们是记录,不改写。
 

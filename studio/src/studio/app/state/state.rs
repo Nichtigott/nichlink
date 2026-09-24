@@ -12,8 +12,12 @@ mod forms;
 mod graft;
 #[path = "misc.rs"]
 mod misc;
+#[path = "new_project_field.rs"]
+pub(crate) mod new_project_field;
 #[path = "pages.rs"]
 mod pages;
+#[path = "plugin_field.rs"]
+pub(crate) mod plugin_field;
 #[path = "search.rs"]
 mod search;
 

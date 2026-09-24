@@ -45,7 +45,7 @@ pub(super) fn draw_keys(frame: &mut Frame<'_>, area: Rect) {
     // 分支里匹配，改由 `super::search` 的调用图页脚展示。写在这里会在没有搜索
     // 浮层时谎报按键。
     frame.render_widget(
-        Paragraph::new(" 1 search   2 inspect   3 data   4 compare   q quit   / search   n new   a add   g graft   p plugin   e edit   d delete   Enter fold   r/F5 reload   b/F9 build   ←/→ resize ")
+        Paragraph::new(" 1 search   2 inspect   3 data   q quit   / search   n new   a add   g graft   p plugin   e edit   d delete   Enter fold   r/F5 reload   b/F9 build   ←/→ resize ")
             .alignment(Alignment::Center)
             .style(Style::default().fg(MUTED)),
         area,

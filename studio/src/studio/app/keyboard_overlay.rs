@@ -32,7 +32,7 @@ impl App {
                 search.graph_mode = false;
                 search.center = None;
                 search.center_line = None;
-                search.graph_selected = 0;
+                search.outline_selected = 0;
                 self.page = StudioPage::Search;
                 return;
             }

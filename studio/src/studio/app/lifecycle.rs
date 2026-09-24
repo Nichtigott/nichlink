@@ -26,13 +26,6 @@ impl App {
                     ..SearchState::default()
                 }));
             }
-            StudioPage::Compare => {
-                self.overlay = Some(Overlay::Search(SearchState {
-                    compare_query: Some(String::new()),
-                    active_pane: 1,
-                    ..SearchState::default()
-                }));
-            }
         }
     }
 
@@ -67,9 +60,12 @@ impl App {
             should_quit: false,
             editor_request: None,
             hot: HotZones::default(),
+            #[cfg(feature = "node-graph")]
+            graph_flow: None,
+            tree_top_down: false,
             tree_offset: 0,
             split_percent: 45,
-            graph_split_percent: 44,
+            graph_split_percent: 60,
             graph_dragging_divider: false,
             dragging_divider: false,
             last_source_stamp: source_stamp(),
@@ -190,6 +186,16 @@ impl App {
 
     /// Ask rustc for a one-shot in-memory MIR snapshot.
     /// 直接请求 rustc 一次，将 MIR 快照留在内存中。
+    /// Load a MIR snapshot on request and say what came of it, in one place so
+    /// the key binding stays one line.
+    /// 按请求载入 MIR 快照并说明结果，集中在一处，使按键绑定保持一行。
+    pub(super) fn load_mir_snapshot_report(&mut self) {
+        self.event = match self.load_mir_snapshot() {
+            Ok(calls) => format!("MIR snapshot loaded in memory: {calls} candidate calls."),
+            Err(error) => format!("MIR unavailable: {error}"),
+        };
+    }
+
     pub fn load_mir_snapshot(&mut self) -> Result<usize, String> {
         let manifest = host_manifest();
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());

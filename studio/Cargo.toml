@@ -12,6 +12,14 @@ documentation = "https://docs.rs/nichlink-studio"
 default-run = "nichlink-studio"
 
 [features]
+# The call tree is drawn by the `rataflow` widget by default; the hand-drawn
+# canvases in `ui/graph` stay compiled in and one key (`g`) away, because they are
+# the ones that draw what the kernel knows (evidence kinds, cut counts, the cursor
+# versus the focus) and the ones that fit a seven-cell column.
+# 调用树默认由 `rataflow` 控件绘制；`ui/graph` 里的手绘画布仍然编入并只差一个按键（`g`）：
+# 画的正是内核知道的东西（证据种类、裁剪计数、游标与焦点的区分），也是塞得进七格宽列的那个。
+default = ["node-graph"]
+node-graph = ["dep:rataflow"]
 prototype-fixtures = []
 # `nichlink-dev` rebuilds Studio from this checkout and launches the workspace's
 # `target/debug` build, so an installed copy can do neither. Gating the bin keeps
@@ -29,9 +37,26 @@ name = "nichlink_studio"
 path = "src/lib.rs"
 
 [dependencies]
-crossterm = "0.28"
+crossterm = "0.29"
 notify = "7"
-ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+# 0.30 split the widgets out and made both the widget set and the layout cache
+# opt-in features: with `default-features = false` a bare `crossterm` build has no
+# `Block` and no `Paragraph`, and layout would recompute on every frame.
+# 0.30 把控件拆了出去，并把控件集与布局缓存都变成可选特性：在 `default-features = false`
+# 下只开 `crossterm` 会没有 `Block`、也没有 `Paragraph`，而且每帧都要重算布局。
+ratatui = { version = "0.30", default-features = false, features = [
+    "all-widgets",
+    "crossterm",
+    "layout-cache",
+] }
+# The node-editor widget, behind a non-default feature: it is a 0.1.0 dependency
+# with its own opinion about who owns pan, zoom and selection, so it runs beside
+# the hand-drawn canvas instead of replacing it until it earns the place.
+# 节点编辑器控件，放在非默认特性之后：它是 0.1.0 的依赖，对"平移、缩放、选择归谁"有自己的
+# 主张，因此它与手绘的画布并存，而不是直接取代它。
+rataflow = { version = "0.1", optional = true, default-features = false, features = [
+    "crossterm",
+] }
 nichlink-run-method = { path = "../run_method", version = "0.1.0", features = ["authoring"] }
 nichlink-debug-method = { path = "../debug_method", version = "0.1.0" }
 nichlink-build-method = { path = "../build_method", version = "0.1.0" }

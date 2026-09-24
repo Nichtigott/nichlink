@@ -10,20 +10,11 @@ pub(crate) fn draw_plugin(
     area: Rect,
     plugin: &PluginState,
 ) -> (Rect, Rect, Rect, Rect) {
-    const NAMES: [&str; 7] = [
-        "source",
-        "framework",
-        "package",
-        "version",
-        "crate",
-        "checksum",
-        "mode",
-    ];
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(9), Constraint::Length(4)])
         .split(area);
-    let rows = NAMES
+    let rows = plugin_field::LABELS
         .iter()
         .enumerate()
         .map(|(index, name)| {

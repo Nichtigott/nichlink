@@ -7,9 +7,9 @@ use nichlink_run_method::pascal_case;
 
 impl App {
     pub(super) fn submit_new_project(&mut self, project: &NewProjectState) {
-        let directory = project.values[0].trim();
-        let package = project.values[1].trim();
-        let kind = project.values[2].trim();
+        let directory = project.values[new_project_field::DIRECTORY].trim();
+        let package = project.values[new_project_field::PACKAGE].trim();
+        let kind = project.values[new_project_field::KIND].trim();
         if directory.is_empty() || package.is_empty() {
             self.event = "New project failed: directory and package are required".to_owned();
             return;
@@ -206,13 +206,13 @@ impl App {
     }
 
     pub(super) fn submit_plugin(&mut self, plugin: &PluginState) {
-        let source = plugin.values[0].trim();
-        let framework = plugin.values[1].trim();
-        let package = plugin.values[2].trim();
-        let version = plugin.values[3].trim();
-        let crate_name = plugin.values[4].trim();
-        let checksum = plugin.values[5].trim();
-        let mode = plugin.values[6].trim();
+        let source = plugin.values[plugin_field::SOURCE].trim();
+        let framework = plugin.values[plugin_field::FRAMEWORK].trim();
+        let package = plugin.values[plugin_field::PACKAGE].trim();
+        let version = plugin.values[plugin_field::VERSION].trim();
+        let crate_name = plugin.values[plugin_field::CRATE].trim();
+        let checksum = plugin.values[plugin_field::CHECKSUM].trim();
+        let mode = plugin.values[plugin_field::MODE].trim();
         if !matches!(source, "official" | "user") {
             self.event = "Plugin failed: source must be official or user".to_owned();
             return;

@@ -1,28 +1,41 @@
-//! Call graph and data-flow rendering for Studio.
-//! Studio 调用图与数据流渲染。
+//! Call tree and data-flow rendering for Studio.
+//! Studio 调用树与数据流渲染。
 //!
-//! The module root owns the overlay entry point and the center/compare
-//! routing; panel layout, call-tree nodes, relation edges, and live values
-//! live in the mounted submodules and stay reachable through this path.
-//! 模块根承载浮层入口与 center/compare 路由；面板布局、调用树节点、
-//! 调用关系边与实时值位于挂载的子模块，并继续经此路径可达。
+//! The page is two panes: the call tree of the focused function, and the values
+//! that the tree cursor's function was observed with. The relation column that
+//! listed callers and callees beside the tree is gone — the tree draws those as
+//! edges — and so is the side-by-side comparison, whose second side halved every
+//! pane the reader actually wanted.
+//! 本页是两块面板：焦点函数的调用树，以及树游标所在函数被观测到的取值。曾经与树并排的
+//! "调用者/被调用者"关系栏已删除——树把那些画成了边——左右对比也一并删除：它的第二侧让每块
+//! 面板都只剩读者真正想要的一半。
+//!
+//! The module root owns the overlay entry point and the two-pane layout; the tree's
+//! geometry, its drawing and the live-value panel live in the mounted submodules.
+//! 模块根承载浮层入口与两栏布局；树的几何、绘制与实时取值面板位于挂载的子模块。
 
 use super::*;
 
-#[path = "graph/cells.rs"]
-mod cells;
+#[path = "graph/box_draw.rs"]
+mod box_draw;
+#[path = "graph/box_draw_vertical.rs"]
+mod box_draw_vertical;
+#[path = "graph/box_vertical.rs"]
+mod box_vertical;
+#[path = "graph/boxes.rs"]
+mod boxes;
 #[path = "graph/data.rs"]
 mod data;
-#[path = "graph/edges.rs"]
-mod edges;
-#[path = "graph/layout.rs"]
-mod layout;
+#[path = "graph/glyphs.rs"]
+mod glyphs;
+#[cfg(feature = "node-graph")]
+#[path = "graph/node_graph.rs"]
+mod node_graph;
 #[path = "graph/nodes.rs"]
 mod nodes;
 
 use data::draw_data_flow_panel;
-use layout::draw_graph_triptych;
-use nodes::draw_call_tree;
+use nodes::{TreePanel, draw_call_tree};
 
 pub(super) fn draw_search_graph(
     frame: &mut Frame<'_>,
@@ -30,188 +43,77 @@ pub(super) fn draw_search_graph(
     app: &mut App,
     search: &SearchState,
 ) {
-    if search.center.is_none() && search.compare_center.is_none() {
+    let Some(center) = search_center_ref(app, search) else {
         frame.render_widget(
-            Paragraph::new("No center selected.").block(panel(" PROVENANCE ", MUTED)),
+            Paragraph::new("No centre selected.").block(panel(" PROVENANCE ", MUTED)),
             area,
         );
         return;
-    }
+    };
     app.hot.graph_area = area;
-    let has_compare = search.compare_query.is_some() || search.compare_center.is_some();
-    if !has_compare {
-        let columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(app.graph_split_percent),
-                Constraint::Percentage((100 - app.graph_split_percent) / 2),
-                Constraint::Percentage((100 - app.graph_split_percent) / 2),
-            ])
-            .split(area);
-        let a = search_center_ref(app, search, 0);
-        app.hot.graph_callers_area = columns[0];
-        app.hot.graph_center_area = columns[0];
-        app.hot.graph_callees_area = columns[0];
-        app.hot.graph_tree_a_area = columns[1];
-        app.hot.graph_data_a_area = columns[2];
-        app.hot.graph_tree_b_area = Rect::default();
-        app.hot.graph_data_b_area = Rect::default();
-        app.hot.graph_detail_area = columns[2];
-        app.hot.graph_provenance_area = columns[2];
-        draw_graph_triptych(
-            frame,
-            columns[0],
-            app,
-            a.as_ref(),
-            search.graph_selected,
-            search.graph_focus == 0,
-            "A",
-        );
-        draw_call_tree(
-            frame,
-            columns[1],
-            app,
-            a.as_ref(),
-            search.outline_selected,
-            search.graph_focus == 2,
-            "CALL TREE",
-        );
-        let a_data = app.graph_tree_item(search, 0, search.outline_selected);
-        draw_data_flow_panel(
-            frame,
-            columns[2],
-            app,
-            a_data.as_ref(),
-            search.data_selected,
-            search.graph_focus == 3,
-            "DATA FLOW",
-        );
-        return;
-    }
-    let left = app.graph_split_percent / 2;
-    let right = 100_u16.saturating_sub(app.graph_split_percent) / 2;
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(left),
-            Constraint::Percentage(left),
-            Constraint::Percentage(right),
-            Constraint::Percentage(right),
+            Constraint::Percentage(app.graph_split_percent),
+            Constraint::Percentage(100_u16.saturating_sub(app.graph_split_percent)),
         ])
         .split(area);
-    app.hot.graph_callers_area = columns[0];
-    app.hot.graph_center_area = columns[1];
-    app.hot.graph_callees_area = columns[2];
-    app.hot.graph_detail_area = columns[3];
-    app.hot.graph_provenance_area = columns[3];
-
-    let a = search_center_ref(app, search, 0);
-    let b = search_center_ref(app, search, 1);
-    draw_graph_triptych(
+    app.hot.graph_tree_area = columns[0];
+    app.hot.graph_data_area = columns[1];
+    // The detail pane is the data pane: what the face inspector and the search
+    // lane point at is the values the cursor's function ran with.
+    // 详情面板就是数据面板：注册面检视器与搜索栏指向的，是游标所在函数运行时的取值。
+    app.hot.graph_detail_area = columns[1];
+    app.hot.graph_provenance_area = columns[1];
+    app.hot.graph_tree_boxes = draw_call_tree(
         frame,
         columns[0],
         app,
-        a.as_ref(),
-        search.graph_selected,
-        search.graph_focus == 0,
-        "A",
+        Some(&center),
+        TreePanel {
+            cursor: search.outline_selected,
+            focused: search.graph_focus == 0,
+            title: "CALL TREE",
+            vertical: search.tree_vertical,
+            #[cfg(feature = "node-graph")]
+            canvas: search.tree_canvas,
+        },
     );
-    draw_graph_triptych(
+    let item = app.graph_tree_item(search, search.outline_selected);
+    draw_data_flow_panel(
         frame,
         columns[1],
         app,
-        b.as_ref(),
-        search.compare_graph_selected,
-        search.graph_focus == 1,
-        "B",
-    );
-
-    let tree = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(columns[2]);
-    app.hot.graph_tree_a_area = tree[0];
-    app.hot.graph_tree_b_area = tree[1];
-    draw_call_tree(
-        frame,
-        tree[0],
-        app,
-        a.as_ref(),
-        search.outline_selected,
-        search.graph_focus == 2 && search.graph_side == 0,
-        "CALL TREE / A",
-    );
-    draw_call_tree(
-        frame,
-        tree[1],
-        app,
-        b.as_ref(),
-        search.compare_outline_selected,
-        search.graph_focus == 2 && search.graph_side == 1,
-        "CALL TREE / B",
-    );
-
-    let data = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(columns[3]);
-    app.hot.graph_data_a_area = data[0];
-    app.hot.graph_data_b_area = data[1];
-    let a_data = app.graph_tree_item(search, 0, search.outline_selected);
-    let b_data = app.graph_tree_item(search, 1, search.compare_outline_selected);
-    draw_data_flow_panel(
-        frame,
-        data[0],
-        app,
-        a_data.as_ref(),
+        item.as_ref(),
         search.data_selected,
-        search.graph_focus == 3 && search.graph_side == 0,
-        "DATA FLOW / A",
-    );
-    draw_data_flow_panel(
-        frame,
-        data[1],
-        app,
-        b_data.as_ref(),
-        search.compare_data_selected,
-        search.graph_focus == 3 && search.graph_side == 1,
-        "DATA FLOW / B",
+        search.graph_focus == 1,
+        "DATA FLOW",
     );
 }
 
-/// Resolve the selected call reference for one comparison side.
-/// 解析某一比较侧当前选中的调用引用。
-fn search_center_ref(app: &App, search: &SearchState, side: usize) -> Option<CallRef> {
-    let (center, function) = if side == 0 {
-        (search.center, search.center_function.as_deref())
-    } else {
-        (
-            search.compare_center,
-            search.compare_center_function.as_deref(),
-        )
-    };
-    if let Some(node) = center {
+/// Resolve the call reference the page is focused on.
+/// 解析本页当前聚焦的调用引用。
+///
+/// The centre is either the node the reader opened, or — before a node is opened —
+/// the row the search list has selected, so the page works from the moment the
+/// reader presses Enter on a search row.
+/// 圆心要么是读者打开的节点，要么——在打开节点之前——是搜索列表选中的那一行，因此读者在搜索行上
+/// 按下 Enter 的那一刻本页就可用。
+fn search_center_ref(app: &App, search: &SearchState) -> Option<CallRef> {
+    if let Some(node) = search.center {
         return app.registry.find(node).map(|info| CallRef {
             node,
-            function: function
+            function: search
+                .center_function
+                .as_deref()
                 .filter(|name| !name.is_empty())
                 .unwrap_or(&info.source.function)
                 .to_owned(),
             file: info.source.file.to_owned(),
         });
     }
-    let query = if side == 0 {
-        &search.query
-    } else {
-        search.compare_query.as_deref().unwrap_or("")
-    };
-    let selected = if side == 0 {
-        search.selected
-    } else {
-        search.compare_selected
-    };
-    let rows = app.search_rows(query);
-    let row = rows.get(selected)?;
+    let rows = app.search_rows(&search.query);
+    let row = rows.get(search.selected)?;
     let node = row.node?;
     let info = app.registry.find(node)?;
     Some(CallRef {

@@ -32,14 +32,14 @@ mod forms;
 use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
 mod search;
 use search::{draw_search, format_admission, format_registration_rule};
-mod search_detail;
 #[path = "status.rs"]
 mod status;
 use status::{draw_event, draw_keys};
 
 use super::app::{
     AddState, App, CallRef, CallTreeNode, CallTreeView, Focus, Overlay, SearchState,
-    app_function_source_range, face_field_indices, source_path_for,
+    app_function_source_range, face_field_indices, new_project_field, plugin_field,
+    source_path_for,
 };
 // The authoring layout's slot names: the form, the appliers and the tests index
 // one array, so they all read the same constants.

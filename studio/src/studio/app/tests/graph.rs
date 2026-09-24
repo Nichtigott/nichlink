@@ -1,6 +1,12 @@
 //! Call-graph navigation and panel focus tests.
 //! 调用图导航与面板焦点测试。
 
+// Every test here needs the fixture project, so the prelude is imported with the
+// feature that mounts them: without it this file has no tests and the import
+// would be unused.
+// 这里的每个测试都需要夹具项目，因此前导与挂载它们的特性一起导入：没有该特性时本文件没有
+// 测试，那个导入就成了未使用。
+#[cfg(feature = "prototype-fixtures")]
 use super::*;
 
 #[test]
@@ -21,18 +27,43 @@ fn graph_navigation_moves_across_real_call_edges() {
     app.handle_overlay_key(crossterm::event::KeyEvent::from(
         crossterm::event::KeyCode::Enter,
     ));
-    let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
-        panic!("search graph should open");
+    let (before, view) = {
+        let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
+            panic!("search graph should open");
+        };
+        assert!(search.graph_mode);
+        assert_eq!(search.graph_focus, 0, "the tree holds the focus on entry");
+        let center = app
+            .graph_item(search)
+            .expect("the cursor stands on a function");
+        (search.outline_selected, app.call_tree_view(&center))
     };
-    assert!(search.graph_mode);
-    let before = search.graph_selected;
-    app.handle_overlay_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Down,
-    ));
+    // Draw once before navigating: that is what tells the arrows which model axis
+    // runs down the screen, and the panel is the authority on it. The key that
+    // means "down the screen" must therefore reach a callee in either drawer.
+    // 导航前先绘制一次：正是它告诉方向键哪个模型轴沿屏幕向下，而面板是这件事的权威。因此
+    // "沿屏幕向下"的那个键在两种绘制方里都必须到达被调用者。
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 48)).expect("a terminal");
+    terminal
+        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
+        .expect("the graph page draws");
+    let down_the_screen = if app.tree_top_down {
+        crossterm::event::KeyCode::Down
+    } else {
+        crossterm::event::KeyCode::Right
+    };
+    app.handle_overlay_key(crossterm::event::KeyEvent::from(down_the_screen));
     let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
         panic!("search graph should remain open");
     };
-    assert!(search.graph_selected > before);
+    let landed = search.outline_selected;
+    assert_ne!(landed, before, "the arrow moves the cursor");
+    assert!(
+        view.tree.nodes[landed].level > 0,
+        "down the screen reaches a callee: {}",
+        view.tree.nodes[landed].symbol
+    );
 }
 
 #[test]
@@ -78,43 +109,26 @@ fn graph_tab_reaches_both_tree_and_data_panels() {
         ..SearchState::default()
     }));
     app.handle_overlay_key(crossterm::event::KeyEvent::from(KeyCode::Enter));
-    let Some(Overlay::Search(search)) = app.overlay.as_mut() else {
-        panic!("graph overlay should stay open");
-    };
-    search.compare_query = Some("preview_canvas_width_traced".to_owned());
-    search.compare_center = search.center;
-    search.compare_center_function = search.center_function.clone();
-
-    for expected in [(1, 1), (2, 0), (2, 1), (3, 0), (3, 1)] {
+    // Two panes: Tab moves the tree → the values, and wraps.
+    for expected in [1, 0] {
         app.handle_overlay_key(crossterm::event::KeyEvent::from(KeyCode::Tab));
         let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
             panic!("graph overlay should stay open");
         };
-        assert_eq!((search.graph_focus, search.graph_side), expected);
+        assert_eq!(search.graph_focus, expected);
+        assert_eq!(search.outline_focus, expected == 0);
     }
 
-    app.handle_overlay_key(crossterm::event::KeyEvent::from(KeyCode::Left));
+    // The value pane is where the data cursor moves; the tree's cursor is
+    // untouched while it has the focus.
+    app.handle_overlay_key(crossterm::event::KeyEvent::from(KeyCode::Tab));
     app.handle_overlay_key(crossterm::event::KeyEvent::from(KeyCode::Down));
     let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
         panic!("graph overlay should stay open");
     };
-    assert_eq!((search.graph_focus, search.graph_side), (3, 0));
+    assert_eq!(search.graph_focus, 1);
     assert_eq!(search.data_selected, 1);
-}
-
-#[test]
-fn graph_tab_skips_absent_comparison_panels() {
-    let mut search = SearchState {
-        graph_mode: true,
-        ..SearchState::default()
-    };
-
-    advance_graph_focus(&mut search);
-    assert_eq!((search.graph_focus, search.graph_side), (2, 0));
-    advance_graph_focus(&mut search);
-    assert_eq!((search.graph_focus, search.graph_side), (3, 0));
-    advance_graph_focus(&mut search);
-    assert_eq!((search.graph_focus, search.graph_side), (0, 0));
+    assert_eq!(search.outline_selected, 0);
 }
 
 #[test]
@@ -136,8 +150,10 @@ fn graph_enter_promotes_callers_and_opens_center_source() {
         crossterm::event::KeyCode::Enter,
     ));
 
+    // → hops downstream to a callee, and Enter makes that callee the centre.
+    // → 跳向下游的被调用者，Enter 让那个被调用者成为新的圆心。
     app.handle_overlay_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Down,
+        crossterm::event::KeyCode::Right,
     ));
     app.handle_overlay_key(crossterm::event::KeyEvent::from(
         crossterm::event::KeyCode::Enter,

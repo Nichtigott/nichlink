@@ -1,6 +1,7 @@
 //! Project root, manifest, and new-project wizard tests.
 //! 项目根、清单与新项目向导测试。
 
+use super::super::state::new_project_field;
 use super::*;
 use nichlink_run_method::face_field;
 
@@ -51,9 +52,9 @@ fn new_project_and_explicit_root_face_compile() {
     let Some(Overlay::NewProject(mut project)) = app.overlay.take() else {
         panic!("n should open the New Project wizard");
     };
-    project.values[0] = root.display().to_string();
-    project.values[1] = "sample-app".to_owned();
-    project.values[2] = "binary".to_owned();
+    project.values[new_project_field::DIRECTORY] = root.display().to_string();
+    project.values[new_project_field::PACKAGE] = "sample-app".to_owned();
+    project.values[new_project_field::KIND] = "binary".to_owned();
     app.overlay = Some(Overlay::NewProject(project));
     app.handle_key(KeyEvent::from(KeyCode::Char('s')));
 
@@ -188,7 +189,7 @@ fn new_project_wizard_toggles_library_kind() {
     app.handle_key(KeyEvent::from(KeyCode::Down));
     app.handle_key(KeyEvent::from(KeyCode::Enter));
     assert!(matches!(app.overlay, Some(Overlay::NewProject(ref project))
-        if project.values[2] == "library"));
+        if project.values[new_project_field::KIND] == "library"));
 }
 
 #[test]
@@ -204,9 +205,9 @@ fn new_project_wizard_creates_library_entrypoint() {
     let Some(Overlay::NewProject(mut project)) = app.overlay.take() else {
         panic!("n should open the New Project wizard");
     };
-    project.values[0] = root.display().to_string();
-    project.values[1] = "sample-framework".to_owned();
-    project.values[2] = "library".to_owned();
+    project.values[new_project_field::DIRECTORY] = root.display().to_string();
+    project.values[new_project_field::PACKAGE] = "sample-framework".to_owned();
+    project.values[new_project_field::KIND] = "library".to_owned();
     app.overlay = Some(Overlay::NewProject(project));
     app.handle_key(KeyEvent::from(KeyCode::Char('s')));
 
@@ -227,8 +228,8 @@ fn new_project_starts_with_an_empty_registration_tree() {
 
     let mut app = App::load();
     let mut project = super::super::NewProjectState::new();
-    project.values[0] = root.display().to_string();
-    project.values[1] = "empty-app".to_owned();
+    project.values[new_project_field::DIRECTORY] = root.display().to_string();
+    project.values[new_project_field::PACKAGE] = "empty-app".to_owned();
     app.submit_new_project(&project);
 
     assert!(!root.join("src/control").exists());

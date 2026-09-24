@@ -14,8 +14,7 @@ pub(crate) fn draw_new_project(
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(7), Constraint::Length(4)])
         .split(area);
-    let names = ["directory", "package", "kind"];
-    let rows = names
+    let rows = new_project_field::LABELS
         .iter()
         .enumerate()
         .map(|(index, name)| {

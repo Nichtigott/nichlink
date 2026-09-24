@@ -7,7 +7,6 @@ pub(super) fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
     let Some(overlay) = app.overlay.clone() else {
         app.hot.overlay_area = Rect::default();
         app.hot.overlay_list_area = Rect::default();
-        app.hot.overlay_compare_list_area = Rect::default();
         app.hot.delete_cancel_area = Rect::default();
         app.hot.delete_confirm_area = Rect::default();
         app.hot.action_cancel_area = Rect::default();
@@ -15,21 +14,10 @@ pub(super) fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
         app.hot.action_exit_area = Rect::default();
         app.hot.graft_compose_area = Rect::default();
         app.hot.graph_area = Rect::default();
+        app.hot.graph_tree_area = Rect::default();
+        app.hot.graph_data_area = Rect::default();
         app.hot.graph_detail_area = Rect::default();
         app.hot.graph_provenance_area = Rect::default();
-        app.hot.graph_callers_area = Rect::default();
-        app.hot.graph_center_area = Rect::default();
-        app.hot.graph_callees_area = Rect::default();
-        app.hot.graph_tree_a_area = Rect::default();
-        app.hot.graph_tree_b_area = Rect::default();
-        app.hot.graph_data_a_area = Rect::default();
-        app.hot.graph_data_b_area = Rect::default();
-        app.hot.graph_a_input_area = Rect::default();
-        app.hot.graph_a_center_area = Rect::default();
-        app.hot.graph_a_output_area = Rect::default();
-        app.hot.graph_b_input_area = Rect::default();
-        app.hot.graph_b_center_area = Rect::default();
-        app.hot.graph_b_output_area = Rect::default();
         app.hot.action_validate_area = Rect::default();
         app.hot.action_edit_area = Rect::default();
         return;
@@ -41,7 +29,6 @@ pub(super) fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
     };
     app.hot.overlay_area = area;
     app.hot.overlay_list_area = Rect::default();
-    app.hot.overlay_compare_list_area = Rect::default();
     app.hot.delete_cancel_area = Rect::default();
     app.hot.delete_confirm_area = Rect::default();
     app.hot.action_cancel_area = Rect::default();
@@ -51,30 +38,18 @@ pub(super) fn draw_overlay(frame: &mut Frame<'_>, app: &mut App) {
     app.hot.action_exit_area = Rect::default();
     app.hot.graft_compose_area = Rect::default();
     app.hot.graph_area = Rect::default();
+    app.hot.graph_tree_area = Rect::default();
+    app.hot.graph_data_area = Rect::default();
     app.hot.graph_detail_area = Rect::default();
     app.hot.graph_provenance_area = Rect::default();
-    app.hot.graph_callers_area = Rect::default();
-    app.hot.graph_center_area = Rect::default();
-    app.hot.graph_callees_area = Rect::default();
-    app.hot.graph_tree_a_area = Rect::default();
-    app.hot.graph_tree_b_area = Rect::default();
-    app.hot.graph_data_a_area = Rect::default();
-    app.hot.graph_data_b_area = Rect::default();
-    app.hot.graph_a_input_area = Rect::default();
-    app.hot.graph_a_center_area = Rect::default();
-    app.hot.graph_a_output_area = Rect::default();
-    app.hot.graph_b_input_area = Rect::default();
-    app.hot.graph_b_center_area = Rect::default();
-    app.hot.graph_b_output_area = Rect::default();
     frame.render_widget(Clear, area);
     frame.render_widget(Block::default().style(Style::default().bg(PANEL)), area);
     match overlay {
         Overlay::Search(search) => {
-            let (list_area, offset, compare_offset) = draw_search(frame, area, app, &search);
+            let (list_area, offset) = draw_search(frame, area, app, &search);
             app.hot.overlay_list_area = list_area;
             if let Some(Overlay::Search(current)) = &mut app.overlay {
                 current.offset = offset;
-                current.compare_offset = compare_offset;
             }
         }
         Overlay::NewProject(project) => {

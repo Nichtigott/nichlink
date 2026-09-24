@@ -10,10 +10,40 @@
 //! 本模块在其上加入内核的布局、一个让一帧不必付十几次源码扫描代价的备忘，以及穿过结果的两种
 //! 手势：沿调用方向移动一跳，以及以某个节点为新的焦点。
 
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 
 use super::*;
+
+/// One arrow press in the tree: the four directions a reader can see.
+/// 树里的方向键：读者能看见的四个方向。
+#[derive(Clone, Copy, Debug)]
+pub(super) enum TreeStep {
+    /// Toward the callers.
+    /// 朝调用者。
+    Up,
+    /// Toward the callees.
+    /// 朝被调用者。
+    Down,
+    /// Toward the previous sibling.
+    /// 朝前一个同级。
+    Left,
+    /// Toward the next sibling.
+    /// 朝后一个同级。
+    Right,
+}
+
+impl TreeStep {
+    /// The word the status line uses for this step.
+    /// 状态行描述这一步时用的词。
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
 
 /// How many hops the spatial call tree draws on each side of its focus.
 /// 空间调用树在焦点两侧各绘制多少跳。
@@ -132,53 +162,84 @@ impl App {
     /// Move the call-tree cursor one hop along the call direction.
     /// 让调用树游标沿调用方向移动一跳。
     ///
-    /// Upstream is "who calls this" and downstream is "what this calls". The
-    /// cursor walks the drawn tree's own edges, and because the caller half is
-    /// drawn on the left, moving toward the focus *is* moving downstream there —
-    /// which is why the mapping flips with the side.
-    /// 上游是"谁在调它"，下游是"它调用了谁"。游标走的是所画树自己的边；由于调用者半边画在
-    /// 左边，在那半边朝焦点走就是往下游走，因此映射随所在半边翻转。
-    pub(super) fn hop_call_tree(&mut self, search: &mut SearchState, downstream: bool) {
-        let side = search.graph_side;
-        let Some(focus) = self.graph_item(search, side) else {
+    /// Move the tree cursor one step the way the reader pressed, along the
+    /// *drawn* picture rather than along the model's own axes.
+    /// 让树游标朝读者按下的方向走一步，沿**画出来的**图走，而不是沿模型自己的轴。
+    ///
+    /// Which model axis is "up" depends on how the panel draws: a top-down tree has
+    /// levels running down the screen, a left-to-right one has them running across
+    /// it. The picture is the authority — the panel's own sentence says which way
+    /// the calls run — so the four keys keep their printed meaning in both layouts,
+    /// and a level step follows a drawn edge that exists instead of jumping to
+    /// whatever happens to be numbered next.
+    /// 哪个模型轴是"上"取决于面板怎么画：自上而下的树让层沿屏幕向下延伸，从左到右的树让层横着
+    /// 延伸。以图为准——面板自己的那句话写明了调用方向——因此四个键在两种排布里都保持字面含义，
+    /// 而沿层的移动走的是确实存在的那条画出来的边，而不是跳到"编号恰好下一个"的节点上。
+    pub(super) fn hop_call_tree(&mut self, search: &mut SearchState, step: TreeStep) {
+        let Some(focus) = self.graph_item(search) else {
             return;
         };
         let view = self.call_tree_view(&focus);
-        let cursor = if side == 1 {
-            search.compare_outline_selected
-        } else {
-            search.outline_selected
-        };
-        let Some(node) = view.tree.nodes.get(cursor) else {
+        let nodes = &view.tree.nodes;
+        let cursor = search.outline_selected;
+        let Some(node) = nodes.get(cursor) else {
             return;
         };
-        let child = |from: usize| {
-            view.tree.nodes.iter().position(|candidate| {
-                candidate.parent == Some(from) && (candidate.level > 0) == downstream
-            })
+        // The grid the panel drew: which model coordinate runs down the screen.
+        // 面板画出的网格：哪个模型坐标沿屏幕向下。
+        let (level_step, lane_step) = match (self.tree_top_down, step) {
+            (true, TreeStep::Up) | (false, TreeStep::Left) => (-1, 0),
+            (true, TreeStep::Down) | (false, TreeStep::Right) => (1, 0),
+            (true, TreeStep::Left) | (false, TreeStep::Up) => (0, -1),
+            _ => (0, 1),
         };
-        let target = match (node.level.cmp(&0), downstream) {
-            (Ordering::Less, true) | (Ordering::Greater, false) => node.parent,
-            _ => child(cursor),
+        let target = if level_step != 0 {
+            // One hop along a drawn edge: the node that placed this one, or one it
+            // placed. The same lane is preferred, so a branch stays a branch.
+            // 沿一条画出来的边走一跳：放置本节点的节点，或它放置的节点。优先同一条车道，
+            // 使一条分支保持是一条分支。
+            let wanted = node.level + level_step;
+            let mut candidates = nodes
+                .iter()
+                .enumerate()
+                .filter(|(index, other)| {
+                    other.level == wanted
+                        && (other.parent == Some(cursor) || node.parent == Some(*index))
+                })
+                .map(|(index, other)| (index, other.lane));
+            let same_lane = candidates.clone().find(|(_, lane)| *lane == node.lane);
+            same_lane
+                .or_else(|| candidates.next())
+                .map(|(index, _)| index)
+        } else {
+            // Sideways is the lane the reader sees: the nearest neighbour in that
+            // direction inside the same band.
+            // 横向就是读者看到的车道：同一条带内该方向上最近的一个。
+            nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, other)| other.level == node.level)
+                .filter(|(_, other)| match lane_step {
+                    -1 => other.lane < node.lane,
+                    _ => other.lane > node.lane,
+                })
+                .min_by_key(|(_, other)| other.lane.abs_diff(node.lane))
+                .map(|(index, _)| index)
         };
         let Some(target) = target else {
             self.event = format!(
-                "{} has no {} hop inside the {CALL_TREE_DEPTH}-hop call tree",
+                "{} has no {} node inside the {CALL_TREE_DEPTH}-hop call tree",
                 node.symbol,
-                if downstream { "downstream" } else { "upstream" }
+                step.label()
             );
             return;
         };
-        if side == 1 {
-            search.compare_outline_selected = target;
-        } else {
-            search.outline_selected = target;
-        }
+        search.outline_selected = target;
         search.data_selected = 0;
         self.event = format!(
-            "Call tree cursor: {} ({} hop)",
-            view.tree.nodes[target].symbol,
-            if downstream { "downstream" } else { "upstream" }
+            "Call tree cursor: {} ({})",
+            nodes[target].symbol,
+            step.label()
         );
     }
 
@@ -186,33 +247,19 @@ impl App {
     /// 让某个树节点成为它那一侧的焦点。
     ///
     /// Returns `false` when the node is the focus already; the caller then opens
-    /// the editor, which is the same gesture the three-column view uses.
-    /// 该节点已是焦点时返回 `false`；此时调用方改为打开编辑器，与三列视图的手势一致。
+    /// the editor.
+    /// 该节点已是焦点时返回 `false`；此时调用方改为打开编辑器。
     pub(super) fn recentre_call_tree(&mut self, search: &mut SearchState, target: CallRef) -> bool {
-        let (center, function) = if search.graph_side == 1 {
-            (
-                search.compare_center,
-                search.compare_center_function.as_deref(),
-            )
-        } else {
-            (search.center, search.center_function.as_deref())
-        };
+        let (center, function) = (search.center, search.center_function.as_deref());
         if center == Some(target.node) && function == Some(target.function.as_str()) {
             return false;
         }
         let line = self.source_function_line(target.node, &target.function);
         self.event = format!("Call tree re-centred on {}", target.function);
-        if search.graph_side == 1 {
-            search.compare_center = Some(target.node);
-            search.compare_center_function = Some(target.function);
-            search.compare_center_line = line;
-            search.compare_outline_selected = 0;
-        } else {
-            search.center = Some(target.node);
-            search.center_function = Some(target.function);
-            search.center_line = line;
-            search.outline_selected = 0;
-        }
+        search.center = Some(target.node);
+        search.center_function = Some(target.function);
+        search.center_line = line;
+        search.outline_selected = 0;
         search.data_selected = 0;
         true
     }

@@ -69,14 +69,19 @@ pub fn render_call_report_for_trace(
                         .map(|check| check.name())
                 })
                 .unwrap_or(&info.source.function);
+            // `kind` is printed once: the handle is the same string by rule
+            // (`__registration_face!` expands both from `stringify!($kind)`), and
+            // a report that states one fact twice reads as two facts.
+            // `kind` 只打印一次：handle 按规则就是同一个字符串
+            // （`__registration_face!` 用 `stringify!($kind)` 展开两者），而把同一个事实
+            // 写两遍的报告读起来像两个事实。
             writeln!(
                 output,
-                "  `-- {}::{} kind={} declared-at={} handle={}",
+                "  `-- {}::{} kind={} declared-at={}",
                 path,
                 function,
                 info.kind,
                 info.source.describe(),
-                info.handle,
             )
             .unwrap();
         }
@@ -102,13 +107,12 @@ pub fn render_call_report_for_trace(
                         .map(|source| format!(" call-at={source}"))
                         .unwrap_or_default();
                     format!(
-                        "{} {}::{}#{} declared-at={} handle={}{call_source}",
+                        "{} {}::{}#{} declared-at={}{call_source}",
                         call.node,
                         path,
                         call.function,
                         call.frame_id,
                         info.source.describe(),
-                        info.handle,
                     )
                 })
                 .unwrap_or_else(|| format!("{} {}", call.node, call.function));
@@ -126,19 +130,22 @@ fn matching_registrations<'a>(
     registry.find_where(|info| registration_matches(registry, info, &query))
 }
 
-/// Match every searchable registration-face field, including parameter names.
-/// 匹配所有可搜索的注册面字段，包括参数名。
+/// Match every searchable registration-face field.
+/// 匹配所有可搜索的注册面字段。
+///
+/// The list holds one entry per distinct field: the handle and the parameter
+/// metadata are the kind by rule, so searching the kind already searches them.
+/// 列表里每个不同的字段各占一项：handle 与参数元数据按规则就是 kind，因此搜索 kind 就等于
+/// 搜索它们。
 fn registration_matches(
     registry: &Registry,
     info: &crate::RegistrationSnapshot,
     query: &str,
 ) -> bool {
     let text_matches = [
-        info.handle.as_str(),
         info.kind.as_str(),
         info.preset.as_str(),
         info.parts.as_str(),
-        info.params.as_str(),
         info.source.file.as_str(),
         info.source.function.as_str(),
         info.name.zh.as_str(),

@@ -18,9 +18,15 @@ pub(super) use super::support::{
     host_manifest, package_root, select_project, with_authoring_context,
 };
 pub(super) use super::{
-    AddState, App, GraftDeclaration, Overlay, SearchState, StudioPage, advance_graph_focus,
-    app_function_source_range, body_calls, function_bodies, function_symbols,
+    AddState, App, GraftDeclaration, Overlay, StudioPage, app_function_source_range, body_calls,
+    function_bodies, function_symbols,
 };
+// `SearchState` is named by the fixture-gated call-tree tests only, so it is
+// imported with them: the default build refuses an unused import.
+// `SearchState` 只被门控在夹具上的调用树测试命名，因此与它们一起导入：默认构建拒绝未使用的
+// 导入。
+#[cfg(feature = "prototype-fixtures")]
+pub(super) use super::SearchState;
 
 // The prototype-fixture tests read call relations and build a compiler snapshot
 // directly, so they name these instead of reaching them through `app`'s private
