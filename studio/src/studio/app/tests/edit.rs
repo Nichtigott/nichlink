@@ -3,6 +3,7 @@
 
 use super::*;
 use nichlink_run_method::face_field;
+use nichlink_run_method::registry_core::declaration::portable_path;
 
 #[test]
 fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
@@ -283,8 +284,19 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
         backup.contains("hand-written note"),
         "the backup holds the text that was overwritten: {backup}"
     );
+    // Both sides name the same file, but they are built differently: the test
+    // joins the trash directory from one `/`-carrying string, while the product
+    // joins its components. Windows therefore spells the same directory
+    // `...\.nichlink\trash\faces\x.rs` on one side and
+    // `...\.nichlink/trash/faces\x.rs` on the other, and a raw `contains`
+    // compares two spellings of one path. Folding both to the portable form is
+    // what the message actually promises: that it names the backup.
+    // 两侧命名的是同一个文件，但拼法不同：测试用一条含 `/` 的字符串拼出垃圾目录，
+    // 产品却逐分量拼。于是 Windows 上一侧写成 `...\.nichlink\trash\faces\x.rs`，另一侧
+    // 写成 `...\.nichlink/trash/faces\x.rs`，而裸 `contains` 比较的是同一条路径的两种
+    // 拼法。把两边都折叠为可移植形式，才是这条消息真正的承诺：它报出了那份备份。
     assert!(
-        app.event.contains(&entries[0].display().to_string()),
+        portable_path(&app.event).contains(&portable_path(&entries[0].display().to_string())),
         "the message names the backup path: {}",
         app.event
     );

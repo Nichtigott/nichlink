@@ -3,6 +3,7 @@
 
 use super::*;
 use nichlink_run_method::face_field;
+use nichlink_run_method::registry_core::declaration::portable_path;
 
 /// The graft screen composes a plan, shows the entry line, and never edits host
 /// source. A plan is a record; the overlay itself is applied by the host.
@@ -230,8 +231,12 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
     assert!(app.event.starts_with("Warning:"), "{}", app.event);
     assert!(app.event.contains("root/canvas"), "{}", app.event);
     assert!(app.event.contains("UnkeptSlot"), "{}", app.event);
+    // The entry is a host path, so Windows spells it `...\src\lib.rs`; the
+    // warning has to name that file however the platform spells it.
+    // 入口是宿主路径，因此 Windows 写成 `...\src\lib.rs`；无论平台怎么拼，警告都必须
+    // 报出那个文件。
     assert!(
-        app.event.contains("src/lib.rs"),
+        portable_path(&app.event).contains("src/lib.rs"),
         "the warning names the entry that lacks the declaration: {}",
         app.event
     );
