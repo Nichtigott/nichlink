@@ -532,11 +532,29 @@ for level in $levels; do
     pending="$pending $crate"
   done
 
+  level_published=""
   for crate in $pending; do
     if [ "$publish" = true ]; then
+      # A version already on the index is the outcome this run wants. Without
+      # this check, a re-run after a partial publication asks `cargo publish` for
+      # a crate it has already uploaded, reads the registry's "already uploaded"
+      # 400 as a failure, and then refuses every crate that depends on it — so a
+      # release that is one command away from correct gets reported as broken,
+      # and there is no script-level way to resume.
+      # index 上已有该版本，就已经是本次运行想要的结果。缺这道检查时，一次部分发布后的
+      # 重跑会为已经上传过的 crate 再问一次 `cargo publish`，把 registry 的
+      # "already uploaded" 400 读成失败，进而拒绝每一个依赖它的 crate——于是一次离正确
+      # 只差一条命令的发布被报成坏的，而且没有脚本级的续跑方式。
+      if is_published "$crate" "$workspace_version"; then
+        printf 'already on the index %s %s\n' "$crate" "$workspace_version"
+        level_published="$level_published $crate"
+        continue
+      fi
       printf 'publishing %s %s\n' "$crate" "$workspace_version"
       # shellcheck disable=SC2086
-      if ! cargo publish -p "$crate" $cargo_flags; then
+      if cargo publish -p "$crate" $cargo_flags; then
+        level_published="$level_published $crate"
+      else
         printf 'error: cargo publish failed for %s\n' "$crate" >&2
         failed="$failed $crate"
       fi
@@ -544,7 +562,7 @@ for level in $levels; do
       printf 'verifying %s %s\n' "$crate" "$workspace_version"
       # shellcheck disable=SC2086
       if cargo publish -p "$crate" --dry-run $cargo_flags; then
-        published="$published $crate"
+        level_published="$level_published $crate"
       else
         printf 'error: cargo publish --dry-run failed for %s\n' "$crate" >&2
         failed="$failed $crate"
@@ -553,9 +571,13 @@ for level in $levels; do
   done
 
   # Wait for this level to be visible before the next one resolves against it.
-  # 等这一层在 index 里可见，下一层才能解析到它。
-  if [ "$publish" = true ] && [ "$failed" = "" ]; then
-    for crate in $pending; do
+  # Only the crates this level actually put on the index are waited for: a crate
+  # that failed is not going to appear, and its dependents are refused by the
+  # dependency check above rather than published against a gap.
+  # 等这一层在 index 里可见，下一层才能解析到它。只等本层真正送上 index 的那些 crate：
+  # 失败的那个不会出现，而它的依赖者会在上面的依赖检查里被拒绝，而不是带着缺口发布。
+  if [ "$publish" = true ]; then
+    for crate in $level_published; do
       waited=0
       while ! is_published "$crate" "$workspace_version"; do
         if [ "$waited" -ge "$wait_seconds" ]; then
@@ -567,8 +589,8 @@ for level in $levels; do
         waited=$((waited + 5))
       done
     done
-    published="$published $pending"
   fi
+  published="$published $level_published"
 done
 
 cat <<EOF
