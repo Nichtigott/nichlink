@@ -193,14 +193,11 @@ crate::node_editor_object! {
     kind: Canvas,
     preset: CanvasPreset,
     parts: CanvasParts,
-    handle: Canvas,
     summary: { zh: "二维画布", en: "A 2-D drawing surface" },
     exports: ["canvas.render"],
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    expected_output: "CanvasFrame",
-    actual_output: "CanvasFrame",
     flow: nichlink_run_method::FlowContract::new(
         nichlink_run_method::ContractId::new("canvas.render.v1"),
         1,
@@ -362,7 +359,6 @@ crate::control_object! {
     kind: Button,
     preset: ActionParts,
     parts: ButtonParts,
-    handle: Button,
     parent: crate::control::NODE_ID,
     exports: ["control.render"],
     handle_traits: ["ControlHandle"],
@@ -647,6 +643,13 @@ call runs exactly the checks the face declared.
 
 Static does not mean every operation in every configuration is free. It means
 the costs are explicit:
+
+The allocation and timing numbers behind this table are measured, not inferred:
+[`docs/performance-baseline.md`](docs/performance-baseline.md) records how they were
+taken and what each check asserts.
+本表背后的分配与耗时数字是实测而非推断：
+[`docs/performance-baseline.md`](docs/performance-baseline.md) 记录了它们如何测得、以及每项检查
+断言了什么。
 
 | Usage | Runtime representation | Cost boundary |
 | --- | --- | --- |

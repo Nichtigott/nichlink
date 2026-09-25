@@ -72,7 +72,8 @@ mod validation;
 // 对外表面，保持在调用方已经在用的路径上。
 pub use entry::host_entry_source;
 pub use face_view::{
-    BuildScopeView, FaceView, PruningRow, face_views, read_build_scope, read_pruning_manifest,
+    BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views, read_build_scope,
+    read_pruning_manifest,
 };
 pub use graft_view::{DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, declared_grafts};
 /// The module path a registration source declares, for authoring surfaces.

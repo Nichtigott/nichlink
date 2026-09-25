@@ -65,17 +65,58 @@ if [ -z "$workspace_version" ]; then
   exit 1
 fi
 
-crates='
-nichlink-core:core:
-nichlink-macro:macro:nichlink-core
-nichlink-build-method:build_method:nichlink-core
-nichlink-mcp:mcp:nichlink-core
-nichlink-run-method:run_method:nichlink-core,nichlink-macro
-nichlink-debug-method:debug_method:nichlink-run-method
-nichlink-plugin-host:plugin-host:nichlink-run-method
-nichlink-studio:studio:nichlink-run-method,nichlink-debug-method,nichlink-build-method
-nichlink-cli:cli:nichlink-build-method,nichlink-mcp,nichlink-studio
-'
+# The shipped crates are derived from the workspace, not listed: a hand-kept table
+# is one a new member can simply not appear in. The audit added a tenth published
+# member and this tool still reported "all nine crates" while
+# `tools/nichlink-publish --check-table` caught it — the derivation below is the
+# same one, duplicated for the same reason the index probe is: each tool has to stay
+# runnable on its own.
+# 已发布的 crate 从工作区推导，而不是手列：手工表正是新成员可以干脆不出现的那种表。审计加了
+# 第十个已发布成员，而本工具仍报"all nine crates"，反倒是 `tools/nichlink-publish --check-table`
+# 抓到了它——下面这段推导与它相同，复刻的理由与 index 探针一样：每个工具都必须能独立运行。
+members=$(awk '
+  /^members *= *\[/ { inside = 1 }
+  inside {
+    line = $0
+    sub(/^[^[]*\[/, "", line)
+    sub(/\].*$/, "", line)
+    gsub(/[",]/, "", line)
+    count = split(line, parts, / +/)
+    for (i = 1; i <= count; i++) if (parts[i] != "") print parts[i]
+    if ($0 ~ /\]/) exit
+  }
+' Cargo.toml)
+
+crates=""
+crate_count=0
+for member in $members; do
+  manifest="$member/Cargo.toml"
+  [ -f "$manifest" ] || continue
+  # A member that does not publish is not a package to audit.
+  # 不发布的成员不是要审计的包。
+  if grep -qE '^publish *= *false' "$manifest"; then
+    continue
+  fi
+  name=$(sed -n 's/^name = "\(.*\)"/\1/p' "$manifest" | head -n 1)
+  [ -n "$name" ] || continue
+  # Internal dependencies, in either spelling: inline
+  # (`nichlink-core = { path = … }`) or inherited (`nichlink-core.workspace = true`).
+  # 内部依赖，两种拼法都算：行内（`nichlink-core = { path = … }`）或继承
+  # （`nichlink-core.workspace = true`）。
+  deps=$(awk '
+    /^\[/ { section = $0; next }
+    section ~ /^\[(build-)?dependencies\]$/ && /^nichlink-[a-z-]+ *=/ { print $1 }
+    section ~ /^\[(build-)?dependencies\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ {
+      name = $1
+      sub(/\.workspace.*/, "", name)
+      print name
+    }
+  ' "$manifest" | sort -u | tr '\n' ',')
+  deps=${deps%,}
+  crates="$crates
+$name:$member:$deps"
+  crate_count=$((crate_count + 1))
+done
 
 if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
   echo "warn: neither curl nor wget is available; cannot probe $index_url," \
@@ -193,7 +234,7 @@ done
 
 cat <<EOF
 Package audit summary
-  contents checked: all nine crates
+  contents checked: all $crate_count shipped crates
   contents failed:${content_failed:- none}
   verified:${verified:- none}
   skipped:${skipped:- none}

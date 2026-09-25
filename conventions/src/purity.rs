@@ -42,7 +42,41 @@ pub const FORBIDDEN: &[&str] = &[
     "std::process",
     "std::net",
     "std::time",
+    "std::io",
+    "std::thread",
+    "std::os",
 ];
+
+/// The text of one line with `use std::{a, b}` expanded into the paths it names.
+/// 一行的文本，其中 `use std::{a, b}` 展开为它命名的那些路径。
+///
+/// A brace import never spells `std::fs`, so the literal search below missed it.
+/// The import line *is* the violation, which is why no alias resolution is needed:
+/// `use std::fs as filesystem;` already contains `std::fs`, and a bare `fs::read`
+/// after `use std::{env, fs}` is caught at the import that made it possible.
+/// 树形导入从不拼出 `std::fs`，因此下面的字面量搜索看不到它。导入行**就是**违规本身，这也正是
+/// 无需解析别名的原因：`use std::fs as filesystem;` 里已经有 `std::fs`，而
+/// `use std::{env, fs}` 之后的裸 `fs::read` 在使其成为可能的那个导入处被抓到。
+fn expand_imports(line: &str) -> String {
+    let Some(start) = line.find("std::{") else {
+        return line.to_owned();
+    };
+    let mut expanded = line.to_owned();
+    let rest = &line[start + "std::{".len()..];
+    let Some(end) = rest.find('}') else {
+        return expanded;
+    };
+    for item in rest[..end].split(',') {
+        let item = item.trim();
+        if item.is_empty() || item == "self" {
+            continue;
+        }
+        expanded.push(' ');
+        expanded.push_str("std::");
+        expanded.push_str(item);
+    }
+    expanded
+}
 
 /// One forbidden token on one line of the kernel.
 /// 内核某一行上的一个禁用词。
@@ -68,8 +102,9 @@ pub fn findings(root: &Path) -> Vec<Finding> {
             if is_comment(line) {
                 continue;
             }
+            let searchable = expand_imports(line);
             for token in FORBIDDEN {
-                if line.contains(token) {
+                if searchable.contains(token) {
                     found.push(Finding {
                         file: relative(root, &path),
                         line: index + 1,
@@ -86,6 +121,70 @@ pub fn findings(root: &Path) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::workspace_root;
+    use std::collections::BTreeSet;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// A throwaway checkout with the given files under it.
+    /// 一个只含给定文件的一次性检出。
+    fn synthetic(files: &[(&str, &str)]) -> PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-purity-{}-{}-{sequence}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        for (relative, contents) in files {
+            let path = root.join(relative);
+            fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
+            fs::write(&path, contents).expect("fixture file");
+        }
+        root
+    }
+
+    /// A brace import names a forbidden module without ever spelling `std::fs`,
+    /// and `std::io` is I/O like everything else in the list.
+    /// 树形导入从未拼出 `std::fs` 却命名了被禁的模块，而 `std::io` 与表里其余各项一样是 I/O。
+    #[test]
+    fn a_brace_import_and_std_io_are_violations() {
+        let root = synthetic(&[(
+            "core/src/probe.rs",
+            "use std::{env, fs};\n\npub fn probe() -> String {\n    \
+             let _ = fs::read_to_string(\"/etc/hostname\");\n    \
+             let _ = env::var(\"HOME\");\n    \
+             let _ = std::io::stdout();\n    String::new()\n}\n",
+        )]);
+        let found = findings(&root);
+        let tokens = found
+            .iter()
+            .map(|finding| finding.token)
+            .collect::<BTreeSet<_>>();
+        assert!(
+            tokens.contains("std::io"),
+            "std::io is I/O and belongs in the list: {found:#?}"
+        );
+        assert!(
+            tokens.contains("std::env") && tokens.contains("std::fs"),
+            "a brace import names both modules: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The walk has a floor, so a renamed kernel directory cannot read as "clean".
+    /// 遍历有一个下限，因此内核目录一旦改名就不会读作"干净"。
+    #[test]
+    fn the_walk_covers_the_kernel_tree() {
+        let sources = rust_sources(&workspace_root().join("core").join("src"));
+        assert!(
+            sources.len() > 40,
+            "the purity walk found only {} files; it is supposed to cover core/src",
+            sources.len()
+        );
+    }
 
     /// The kernel stays pure: the audit verdict is now a gate.
     /// 内核保持纯净：审计结论现在是一道门禁。

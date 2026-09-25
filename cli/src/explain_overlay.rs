@@ -49,7 +49,14 @@ pub(super) fn overlay_report(
     out: &mut dyn Write,
 ) -> Result<(), String> {
     let out_dir = build_out_dir(manifest);
-    let scope = read_build_scope(&out_dir).ok();
+    // Same rule as the per-node report: output that no longer describes these
+    // sources is treated as absent, so the projection says "unknown" instead of
+    // drawing a tree from a previous build.
+    // 与逐节点报告同一条规则：不再描述这批源码的产物按缺失处理，因此投影说的是"未知"，而不是
+    // 用上一次构建画出一棵树。
+    let scope = nichlink_build_method::build_output_is_current(manifest, &out_dir)
+        .then(|| read_build_scope(&out_dir).ok())
+        .flatten();
     let declared = declared_grafts(manifest);
     let plans = super::super::grafts::plan_rows(manifest, faces, declared.as_ref().ok())?;
 

@@ -291,3 +291,63 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Delete moves the module of the project Studio has open, not of whatever
+/// directory the process happens to sit in.
+/// 删除搬走的是 Studio **打开**的项目的模块，而不是进程恰好所在目录的那个。
+///
+/// `delete_module` resolves its root through the authoring context, and the delete
+/// overlay was the one authoring call that did not establish it — so it acted on the
+/// process CWD project while the screen showed another one. A test cannot observe
+/// the CWD project without risking the checkout, so this pins the positive half: the
+/// open project's file is the one that moves, and the status line names it.
+/// `delete_module` 经创作上下文解析根路径，而删除浮层是唯一没有建立它的创作调用——于是它作用
+/// 在进程 CWD 的项目上，而屏幕上显示的是另一个。测试无法在不冒犯检出的前提下观察 CWD 项目，
+/// 因此这里钉住正面的一半：搬走的是打开项目的文件，而且状态行点名了它。
+#[test]
+fn delete_moves_the_module_of_the_open_project() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-delete-{suffix}"));
+    let control = root.join("src/control/control.rs");
+    let rule = root.join("src/control/registry_rule/registry_rule.rs");
+    std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
+    std::fs::write(
+        &control,
+        "pub struct ControlRegistry;\n\ncrate::control_object! {\n    kind: ControlRegistry,\n    needs_registry: true,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n}\n",
+    )
+    .expect("write control");
+    std::fs::write(
+        &rule,
+        "use crate::RegistrationRule;\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::ANY;\n",
+    )
+    .expect("write legacy rule");
+    select_project(root.clone(), root.join("Cargo.toml"), "delete-app");
+
+    let mut app = App::load();
+    app.selected = app.registry.depth_first()[0].id;
+    app.handle_key(KeyEvent::from(KeyCode::Char('d')));
+    assert!(
+        matches!(app.overlay, Some(Overlay::Delete(_))),
+        "d opens the delete overlay"
+    );
+    app.handle_key(KeyEvent::from(KeyCode::Char('y')));
+
+    assert!(
+        !app.event.starts_with("Delete failed"),
+        "delete must act on the open project: {}",
+        app.event
+    );
+    assert!(
+        !control.exists(),
+        "the open project's module file must be the one that moved"
+    );
+    assert!(
+        app.event.contains(&root.display().to_string()),
+        "the status line must name the open project: {}",
+        app.event
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

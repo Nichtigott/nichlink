@@ -152,6 +152,38 @@ fn button_target(registry: &Registry) -> NodeId {
         .id
 }
 
+/// Creating a plan whose selector would land outside the record directory is an
+/// error, and it creates nothing on the way: `..` used to be accepted, written to
+/// `<pkg>/.nichlink/graft.plan`, and then never listed — a record the runtime
+/// never applied and the author could not see.
+/// 用会落到记录目录之外的选择器创建计划是错误，而且过程中不创建任何东西：`..` 过去会被接受、
+/// 写到 `<pkg>/.nichlink/graft.plan`，然后又永远不会被列出——一份运行期从不应用、作者也看不到
+/// 的记录。
+#[test]
+fn a_selector_that_escapes_the_record_directory_creates_nothing() {
+    with_temp_root(|_root| {
+        let registry = registry_with_button();
+        let target = button_target(&registry);
+        for escaped in ["..", ".", ".hidden"] {
+            let error = create_external_graft(&registry, target, escaped, false)
+                .expect_err("a selector must not leave the record directory");
+            assert!(
+                error.contains("selector") || error.contains("name"),
+                "the refusal must explain itself: {error}"
+            );
+        }
+        // Nothing was created for any of them, and the plan directory is untouched.
+        // 它们一个都没有创建任何东西，计划目录保持原样。
+        assert!(
+            !external_graft_root()
+                .join("..")
+                .join(lexicon::GRAFT_PLAN_FILE)
+                .exists(),
+            "no escapee plan may be written"
+        );
+    });
+}
+
 #[test]
 fn a_created_plan_round_trips_is_listed_and_moves_to_trash() {
     with_temp_root(|root| {

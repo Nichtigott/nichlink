@@ -46,7 +46,14 @@ pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize
     let mut depth = 0usize;
     let mut opened = false;
     for (index, line) in lines.iter().enumerate().skip(start) {
-        for character in line.chars() {
+        // Braces inside a string or a comment are not code. Counting them on the
+        // raw line let `let s = "{";` open a range that closed on a later `}` —
+        // and with no closing brace at all the old fallback claimed a one-line
+        // function. The masking below is the same rule the function index uses.
+        // 字符串或注释里的花括号不是代码。按原始行计数会让 `let s = "{";` 打开一个在更后面的
+        // `}` 处闭合的范围——而完全没有闭合花括号时，旧的兜底会声称这是个单行函数。下面的
+        // 屏蔽与函数索引用的是同一条规则。
+        for character in mask_non_code(line).chars() {
             match character {
                 '{' => {
                     depth += 1;
@@ -60,7 +67,23 @@ pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize
             return Some((start, index));
         }
     }
-    Some((start, start))
+    // Unbalanced at the end of `lines`: the function does not close inside what
+    // the caller handed over. `Some((start, start))` reported that as a one-line
+    // function, which is the opposite of what the caller needs to know.
+    // 在 `lines` 末尾仍未配平：该函数没有在调用方给出的范围内闭合。过去用
+    // `Some((start, start))` 把它报成单行函数，而这与调用方需要知道的事实相反。
+    None
+}
+
+/// Advance `cursor` past one UTF-8 character, when there is one.
+/// 若存在，把 `cursor` 推进一个 UTF-8 字符。
+fn skip_one_character(bytes: &[u8], cursor: &mut usize) {
+    if *cursor < bytes.len() {
+        *cursor += 1;
+        while bytes.get(*cursor).is_some_and(|byte| byte & 0xC0 == 0x80) {
+            *cursor += 1;
+        }
+    }
 }
 
 /// Index function bodies without treating comments, strings, or macro text as Rust.
@@ -180,7 +203,20 @@ fn is_ident_continue(byte: u8) -> bool {
 
 /// Replace comments and quoted literals with spaces while preserving offsets.
 /// 用空格替换注释和引号字面量，同时保留原始偏移量。
-fn mask_non_code(source: &str) -> String {
+/// Blank the contents of comments, string literals and character literals.
+/// 把注释、字符串字面量与字符字面量的内容抹成空白。
+///
+/// The workspace's one text rule for "what is code": the source scanners use it so
+/// a `fn` inside a comment or a brace inside a string is not read as Rust, and the
+/// `conventions` gates use it so a workspace test's *fixture string* mentioning
+/// `include!`/`std::fs` is not read as a violation. Macro bodies are deliberately
+/// left alone — the macro name and its delimiter are code, and a gate that looks
+/// for a macro invocation has to see them.
+/// 本工作区关于"什么算代码"的唯一文本规则：源码扫描器用它，使注释里的 `fn` 或字符串里的花括号不被
+/// 读成 Rust；`conventions` 的门禁也用它，使工作区测试里**夹具字符串**中提到的
+/// `include!`/`std::fs` 不被读成违规。宏内容有意保留——宏名与它的定界符是代码，而查找宏调用的
+/// 门禁必须看见它们。
+pub fn mask_non_code(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut masked = bytes.to_vec();
     let mut index = 0usize;
@@ -220,7 +256,7 @@ fn mask_non_code(source: &str) -> String {
             }
             continue;
         }
-        if bytes[index] == b'"' || bytes[index] == b'\'' {
+        if bytes[index] == b'"' {
             let quote = bytes[index];
             masked[index] = b' ';
             index += 1;
@@ -238,6 +274,54 @@ fn mask_non_code(source: &str) -> String {
                 } else if bytes[index - 1] == quote {
                     break;
                 }
+            }
+            continue;
+        }
+        // A `'` opens a character literal only when that literal closes. A
+        // lifetime (`'a`), a label (`'outer`) or the apostrophe of `&'static` has
+        // no closing quote, and treating it as one masked everything up to the
+        // next apostrophe — a function's `{` included — so every function with a
+        // lifetime parameter vanished from the index, and every call after a
+        // `&'static` was missed. The rule here is the lexer's: `'\…'`, or one
+        // character followed by `'`.
+        // `'` 只有在字符字面量闭合时才是它的起始。生命周期（`'a`）、标签（`'outer`）或
+        // `&'static` 的撇号没有闭合引号，把它当成引号会一路遮到下一个撇号——包括函数的 `{`
+        // ——于是每个带生命周期参数的函数都从索引里消失，`&'static` 之后的调用也全部漏掉。
+        // 这里的规则与词法器相同：`'\…'`，或一个字符后紧跟 `'`。
+        if bytes[index] == b'\'' {
+            let mut cursor = index + 1;
+            if bytes.get(cursor) == Some(&b'\\') {
+                cursor += 1;
+                match bytes.get(cursor) {
+                    // `\u{…}`: the escape is delimited by braces.
+                    Some(&b'u') if bytes.get(cursor + 1) == Some(&b'{') => {
+                        cursor += 2;
+                        while cursor < bytes.len() && bytes[cursor] != b'}' {
+                            cursor += 1;
+                        }
+                        cursor = (cursor + 1).min(bytes.len());
+                    }
+                    // `\xNN`: exactly two hex digits.
+                    Some(&b'x') => cursor = (cursor + 3).min(bytes.len()),
+                    // `\n`, `\'`, `\\`, an escaped multi-byte character: one.
+                    _ => skip_one_character(bytes, &mut cursor),
+                }
+            } else {
+                skip_one_character(bytes, &mut cursor);
+            }
+            if bytes.get(cursor) == Some(&b'\'') {
+                for byte in &mut masked[index..=cursor] {
+                    if *byte != b'\n' {
+                        *byte = b' ';
+                    }
+                }
+                index = cursor + 1;
+            } else {
+                // A lifetime or a label: an apostrophe is not a token either
+                // scanner looks for, so masking it alone is enough.
+                // 生命周期或标签：撇号不是两个扫描器要找的 token，只遮掉它本身即可。
+                masked[index] = b' ';
+                index += 1;
             }
             continue;
         }
@@ -273,86 +357,6 @@ pub fn registration_kinds(source: &str) -> Vec<String> {
     kinds.dedup();
     kinds
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn function_symbols_ignore_comments_and_index_impl_methods() {
-        let source = r#"
-            // fn ignored() {}
-            pub(crate) async fn load(value: usize)
-            where
-                usize: Copy,
-            {
-                self.render::<usize>(value);
-            }
-
-            impl Widget {
-                unsafe fn render(&self, value: usize) {
-                    Type::paint(value);
-                }
-            }
-        "#;
-        let functions = function_symbols(source);
-        assert_eq!(
-            functions
-                .iter()
-                .map(|item| item.name.as_str())
-                .collect::<Vec<_>>(),
-            ["load", "render"]
-        );
-        assert!(functions[0].signature.contains("pub(crate) async fn load"));
-        assert!(functions[0].body.contains("self.render::<usize>(value)"));
-        assert_eq!(functions[0].line, 3);
-        assert_eq!(functions[0].end_line, 8);
-        assert!(body_calls(&functions[0].body, "render"));
-        assert!(body_calls(&functions[1].body, "paint"));
-        assert!(!body_calls(&functions[1].body, "load"));
-    }
-
-    /// Line numbers survive a file with many functions, which is also the shape
-    /// the shared forward scan has to keep correct while it stops counting twice.
-    /// 行号在许多函数的文件里仍然正确——这也正是共享的前向扫描在不再重数之后必须保持
-    /// 正确的形状。
-    #[test]
-    fn every_function_reports_its_own_lines_in_a_long_file() {
-        let mut source = String::new();
-        for index in 0..200 {
-            source.push_str(&format!("// filler {index}\n"));
-            source.push_str(&format!("fn f{index}() {{\n    let x = {index};\n}}\n"));
-        }
-        let functions = function_symbols(&source);
-        assert_eq!(functions.len(), 200);
-        for (index, function) in functions.iter().enumerate() {
-            assert_eq!(function.name, format!("f{index}"));
-            let line = (index * 4 + 2) as u32;
-            assert_eq!(function.line, line, "{}", function.name);
-            assert_eq!(function.end_line, line + 2, "{}", function.name);
-        }
-    }
-
-    #[test]
-    fn function_source_range_is_limited_to_the_named_function() {
-        let lines = [
-            "fn first() {",
-            "    one();",
-            "}",
-            "",
-            "pub(crate) fn second() {",
-            "    two();",
-            "}",
-        ];
-        assert_eq!(function_source_range(&lines, "second"), Some((4, 6)));
-        assert_eq!(function_source_range(&lines, "missing"), None);
-    }
-
-    #[test]
-    fn registration_kinds_are_compact_and_deduplicated() {
-        let kinds = registration_kinds(
-            "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
-        );
-        assert_eq!(kinds, ["Button"]);
-    }
-}
+#[path = "source_tests.rs"]
+mod tests;

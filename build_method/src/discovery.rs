@@ -2,7 +2,7 @@
 //! 文件夹注册面发现。
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::Node;
 use super::registry_syntax::parse_face;
@@ -189,4 +189,44 @@ pub(crate) fn collect_source_files(nodes: &[Node], files: &mut Vec<std::path::Pa
         }
         collect_source_files(&node.children, files);
     }
+}
+
+/// Every `.rs` file under `directory`, following the crate's own layout.
+/// `directory` 下的每个 `.rs` 文件，遵循 crate 自己的布局。
+/// The filesystem facts the kernel's source walk asks this surface for.
+/// 内核源码遍历向本执行面索取的文件系统事实。
+struct StdSourceTree;
+
+impl nichlink::source::SourceTree for StdSourceTree {
+    fn is_directory(&self, path: &Path) -> bool {
+        path.is_dir()
+    }
+
+    fn entries(&self, path: &Path) -> Result<Vec<PathBuf>, String> {
+        fs::read_dir(path)
+            .map_err(|error| format!("cannot scan {}: {error}", path.display()))?
+            .map(|entry| {
+                entry
+                    .map(|entry| entry.path())
+                    .map_err(|error| format!("cannot scan {}: {error}", path.display()))
+            })
+            .collect()
+    }
+
+    fn read_text(&self, path: &Path) -> Result<String, String> {
+        fs::read_to_string(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
+    }
+}
+
+pub(crate) fn collect_rust_sources(
+    directory: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), String> {
+    nichlink::source::collect_rust_sources(
+        &StdSourceTree,
+        directory,
+        nichlink::source::SourceWalk::EVERYTHING,
+        |_, _| nichlink::source::Keep::Yes,
+        files,
+    )
 }

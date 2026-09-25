@@ -20,6 +20,34 @@ use std::path::Path;
 
 use super::super::registry_identity::NodeId;
 
+/// Whether `out_dir` was published from the sources the package has right now.
+/// `out_dir` 是否由该包**此刻**的源码发布而来。
+///
+/// A reader that answers questions about the build from `out_dir` — `explain` is
+/// the one — has to know whether that output still describes this tree. Without
+/// this check the same tree gave two different answers depending on whether
+/// `check` had happened to run in between: `explain` served the previous build's
+/// scope as `known: true`, and it did the same for output left behind by a check
+/// that *failed*. The published `discovery.fingerprint` is the token: the pipeline
+/// writes it on a clean run and removes it when validation fails, so a missing or
+/// different fingerprint means "ask the build again".
+/// 从 `out_dir` 回答构建问题的读取方——`explain` 就是——必须知道那份产物是否仍在描述这棵树。
+/// 没有这道检查时，同一棵树会因期间是否恰好跑过 `check` 而给出两个不同答案：`explain` 会把
+/// 上一次构建的作用域当作 `known: true` 提供，对**失败**的 check 留下的产物也一样。已发布的
+/// `discovery.fingerprint` 就是那枚凭据：干净的一次运行写下它，校验失败时移除它，因此指纹缺失或
+/// 不同只意味着"再问构建一次"。
+pub fn build_output_is_current(root: &Path, out_dir: &Path) -> bool {
+    let Ok(stored) = fs::read_to_string(out_dir.join("discovery.fingerprint")) else {
+        return false;
+    };
+    let src = root.join("src");
+    if !src.is_dir() {
+        return false;
+    }
+    let nodes = crate::discovery::discover_root(&src);
+    stored.trim() == crate::discovery::discovery_fingerprint(&src, &nodes)
+}
+
 /// One row of `pruning_manifest.tsv`: a symbol release-time pruning tracks for
 /// one face.
 /// `pruning_manifest.tsv` 的一行：发布期修剪为一个面跟踪的一个符号。
@@ -162,4 +190,98 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
         });
     }
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// A minimal host: one valid root face and the conventional entry.
+    /// 最小宿主：一个合法的根面与约定入口。
+    fn host(label: &str) -> PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-{label}-{}-{stamp}-{sequence}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("src/alpha")).expect("src tree");
+        fs::write(
+            root.join("Cargo.toml"),
+            format!("[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+        )
+        .expect("manifest");
+        fs::write(root.join("src/lib.rs"), "// host entry\n").expect("entry");
+        fs::write(
+            root.join("src/alpha/alpha.rs"),
+            "crate::root_object! {\n    kind: Alpha,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+        )
+        .expect("face");
+        root
+    }
+
+    /// Published output describes the sources it was built from, and stops being
+    /// trusted the moment they change.
+    /// 已发布的产物描述它构建时的那批源码，并在源码一变就不再被信任。
+    #[test]
+    fn published_output_is_current_until_the_sources_change() {
+        let root = host("scope-view-current");
+        let out = root.join("target/nichlink/out");
+        crate::check_for(&root, &out, "scope-view-current").expect("a valid host checks clean");
+        assert!(
+            build_output_is_current(&root, &out),
+            "a clean run publishes output that describes these sources"
+        );
+
+        // A content change that stays valid: the fingerprint hashes bytes, so the
+        // pin is about the token, not about a semantic edit.
+        // 一次仍然合法的内容变化：指纹哈希的是字节，因此这条钉子关乎那枚凭据，而不是语义改动。
+        fs::write(
+            root.join("src/alpha/alpha.rs"),
+            "// edited\ncrate::root_object! {\n    kind: Alpha,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+        )
+        .expect("edited face");
+        assert!(
+            !build_output_is_current(&root, &out),
+            "the same tree must not report a previous build as current"
+        );
+
+        crate::check_for(&root, &out, "scope-view-current").expect("the edited host still checks");
+        assert!(
+            build_output_is_current(&root, &out),
+            "a clean run makes the output current again"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A failed run publishes no token, so a reader asks the build instead of
+    /// trusting what the failed run left behind.
+    /// 失败的一次运行不发布任何凭据，读取方因此去问构建，而不是相信那次运行留下的东西。
+    #[test]
+    fn a_failed_check_publishes_no_trusted_output() {
+        let root = host("scope-view-failed");
+        let out = root.join("target/nichlink/out");
+        fs::write(
+            root.join("src/alpha/alpha.rs"),
+            "crate::root_object! {\n    kind:\n}\n",
+        )
+        .expect("broken face");
+
+        let outcome = crate::check_for(&root, &out, "scope-view-failed");
+        assert!(outcome.is_err(), "a malformed face must fail the check");
+        assert!(
+            !out.join("discovery.fingerprint").exists(),
+            "a failed run must leave no fingerprint behind"
+        );
+        assert!(
+            !build_output_is_current(&root, &out),
+            "and the output it left must not read as current"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
 }

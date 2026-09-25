@@ -32,6 +32,10 @@ use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::node::{Node, relative_display};
 use super::registry_syntax::application_entries;
 
+#[path = "entry_paths.rs"]
+mod entry_paths;
+pub(crate) use entry_paths::{entry_path_exists, path_mentions_module};
+
 /// Pick the ordinary Cargo entry when no `application!` declaration exists.
 /// 没有 `application!` 声明时，按 Cargo 约定选择默认入口。
 pub(crate) fn default_entry_source(src: &Path) -> PathBuf {
@@ -423,7 +427,7 @@ pub fn host_entry_source(root: &Path) -> Result<PathBuf, String> {
 /// 只被上报，不会 panic。
 fn declaring_application_entry(src: &Path) -> Result<Option<PathBuf>, String> {
     let mut files = Vec::new();
-    collect_rust_sources(src, &mut files)?;
+    super::discovery::collect_rust_sources(src, &mut files)?;
     files.sort();
     let mut declarations = Vec::new();
     for file in files {
@@ -467,67 +471,6 @@ fn declaring_application_entry(src: &Path) -> Result<Option<PathBuf>, String> {
             ))
         }
     }
-}
-
-/// Every `.rs` file under `directory`, following the crate's own layout.
-/// `directory` 下的每个 `.rs` 文件，遵循 crate 自己的布局。
-/// The filesystem facts the kernel's source walk asks this surface for.
-/// 内核源码遍历向本执行面索取的文件系统事实。
-struct StdSourceTree;
-
-impl nichlink::source::SourceTree for StdSourceTree {
-    fn is_directory(&self, path: &Path) -> bool {
-        path.is_dir()
-    }
-
-    fn entries(&self, path: &Path) -> Result<Vec<PathBuf>, String> {
-        fs::read_dir(path)
-            .map_err(|error| format!("cannot scan {}: {error}", path.display()))?
-            .map(|entry| {
-                entry
-                    .map(|entry| entry.path())
-                    .map_err(|error| format!("cannot scan {}: {error}", path.display()))
-            })
-            .collect()
-    }
-
-    fn read_text(&self, path: &Path) -> Result<String, String> {
-        fs::read_to_string(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
-    }
-}
-
-fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    nichlink::source::collect_rust_sources(
-        &StdSourceTree,
-        directory,
-        nichlink::source::SourceWalk::EVERYTHING,
-        |_, _| nichlink::source::Keep::Yes,
-        files,
-    )
-}
-
-fn entry_path_exists(src: &Path, path: &str) -> bool {
-    let mut segments = path
-        .strip_prefix("crate::")
-        .unwrap_or_default()
-        .split("::")
-        .filter(|segment| !segment.is_empty());
-    let Some(first) = segments.next() else {
-        return false;
-    };
-    let module = src.join(first);
-    module.with_extension("rs").is_file()
-        || module.join("mod.rs").is_file()
-        || src.join("bin").join(first).with_extension("rs").is_file()
-        || (first == "main" && src.join("lib.rs").is_file())
-}
-
-pub(crate) fn path_mentions_module(path: &str, module: &str) -> bool {
-    let path = path
-        .strip_prefix("crate::")
-        .or_else(|| path.strip_prefix("nichlink::"))
-        .unwrap_or(path);
-    path == module || path.starts_with(&format!("{module}::"))
 }
 
 #[cfg(test)]

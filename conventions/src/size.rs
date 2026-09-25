@@ -50,11 +50,10 @@ pub const CEILING: usize = 450;
 /// 过期项上失败，正是为了让"忘记删除"不可能发生。
 pub const BASELINE: &[(&str, usize)] = &[
     ("core/src/registry_core/declaration/runtime_checks.rs", 551),
+    ("build_method/src/entry.rs", 478),
     ("core/src/registry_core/plugin/contracts/contracts.rs", 645),
-    ("build_method/src/entry.rs", 535),
     ("core/src/registry_core/tree/connector/connector.rs", 504),
     ("core/src/registry_core/syntax/entries/graft.rs", 502),
-    ("core/src/registry_core/syntax/face.rs", 482),
     ("core/src/registry_core/declaration/registration.rs", 460),
     ("build_method/src/graft_plan_check.rs", 465),
     ("core/src/registry_core/tree/graft_ops/overlay.rs", 463),

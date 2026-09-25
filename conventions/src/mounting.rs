@@ -51,11 +51,21 @@ pub fn findings(root: &Path) -> Findings {
                 found.mod_rs.push(relative(root, &path));
             }
             for (index, line) in lines(&path).iter().enumerate() {
-                // Only an item-position `include!` mounts a module. The string
-                // `"include!("` inside an assertion is not a mount.
-                // 只有处于项位置的 `include!` 才挂载模块。断言里的 `"include!("`
-                // 字符串不是挂载。
-                if line.trim_start().starts_with("include!(") {
+                // A splice is the `include!` macro, whatever delimiter it uses and
+                // wherever it sits on the line: matching the exact `include!(` prefix
+                // missed the brace spelling rustc's own diagnostic suggests, so a
+                // splice could ship while the count still read 1. The search runs on
+                // the kernel's masked text, because a workspace test's fixture string
+                // that mentions `include!` is not a mount.
+                // 拼接就是 `include!` 这个宏，无论它用哪种定界符、在行内什么位置：只匹配
+                // `include!(` 前缀会漏掉 rustc 自己建议的花括号写法，于是拼接可以出厂而计数仍是 1。
+                // 搜索跑在内核屏蔽后的文本上，因为工作区测试里提到 `include!` 的夹具字符串不是挂载。
+                let code = nichlink::source::mask_non_code(line);
+                let Some(position) = code.find("include!") else {
+                    continue;
+                };
+                let delimiter = code[position + "include!".len()..].trim_start();
+                if delimiter.starts_with(['(', '[', '{']) {
                     found.includes.push(format!(
                         "{}:{} {}",
                         relative(root, &path),
@@ -75,6 +85,48 @@ mod tests {
     use crate::workspace_root;
 
     /// The only `include!` is the generated plan, and no file is named `mod.rs`.
+    /// `include!` is recognised by the macro, not by one exact spelling: a
+    /// delimiter change (`include! { … }`) splices a module just as well, and the
+    /// workspace gate must see it.
+    /// `include!` 靠宏本身识别，而不是靠一种拼法：换个定界符（`include! { … }`）照样拼接模块，
+    /// 工作区门禁必须看见它。
+    #[test]
+    fn an_include_with_another_delimiter_is_still_a_splice() {
+        let root = synthetic(&[(
+            "cli/src/zz_audit_probe.rs",
+            "pub mod spliced {\n    include! {\"zz_body.rs\"}\n}\n",
+        )]);
+        let found = findings(&root);
+        assert_eq!(
+            found.includes.len(),
+            1,
+            "a brace-delimited include! is a splice too: {:#?}",
+            found.includes
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A throwaway checkout with the given files under it.
+    /// 一个只含给定文件的一次性检出。
+    fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-mounting-{}-{}-{sequence}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        for (relative, contents) in files {
+            let path = root.join(relative);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
+            std::fs::write(&path, contents).expect("fixture file");
+        }
+        root
+    }
+
     /// 唯一的 `include!` 是生成计划，且没有文件叫 `mod.rs`。
     #[test]
     fn modules_are_mounted_without_splicing_identity() {

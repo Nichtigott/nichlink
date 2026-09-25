@@ -288,6 +288,93 @@ EOF
   exit 0
 fi
 
+# Version problems in one shipped manifest, one per line, empty when there are
+# none. `--check-table` compared dependency *names* only, so a member whose
+# manifest said `0.1.1` passed while the tag check and the index wait used the
+# root's `0.1.0` — and `cargo publish` uploads the *member's* version. The three
+# readings are: the crate's own version, a dependency spelled inline, and a
+# dependency spelled as a `[dependencies.nichlink-x]` table with its version on a
+# separate line.
+# 一个已发布清单里的版本问题，每行一条，没有则为空。`--check-table` 过去只比依赖**名字**，
+# 因此某个清单写着 `0.1.1` 的成员照样通过，而 tag 检查与 index 等待用的是根清单的 `0.1.0`——
+# `cargo publish` 上传的却是**该成员**的版本。这里读三处：crate 自己的版本、行内写的依赖、
+# 以及用 `[dependencies.nichlink-x]` 表写、版本在另一行的依赖。
+version_problems() {
+  manifest=$1
+  crate=$2
+  want=$3
+  awk -v crate="$crate" -v want="$want" '
+    /^\[/ {
+      section = $0
+      dotted = ""
+      if (section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\.nichlink-[a-z-]+\]$/) {
+        dotted = section
+        sub(/^\[.*dependencies\./, "", dotted)
+        sub(/\]$/, "", dotted)
+      }
+      next
+    }
+    section == "[package]" && /^version\.workspace *= *true/ { next }
+    section == "[package]" && /^version *= *"/ {
+      value = $0
+      sub(/^version *= *"/, "", value)
+      sub(/".*$/, "", value)
+      if (value != want) {
+        printf "%s declares version %s, but the workspace version is %s; a tag for %s would publish %s\n", crate, value, want, want, value
+      }
+      next
+    }
+    dotted != "" && /^version *= *"/ {
+      value = $0
+      sub(/^version *= *"/, "", value)
+      sub(/".*$/, "", value)
+      if (value != want) {
+        printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, dotted, value, want
+      }
+      next
+    }
+    # `nichlink-x.workspace = true` inherits its requirement from the root table
+    # `[workspace.dependencies]`, which `workspace_requirement_problems` checks once
+    # instead of once per member.
+    # `nichlink-x.workspace = true` 的需求继承自根的 `[workspace.dependencies]`，由
+    # `workspace_requirement_problems` 检查一次，而不是每个成员各查一次。
+    section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ { next }
+    section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+ *=/ {
+      if (match($0, /version *= *"[^"]*"/)) {
+        value = substr($0, RSTART, RLENGTH)
+        sub(/^version *= *"/, "", value)
+        sub(/"$/, "", value)
+        if (value != want) {
+          printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, $1, value, want
+        }
+      }
+    }
+  ' "$manifest"
+}
+
+# Version problems in the root's `[workspace.dependencies]`, one per line. A
+# requirement inherited with `x.workspace = true` is spelled once there, so it is
+# checked once there rather than by every member that inherits it.
+# 根的 `[workspace.dependencies]` 里的版本问题，每行一条。用 `x.workspace = true` 继承的需求
+# 只在那里写一次，因此也只在那里检查一次，而不是由每个继承它的成员各查一遍。
+workspace_requirement_problems() {
+  want=$1
+  awk -v want="$want" '
+    /^\[/ { section = $0; next }
+    section == "[workspace.dependencies]" && /^nichlink-[a-z-]+ *=/ {
+      if (match($0, /version *= *"[^"]*"/)) {
+        value = substr($0, RSTART, RLENGTH)
+        sub(/^version *= *"/, "", value)
+        sub(/"$/, "", value)
+        if (value != want) {
+          crate = $1
+          printf "[workspace.dependencies] %s requires %s, but every internal requirement must be %s\n", crate, value, want
+        }
+      }
+    }
+  ' Cargo.toml
+}
+
 # Derive the release order's truth from the manifests and compare it with the
 # table above. Nothing here needs the network: it is the check that keeps the
 # table from rotting between releases.
@@ -348,7 +435,22 @@ if [ "$check_table" = true ]; then
         next
       }
       section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+ *=/ { print $1 }
-    ' "$manifest" | sort)
+      # `nichlink-x.workspace = true` names the same dependency in its inherited
+      # spelling; reading it through `[workspace.dependencies]` is what stops the
+      # table from looking wrong and inviting its own removal.
+      # `nichlink-x.workspace = true` 用继承的拼法命名同一个依赖；经
+      # `[workspace.dependencies]` 读出它，才不会让表显得不对并诱使人删掉它。
+      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ {
+        name = $1
+        sub(/\.workspace.*/, "", name)
+        print name
+      }
+    ' "$manifest" | sort -u)
+    version_issues=$(version_problems "$manifest" "$name" "$workspace_version")
+    if [ -n "$version_issues" ]; then
+      problems="$problems
+$version_issues"
+    fi
     tabled=$(deps_of "$name" | tr ' ' '\n' | sed '/^$/d' | sort)
     if [ "$actual" != "$tabled" ]; then
       problems="$problems
@@ -388,6 +490,11 @@ $crate is listed before its dependency $dep" ;;
 the level table and the dependency table disagree about which crates ship:
   levels:       $(printf '%s\n' $seen | sort | tr '\n' ' ')
   dependencies: $(printf '%s\n' "$listed" | tr '\n' ' ')"
+  fi
+  workspace_issues=$(workspace_requirement_problems "$workspace_version")
+  if [ -n "$workspace_issues" ]; then
+    problems="$problems
+$workspace_issues"
   fi
   if [ -n "$problems" ]; then
     printf 'error: the release tables in %s no longer match the manifests:%s\n' "$0" "$problems" >&2

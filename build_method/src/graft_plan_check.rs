@@ -376,7 +376,7 @@ mod tests {
 
         let nodes = crate::discover_root(&src);
         let entry = crate::entry::resolve_host_entry(&src, &nodes, None);
-        let declared = crate::host_graft_entries(&entry)
+        let declared = crate::host_graft_entries(&entry, &mut BuildDiagnostics::default())
             .declared
             .iter()
             .map(crate::declared_graft_view)

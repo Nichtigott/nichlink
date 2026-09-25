@@ -10,7 +10,7 @@
 - [x] admission、结构规范和输入/输出合同；
 - [x] 按目录发现注册面、身份缓存、粗修和 `StaticPlan`；
 - [x] `off`、`errors-only`、`full` 三档运行时追踪；
-- [x] Studio 的搜索、检查、数据、对比和源码跳转；
+- [x] Studio 的搜索、检查、数据和源码跳转；
 - [x] 只读 MCP 桥、经过校验的 Wasm/进程插件适配器；
 - [x] 跨平台 CI、规模审计、符号审计和打包检查。
 - [x] kernel / 执行面分界：一个纯 kernel（`nichlink-core`）承载协议名词与纯方法，

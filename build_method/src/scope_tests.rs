@@ -6,6 +6,7 @@
 //! 独立一页，使被测模块留在尺寸棘轮之内：测试模块不受棘轮约束，而这一份已经长到
 //! 与被测代码相当。
 
+use crate::diagnostics::BuildDiagnostics;
 use crate::discovery::discover_root;
 
 /// The face files the scope proved live, named relative to `src`.
@@ -138,7 +139,7 @@ fn a_configured_entry_drives_the_scope_and_the_cut_table() {
     );
     assert_eq!(entry.path(), src.join("preview/preview.rs"));
 
-    let cuts = crate::host_graft_entries(&entry).enabled;
+    let cuts = crate::host_graft_entries(&entry, &mut BuildDiagnostics::default()).enabled;
     assert_eq!(cuts.len(), 1, "{cuts:?}");
     assert_eq!(cuts[0].cut, "crate::alpha::NODE_ID");
 

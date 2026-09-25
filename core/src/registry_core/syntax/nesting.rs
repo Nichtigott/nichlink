@@ -86,13 +86,21 @@ pub(crate) enum Shape {
     /// `(`, `[` and `{` groups.
     /// `(`、`[` 与 `{` 组。
     Delimiters,
-    /// A `Vec<Vec<…>>` argument chain.
-    /// `Vec<Vec<…>>` 实参链。
-    Arguments,
     /// A run of tokens folded into one nested expression or type, with no
-    /// delimiter or angle bracket to count: `& & & …`, `1 + 1 + …`.
-    /// 被折叠成一个嵌套表达式或类型、却没有定界符或尖括号可数的 token 串：`& & & …`、
-    /// `1 + 1 + …`。
+    /// delimiter to count: `& & & …`, `1 + 1 + …`, `Vec<Vec<…>>`.
+    /// 被折叠成一个嵌套表达式或类型、却没有定界符可数的 token 串：`& & & …`、
+    /// `1 + 1 + …`、`Vec<Vec<…>>`。
+    ///
+    /// A generic-argument chain used to have its own counter here
+    /// ([`Shape::Arguments`]). It could never fire: the counter reset on every
+    /// identifier and every generic argument begins with one, so the deepest
+    /// `Vec<Vec<u8>>` the counter ever saw was one. The cases it was meant to catch
+    /// are linear runs — `Vec<` repeated is a run of tokens the parser folds — which
+    /// is why the variant is gone and the chain shape below covers it.
+    /// 泛型实参链过去在这里有自己的计数器（[`Shape::Arguments`]）。它永远不会触发：计数器每遇到
+    /// 一个标识符就清零，而每个泛型实参都以标识符开头，因此它见过的最深 `Vec<Vec<u8>>` 只有一层。
+    /// 它本想抓的那些情况都是线性串——重复的 `Vec<` 正是解析器会折叠的 token 串——因此该变体已
+    /// 删除，由下面的串形状覆盖。
     Chain,
 }
 
@@ -100,7 +108,6 @@ impl fmt::Display for Shape {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Delimiters => "delimiters",
-            Self::Arguments => "generic arguments",
             Self::Chain => "tokens folded into one expression",
         })
     }
@@ -116,15 +123,19 @@ pub(crate) struct TooDeep {
     /// How deep it actually went.
     /// 实际深到多少层。
     pub(crate) depth: usize,
+    /// The limit that applies to `shape`, so the message names the number the
+    /// reader has to compare against instead of one borrowed from another shape.
+    /// 适用于 `shape` 的上限，使消息说明读者真正要比对的那个数字，而不是从另一种形状借来的。
+    pub(crate) limit: usize,
 }
 
 impl fmt::Display for TooDeep {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "input nests {} levels of {}, above the limit of {LIMIT}; \
+            "input nests {} levels of {}, above the limit of {}; \
              it is refused because the parser would overflow the stack instead of reporting an error",
-            self.depth, self.shape
+            self.depth, self.shape, self.limit
         )
     }
 }
@@ -149,7 +160,6 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
     // grows one level per `<`.
     // 连续出现的 `Ident`/`<`/`>` 是唯一能长出泛型实参链的序列，任何其他词法单元都会终结该
     // 序列。因此通篇 `a < b` 比较的文件永远到不了上限，而 `Vec<Vec<…>>` 每遇一个 `<` 长一层。
-    let mut arguments = 0usize;
     // Tokens folded into one tree since the last separator. `chain += 1` appears
     // in every arm that continues a run, so a new token kind cannot silently
     // escape the measurement the way the prefix operators escaped the first
@@ -161,12 +171,12 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
         let mut grows = true;
         match tree {
             proc_macro2::TokenTree::Group(group) => {
-                arguments = 0;
                 let depth = depth + 1;
                 if depth > LIMIT {
                     return Err(TooDeep {
                         shape: Shape::Delimiters,
                         depth,
+                        limit: LIMIT,
                     });
                 }
                 // A brace group is a body or an item: it ends a chain. The other
@@ -182,22 +192,9 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
             proc_macro2::TokenTree::Punct(punct)
                 if punct.as_char() == ',' || punct.as_char() == ';' =>
             {
-                arguments = 0;
                 grows = false;
             }
-            proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '<' => {
-                arguments += 1;
-                if arguments > LIMIT {
-                    return Err(TooDeep {
-                        shape: Shape::Arguments,
-                        depth: arguments,
-                    });
-                }
-            }
-            proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '>' => {
-                arguments = arguments.saturating_sub(1);
-            }
-            _ => arguments = 0,
+            _ => {}
         }
         if grows {
             chain += 1;
@@ -205,6 +202,7 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
                 return Err(TooDeep {
                     shape: Shape::Chain,
                     depth: chain,
+                    limit: CHAIN_LIMIT,
                 });
             }
         } else {
@@ -212,6 +210,27 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
         }
     }
     Ok(())
+}
+
+/// Refuse a source whose nesting would overflow `syn`, for callers that parse
+/// text themselves.
+/// 对自行解析文本的调用方：拒绝一份嵌套会让 `syn` 栈溢出的源码。
+///
+/// `parse_file` applies this to every `syn::parse_file` in this crate. It is
+/// public because it is the *only* nesting measurement in the workspace: the
+/// documentation gate in `conventions` hands fenced Rust to `syn` too, and a
+/// pathological fence would abort that gate's process rather than fail it. A
+/// second copy of the heuristic there would be a second thing to keep honest;
+/// asking the kernel keeps one.
+/// `parse_file` 把本函数施加于本 crate 里每一处 `syn::parse_file`。它公开是因为它是本工作区
+/// **唯一**的嵌套度量：`conventions` 里的文档门禁也会把围栏 Rust 交给 `syn`，而一份病态围栏
+/// 会让那道门禁的进程 abort 而不是失败。在那里复制一份启发式就等于多一个需要保持诚实的东西；
+/// 向内核发问则只有一份。
+pub fn guard_nesting(source: &str) -> Result<(), FaceSyntaxError> {
+    guard(source).map_err(|error| FaceSyntaxError {
+        message: error.to_string(),
+        location: None,
+    })
 }
 
 /// Parse one Rust file, refusing nesting that would overflow the parser.

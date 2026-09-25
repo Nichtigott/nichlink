@@ -177,14 +177,11 @@ crate::node_editor_object! {
     kind: Canvas,
     preset: CanvasPreset,
     parts: CanvasParts,
-    handle: Canvas,
     summary: { zh: "二维画布", en: "A 2-D drawing surface" },
     exports: ["canvas.render"],
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    expected_output: "CanvasFrame",
-    actual_output: "CanvasFrame",
     flow: nichlink_run_method::FlowContract::new(
         nichlink_run_method::ContractId::new("canvas.render.v1"),
         1,
@@ -339,7 +336,6 @@ crate::control_object! {
     kind: Button,
     preset: ActionParts,
     parts: ButtonParts,
-    handle: Button,
     parent: crate::control::NODE_ID,
     exports: ["control.render"],
     handle_traits: ["ControlHandle"],
@@ -581,6 +577,10 @@ NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
 只执行这些声明过的检查。
 
 但“静态化”等于成本清楚，不等于所有场景绝对零成本：
+
+本表背后的分配与耗时数字是实测而非推断：
+[`docs/performance-baseline.md`](docs/performance-baseline.md) 记录了它们如何测得、以及每项检查
+断言了什么。
 
 | 使用方式 | 运行时保留什么 | 成本边界 |
 | --- | --- | --- |

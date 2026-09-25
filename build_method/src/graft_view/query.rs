@@ -11,6 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use super::declared::{DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts};
+use crate::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use crate::registry_syntax::{GraftSyntax, graft_entries};
 use crate::{HostEntry, host_entry_source};
 
@@ -57,26 +58,38 @@ pub(crate) struct HostGraftEntries {
 /// 实际剪枝依据的文件不是同一个——只在被指定文件里声明的槽位永远到不了运行期，而从
 /// 另一个文件保留下来的切口则可能活过一次根本没看到它的剪枝决策。现在 `pipeline`
 /// 解析一次入口，把同一个值交给这里和 `SourceScope`。
-pub(crate) fn host_graft_entries(entry: &HostEntry) -> HostGraftEntries {
-    let declared = read_graft_entries(entry.path(), entry.is_required());
+pub(crate) fn host_graft_entries(
+    entry: &HostEntry,
+    errors: &mut BuildDiagnostics,
+) -> HostGraftEntries {
+    let declared = read_graft_entries(entry.path(), entry.is_required(), errors);
     // The same gate rule the static plan follows: a feature the build can see
     // decides, and a gate it cannot evaluate is refused rather than guessed.
-    // 与静态计划同一条规则：构建看得见的特性说了算，无法求值的门控一律拒绝而非猜测。
+    // Refused *with a diagnostic*: this used to panic, which took `check --json`
+    // down with an exit code of 101 and an empty stdout instead of the document the
+    // CLI promises — the same class C2 fixed for faces, in the one place that was
+    // left. The message matches the one `scope` already pushes for a malformed
+    // entry, so the two collapse into one line instead of repeating.
+    // 与静态计划同一条规则：构建看得见的特性说了算，无法求值的门控一律拒绝而非猜测。拒绝方式是
+    // **发诊断**：这里过去会 panic，使 `check --json` 以 101 退出、stdout 为空，而不是给出 CLI
+    // 承诺的文档——与 C2 为注册面修掉的是同一类，只是这一处被漏了。消息与 `scope` 为畸形入口
+    // 已推的那条一致，因此两者会折叠成一行而不是重复。
     let entry_path = entry.path();
-    let enabled = declared
-        .iter()
-        .filter(|declaration| match declaration.cfg.as_deref() {
-            Some(cfg) => match crate::static_plan::face_cfg_enabled(
-                cfg,
-                &crate::static_plan::feature_enabled,
-            ) {
-                Ok(enabled) => enabled,
-                Err(message) => panic!("{message} in `{}`", entry_path.display()),
-            },
-            None => true,
-        })
-        .cloned()
-        .collect();
+    let mut enabled = Vec::new();
+    for declaration in &declared {
+        let Some(cfg) = declaration.cfg.as_deref() else {
+            enabled.push(declaration.clone());
+            continue;
+        };
+        match crate::static_plan::face_cfg_enabled(cfg, &crate::static_plan::feature_enabled) {
+            Ok(true) => enabled.push(declaration.clone()),
+            Ok(false) => {}
+            Err(message) => errors.push(BuildDiagnostic::new(
+                "graft-entry",
+                format!("{message} in `{}`", entry_path.display()),
+            )),
+        }
+    }
     HostGraftEntries { declared, enabled }
 }
 
@@ -92,22 +105,36 @@ pub(crate) fn host_graft_entries(entry: &HostEntry) -> HostGraftEntries {
 /// 宿主读不出来就是构建失败，而既无 `src/main.rs` 也无 `src/lib.rs` 的包只是没有入口
 /// 的宿主，不算错误。该边界由 `an_absent_convention_entry_is_no_entry_not_a_failure`
 /// 钉住。
-fn read_graft_entries(entry_path: &Path, required: bool) -> Vec<GraftSyntax> {
+fn read_graft_entries(
+    entry_path: &Path,
+    required: bool,
+    errors: &mut BuildDiagnostics,
+) -> Vec<GraftSyntax> {
     let Ok(source) = fs::read_to_string(entry_path) else {
         if required {
-            panic!(
-                "failed to read graft entry source `{}`",
-                entry_path.display()
-            );
+            errors.push(BuildDiagnostic::new(
+                "graft-entry",
+                format!(
+                    "failed to read graft entry source `{}`",
+                    entry_path.display()
+                ),
+            ));
         }
         return Vec::new();
     };
-    graft_entries(&source).unwrap_or_else(|error| {
-        panic!(
-            "invalid graft declaration in `{}`: {error}",
-            entry_path.display()
-        )
-    })
+    match graft_entries(&source) {
+        Ok(entries) => entries,
+        Err(error) => {
+            errors.push(BuildDiagnostic::new(
+                "graft-entry",
+                format!(
+                    "invalid graft declaration in `{}`: {error}",
+                    entry_path.display()
+                ),
+            ));
+            Vec::new()
+        }
+    }
 }
 
 /// Read the host entry and return the graft declarations it carries.
@@ -160,8 +187,10 @@ pub(crate) fn declared_graft_view(entry: &GraftSyntax) -> DeclaredGraft {
 #[cfg(test)]
 mod tests {
     use super::{declared_grafts, host_graft_entries};
+    use crate::diagnostics::BuildDiagnostics;
     use crate::discovery::discover_root;
     use crate::host_entry_source;
+    use std::fs;
     use std::path::PathBuf;
 
     /// A throwaway package root for the entry-resolution fixtures.
@@ -225,7 +254,7 @@ mod tests {
         // The build capture is the same declaration set.
         let nodes = discover_root(&src);
         let entry = crate::entry::resolve_host_entry(&src, &nodes, None);
-        let captured = host_graft_entries(&entry);
+        let captured = host_graft_entries(&entry, &mut BuildDiagnostics::default());
         assert_eq!(captured.declared.len(), declared.cuts.len());
         assert_eq!(captured.enabled.len(), declared.cuts.len());
         for (captured, declared) in captured.enabled.iter().zip(&declared.cuts) {
@@ -260,7 +289,11 @@ mod tests {
             "{entry:?}"
         );
 
-        assert!(host_graft_entries(&entry).enabled.is_empty());
+        assert!(
+            host_graft_entries(&entry, &mut BuildDiagnostics::default())
+                .enabled
+                .is_empty()
+        );
 
         std::fs::remove_dir_all(&root).expect("cleanup");
     }
@@ -308,6 +341,71 @@ mod tests {
         assert!(host_entry_source(&root).is_err());
         assert!(declared_grafts(&root).is_err());
         assert!(host_entry_source(&root.join("missing")).is_err());
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    /// A malformed graft declaration is a diagnostic, not a panic.
+    /// 畸形的 graft 声明是一条诊断，而不是 panic。
+    ///
+    /// This used to `panic!`, which took `check --json` down with an exit code of
+    /// 101 and an empty stdout — while `scope` had already produced the same
+    /// diagnostic that the panic then discarded.
+    /// 这里过去会 `panic!`，让 `check --json` 以 101 退出、stdout 为空——而 `scope` 其实已经
+    /// 产出了同一条诊断，随后被 panic 丢掉。
+    #[test]
+    fn a_malformed_graft_declaration_is_reported_not_fatal() {
+        let root = entry_fixture("malformed-graft");
+        let src = root.join("src");
+        fs::create_dir_all(&src).expect("src");
+        fs::write(
+            src.join("lib.rs"),
+            "nichlink_run_method::host!();\n\
+             nichlink_run_method::static_graft_plan!(FRAMEWORK, cut);\n",
+        )
+        .expect("host entry");
+        let nodes = discover_root(&src);
+        let entry = crate::entry::resolve_host_entry(&src, &nodes, None);
+
+        let mut errors = BuildDiagnostics::default();
+        let captured = host_graft_entries(&entry, &mut errors);
+        assert!(captured.declared.is_empty(), "{:?}", captured.declared);
+        assert!(captured.enabled.is_empty());
+        assert_eq!(errors.len(), 1, "{}", errors.render());
+        let rendered = errors.render();
+        assert!(rendered.contains("phase=graft-entry"), "{rendered}");
+        assert!(rendered.contains("invalid graft declaration"), "{rendered}");
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    /// A gate this build cannot evaluate is a diagnostic too, not a panic.
+    /// 构建无法求值的门控同样是一条诊断，而不是 panic。
+    #[test]
+    fn an_unevaluable_graft_gate_is_reported_not_fatal() {
+        let root = entry_fixture("unevaluable-gate");
+        let src = root.join("src");
+        fs::create_dir_all(&src).expect("src");
+        fs::write(
+            src.join("lib.rs"),
+            "nichlink_run_method::host!();\n\
+             #[cfg(unix)]\n\
+             nichlink_run_method::static_graft_plan!(FRAMEWORK, \
+             cut(crate::control::NODE_ID) graft(canvas_fast));\n",
+        )
+        .expect("host entry");
+        let nodes = discover_root(&src);
+        let entry = crate::entry::resolve_host_entry(&src, &nodes, None);
+
+        let mut errors = BuildDiagnostics::default();
+        let captured = host_graft_entries(&entry, &mut errors);
+        // A refused gate keeps nothing enabled and reports why.
+        // 被拒的门控不启用任何东西，并说明原因。
+        assert!(captured.enabled.is_empty());
+        assert_eq!(errors.len(), 1, "{}", errors.render());
+        let rendered = errors.render();
+        assert!(rendered.contains("phase=graft-entry"), "{rendered}");
+        assert!(rendered.contains("cfg"), "{rendered}");
 
         std::fs::remove_dir_all(&root).expect("cleanup");
     }

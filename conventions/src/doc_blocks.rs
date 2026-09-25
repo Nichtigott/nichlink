@@ -69,8 +69,13 @@ pub const RECORD_PREFIXES: &[&str] = &["audit", "design"];
 /// Every markdown file the gate covers, sorted, existing ones only.
 /// 门禁覆盖的每个 markdown 文件，已排序，仅包含存在者。
 pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
-    let mut files = vec![root.join("README.md"), root.join("README.zh-CN.md")];
-    if let Ok(entries) = std::fs::read_dir(root.join("docs")) {
+    // Every root-level markdown file (the two READMEs, `AGENTS.md`, `CHANGELOG.md`)
+    // and every markdown file under `docs/`, however deep: a document is living
+    // documentation by where it is, not by how shallowly it sits.
+    // 每个根级 markdown 文件（两份 README、`AGENTS.md`、`CHANGELOG.md`）以及 `docs/` 下每个
+    // markdown 文件，无论多深：一份文档是不是活文档取决于它在哪，而不取决于它有多浅。
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|extension| extension == "md") {
@@ -78,6 +83,7 @@ pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
             }
         }
     }
+    collect_markdown(&root.join("docs"), &mut files);
     for directory in crate_directories(root) {
         files.push(directory.join("README.md"));
         files.push(directory.join("README.zh-CN.md"));
@@ -86,6 +92,22 @@ pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
     files.sort();
     files.dedup();
     files
+}
+
+/// Every markdown file under `directory`, at any depth.
+/// `directory` 下每个 markdown 文件，任意深度。
+fn collect_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_markdown(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "md") {
+            files.push(path);
+        }
+    }
 }
 
 /// Whether a markdown path is a record rather than living documentation.
@@ -159,6 +181,20 @@ fn markdown_findings(root: &Path) -> Vec<Finding> {
                     }
                 }
             }
+        }
+        if let Some((start, _)) = open {
+            // A fence that never closes is not "nothing to check": the reader sees the
+            // code and the parser never gets it. The comment half of this gate already
+            // flushed its open block; the markdown half did not.
+            // 从不闭合的围栏不是"没有东西要检查"：读者看得到那段代码，而解析器从没拿到过它。本门禁
+            // 的注释那一半已经会收尾未闭合的块，markdown 这一半此前不会。
+            found.push(Finding {
+                file: file.clone(),
+                line: start,
+                error:
+                    "unterminated Rust fence: it opens here and the file ends without a closing ```"
+                        .to_owned(),
+            });
         }
     }
     found
@@ -252,6 +288,16 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
 /// Whether a fence's contents parse as a file, a statement block, or fields.
 /// 围栏内容是否能作为文件、语句块或字段列表解析。
 fn parses(code: &str) -> Result<(), String> {
+    // A stack overflow is not a catchable panic, and `syn` is recursive descent
+    // with no depth guard of its own, so a fence that nested past the kernel's
+    // measurement would take down the whole gate battery instead of failing it.
+    // The measurement is the kernel's `guard_nesting`, which is also what the
+    // kernel's own parse entries use; keeping one copy is what stops the two from
+    // drifting apart.
+    // 栈溢出不是可捕获的 panic，而 `syn` 是无自带深度守卫的递归下降解析器，因此嵌套越过内核
+    // 度量的围栏会带走整套门禁而不是让它失败。度量来自内核的 `guard_nesting`，内核自己的解析
+    // 入口用的也是它；只留一份正是防止两者漂移的办法。
+    nichlink::registry_core::syntax::guard_nesting(code).map_err(|error| error.to_string())?;
     if syn::parse_file(code).is_ok() {
         return Ok(());
     }
@@ -284,6 +330,81 @@ mod tests {
     use super::*;
     use crate::workspace_root;
 
+    /// A fence that nests past the kernel's measurement is *reported*, not fatal.
+    /// 嵌套越过内核度量的围栏会被**报告**，而不是致命。
+    ///
+    /// Without the guard this test does not fail — it aborts the test process, which
+    /// is the whole point: `syn` is recursive descent, so a documentation gate that
+    /// parses untrusted-in-shape fences can be killed by one of them.
+    /// 没有守卫时这条测试不是失败——它会 abort 测试进程，而这正是要点：`syn` 是递归下降的，因此
+    /// 一道会解析"形状不可信"围栏的文档门禁可以被其中一份围栏打死。
+    #[test]
+    fn a_pathologically_nested_fence_is_reported_not_fatal() {
+        let code = format!("let x = {}1{};", "(".repeat(60_000), ")".repeat(60_000));
+        let message = parses(&code).expect_err("a fence past the nesting limit must be refused");
+        assert!(
+            message.contains("nests"),
+            "the refusal must explain itself: {message}"
+        );
+    }
+
+    /// A fence that never closes is not "nothing to check": the reader sees the
+    /// code, and `syn` never gets it.
+    /// 从不闭合的围栏不是"没有东西要检查"：读者看得到那段代码，而 `syn` 从没拿到过它。
+    #[test]
+    fn an_unterminated_fence_is_reported() {
+        let root = synthetic(&[("README.md", "```rust\npub struct Broken {\n")]);
+        let found = findings(&root);
+        assert_eq!(
+            found.len(),
+            1,
+            "an unclosed fence must be reported: {found:#?}"
+        );
+        assert!(
+            found[0].error.contains("unterminated") || found[0].error.contains("closed"),
+            "the refusal must explain itself: {:#?}",
+            found[0]
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Every living document under `docs/` is covered, however deep it sits.
+    /// `docs/` 下的每份活文档都在覆盖范围内，无论它有多深。
+    #[test]
+    fn a_fence_in_a_nested_docs_file_is_covered() {
+        let root = synthetic(&[(
+            "docs/reference/zz_audit_probe.md",
+            "```rust\npub struct Broken {\n```\n",
+        )]);
+        let found = findings(&root);
+        assert_eq!(
+            found.len(),
+            1,
+            "a document under docs/ is living documentation: {found:#?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A throwaway checkout with the given files under it.
+    /// 一个只含给定文件的一次性检出。
+    fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-doc-blocks-{}-{}-{sequence}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        for (relative, contents) in files {
+            let path = root.join(relative);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
+            std::fs::write(&path, contents).expect("fixture file");
+        }
+        root
+    }
     /// Every Rust block in the READMEs and docs parses.
     /// README 与文档里的每个 Rust 块都能解析。
     #[test]

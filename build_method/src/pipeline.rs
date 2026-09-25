@@ -62,7 +62,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
-    let graft_entries = super::host_graft_entries(&entry);
+    let graft_entries = super::host_graft_entries(&entry, &mut compile_errors);
     // A plan file is an authoring record the build never reads, so a plan whose
     // slot no declaration names would otherwise be discovered at runtime, long
     // after the build pruned it. This is the one case that is unambiguous *and*
@@ -105,11 +105,23 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 正是写不成的那个——因此下面按两种调用方分别处理：构建脚本带着原因停下，
     // 结构化调用方（`check --json`）把它与其余诊断一起报出。
     let mut write_errors = Vec::new();
-    if let Err(error) = write_if_changed(
-        &out_dir.join("discovery.fingerprint"),
-        &discovery_fingerprint,
-    ) {
-        write_errors.push(error);
+    // The fingerprint is the token `build_output_is_current` reads, so only a clean
+    // run writes it: a failed run publishes no token at all, and a reader then asks
+    // the build instead of trusting output that run left behind. The other
+    // manifests stay where they are — without the token nothing reads them as
+    // describing the current sources.
+    // 指纹是 `build_output_is_current` 读取的那枚凭据，因此只有干净的一次运行才写下它：失败的
+    // 一次运行不发布任何凭据，读取方于是去问构建，而不是相信那次运行留下的产物。其余清单留在
+    // 原处——没有那枚凭据，没有任何东西会把它们读作"描述了当前源码"。
+    if compile_errors.is_empty() {
+        if let Err(error) = write_if_changed(
+            &out_dir.join("discovery.fingerprint"),
+            &discovery_fingerprint,
+        ) {
+            write_errors.push(error);
+        }
+    } else {
+        let _ = std::fs::remove_file(out_dir.join("discovery.fingerprint"));
     }
     if input.emit_cargo_directives
         && let Some(status) = cache_status_line(

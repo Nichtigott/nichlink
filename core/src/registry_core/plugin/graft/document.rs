@@ -215,6 +215,23 @@ pub fn validate_graft_selector(selector: &str) -> Result<(), GraftPlanDocumentEr
             "external graft name must be one word without quotes".to_owned(),
         ));
     }
+    // A selector names one directory inside the record root, so `.` and `..` are
+    // not names at all: joining them walked the writer out of the record root
+    // (`<pkg>/.nichlink/external-grafts/../graft.plan`), the write reported
+    // success, and `list_external_grafts` then never listed it — a record the
+    // runtime never applied while the author saw a created plan. A leading dot is
+    // refused with them, because a hidden record directory is the same surprise in
+    // a quieter form.
+    // 选择器命名记录根目录里的**一个**目录，因此 `.` 与 `..` 根本不是名字：join 它们会把写入方
+    // 带出记录根（`<pkg>/.nichlink/external-grafts/../graft.plan`），写入还报成功，随后
+    // `list_external_grafts` 永远列不出它——一份运行期从不应用、作者却看到"计划已创建"的记录。
+    // 以点开头的名字一并拒绝，因为隐藏的记录目录是同一个意外更安静的形式。
+    if selector.starts_with('.') {
+        return Err(GraftPlanDocumentError::InvalidSelector(
+            "external graft name must not start with `.`: it names a directory inside the record root"
+                .to_owned(),
+        ));
+    }
     Ok(())
 }
 
@@ -299,6 +316,24 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("duplicate"), "{message}");
         assert!(message.contains("graft"), "{message}");
+    }
+
+    /// A selector names one directory, so `.` and `..` — and any name that starts
+    /// with a dot — are refused by the same rule the writer and the parser share.
+    /// 选择器命名的是一个目录，因此 `.`、`..` 以及任何以点开头的名字都被写入方与解析方共用的
+    /// 同一条规则拒绝。
+    #[test]
+    fn selectors_that_could_leave_the_record_directory_are_refused() {
+        for refused in [".", "..", ".hidden"] {
+            assert!(
+                validate_graft_selector(refused).is_err(),
+                "`{refused}` must not name a directory"
+            );
+        }
+        // The control: an ordinary selector still passes, so the rule did not
+        // simply refuse everything.
+        // 对照：普通选择器仍然通过，因此这条规则不是一律拒绝。
+        validate_graft_selector("button_graft").expect("an ordinary selector is valid");
     }
 
     fn document() -> GraftPlanDocument {

@@ -91,8 +91,13 @@ pub(crate) fn explain(
         }
     };
     let out_dir = build_out_dir(&manifest);
-    let (scope_json, scope_note) = report::scope_report(&out_dir, face);
-    let (pruning_json, pruning_note) = report::pruning_report(&out_dir, face);
+    // Published output is trusted only while it still describes these sources; see
+    // `build_output_is_current` for why the fingerprint is the token.
+    // 已发布的产物只在仍然描述这批源码时才被信任；为什么指纹是那枚凭据见
+    // `build_output_is_current`。
+    let current = nichlink_build_method::build_output_is_current(&manifest, &out_dir);
+    let (scope_json, scope_note) = report::scope_report(&out_dir, face, current);
+    let (pruning_json, pruning_note) = report::pruning_report(&out_dir, face, current);
     let (grafts_json, graft_note) = report::declared_report(&manifest, face);
     let kept = scope_json["kept"].as_bool();
 

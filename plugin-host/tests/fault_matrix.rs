@@ -291,6 +291,73 @@ mod wasm_faults {
         assert!(error.to_string().contains("artifact is"), "{error}");
     }
 
+    /// A passive element segment is invisible to both ceilings that look like they
+    /// cover it: `table_elements` bounds a table's *growth* (a passive segment
+    /// never grows one), and the artifact cap counts encoding bytes while wasmi
+    /// materializes every entry at instantiation for about 32 bytes each. Measured
+    /// before this budget existed: a 2 000 103-byte module carrying two million
+    /// entries loaded and cost 64 070 402 bytes of host memory.
+    /// 被动元素段对两道看起来覆盖它的上限都不可见：`table_elements` 约束的是表的**增长**
+    /// （被动段从不增长表），而工件上限数的是编码字节，wasmi 却在实例化时为每个条目物化约
+    /// 32 字节。本预算存在之前实测：一个 2 000 103 字节、带两百万条目的模块能加载，并花掉
+    /// 64 070 402 字节宿主内存。
+    #[test]
+    fn a_large_passive_element_segment_is_refused_before_instantiation() {
+        // About 400 000 entries: one byte each in the compact encoding, so the
+        // element payload alone is around 400 KiB.
+        // 约 40 万条目：紧凑编码下每条约一字节，因此仅元素段负载就约 400 KiB。
+        let entries = "$f ".repeat(400_000);
+        let wat = format!(
+            r#"(module
+              (memory (export "memory") 1)
+              (data (i32.const 0) "ok")
+              (table 1 funcref)
+              (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+              (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+              (elem func {entries})
+            )"#
+        );
+        let bytes = wat::parse_str(&wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a passive element segment must be budgeted, not materialized");
+        assert!(
+            error.to_string().contains("element") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// The control: a small passive element segment still loads, so the budget is
+    /// not a refusal of the feature.
+    /// 对照：小的被动元素段仍能加载，因此这个预算不是对功能的一律拒绝。
+    #[test]
+    fn a_small_passive_element_segment_still_loads() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 4 funcref)
+          (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (elem func $f $f $f)
+        )"#;
+        let table = table(wat, WasmLimits::default());
+        assert_eq!(
+            table
+                .call("test", "probe", &[])
+                .expect("small segment loads"),
+            b"ok".to_vec()
+        );
+    }
+
     #[test]
     fn linear_memory_growth_is_capped() {
         let wat = r#"(module

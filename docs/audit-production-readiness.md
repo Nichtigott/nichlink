@@ -39,13 +39,15 @@ contracts are pinned (four `NodeId` literals + the SHA-256 NIST vector + graft
 plan `version=1`), kernel purity/mounting/size/`missing_docs`/doc-parse are
 executable gates, every gate battery is green (`fmt`, clippy both feature sets,
 401 tests default, 436 `--all-features`, 395 in release, doctests, doc
-`-D warnings`, `--locked` build, package contents for all nine crates), and the
-real CLI's happy path and its documented failure path both behave.
+`-D warnings`, `--locked` build, package contents for all nine crates — those are
+the counts at audit time; the status section below has them after the fixes), and
+the real CLI's happy path and its documented failure path both behave.
 先说好消息，免得它被清单淹没：内核自身的契约是被钉住的（四个 `NodeId` 字面量 + SHA-256 的
 NIST 向量 + graft plan `version=1`），内核纯净性/模块挂载/尺寸/`missing_docs`/文档解析都有可
 执行门禁，各套门禁全绿（`fmt`、两套特性的 clippy、默认 401 条测试、`--all-features` 436 条、
-release 模式 395 条、doctest、doc `-D warnings`、`--locked` 构建、九个 crate 的包内容），真
-实 CLI 的成功路径与它文档化的失败路径都符合预期。
+release 模式 395 条、doctest、doc `-D warnings`、`--locked` 构建、九个 crate 的包内容——这些是
+审计当时的数字，修完之后的数字见下面的状态一节），真实 CLI 的成功路径与它文档化的失败路径都
+符合预期。
 
 ## Status of the list / 清单状态
 
@@ -66,8 +68,8 @@ Updated as the fixes landed; this is the state after the tenth batch.
   arguments, so seven other shapes (`& & & …`, `* * * …`, `1 + 1 + …` and four
   more) still aborted the process. That row records the finding, the third measured
   shape, and the gate that now refuses nothing in this repository.
-- **The gates at the end of that work, all offline**: `fmt --check` clean, 443
-  tests passing by default and 482 with `--all-features` (0 failures either way),
+- **The gates at the end of that work, all offline**: `fmt --check` clean, 453
+  tests passing by default and 492 with `--all-features` (0 failures either way),
   clippy `-D warnings` clean with and without `--all-features`, `cargo doc -D
   warnings` clean, doctests clean, `--no-default-features` clean, and two checks
   that need no network at all — `tools/nichlink-publish --check-table` and
@@ -91,8 +93,8 @@ Updated as the fixes landed; this is the state after the tenth batch.
 - **复核是有回报的**：核对那五行实测项时，找出了 M1 修法里的第二个缺口——它的第一版守卫只量
   定界符与泛型实参，于是另外七种形状（`& & & …`、`* * * …`、`1 + 1 + …` 等）依然会打死进程。
   该行记录了这次发现、新增的第三种形状，以及那道"本仓库没有一个文件会被拒"的门禁。
-- **那次工作结束时的门禁，全部离线**：`fmt --check` 干净、默认 443 条测试通过、`--all-features`
-  482 条（两者都是 0 失败）、两套 clippy `-D warnings` 干净、`cargo doc -D warnings` 干净、
+- **那次工作结束时的门禁，全部离线**：`fmt --check` 干净、默认 453 条测试通过、`--all-features`
+  492 条（两者都是 0 失败）、两套 clippy `-D warnings` 干净、`cargo doc -D warnings` 干净、
   doctest 干净、`--no-default-features` 干净，以及两项完全不需要网络的检查——
   `tools/nichlink-publish --check-table` 与 `tools/nichlink-external-rehearsal`（27 条测试，
   示例宿主在检出之外构建通过）。
@@ -124,7 +126,8 @@ Updated as the fixes landed; this is the state after the tenth batch.
   → 退出 1 且 `check --json` 输出完整十一键文档。Pinned by
   `build_method/src/pipeline.rs::an_ordinary_flat_module_is_not_a_registration_source` 与
   `::a_face_outside_the_layout_is_reported_with_its_path`。
-  仍未做：把这条布局规则写进 README 的 `## Boundaries`（随 m16 一起）。
+  该布局规则已随 m16 写进 README 的 `## Boundaries`（`README.md:787-789`、
+  `README.zh-CN.md:703`，中英同步），因此 C1 没有遗留项。
 - **C2 ✅ FIXED CRITICAL 畸形注册面 panic 而不是诊断** `[实测]` —
   `build_method/src/registration_check.rs:104-105` 与
   `build_method/src/validation.rs:170-171` 用 `unwrap_or_else(|error| panic!(...))`，
@@ -478,10 +481,6 @@ Updated as the fixes landed; this is the state after the tenth batch.
   插件信任的默认是校验和、只有 `verify_signed` 记录签名保证并打开官方通道、撤销在校验期间就被
   检查（沙箱边界仍归进程适配器，原本已写明）。中英同步。
 
-  `CHANGELOG.md` 说已知限制见根 README，而 README 里那一节叫 `## Boundaries`
-  （`README.md:772`），且其中没有 C1 的布局规则、也没有 M2 的信任链边界。
-  Fix: reconcile the pointer and, once C1/M2 are settled, record those boundaries there.
-
 ## RELEASE / 发布
 
 - **R1 ✅ FIXED RELEASE 首次发布演练** — `tools/nichlink-package-audit` 的实测输出是
@@ -623,6 +622,31 @@ Updated as the fixes landed; this is the state after the tenth batch.
 - **U8** 在线 `cargo publish --dry-run`（需 token 与网络；`tools/nichlink-publish` 离线时报
   `attempting to make an HTTP request, but --offline was specified`，退出 1）。
 
+## Extra findings during the fix work / 修复过程中额外发现的问题
+
+These are not among the 48 rows: the tests and checks written for those rows turned
+them up. All are fixed and pinned; they are recorded so the next reader does not
+have to rediscover them.
+这些不在 48 条之内：它们是那些行所写的测试与检查翻出来的。全部已修并已钉住；记在这里，免得
+下一个读的人重新发现一遍。
+
+- **`tools/nichlink-publish` 按词读取自己的表** `[实测]` — `deps_of` 只返回多依赖 crate 的
+  第一个依赖（`nichlink-cli` 只被按 `nichlink-build-method` 检查），使"依赖未上 index 就不许
+  发布"的守卫形同虚设；同一次遍历还把边行的被依赖者当成独立 crate（九行表产出十四个节点）。
+  现在两张表都按整行读取，并由 `--check-table` 与清单对比；它立刻找出一条真实漂移——
+  `nichlink-cli` 直接依赖 `nichlink-core`，而表里没写。同一处的工作区成员扫描原先用
+  `sed -n '/^members/,/\]/p'`，而 sed 的范围不在起始行上测试结束地址，于是
+  `[workspace.package]` 作为一个恰好不存在的目录名进了成员列表；现在用 `awk` 精确取数组。
+- **文档门禁无守卫地把围栏 Rust 交给 `syn`** `[实测]` — 嵌套 60 000 个定界符的围栏会让门禁
+  进程 abort 而不是失败，与 M1 同一类，出现在唯一还没改到的地方。它现在向内核的
+  `guard_nesting` 提问（该函数为此公开，整个工作区因此只有一份嵌套度量），拒绝行为由
+  `conventions/src/doc_blocks.rs::a_pathologically_nested_fence_is_reported_not_fatal` 钉住：
+  把守卫那一行删掉，该测试立刻以栈溢出 abort。
+- **本文档里的两处陈旧残留** `[代码]` — C1 行仍说那条布局规则没写进 README（m16 已经写了，
+  `README.md:787-789`、`README.zh-CN.md:703`），m16 行尾还带着一份修前描述和一条已经执行完的
+  `Fix:` 说明。两处已清理，开头那段门禁数字也标明是审计当时的数字（修完后的数字在状态一节）。
+- **成本表的断言与实测数字之间没有链接** `[代码]` — `README.md` 与 `README.zh-CN.md` 现在从
+  表格处指向 `docs/performance-baseline.md`，读者不必先知道那份文件存在。
 ## Fix order / 修复顺序
 
 Not "by severity" but by what unblocks what; each batch is meant to land green on its own

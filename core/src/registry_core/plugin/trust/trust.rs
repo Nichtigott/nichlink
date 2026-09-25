@@ -195,6 +195,18 @@ pub enum PluginTrustError {
     /// Package version appears in the revocation list.
     /// 包版本出现在撤销列表中。
     Revoked,
+    /// Signature assurance was requested for a source no verifier is consulted for.
+    /// 对一个不会咨询验证器的来源请求了签名保证。
+    ///
+    /// [`PluginTrustPolicy::verify_with`] consults a verifier only for the official
+    /// lane, so recording `PluginAssurance::Signature` for a user artifact would
+    /// make the field — documented as the strongest check actually performed — false.
+    /// The refusal is explicit instead of a silent downgrade, because the caller
+    /// asked for a check this lane cannot perform; the digest path stays available.
+    /// [`PluginTrustPolicy::verify_with`] 只为官方通道咨询验证器，因此对用户工件记录
+    /// `PluginAssurance::Signature` 会让那个"实际执行过的最强检查"字段变成假话。这里显式
+    /// 拒绝而不是静默降级，因为调用方请求的是本通道做不到的检查；纯摘要路径仍然可用。
+    SignatureLaneRequired,
 }
 
 impl fmt::Display for PluginTrustError {
@@ -208,6 +220,9 @@ impl fmt::Display for PluginTrustError {
             Self::MissingOfficialKey => "official plugin has no signing-key fingerprint",
             Self::UntrustedOfficialKey => "official plugin signing key is not trusted",
             Self::SignatureNotVerified => "official plugin signature was not verified",
+            Self::SignatureLaneRequired => {
+                "signature assurance requires the official lane; use the digest path for other sources"
+            }
             Self::Revoked => "plugin version has been revoked",
         })
     }

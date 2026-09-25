@@ -153,7 +153,7 @@ implementation that grafts over it.
 ## Studio
 
 Run the standalone package with `cargo run --manifest-path studio/Cargo.toml`.
-Use `1` through `4` to select Search, Inspect, Data, or Compare. `watch` is
+Use `1` through `3` to select Search, Inspect, or Data. `watch` is
 provided by `nichlink-dev`, a workspace-only binary behind the non-default
 `dev-supervisor` feature: it rebuilds the child Studio process after source,
 Cargo, or plugin catalog changes, so it needs this checkout

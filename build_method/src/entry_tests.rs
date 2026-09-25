@@ -206,3 +206,45 @@ fn a_malformed_application_declaration_is_a_diagnostic() {
 
     std::fs::remove_dir_all(&root).expect("cleanup");
 }
+
+/// `application!(entry = …)` resolves every segment against the package tree, and
+/// the canonical `dir/dir.rs` layout is one of the spellings it must accept.
+/// `application!(entry = …)` 的每一段都对包内目录树解析，而规范的 `dir/dir.rs` 布局是它必须
+/// 接受的一种写法。
+///
+/// It used to look at the first segment alone, so the documented
+/// `application!(entry = crate::app::run)` was refused for `src/app/app.rs` — the
+/// layout this workspace's own modules use — while a bogus tail under a flat module
+/// passed. Both directions are pinned here.
+/// 它过去只看第一段，于是文档里写的 `application!(entry = crate::app::run)` 在
+/// `src/app/app.rs`——本工作区自己的模块用的布局——下被拒，而扁平模块下一个不存在的尾巴却
+/// 通过。两个方向都在这里钉住。
+#[test]
+fn an_application_entry_resolves_every_segment_against_the_tree() {
+    let root = fixture("application-entry");
+    let src = root.join("src");
+    std::fs::create_dir_all(src.join("app")).expect("app module dir");
+    std::fs::write(src.join("app/app.rs"), "pub fn run() {}\n").expect("app module");
+    std::fs::write(src.join("flat.rs"), "pub fn run() {}\n").expect("flat module");
+    std::fs::create_dir_all(src.join("bin")).expect("bin dir");
+    std::fs::write(src.join("bin/tool.rs"), "fn main() {}\n").expect("bin root");
+    std::fs::write(src.join("lib.rs"), "// host\n").expect("conventional entry");
+
+    // The canonical `<dir>/<dir>.rs` module layout, with and without the function.
+    // 规范的 `<dir>/<dir>.rs` 模块布局，带函数名与不带各一次。
+    assert!(super::entry_path_exists(&src, "crate::app"));
+    assert!(super::entry_path_exists(&src, "crate::app::run"));
+    // A flat module, a `src/bin` root, and the conventional `main` → `lib.rs`.
+    // 扁平模块、`src/bin` 根，以及约定的 `main` → `lib.rs`。
+    assert!(super::entry_path_exists(&src, "crate::flat::run"));
+    assert!(super::entry_path_exists(&src, "crate::tool"));
+    assert!(super::entry_path_exists(&src, "crate::main"));
+
+    // A segment that does not resolve may only be the trailing name: `bogus` in
+    // the middle is a wrong path, not a function.
+    // 解析不了的段只能是末段的那个名字：夹在中间的 `bogus` 是写错的路径，不是函数。
+    assert!(!super::entry_path_exists(&src, "crate::app::bogus::run"));
+    assert!(!super::entry_path_exists(&src, "crate::absent::run"));
+    assert!(!super::entry_path_exists(&src, "crate::"));
+    let _ = std::fs::remove_dir_all(&root);
+}

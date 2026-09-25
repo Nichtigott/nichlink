@@ -2,6 +2,7 @@
 //! 已验证插件工件与筛选决策。
 
 use super::*;
+use crate::registry_core::declaration::PluginSource;
 use std::fmt;
 
 /// External registration data together with the bytes that produced it.
@@ -115,6 +116,18 @@ impl PluginArtifact {
             .registration
             .plugin
             .ok_or(PluginTrustError::MissingManifest)?;
+        // `verify_with` consults a verifier only for the official lane, so this
+        // entry point could otherwise record `Signature` for a user artifact whose
+        // signature nothing checked — and the field it writes is documented as the
+        // strongest check actually performed. Refuse instead of downgrading
+        // silently: the caller asked for a signature check this lane cannot perform,
+        // and the digest path stays available for that artifact.
+        // `verify_with` 只为官方通道咨询验证器，因此本入口否则会为一个没有检查过签名的用户工件
+        // 记录 `Signature`——而它写下的那个字段的文档写的是"实际执行过的最强检查"。这里拒绝而不是
+        // 静默降级：调用方请求的是本通道做不到的签名检查，而那个工件仍然可用纯摘要路径。
+        if manifest.source != PluginSource::Official {
+            return Err(PluginTrustError::SignatureLaneRequired);
+        }
         policy.verify_with(
             manifest,
             &self.bytes,
@@ -283,6 +296,42 @@ mod tests {
             official_artifact().verify_signed(policy, &AcceptingVerifier),
             Err(PluginTrustError::Revoked)
         ));
+    }
+
+    /// Signature assurance is refused for a source no verifier is consulted for.
+    /// 对不会咨询验证器的来源，签名保证被拒绝。
+    ///
+    /// The audit's probe read `assurance=Signature verifier_called=false`: the field
+    /// is documented as the strongest check actually performed, and it was false for
+    /// every user artifact. The refusal is explicit, and the digest path still
+    /// accepts the same artifact.
+    /// 审计的探针读到 `assurance=Signature verifier_called=false`：该字段的文档写的是"实际
+    /// 执行过的最强检查"，而它对每个用户工件都是假话。这里显式拒绝，而纯摘要路径仍然接受同一个
+    /// 工件。
+    #[test]
+    fn signature_assurance_is_refused_for_a_user_artifact() {
+        let mut artifact = official_artifact();
+        let mut manifest = artifact.registration.plugin.expect("manifest");
+        manifest.source = PluginSource::User;
+        manifest.signature = None;
+        manifest.public_key_fingerprint = None;
+        artifact.registration.plugin = Some(manifest);
+        artifact.key_fingerprint = None;
+
+        assert!(
+            matches!(
+                artifact
+                    .clone()
+                    .verify_signed(PluginTrustPolicy::open(), &AcceptingVerifier),
+                Err(PluginTrustError::SignatureLaneRequired)
+            ),
+            "a lane that never calls a verifier cannot record a verified signature"
+        );
+
+        let digest = artifact
+            .verify_artifact(PluginTrustPolicy::open())
+            .expect("the checksum path accepts a user artifact");
+        assert_eq!(digest.assurance(), PluginAssurance::Digest);
     }
 
     /// A refused signature never earns the stronger assurance.

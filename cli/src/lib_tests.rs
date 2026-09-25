@@ -180,6 +180,66 @@ fn explain_json_reports_identity_scope_and_declared_grafts() {
     fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// `explain` refuses to present build output that predates the sources.
+/// `explain` 不会把早于当前源码的构建产物当作现状提供。
+///
+/// It used to serve the previous build's scope as `known: true`, so the same tree
+/// answered differently depending on whether a `check` had happened to run in
+/// between; output left behind by a *failed* check was served the same way. The
+/// failing half is pinned in `build_method::scope_view` (the run publishes no
+/// fingerprint); this pins the staleness half end to end, through the real
+/// command.
+/// 它过去会把上一次构建的作用域当作 `known: true` 提供，于是同一棵树会因期间是否恰好跑过
+/// `check` 而给出不同答案；**失败**的 check 留下的产物也是这样被提供的。失败那一半钉在
+/// `build_method::scope_view`（该次运行不发布指纹）；这里端到端钉住陈旧那一半，走真实命令。
+#[test]
+fn explain_reports_an_unknown_scope_when_the_build_output_is_stale() {
+    let root = fixture_host("cli-explain-stale", DECLARED_BUTTON, &control_tree());
+    let path = root.display().to_string();
+    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    assert!(checked.is_ok(), "{checked:?} {check_stdout}");
+
+    let query = [
+        "nichlink",
+        "explain",
+        "--json",
+        "--path",
+        &path,
+        "root/control/object/button",
+    ];
+    let (result, stdout) = run_capture(&query);
+    assert!(result.is_ok(), "{result:?} {stdout}");
+    let fresh: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
+    assert_eq!(fresh["scope"]["known"], true, "{fresh}");
+    assert_eq!(fresh["pruning"]["known"], true, "{fresh}");
+
+    // A content change that keeps the host valid: the pin is about the token, not
+    // about a semantic edit.
+    // 一次仍然让宿主合法的内容变化：这条钉子关乎那枚凭据，而不是语义改动。
+    let button = root.join("src/control/object/button/button.rs");
+    let text = fs::read_to_string(&button).expect("button source");
+    fs::write(&button, format!("// edited\n{text}")).expect("edited button");
+
+    let (result, stdout) = run_capture(&query);
+    assert!(result.is_ok(), "{result:?} {stdout}");
+    let stale: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
+    assert_eq!(
+        stale["scope"]["known"], false,
+        "a previous build must not answer for these sources: {stale}"
+    );
+    assert_eq!(stale["pruning"]["known"], false, "{stale}");
+    assert_eq!(stale["resolved"], true, "the node itself is resolved live");
+
+    // Re-publishing restores the answer, so the command is not simply pessimistic.
+    // 重新发布即可恢复答案，因此本命令并非一律悲观。
+    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    assert!(checked.is_ok(), "{checked:?} {check_stdout}");
+    let (_, stdout) = run_capture(&query);
+    let current: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
+    assert_eq!(current["scope"]["known"], true, "{current}");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
 /// An unresolvable query is reported with its reason instead of a bare
 /// failure, so an operator can correct the spelling.
 /// 无法解析的查询连原因一起报告，而不是只报失败，让操作者能改正拼写。

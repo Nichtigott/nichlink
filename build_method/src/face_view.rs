@@ -42,7 +42,9 @@ use super::{Node, discover_root, parsed_face, relative_display, source_module_pa
 #[path = "scope_view.rs"]
 mod scope_view;
 
-pub use self::scope_view::{BuildScopeView, PruningRow, read_build_scope, read_pruning_manifest};
+pub use self::scope_view::{
+    BuildScopeView, PruningRow, build_output_is_current, read_build_scope, read_pruning_manifest,
+};
 
 /// One registration face as the build's own discovery sees it.
 /// 构建自身的发现过程看到的一个注册面。

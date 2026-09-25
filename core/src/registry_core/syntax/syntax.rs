@@ -14,6 +14,13 @@ pub mod entries;
 pub use entries::*;
 #[path = "nesting.rs"]
 pub(crate) mod nesting;
+#[path = "reference_scan.rs"]
+pub(crate) mod reference_scan;
+
+// The module stays crate-private; the one function other crates need is
+// re-exported so the workspace keeps a single nesting measurement.
+// 模块保持 crate 私有；其他 crate 需要的那一个函数在此重导出，使工作区只保留一份嵌套度量。
+pub use nesting::guard_nesting;
 
 #[cfg(test)]
 #[path = "deep_input_tests.rs"]

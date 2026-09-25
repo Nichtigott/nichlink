@@ -549,6 +549,59 @@ line to `1.0.0` is a separate decision that would move the fourteen internal
   (`RecordReport::SelectorDirectoryMismatch` is gone), and a record whose
   identity and path name different faces.
 
+- The repository gates no longer accept what they were built to refuse: kernel purity
+  sees `std::io`/`std::thread`/`std::os` and brace imports (`use std::{env, fs}`), has a
+  walk floor, and the mounting gate finds `include!` whatever delimiter it uses (on the
+  kernel's masked text, so a fixture string is not a mount); the document gate reports
+  an unterminated fence and covers every markdown file under `docs/` at any depth and
+  every root-level one; the lint gate reads a rustfmt-folded `#[allow(…)]` and derives
+  the roots that must carry `#![warn(missing_docs)]` from the tree instead of a list a
+  new crate can miss; `tools/nichlink-package-audit` derives the shipped crate set and
+  their internal dependencies from the manifests; `tools/nichlink-publish --check-table`
+  reads internal requirements spelled `x.workspace = true` and checks the root's
+  `[workspace.dependencies]` versions; and the nesting guard names the limit that
+  applies to the shape it refused (1024 for a linear run, 128 for a delimiter group)
+  after the generic-argument counter, which could never fire, was removed.
+- `application!(entry = …)` resolves every path segment against the package tree,
+  so the canonical `<dir>/<dir>.rs` layout works (`entry = crate::control` for
+  `src/control/control.rs`) and a segment that resolves to nothing in the middle is
+  refused instead of passing as a function name. The resolver lives in
+  `build_method/src/entry_paths.rs`, split out with the filesystem walk moved to
+  `discovery.rs` to keep `entry.rs` inside the size ratchet.
+- `WasmLimits::max_element_bytes` bounds what a module can make wasmi materialize
+  at instantiation: a passive element segment never grows a table, so
+  `table_elements` never saw it, and the measured cost was about 32 bytes per entry
+  against about one byte of compact encoding — a 2 000 103-byte module with two
+  million entries cost 64 070 402 bytes of host memory. The payload is measured from
+  the section headers before compilation, like the artifact ceiling.
+- `PluginArtifact::verify_signed` refuses a source no verifier is consulted for
+  with the new `PluginTrustError::SignatureLaneRequired`, instead of recording
+  `Signature` assurance that nothing checked; that artifact's digest path still
+  works.
+- A graft selector that starts with `.` is refused by the rule the writer, the
+  parser and Studio already share: `..` used to be accepted, wrote the plan to
+  `<pkg>/.nichlink/graft.plan`, and was then never listed — a record the runtime
+  never applied while the author saw a created plan.
+- Build output is trusted only while it still describes the sources:
+  `nichlink_build_method::build_output_is_current` compares the published
+  `discovery.fingerprint` against a freshly computed one, the pipeline writes that
+  fingerprint only on a clean run, and `explain` (and `--overlay`) reports
+  `known: false` with the existing "run `nichlink check`" note when it is missing or
+  stale. A failing check no longer leaves output that `explain` presents as the
+  current scope.
+- A malformed or unevaluable-gated `static_graft_plan!` is a `phase=graft-entry`
+  diagnostic instead of a panic: `check --json` used to exit 101 with an empty
+  stdout, discarding the diagnostic `scope` had already produced. The reader now
+  takes the build's diagnostics collection, all three refusal kinds report through
+  it, and the parse message is byte-identical to `scope`'s so the two collapse into
+  one line.
+- The documentation gate handed fenced Rust straight to `syn`, so a fence nesting
+  tens of thousands of delimiters aborted the gate process instead of failing it —
+  the same defect the kernel's parse entries had, in the one place that still had
+  it. It now asks the kernel's `guard_nesting`, which is the workspace's single
+  nesting measurement and is public for exactly this reason, and
+  `a_pathologically_nested_fence_is_reported_not_fatal` pins that a refusal is a
+  message: with the guard removed, that test aborts.
 - `tools/nichlink-publish` read its own dependency table word-wise, so a crate
   with more than one internal dependency reported only the first — `nichlink-cli`
   was checked against `nichlink-build-method` alone — and the guard that refuses
@@ -941,6 +994,41 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   （一次报出全部不可读计划）、目录与计划里的 `graft` 不一致的记录
   （`RecordReport::SelectorDirectoryMismatch` 已删除）、以及身份与路径指向不同面的记录。
 
+- 仓库门禁不再接受它们本应拒绝的东西：内核纯净性现在看得见 `std::io`/`std::thread`/`std::os` 与树形
+  导入（`use std::{env, fs}`）并有"走过文件"的下限；挂载门禁无论 `include!` 用哪种定界符都能发现它
+  （跑在内核屏蔽后的文本上，因此夹具字符串不算挂载）；文档门禁会报告未闭合的围栏，并覆盖 `docs/` 下
+  任意深度的每个 markdown 文件与每个根级 markdown 文件；lint 门禁能读出被 rustfmt 折行的
+  `#[allow(…)]`，并从目录树推导必须带 `#![warn(missing_docs)]` 的根，而不是用一份新 crate 可以漏掉的
+  清单；`tools/nichlink-package-audit` 从清单推导已发布 crate 集合及其内部依赖；
+  `tools/nichlink-publish --check-table` 能读 `x.workspace = true` 形式的内部需求并检查根的
+  `[workspace.dependencies]` 版本；嵌套守卫在删掉永远不会触发的泛型实参计数器之后，报出**适用于**
+  该形状的上限（线性串 1024、定界符组 128）。
+- `application!(entry = …)` 的每一段路径都对包内目录树解析，因此规范的 `<dir>/<dir>.rs` 布局可用
+  （`src/control/control.rs` 对应 `entry = crate::control`），而夹在中间解析不出任何东西的段会被拒，
+  不再被当作函数名放过。解析器位于 `build_method/src/entry_paths.rs`；为使 `entry.rs` 留在尺寸棘轮
+  之内，它与该文件里的文件系统遍历（并入 `discovery.rs`）一起被拆出。
+- `WasmLimits::max_element_bytes` 约束一个模块能让 wasmi 在实例化时物化多少：被动元素段从不增长
+  表，因此 `table_elements` 从来看不到它，而实测代价是每条约 32 字节（紧凑编码每条约一字节）——
+  一个 2 000 103 字节、带两百万条目的模块花掉 64 070 402 字节宿主内存。负载与工件上限一样，在
+  编译前从段头量出。
+- `PluginArtifact::verify_signed` 对不会咨询验证器的来源返回新增的
+  `PluginTrustError::SignatureLaneRequired`，而不是记录一个没有检查过任何东西的 `Signature` 保证；
+  同一工件的纯摘要路径仍然可用。
+- 以 `.` 开头的 graft 选择器被写入方、解析方与 Studio 已在共用的那条规则拒绝：`..` 过去会被接受、
+  把计划写到 `<pkg>/.nichlink/graft.plan`，然后永远不会被列出——一份运行期从不应用、作者却看到
+  "计划已创建"的记录。
+- 构建产物只在仍然描述当前源码时才被信任：`nichlink_build_method::build_output_is_current` 把已发布
+  的 `discovery.fingerprint` 与新算出的指纹比对，pipeline 只在干净的一次运行写下那枚指纹，而
+  `explain`（以及 `--overlay`）在它缺失或过期时报 `known: false` 并沿用既有的"跑 `nichlink
+  check`"提示。失败的 check 不再留下会被 `explain` 当作当前作用域提供的产物。
+- 畸形或带不可求值门控的 `static_graft_plan!` 现在是 `phase=graft-entry` 诊断而不是 panic：
+  `check --json` 过去以 101 退出、stdout 为空，并把 `scope` 已经产出的诊断丢掉。读取者现在接收构建
+  的诊断集合，三类拒绝都经它上报，且解析失败的消息与 `scope` 的逐字相同，两者因此折叠成一行。
+- 文档门禁此前把围栏 Rust 直接交给 `syn`，因此嵌套几万个定界符的围栏会让门禁进程 abort 而不是
+  失败——与内核解析入口当初的缺陷同一类，而这是最后一个还有它的地方。现在它向内核的
+  `guard_nesting` 提问，那是本工作区唯一的嵌套度量（它公开出来正是为了这件事），并由
+  `a_pathologically_nested_fence_is_reported_not_fatal` 钉住"拒绝是一条消息"：把守卫删掉，该
+  测试就会 abort。
 - `tools/nichlink-publish` 按词读取自己的依赖表，因此有多个内部依赖的 crate 只报出第一个——
   `nichlink-cli` 只被按 `nichlink-build-method` 检查——"依赖还没上 index 就不许发布"的守卫因此
   形同虚设。同一次遍历还把边行的被依赖者当成独立 crate，九行表产出十四个节点。现在两张表都按整行

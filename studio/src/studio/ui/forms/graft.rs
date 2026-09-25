@@ -190,8 +190,19 @@ pub(crate) fn draw_graft(
             })
             .collect()
     };
+    // `then_some` evaluates its argument eagerly, so `plans.len() - 1` underflowed
+    // on an empty list: in every debug build (the repo's own `target/debug`, any
+    // `cargo run`) pressing `g` on a fresh project panicked before a first plan
+    // could exist. `checked_sub` asks the question instead of assuming the answer.
+    // `then_some` 会立即求值它的参数，因此 `plans.len() - 1` 在空列表上会下溢：在每种 debug
+    // 构建（仓库自己的 `target/debug`、任何 `cargo run`）里，在全新工程上按 `g` 会在第一个
+    // 计划存在之前就 panic。`checked_sub` 是去问这个问题，而不是假定答案。
     let mut state = ListState::default().with_selected(
-        (!graft.plans.is_empty()).then_some(graft.plan_selected.min(graft.plans.len() - 1)),
+        graft
+            .plans
+            .len()
+            .checked_sub(1)
+            .map(|last| graft.plan_selected.min(last)),
     );
     let border = if graft.pane == 1 { CYAN } else { MUTED };
     frame.render_stateful_widget(

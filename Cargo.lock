@@ -676,6 +676,7 @@ dependencies = [
 name = "nichlink-conventions"
 version = "0.1.0"
 dependencies = [
+ "nichlink-core",
  "syn 2.0.119",
  "tempfile",
 ]

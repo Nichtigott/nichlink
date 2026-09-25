@@ -147,3 +147,27 @@ fn a_long_binary_addition_chain_is_refused() {
     let source = format!("pub const X: u32 = {}1;", "1 + ".repeat(PAST_THE_STACK));
     refused("binary chains", &source);
 }
+
+#[test]
+fn the_refusal_names_the_limit_that_applies() {
+    // The delimiter limit is rustc's own recursion limit; the linear-run limit is
+    // this workspace's, because the overflowing structure there is the tree rather
+    // than the parser. A message that printed one number for both was wrong for
+    // whichever shape it did not belong to.
+    // 定界符上限就是 rustc 自己的递归上限；线性串上限是本工作区的，因为那里溢出的是**树**而不是
+    // 解析器。对两种形状都印同一个数字，必然对它不属于的那一种说错。
+    let delimiters = format!("const X: u8 = {}1{};", "(".repeat(300), ")".repeat(300));
+    let error = parse_faces(&delimiters)
+        .expect_err("nesting is refused")
+        .to_string();
+    assert!(error.contains("limit of 128"), "{error}");
+
+    let run = format!("pub const X: u8 = {}1;", "Vec::<".repeat(2000));
+    let error = parse_faces(&run)
+        .expect_err("nesting is refused")
+        .to_string();
+    assert!(
+        error.contains("limit of 1024"),
+        "a linear run is measured against its own limit: {error}"
+    );
+}

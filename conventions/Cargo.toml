@@ -20,6 +20,13 @@ path = "src/lib.rs"
 # C6 的文档代码块门禁要解析 markdown 围栏里的 Rust，需要真正的解析器。
 # `syn` 已通过内核的 `syntax` 特性存在于锁文件中。
 syn = { version = "2", features = ["full", "parsing"] }
+# That parse used to be unguarded, so a fence nesting tens of thousands of
+# delimiters aborted this gate's process instead of failing it — the same defect
+# the kernel's parse entries had. The measurement lives in the kernel, and this
+# crate asks for it rather than keeping a second copy that could drift.
+# 那次解析此前没有守卫，因此嵌套几万个定界符的围栏会让本门禁的进程 abort 而不是失败——与内核
+# 解析入口当初的缺陷同一类。度量属于内核，本 crate 向它提问，而不是自己留一份可能漂移的副本。
+nichlink-core = { path = "../core", features = ["syntax"] }
 
 [dev-dependencies]
 # The doc-block gate proves it can fail against a synthetic README, so that the

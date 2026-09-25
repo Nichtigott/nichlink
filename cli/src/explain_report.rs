@@ -26,7 +26,34 @@ use serde_json::{Value, json};
 /// pruned.
 /// `selected` 表示"该面是作用域根"（已声明槽位）；`kept` 表示"该面在发布树中"，
 /// 被选中面所需的祖先同样成立。只报 `selected` 会把仍然存活的父面说成被剪掉。
-pub(super) fn scope_report(out_dir: &Path, face: &FaceView) -> (Value, Vec<String>) {
+pub(super) fn scope_report(out_dir: &Path, face: &FaceView, current: bool) -> (Value, Vec<String>) {
+    // Output that does not describe the current sources is reported exactly like
+    // output that is missing: `known: false` and the same "run `check`" note. The
+    // command used to serve the previous build's scope as `known: true`, so the
+    // same tree gave two different answers depending on whether a `check` had
+    // happened to run in between — and output left behind by a *failed* check was
+    // served the same way.
+    // 不描述当前源码的产物与被当作缺失的产物一样上报：`known: false` 与同一条"跑 `check`"提示。
+    // 本命令过去会把上一次构建的作用域当作 `known: true` 提供，于是同一棵树会因期间是否恰好跑过
+    // `check` 而给出两个不同答案——而**失败**的 check 留下的产物也是这样被提供的。
+    if !current {
+        return (
+            json!({
+                "known": false,
+                "mode": Value::Null,
+                "all": Value::Null,
+                "reason": Value::Null,
+                "selected": Value::Null,
+                "kept": Value::Null,
+                "error": "build output is out of date with the sources",
+            }),
+            vec![
+                "  scope: unknown (build output is out of date with the sources); \
+                 run `nichlink check` to publish source_scope.tsv"
+                    .to_owned(),
+            ],
+        );
+    }
     match read_build_scope(out_dir) {
         Ok(scope) => {
             let selected = scope.all
@@ -81,7 +108,26 @@ pub(super) fn scope_report(out_dir: &Path, face: &FaceView) -> (Value, Vec<Strin
 
 /// Report the pruning symbols the build published for the face.
 /// 报告构建为该面发布的修剪符号。
-pub(super) fn pruning_report(out_dir: &Path, face: &FaceView) -> (Value, Vec<String>) {
+pub(super) fn pruning_report(
+    out_dir: &Path,
+    face: &FaceView,
+    current: bool,
+) -> (Value, Vec<String>) {
+    if !current {
+        return (
+            json!({
+                "known": false,
+                "pruned": Value::Null,
+                "symbols": Value::Null,
+                "error": "build output is out of date with the sources",
+            }),
+            vec![
+                "  pruning: unknown (build output is out of date with the sources); \
+                 run `nichlink check` to publish pruning_manifest.tsv"
+                    .to_owned(),
+            ],
+        );
+    }
     match read_pruning_manifest(out_dir) {
         Ok(rows) => {
             let mut symbols = rows

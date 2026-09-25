@@ -64,6 +64,30 @@ pub struct WasmLimits {
     /// 模块可以声明多少张表（`max_tables`）与多少个元素段（`max_element_segments`），而不是
     /// 单张表能长到多大。
     pub table_elements: usize,
+    /// Largest total element-section payload a module may carry, in bytes.
+    /// 模块可携带的元素段负载总量上限，以字节计。
+    ///
+    /// A passive element segment is invisible to the two ceilings that look like
+    /// they cover it: `table_elements` bounds a table's *growth* and a passive
+    /// segment never grows one, while wasmi's `EnforcedLimits::strict()` caps how
+    /// many element *segments* a module may declare, not how many entries they
+    /// carry. wasmi materializes every entry at instantiation, measured at about
+    /// 32 bytes per entry against about one byte per entry in the compact
+    /// encoding — a 2 000 103-byte module carrying two million entries cost
+    /// 64 070 402 bytes of host memory, with `(table 1 funcref)` and default
+    /// limits. This budget is therefore also an allocation budget of roughly
+    /// thirty-two times it, which is why the default caps that shape at about
+    /// 8 MiB. The payload is measured from the binary's section headers before
+    /// compilation, the same hand-checked seam `max_module_bytes` uses, because no
+    /// engine limit applies before the engine runs.
+    /// 被动元素段对两道看起来覆盖它的上限都不可见：`table_elements` 约束的是表的**增长**，
+    /// 而被动段从不增长表；wasmi 的 `EnforcedLimits::strict()` 限制的是一个模块可以声明多少个
+    /// 元素**段**，而不是它们携带多少条目。wasmi 在实例化时为每个条目物化约 32 字节，而紧凑编码
+    /// 下每条约一字节——一个 2 000 103 字节、带两百万条目的模块，在 `(table 1 funcref)` 与默认
+    /// 上限下花掉 64 070 402 字节宿主内存。因此本预算同时也是约三十二倍的分配预算，这正是默认值
+    /// 把那种形状压在约 8 MiB 的原因。负载在编译前从二进制的段头量出，与 `max_module_bytes`
+    /// 用的是同一处手工检查接缝，因为在引擎运行之前没有任何引擎限制生效。
+    pub max_element_bytes: usize,
     /// Largest artifact the backend will compile, in bytes.
     /// 后端愿意编译的最大工件字节数。
     ///
@@ -83,6 +107,7 @@ impl Default for WasmLimits {
             max_input_bytes: 1024 * 1024,
             max_output_bytes: 1024 * 1024,
             table_elements: 4096,
+            max_element_bytes: 256 * 1024,
             max_module_bytes: 16 * 1024 * 1024,
         }
     }
@@ -112,6 +137,18 @@ impl WasmBackend {
                 "artifact is {} bytes; limit is {}",
                 bytes.len(),
                 self.limits.max_module_bytes
+            )));
+        }
+        // A passive element segment never reaches `table_growing`, so the store's
+        // element ceiling does not see it: this is the only bound on what a
+        // module can make wasmi materialize at instantiation.
+        // 被动元素段永远到不了 `table_growing`，因此 store 的元素上限看不到它：这是对"模块能
+        // 让 wasmi 在实例化时物化多少"的唯一边界。
+        let element_bytes = element_section_bytes(&bytes);
+        if element_bytes > self.limits.max_element_bytes {
+            return Err(HostError::Limit(format!(
+                "module declares {element_bytes} bytes of element segments; limit is {}",
+                self.limits.max_element_bytes
             )));
         }
         let mut config = Config::default();
@@ -178,6 +215,67 @@ impl WasmBackend {
             limits: self.limits,
         })
     }
+}
+
+/// Total element-section payload in a wasm binary, in bytes.
+/// wasm 二进制里元素段负载的总字节数。
+///
+/// Only the section headers are walked — `id`, LEB128 size, payload — which is
+/// enough to bound the entries, because every entry costs at least one byte of
+/// payload. A binary this walk cannot make sense of reports `0` and is left to the
+/// engine, whose diagnostic for a malformed module is better than a budget
+/// refusal would be.
+/// 只走段头——`id`、LEB128 长度、负载——这已足以约束条目数，因为每个条目至少占一字节负载。
+/// 本遍历读不懂的二进制报 `0` 并留给引擎：它对"模块损坏"的诊断比一条预算拒绝更有用。
+fn element_section_bytes(bytes: &[u8]) -> usize {
+    /// Magic (4) plus version (4).
+    /// 魔数（4）加版本（4）。
+    const HEADER: usize = 8;
+    /// Section id of the element section.
+    /// 元素段的段 id。
+    const ELEMENT_SECTION: u8 = 9;
+    if bytes.len() < HEADER || &bytes[..4] != b"\0asm" {
+        return 0;
+    }
+    let mut index = HEADER;
+    let mut total = 0usize;
+    while index < bytes.len() {
+        let id = bytes[index];
+        index += 1;
+        let Some((size, next)) = read_uleb(bytes, index) else {
+            return 0;
+        };
+        let size = size as usize;
+        if next + size > bytes.len() {
+            return 0;
+        }
+        if id == ELEMENT_SECTION {
+            total += size;
+        }
+        index = next + size;
+    }
+    total
+}
+
+/// One unsigned LEB128 value at `start`, with the index after it.
+/// `start` 处的一个无符号 LEB128 取值，以及它之后的索引。
+fn read_uleb(bytes: &[u8], start: usize) -> Option<(u32, usize)> {
+    let mut value = 0u32;
+    let mut shift = 0u32;
+    let mut index = start;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        value |= u32::from(byte & 0x7f).checked_shl(shift)?;
+        index += 1;
+        if byte & 0x80 == 0 {
+            return Some((value, index));
+        }
+        shift += 7;
+        if shift >= 32 {
+            return None;
+        }
+    }
+    None
 }
 
 struct WasmState {
