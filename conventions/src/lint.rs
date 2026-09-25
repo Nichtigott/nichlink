@@ -82,10 +82,7 @@ pub const LINT_NAME: &str = "missing_docs";
 pub fn missing_roots(root: &Path) -> Vec<String> {
     required_roots(root)
         .into_iter()
-        .filter(|relative_path| {
-            let path = root.join(relative_path);
-            !lines(&path).iter().any(|line| line.trim() == ATTRIBUTE)
-        })
+        .filter(|relative_path| !carries_the_lint(&root.join(relative_path)))
         .collect()
 }
 
@@ -99,41 +96,104 @@ pub fn missing_roots(root: &Path) -> Vec<String> {
 /// 不会被报成违反该规则。
 pub fn allow_workarounds(root: &Path) -> Vec<String> {
     let mut found = Vec::new();
+    // Built at run time so this file's own source does not contain the literal it
+    // searches for: `conventions` is a crate directory like any other, so the gate
+    // scans itself, and a literal needle would report this constant.
+    // 运行时拼出来，使本文件自己的源码不含被搜索的字面量：`conventions` 与其他 crate 目录一样，
+    // 门禁会扫描自己，而写死的针会把这个常量报出来。
+    let needle = ["allow", "("].concat();
     for directory in crate_directories(root) {
         for path in rust_sources(&directory) {
-            // The scan runs on the kernel's masked text — comments and literals
-            // blanked — and reads an attribute across lines, because rustfmt folds a
-            // long `#[allow(…)]`: requiring both halves on one physical line let the
-            // tool's own formatting silence the lint, and a raw scan also flagged a
-            // fixture *string* that merely mentioned the attribute.
-            // 扫描跑在内核屏蔽后的文本上（注释与字面量被抹掉），并跨行读取一个属性，因为 rustfmt
-            // 会把长的 `#[allow(…)]` 折行：要求两半落在同一物理行，等于让工具自己的排版让 lint
-            // 闭嘴；而原样扫描还会把仅仅是提到该属性的夹具**字符串**报成违规。
-            let masked = lines(&path)
-                .iter()
-                .map(|line| nichlink::source::mask_non_code(line))
-                .collect::<Vec<_>>();
-            let mut index = 0usize;
-            while index < masked.len() {
-                let Some(start) = masked[index].find(ALLOW_HEAD) else {
-                    index += 1;
-                    continue;
-                };
-                let mut attribute = masked[index][start..].to_owned();
-                let mut end = index;
-                while !attribute.contains(')') && end + 1 < masked.len() && end - index < 16 {
-                    end += 1;
-                    attribute.push_str(&masked[end]);
+            // The scan runs on the kernel's masked text — comments and literals blanked
+            // — and looks for `allow(…missing_docs…)` *anywhere*, not for the item
+            // attribute shape. Three spellings were measured green against the old
+            // `#[allow(` search: `#![allow(missing_docs)]` at the crate root (which has
+            // no `#[allow(` substring at all, and which disables the lint crate-wide
+            // because the last attribute wins), a second attribute on the same line
+            // (`#[allow(dead_code)] #[allow(missing_docs)]`, where the scan stopped at
+            // the first `)` and then skipped the rest of the line), and
+            // `#[cfg_attr(all(), allow(missing_docs))]`.
+            // 扫描跑在内核屏蔽后的文本上（注释与字面量被抹掉），并搜索**任意位置**的
+            // `allow(…missing_docs…)`，而不是某个项的属性形状。对旧的 `#[allow(` 搜索实测有三种
+            // 写法为绿：crate 根的 `#![allow(missing_docs)]`（根本不含 `#[allow(` 子串，而它因
+            // 最后一个属性生效而整 crate 关掉 lint）、同一行上的第二个属性
+            // （`#[allow(dead_code)] #[allow(missing_docs)]`，扫描在第一个 `)` 停下然后跳过该行
+            // 剩余部分）、以及 `#[cfg_attr(all(), allow(missing_docs))]`。
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+            let masked = nichlink::source::mask_non_code(&text);
+            let mut from = 0usize;
+            while let Some(offset) = masked[from..].find(&needle) {
+                let at = from + offset;
+                // An identifier character immediately before the needle means it is part
+                // of a longer name (`disallow(`), not the attribute.
+                // 针之前紧邻标识符字符意味着它是更长名字的一部分（`disallow(`），而不是属性。
+                let boundary = at == 0
+                    || !masked[..at]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|previous| previous.is_alphanumeric() || previous == '_');
+                if boundary && names_the_lint(&masked, at + needle.len() - 1) {
+                    found.push(format!(
+                        "{}:{}",
+                        relative(root, &path),
+                        masked[..at].matches('\n').count() + 1
+                    ));
                 }
-                let closed = attribute.find(')').unwrap_or(attribute.len());
-                if attribute[..closed].contains(LINT_NAME) {
-                    found.push(format!("{}:{}", relative(root, &path), index + 1));
-                }
-                index = if end > index { end + 1 } else { index + 1 };
+                from = at + needle.len();
             }
         }
     }
     found
+}
+
+/// Whether the attribute whose opening paren sits at `open` names [`LINT_NAME`].
+/// 开括号位于 `open` 的属性是否命名了 [`LINT_NAME`]。
+///
+/// The scan runs to the *matching* paren, not to the first one: `#[allow(dead_code)]
+/// #[allow(missing_docs)]` on one line is two attributes, and the second one is the
+/// violation. A bounded window is the fallback for an unbalanced attribute, which no
+/// compiler accepts anyway.
+/// 扫描走到**配对**的括号，而不是第一个：同一行上的 `#[allow(dead_code)]
+/// #[allow(missing_docs)]` 是两个属性，第二个才是违规。括号不配平时回退到有界窗口——反正
+/// 没有任何编译器接受那种代码。
+fn names_the_lint(masked: &str, open: usize) -> bool {
+    let mut depth = 0usize;
+    let mut end = masked.len().min(open + 256);
+    for (offset, character) in masked[open..].char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = open + offset + 1;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    masked[..end]
+        .get(open..)
+        .is_some_and(|window| window.contains(LINT_NAME))
+}
+
+/// Whether a crate root carries the missing-documentation lint at warn or stronger.
+/// crate 根是否以 warn 或更强的方式带着缺失文档 lint。
+///
+/// Accepting only the literal `#![warn(missing_docs)]` refused a *stronger*
+/// declaration: `#![deny(missing_docs)]` and `#![warn(missing_docs, other)]` both keep
+/// the lint on and were reported as missing it.
+/// 只接受字面量 `#![warn(missing_docs)]` 会拒绝**更强**的声明：
+/// `#![deny(missing_docs)]` 与 `#![warn(missing_docs, other)]` 都让 lint 保持开启，却被报成
+/// 缺少它。
+fn carries_the_lint(path: &Path) -> bool {
+    lines(path).iter().any(|line| {
+        let trimmed = line.trim();
+        ((trimmed.starts_with("#![warn(") || trimmed.starts_with("#![deny("))
+            && trimmed.contains(LINT_NAME))
+            || trimmed == "#![deny(warnings)]"
+    })
 }
 
 #[cfg(test)]
@@ -232,5 +292,71 @@ mod tests {
             "`allow(missing_docs)` is forbidden by AGENTS.md; write the bilingual \
              doc comment instead: {found:#?}"
         );
+    }
+    /// The three spellings a search for `#[allow(` was measured to miss, plus the
+    /// stronger declarations it wrongly refused.
+    /// 搜索 `#[allow(` 时实测漏掉的三种写法，以及它错误拒绝的更强声明。
+    #[test]
+    fn crate_root_allows_and_second_attributes_are_violations() {
+        let cases: &[(&str, &str)] = &[
+            (
+                "a crate-root allow, which also has no `#[allow(` substring",
+                "#![warn(missing_docs)]\n#![allow(missing_docs)]\n\npub fn probe() {}\n",
+            ),
+            (
+                "a second attribute on the same line",
+                "#![warn(missing_docs)]\n\n#[allow(dead_code)] #[allow(missing_docs)]\npub struct Probe;\n",
+            ),
+            (
+                "an attribute nested in `cfg_attr`",
+                "#![warn(missing_docs)]\n\n#[cfg_attr(all(), allow(missing_docs))]\npub struct Probe;\n",
+            ),
+        ];
+        for (shape, source) in cases {
+            let root = synthetic(&[
+                (
+                    "zzprobe/Cargo.toml",
+                    "[package]\nname = \"nichlink-zzprobe\"\n",
+                ),
+                ("zzprobe/src/lib.rs", source),
+            ]);
+            let found = allow_workarounds(&root);
+            assert!(
+                found
+                    .iter()
+                    .any(|finding| finding.starts_with("zzprobe/src/lib.rs:")),
+                "{shape} must be a violation: {found:?}"
+            );
+            let _ = std::fs::remove_dir_all(&root);
+        }
+    }
+
+    /// A stronger or multi-lint declaration keeps the lint on and is not a missing
+    /// root.
+    /// 更强或含多个 lint 的声明让 lint 保持开启，不算缺失的根。
+    #[test]
+    fn a_stronger_or_multi_lint_declaration_is_accepted() {
+        for declaration in [
+            "#![warn(missing_docs)]",
+            "#![deny(missing_docs)]",
+            "#![warn(missing_docs, missing_debug_implementations)]",
+        ] {
+            let root = synthetic(&[
+                (
+                    "zzprobe/Cargo.toml",
+                    "[package]\nname = \"nichlink-zzprobe\"\n",
+                ),
+                (
+                    "zzprobe/src/lib.rs",
+                    &format!("{declaration}\n\npub fn probe() {{}}\n"),
+                ),
+            ]);
+            let missing = missing_roots(&root);
+            assert!(
+                !missing.iter().any(|path| path == "zzprobe/src/lib.rs"),
+                "`{declaration}` keeps the lint on: {missing:?}"
+            );
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 }

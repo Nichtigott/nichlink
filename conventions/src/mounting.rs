@@ -27,7 +27,7 @@
 
 use std::path::Path;
 
-use crate::{crate_directories, lines, relative, rust_sources};
+use crate::{crate_directories, relative, rust_sources};
 
 /// What the mounting walk found.
 /// 挂载遍历的结果。
@@ -50,29 +50,40 @@ pub fn findings(root: &Path) -> Findings {
             if path.file_name().is_some_and(|name| name == "mod.rs") {
                 found.mod_rs.push(relative(root, &path));
             }
-            for (index, line) in lines(&path).iter().enumerate() {
-                // A splice is the `include!` macro, whatever delimiter it uses and
-                // wherever it sits on the line: matching the exact `include!(` prefix
-                // missed the brace spelling rustc's own diagnostic suggests, so a
-                // splice could ship while the count still read 1. The search runs on
-                // the kernel's masked text, because a workspace test's fixture string
-                // that mentions `include!` is not a mount.
-                // 拼接就是 `include!` 这个宏，无论它用哪种定界符、在行内什么位置：只匹配
-                // `include!(` 前缀会漏掉 rustc 自己建议的花括号写法，于是拼接可以出厂而计数仍是 1。
-                // 搜索跑在内核屏蔽后的文本上，因为工作区测试里提到 `include!` 的夹具字符串不是挂载。
-                let code = nichlink::source::mask_non_code(line);
-                let Some(position) = code.find("include!") else {
-                    continue;
-                };
-                let delimiter = code[position + "include!".len()..].trim_start();
-                if delimiter.starts_with(['(', '[', '{']) {
+            // The splice search runs on the whole masked file, not line by line, and
+            // accepts any run of spaces between the macro name and its `!`. Three
+            // spellings were measured green against the line-based literal search:
+            // `include ! ("x")`, a `!` whose delimiter sits on the next line, and a
+            // comment between the name and the `!` (masking blanks the comment, which
+            // used to destroy the literal `include!`). A splice renumbers faces either
+            // way, so the gate has to see the macro, not one spelling of it.
+            // 拼接搜索跑在整个屏蔽文本上而不是逐行，并接受宏名与 `!` 之间的任意空格。对逐行字面
+            // 搜索实测有三种写法为绿：`include ! ("x")`、定界符位于下一行的 `!`、以及宏名与 `!`
+            // 之间的注释（屏蔽会把注释抹白，过去会破坏字面量 `include!`）。三种写法都会重编面孔
+            // 编号，因此门禁必须看见这个宏，而不是它的某一种拼法。
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+            let masked = nichlink::source::mask_non_code(&text);
+            let mut from = 0usize;
+            while let Some(offset) = masked[from..].find("include") {
+                let at = from + offset;
+                let boundary = at == 0
+                    || !masked[..at]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|previous| previous.is_alphanumeric() || previous == '_');
+                let after = masked[at + "include".len()..].trim_start_matches([' ', '\t']);
+                if boundary && after.starts_with('!') {
+                    let line = masked[..at].matches('\n').count() + 1;
+                    let source_line = text.lines().nth(line - 1).unwrap_or("").trim();
                     found.includes.push(format!(
                         "{}:{} {}",
                         relative(root, &path),
-                        index + 1,
-                        line.trim()
+                        line,
+                        source_line
                     ));
                 }
+                from = at + "include".len();
             }
         }
     }
@@ -150,5 +161,36 @@ mod tests {
             "the single include! must be host!()'s generated plan, found: {:#?}",
             found.includes
         );
+    }
+    /// The three spellings the line-based literal search missed.
+    /// 逐行字面搜索漏掉的三种写法。
+    #[test]
+    fn a_splice_is_seen_however_it_is_spelled() {
+        let cases: &[(&str, &str)] = &[
+            ("a space before the bang", "include ! (\"body.rs\");"),
+            (
+                "a delimiter on the next line",
+                "include!\n        (\"body.rs\");",
+            ),
+            (
+                "a comment between the name and the bang",
+                "include/* spliced */!(\"body.rs\");",
+            ),
+            ("a brace delimiter", "include! { \"body.rs\" }"),
+        ];
+        for (shape, splice) in cases {
+            let root = synthetic(&[(
+                "zzprobe/src/lib.rs",
+                &format!("pub mod spliced {{\n    {splice}\n}}\n"),
+            )]);
+            let found = findings(&root);
+            assert_eq!(
+                found.includes.len(),
+                1,
+                "{shape} must be seen as a splice: {:#?}",
+                found.includes
+            );
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 }
