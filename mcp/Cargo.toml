@@ -7,6 +7,8 @@ license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
 description = "MCP stdio bridge for the five compact NichLink Rust source queries"
+keywords = ["mcp", "json-rpc", "ai", "stdio"]
+categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-mcp"
 

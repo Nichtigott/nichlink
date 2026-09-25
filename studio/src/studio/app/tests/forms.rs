@@ -1,6 +1,7 @@
 //! Add/edit form and registration-face field tests.
 //! 新增/编辑表单与注册面字段测试。
 
+use super::super::plugin_field;
 use super::*;
 use nichlink_run_method::face_field;
 
@@ -142,4 +143,74 @@ fn derived_storage_fields_do_not_open_a_fake_editor() {
     app.handle_overlay_key(KeyEvent::from(KeyCode::Enter));
 
     assert!(matches!(app.overlay, Some(Overlay::Add(ref add)) if !add.editing));
+}
+
+/// Selecting a plugin writes two files, so it takes two presses, and a failure on
+/// the second file puts the first one back: a half-written pair would leave the
+/// entry importing a crate the lock does not record.
+/// 选择插件会写两个文件，因此需要两次按键；而第二个文件失败时会把第一个恢复：写了一半会让
+/// 入口导入一个锁里没有记录的 crate。
+#[test]
+fn a_plugin_selection_takes_two_presses_and_rolls_back_a_half_write() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-plugin-{suffix}"));
+    let plugins = root.join(".nichlink/plugins");
+    std::fs::create_dir_all(&plugins).expect("plugin directory");
+    let entry = plugins.join("user.rs");
+    let lock = plugins.join("user.lock");
+    select_project(root.clone(), root.join("Cargo.toml"), "plugin-app");
+
+    let mut app = App::load();
+    app.handle_key(KeyEvent::from(KeyCode::Char('p')));
+    let Some(Overlay::Plugin(mut plugin)) = app.overlay.take() else {
+        panic!("p should open the Plugin form");
+    };
+    plugin.values[plugin_field::SOURCE] = "user".to_owned();
+    plugin.values[plugin_field::FRAMEWORK] = "nichlink.test".to_owned();
+    plugin.values[plugin_field::PACKAGE] = "demo-plugin".to_owned();
+    plugin.values[plugin_field::VERSION] = "0.1.0".to_owned();
+    plugin.values[plugin_field::CRATE] = "demo_plugin".to_owned();
+    plugin.values[plugin_field::CHECKSUM] = "sha256:00".to_owned();
+    plugin.values[plugin_field::MODE] = "extension".to_owned();
+    app.overlay = Some(Overlay::Plugin(plugin));
+
+    // The first press only arms, and an unrelated key clears the arm.
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
+    assert!(app.event.contains("press s again"), "{}", app.event);
+    assert!(
+        !entry.exists() && !lock.exists(),
+        "one press must not write"
+    );
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
+    assert!(
+        !entry.exists() && !lock.exists(),
+        "another key clears the arm, so this press only arms again"
+    );
+
+    // The lock is a directory, so the second write fails after the first
+    // succeeded, and the entry file must not survive it.
+    // 锁的位置是个目录，因此第二个写入在第一个成功之后失败，而入口文件绝不能留下来。
+    std::fs::create_dir_all(&lock).expect("a directory where the lock belongs");
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
+    assert!(
+        app.event.contains("cannot update user.lock"),
+        "the failure names the file: {}",
+        app.event
+    );
+    assert!(
+        app.event.contains("restored"),
+        "the report says what happened to the other file: {}",
+        app.event
+    );
+    assert!(
+        !entry.exists(),
+        "the entry line must not survive a failed lock write: {}",
+        app.event
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }

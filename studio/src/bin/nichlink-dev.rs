@@ -12,7 +12,7 @@
 use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, Stdio};
+use std::process::{Child, Command, ExitCode, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -61,7 +61,7 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
 
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => return Ok(()),
+            Ok(Some(status)) => return exited(status),
             Ok(None) => {}
             Err(error) => return Err(format!("cannot inspect Studio process: {error}")),
         }
@@ -115,6 +115,23 @@ fn resolve_studio(exe: Option<&Path>, path_env: Option<&OsStr>, workspace_root: 
         }
     }
     workspace_root.join("target/debug").join(name)
+}
+
+/// The supervisor's outcome for a Studio process that has exited.
+/// Studio 进程退出后监督器的结论。
+///
+/// A child that exited non-zero is not a successful session: an editor that died
+/// on startup and one the reader quit look identical from here, and only the exit
+/// status tells them apart. Reporting success for both is what let a crashing
+/// Studio look like a normal end.
+/// 以非零退出的子进程不是一次成功的会话：在这里看，启动即崩的编辑器与读者主动退出的编辑器
+/// 一模一样，只有退出状态能区分它们。两者都报成功，正是崩溃的 Studio 看起来像正常结束的原因。
+fn exited(status: ExitStatus) -> Result<(), String> {
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Studio exited with {status}"))
+    }
 }
 
 fn rebuild(studio_root: &Path) -> Result<(), String> {
@@ -264,7 +281,7 @@ fn relevant_event(event: &notify::Event) -> bool {
 mod tests {
     use notify::{Event, EventKind, event::CreateKind};
 
-    use super::{relevant_event, resolve_studio};
+    use super::{exited, relevant_event, resolve_studio};
 
     /// A throwaway directory for the resolution fixtures, unique per call.
     /// 解析夹具使用的一次性目录，每次调用唯一。
@@ -383,5 +400,28 @@ mod tests {
         assert!(relevant_event(&removed));
         assert!(relevant_event(&renamed));
         assert!(relevant_event(&cargo));
+    }
+
+    /// Run a child that exits with `code` and fold its status the way the loop
+    /// does.
+    /// 跑一个以 `code` 退出的子进程，并按循环的方式折叠它的状态。
+    fn outcome(code: i32) -> Result<(), String> {
+        let status = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("exit {code}"))
+            .status()
+            .expect("run a shell that exits");
+        exited(status)
+    }
+
+    /// A clean quit is a successful session; a crash is not. Reporting success
+    /// for both is what let a Studio that died on startup look like a normal end.
+    /// 正常退出是一次成功会话；崩溃不是。两者都报成功，正是启动即崩的 Studio 看起来像正常
+    /// 结束的原因。
+    #[test]
+    fn a_studio_that_exits_non_zero_is_reported() {
+        assert!(outcome(0).is_ok(), "a clean exit stays successful");
+        let error = outcome(7).expect_err("a non-zero exit must be reported");
+        assert!(error.contains("Studio exited"), "{error}");
     }
 }

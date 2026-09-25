@@ -93,7 +93,14 @@ usage() {
 
 build() {
     printf 'building nichlink-studio\n'
-    (cd "$ROOT" && cargo build -p nichlink-studio --offline)
+    # `--offline` is the local default because this checkout is developed offline.
+    # CI has a network and an empty registry cache on a cold runner, so it passes
+    # an empty value here; the expansion uses `-` rather than `:-` precisely so an
+    # explicitly empty override survives.
+    # `--offline` 是本地的默认值，因为本检出在离线环境下开发。CI 有网络，且冷启动时注册表
+    # 缓存为空，因此它在这里传空值；展开用的是 `-` 而不是 `:-`，正是为了让显式传入的空值
+    # 得以保留。
+    (cd "$ROOT" && cargo build -p nichlink-studio ${NICHLINK_VISUAL_CARGO_FLAGS---offline})
 }
 
 cleanup() {

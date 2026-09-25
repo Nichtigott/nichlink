@@ -16,6 +16,7 @@ use std::path::Path;
 
 use nichlink::lexicon;
 
+use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::entry::{HostEntry, path_mentions_module};
 use super::faces::collect_faces;
 use super::graft_view::{face_declares_plugin, graft_expression_module, string_cut_modules};
@@ -35,21 +36,60 @@ pub(crate) struct SourceScope {
 }
 
 impl SourceScope {
-    pub(crate) fn from_environment(src: &Path, nodes: &[Node], entry: &HostEntry) -> Self {
+    /// Read the scope from the environment, reporting unusable values.
+    /// 从环境读取范围，并报告不可用的取值。
+    ///
+    /// A refused value is a diagnostic and a conservative fallback rather than a
+    /// panic: the build fails either way, and a diagnostic reaches `check --json`
+    /// while a panic leaves its stdout empty. The fallback is the full tree, so a
+    /// reader who ignores the diagnostic still prunes nothing.
+    /// 被拒绝的取值是诊断加保守回退，而不是 panic：两种方式构建都失败，但诊断能到达
+    /// `check --json`，而 panic 会让它的 stdout 一片空白。回退是全树，因此忽略诊断的读者
+    /// 也仍然什么都不剪。
+    pub(crate) fn from_environment(
+        src: &Path,
+        nodes: &[Node],
+        entry: &HostEntry,
+        errors: &mut BuildDiagnostics,
+    ) -> Self {
         let Some(raw) = env::var_os(lexicon::SCOPE_ENV) else {
-            return Self::auto(src, nodes, entry);
+            return Self::auto_reporting(src, nodes, entry, errors);
         };
-        let raw = raw.to_string_lossy();
+        Self::from_raw(&raw.to_string_lossy(), src, nodes, entry, errors)
+    }
+
+    /// Read the scope from one explicit `NICH_LINK_SCOPE` value.
+    /// 从明确的 `NICH_LINK_SCOPE` 取值读取范围。
+    ///
+    /// The value arrives as a parameter rather than from the environment so the
+    /// refusals below can be pinned by tests: `#[test]` threads share the process
+    /// environment, so a test that set it would race every other test.
+    /// 取值作为参数传入而不是就地读环境，使下面这些拒绝能被测试钉住：`#[test]` 线程共享
+    /// 进程环境，设置它的测试会与所有其他测试赛跑。
+    pub(crate) fn from_raw(
+        raw: &str,
+        src: &Path,
+        nodes: &[Node],
+        entry: &HostEntry,
+        errors: &mut BuildDiagnostics,
+    ) -> Self {
         let raw = if let Some((version, values)) = raw.split_once(':') {
             if version.strip_prefix('v') != Some(IDENTITY_SCHEMA) {
-                panic!(
-                    "{} uses identity schema `{version}`, expected `v{IDENTITY_SCHEMA}`",
-                    lexicon::SCOPE_ENV
-                );
+                errors.push(BuildDiagnostic::new(
+                    "scope",
+                    format!(
+                        "{} uses identity schema `{version}`, expected `v{IDENTITY_SCHEMA}`",
+                        lexicon::SCOPE_ENV
+                    ),
+                ));
+                return Self {
+                    roots: None,
+                    reason: "scope-invalid",
+                };
             }
             values
         } else {
-            raw.as_ref()
+            raw
         };
         if raw.trim().is_empty() || raw.trim().eq_ignore_ascii_case("all") {
             return Self {
@@ -58,20 +98,38 @@ impl SourceScope {
             };
         }
         if raw.trim().eq_ignore_ascii_case("auto") {
-            return Self::auto(src, nodes, entry);
+            return Self::auto_reporting(src, nodes, entry, errors);
         }
+        let mut refused = false;
         let ids = raw
             .split(|ch: char| ch == ',' || ch.is_ascii_whitespace())
             .filter(|value| !value.is_empty())
-            .map(|value| {
-                value.parse::<NodeId>().unwrap_or_else(|_| {
-                    panic!(
-                        "{} entry `{value}` is not a 32-digit node identity",
-                        lexicon::SCOPE_ENV
-                    )
-                })
+            .filter_map(|value| match value.parse::<NodeId>() {
+                Ok(id) => Some(id),
+                Err(_) => {
+                    refused = true;
+                    errors.push(BuildDiagnostic::new(
+                        "scope",
+                        format!(
+                            "{} entry `{value}` is not a 32-digit node identity",
+                            lexicon::SCOPE_ENV
+                        ),
+                    ));
+                    None
+                }
             })
             .collect::<BTreeSet<_>>();
+        if refused && ids.is_empty() {
+            // Nothing parsed, so an explicit scope would prune the whole tree.
+            // The diagnostic above already fails the build; keeping everything is
+            // the conservative reading of a value the build refused.
+            // 一个都没解析出来，因此"显式范围"会把整棵树剪光。上面的诊断已经让构建失败；
+            // 对一个被构建拒绝的取值，保留一切是保守的读法。
+            return Self {
+                roots: None,
+                reason: "conservative-fallback",
+            };
+        }
         let mut known = BTreeSet::new();
         collect_node_ids(src, nodes, &mut known);
         let unknown = ids
@@ -79,11 +137,23 @@ impl SourceScope {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
         if !unknown.is_empty() {
-            panic!(
-                "{} contains unknown node identity(s): {}",
-                lexicon::SCOPE_ENV,
-                unknown.join(", ")
-            );
+            errors.push(BuildDiagnostic::new(
+                "scope",
+                format!(
+                    "{} contains unknown node identity(s): {}",
+                    lexicon::SCOPE_ENV,
+                    unknown.join(", ")
+                ),
+            ));
+            // An identity no node owns narrows to nothing, so honouring the value
+            // would prune the whole tree. The diagnostic already fails the build;
+            // keeping everything is the reading that cannot silently lose faces.
+            // 没有任何节点拥有的身份会把范围收窄到空，因此照办会剪光整棵树。诊断已经让构建
+            // 失败；保留一切是不会静默丢掉注册面的读法。
+            return Self {
+                roots: None,
+                reason: "conservative-fallback",
+            };
         }
         Self {
             roots: Some(ids),
@@ -100,8 +170,13 @@ impl SourceScope {
     /// dynamic/generated code is present, the safe result is the full tree.
     /// 逻辑放在构建步骤中，发现和身份计算共用同一套解析与 node identity 实现。源码扫描
     /// 不是完整 rustc 调用图；无法证明注册面或发现动态/生成代码时，安全结果是全树。
-    fn auto(src: &Path, nodes: &[Node], entry: &HostEntry) -> Self {
-        Self::auto_from_entry(src, nodes, entry.path())
+    fn auto_reporting(
+        src: &Path,
+        nodes: &[Node],
+        entry: &HostEntry,
+        errors: &mut BuildDiagnostics,
+    ) -> Self {
+        Self::auto_from_entry_reporting(src, nodes, entry.path(), errors)
     }
 
     /// Derive the scope from one explicit entry source, without reading the
@@ -116,7 +191,19 @@ impl SourceScope {
     /// 入口由外部传入而不是就地解析：剪枝与生成的切口表必须读同一个文件，而两次各自
     /// 独立的解析正是它们开始不一致的原因。测试通过把同一个明确入口交给两个读取者来
     /// 钉住这一点（`a_configured_entry_drives_the_scope_and_the_cut_table`）。
+    /// The entry-derived scope with the findings thrown away (test-only).
+    /// 丢弃发现结果的入口推导作用域（仅测试）。
+    #[cfg(test)]
     fn auto_from_entry(src: &Path, nodes: &[Node], entry: &Path) -> Self {
+        Self::auto_from_entry_reporting(src, nodes, entry, &mut BuildDiagnostics::default())
+    }
+
+    fn auto_from_entry_reporting(
+        src: &Path,
+        nodes: &[Node],
+        entry: &Path,
+        errors: &mut BuildDiagnostics,
+    ) -> Self {
         let Some(entry_source) = fs::read_to_string(entry).ok() else {
             return Self {
                 roots: None,
@@ -126,12 +213,19 @@ impl SourceScope {
         // Graft declarations belong to the host entry. Parse them here so a
         // malformed overlay fails at build time; the plan itself is applied by
         // the host against an external Registry at runtime or release setup.
-        let cuts = graft_entries(&entry_source).unwrap_or_else(|error| {
-            panic!(
-                "invalid graft declaration in `{}`: {error}",
-                entry.display()
-            )
-        });
+        let cuts = match graft_entries(&entry_source) {
+            Ok(cuts) => cuts,
+            Err(error) => {
+                errors.push(BuildDiagnostic::new(
+                    "graft-entry",
+                    format!(
+                        "invalid graft declaration in `{}`: {error}",
+                        entry.display()
+                    ),
+                ));
+                Vec::new()
+            }
+        };
         let faces = collect_faces(src, nodes);
         if faces.is_empty() {
             return Self {
@@ -290,191 +384,5 @@ impl SourceScope {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::discovery::discover_root;
-
-    /// The face files the scope proved live, named relative to `src`.
-    /// 作用域证明存活的注册面文件，路径相对 `src`。
-    fn selected_sources(
-        src: &std::path::Path,
-        nodes: &[super::Node],
-        scope: &super::SourceScope,
-    ) -> Vec<String> {
-        let roots = scope.roots.as_ref().expect("the fixture narrows");
-        let mut sources = super::collect_faces(src, nodes)
-            .into_iter()
-            .filter(|face| roots.contains(&face.id))
-            .map(|face| super::relative_display(src, &face.source))
-            .collect::<Vec<_>>();
-        sources.sort();
-        sources
-    }
-
-    /// A typed cut narrows the scope to the face it names, and a face nobody
-    /// declared is pruned: declaring the slot is what ships the face.
-    /// 类型化切口把作用域收窄到它命名的注册面，没人声明的面会被剪掉：
-    /// 声明槽位才是这个面被发布出来的原因。
-    #[test]
-    fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-scope-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        let src = root.join("src");
-        let entry = src.join("lib.rs");
-        for module in ["a", "b"] {
-            std::fs::create_dir_all(src.join(module)).expect("fixture dir");
-        }
-        std::fs::write(
-            &entry,
-            "nichlink_run_method::host!();\n\
-             nichlink_run_method::static_graft_plan!(\n\
-                 FRAMEWORK,\n\
-                 cut(crate::a::NODE_ID) graft(\"a_fast\"),\n\
-             );\n",
-        )
-        .expect("host entry");
-        for (module, kind) in [("a", "A"), ("b", "B")] {
-            std::fs::write(
-                src.join(format!("{module}/{module}.rs")),
-                format!("crate::root_object! {{\n    kind: {kind},\n}}\n"),
-            )
-            .expect("face file");
-        }
-        let nodes = discover_root(&src);
-        let scope = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
-
-        assert_eq!(
-            selected_sources(&src, &nodes, &scope),
-            ["a/a.rs"],
-            "only the declared slot stays live"
-        );
-        assert_eq!(scope.reason, "auto", "the scope was narrowed, not given up");
-
-        std::fs::remove_dir_all(&root).expect("cleanup");
-    }
-
-    /// The scope and the generated cut table read the entry the build resolved,
-    /// not two independently resolved ones.
-    /// 作用域与生成的切口表读的是构建解析出的同一个入口，而不是各自独立解析出的两个。
-    ///
-    /// The configured value is passed in explicitly because the value itself is
-    /// what the two readers must agree on; reading the process environment here
-    /// would race with every other test in this binary. The fixture makes the two
-    /// entries name different slots, so a reader that ignores the configured value
-    /// keeps `beta` live and reports `beta`'s cut, while a reader that follows it
-    /// keeps `alpha` live and reports `alpha`'s.
-    /// 被指定的值以显式参数传入，因为两个读取者必须一致的就是这个值；在这里读进程环境
-    /// 会与同一二进制里的其他测试竞争。夹具让两个入口声明不同的槽位，因此忽略指定值的
-    /// 读取者会让 `beta` 存活并报告 `beta` 的切口，跟随它的读取者则让 `alpha` 存活并
-    /// 报告 `alpha` 的切口。
-    #[test]
-    fn a_configured_entry_drives_the_scope_and_the_cut_table() {
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-scope-configured-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        let src = root.join("src");
-        for module in ["alpha", "beta", "preview"] {
-            std::fs::create_dir_all(src.join(module)).expect("fixture dir");
-        }
-        // The convention entry — the file that calls `host!()` — declares `beta`.
-        // 约定入口（调用 `host!()` 的文件）声明 `beta`。
-        std::fs::write(
-            src.join("lib.rs"),
-            "nichlink_run_method::host!();\n\
-             nichlink_run_method::static_graft_plan!(\n\
-                 FRAMEWORK,\n\
-                 cut(crate::beta::NODE_ID) graft(\"beta_fast\"),\n\
-             );\n",
-        )
-        .expect("convention entry");
-        // The configured entry declares `alpha` instead.
-        // 被指定的入口改为声明 `alpha`。
-        std::fs::write(
-            src.join("preview/preview.rs"),
-            "nichlink_run_method::static_graft_plan!(\n\
-                 FRAMEWORK,\n\
-                 cut(crate::alpha::NODE_ID) graft(\"alpha_fast\"),\n\
-             );\n",
-        )
-        .expect("configured entry");
-        for (module, kind) in [("alpha", "Alpha"), ("beta", "Beta")] {
-            std::fs::write(
-                src.join(format!("{module}/{module}.rs")),
-                format!("crate::root_object! {{\n    kind: {kind},\n}}\n"),
-            )
-            .expect("face file");
-        }
-
-        let nodes = discover_root(&src);
-        let entry = crate::entry::resolve_host_entry(
-            &src,
-            &nodes,
-            Some(std::path::PathBuf::from("src/preview/preview.rs")),
-        );
-        assert_eq!(entry.path(), src.join("preview/preview.rs"));
-
-        let cuts = crate::host_graft_entries(&entry).enabled;
-        assert_eq!(cuts.len(), 1, "{cuts:?}");
-        assert_eq!(cuts[0].cut, "crate::alpha::NODE_ID");
-
-        let scope = super::SourceScope::auto_from_entry(&src, &nodes, entry.path());
-        assert_eq!(
-            selected_sources(&src, &nodes, &scope),
-            ["alpha/alpha.rs"],
-            "pruning follows the same entry the cut table read"
-        );
-        assert_eq!(scope.reason, "auto", "the scope was narrowed, not given up");
-
-        std::fs::remove_dir_all(&root).expect("cleanup");
-    }
-
-    /// A typed cut whose Rust path names no discovered face is an unreadable
-    /// declaration: the whole tree is kept rather than pruned wrongly.
-    /// 类型化切口的 Rust 路径指不到任何已发现注册面时，声明就是读不懂的：
-    /// 保留整棵树，而不是错误裁剪。
-    #[test]
-    fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-scope-unrecognized-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        let src = root.join("src");
-        let entry = src.join("lib.rs");
-        std::fs::create_dir_all(src.join("a")).expect("fixture dir");
-        std::fs::write(
-            &entry,
-            "nichlink_run_method::host!();\n\
-             nichlink_run_method::static_graft_plan!(\n\
-                 FRAMEWORK,\n\
-                 cut(crate::missing::NODE_ID) graft(\"a_fast\"),\n\
-             );\n",
-        )
-        .expect("host entry");
-        std::fs::write(
-            src.join("a/a.rs"),
-            "crate::root_object! {\n    kind: A,\n}\n",
-        )
-        .expect("face file");
-        let nodes = discover_root(&src);
-        let scope = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
-
-        assert_eq!(scope.roots, None);
-        assert_eq!(scope.reason, "graft-typed-cut-unrecognized");
-
-        std::fs::remove_dir_all(&root).expect("cleanup");
-    }
-}
+#[path = "scope_tests.rs"]
+mod scope_tests;

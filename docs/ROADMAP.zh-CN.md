@@ -36,7 +36,10 @@
 
 ### 4. 构建与发布证据
 
-把确认后的 scope 交给正常 rustc/LLVM/ThinLTO，再比较符号和产物大小。发布可复现的 debug/release 及 1 万、10 万节点基准。
+把确认后的 scope 交给正常 rustc/LLVM/ThinLTO，再比较符号和产物大小。发布可复现的 debug/release 及 1 万、10
+万节点基准。其中一部分在适配器之外已经记下：[`docs/performance-baseline.md`](performance-baseline.md) 记录了 release
+产物的字节与定义符号，以及 1 万、10 万节点的注册与索引耗时——CI 现在把这些当上限来卡。debug 档的对比与按 scope 比符号仍要等适配器，因为现在还不存在一个 scope 可能与
+rustc 不同的东西。
 
 ### 5. 协议稳定化
 

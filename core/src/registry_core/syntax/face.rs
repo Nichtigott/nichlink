@@ -145,8 +145,7 @@ impl std::error::Error for FaceSyntaxError {}
 /// Parse every NichLink face declaration in one Rust source file.
 /// 解析一个 Rust 源文件中的全部 NichLink 注册面声明。
 pub fn parse_faces(source: &str) -> Result<Vec<FaceSyntax>, FaceSyntaxError> {
-    let file =
-        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let file = super::nesting::parse_file(source)?;
     let mut visitor = FaceVisitor {
         faces: Vec::new(),
         error: None,
@@ -234,8 +233,7 @@ fn source_offset(source: &str, location: &SyntaxLocation) -> Result<usize, FaceS
 /// strings, and registration-macro metadata.
 /// 收集可执行表达式使用的路径，排除导入、注释、字符串和注册宏元数据。
 pub fn source_references(source: &str) -> Result<SourceReferences, FaceSyntaxError> {
-    let file =
-        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let file = super::nesting::parse_file(source)?;
     let mut visitor = ReferenceVisitor::default();
     visitor.visit_file(&file);
     Ok(visitor.references)

@@ -9,9 +9,13 @@ use, plus a workspace-only `nichlink-dev` rebuild supervisor behind the
 non-default `dev-supervisor` feature (it rebuilds from a checkout, so an
 installed copy could never work — hence `cargo install` leaves it out).
 
-Run it with `cargo run --manifest-path studio/Cargo.toml`. Set
-`NICH_LINK_PACKAGE_ROOT` to the project directory whose `src/` and plugin
-catalog should be read or edited. Set `NICH_LINK_HOST_MANIFEST` when MIR
+Run it with `cargo run --manifest-path studio/Cargo.toml`, or name the project
+directly: `nichlink-studio /path/to/project` (`--help` lists the argument). With
+no argument it uses `NICH_LINK_PACKAGE_ROOT`, then the working directory when it
+holds a `Cargo.toml`. There is no other fallback on purpose: a launch with no
+project is refused with a message and a non-zero exit rather than opening an
+empty tree over some other directory. Set `NICH_LINK_PACKAGE_ROOT` to the project
+directory whose `src/` and plugin catalog should be read or edited. Set `NICH_LINK_HOST_MANIFEST` when MIR
 inspection and release builds should target a manifest other than
 `<package-root>/Cargo.toml`. `NICH_LINK_NAMESPACE` isolates authored snapshots
 when several libraries share one process.

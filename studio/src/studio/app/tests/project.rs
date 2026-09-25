@@ -237,3 +237,78 @@ fn new_project_starts_with_an_empty_registration_tree() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A project that cannot be resolved is refused by name, never replaced by the
+/// directory this crate was compiled in. That directory is the checkout or the
+/// installed crate's sources, and it is exactly where a launch with nothing open
+/// used to write the next face.
+/// 解析不出的项目按名字被拒绝，绝不由本 crate 编译时所在的目录顶替。那目录是检出目录或
+/// 已安装 crate 的源码，而"没打开任何项目"的启动过去正是把下一个注册面写在那里。
+#[test]
+fn an_unresolvable_project_is_refused_instead_of_falling_back() {
+    let missing = std::env::temp_dir().join("nichlink-studio-missing-project");
+
+    let nothing = resolve_project_from(None, None, None, None, false)
+        .expect_err("no project at all must be an error");
+    assert!(nothing.contains("no project to open"), "{nothing}");
+    assert!(
+        nothing.contains("NICH_LINK_PACKAGE_ROOT"),
+        "the message must say how to point Studio at a project: {nothing}"
+    );
+
+    let explicit = resolve_project_from(None, Some(&missing), None, None, false)
+        .expect_err("a path argument that is not a directory must be refused");
+    assert!(explicit.contains("path argument"), "{explicit}");
+    assert!(
+        explicit.contains("nichlink-studio-missing-project"),
+        "{explicit}"
+    );
+
+    let configured = resolve_project_from(None, None, Some(&missing), None, false)
+        .expect_err("a configured root that is not a directory must be refused");
+    assert!(
+        configured.contains("NICH_LINK_PACKAGE_ROOT"),
+        "{configured}"
+    );
+
+    let selected = resolve_project_from(Some(&missing), None, None, None, false)
+        .expect_err("a selected project that vanished must be refused");
+    assert!(selected.contains("select_project"), "{selected}");
+}
+
+/// The working directory is the only implicit project, and only when it holds a
+/// package: a directory without a manifest is not guessed at.
+/// 当前目录是唯一的隐式项目，而且只在它持有包时成立；没有清单的目录不会被猜。
+#[test]
+fn only_a_working_directory_that_holds_a_package_is_opened() {
+    let current = std::env::temp_dir();
+    assert_eq!(
+        resolve_project_from(None, None, None, Some(&current), true),
+        Ok(current.clone())
+    );
+    assert!(
+        resolve_project_from(None, None, None, Some(&current), false).is_err(),
+        "a directory without a Cargo.toml is not a project"
+    );
+}
+
+/// A relative candidate resolves against the working directory, so a relative
+/// argument or environment value names the directory the shell would name.
+/// 相对候选值相对当前目录解析，因此相对参数或相对环境变量指向 shell 会指向的目录。
+#[test]
+fn a_relative_candidate_resolves_against_the_working_directory() {
+    let root = std::env::temp_dir();
+    let child = root.join("nichlink-studio-relative");
+    std::fs::create_dir_all(&child).expect("fixture directory");
+    assert_eq!(
+        resolve_project_from(
+            None,
+            Some(std::path::Path::new("nichlink-studio-relative")),
+            None,
+            Some(&root),
+            false,
+        ),
+        Ok(child.clone())
+    );
+    let _ = std::fs::remove_dir_all(&child);
+}

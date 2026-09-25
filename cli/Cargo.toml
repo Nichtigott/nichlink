@@ -7,8 +7,16 @@ license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
 description = "NichLink command-line interface: project scaffolding, Studio, and the MCP bridge"
+keywords = ["cli", "cargo-subcommand", "scaffolding", "codegen"]
+categories = ["command-line-utilities", "development-tools::cargo-plugins", "development-tools"]
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-cli"
+# Two binaries ship from this package, so `cargo run -p nichlink-cli` has to be
+# told which one; the README commands name `studio`, and every other documented
+# use is the `nichlink` entry point. `cargo-nichlink` keeps working by name.
+# 本包出厂两个二进制，因此 `cargo run -p nichlink-cli` 必须被告知运行哪一个；README 的命令
+# 指的就是 `studio`，其余文档化用法都是 `nichlink` 入口。`cargo-nichlink` 按名字照常可用。
+default-run = "nichlink"
 autobins = false
 
 [dependencies]

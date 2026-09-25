@@ -11,6 +11,16 @@ kept**. Release order and the reasoning behind the one-line release are in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Release state:** nothing in this file is on crates.io yet. The first release is
+`0.1.0` — the version in `[workspace.package]` — and "1.0" names the milestone in
+[`docs/roadmap-1.0.md`](docs/roadmap-1.0.md), not a published version. Raising the
+line to `1.0.0` is a separate decision that would move the fourteen internal
+`version = "0.1.0"` requirements with it.
+**发布状态：** 本文件里的任何东西都还没有上 crates.io。首个发布的版本是 `0.1.0`——
+即 `[workspace.package]` 里的版本——而"1.0"是
+[`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
+`1.0.0` 是另一个决定，需要连同十四处内部 `version = "0.1.0"` 要求一起移动。
+
 ## [Unreleased]
 
 ### Added
@@ -74,6 +84,84 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   crates: every `src/**/*.rs` module and the manifest's declared README must be
   in the package. `cargo package --list` needs no registry, so this half runs
   before the first publish instead of waiting for it.
+
+- `tools/nichlink-publish --verify-consumers`, the half of a release rehearsal
+  that only the published crates can answer: it builds a throwaway crate outside
+  the checkout and `cargo add`s all nine by version, so resolution runs against
+  the index rather than against local paths, then `cargo check`s them together. A
+  version the index does not serve yet is reported as exactly that, with the
+  command to run after publishing, instead of as a failure of the script.
+- `tools/nichlink-publish --check-table`, which compares the tool's dependency and
+  level tables against the manifests that decide the real publish order: manifests
+  against the dependency table, the dependency table against the level order, and
+  no crate listed before something it depends on. It needs no network, so the
+  `features` CI job runs it on every push as well as the release workflow.
+- `.github/workflows/release.yml`, triggered by a `v*` tag: it stops before
+  uploading when the tag does not name the workspace version, then runs the
+  all-features battery, `--check-table`, the package audit and the release-artifact
+  audit, and only then publishes in dependency order and verifies that a consumer
+  outside the checkout can resolve the result. `workflow_dispatch` runs every
+  check without publishing, which is how the first release can be rehearsed
+  before the tag exists.
+- The nesting guard now measures the shape that took a second pass to find: a
+  **linear token run** folded into one nested expression or type with no delimiter
+  or angle bracket to count. Seven shapes still aborted the process before this —
+  `& & & …`, `&mut …`, `&'a …`, `* * * …`, `- - - …`, `! ! ! …`, `|| || …`, and
+  `1 + 1 + …` — and the last one is why the guard is about the *tree* rather than
+  only the parse: a binary chain is parsed by a loop, but the left-nested
+  `ExprBinary` it builds recurses once per operator in `Drop`, so the process died
+  on the way out of a parse that had succeeded. Runs are separated by `,`, `;` and
+  brace groups (parentheses and brackets do not separate one, so `x.f().f()…` is
+  counted), the limit is 1024 tokens — sixteen times below the smallest run
+  measured to survive a 256 KiB stack — and `core/tests/nesting_budget.rs` feeds
+  every one of the workspace's 318 Rust files to the guarded entry point to prove
+  the limit refuses nothing this repository ships. `deep_input_tests.rs` carries
+  one case per shape.
+- `examples/control-button/tests/static_plan_allocations.rs`, which measures the
+  release read path's heap allocations with a counting global allocator instead of
+  inferring them from the code shape. Reading the built-in plan allocates nothing
+  (0 allocations, 0 bytes across `builtin_static_plan()`, both slices, `find` hit
+  and miss, `children_of`, and a full walk), and `overlay_static` — not free, since
+  it clones the tree and builds its visited-cut set — builds no `GraftPlan` and
+  costs less than the dynamic spelling of the same cuts (60 allocations against 77
+  for one cut, 107 against 138 for two). The file holds exactly one test because
+  the counter is process-global and libtest threads tests separately.
+- `tools/nichlink-external-rehearsal`, which makes the external-path rehearsal
+  reproducible: it copies the two example hosts outside the checkout, repoints
+  their path dependencies here, detaches them from the workspace and builds and
+  tests them from scratch in their own `target/`. The example host's 27 tests pass
+  there, and the built CLI checks that external project (`check: ok`). It is what
+  catches a host layout assumption that only holds in-tree, and CI runs it on one
+  matrix cell.
+- `plugin-host/tests/wasm_table_cost.rs`: what a Wasm table actually costs the
+  host, measured with a counting global allocator instead of estimated. A
+  function reference is 8 bytes, so the default `table_elements` ceiling of 4096
+  is 32 KiB, the hundred-million-entry table `a_huge_table_is_refused` pins would
+  have been 762 MiB, and the limiter refuses that module after 5 225 bytes of peak
+  allocation because it denies the table before it exists. The same check settled
+  which limit does the work: wasmi's `EnforcedLimits::strict()` caps how many
+  tables and element segments a module may declare, not how large one table may
+  grow, so `WasmLimits::table_elements` is the only bound on table size.
+- Two observation tests in `studio/src/studio/app/tests/evidence.rs` that replace
+  an argument about `CallEvidence::Live` with a measurement: with the shipped demo
+  trace installed, no edge of a real project classifies as `Live` — and the test
+  asserts that the trace is installed and that its nodes belong to no node of the
+  loaded project, so it cannot pass by having no trace at all. Install a trace
+  over the loaded faces and the same enumeration reports exactly the edge that
+  trace recorded. `Live` is thus not dead code; it is unreachable for a real
+  project only because Studio ingests no real trace yet.
+- Budgets in `run_method/examples/scale_audit.rs`: 40 µs per node registered and
+  20 µs per node indexed, roughly eight times the measured values and overridable
+  with `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US`, so an
+  order-of-magnitude regression fails the run instead of only printing a larger
+  number.
+- Three steps in the `features` CI job for gaps no other job covered: clippy over
+  `--all-targets --all-features`, the tmux visual check (`tools/nichlink-visual
+  home graph tree-demo`, where each capture must be non-empty), and a
+  `tools/nichlink-publish` dry run.
+- `docs/performance-baseline.md`: what registration and indexing cost at 10k and
+  100k nodes, what the release artifacts cost in bytes and defined symbols, and
+  the commands that re-measure both.
 
 ### Changed
 
@@ -258,6 +346,157 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The documentation gate now parses Rust fenced in `///` doc comments, not only
+  in markdown. Rustdoc skips a block tagged `ignore`, so a macro-usage example
+  that can never be a doctest of its crate was shown to every reader and checked
+  by nothing; the 24 face-macro examples are now tagged `rust,ignore` and 21 of
+  them are parsed by the gate (the other three are shaped by a macro matcher and
+  carry an explicit `macro-input` tag, with the reason stated where the gate
+  reads it).
+- `atomic_write` uses a unique temporary name instead of a fixed
+  `<file>.nichlink.tmp`, which it used to delete before reuse — a sibling that
+  happened to carry that name was destroyed.
+- A graft plan with a repeated key is refused, as every other reader in the
+  workspace refuses a repeated field; the second value used to win silently.
+- The built-in Studio sample records one observed local, so the DATA panel can
+  show a value rather than the placeholder it rendered forever.
+- The nine manifests carry `keywords` and `categories`, and the two places that
+  counted the `publish = false` members say three (the two example hosts and
+  `conventions`). `assert_static_registration` documents its panic and its
+  relationship to the runtime rule check, and `MirGraph::from_mir_text` documents
+  that text which is not MIR yields an empty graph.
+- The changelog no longer claims a release that has not happened, and the crate
+  documentation matches the code. The `0.1.0` section said all nine crates were
+  published while nothing is on crates.io; it now says the first release is not
+  cut yet, and the header states the version line once — the first release is
+  `0.1.0`, "1.0" is the milestone name, and raising the line means moving the
+  fourteen internal requirements with it. The README's Studio keys no longer
+  list a comparison page that was removed (and now list `p`), `debug_method` is
+  no longer credited with running the MIR subprocess, the install section says
+  plainly that only the Git source resolves today, the `cargo run -p
+  nichlink-cli` commands work again (`default-run`), the MCP README no longer
+  promises stderr diagnostics, and `## Boundaries` records the face-layout rule
+  and the plugin-trust boundary.
+- A verified plugin signature is reachable, so the official channel can admit
+  anything at all. `PluginArtifact::verify_artifact` always recorded the digest
+  assurance while the official channel requires the signature assurance, so the
+  lane failed closed and the control the threat model names never ran. The new
+  `PluginArtifact::verify_signed` runs the whole policy chain — digest,
+  revocation, official key, signature — and records the stronger assurance.
+  Revocation is therefore consulted before a signature is accepted.
+- `nichlink-dev` reports a Studio that exits non-zero, instead of calling a crash
+  a successful session.
+- A Wasm plugin can no longer buy host memory through a table, and its artifact is
+  bounded before compilation. The declared memory ceiling does not bound a table —
+  a table is a separate, eagerly instantiated array of function references, so
+  `(table 100000000 funcref)` cost hundreds of megabytes outside `memory_bytes`.
+  `WasmLimits` now carries `table_elements` and `max_module_bytes`, and modules
+  compile under wasmi's own strict engine limits instead of unlimited defaults.
+- A process plugin that keeps writing after its answer still delivers that
+  answer. The host read one frame and stopped, so a child writing past the pipe
+  buffer blocked, the host waited for an exit that could not come, killed it at
+  the deadline and reported `Timeout` while discarding the response it already
+  held. The answer is sent on first and the rest of stdout is drained to EOF —
+  the rule stderr already followed.
+- The MCP bridge cannot read outside the source root it was pointed at, and it no
+  longer exits zero when its transport fails. A directory symlink under the root
+  was followed because the walk asked `is_dir` and the read only compared path
+  prefixes; both now go through the canonical path, and a direct request for an
+  escaping path is still refused by name. A read or write failure on the stdio
+  transport is returned instead of ending the loop quietly, so a client that
+  cannot be answered no longer sees a successful session.
+- `nichlink grafts` fails when it cannot answer its question instead of answering
+  part of it. An unreadable source tree, an unreadable host entry and a plans
+  directory that exists but cannot be read now make the command exit non-zero
+  after writing whatever was readable, because the declaration column would
+  otherwise be a guess. A plan whose text is simply broken is still a successful
+  report of a broken plan.
+- A generated tree that cannot be written is reported rather than panicking out
+  of a structured caller. A build script still stops with the reason — it has
+  nowhere to render a diagnostic, because the generated tree is what would carry
+  it — while `check --json` reports it as an `out-dir` diagnostic.
+- A runtime check whose numeric bounds the runtime cannot state exactly is
+  refused instead of answered with a guess. The comparison rounded both bounds
+  through `f64`, so `number_in_range(9007199254740993, 9007199254740993)`
+  accepted `9007199254740992.0`, a number below its own minimum.
+- The source walk stops at a depth bound instead of overflowing the stack. It is
+  the workspace's only recursive traversal, and the kernel takes its filesystem
+  facts from the caller, so it cannot canonicalize a path to tell a link that
+  points at an ancestor from a directory that is simply deep; 128 directories is
+  far past any real layout, and a tree that reaches it is reported.
+- `function_symbols` counts lines in one forward pass. It re-counted from byte
+  zero for every function it found, which made the pass quadratic in the number
+  of functions — the shape MCP's index walks.
+- A host crate with nested faces type-checks under the IDE's `rust_analyzer` cfg.
+  `rust-analyzer` applies `#[path]` only at the top level, so every nested face is
+  loaded a second time as a crate-root shadow; in that shadow `super` is the crate
+  root, while the rule a registry-owning face derives names a module beside its
+  own file, so `E0433 cannot find registry_rule in super` failed the whole crate
+  in the editor's view. The resolver now answers both tools: `rustc` still
+  compiles the sibling path verbatim, and the IDE gets the fallback instead. The
+  check runs in CI (`IDE mirror (rust_analyzer cfg)`), because no other step
+  compiled that cfg.
+- Deleting an external graft record takes two presses, and a record whose text
+  does not parse can be deleted at all. One `d` used to move the directory
+  immediately, and the delete path read the plan first, so a broken record — the
+  one a reader most needs to remove — could never be removed. The first `d` now
+  arms and names the record, any other key clears the arm, and the second `d`
+  moves it. Selection writes (the plugin form) work the same way, and a failure
+  on the second of its two files puts the first one back.
+- A new project resolves a relative directory against the project that is open,
+  not against the directory Studio was started from, and a scaffold that fails
+  part-way leaves nothing behind. A pre-existing directory is not deleted: the
+  error says a partial project was left in it instead.
+- Studio refuses to start with no project to open, instead of showing an empty
+  tree and exiting zero. The old resolution fell back to the directory this crate
+  was compiled in — the checkout, or the installed crate's sources — so a launch
+  from anywhere else looked healthy while the next authoring command wrote a new
+  face into NichLink's own tree. The rule now takes the session's selection, then
+  a path argument, then `NICH_LINK_PACKAGE_ROOT`, then the working directory when
+  it holds a `Cargo.toml`, and refuses every candidate that names something
+  unusable by name. `nichlink-studio` also accepts `[PROJECT]` and `--help`, and a
+  failed launch prints one line and exits non-zero before the terminal is taken
+  over.
+- Rewriting a face keeps its previous text where the reader can find it. The
+  editor rebuilds a file from the fields it models, so anything hand-added is not
+  in the result; the write was atomic, but the loss was silent and permanent. The
+  previous text now lands under the same `.nichlink/trash/` the delete path
+  already uses, and the message names the backup path. `delete_module` moved to
+  its own module in the process, which paid for the addition: the operations page
+  is still inside the size ratchet.
+- A misconfigured entry or scope is a diagnostic instead of a panic.
+  `NICH_LINK_ENTRY` naming no file, a malformed `application!` declaration, an
+  `application!` entry that is not `crate::…` or resolves to nothing, a
+  `NICH_LINK_SCOPE` value with the wrong schema or an identity no node owns, and a
+  malformed graft declaration in the entry all used to panic. They failed the
+  build, but took the build script down with them and left `check --json`
+  printing nothing at all. Each now reports a diagnostic (`entry`, `scope`,
+  `graft-entry`) and falls back conservatively — Cargo's convention, the full
+  tree, an empty cut table — so one run reports every problem it can find, and no
+  refused configuration can silently prune faces away. The scope value is parsed
+  by a pure `SourceScope::from_raw` so the refusals are pinned without mutating
+  the process environment.
+- An ordinary module beside the registration faces no longer fails the build. Any
+  flat `.rs` under a host's `src/` — `src/helpers.rs`, say — used to panic with a
+  layout message, from the host's own `cargo build` as well as from every
+  `nichlink` command that reads the tree, because discovery treated such a file
+  as a mislaid registration face. Discovery now asks the question the rest of the
+  build asks (`parse_face` returning `Ok(None)` means "no face here"), skips
+  ordinary modules in silence, and reports a file that really is a face as a
+  `face-layout` diagnostic naming the path and the layout it belongs in — so
+  `check --json` produces its document instead of an empty stdout. A face that
+  does not parse is reported the same way (`face-syntax`), before the stages that
+  decode fields, which now skip it instead of aborting the process.
+- A deeply nested source no longer aborts the process. `syn` is recursive descent
+  with no depth guard, and `proc-macro2` protects only its lexer, so
+  `parse_faces` on tens of thousands of nested delimiters (or a
+  `Vec<Vec<…>>` chain) ended in `fatal runtime error: stack overflow` — a
+  SIGABRT that no `Result` can report and no `catch_unwind` can catch. The three
+  `syn::parse_file` entry points now run a nesting scan first, measured on
+  `proc-macro2`'s own token stream so brackets inside string literals and
+  comments cannot be mistaken for nesting, with the limit at 128 — `rustc`'s own
+  default `recursion_limit`. Four shapes are pinned by
+  `core/src/registry_core/syntax/deep_input_tests.rs`.
 - The process backend no longer has unbounded blocks. Three were measured and
   removed: a `try_wait` poll that never drained stdout, so a healthy child
   writing more than the pipe buffer was killed and reported as `Timeout` (the
@@ -310,9 +549,23 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`RecordReport::SelectorDirectoryMismatch` is gone), and a record whose
   identity and path name different faces.
 
-## [0.1.0] - 2026-09-23
+- `tools/nichlink-publish` read its own dependency table word-wise, so a crate
+  with more than one internal dependency reported only the first — `nichlink-cli`
+  was checked against `nichlink-build-method` alone — and the guard that refuses
+  to publish a crate before its dependencies are on the index was effectively off.
+  The same traversal also handed back an edge line's dependencies as crates of
+  their own, so nine table lines produced fourteen nodes. Both tables are now read
+  as whole lines, and `--check-table` compares them against the manifests: the
+  first run found a real drift, `nichlink-cli` depending on `nichlink-core`
+  directly while the table listed only the other three. The same check reads
+  workspace members with `awk` rather than a `sed` address range, because a sed
+  range does not test its end address on the start line: the one-line `members`
+  array made the range run on to `[workspace.package]`, whose name then entered
+  the member list — invisible only because no directory of that name exists.
+## [0.1.0] — not published yet
 
-First release. All nine crates are published together in dependency order:
+The first release, not cut yet. All nine crates go out together in dependency
+order when it is:
 `nichlink-core` → `nichlink-macro` / `nichlink-build-method` / `nichlink-mcp`
 → `nichlink-run-method` → `nichlink-debug-method` / `nichlink-plugin-host`
 → `nichlink-studio` → `nichlink-cli`. Dependency requirements are written as
@@ -335,8 +588,8 @@ caret `0.1.0`, so a patch release does not force dependents to republish.
 - **`nichlink-mcp`**: the read-only MCP stdio bridge for five source queries.
 - **`nichlink-cli`**: the unified `nichlink` / `cargo-nichlink` binaries.
 
-Known limits for this line are in the root `README.md` and
-[`docs/threat-model.md`](docs/threat-model.md). Version-dependent behaviour
+Known limits for this line are in the root `README.md`'s `## Boundaries`
+section and [`docs/threat-model.md`](docs/threat-model.md). Version-dependent behaviour
 such as the kind-only `registry_name` derivation is recorded in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md).
 
@@ -396,6 +649,56 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - `tools/nichlink-package-audit` 现在检查九个 crate 的包**内容**：每个 `src/**/*.rs` 模块与
   清单声明的 README 都必须在包里。`cargo package --list` 不需要 registry，因此这一半在首次
   发布之前就生效，而不是等它。
+
+- `tools/nichlink-publish --verify-consumers`：发布演练中只有已发布的 crate 才答得出来的那一半。
+  它在本检出之外建一个一次性 crate，按版本 `cargo add` 九个 crate（因此解析发生在 index 上而不是
+  本地路径上），再一起 `cargo check`。index 上还没有的版本会如实报成"尚未发布"并给出发布后该跑的
+  命令，而不是报成脚本失败。
+- `tools/nichlink-publish --check-table`：把工具里的依赖表与层表同决定真实发布顺序的清单对比——
+  清单对依赖表、依赖表对层顺序、以及"没有 crate 排在自己的依赖之前"。它不需要网络，因此
+  `features` CI 任务每次 push 都会跑，发布工作流也会跑。
+- `.github/workflows/release.yml`：由 `v*` tag 触发。tag 与 workspace 版本不一致时在上传前停下，
+  然后跑全特性门禁、`--check-table`、包审计与产物审计，最后才按依赖顺序发布，并验证本检出之外的
+  消费者能解析这次发布。`workflow_dispatch` 只跑全部检查而不发布——首次发布因此可以在 tag 存在
+  之前先演练一遍。
+- 嵌套守卫现在量到第三种形状，它是第二轮才被找到的：**线性 token 串**——被折叠成一个嵌套表达式
+  或类型、却没有定界符或尖括号可数的 token 串。在这之前仍有七种形状会打死进程：
+  `& & & …`、`&mut …`、`&'a …`、`* * * …`、`- - - …`、`! ! ! …`、`|| || …` 以及 `1 + 1 + …`；
+  最后一条正是"这件事关乎**树**而不只是解析"的原因：二元链是用循环解析的，但它建出的左嵌套
+  `ExprBinary` 的 `Drop` 每个运算符递归一层，于是进程在离开一次**已经成功**的解析时死掉。串以
+  `,`、`;` 与花括号组为分隔（括号与方括号不分隔，因此 `x.f().f()…` 会被数到），上限 1024 个
+  token——比"在 256 KiB 栈上观察到能活下来的最小串"还低十六倍——并由新增的
+  `core/tests/nesting_budget.rs` 把工作区里 318 个 Rust 文件全部喂给带守卫的入口，证明这个上限
+  不会拒绝本仓库出厂的任何文件。`deep_input_tests.rs` 为每种形状留了一条用例。
+- 新增 `examples/control-button/tests/static_plan_allocations.rs`：用计数式全局分配器实测发布读
+  路径的堆分配，而不是从代码形状推断。读内置计划完全不分配（`builtin_static_plan()`、两个切片、
+  `find` 命中与落空、`children_of`、以及遍历全部面合计 0 次分配、0 字节）；`overlay_static`
+  并不免费（它会克隆树并建立已访问切口集合），但不构造 `GraftPlan`，且比同样切口的动态写法便宜
+  （一个切口 60 次对 77 次，两个切口 107 次对 138 次）。该文件恰好只放一条测试，因为计数器是进程
+  全局的，而 libtest 会把测试放在不同线程上。
+- 新增 `tools/nichlink-external-rehearsal`，让"外部路径演练"可复跑：它把两个示例宿主复制到
+  检出之外、把它们的路径依赖指向这里、让它们脱离工作区，并在自己的 `target/` 里从零构建与测试。
+  示例宿主的 27 条测试在那里全部通过，构建出的 CLI 也能检查那个外部项目（`check: ok`）。它抓的
+  是"只在树内成立的宿主布局假设"，CI 在一个矩阵单元上跑它。
+- 新增 `plugin-host/tests/wasm_table_cost.rs`：一张 Wasm 表在宿主一侧到底花多少，用计数式
+  全局分配器实测而不是估计。一个函数引用是 8 字节，因此 `table_elements` 的默认上限 4096 是
+  32 KiB，而 `a_huge_table_is_refused` 钉住的一亿条目表本来会是 762 MiB；限制器在峰值 5 225
+  字节之后就拒绝了那个模块，因为它在表存在之前就拒绝。同一次核对还确定了是哪条限制在起作用：
+  wasmi 的 `EnforcedLimits::strict()` 限制的是一个模块可以声明多少张表与多少个元素段，而不是
+  单张表能长到多大，因此 `WasmLimits::table_elements` 是表大小的唯一约束。
+- 新增两条运行观察 `studio/src/studio/app/tests/evidence.rs`，把关于 `CallEvidence::Live` 的
+  论证换成实测：装上出厂的演示追踪后，真实工程里没有任何一条边被判为 `Live`——而且测试断言的
+  是"追踪确实装上了、且它的节点不属于已加载工程的任何节点"，因此它不会因为"根本没有追踪"而
+  通过。换成针对已加载注册面的追踪后，同一份枚举恰好报出那条追踪记录过的边。所以 `Live`
+  不是死代码；它对真实工程不可达的唯一原因是 Studio 目前不载入真实追踪。
+- `run_method/examples/scale_audit.rs` 现在带预算：注册 40 µs/节点、索引 20 µs/节点，约为实测值
+  的八倍，可用 `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US` 覆盖，因此数量级回归会
+  让运行失败，而不是只打印一个更大的数字。
+- `features` CI 任务新增三步，补上没有其他任务覆盖的缺口：`--all-targets
+  --all-features` 的 clippy、tmux 视觉检查（`tools/nichlink-visual home graph tree-demo`，
+  每份 capture 必须非空），以及 `tools/nichlink-publish` 的 dry-run。
+- 新增 `docs/performance-baseline.md`：10k/100k 节点下注册与索引的耗时、release 产物按字节与
+  定义符号计的规模，以及重新测量两者的命令。
 
 变更：
 
@@ -513,6 +816,97 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- 文档门禁现在也解析 `///` 文档注释里的 Rust 围栏，而不只是 markdown。rustdoc 会跳过标了
+  `ignore` 的块，因此一个永远无法成为本 crate doctest 的宏用法示例会给每个读者看到、却没有任何
+  程序检查；24 个注册面宏示例现在标为 `rust,ignore`，其中 21 个进入门禁解析（另外 3 个的形状由宏
+  匹配器决定，带显式的 `macro-input` 标记，理由写在门禁能读到的地方）。
+- `atomic_write` 改用唯一临时名，不再用固定的 `<file>.nichlink.tmp`——它过去会在复用前删掉该名字，
+  于是一个恰好带着它的同级文件会被销毁。
+- 重复键的 graft 计划会被拒绝，正如本工作区其他每个读取者都拒绝重复字段；过去第二个取值静默获胜。
+- Studio 的内置样本记录一个被观测到的局部值，因此 DATA 面板能显示数值，而不是它一直渲染的占位。
+- 九个清单带上 `keywords` 与 `categories`；两处统计 `publish = false` 成员的地方改为三个（两个示例
+  宿主与 `conventions`）。`assert_static_registration` 写明了它的 panic 与它和运行期规则校验的关系，
+  `MirGraph::from_mir_text` 写明"不是 MIR 的文本得到空图"。
+- CHANGELOG 不再声称一次没有发生的发布，crate 文档也与代码对齐。`0.1.0` 那一节曾说九个 crate
+  已发布，而 crates.io 上什么都没有；现在它说首次发布尚未切割，并由头部一句话说清版本线——
+  首个发布是 `0.1.0`，"1.0"是里程碑名，抬版本线要连同十四处内部要求一起移动。README 的 Studio
+  键位不再列出已删除的对比页（并补上了 `p`），`debug_method` 不再被说成运行 MIR 子进程，安装段
+  明说今天只有 Git 源能解析，`cargo run -p nichlink-cli` 那两条命令重新可用（`default-run`），
+  MCP README 不再承诺 stderr 诊断，`## Boundaries` 记录了注册面布局规则与插件信任边界。
+- 已验证的插件签名现在可达，因此官方通道终于能接纳任何东西。`PluginArtifact::verify_artifact`
+  永远记录摘要等级，而官方通道要求签名等级，于是那条通道失败关闭、威胁模型点名的控制从未运行。
+  新的 `PluginArtifact::verify_signed` 跑完整条策略链——摘要、撤销、官方密钥、签名——并记录更强
+  的等级。因此撤销在被接受的签名之前就被检查。
+- `nichlink-dev` 现在会报告以非零退出的 Studio，而不是把一次崩溃称作成功会话。
+- Wasm 插件再也无法通过表买到宿主内存，且工件在编译之前就有上界。声明的内存上限并不约束表
+  ——表是一块独立的、即时实例化的函数引用数组，因此 `(table 100000000 funcref)` 会在
+  `memory_bytes` 之外花掉数百兆。`WasmLimits` 现在带 `table_elements` 与 `max_module_bytes`，
+  并且模块在 wasmi 自身的严格引擎限制下编译，而不是默认的无限。
+- 已经给出答案却继续写入的进程插件仍会交付那个答案。宿主过去读一帧就停下，于是写得超过管道
+  缓冲的子进程阻塞、宿主去等一个不可能到来的退出、在超时点杀掉它并报出 `Timeout`，同时丢掉
+  它其实已经拿到的响应。现在答案先送出，stdout 的其余部分排空到 EOF——这正是 stderr 早已遵循
+  的规则。
+- MCP 桥读不到它被指向的源码根之外，且传输失败时不再以 0 退出。根下的目录符号链接过去会被
+  跟随，因为遍历问的是 `is_dir` 而读取只比较路径前缀；两者现在都经规范路径，而对逃逸路径的
+  直接请求仍会按名字被拒绝。stdio 传输上的读或写失败会被返回，而不是安静地结束循环，因此
+  一个服务不了的客户端不会看到"会话成功"。
+- `nichlink grafts` 在答不出问题时失败，而不是只答一部分。读不了的源码树、读不了的宿主入口、
+  以及存在却读不了的计划目录，现在都会让命令在写出可读部分之后以非零退出，因为声明那一列否则
+  就是猜的。文本本身损坏的计划仍然是一次成功的"计划已损坏"报告。
+- 写不成的生成树会被报告，而不是从结构化调用方那里 panic 出去。构建脚本仍带着原因停下——它
+  没有地方渲染诊断，因为生成树正是本该承载诊断的东西——而 `check --json` 把它当作
+  `out-dir` 诊断报出。
+- 运行期检查中，运行期无法精确说出的数值边界会被拒绝，而不是用猜测作答。旧的比较把两个边界
+  都经 `f64` 舍入，因此 `number_in_range(9007199254740993, 9007199254740993)` 会接受
+  `9007199254740992.0`——一个低于它自己下限的数。
+- 源码遍历在深度上限处停下，而不是栈溢出。它是 workspace 唯一的递归遍历，而内核的文件系统
+  事实来自调用方，因此无法 canonicalize 路径来区分"指向祖先的链接"与"确实很深的目录"；
+  128 层远超任何真实布局，达到它的树会被报告。
+- `function_symbols` 用一次前向扫描数行。它过去为找到的每个函数都从第 0 字节重数一遍，使这趟
+  遍历的复杂度与函数个数相乘——而 MCP 的索引正是按那种形状遍历的。
+- 含嵌套面的宿主 crate 现在能在 IDE 的 `rust_analyzer` cfg 下通过类型检查。`rust-analyzer`
+  只在顶层应用 `#[path]`，因此每个嵌套面都会被第二次载入为 crate 根影子；影子里的 `super` 是
+  crate 根，而拥有注册机的面派生的规则命名的是它自己文件旁边的模块，于是
+  `E0433 cannot find registry_rule in super` 让整个 crate 在编辑器视图里失败。解析器现在为两种
+  工具各答一次：`rustc` 仍然逐字节编译那条同目录路径，IDE 拿到的是兜底值。这项检查进了 CI
+  （`IDE mirror (rust_analyzer cfg)`），因为此前没有任何步骤编译过这条 cfg。
+- 删除一条外部 graft 记录需要两次按键，而文本解析不了的记录现在也删得掉。过去一次 `d` 就
+  立刻移动目录，且删除路径先读计划，因此坏记录——读者最需要删掉的那一种——永远删不掉。现在
+  第一次 `d` 只进入待删状态并点名该记录，任何其他键解除，第二次 `d` 才移动。选择类写入（插件
+  表单）同样如此，而它两个文件中第二个写失败时会把第一个恢复回去。
+- 新建项目的相对目录相对**打开的项目**解析，而不是 Studio 启动时所在的目录；脚手架中途失败
+  不再留下任何东西。本来就存在的目录不会被删除：错误会说"里面留下了部分项目"。
+- 没有可打开的项目时 Studio 拒绝启动，而不是显示一棵空树并以 0 退出。旧的解析会回退到本
+  crate 编译时所在的目录——检出目录，或已安装 crate 的源码——因此从别处启动看起来一切正常，
+  而下一条创作命令会把新注册面写进 NichLink 自己的树里。规则现在依次取：本会话的选择、路径
+  参数、`NICH_LINK_PACKAGE_ROOT`、持有 `Cargo.toml` 的当前目录，并把每个指不到东西的候选按
+  名字拒绝。`nichlink-studio` 另外接受 `[PROJECT]` 与 `--help`；启动失败会打印一行并在接管
+  终端之前以非零退出。
+- 重写注册面时把先前的文本留在读者找得到的地方。编辑器用自己建模的字段重建文件，因此手工
+  加进去的内容不在结果里；写入本身是原子的，但那次丢失既静默又永久。现在先前的文本落在删除
+  路径本就使用的 `.nichlink/trash/` 下，且消息点出备份路径。顺带把 `delete_module` 拆成独立
+  模块，正好付掉这次新增的代价：operations 页仍在尺寸棘轮之内。
+- 入口或范围配置错误是诊断而不是 panic。`NICH_LINK_ENTRY` 指不到文件、畸形的
+  `application!` 声明、不以 `crate::` 开头或解析不到的 `application!` 入口、schema 不对或
+  含有任何节点都不拥有的身份的 `NICH_LINK_SCOPE` 取值、以及入口里畸形的 graft 声明，过去
+  全都会 panic：构建确实失败了，但它把构建脚本一起打死，并让 `check --json` 什么都不打印。
+  现在每一处都给出诊断（`entry`、`scope`、`graft-entry`）并**保守回退**——Cargo 约定、全树、
+  空切口表——因此一次运行能报出它查得到的每个问题，而任何被拒绝的配置都不可能静默把注册面
+  剪掉。范围取值由纯函数 `SourceScope::from_raw` 解析，因此这些拒绝无需改动进程环境即可钉住。
+- 注册面旁边的普通模块不再让构建失败。宿主 `src/` 下任何平铺 `.rs`——比如
+  `src/helpers.rs`——过去会以布局消息 panic，宿主自己的 `cargo build` 与每条读取该树的
+  `nichlink` 命令都一样，因为发现过程把这种文件当成了放错位置的注册面。现在发现过程问的是
+  构建其余部分问的同一个问题（`parse_face` 返回 `Ok(None)` 即"这里没有面"），普通模块静默
+  跳过，而确实是面的文件变成 `phase=face-layout` 诊断并点出路径与它该在的布局——因此
+  `check --json` 产出的是文档而不是空白 stdout。解析不了的面同样被报告（`face-syntax`），
+  且在解码字段的各阶段之前，那些阶段现在跳过它而不是打死进程。
+- 深层嵌套的源码不再打死进程。`syn` 是无深度守卫的递归下降解析器，而 `proc-macro2` 只保护
+  它自己的词法器，因此对几万层嵌套定界符（或一条 `Vec<Vec<…>>` 链）调用 `parse_faces` 会以
+  `fatal runtime error: stack overflow` 结束——那是一次 SIGABRT，任何 `Result` 都报不出来、
+  `catch_unwind` 也拦不住。三个 `syn::parse_file` 入口现在先跑一次嵌套扫描，量在 `proc-macro2`
+  自己的 token 流上，因此字符串字面量与注释里的括号不会被误当成嵌套；上限取 128——`rustc`
+  自己的默认 `recursion_limit`。四种形状由
+  `core/src/registry_core/syntax/deep_input_tests.rs` 钉住。
 - 进程后端不再有无限阻塞。三处都经实测后移除：从不排空 stdout 的 `try_wait` 轮询（写得超过
   管道缓冲的健康子进程会被杀掉并报成 `Timeout`，实测边界是 65 536 字节的帧成功、65 537 字节
   超时）；发生在超时启动之前的 `stdin` 写入（不读 stdin 的子进程会把调用方钉在超时之外，1 MiB
@@ -547,13 +941,20 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   （一次报出全部不可读计划）、目录与计划里的 `graft` 不一致的记录
   （`RecordReport::SelectorDirectoryMismatch` 已删除）、以及身份与路径指向不同面的记录。
 
-### [0.1.0] 首次发布（2026-09-23）
+- `tools/nichlink-publish` 按词读取自己的依赖表，因此有多个内部依赖的 crate 只报出第一个——
+  `nichlink-cli` 只被按 `nichlink-build-method` 检查——"依赖还没上 index 就不许发布"的守卫因此
+  形同虚设。同一次遍历还把边行的被依赖者当成独立 crate，九行表产出十四个节点。现在两张表都按整行
+  读取，`--check-table` 会把它们与清单对比：第一次运行就找出一条真实漂移——`nichlink-cli` 直接依赖
+  `nichlink-core`，而表里只列了另外三个。同一个检查用 `awk` 而不是 `sed` 地址范围读取工作区成员，
+  因为 sed 的范围不在起始行上测试结束地址：单行的 `members` 数组会让范围一直跑到
+  `[workspace.package]`，它的名字随后进入成员列表——只因不存在同名目录才隐形。
+### [0.1.0] 首次发布（尚未发布）
 
-九个 crate 按依赖顺序一同发布：`nichlink-core` → `nichlink-macro` /
+九个 crate 在发布时按依赖顺序一同发布：`nichlink-core` → `nichlink-macro` /
 `nichlink-build-method` / `nichlink-mcp` → `nichlink-run-method` →
 `nichlink-debug-method` / `nichlink-plugin-host` → `nichlink-studio` →
 `nichlink-cli`。依赖版本要求写 caret `0.1.0`，因此补丁版本不会连锁要求依赖方重发。
 
-各 crate 职责见上方英文列表。本版本线的已知边界见根 `README.md` 与
+各 crate 职责见上方英文列表。本版本线的已知边界见根 `README.md` 的 `## Boundaries` 一节与
 [`docs/threat-model.md`](docs/threat-model.md)；kind-only `registry_name` 派生等
 随版本变化的行为记录在 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md)。

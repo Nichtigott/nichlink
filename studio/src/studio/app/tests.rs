@@ -15,7 +15,7 @@ pub(super) use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind
 pub(super) use ratatui::layout::Rect;
 
 pub(super) use super::support::{
-    host_manifest, package_root, select_project, with_authoring_context,
+    host_manifest, package_root, resolve_project_from, select_project, with_authoring_context,
 };
 pub(super) use super::{
     AddState, App, GraftDeclaration, Overlay, StudioPage, app_function_source_range, body_calls,
@@ -50,6 +50,12 @@ pub(super) use nichlink_debug_method::{CallEvidence, MirGraph};
 mod call_tree;
 #[path = "tests/edit.rs"]
 mod edit;
+// The evidence observation classifies the edges of a real project tree, so it is
+// mounted with the fixture tests that load one.
+// 证据观察要对一棵真实工程树的边分级，因此与加载工程树的夹具测试一同挂载。
+#[cfg(feature = "prototype-fixtures")]
+#[path = "tests/evidence.rs"]
+mod evidence;
 // The live trace the prototype-fixture tests install: mounted only with them, so
 // the default build carries neither the helper nor its imports.
 // 原型夹具测试安装的实时追踪：只在启用它们时挂载，因此默认构建既不携带该辅助函数，

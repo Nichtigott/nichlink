@@ -60,15 +60,20 @@ crates.io）。可用 `--path` 或 `--git` 显式覆盖。
 
 ### 各 phase 的字段
 
-| `phase` | 构造位置 | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
+| `phase` | 构造符号 | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `requirements` | `core/src/registry_core/requirements/requirements.rs:70` | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 从不 | 仅当某祖先以不同的 kind 提供该能力时（`:80-82`） | 总是 |
-| `contract` | `build_method/src/contracts.rs:136`、`:173`、`:192`、`:216` | 从不 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 仅输出合同不匹配时（`:142`） | 从不 | 总是 |
-| `stable-identity` | `build_method/src/validation.rs:149` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
-| `parent-macro` | `build_method/src/validation.rs:59`、`:85`、`:113` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
-| `static-plan` | `build_method/src/static_plan.rs:131`；`build_method/src/graft_plan_check.rs:157`；`core/src/registry_core/diagnostic/topology.rs:41`、`:49`、`:68` | 从不 | 从不 | 总是 | 总是 `0` | 从不 | 仅三项拓扑检查 | 仅 missing-parent 与 no-registry 两项 | 仅三项拓扑检查 | 从不 | 总是 |
-| `face-cfg` | `build_method/src/static_plan.rs:109` | 从不 | 从不 | 总是 | 总是 | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
-| `out-dir` | `build_method/src/lib.rs:158` | 从不 | 从不 | 从不 | 总是 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `requirements` | `core` `requirements::missing` | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 从不 | 仅当某祖先以不同的 kind 提供该能力时 | 总是 |
+| `contract` | `build_method` `contracts::check_parent_rule` | 从不 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 仅输出合同不匹配时 | 从不 | 总是 |
+| `stable-identity` | `build_method` `validation::collect_stable_names` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
+| `parent-macro` | `build_method` `validation::collect_parent_macro_errors` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
+| `static-plan` | `build_method` `static_plan::collect_static_faces`、`graft_plan_check::undeclared_plan_errors`；`core` `topology::validate_face_topology` | 从不 | 从不 | 总是 | 总是 `0` | 从不 | 仅三项拓扑检查 | 仅 missing-parent 与 no-registry 两项 | 仅三项拓扑检查 | 从不 | 总是 |
+| `face-cfg` | `build_method` `static_plan::collect_static_faces` | 从不 | 从不 | 总是 | 总是 | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `out-dir` | `build_method` `check_for` | 从不 | 从不 | 从不 | 总是 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `face-layout` | `build_method` `validation::unplaced_face_errors`（phase 由 `discovery::record_unplaced` 选定） | 从不 | 从不 | 总是 | 文件内无位置时为 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `face-syntax` | `build_method` `validation::collect_face_syntax_errors` | 从不 | 从不 | 总是 | 解析错误无位置时为 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `entry` | `build_method` `entry::application_entry_source`、`entry::resolve_host_entry_reporting`、`entry::rejected_entry` | 从不 | 从不 | 总是 | 失败针对整个包而不是某一行时为 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `scope` | `build_method` `scope::from_raw` | 从不 | 从不 | 从不 | 总是 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
+| `graft-entry` | `build_method` `scope::auto_from_entry_reporting` | 从不 | 从不 | 从不 | 总是 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
 
 有一条 `static-plan` 诊断来自 graft 计划交叉校验（`build_method/src/graft_plan_check.rs`）：
 它的 `source` 指向有问题的 `.nichlink/external-grafts/<selector>/graft.plan`，并在
@@ -77,6 +82,7 @@ crates.io）。可用 `--path` 或 `--git` 显式覆盖。
 `static-plan` 的三项拓扑检查是 `parent node is missing`、`parent does not own a
 registry`、`parent cycle detected`；三者都设置 `field=parent` 与 `actual`，前两者还设置
 `expected`，成环检查不设置。第四条 `static-plan` 诊断 `parent declaration cannot be
-resolved`（`static_plan.rs:131`）只设置 `phase`、`source`、`line=0` 与 `message`。
+resolved`（`static_plan::collect_static_faces`）只设置 `phase`、`source`、`line=0` 与
+`message`。
 
 English: [README.md](README.md)

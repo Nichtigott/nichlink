@@ -75,6 +75,19 @@ pub enum Keep {
     NeedSource,
 }
 
+/// How deep the walk nests before it assumes the tree is cyclic.
+/// 遍历在假定树存在环之前允许达到的深度。
+///
+/// The kernel takes filesystem facts from its caller and cannot canonicalize a
+/// path, so it cannot tell a link that points at an ancestor from a directory
+/// that is simply deep. A bound is what keeps the workspace's only recursive
+/// traversal from overflowing the stack; 128 directories is far past any real
+/// source layout, and a tree that reaches it is reported rather than followed.
+/// 内核的文件系统事实来自调用方，且无法 canonicalize 路径，因此它分不出"指向祖先的链接"
+/// 与"确实很深的目录"。能阻止 workspace 唯一的递归遍历栈溢出的东西就是一条深度上限；
+/// 128 层远超任何真实源码布局，而达到它的树会被报告而不是继续跟随。
+pub const MAX_DEPTH: usize = 128;
+
 /// Every `.rs` file under `root`, depth-first, in directory order.
 /// `root` 下每个 `.rs` 文件，深度优先，按目录顺序。
 ///
@@ -93,16 +106,23 @@ pub fn collect_rust_sources(
     fn visit(
         tree: &impl SourceTree,
         directory: &Path,
+        depth: usize,
         walk: SourceWalk,
         keep: &mut dyn FnMut(&Path, Option<&str>) -> Keep,
         collected: &mut Vec<PathBuf>,
     ) -> Result<(), String> {
+        if depth > MAX_DEPTH {
+            return Err(format!(
+                "source tree nests deeper than {MAX_DEPTH} directories at {}; it is cyclic, or too deep for this bound",
+                directory.display()
+            ));
+        }
         for path in tree.entries(directory)? {
             if walk.skips(&path) {
                 continue;
             }
             if tree.is_directory(&path) {
-                visit(tree, &path, walk, keep, collected)?;
+                visit(tree, &path, depth + 1, walk, keep, collected)?;
                 continue;
             }
             if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
@@ -123,5 +143,90 @@ pub fn collect_rust_sources(
         }
         Ok(())
     }
-    visit(tree, root, walk, &mut keep, collected)
+    visit(tree, root, 0, walk, &mut keep, collected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A tree that points back at itself must stop with a report, not recurse
+    /// until the stack overflows. The kernel cannot canonicalize a path, so the
+    /// bound is the only thing standing between a link loop and a crash.
+    /// 指向自身的树必须带着报告停下来，而不是递归到栈溢出。内核无法 canonicalize 路径，
+    /// 因此这条上限是链接环与崩溃之间唯一的东西。
+    #[test]
+    fn a_cyclic_tree_stops_at_the_depth_bound() {
+        struct Cyclic;
+
+        impl SourceTree for Cyclic {
+            fn is_directory(&self, _path: &Path) -> bool {
+                true
+            }
+
+            fn entries(&self, path: &Path) -> Result<Vec<PathBuf>, String> {
+                // Every directory holds one more directory, forever.
+                // 每个目录里都还有一个目录，永远如此。
+                Ok(vec![path.join("loop")])
+            }
+
+            fn read_text(&self, _path: &Path) -> Result<String, String> {
+                Ok(String::new())
+            }
+        }
+
+        let mut collected = Vec::new();
+        let error = collect_rust_sources(
+            &Cyclic,
+            Path::new("/root"),
+            SourceWalk::EVERYTHING,
+            |_path, _source| Keep::No,
+            &mut collected,
+        )
+        .expect_err("a cyclic tree must be reported");
+        assert!(error.contains("deeper than"), "{error}");
+        assert!(collected.is_empty(), "{collected:?}");
+    }
+
+    /// A tree that stays inside the bound is walked as before.
+    /// 停在上限之内的树照常被遍历。
+    #[test]
+    fn a_flat_tree_yields_every_rust_file() {
+        struct Flat(Vec<PathBuf>, Vec<PathBuf>);
+
+        impl SourceTree for Flat {
+            fn is_directory(&self, path: &Path) -> bool {
+                self.0.iter().any(|directory| directory == path)
+            }
+
+            fn entries(&self, path: &Path) -> Result<Vec<PathBuf>, String> {
+                Ok(self
+                    .1
+                    .iter()
+                    .filter(|entry| entry.parent() == Some(path))
+                    .cloned()
+                    .collect())
+            }
+
+            fn read_text(&self, _path: &Path) -> Result<String, String> {
+                Ok(String::new())
+            }
+        }
+
+        let root = PathBuf::from("/src");
+        let tree = Flat(
+            vec![root.clone()],
+            vec![root.join("a.rs"), root.join("b.txt"), root.join("nested")],
+        );
+        let mut collected = Vec::new();
+        collect_rust_sources(
+            &tree,
+            &root,
+            SourceWalk::EVERYTHING,
+            |_path, _| Keep::Yes,
+            &mut collected,
+        )
+        .expect("a flat tree walks");
+        assert_eq!(collected, vec![root.join("a.rs")]);
+    }
 }

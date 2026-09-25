@@ -30,7 +30,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{crate_directories, lines, relative};
+use crate::size::is_test_file;
+use crate::{crate_directories, lines, relative, rust_sources};
 
 /// One Rust-tagged fence that neither parses as a file nor as a statement block.
 /// 一个既不能作为文件、也不能作为语句块解析的 Rust 围栏。
@@ -99,9 +100,28 @@ pub fn is_record(path: &Path) -> bool {
         .any(|prefix| name.starts_with(prefix))
 }
 
-/// Every fenced Rust block that does not parse.
-/// 每一个无法解析的 Rust 围栏块。
+/// Every fenced Rust block that does not parse, in markdown or in a doc comment.
+/// 每一个无法解析的 Rust 围栏块，无论在 markdown 还是文档注释里。
+///
+/// Rustdoc comment examples are the other half of the same promise. Rustdoc skips
+/// a block tagged `ignore`, so a macro-usage example that can never be a doctest
+/// of this crate — it names the host's `crate::…` paths — is shown to every reader
+/// and compiled by nobody. Those blocks are still parsed here, which is why the
+/// tag `rust,ignore` matters rather than a bare `ignore`: the language has to be
+/// explicit for a reader to know, and for this gate to find it.
+/// Rustdoc 注释里的示例是同一个承诺的另一半。rustdoc 会跳过标了 `ignore` 的代码块，因此
+/// 一个永远无法成为本 crate doctest 的宏用法示例——它命名宿主的 `crate::…` 路径——会给每个
+/// 读者看到，却没有任何程序编译它。这些块仍会在这里被解析，这也正是标 `rust,ignore` 而不是
+/// 裸 `ignore` 的意义：语言必须写明，读者才知道，本门禁也才找得到。
 pub fn findings(root: &Path) -> Vec<Finding> {
+    let mut found = markdown_findings(root);
+    found.extend(doc_comment_findings(root));
+    found
+}
+
+/// Every fenced Rust block in markdown that does not parse.
+/// markdown 里每一个无法解析的 Rust 围栏块。
+fn markdown_findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     for path in markdown_files(root) {
         let file = relative(root, &path);
@@ -144,20 +164,119 @@ pub fn findings(root: &Path) -> Vec<Finding> {
     found
 }
 
-/// Whether a fence's contents parse as a file or as a statement block.
-/// 围栏内容是否能作为文件或语句块解析。
+/// Every fenced Rust block in a `///` or `//!` doc comment that does not parse.
+/// `///` 或 `//!` 文档注释里每一个无法解析的 Rust 围栏块。
+///
+/// Test-only files are skipped: their comments are not documentation a reader is
+/// shown, and several of them carry whole source files inside string literals,
+/// whose lines would otherwise be mistaken for doc comments.
+/// 仅测试文件被跳过：它们的注释不是给读者看的文档，而且其中好几个把整份源码放进字符串字面量
+/// 里，那些行否则会被误认成文档注释。
+fn doc_comment_findings(root: &Path) -> Vec<Finding> {
+    let mut found = Vec::new();
+    for directory in crate_directories(root) {
+        for path in rust_sources(&directory.join("src")) {
+            if is_test_file(&path) {
+                continue;
+            }
+            let file = relative(root, &path);
+            // The block a doc comment opened, with the line its fence sat on.
+            // 文档注释打开的那个块，以及它的围栏所在行号。
+            let mut open: Option<(usize, String)> = None;
+            let finish = |open: Option<(usize, String)>, found: &mut Vec<Finding>| {
+                if let Some((start, code)) = open
+                    && let Err(error) = parses(&code)
+                {
+                    found.push(Finding {
+                        file: file.clone(),
+                        line: start,
+                        error,
+                    });
+                }
+            };
+            for (index, line) in lines(&path).iter().enumerate() {
+                let trimmed = line.trim_start();
+                let comment = trimmed
+                    .strip_prefix("///")
+                    .or_else(|| trimmed.strip_prefix("//!"));
+                let Some(comment) = comment else {
+                    // Any other line ends the block, exactly as rustdoc ends it.
+                    // 任何其他行都会结束该块，与 rustdoc 的行为一致。
+                    finish(open.take(), &mut found);
+                    continue;
+                };
+                let text = comment.strip_prefix(' ').unwrap_or(comment);
+                if !text.trim_start().starts_with("```") {
+                    if let Some((_, code)) = open.as_mut() {
+                        code.push_str(text);
+                        code.push('\n');
+                    }
+                    continue;
+                }
+                match open.take() {
+                    Some(block) => {
+                        finish(Some(block), &mut found);
+                        finish(None::<(usize, String)>, &mut found);
+                    }
+                    None => {
+                        let info = text.trim_start().trim_start_matches('`').trim();
+                        let mut tags = info.split(',').map(str::trim);
+                        if tags.next().unwrap_or("") != "rust" {
+                            continue;
+                        }
+                        // `macro-input` marks an excerpt whose shape is decided by a
+                        // macro matcher rather than by Rust: `name: { zh: … }` is how
+                        // an author writes a field inside a face macro, and a bare
+                        // brace in field-value position is not valid Rust on its own.
+                        // Those shapes are pinned by the macro front end's own tests
+                        // (`run_method/tests/face_*.rs`); a documentation gate cannot
+                        // parse them, and pretending otherwise would only hide them.
+                        // `macro-input` 标出的是形状由宏匹配器而非 Rust 决定的摘录：
+                        // `name: { zh: … }` 是作者在注册面宏里写字段的方式，而字段值位置上的
+                        // 裸花括号本身不是合法 Rust。那些形状由宏前端自己的测试钉住
+                        // （`run_method/tests/face_*.rs`）；文档门禁解析不了它们，假装能解析
+                        // 只会把它们藏起来。
+                        if tags.any(|tag| tag == "macro-input") {
+                            continue;
+                        }
+                        open = Some((index + 1, String::new()));
+                    }
+                }
+            }
+            finish(open, &mut found);
+        }
+    }
+    found
+}
+
+/// Whether a fence's contents parse as a file, a statement block, or fields.
+/// 围栏内容是否能作为文件、语句块或字段列表解析。
 fn parses(code: &str) -> Result<(), String> {
     if syn::parse_file(code).is_ok() {
         return Ok(());
     }
     // Most excerpts are statements rather than items, so a block is tried second
-    // and its message is reported only when both readings fail.
-    // 大多数摘录是语句而不是项，因此第二次尝试按块解析，只有两种读法都失败时才报告消息。
+    // and its message is reported only when every reading fails.
+    // 大多数摘录是语句而不是项，因此第二次尝试按块解析，只有所有读法都失败时才报告它的消息。
     let wrapped = format!("{{\n{code}\n}}");
-    match syn::parse_str::<syn::Block>(&wrapped) {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error.to_string()),
+    let block_error = match syn::parse_str::<syn::Block>(&wrapped) {
+        Ok(_) => return Ok(()),
+        Err(error) => error.to_string(),
+    };
+    // The last reading is a struct-literal field list, which is how the face
+    // macros' examples are written: `flow_provider: crate::ControlHandle` is
+    // neither a file nor a statement, and retagging it as `text` would hide that
+    // it is Rust. The type name is a fresh identifier — only the syntax is
+    // checked, and a typo in brackets, commas or nesting is still a failure.
+    // 最后一种读法是结构体字面量的字段列表，注册面宏的示例正是这么写的：
+    // `flow_provider: crate::ControlHandle` 既不是文件也不是语句，而把它重新标成 `text`
+    // 会掩盖它是 Rust 这件事。类型名是一个新鲜标识符——这里只检查语法，而括号、逗号或嵌套的
+    // 笔误仍然会失败。
+    let as_fields = format!("fn excerpt() {{ let _ = Excerpt {{ {code} }}; }}");
+    if syn::parse_file(&as_fields).is_ok() {
+        return Ok(());
     }
+    Err(block_error)
 }
 
 #[cfg(test)]

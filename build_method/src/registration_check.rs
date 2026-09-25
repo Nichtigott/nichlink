@@ -101,9 +101,12 @@ fn collect(
             continue;
         };
         let relative = relative_display(root, &path);
-        let Some(face) = parse_face(&source)
-            .unwrap_or_else(|error| panic!("invalid registration face in {relative}: {error}"))
-        else {
+        // A face that does not parse is reported once by
+        // `validation::face_syntax_errors`, before this pass runs; skipping it
+        // here is what keeps the diagnostic the only outcome instead of a panic.
+        // 解析不了的注册面由 `validation::face_syntax_errors` 在本轮之前报告一次；此处跳过
+        // 它，正是让诊断成为唯一结果、而不是 panic 的原因。
+        let Ok(Some(face)) = parse_face(&source) else {
             continue;
         };
         collect_face(root, &relative, face, requirements, declarations);

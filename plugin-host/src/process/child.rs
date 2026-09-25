@@ -94,6 +94,24 @@ pub(super) fn read_stderr(reader: &mut impl Read) -> String {
     String::from_utf8_lossy(&kept).into_owned()
 }
 
+/// Read a stream to EOF, keeping nothing.
+/// 把一个流读到 EOF，不保留任何内容。
+///
+/// Used after a response frame: a child that keeps writing after its answer must
+/// not block on a full pipe. If it does, the host waits for an exit that cannot
+/// come, kills the child at the deadline and reports a timeout — discarding the
+/// answer it already holds.
+/// 用在响应帧之后：已经给出答案却继续写入的子进程绝不能阻塞在满管道上。一旦阻塞，宿主会去
+/// 等一个不可能到来的退出，在超时点杀掉子进程并报出超时——同时丢掉它其实已经拿到的答案。
+pub(super) fn drain_to_eof(reader: &mut impl Read) {
+    let mut scratch = [0_u8; 1024];
+    while let Ok(read) = reader.read(&mut scratch) {
+        if read == 0 {
+            break;
+        }
+    }
+}
+
 /// Kill the child and reap it, even when the kill itself fails.
 /// 杀掉子进程并回收它，即使 kill 本身失败。
 ///

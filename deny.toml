@@ -77,11 +77,13 @@ confidence-threshold = 0.9
 unused-allowed-license = "warn"
 
 [licenses.private]
-# The two example hosts set `publish = false` and carry no `license` field;
-# they are never distributed, so the licence check ignores unpublished members.
-# The nine published crates still have their MIT expression checked.
-# 两个示例宿主设置了 `publish = false` 且没有 `license` 字段；它们从不分发，因此
-# 许可证检查忽略未发布的成员。九个已发布的 crate 仍会检查其 MIT 表达式。
+# The three `publish = false` workspace members (`conventions` and the two
+# example hosts) carry no `license` field; they are never distributed, so the
+# licence check ignores unpublished members. The nine published crates still have
+# their MIT expression checked.
+# 三个设了 `publish = false` 的工作区成员（`conventions` 与两个示例宿主）没有 `license`
+# 字段；它们从不分发，因此许可证检查忽略未发布的成员。九个已发布的 crate 仍会检查其 MIT
+# 表达式。
 ignore = true
 
 [bans]

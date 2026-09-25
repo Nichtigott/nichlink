@@ -7,6 +7,7 @@ use std::path::Path;
 
 use super::Node;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
+use super::discovery::UnplacedFace;
 use super::registration_check;
 use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
 use super::{SourceScope, collect_active_ids, relative_display};
@@ -166,9 +167,59 @@ fn collect_stable_names(
     }
 }
 
-pub(crate) fn parsed_face(source: &str, display_path: &str) -> Option<FaceSyntax> {
-    parse_face(source)
-        .unwrap_or_else(|error| panic!("invalid registration face in {display_path}: {error}"))
+/// Decode the face in one discovered file, or `None` when it has none.
+/// 解码一个已发现文件中的注册面；文件没有面时返回 `None`。
+///
+/// A malformed face yields `None` here on purpose. [`face_syntax_errors`] reports
+/// it once, with a position, before any stage decodes fields, so every later
+/// stage skips the file instead of aborting the process — that ordering is what
+/// keeps `check --json` producing a document for a host whose face is broken.
+/// 畸形面在这里有意返回 `None`。[`face_syntax_errors`] 会在任何阶段解码字段之前带着位置
+/// 报告它一次，因此后续每个阶段都跳过该文件而不是打死进程——正是这个顺序让"宿主的面坏了"
+/// 时 `check --json` 仍能产出文档。
+pub(crate) fn parsed_face(source: &str, _display_path: &str) -> Option<FaceSyntax> {
+    parse_face(source).ok().flatten()
+}
+
+/// Report every discovered file whose registration face does not parse.
+/// 报告每个注册面解析不了的已发现文件。
+///
+/// This runs before the stages that decode fields, because those stages cannot
+/// describe a file they cannot parse and would otherwise abort.
+/// 本函数在解码字段的各阶段之前运行，因为那些阶段描述不了自己解析不了的文件，否则只会
+/// 打死进程。
+pub(crate) fn face_syntax_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    collect_face_syntax_errors(src, nodes, &mut errors);
+    errors
+}
+
+fn collect_face_syntax_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
+    for node in nodes {
+        if let Some(file) = &node.file
+            && let Ok(source) = fs::read_to_string(file)
+            && let Err(error) = parse_face(&source)
+        {
+            errors.push(BuildDiagnostic::new("face-syntax", error.message).at(
+                relative_display(src, file),
+                error.location.as_ref().map_or(0, |location| location.line),
+            ));
+        }
+        collect_face_syntax_errors(src, &node.children, errors);
+    }
+}
+
+/// Turn the faces discovery could not place into diagnostics.
+/// 把发现过程安放不了的面变成诊断。
+pub(crate) fn unplaced_face_errors(unplaced: &[UnplacedFace]) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    for face in unplaced {
+        errors.push(
+            BuildDiagnostic::new(face.phase, face.message.clone())
+                .at(face.relative.clone(), face.line),
+        );
+    }
+    errors
 }
 
 #[cfg(test)]

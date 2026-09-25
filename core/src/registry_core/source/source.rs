@@ -69,6 +69,37 @@ pub fn function_symbols(source: &str) -> Vec<SourceFunction> {
     let masked = mask_non_code(source);
     let bytes = masked.as_bytes();
     let mut result = Vec::new();
+    // Line numbers come from one forward scan. Both offsets this reports are
+    // non-decreasing — the loop resumes at the end of the function it just took —
+    // so counting from the last offset instead of from zero makes the whole pass
+    // linear; counting from zero per function made it quadratic in the number of
+    // functions, which is the shape MCP's index walks.
+    // 行号来自一次前向扫描。它报告的两个偏移都是非递减的——循环从刚取下的函数末尾继续——
+    // 因此从上次的偏移继续数、而不是每次从 0 数，使整趟是线性的；过去每个函数都从 0 数，
+    // 于是复杂度与函数个数相乘，而 MCP 的索引正是按那种形状遍历的。
+    //
+    // The `target < counted_to` arm is a correctness fallback, not the path any
+    // caller takes today: a future caller that asks about an earlier offset gets
+    // the right answer at the old cost instead of a wrong one.
+    // `target < counted_to` 那一支是正确性兜底，不是今天任何调用方会走的路径：将来若有
+    // 调用方问一个更早的偏移，它会以旧代价拿到正确答案，而不是拿到一个错答案。
+    let mut counted_to = 0usize;
+    let mut counted_lines = 1u32;
+    let line_at = |target: usize, counted_to: &mut usize, counted_lines: &mut u32| -> u32 {
+        if target < *counted_to {
+            return source[..target]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count() as u32
+                + 1;
+        }
+        *counted_lines += source[*counted_to..target]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count() as u32;
+        *counted_to = target;
+        *counted_lines
+    };
     let mut index = 0usize;
     while index < bytes.len() {
         if !is_ident_start(bytes[index]) {
@@ -124,16 +155,8 @@ pub fn function_symbols(source: &str) -> Vec<SourceFunction> {
             continue;
         }
         let line_start = source[..token_start].rfind('\n').map_or(0, |line| line + 1);
-        let line = source[..token_start]
-            .bytes()
-            .filter(|byte| *byte == b'\n')
-            .count() as u32
-            + 1;
-        let end_line = source[..close]
-            .bytes()
-            .filter(|byte| *byte == b'\n')
-            .count() as u32
-            + 1;
+        let line = line_at(token_start, &mut counted_to, &mut counted_lines);
+        let end_line = line_at(close, &mut counted_to, &mut counted_lines);
         let signature = source[line_start..open].trim().to_owned();
         result.push(SourceFunction {
             name,
@@ -287,6 +310,27 @@ mod tests {
         assert!(body_calls(&functions[0].body, "render"));
         assert!(body_calls(&functions[1].body, "paint"));
         assert!(!body_calls(&functions[1].body, "load"));
+    }
+
+    /// Line numbers survive a file with many functions, which is also the shape
+    /// the shared forward scan has to keep correct while it stops counting twice.
+    /// 行号在许多函数的文件里仍然正确——这也正是共享的前向扫描在不再重数之后必须保持
+    /// 正确的形状。
+    #[test]
+    fn every_function_reports_its_own_lines_in_a_long_file() {
+        let mut source = String::new();
+        for index in 0..200 {
+            source.push_str(&format!("// filler {index}\n"));
+            source.push_str(&format!("fn f{index}() {{\n    let x = {index};\n}}\n"));
+        }
+        let functions = function_symbols(&source);
+        assert_eq!(functions.len(), 200);
+        for (index, function) in functions.iter().enumerate() {
+            assert_eq!(function.name, format!("f{index}"));
+            let line = (index * 4 + 2) as u32;
+            assert_eq!(function.line, line, "{}", function.name);
+            assert_eq!(function.end_line, line + 2, "{}", function.name);
+        }
     }
 
     #[test]

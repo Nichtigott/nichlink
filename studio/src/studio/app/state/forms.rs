@@ -124,6 +124,17 @@ pub struct PluginState {
     /// Whether the focused row is accepting typed input.
     /// 当前行是否正在接受键入。
     pub editing: bool,
+    /// Whether a first `s` armed this form for writing.
+    /// 第一次按 `s` 是否已让本表单进入待写状态。
+    ///
+    /// Writing appends a `use` line to the host's plugin entry and a line to the
+    /// lock, so a mistyped crate name could break the host build. The first press
+    /// arms and any other key clears it, which is what makes the write two
+    /// deliberate presses on one form.
+    /// 写入会向宿主的插件入口追加一行 `use`、并向锁追加一行，因此一个打错的 crate 名可能
+    /// 破坏宿主构建。第一次按只进入待写状态，任何其他键都会解除，这就是"同一次表单上两次
+    /// 有意的按键"的来源。
+    pub pending_submit: bool,
 }
 
 impl PluginState {
@@ -136,6 +147,7 @@ impl PluginState {
             values,
             field: plugin_field::SOURCE,
             editing: false,
+            pending_submit: false,
         }
     }
 }

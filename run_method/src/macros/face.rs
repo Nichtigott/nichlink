@@ -17,6 +17,18 @@ mod face_registration;
 /// into a literal of it under `cfg(rust_analyzer)` so an editor can complete the
 /// field names inside `crate::<name>_object! { … }`. Each field documents its
 /// meaning, its default and one example.
+///
+/// Every example below is fenced `rust,ignore` for one reason, stated once here
+/// rather than repeated 24 times: each is the **inside** of a macro invocation in
+/// a host crate — it names `crate::…` paths and the generated per-registry alias,
+/// neither of which exists in this crate — so it can never be compiled as a
+/// doctest of `run_method`. The `rust` tag is what matters: the documentation gate
+/// parses these blocks, so a typo in one is a failed test rather than a reader's
+/// problem.
+/// 下面每个示例都用 `rust,ignore` 围栏，理由在此说一次而不是重复 24 次：每一段都是宿主 crate
+/// 里某次宏调用**内部**的内容——它命名 `crate::…` 路径与生成的按注册机别名，两者在本 crate
+/// 里都不存在——因此永远无法作为 `run_method` 的 doctest 编译。重要的是那个 `rust` 标签：
+/// 文档门禁会解析这些代码块，所以其中一处笔误是失败的测试，而不是读者的问题。
 /// 没有任何代码构造这个类型；注册面宏在 `cfg(rust_analyzer)` 下把作者的 token 拼进它的
 /// 字面量，编辑器因此能在 `crate::<name>_object! { … }` 里补全字段名。每个字段都写明含义、
 /// 默认值与一个示例。
@@ -72,73 +84,73 @@ pub struct FaceFields<
 > {
     /// External form only: the file this declaration lives in.
     /// 仅外部形式：声明所在的文件。
-    /// ```ignore
+    /// ```rust,ignore
     /// source: "widget/widget.rs"
     /// ```
     pub source: SourceValue,
     /// The handle-marker type this file declares. Required.
     /// 本文件声明的 handle 标记类型。必填。
-    /// ```ignore
+    /// ```rust,ignore
     /// kind: Widget
     /// ```
     pub kind: KindValue,
     /// Preset contract; defaults to NoPreset.
     /// preset 合同；默认 NoPreset。
-    /// ```ignore
+    /// ```rust,ignore
     /// preset: NoPreset
     /// ```
     pub preset: PresetValue,
     /// Parts contract; defaults to NoParts.
     /// parts 合同；默认 NoParts。
-    /// ```ignore
+    /// ```rust,ignore
     /// parts: NoParts
     /// ```
     pub parts: PartsValue,
     /// Display name; defaults to the kind.
     /// 显示名；默认取 kind。
-    /// ```ignore
+    /// ```rust,ignore,macro-input
     /// name: { zh: "控件", en: "Widget" }
     /// ```
     pub name: NameValue,
     /// One-line summary; defaults to empty.
     /// 一句话摘要；默认空。
-    /// ```ignore
+    /// ```rust,ignore,macro-input
     /// summary: { zh: "说明", en: "Summary" }
     /// ```
     pub summary: SummaryValue,
     /// Capabilities this face exports for its children.
     /// 本面向子级导出的能力。
-    /// ```ignore
+    /// ```rust,ignore
     /// exports: ["control.render"]
     /// ```
     pub exports: ExportsValue,
     /// Frozen logical name; omit to derive it.
     /// 固定的逻辑名；省略则自动推导。
-    /// ```ignore
+    /// ```rust,ignore
     /// stable_name: "widget"
     /// ```
     pub stable_name: StableNameValue,
     /// Whether this face owns a child registry.
     /// 本面是否拥有子注册机。
-    /// ```ignore
+    /// ```rust,ignore
     /// needs_registry: true
     /// ```
     pub needs_registry: NeedsRegistryValue,
     /// Where this face hangs. Required.
     /// 本面挂在谁下面。必填。
-    /// ```ignore
+    /// ```rust,ignore
     /// parent: crate::control::NODE_ID
     /// ```
     pub parent: ParentValue,
     /// `Some("name")` when the implementation comes from another registry.
     /// 实现来自另一个注册机时写 `Some("名字")`。
-    /// ```ignore
+    /// ```rust,ignore
     /// getting_from_other_registry: Some("engine")
     /// ```
     pub getting_from_other_registry: GettingFromOtherRegistryValue,
     /// Rule file path; defaults to the canonical sibling path.
     /// 规则文件路径；默认同目录规范路径。
-    /// ```ignore
+    /// ```rust,ignore
     /// registry_rule_path: "widget/registry_rule/registry_rule.rs"
     /// ```
     pub registry_rule_path: RegistryRulePathValue,
@@ -152,73 +164,73 @@ pub struct FaceFields<
     /// 拥有注册机的面（`needs_registry: true`）可以省略本字段：规则会解析到注册面旁边
     /// 那份规范规则（`super::registry_rule::REGISTRATION_RULE`）。其余面保留
     /// `RegistrationRule::ANY`，改为接受父级规则。
-    /// ```ignore
+    /// ```rust,ignore
     /// registry_rule: crate::widget::registry_rule::REGISTRATION_RULE
     /// ```
     pub registry_rule: RegistryRuleValue,
     /// Which paths this face may reach.
     /// 本面允许访问哪些路径。
-    /// ```ignore
+    /// ```rust,ignore
     /// admission: crate::Admission::new(&["control.*"], &[])
     /// ```
     pub admission: AdmissionValue,
     /// Trait labels the handle promises, for search.
     /// handle 承诺的 trait 标签，供检索。
-    /// ```ignore
+    /// ```rust,ignore
     /// handle_traits: ["ControlHandle"]
     /// ```
     pub handle_traits: HandleTraitsValue,
     /// Compile-time contracts the handle must satisfy.
     /// handle 必须满足的编译期契约。
-    /// ```ignore
+    /// ```rust,ignore
     /// handle_contracts: [crate::ControlHandle]
     /// ```
     pub handle_contracts: HandleContractsValue,
     /// Trait labels the parts promise, for search.
     /// parts 承诺的 trait 标签，供检索。
-    /// ```ignore
+    /// ```rust,ignore
     /// part_traits: ["ActionParts"]
     /// ```
     pub part_traits: PartTraitsValue,
     /// Compile-time contracts the parts must satisfy.
     /// parts 必须满足的编译期契约。
-    /// ```ignore
+    /// ```rust,ignore
     /// part_contracts: [crate::ActionParts]
     /// ```
     pub part_contracts: PartContractsValue,
     /// Capabilities this face needs, as `"cap" => "Provider"`.
     /// 本面需要的能力，写成 `"能力" => "提供者"`。
-    /// ```ignore
+    /// ```rust,ignore,macro-input
     /// requires: ["layout.viewport" => "ControlRegistry"]
     /// ```
     pub requires: RequiresValue,
     /// Capabilities this face provides upward.
     /// 本面向上提供的能力。
-    /// ```ignore
+    /// ```rust,ignore
     /// provides: ["control.render"]
     /// ```
     pub provides: ProvidesValue,
     /// Data-flow contract shared with a replacement.
     /// 与替换件共享的数据流合同。
-    /// ```ignore
+    /// ```rust,ignore
     /// flow: FlowContract::new(ContractId::new("control.render.v1"), 1, "ControlInput", "ControlFrame")
     /// ```
     pub flow: FlowValue,
     /// Type that supplies the flow contract.
     /// 提供该数据流合同的类型。
-    /// ```ignore
+    /// ```rust,ignore
     /// flow_provider: crate::ControlHandle
     /// ```
     pub flow_provider: FlowProviderValue,
     /// Plugin surface this face can be replaced by.
     /// 本面可被哪个插件替换。
-    /// ```ignore
+    /// ```rust,ignore
     /// plugin: crate::PluginSpec::new("widget")
     /// ```
     pub plugin: PluginValue,
     /// Checks run at registration time.
     /// 注册时执行的运行时检查。
-    /// ```ignore
+    /// ```rust,ignore
     /// runtime_checks: []
     /// ```
     pub runtime_checks: RuntimeChecksValue,

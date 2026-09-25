@@ -33,6 +33,19 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --no-deps
+      - name: External-path rehearsal
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # Copies the example hosts outside the checkout, repoints their path
+        # dependencies here, detaches them from the workspace and builds them from
+        # scratch. A layout that only works in-tree fails this, which is the class
+        # of defect the external-path rehearsal exists for. It runs on one cell
+        # because it rebuilds the workspace crates in a fresh target directory.
+        # 把示例宿主复制到检出之外，把它们的路径依赖指向这里，让它们脱离工作区并从零构建。
+        # 只在树内成立的布局会在这里失败，而这正是外部路径演练要抓的那类缺陷。它只在一个矩阵
+        # 单元上跑，因为它要在全新的 target 目录里重建工作区各 crate。
+        env:
+          NICHLINK_REHEARSAL_CARGO_FLAGS: ""
+        run: tools/nichlink-external-rehearsal
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # nichlink-build-method is not packaged here: its versioned dependency
@@ -85,6 +98,59 @@ jobs:
         run: cargo test --workspace --all-features --doc
       - name: Check (no default features)
         run: cargo check --workspace --no-default-features --all-targets
+      - name: Clippy (all features)
+        # The verify matrix lints each crate's default features only, so a warning
+        # that exists solely behind `prototype-fixtures`, `authoring`,
+        # `process-tools`, `syntax` or `dev-supervisor` reached no gate at all.
+        # verify 矩阵只对每个 crate 的默认特性跑 lint，因此只存在于
+        # `prototype-fixtures`、`authoring`、`process-tools`、`syntax` 或 `dev-supervisor`
+        # 之后的警告此前没有任何门禁会看到。
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Visual check (tmux)
+        # The TUI is the surface a reader actually sees, and no other step renders
+        # it: a test backend checks a buffer, not a terminal. Each scene drives the
+        # real binary in a fixed-size pane and its capture must be non-empty.
+        # TUI 是读者真正看到的那一面，而其他步骤都不渲染它：测试后端检查的是缓冲区而不是
+        # 终端。每个场景在固定尺寸的面板里驱动真实二进制，抓到的内容必须非空。
+        env:
+          NICHLINK_VISUAL_CARGO_FLAGS: ""
+        run: |
+          command -v tmux >/dev/null || (sudo apt-get update && sudo apt-get install -y tmux)
+          tools/nichlink-visual home graph tree-demo
+          for scene in home graph tree-demo; do
+            test -s "target/visual/$scene.txt"
+          done
+      - name: Release tables match the manifests
+        # No network: `--check-table` compares the dependency and level tables in
+        # `tools/nichlink-publish` against the manifests that decide the real
+        # publish order. It runs here as well as in the release workflow because
+        # the tables are hand-maintained and rot between releases — `nichlink-cli`
+        # grew a direct `nichlink-core` requirement while the table still listed
+        # only the other three, and every gate stayed green.
+        # 不需要网络：`--check-table` 把 `tools/nichlink-publish` 里的依赖表与层表同决定真实
+        # 发布顺序的清单对比。它既在这里跑也在发布工作流里跑，因为这两张表是手工维护的、会在
+        # 两次发布之间腐烂——`nichlink-cli` 增加了对 `nichlink-core` 的直接依赖，而表里仍只列
+        # 另外三个，所有门禁却都是绿的。
+        run: tools/nichlink-publish --check-table
+      - name: Publish dry run
+        # `tools/nichlink-publish` without `--publish` packages every crate whose
+        # versioned dependencies are on the index, waits for the rest, and uploads
+        # nothing. It needs a network, which is why it lives in this job and not in
+        # the offline local battery.
+        # 不带 `--publish` 的 `tools/nichlink-publish` 会打包所有版本依赖已在 index 上的
+        # crate、把其余的报成等待，且不上传任何东西。它需要网络，这正是它在这个任务而不是
+        # 离线本地门禁里的原因。
+        run: tools/nichlink-publish
+      - name: IDE mirror (rust_analyzer cfg)
+        # No other step compiles this: the check builds two host examples again
+        # under a cfg only an editor uses. A nested face's derived rule path
+        # resolves in the real module tree but not in the crate-root shadow
+        # rust-analyzer needs, so without this step the editor's view of a host
+        # can rot while every other gate stays green.
+        # 没有其他步骤会编译它：这项检查用一条只有编辑器才用的 cfg 把两个宿主示例再构建
+        # 一遍。嵌套面派生的规则路径在真实模块树里能解析，而 rust-analyzer 需要的 crate 根
+        # 影子里解析不了；没有这一步，宿主在编辑器里的视图会腐化，而其余门禁全是绿的。
+        run: cargo test -p nichlink-example-control-button --test ide_mirror -- --ignored
 
   deny:
     # advisories / licenses / bans are configured in deny.toml.

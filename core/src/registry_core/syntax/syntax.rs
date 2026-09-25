@@ -12,3 +12,9 @@ pub use face::*;
 #[path = "entries.rs"]
 pub mod entries;
 pub use entries::*;
+#[path = "nesting.rs"]
+pub(crate) mod nesting;
+
+#[cfg(test)]
+#[path = "deep_input_tests.rs"]
+mod deep_input_tests;

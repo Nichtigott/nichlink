@@ -11,16 +11,24 @@ use super::registry_syntax::GraftSyntax;
 use super::static_plan::source_module_path;
 use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
-pub(crate) fn write_pruning_manifest(src: &Path, nodes: &[Node], out_dir: &Path) {
+pub(crate) fn write_pruning_manifest(
+    src: &Path,
+    nodes: &[Node],
+    out_dir: &Path,
+) -> Result<(), String> {
     let mut rows = Vec::new();
     collect_pruning_symbols(src, nodes, &mut rows);
-    write_rows(out_dir.join("pruning_manifest.tsv"), rows);
+    write_rows(out_dir.join("pruning_manifest.tsv"), rows)
 }
 
-pub(crate) fn write_function_manifest(src: &Path, nodes: &[Node], out_dir: &Path) {
+pub(crate) fn write_function_manifest(
+    src: &Path,
+    nodes: &[Node],
+    out_dir: &Path,
+) -> Result<(), String> {
     let mut rows = Vec::new();
     collect_function_symbols(src, nodes, &mut rows);
-    write_rows(out_dir.join("function_manifest.tsv"), rows);
+    write_rows(out_dir.join("function_manifest.tsv"), rows)
 }
 
 pub(crate) fn write_source_scope_manifest(
@@ -28,7 +36,7 @@ pub(crate) fn write_source_scope_manifest(
     nodes: &[Node],
     scope: &SourceScope,
     out_dir: &Path,
-) {
+) -> Result<(), String> {
     let Some(selected) = &scope.roots else {
         write_if_changed(
             &out_dir.join("source_scope.tsv"),
@@ -41,8 +49,8 @@ pub(crate) fn write_source_scope_manifest(
                 },
                 scope.reason
             ),
-        );
-        return;
+        )?;
+        return Ok(());
     };
     let mut output = format!(
         "# mode\t{}\n# selected\t{}\n# node\tsource\tmodule\n",
@@ -65,12 +73,12 @@ pub(crate) fn write_source_scope_manifest(
             .unwrap();
         }
     }
-    write_if_changed(&out_dir.join("source_scope.tsv"), &output);
+    write_if_changed(&out_dir.join("source_scope.tsv"), &output)
 }
 
 /// Persist host graft selectors as data-only build metadata.
 /// 将宿主 graft 选择器持久化为只含数据的构建元信息。
-pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) {
+pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) -> Result<(), String> {
     let mut output = String::from("# cut\tgraft\tfull\tline\tcolumn\n");
     for graft in grafts {
         // The manifest is human-facing audit text, so a range is rendered back
@@ -84,17 +92,20 @@ pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) {
         )
         .unwrap();
     }
-    write_if_changed(&out_dir.join("graft_plan.tsv"), &output);
+    write_if_changed(&out_dir.join("graft_plan.tsv"), &output)
 }
 
-fn write_rows(path: impl AsRef<Path>, mut rows: Vec<(NodeId, String, String)>) {
+fn write_rows(
+    path: impl AsRef<Path>,
+    mut rows: Vec<(NodeId, String, String)>,
+) -> Result<(), String> {
     rows.sort();
     rows.dedup();
     let mut output = String::from("# node\tsource\tsymbol\n");
     for (id, source, symbol) in rows {
         writeln!(output, "{id}\t{source}\t{symbol}").unwrap();
     }
-    write_if_changed(path.as_ref(), &output);
+    write_if_changed(path.as_ref(), &output)
 }
 
 fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {

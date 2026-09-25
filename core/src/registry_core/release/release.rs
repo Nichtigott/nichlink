@@ -257,6 +257,36 @@ impl StaticPlan {
 
 /// Evaluate mounting and construction rules during crate generation.
 /// 在生成 crate 时求值挂载规则与构造规则。
+///
+/// # Panics
+///
+/// This is the **const twin** of [`RegistrationRule::validate`]: same five
+/// checks, same order, different cost. The runtime side collects one `String` per
+/// failure and names it; this side cannot allocate or format inside const
+/// evaluation, so it stops at the first failure with a fixed message. They must be
+/// changed together — the runtime side is pinned by
+/// `parent_rule_aggregates_every_missing_structural_requirement`, and this side by
+/// every registry-owning face in the workspace compiling (or not) under the rule
+/// its own declaration carries. Folding the two into one function is not possible
+/// while this one is `const`: the shared checker returns a `Vec<String>`.
+/// 这是 [`RegistrationRule::validate`] 的 **const 孪生**：同样五项检查、同样顺序、不同代价。
+/// 运行期一侧为每个失败收集一个 `String` 并点名它；本侧在常量求值里无法分配或格式化，因此停
+/// 在第一个失败上并给出固定消息。两者必须一起改——运行期一侧由
+/// `parent_rule_aggregates_every_missing_structural_requirement` 钉住，本侧则由工作区里每个
+/// 拥有注册机的注册面按它自己声明所带的规则能否编译来钉住。在本函数仍是 `const` 期间把两者
+/// 合成一个是不可能的：共享的那个校验器返回 `Vec<String>`。
+///
+/// # Panics
+///
+/// Panics when `info` does not satisfy `rule`: a wrong preset, a missing
+/// structural part, export, handle interface, or parts interface, or a preset
+/// whose parts the face does not provide. The generated crate calls this in a
+/// `const` item, so the panic is a compile error naming the declaration source
+/// rather than a runtime failure — which is the whole point of evaluating it
+/// there.
+/// 当 `info` 不满足 `rule` 时 panic：preset 不符，缺少结构部件、导出、handle 接口或 parts
+/// 接口，或 preset 的 parts 没有被该面提供。生成的 crate 在 `const` 项里调用它，因此这次
+/// panic 是点名声明来源的编译错误，而不是运行期失败——这正是放在那里求值的目的。
 #[doc(hidden)]
 pub const fn assert_static_registration(rule: RegistrationRule, info: RegistrationInfo) {
     if let Some(required) = rule.required_preset

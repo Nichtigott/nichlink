@@ -28,7 +28,8 @@ use std::path::{Path, PathBuf};
 
 use nichlink::lexicon;
 
-use super::node::Node;
+use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
+use super::node::{Node, relative_display};
 use super::registry_syntax::application_entries;
 
 /// Pick the ordinary Cargo entry when no `application!` declaration exists.
@@ -90,42 +91,91 @@ fn host_macro_call(source: &str) -> bool {
     nichlink::source::body_calls(&probe, "host")
 }
 
-pub(crate) fn application_entry_source(src: &Path, nodes: &[Node]) -> Option<PathBuf> {
-    let mut declarations = Vec::new();
-    fn visit(nodes: &[Node], declarations: &mut Vec<(PathBuf, String, usize, usize)>) {
+/// The file declaring `application!(entry = …)`, or `None` when none does.
+/// 声明 `application!(entry = …)` 的文件；没有声明时返回 `None`。
+///
+/// Every refusal is a diagnostic rather than a panic. The build still fails — the
+/// diagnostic is rendered into the generated tree like the rest — but it fails
+/// with a document a reader and `check --json` can both consume, and the pipeline
+/// survives long enough to report every other problem in the same run.
+/// 每一次拒绝都是诊断而不是 panic。构建仍然失败——诊断会像其余诊断一样被渲染进生成树
+/// ——但它带着读者与 `check --json` 都能消费的文档失败，而且管线能活到把同一次运行里的
+/// 其他问题一并报完。
+pub(crate) fn application_entry_source(
+    src: &Path,
+    nodes: &[Node],
+    errors: &mut BuildDiagnostics,
+) -> Option<PathBuf> {
+    fn visit(
+        src: &Path,
+        nodes: &[Node],
+        errors: &mut BuildDiagnostics,
+        declarations: &mut Vec<(PathBuf, String, usize, usize)>,
+    ) {
         for node in nodes {
             if let Some(file) = &node.file {
-                let source = fs::read_to_string(file).unwrap_or_else(|error| {
-                    panic!(
-                        "failed to read application entry source `{}`: {error}",
-                        file.display()
-                    )
-                });
-                let entries = application_entries(&source).unwrap_or_else(|error| {
-                    panic!(
-                        "invalid application! declaration in `{}`: {error}",
-                        file.display()
-                    )
-                });
-                for (path, location) in entries {
-                    declarations.push((file.clone(), path, location.line, location.column));
+                match fs::read_to_string(file) {
+                    Ok(source) => match application_entries(&source) {
+                        Ok(entries) => {
+                            for (path, location) in entries {
+                                declarations.push((
+                                    file.clone(),
+                                    path,
+                                    location.line,
+                                    location.column,
+                                ));
+                            }
+                        }
+                        Err(error) => errors.push(
+                            BuildDiagnostic::new(
+                                "entry",
+                                format!("invalid `application!` declaration: {}", error.message),
+                            )
+                            .at(
+                                relative_display(src, file),
+                                error.location.as_ref().map_or(0, |location| location.line),
+                            ),
+                        ),
+                    },
+                    Err(error) => errors.push(
+                        BuildDiagnostic::new(
+                            "entry",
+                            format!(
+                                "failed to read `{}` while looking for an `application!` entry: {error}",
+                                file.display()
+                            ),
+                        )
+                        .at(relative_display(src, file), 0),
+                    ),
                 }
             }
-            visit(&node.children, declarations);
+            visit(src, &node.children, errors, declarations);
         }
     }
-    visit(nodes, &mut declarations);
+    let mut declarations = Vec::new();
+    visit(src, nodes, errors, &mut declarations);
     match declarations.as_slice() {
         [] => None,
-        [(file, path, _, _)] => {
+        [(file, path, line, _)] => {
             if !path.starts_with("crate::") {
-                panic!("application! entry `{path}` must start with `crate::`");
+                errors.push(rejected_entry(
+                    src,
+                    file,
+                    *line,
+                    path,
+                    "must start with `crate::`",
+                ));
+                return None;
             }
             if !entry_path_exists(src, path) {
-                panic!(
-                    "application! entry `{path}` does not resolve to a source module under `{}`",
-                    src.display()
-                );
+                errors.push(rejected_entry(
+                    src,
+                    file,
+                    *line,
+                    path,
+                    "does not resolve to a source module under the package root",
+                ));
+                return None;
             }
             Some(file.clone())
         }
@@ -137,9 +187,24 @@ pub(crate) fn application_entry_source(src: &Path, nodes: &[Node]) -> Option<Pat
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            panic!("multiple application! entry declarations found: {details}");
+            let (file, _, line, _) = &many[0];
+            errors.push(
+                BuildDiagnostic::new(
+                    "entry",
+                    format!("multiple `application!` entry declarations found: {details}"),
+                )
+                .at(relative_display(src, file), *line),
+            );
+            None
         }
     }
+}
+
+/// One `application!` entry the build refused, with the file that declared it.
+/// 构建拒绝的一条 `application!` 入口，以及声明它的文件。
+fn rejected_entry(src: &Path, file: &Path, line: usize, path: &str, why: &str) -> BuildDiagnostic {
+    BuildDiagnostic::new("entry", format!("`application!` entry `{path}` {why}"))
+        .at(relative_display(src, file), line)
 }
 
 /// The build's host entry, together with the rule that decided it.
@@ -190,12 +255,34 @@ impl HostEntry {
 /// The environment is read here and nowhere else in the build, so the two
 /// readers downstream cannot observe different values for it.
 /// 环境只在这里读取，构建中别无他处读取它，因此下游两个读取者不可能看到不同的值。
-pub(crate) fn host_entry_from_environment(src: &Path, nodes: &[Node]) -> HostEntry {
-    resolve_host_entry(
+pub(crate) fn host_entry_from_environment(
+    src: &Path,
+    nodes: &[Node],
+    errors: &mut BuildDiagnostics,
+) -> HostEntry {
+    resolve_host_entry_reporting(
         src,
         nodes,
         env::var_os(lexicon::ENTRY_ENV).map(PathBuf::from),
+        errors,
     )
+}
+
+/// Resolve a host entry with the findings thrown away.
+/// 解析宿主入口，并丢弃发现结果。
+///
+/// Test-only: production code goes through the reporting form, and keeping the
+/// plain wrapper is what lets the existing tests stay one line shorter than the
+/// code they pin.
+/// 仅测试使用：生产代码走带报告的形式，而保留这个纯包装正是让既有测试比它们钉住的代码
+/// 少一行的原因。
+#[cfg(test)]
+pub(crate) fn resolve_host_entry(
+    src: &Path,
+    nodes: &[Node],
+    configured: Option<PathBuf>,
+) -> HostEntry {
+    resolve_host_entry_reporting(src, nodes, configured, &mut BuildDiagnostics::default())
 }
 
 /// Resolve the host entry from an explicit `NICH_LINK_ENTRY` value.
@@ -207,7 +294,7 @@ pub(crate) fn host_entry_from_environment(src: &Path, nodes: &[Node]) -> HostEnt
 /// 把取值作为参数传入而不是就地读环境，使解析可被测试：测试可以把两个读取者收到的
 /// 同一个值直接传进来，而不必改动进程环境（`#[test]` 线程是共享它的）。
 ///
-/// Why a configured entry that is not a file panics instead of falling back.
+/// Why a configured entry that is not a file fails the build.
 /// The obvious implementation — ignore the variable here, or fall back to
 /// `main.rs` — is exactly the bug this function exists to remove: pruning would
 /// follow the variable (reading nothing, hence keeping the whole tree) while the
@@ -216,24 +303,27 @@ pub(crate) fn host_entry_from_environment(src: &Path, nodes: &[Node]) -> HostEnt
 /// file. A `main.rs` fallback would reproduce that split; an empty table would be
 /// worse than today, because a typo in the variable would turn a working build
 /// into a runtime full of unknown targets. The boundary: only a *set* variable
-/// panics on an unusable path. An unset variable keeps Cargo's convention,
+/// that names no file fails the build. An unset variable keeps Cargo's convention,
 /// including the legitimate "neither `main.rs` nor `lib.rs` exists" package,
 /// which stays a non-error. The behaviour is pinned by
-/// `a_configured_entry_that_is_not_a_file_fails_the_build` and
+/// `a_configured_entry_that_is_not_a_file_is_a_diagnostic` and
 /// `a_configured_entry_drives_the_scope_and_the_cut_table`.
-/// 为什么被指定却指不到文件的入口要 panic 而不是回退。显而易见的做法——这里干脆
+/// 为什么被指定却指不到文件的入口要让构建失败。显而易见的做法——这里干脆
 /// 不看变量，或回退到 `main.rs`——正是本函数要消除的那个 bug：剪枝会跟随变量（读不到
 /// 内容，于是保留整棵树），而切口表仍在描述 `main.rs`，运行期于是拿着发布态并未保留
 /// 的表，或静默丢掉只在被指定文件里声明的每一个槽位。回退到 `main.rs` 会重现这种
 /// 分裂；返回空表则比今天更糟，因为变量里一个错字就会把本来能跑的构建变成运行期满是
-/// 未知目标。边界是：只有变量**被设置**且路径不可用时才 panic。变量未设置时仍按
+/// 未知目标。边界是：只有变量**被设置**且路径不可用时才是错误。变量未设置时仍按
 /// Cargo 约定，包括合法的“既无 `main.rs` 也无 `lib.rs`”的包，那仍然不是错误。该行为
-/// 由 `a_configured_entry_that_is_not_a_file_fails_the_build` 与
+/// 由 `a_configured_entry_that_is_not_a_file_is_a_diagnostic` 与
 /// `a_configured_entry_drives_the_scope_and_the_cut_table` 钉住。
-pub(crate) fn resolve_host_entry(
+/// Resolve the host entry and report what it had to refuse.
+/// 解析宿主入口，并报告它不得不拒绝的东西。
+pub(crate) fn resolve_host_entry_reporting(
     src: &Path,
     nodes: &[Node],
     configured: Option<PathBuf>,
+    errors: &mut BuildDiagnostics,
 ) -> HostEntry {
     if let Some(path) = configured {
         let path = if path.is_absolute() {
@@ -246,15 +336,27 @@ pub(crate) fn resolve_host_entry(
             src.parent().unwrap_or(src).join(path)
         };
         if !path.is_file() {
-            panic!(
-                "{} names `{}`, which is not a file",
-                lexicon::ENTRY_ENV,
-                path.display()
+            errors.push(
+                BuildDiagnostic::new(
+                    "entry",
+                    format!(
+                        "{} names `{}`, which is not a file",
+                        lexicon::ENTRY_ENV,
+                        path.display()
+                    ),
+                )
+                .at(relative_display(src, &path), 0),
             );
+            // The diagnostic above already fails the build, so which entry the
+            // pipeline carries matters only for the diagnostics still to come:
+            // the convention entry keeps them flowing instead of aborting here.
+            // 上面的诊断已经让构建失败，因此管线带着哪个入口只影响后面还要产出的诊断：
+            // 约定入口让它们继续流出来，而不是在这里中止。
+            return HostEntry::Convention(default_entry_source(src));
         }
         return HostEntry::Configured(path);
     }
-    if let Some(file) = application_entry_source(src, nodes) {
+    if let Some(file) = application_entry_source(src, nodes, errors) {
         return HostEntry::Declared(file);
     }
     HostEntry::Convention(default_entry_source(src))
@@ -429,144 +531,5 @@ pub(crate) fn path_mentions_module(path: &str, module: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use super::{HostEntry, calls_host, default_entry_source, resolve_host_entry};
-
-    /// A throwaway package root for the resolution fixtures, unique per call.
-    /// 解析夹具使用的临时包根，每次调用唯一。
-    ///
-    /// Unique because Cargo runs test binaries in parallel: a fixed name would let
-    /// one binary's cleanup delete another's fixture mid-test.
-    /// 唯一是必需的：Cargo 并行运行测试二进制，固定名字会让一个二进制的清理删掉另一个
-    /// 正在使用的夹具。
-    fn fixture(name: &str) -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-entry-{name}-{}-{}-{sequence}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(root.join("src")).expect("fixture dir");
-        root
-    }
-
-    /// A file that only mentions `host!()` — in a line comment, a block comment,
-    /// or a string literal — has no host call. The kernel's lexical scanner masks
-    /// those regions, so a real call elsewhere still wins over Cargo's `main.rs`
-    /// preference.
-    /// 只在行注释、块注释或字符串字面量里提到 `host!()` 的文件没有宿主调用。内核词法
-    /// 扫描器屏蔽这些区域，因此别处的真实调用仍然胜过 Cargo 对 `main.rs` 的偏好。
-    #[test]
-    fn a_host_mention_in_a_comment_or_string_is_not_a_call() {
-        let root = fixture("host-mention");
-        let src = root.join("src");
-        std::fs::write(
-            src.join("main.rs"),
-            "// host!() in a line comment\n\
-             /* host!() in a block comment */\n\
-             fn main() { let _ = \"host!()\"; }\n",
-        )
-        .expect("prose-only main");
-        assert!(
-            !calls_host(&src.join("main.rs")),
-            "a comment or string literal is not a call"
-        );
-        std::fs::write(src.join("lib.rs"), "nichlink_run_method::host!();\n").expect("host lib");
-        assert!(
-            calls_host(&src.join("lib.rs")),
-            "a real invocation is a call"
-        );
-        assert_eq!(
-            default_entry_source(&src),
-            src.join("lib.rs"),
-            "the file that really calls host!() is the entry"
-        );
-
-        std::fs::remove_dir_all(&root).expect("cleanup");
-    }
-
-    /// A lib+bin host keeps `main.rs` as a stub and calls `host!()` in `lib.rs`.
-    /// The declared graft plan lives at that call, so the entry must follow it
-    /// instead of Cargo's `main.rs` preference.
-    /// 库+二进制宿主把 `main.rs` 留作空壳、在 `lib.rs` 里调用 `host!()`。声明的 graft
-    /// 计划就在那次调用处，因此入口必须跟随它，而不是 Cargo 对 `main.rs` 的偏好。
-    #[test]
-    fn the_entry_is_the_file_that_calls_host() {
-        let root = fixture("calls-host");
-        let source = root.join("src");
-        std::fs::write(source.join("main.rs"), "fn main() {}\n").expect("stub main");
-        std::fs::write(
-            source.join("lib.rs"),
-            "//! docs mentioning host!() in prose\nnichlink_run_method::host!();\n",
-        )
-        .expect("host lib");
-        assert_eq!(default_entry_source(&source), source.join("lib.rs"));
-
-        std::fs::write(
-            source.join("main.rs"),
-            "nichlink_run_method::host!();\nfn main() {}\n",
-        )
-        .expect("host main");
-        assert_eq!(default_entry_source(&source), source.join("main.rs"));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A configured entry resolves against the package root, and an absolute one
-    /// is used as written. Both spellings must be able to name the same file,
-    /// because the documentation presents them as equivalent.
-    /// 被指定的入口相对包根解析，绝对路径则原样使用。两种写法都必须能指到同一个文件，
-    /// 因为文档把二者写成等价。
-    #[test]
-    fn a_configured_entry_resolves_against_the_package_root() {
-        let root = fixture("configured");
-        let src = root.join("src");
-        std::fs::write(src.join("lib.rs"), "nichlink_run_method::host!();\n").expect("host entry");
-        // The configured entry lives in the registry layout discovery accepts:
-        // a bare `.rs` next to `src/` is rejected, so a variable can only name a
-        // registration source or `lib.rs`/`main.rs`.
-        // 被指定的入口位于发现机制接受的注册布局中：`src/` 旁的裸 `.rs` 会被拒绝，
-        // 因此变量只能指向一个注册源文件或 `lib.rs`/`main.rs`。
-        std::fs::create_dir_all(src.join("preview")).expect("fixture dir");
-        std::fs::write(src.join("preview/preview.rs"), "fn preview() {}\n")
-            .expect("configured entry");
-        let nodes = crate::discover_root(&src);
-
-        let absolute = resolve_host_entry(&src, &nodes, Some(src.join("preview/preview.rs")));
-        assert!(matches!(absolute, HostEntry::Configured(_)), "{absolute:?}");
-        assert_eq!(absolute.path(), src.join("preview/preview.rs"));
-
-        let relative =
-            resolve_host_entry(&src, &nodes, Some(PathBuf::from("src/preview/preview.rs")));
-        assert_eq!(relative.path(), src.join("preview/preview.rs"));
-        // A host that named the file owns the absence rule: this entry is required.
-        // 自己指定了文件的宿主承担“可否缺失”的规则：这个入口是必需的。
-        assert!(relative.is_required());
-
-        std::fs::remove_dir_all(&root).expect("cleanup");
-    }
-
-    /// A configured entry that names something which is not a file fails the
-    /// build instead of letting one reader fall back while the other follows the
-    /// variable. The obvious alternative — return the convention entry — is the
-    /// bug: pruning would follow the variable while the cut table described
-    /// `main.rs`.
-    /// 被指定却指不到文件的入口让构建失败，而不是让一个读取者回退、另一个跟随变量。
-    /// 显而易见的替代做法——返回约定入口——正是那个 bug：剪枝跟随变量，切口表却描述
-    /// `main.rs`。
-    #[test]
-    #[should_panic(expected = "NICH_LINK_ENTRY names")]
-    fn a_configured_entry_that_is_not_a_file_fails_the_build() {
-        let root = fixture("configured-missing");
-        let src = root.join("src");
-        std::fs::write(src.join("lib.rs"), "nichlink_run_method::host!();\n").expect("host entry");
-        let nodes = crate::discover_root(&src);
-
-        let _ = resolve_host_entry(&src, &nodes, Some(PathBuf::from("src/nope.rs")));
-    }
-}
+#[path = "entry_tests.rs"]
+mod entry_tests;

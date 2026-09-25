@@ -3,8 +3,9 @@
 [简体中文](README.zh-CN.md) | English
 
 `nichlink-mcp` is a small Model Context Protocol server for AI-assisted
-NichLink work. It uses newline-delimited JSON-RPC over stdin/stdout and keeps
-all diagnostics on stderr so it can be attached directly to an MCP client.
+NichLink work. It uses newline-delimited JSON-RPC over stdin/stdout and writes
+nothing to stderr: a failure is an error response on stdout, where the client is
+already reading, so the stream stays attachable to an MCP client.
 
 Run it from a host project (or `nichlink mcp` via the `nichlink-cli` package):
 

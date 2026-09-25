@@ -17,7 +17,7 @@ core 声明只是元数据，不执行插件代码。Studio 和 debug collector 
 - release 使用经过检查的 `StaticPlan`，不保留 inventory linker section；
 - 外部注册面在发布前校验来源、框架、版本、父节点和合同闭合；
 - 官方插件需要匹配信任策略和签名，社区/本地插件至少需要已验证 checksum；
-- Wasm 限制线性内存、fuel、输入和输出大小；
+- Wasm 限制线性内存、表元素、fuel、输入与输出大小，以及接受的工件字节数；模块还在引擎的严格限制下编译；
 - 进程调用使用 framed I/O、大小限制和硬超时，超时子进程会被终止；
 - 热替换在同一 generation 发布代码和 Registry，健康检查或 graft 失败会保留旧版本；
 - 撤销和流程版本不匹配会在激活前拒绝候选。

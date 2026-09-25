@@ -3,9 +3,11 @@
 [简体中文](README.zh-CN.md) | English
 
 `nichlink-plugin-host` verifies and deploys plugin artifacts without exposing
-untrusted bytes to the registry. The default `wasm` feature provides fuel and
-memory-limited Wasm execution; enable `process-tools` for timeout-controlled
-process adapters. `HotDeployment` stages a validated graft and publishes it
+untrusted bytes to the registry. The default `wasm` feature provides fuel-metered
+Wasm execution bounded by linear memory, **table elements**, artifact bytes and
+the engine's own strict compile limits — a table is a separate eagerly
+instantiated array, so the memory ceiling alone does not bound it. Enable
+`process-tools` for timeout-controlled process adapters. `HotDeployment` stages a validated graft and publishes it
 atomically, leaving the last healthy snapshot visible after a failure.
 
 ## Wasm ABI handshake

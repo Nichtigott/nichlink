@@ -1,0 +1,97 @@
+#!/bin/sh
+# Rehearse the path a real user takes: a project that lives *outside* this
+# checkout and depends on the workspace by path.
+# 演练真实用户走的路径：一个位于本检出**之外**、按路径依赖本工作区的项目。
+#
+#   tools/nichlink-external-rehearsal
+#   NICHLINK_REHEARSAL_CARGO_FLAGS="" tools/nichlink-external-rehearsal
+#
+# Why it exists: every other check builds the examples where they are checked in,
+# i.e. inside the workspace that owns them, where `[workspace]` members, relative
+# `path` dependencies, the shared `target/` and the shared lockfile all happen to
+# be right. None of that holds for a user. The examples are copied to a temporary
+# directory, their internal `path` dependencies are repointed at this checkout,
+# and they are detached from the workspace, so a host layout assumption that only
+# works in-tree fails here. Several of this workspace's worst defects were exactly
+# that kind — a face layout the build script accepted only from the root it knew,
+# and a Studio project resolver that fell back to `CARGO_MANIFEST_DIR` — and this
+# is the rehearsal that catches them.
+# 为什么需要它：其他所有检查都在示例被签入的地方构建它们，也就是在拥有它们的工作区内部——
+# `[workspace]` 成员、相对 `path` 依赖、共享的 `target/` 与共享 lockfile 在那里恰好都是对的。
+# 这些条件对用户一条都不成立。本脚本把示例复制到临时目录，把它们内部的 `path` 依赖指向本检出，
+# 并让它们脱离工作区，因此任何只在树内成立的主机布局假设都会在这里失败。本工作区最严重的几个
+# 缺陷正是这一类——构建脚本只肯从它认识的根接受某种面布局，以及 Studio 的项目解析回落到
+# `CARGO_MANIFEST_DIR`——而这里正是抓住它们的演练。
+#
+# The copied hosts are built from scratch in the temporary directory (their own
+# `target/`), so this also proves the build does not depend on artifacts this
+# checkout happens to have. It needs no network when the registry cache is warm,
+# which is why the flag below defaults to `--offline` and CI, which has a network,
+# can set it empty.
+# 被复制的主机在临时目录里从零构建（自己的 `target/`），因此这也证明构建不依赖本检出恰好已有的
+# 产物。注册表缓存是热的时候它不需要网络，这正是下面那个标志默认 `--offline`、而有网络的 CI
+# 可以把它置空的原因。
+
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CARGO_FLAGS="${NICHLINK_REHEARSAL_CARGO_FLAGS---offline}"
+HOSTS="control-button control-button-graft"
+# Which host the rehearsal builds and tests, once both are copied.
+# 两个宿主都复制之后，本演练构建并测试哪一个。
+SUBJECT="control-button"
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+echo "rehearsal root: $WORK" >&2
+
+for host in $HOSTS; do
+  source="$ROOT/examples/$host"
+  if [ ! -d "$source" ]; then
+    echo "error: $source does not exist; this tool rehearses the example hosts" >&2
+    exit 1
+  fi
+  cp -R "$source" "$WORK/$host"
+  # A copied `target/` would defeat the point of the rehearsal: the build has to
+  # start from nothing.
+  # 被复制过来的 `target/` 会让演练失去意义：构建必须从零开始。
+  rm -rf "$WORK/$host/target"
+  # `path = "../../run_method"` reaches outside the host; inside the temporary
+  # root that name means nothing, so repoint it at the checkout.
+  # `path = "../../run_method"` 伸到宿主之外；在临时根目录里那个名字没有意义，因此指向本检出。
+  manifest="$WORK/$host/Cargo.toml"
+  sed -i "s|path = \"\.\./\.\./|path = \"$ROOT/|g" "$manifest"
+  # Detach from any workspace: the host is now a project of its own, which is what
+  # a user's project is.
+  # 脱离工作区：这个宿主现在是一个独立项目，而用户的项目就是这样。
+  printf '\n[workspace]\n' >> "$manifest"
+done
+
+# The repointing is the rehearsal's one piece of surgery, so it is checked rather
+# than trusted: a stale relative path would otherwise show up as a missing file
+# error much later.
+# 重新指向是本演练唯一的手术，因此它被检查而不是被相信：否则一条过期的相对路径会在很久之后
+# 才以"文件不存在"的形式暴露。
+if grep -q 'path = "\.\./\.\./' "$WORK/$SUBJECT/Cargo.toml"; then
+  echo "error: $SUBJECT still has a relative path dependency after repointing" >&2
+  exit 1
+fi
+
+cd "$WORK/$SUBJECT"
+echo "cargo test $CARGO_FLAGS (in $WORK/$SUBJECT)" >&2
+# shellcheck disable=SC2086  # the flags are a deliberate word list
+cargo test $CARGO_FLAGS
+
+# The checkout's own CLI, pointed at a project that is not its example: the
+# external-path diagnostic and the project resolver are part of this path.
+# 本检出自己的 CLI，指向一个不是它示例的项目：外部路径诊断与项目解析都是这条路径的一部分。
+BIN="$ROOT/target/debug/nichlink"
+if [ -x "$BIN" ]; then
+  echo "checking $WORK/$SUBJECT with the built CLI" >&2
+  "$BIN" check "$WORK/$SUBJECT"
+else
+  echo "note: $BIN is not built; skipping the CLI half (cargo build -p nichlink-cli)" >&2
+fi
+
+echo "external rehearsal passed: $SUBJECT built and tested outside the checkout"

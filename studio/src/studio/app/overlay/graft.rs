@@ -19,6 +19,12 @@ impl App {
                 _ => {}
             }
         } else {
+            // Any key consumes an armed deletion, so confirming takes two
+            // deliberate presses on the same record and nothing else can carry
+            // the arm into an unrelated action.
+            // 任何按键都会消费掉待删状态，因此确认需要针对同一条记录两次有意的按键，别的动作
+            // 不可能把这个状态带过去。
+            let armed = graft.pending_delete.take();
             match key.code {
                 KeyCode::Tab => {
                     graft.pane = if graft.pane == 0 && !graft.plans.is_empty() {
@@ -90,10 +96,18 @@ impl App {
                 }
                 KeyCode::Char('d') => {
                     let selector = self.selected_graft_selector(&graft);
-                    if let Some(selector) = selector {
-                        self.delete_graft_plan(&selector);
-                    } else {
-                        self.event = "Graft: no plan exists for this selector yet".to_owned();
+                    match selector {
+                        Some(selector) if armed.as_deref() == Some(selector.as_str()) => {
+                            self.delete_graft_plan(&selector);
+                        }
+                        Some(selector) => {
+                            self.event =
+                                format!("Graft: press d again to move `{selector}` to the trash");
+                            graft.pending_delete = Some(selector);
+                        }
+                        None => {
+                            self.event = "Graft: no plan exists for this selector yet".to_owned();
+                        }
                     }
                     self.overlay = Some(Overlay::Graft(graft));
                     self.refresh_graft();

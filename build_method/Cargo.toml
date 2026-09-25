@@ -7,6 +7,8 @@ license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
 description = "Source discovery, manifest parsing, cache, scope, and StaticPlan generation"
+keywords = ["build-script", "codegen", "registration", "discovery"]
+categories = ["development-tools::build-utils", "development-tools"]
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-build-method"
 

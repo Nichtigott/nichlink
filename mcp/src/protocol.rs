@@ -46,15 +46,33 @@ fn package_root() -> PathBuf {
     )
 }
 
-/// Run the read-only MCP stdio bridge until stdin closes or the transport
-/// fails.
-/// 运行只读 MCP stdio 桥，直到 stdin 关闭或传输失败。
-pub fn run() {
-    let root = package_root();
+/// Run the read-only MCP stdio bridge over the process's own streams.
+/// 在进程自己的流上运行只读 MCP stdio 桥。
+///
+/// A transport failure is reported rather than swallowed. This process exists to
+/// answer on stdout, so an unreadable stdin or an unwritable stdout means it can
+/// no longer do its job; exiting zero there would tell the caller the session
+/// ended normally.
+/// 传输失败会被报告而不是吞掉。本进程的存在意义就是在 stdout 上作答，因此 stdin 读不了或
+/// stdout 写不了意味着它再也做不了这件事；在那里以 0 退出会告诉调用方这次会话正常结束。
+pub fn run() -> Result<(), String> {
     let stdin = io::stdin();
-    let mut output = io::BufWriter::new(io::stdout().lock());
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
+    let stdout = io::stdout();
+    run_with(&mut stdin.lock(), &mut io::BufWriter::new(stdout.lock()))
+}
+
+/// Run the bridge over explicit streams, so the framing can be pinned by a test.
+/// 在显式给定的流上运行桥，使分帧行为可以被测试钉住。
+///
+/// The streams are parameters rather than the process's own because the two
+/// failure modes worth pinning — an unreadable request line and an unwritable
+/// response — cannot be produced on a real terminal from inside a test.
+/// 两个流作为参数传入而不是取进程自己的，是因为值得钉住的两种失败——请求行读不了、响应写不了
+/// ——在测试里无法在真实终端上造出来。
+pub fn run_with(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), String> {
+    let root = package_root();
+    for line in input.lines() {
+        let line = line.map_err(|error| format!("cannot read stdin: {error}"))?;
         if line.trim().is_empty() {
             continue;
         }
@@ -65,13 +83,14 @@ pub fn run() {
         if response.is_null() {
             continue;
         }
-        if serde_json::to_writer(&mut output, &response).is_err() {
-            break;
-        }
-        if output.write_all(b"\n").is_err() || output.flush().is_err() {
-            break;
-        }
+        serde_json::to_writer(&mut *output, &response)
+            .map_err(|error| format!("cannot write stdout: {error}"))?;
+        output
+            .write_all(b"\n")
+            .and_then(|()| output.flush())
+            .map_err(|error| format!("cannot write stdout: {error}"))?;
     }
+    Ok(())
 }
 
 fn dispatch(root: &Path, request: &Value) -> Value {
@@ -104,4 +123,44 @@ pub(crate) fn success(id: Value, result: Value) -> Value {
 /// Wrap a JSON-RPC error payload. 包装 JSON-RPC 错误负载。
 pub(crate) fn error_response(id: Value, code: i64, message: String) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A writer that fails on every write, standing in for a closed pipe.
+    /// 每次写入都失败的写端，用来代替已关闭的管道。
+    struct Broken;
+
+    impl Write for Broken {
+        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
+        }
+    }
+
+    /// A request whose answer cannot be delivered is an error, not a quiet
+    /// shutdown: the caller is waiting for a reply.
+    /// 应答送不出去的请求是错误，而不是安静地结束：调用方在等回复。
+    #[test]
+    fn an_unwritable_response_is_reported() {
+        let mut input = &b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n"[..];
+        let error =
+            run_with(&mut input, &mut Broken).expect_err("a write failure must be an error");
+        assert!(error.contains("cannot write stdout"), "{error}");
+    }
+
+    /// A readable end of input ends the session successfully.
+    /// 输入正常结束会让本次会话成功收尾。
+    #[test]
+    fn a_closed_input_ends_the_session_cleanly() {
+        let mut input = &b""[..];
+        let mut output = Vec::new();
+        run_with(&mut input, &mut output).expect("an empty stdin is a clean end");
+        assert!(output.is_empty());
+    }
 }

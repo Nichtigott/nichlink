@@ -49,14 +49,39 @@ pub(crate) fn grafts(
     }
     let directory = directory.unwrap_or_else(|| ".".to_owned());
     let (manifest, package) = resolve_package(&directory)?;
-    let faces = face_views(&manifest, &package).unwrap_or_default();
+    // Every read failure here is collected and reported at the end. This command
+    // answers one question — "does the host entry declare the slot each plan
+    // addresses" — and a source tree, an entry or a plans directory it cannot
+    // read means it cannot answer it. Exiting zero on a partial answer would be
+    // worse than the failure: the declaration column would look computed when it
+    // was guessed.
+    // 这里的每次读取失败都会被收集并在最后报告。本命令回答一个问题——"宿主入口是否声明了
+    // 每条计划所针对的槽位"——而读不了的源码树、入口或计划目录都意味着它答不出来。带着部分
+    // 答案以 0 退出比失败更糟：声明那一列看上去像是算出来的，其实是猜的。
+    let mut problems = Vec::new();
+    let faces = match face_views(&manifest, &package) {
+        Ok(faces) => faces,
+        Err(error) => {
+            problems.push(format!("host source tree: {error}"));
+            Vec::new()
+        }
+    };
     let declared = declared_grafts(&manifest);
-    let rows = plan_rows(&manifest, &faces, declared.as_ref().ok());
+    let rows = match plan_rows(&manifest, &faces, declared.as_ref().ok()) {
+        Ok(rows) => rows,
+        Err(error) => {
+            problems.push(error);
+            Vec::new()
+        }
+    };
     let entry = declared
         .as_ref()
         .map(|declared| declared.entry.display().to_string())
         .ok();
     let entry_error = declared.as_ref().err().cloned();
+    if let Some(error) = &entry_error {
+        problems.push(format!("host entry: {error}"));
+    }
 
     if json_output {
         let report = json!({
@@ -66,7 +91,7 @@ pub(crate) fn grafts(
             "plans": rows,
         });
         writeln!(out, "{}", render_json(&report)).map_err(write_error)?;
-        return Ok(());
+        return report_problems(problems);
     }
 
     match (&entry, &entry_error) {
@@ -82,7 +107,7 @@ pub(crate) fn grafts(
             "no external graft plans under .nichlink/external-grafts/"
         )
         .map_err(write_error)?;
-        return Ok(());
+        return report_problems(problems);
     }
     for row in &rows {
         match row.get("error").and_then(Value::as_str) {
@@ -125,7 +150,23 @@ pub(crate) fn grafts(
             }
         }
     }
-    Ok(())
+    report_problems(problems)
+}
+
+/// Succeed only when every part of the answer could be read.
+/// 只有答案的每个部分都读到了才成功。
+///
+/// The report is written first, so a reader still gets the rows that were
+/// readable; the error then makes the exit code say the answer is incomplete.
+/// 报告先写出，因此读者仍拿到可读的那些条目；随后的错误让退出码说明这份答案不完整。
+fn report_problems(problems: Vec<String>) -> Result<(), String> {
+    if problems.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "incomplete: could not read {}",
+        problems.join("; ")
+    ))
 }
 
 /// Build one report row per plan directory, sorted by selector.
@@ -140,12 +181,21 @@ pub(crate) fn plan_rows(
     manifest: &Path,
     faces: &[FaceView],
     declared: Option<&DeclaredGrafts>,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, String> {
     let directory = manifest
         .join(lexicon::NICHLINK_DIR)
         .join(lexicon::EXTERNAL_GRAFT_DIR);
-    let Ok(entries) = std::fs::read_dir(&directory) else {
-        return Vec::new();
+    let entries = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries,
+        // No directory is the ordinary "no plans" case; a directory that exists
+        // and cannot be read is not, and saying "no plans" there would answer a
+        // question nobody could answer.
+        // 目录不存在是普通的"没有计划"；目录存在却读不了则不是，在那里回一句"没有计划"等于
+        // 回答了一个谁也答不出的问题。
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!("cannot read {}: {error}", directory.display()));
+        }
     };
     let mut rows = Vec::new();
     for entry in entries.flatten() {
@@ -235,5 +285,5 @@ pub(crate) fn plan_rows(
             .unwrap_or_default()
             .cmp(right["selector"].as_str().unwrap_or_default())
     });
-    rows
+    Ok(rows)
 }

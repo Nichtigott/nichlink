@@ -37,7 +37,7 @@ Track generic instances and methods from host roots. Represent `dyn Trait`, func
 
 ### 4. Build and release proof
 
-Feed the verified scope to normal rustc/LLVM/ThinLTO, then compare defined symbols and artifact size. Publish reproducible debug/release and 10k/100k-node benchmarks.
+Feed the verified scope to normal rustc/LLVM/ThinLTO, then compare defined symbols and artifact size. Publish reproducible debug/release and 10k/100k-node benchmarks. Part of this is recorded already, outside the adapter: [`docs/performance-baseline.md`](performance-baseline.md) holds the release-profile artifact bytes and defined symbols, and the 10k/100k-node registration and indexing costs that CI now enforces as ceilings. The debug-profile comparison and the per-scope symbol comparison wait for the adapter, because there is nothing yet whose scope could differ from rustc's.
 
 ### 5. Protocol stability
 

@@ -26,13 +26,17 @@ impl App {
                 "New project failed: package must use letters, digits, '_' or '-'".to_owned();
             return;
         }
+        // A relative directory is the reader's, not the process's: the wizard is
+        // open over a project, so `my-app` means a child of the project the reader
+        // is looking at rather than of whatever directory Studio happened to be
+        // started from.
+        // 相对目录属于读者而不是进程：向导开在一个项目之上，因此 `my-app` 指的是读者正在看的
+        // 项目的兄弟目录，而不是 Studio 恰好在其中启动的那个目录的子目录。
         let root = std::path::PathBuf::from(directory);
         let root = if root.is_absolute() {
             root
         } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."))
-                .join(root)
+            package_root().join(root)
         };
         let source = nichlink_build_method::scaffold::detected_source(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
@@ -292,25 +296,33 @@ impl App {
         };
         let entry = plugin_root.join(entry_name);
         let anchor = format!("\n#[allow(unused_imports)]\nuse {crate_name} as _;\n");
+        let entry_existed = entry.is_file();
         let entry_text = std::fs::read_to_string(&entry).unwrap_or_default();
         if !entry_text.contains(&format!("use {crate_name} as _;"))
-            && let Err(error) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&entry)
-                .and_then(|mut file| std::io::Write::write_all(&mut file, anchor.as_bytes()))
+            && let Err(error) = append_line(&entry, &anchor)
         {
             self.event = format!("Plugin failed: cannot update {entry_name}: {error}");
             return;
         }
+        // Two files carry one decision, and the lock is the one the runtime reads.
+        // A half-written pair would leave the entry importing a crate the lock
+        // does not record, so the entry file goes back to its previous bytes
+        // before the error is reported.
+        // 一个决定由两个文件承载，而锁是运行期读取的那一个。写了一半会让入口导入一个锁里没有
+        // 记录的 crate，因此在报告错误之前把入口文件恢复成先前的字节。
         let line = format!("{record}\n");
-        if let Err(error) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&lock)
-            .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()))
-        {
-            self.event = format!("Plugin failed: cannot update {lock_name}: {error}");
+        if let Err(error) = append_line(&lock, &line) {
+            let restored = if entry_existed {
+                std::fs::write(&entry, &entry_text)
+            } else {
+                std::fs::remove_file(&entry)
+            };
+            let note = if restored.is_ok() {
+                "the entry file was restored"
+            } else {
+                "the entry file could not be restored"
+            };
+            self.event = format!("Plugin failed: cannot update {lock_name}: {error}; {note}");
             return;
         }
         self.event = format!("Plugin selected: {package} ({source}, {mode})");
@@ -351,4 +363,14 @@ impl App {
             )),
         }
     }
+}
+
+/// Append one line to a file, creating it when it is absent.
+/// 向文件追加一行；文件不存在时创建它。
+fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()))
 }

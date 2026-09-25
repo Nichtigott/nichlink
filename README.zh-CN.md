@@ -628,7 +628,7 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 | `a` / `e` / `d` | 添加、编辑、删除注册面 |
 | `g` | 为选中注册面创建并编辑外部 graft 计划 |
 | `/` | 搜索文件和函数 |
-| `1`–`4` | 搜索、检视、数据、对比页面 |
+| `1`–`3` | 搜索、检视、数据页面 |
 | `Tab` | 在树和详情之间切换焦点 |
 | 方向键 / `j` `k` | 移动选择或调整当前面板 |
 | `r` / `F5` | 重新加载项目 |
@@ -700,6 +700,13 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 加载都是可选能力。
 - Studio、debug、MCP 和 plugin-host 都是可选工具；只使用 core 时，发布
 产物不包含开发界面。
+- 注册面位于 `<name>/<name>.rs`。注册面旁边的普通 `.rs` 模块会被静默跳过，而**确实是**
+  注册面却不在该布局里的文件会变成一条诊断，点名该文件与它应当在的布局——构建永远编译不到它，
+  因此它绝不能悄悄过去。
+- 插件信任默认是校验和，宿主验证签名时才升级为签名：只有
+  `PluginArtifact::verify_signed` 会记录签名保证，也只有它能打开官方通道。撤销在校验期间、
+  接受任何签名之前就被检查。这里的东西都不是操作系统级沙箱——那条边界属于进程适配器，已在
+  上面写明。
 
 ## 运行时追踪
 
@@ -727,7 +734,7 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 | --- | --- | --- |
 | `nichlink-build-method` | `build_method/` | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令 |
 | `nichlink-run-method` | `run_method/` | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器 |
-| `nichlink-debug-method` | `debug_method/` | 观测证据面：inventory 收集、MIR 子进程编排、tracing/petgraph 适配、`UnifiedCallGraph` |
+| `nichlink-debug-method` | `debug_method/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
 | `nichlink-plugin-host` | `plugin-host/` | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表 |
 | `nichlink-studio` | `studio/` | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法 |
 | `nichlink-mcp` | `mcp/` | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护 |

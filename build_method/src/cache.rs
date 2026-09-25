@@ -33,10 +33,12 @@ pub(crate) const CACHE_SCHEMA: &str = "3";
 
 /// Write a generated artifact only when its bytes changed.
 /// 仅在内容变化时写入生成产物。
-pub(crate) fn write_if_changed(path: &Path, content: &str) {
+pub(crate) fn write_if_changed(path: &Path, content: &str) -> Result<(), String> {
     if fs::read_to_string(path).ok().as_deref() != Some(content) {
-        fs::write(path, content).expect("write generated module tree");
+        fs::write(path, content)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
     }
+    Ok(())
 }
 
 pub(crate) fn collect_active_ids(

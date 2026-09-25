@@ -19,6 +19,11 @@ impl App {
                 _ => {}
             }
         } else {
+            // Any key consumes an armed write, so confirming takes two presses on
+            // the same form and nothing else can carry the arm into a write.
+            // 任何按键都会消费掉待写状态，因此确认需要在同一份表单上按两次，别的动作不可能把
+            // 这个状态带进一次写入。
+            let armed = std::mem::take(&mut plugin.pending_submit);
             match key.code {
                 KeyCode::Up => plugin.field = plugin.field.saturating_sub(1),
                 KeyCode::Down | KeyCode::Tab => plugin.field = (plugin.field + 1).min(6),
@@ -37,9 +42,15 @@ impl App {
                     };
                 }
                 KeyCode::Enter => plugin.editing = true,
-                KeyCode::Char('s') => {
+                KeyCode::Char('s') if armed => {
                     self.submit_plugin(&plugin);
                     return;
+                }
+                KeyCode::Char('s') => {
+                    plugin.pending_submit = true;
+                    self.event =
+                        "Plugin: press s again to write the entry line and the lock record"
+                            .to_owned();
                 }
                 _ => {}
             }

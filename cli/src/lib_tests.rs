@@ -255,6 +255,57 @@ fn grafts_json_lists_plans_and_declared_state() {
     fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// A plans directory that exists and cannot be read is a failure, not "no
+/// plans": the command's one answer is the declaration state of each plan, and
+/// an unreadable directory leaves it with nothing to answer. The document still
+/// reaches stdout, so a reader sees whatever was readable.
+/// 存在却读不了的计划目录是失败，而不是"没有计划"：本命令唯一的答案是每条计划的声明状态，
+/// 而读不了的目录让它无话可答。文档仍会写到 stdout，因此读者能看到可读的部分。
+#[test]
+fn grafts_reports_an_unreadable_plans_directory() {
+    let root = fixture_host("cli-grafts-unreadable", DECLARED_BUTTON, &control_tree());
+    // A file where the plans directory belongs, so the path exists and this is
+    // not the ordinary "no plans yet" case.
+    // 计划目录的位置放一个文件：路径存在，因此这不是普通的"还没有计划"。
+    fs::create_dir_all(root.join(".nichlink")).expect("nichlink directory");
+    fs::write(root.join(".nichlink/external-grafts"), "not a directory").expect("blocking file");
+
+    let path = root.display().to_string();
+    let (result, stdout) = run_capture(&["nichlink", "grafts", "--json", &path]);
+    let error = result.expect_err("an unreadable plans directory must fail");
+    assert!(error.contains("external-grafts"), "{error}");
+    let report: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
+    assert_eq!(report["plans"].as_array().map(Vec::len), Some(0));
+
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// A host whose source tree cannot be read is a failure too: the declaration
+/// column would otherwise be guessed from an empty face list.
+/// 读不了源码树的宿主同样是失败：否则声明那一列会由一个空的面清单猜出来。
+#[test]
+fn grafts_reports_a_host_whose_sources_cannot_be_read() {
+    let root = temporary_root("cli-grafts-no-src");
+    // Cargo needs a target, so this package names one outside `src/`; the
+    // question `grafts` asks is about `src/`, which is absent.
+    // Cargo 需要一个 target，因此这个包把 target 指到 `src/` 之外；而 `grafts` 问的正是
+    // `src/`，它不存在。
+    fs::create_dir_all(root.join("library")).expect("library directory");
+    fs::write(root.join("library/lib.rs"), "pub fn placeholder() {}\n").expect("library target");
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"no-src\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"library/lib.rs\"\n",
+    )
+    .expect("manifest");
+
+    let path = root.display().to_string();
+    let (result, _stdout) = run_capture(&["nichlink", "grafts", &path]);
+    let error = result.expect_err("a host without sources cannot be answered about");
+    assert!(error.contains("source tree"), "{error}");
+
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
 /// `explain --overlay` renders the static overlay projection: the declared
 /// slot carries its replacement, and the plan records are listed.
 /// `explain --overlay` 渲染静态覆盖投影：已声明槽位带出它的替换件，并列出计划记录。

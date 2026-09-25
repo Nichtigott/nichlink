@@ -1,0 +1,93 @@
+name: nichlink-release
+
+# A published crates.io version is immutable — it can be yanked, never replaced —
+# and this workspace is a hard publish chain, so a release is a tag and nothing
+# else starts it: `v0.1.0` publishes `0.1.0`, or the job stops before uploading.
+# 已发布的 crates.io 版本不可变（只能 yank，不能替换），而本工作区是一条硬发布链，因此
+# 一次发布就是一个 tag，且只有 tag 会启动它：`v0.1.0` 发布 `0.1.0`，否则任务在上传前停下。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload to crates.io (off: stop after the checks)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Two runs of the same tag would race for the same immutable versions, and the
+# index wait can hang; both are bounded here rather than left to luck.
+# 同一个 tag 的两次运行会争抢同一批不可变版本，而等待 index 有可能挂住；两者都在这里被限住，
+# 而不是交给运气。
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Tag names this version
+        # The release workflow's one hard precondition. `cargo publish` would
+        # happily upload whatever version the manifests carry; only this step
+        # ties the upload to the tag that is supposed to describe it, and a
+        # mismatch cannot be undone afterwards.
+        # 本工作流唯一硬性前提。`cargo publish` 会照发清单里的版本号；只有这一步把上传绑定
+        # 到本应描述它的 tag 上，而一旦不匹配就再也无法挽回。
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not name workspace version $version" >&2
+            exit 1
+          fi
+
+      - name: Release tables match the manifests
+        run: tools/nichlink-publish --check-table
+
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Tests (all features, all targets)
+        run: cargo test --workspace --all-features --all-targets
+      - name: Doctests (all features)
+        run: cargo test --workspace --all-features --doc
+      - name: Clippy (all features, all targets)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+      - name: Package audit
+        run: tools/nichlink-package-audit
+      - name: Release artifact audit
+        run: tools/nichlink-release-audit
+
+      - name: Publish in dependency order
+        # `--publish --yes` is the only invocation that uploads: every other mode
+        # of `tools/nichlink-publish` is a dry run, so a mistaken tag is caught by
+        # the gates above rather than by an upload nobody can take back.
+        # `--publish --yes` 是唯一会真正上传的调用：`tools/nichlink-publish` 的其他模式都是
+        # dry run，因此打错的 tag 会被上面的门禁挡住，而不是被一次收不回的上传发现。
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: tools/nichlink-publish --publish --yes
+
+      - name: A stranger can consume the release
+        # Packaging reads local paths; only a consumer reads the published
+        # requirements. This builds a throwaway crate outside the checkout and
+        # `cargo add`s all nine by version, which is the half of the rehearsal
+        # that cannot run before the upload.
+        # 打包读的是本地路径，只有消费者读的是已发布的要求。这一步在本检出之外建一个一次性
+        # crate，按版本 `cargo add` 九个 crate——这是演练中无法在上传之前跑的那一半。
+        if: github.event_name == 'push' || inputs.publish
+        run: tools/nichlink-publish --verify-consumers

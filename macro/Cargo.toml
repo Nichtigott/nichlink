@@ -7,6 +7,8 @@ license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
 description = "Face field normalisation and diagnostics for NichLink's authoring macros"
+keywords = ["registration", "proc-macro", "codegen", "macros"]
+categories = ["development-tools::procedural-macro-helpers", "development-tools"]
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-macro"
 

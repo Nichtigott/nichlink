@@ -5,6 +5,12 @@ use super::*;
 #[path = "create.rs"]
 mod create;
 use create::create_module;
+#[path = "delete.rs"]
+mod delete;
+pub use delete::delete_module;
+#[path = "trash.rs"]
+mod trash;
+use trash::stash_face_source;
 #[path = "face_values.rs"]
 mod face_values;
 use face_values::ModuleFaceValues;
@@ -348,6 +354,19 @@ pub fn edit_module_face(
     let rule = face.rule_source_path()?;
     let old_rule = fs::read_to_string(&rule).ok();
     let rendered = face.render_source()?;
+    // The rewrite rebuilds the file from the fields this surface models, so
+    // anything hand-added to it is not in `rendered`. Keep the previous text
+    // recoverable before the first byte changes: deleting a face already goes
+    // through the trash, and a rewrite deserves the same way back. Nothing is
+    // stashed when the rewrite is a no-op, so an unedited save leaves no litter.
+    // 重写会用本执行面建模的字段重建文件，因此手工加进文件的内容不在 `rendered` 里。在
+    // 第一个字节改变之前把先前的文本留成可恢复的：删除注册面本就经 trash 走，重写也应当
+    // 有同样的回退方式。重写没有实质变化时不留备份，因此未改动的保存不会留下垃圾。
+    let backup = if rendered == old_source {
+        None
+    } else {
+        Some(stash_face_source(&source, id, &old_source)?)
+    };
     if let Err(error) = atomic_write(&source, &rendered) {
         let _ = atomic_write(&source, &old_source);
         return Err(error);
@@ -387,43 +406,14 @@ pub fn edit_module_face(
         }
     }
     Ok(AuthoringChange {
-        message: format!("updated registration face {}", source.display()),
+        message: match &backup {
+            Some(backup) => format!(
+                "updated registration face {} (previous text kept at {})",
+                source.display(),
+                backup.display()
+            ),
+            None => format!("updated registration face {}", source.display()),
+        },
         source,
-    })
-}
-
-/// Move one generated module subtree into the recoverable NichLink trash.
-/// 将一个生成模块子树移动到可恢复的 NichLink 回收目录。
-pub fn delete_module(registry: &Registry, spec: &str) -> Result<AuthoringChange, String> {
-    let mut fields = spec.split_whitespace();
-    let id = fields
-        .next()
-        .ok_or_else(|| "usage: delete <node> confirm".to_owned())?
-        .parse::<NodeId>()
-        .map_err(|_| "delete requires a 32-digit node identity".to_owned())?;
-    if fields.next() != Some("confirm") || fields.next().is_some() {
-        return Err("usage: delete <node> confirm".to_owned());
-    }
-
-    let (name, source) = generated_paths(registry, id)?;
-    let module_dir = source
-        .parent()
-        .ok_or_else(|| "generated source has no module directory".to_owned())?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("clock error: {error}"))?
-        .as_secs();
-    let trash = package_root()
-        .join(".nichlink")
-        .join("trash")
-        .join(format!("{name}-{id}-{stamp}"));
-    fs::create_dir_all(trash.parent().expect("trash has a parent"))
-        .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
-    fs::rename(module_dir, &trash)
-        .map_err(|error| format!("cannot move module to trash: {error}"))?;
-
-    Ok(AuthoringChange {
-        message: format!("moved `{name}` to {}", trash.display()),
-        source: trash,
     })
 }

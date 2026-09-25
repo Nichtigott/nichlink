@@ -85,7 +85,8 @@ nichlink new my-app
 cd my-app && nichlink studio
 ```
 
-For a released crate, replace the Git source with `cargo install nichlink-cli`.
+Nothing is on crates.io yet, so the Git source is the only one that resolves
+today; once 0.1.0 is out, replace it with `cargo install nichlink-cli`.
 The plugin binary also answers to `cargo nichlink <command>`. To inspect an
 existing project instead, point the CLI at it:
 
@@ -699,8 +700,9 @@ on input, resize, or a file event.
 | `a` / `e` / `d` | Add, edit, or delete a face |
 | `g` | Compose an external graft plan for the selected face |
 | `/` | Search files and functions |
-| `1`–`4` | Search, inspect, data, compare pages |
-| `Tab` | Move focus between tree and details |
+| `1`–`3` | Search, inspect, data pages |
+| `Tab` | Move focus between the tree and the data pane |
+| `p` | Select a plugin and record it in the lock |
 | arrows / `j` `k` | Move or resize the focused panel |
 | `r` / `F5` | Reload the project |
 | `b` / `F9` | Run the build check |
@@ -782,6 +784,15 @@ choice.
   operating-system security sandbox. Wasm/process loading is optional.
 - Studio, debug, MCP, and plugin-host code are optional tools. A core-only
   release keeps the registry protocol without the development UI.
+- A registration face lives in `<name>/<name>.rs`. An ordinary `.rs` module
+  beside the faces is skipped in silence, while a file that *is* a face outside
+  that layout is a build diagnostic naming the file and the layout it belongs in
+  — the build can never compile it, so it must not pass unnoticed.
+- Plugin trust is a checksum by default and a signature when the host verifies
+  one: only `PluginArtifact::verify_signed` records signature assurance, and only
+  that opens the official channel. Revocation is consulted during verification,
+  before any signature is accepted. Nothing here is an operating-system
+  sandbox — that boundary is the process adapter's, and it is stated above.
 
 ## Runtime tracing
 
@@ -813,7 +824,7 @@ same methods.
 | --- | --- | --- |
 | `nichlink-build-method` | `build_method/` | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives |
 | `nichlink-run-method` | `run_method/` | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor |
-| `nichlink-debug-method` | `debug_method/` | Observation evidence: inventory collection, MIR subprocess orchestration, tracing/petgraph adapters, `UnifiedCallGraph` |
+| `nichlink-debug-method` | `debug_method/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
 | `nichlink-plugin-host` | `plugin-host/` | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table |
 | `nichlink-studio` | `studio/` | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods |
 | `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |

@@ -59,9 +59,12 @@ pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
 }
 
 /// Resolve the project whose sources Studio reads and edits.
+/// 解析 Studio 读取与编辑其源码的项目。
 ///
-/// The rule is `lexicon`'s; only the last-resort fallback is Studio's own.
-/// 规则来自 `lexicon`；只有最后兜底属于 Studio 自己。
+/// The rule is `lexicon`'s, plus one refusal it cannot make: Studio is an
+/// editor, so "no project" has to be an error rather than a path to write into.
+/// 规则来自 `lexicon`，外加一条它无法做出的拒绝：Studio 是编辑器，因此"没有项目"必须是
+/// 错误，而不是一个可以往里写的路径。
 pub(super) fn package_root() -> PathBuf {
     if let Some(root) = PROJECT_CONTEXT.with(|current| {
         current
@@ -74,21 +77,109 @@ pub(super) fn package_root() -> PathBuf {
     let configured =
         std::env::var_os(nichlink_run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = std::env::current_dir().ok();
-    // When Studio is launched from a host project, that project is the natural
-    // target. This keeps `cargo run --manifest-path .../studio/Cargo.toml`
-    // useful without requiring an environment variable.
-    // 从宿主项目目录启动 Studio 时，当前目录就是默认目标，无需额外环境变量。
-    let fallback = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap_or_else(|| Path::new("."));
-    nichlink_run_method::lexicon::resolve_package_root(
+    resolve_project_from(
+        None,
+        None,
         configured.as_deref(),
         current.as_deref(),
         current
             .as_ref()
             .is_some_and(|directory| directory.join("Cargo.toml").is_file()),
-        fallback,
     )
+    // `launch` already refused an unresolvable project before the editor started,
+    // so this branch is unreachable in a running session. The working directory is
+    // the last resort rather than the directory this crate was compiled in, which
+    // is what a reader would otherwise be editing: the checkout, or the installed
+    // crate's sources.
+    // `launch` 已在编辑器启动前拒绝了解析不出的项目，因此这个分支在运行中的会话里不可达。
+    // 兜底取当前目录，而不是本 crate 编译时所在的目录——否则读者编辑的会是检出目录或已安装
+    // crate 的源码。
+    .unwrap_or_else(|_| current.unwrap_or_else(|| PathBuf::from(".")))
+}
+
+/// Resolve the project Studio should open, or say why it cannot.
+/// 解析 Studio 应当打开的项目，或说明为什么不能。
+pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String> {
+    let configured =
+        std::env::var_os(nichlink_run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let current = std::env::current_dir().ok();
+    resolve_project_from(
+        PROJECT_CONTEXT
+            .with(|session| {
+                session
+                    .borrow()
+                    .as_ref()
+                    .map(|project| project.root.clone())
+            })
+            .as_deref(),
+        explicit,
+        configured.as_deref(),
+        current.as_deref(),
+        current
+            .as_ref()
+            .is_some_and(|directory| directory.join("Cargo.toml").is_file()),
+    )
+}
+
+/// The resolution rule itself, with every input a parameter so it can be pinned.
+/// 解析规则本身；每个输入都是参数，因此可以被钉住。
+///
+/// Order: the session's own selection, an explicit path, the environment, then
+/// the working directory when it holds a package. Every value that names
+/// something unusable is refused by name instead of being used or skipped.
+/// 顺序：本会话自己的选择、显式路径、环境变量，最后是持有包的当前目录。任何指不到东西的
+/// 取值都按名字被拒绝，而不是被使用或被跳过。
+pub(super) fn resolve_project_from(
+    selected: Option<&Path>,
+    explicit: Option<&Path>,
+    configured: Option<&Path>,
+    current: Option<&Path>,
+    current_holds_package: bool,
+) -> Result<PathBuf, String> {
+    if let Some(path) = selected {
+        return usable(path, current, "the selected project", "select_project");
+    }
+    if let Some(path) = explicit {
+        return usable(path, current, "the path argument", "nichlink-studio <path>");
+    }
+    if let Some(path) = configured {
+        return usable(
+            path,
+            current,
+            nichlink_run_method::lexicon::PACKAGE_ROOT_ENV,
+            "NICH_LINK_PACKAGE_ROOT",
+        );
+    }
+    if current_holds_package && let Some(current) = current {
+        return Ok(current.to_path_buf());
+    }
+    Err(
+        "no project to open: pass a project path, set NICH_LINK_PACKAGE_ROOT, or start Studio \
+         from a directory that holds a Cargo.toml"
+            .to_owned(),
+    )
+}
+
+/// Accept one candidate root, or refuse it by name.
+/// 接受一个候选根，或按名字拒绝它。
+fn usable(
+    path: &Path,
+    current: Option<&Path>,
+    what: &str,
+    remedy: &str,
+) -> Result<PathBuf, String> {
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        current.unwrap_or_else(|| Path::new(".")).join(path)
+    };
+    if resolved.is_dir() {
+        return Ok(resolved);
+    }
+    Err(format!(
+        "{what} names `{}`, which is not a directory; check {remedy}",
+        resolved.display()
+    ))
 }
 
 /// Resolve the Cargo manifest used for MIR inspection and rebuilds.

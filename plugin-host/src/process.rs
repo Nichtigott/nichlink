@@ -18,7 +18,7 @@ use crate::{HostError, PluginInstance};
 #[path = "process/child.rs"]
 mod child;
 
-use child::{POLL_INTERVAL, kill_and_reap, read_frame, read_stderr, spawn_staged};
+use child::{POLL_INTERVAL, drain_to_eof, kill_and_reap, read_frame, read_stderr, spawn_staged};
 
 /// Limits for one isolated process call.
 /// 单次隔离进程调用的限制。
@@ -274,7 +274,18 @@ impl PluginInstance for ProcessInstance {
         // 在整个子进程生存期内排空 stdout，正是把管道缓冲从契约里移除的那一步。
         // `read_frame` 在分配之前就拒绝超过上限的声明长度，因此该上限同时约束内存。
         thread::spawn(move || {
-            let _ = frames.send(read_frame(&mut stdout, max_output));
+            // The frame leaves before the rest of stdout is drained, so a child
+            // that answers and then keeps talking still delivers its answer at
+            // once; draining is what keeps that child from blocking on a full
+            // pipe while the host waits for it to exit. Reading one frame and
+            // stopping was the bug: the child blocked, the host killed it at the
+            // deadline, and a delivered answer was reported as a timeout.
+            // 帧在排空 stdout 其余部分之前送出，因此先作答、后继续说话的子进程仍会立刻交付
+            // 答案；排空正是让那个子进程不会在宿主等它退出时阻塞在满管道上的东西。只读一帧就
+            // 停下曾是缺陷：子进程阻塞、宿主在超时点杀掉它，而一个已经送达的答案被报成超时。
+            let frame = read_frame(&mut stdout, max_output);
+            let _ = frames.send(frame);
+            drain_to_eof(&mut stdout);
         });
 
         let mut stderr = child

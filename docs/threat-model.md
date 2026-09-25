@@ -23,7 +23,9 @@ child process per call.
   contract closure before publication.
 - Official plugins require a matching trust policy and signature assurance;
   community and local plugins still require a verified checksum artifact.
-- Wasm calls are limited by linear memory, fuel, input bytes, and output bytes.
+- Wasm calls are limited by linear memory, table elements, fuel, input bytes,
+  output bytes, and the artifact size accepted for compilation; modules are also
+  compiled under the engine's strict limits.
 - Process calls use framed I/O, input/output limits, and a hard timeout; a
   timed-out child is terminated.
 - Hot replacement publishes code and registry in one generation. Failed health

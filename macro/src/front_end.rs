@@ -23,6 +23,37 @@ use crate::mirror::{Field, punct};
 /// third part.
 /// 组（`{ … }`、`( … )`、`[ … ]`）内的 `;` 属于该组，因此绝不算分隔符；第三个分隔符
 /// 之后的内容留在第三段。
+/// Replace every occurrence of one identifier with the given tokens.
+/// 把某一标识符的每次出现替换为给定的 token。
+///
+/// Used to splice a caller's tokens into a template that must parse as a whole:
+/// building the template by concatenating a prefix and a suffix would leave a
+/// half-written item that no parser accepts. Groups are walked, so a placeholder
+/// inside a block is found too, and the replacement is inserted verbatim — its
+/// spans and any `$crate` hygiene survive.
+/// 用于把调用方的 token 拼进一个必须整体可解析的模板：用前后缀拼接会留下半个语法项，任何
+/// 解析器都不接受。遍历会进入分组，因此块内的占位符同样能找到，而替换是原样插入——它的
+/// span 与任何 `$crate` 卫生性都得以保留。
+pub(crate) fn splice(tokens: Tokens, placeholder: &str, replacement: &Tokens) -> Tokens {
+    tokens
+        .into_iter()
+        .map(|token| match token {
+            TokenTree::Ident(ident) if ident == placeholder => {
+                TokenTree::Group(Group::new(Delimiter::None, replacement.clone()))
+            }
+            TokenTree::Group(group) => {
+                let mut replaced = Group::new(
+                    group.delimiter(),
+                    splice(group.stream(), placeholder, replacement),
+                );
+                replaced.set_span(group.span());
+                TokenTree::Group(replaced)
+            }
+            other => other,
+        })
+        .collect()
+}
+
 pub(crate) fn split_semicolons(tokens: Tokens) -> Vec<Tokens> {
     let mut parts = vec![Tokens::new()];
     for token in tokens {

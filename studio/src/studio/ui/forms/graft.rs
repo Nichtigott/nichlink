@@ -135,7 +135,7 @@ pub(crate) fn draw_graft(
         .any(|plan| plan.selector == graft.selector.trim())
     {
         lines.push(Line::from(Span::styled(
-            "! that selector already exists; o opens it, d deletes it",
+            "! that selector already exists; o opens it, d deletes it (press d twice)",
             Style::default().fg(Color::LightRed),
         )));
     }
@@ -219,9 +219,11 @@ pub(crate) fn draw_graft(
     frame.render_widget(button("Close [Esc]", MUTED), buttons[1]);
     frame.render_widget(button("Exit [q]", Color::LightRed), buttons[2]);
     frame.render_widget(
-        Paragraph::new("↑↓ row  Tab pane  Enter edit/toggle  o open  f full  d delete")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(MUTED).bg(PANEL)),
+        Paragraph::new(
+            "↑↓ row  Tab pane  Enter edit/toggle  o open  f full  d delete (press twice)",
+        )
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(MUTED).bg(PANEL)),
         buttons[3],
     );
     // The two clickable compose rows: the panel's inner first line is `target`,

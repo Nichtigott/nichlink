@@ -94,12 +94,28 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
     assert_eq!(state.plans[0].selector, "canvas_graft");
     assert!(state.plans[0].full);
 
-    // `f` rewrites the record, `d` moves it to the recoverable trash.
+    // `f` rewrites the record; `d` arms and only a second `d` moves it to the
+    // recoverable trash: moving a directory deserves two deliberate presses, and
+    // any other key in between clears the arm.
+    // `f` 重写记录；`d` 只进入待删状态，只有第二次 `d` 才把它移进可恢复的回收目录：移动
+    // 目录值得两次有意的按键，而中间任何其他键都会解除。
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('f')));
     assert!(
         !with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft"))
             .expect("plan reads back")
             .full()
+    );
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
+    assert!(app.event.contains("press d again"), "{}", app.event);
+    assert!(
+        with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft")).is_ok(),
+        "one press must not delete the record"
+    );
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
+    app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
+    assert!(
+        with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft")).is_ok(),
+        "another key clears the arm, so this press only arms again"
     );
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
     assert!(

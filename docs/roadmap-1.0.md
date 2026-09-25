@@ -254,9 +254,15 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    `nichlink-core` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
    `cargo workspaces publish`**：那个配置我无法在离线环境里跑起来验证，交一份没验证过的配置
    正是这个仓库拒绝的东西；脚本的顺序与轮询逻辑可以在本地实测（已实测）。
-   **仍然只剩你需要做的一步**：`CARGO_REGISTRY_TOKEN=… tools/nichlink-publish --publish --yes`
-   ——发布需要你的 token 与授权，我不代按。发布后重跑 `tools/nichlink-package-audit`，CI 的包
-   检查会自动覆盖全九包。
+   **仍然只剩你需要做的一步**：打 tag 并给发布工作流 `CARGO_REGISTRY_TOKEN` secret
+   ——发布需要你的 token 与授权，我不代按、也不做 git 写操作。收尾那一步现在是
+   `tools/nichlink-publish --verify-consumers`（本轮新增）：它在本检出之外建一个一次性 crate
+   按版本 `cargo add` 九个 crate，因此验证的是 index 上的解析而不是本地路径。`--check-table`
+   在同一批里修掉了两张表的既存缺陷：`deps_of` 原先只返回多依赖 crate 的第一个依赖
+   （`nichlink-cli` 因此绕过"依赖未上 index 就不许发布"的守卫），并且边行的被依赖者被当成
+   独立 crate；现在按整行读取，并由 `--check-table` 在每次 push 与每次发布前核对
+   （`nichlink-cli` 缺的 `nichlink-core` 这条真实漂移已修正）。发布工作流见
+   `.github/workflows/release.yml`；`docs/performance-baseline.md` 记录 R4 的性能基线与预算。
 7. ✅ **`#![warn(missing_docs)]` 已在九个 crate 上全部开启**（比原计划的 `lexicon`/`identity`/
    `declaration`/`graft` 递增白名单更进一步：债一次还清，lint 覆盖整个 crate，因此不会再
    长回来）。总计补齐 **约 700 条**公开项的双语文档：core 510（38 个文件，含 44 条只在

@@ -11,4 +11,4 @@
 #[path = "studio/studio.rs"]
 mod studio;
 
-pub use studio::launch;
+pub use studio::{launch, launch_with};

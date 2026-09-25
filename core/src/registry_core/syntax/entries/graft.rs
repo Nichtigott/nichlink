@@ -323,8 +323,7 @@ impl<'a> GraftVisitor<'a> {
 /// Parse static and dynamic graft declarations without executing them.
 /// 解析静态和动态 graft 声明，不执行宏。
 pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> {
-    let file =
-        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let file = super::super::nesting::parse_file(source)?;
     let mut entries = Vec::new();
     let mut visitor = GraftVisitor {
         entries: &mut entries,

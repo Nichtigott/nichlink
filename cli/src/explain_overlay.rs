@@ -51,7 +51,7 @@ pub(super) fn overlay_report(
     let out_dir = build_out_dir(manifest);
     let scope = read_build_scope(&out_dir).ok();
     let declared = declared_grafts(manifest);
-    let plans = super::super::grafts::plan_rows(manifest, faces, declared.as_ref().ok());
+    let plans = super::super::grafts::plan_rows(manifest, faces, declared.as_ref().ok())?;
 
     let mut slots = Vec::new();
     let mut pruned = Vec::new();

@@ -123,10 +123,7 @@ pub fn run_to(argv: impl IntoIterator<Item = String>, out: &mut dyn Write) -> Re
         Some("explain") => explain::explain(&mut args, out),
         Some("grafts") => grafts::grafts(&mut args, out),
         Some("studio") => nichlink_studio::launch().map_err(|error| error.to_string()),
-        Some("mcp") => {
-            nichlink_mcp::run();
-            Ok(())
-        }
+        Some("mcp") => nichlink_mcp::run().map_err(|error| format!("mcp: {error}")),
         Some(other) => Err(format!("unknown command '{other}' (see --help)")),
     }
 }

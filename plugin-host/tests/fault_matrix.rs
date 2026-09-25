@@ -194,6 +194,103 @@ mod wasm_faults {
         );
     }
 
+    /// The table ceiling is wired to the store, not only declared: with it at
+    /// zero even a one-element table cannot activate.
+    /// 表的上限是真的接到存储上的，而不只是声明：把它设为零时，连只有一个元素的表也无法
+    /// 激活。
+    #[test]
+    fn the_table_element_limit_is_enforced() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 1 funcref)
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                table_elements: 0,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        // Registration is lazy; activation is the first call.
+        // 注册是惰性的；激活发生在第一次调用。
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a table past the ceiling must not activate");
+        assert!(
+            error.to_string().contains("table") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// A hostile module cannot buy host memory through a table: the memory
+    /// ceiling does not bound a table, which is a separate eagerly-instantiated
+    /// array of function references.
+    /// 敌对模块无法通过表买到宿主内存：内存上限并不约束表，而表是一块独立的、即时实例化的
+    /// 函数引用数组。
+    #[test]
+    fn a_huge_table_is_refused() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 100000000 funcref)
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a hundred million table entries must not be allocated");
+        assert!(
+            error.to_string().contains("table") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// Compilation happens before any runtime limit can apply, so the artifact
+    /// ceiling is checked by hand and reported as a limit rather than as a broken
+    /// module.
+    /// 编译发生在任何运行期限制生效之前，因此工件上限是手工检查的，并且报成"超限"而不是
+    /// "模块损坏"。
+    #[test]
+    fn an_oversized_artifact_is_refused_before_compilation() {
+        let bytes = wat::parse_str(ECHO).expect("valid WAT");
+        let ceiling = bytes.len() - 1;
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                max_module_bytes: ceiling,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "echo", &[])
+            .expect_err("an artifact past the ceiling must not be compiled");
+        assert!(error.to_string().contains("artifact is"), "{error}");
+    }
+
     #[test]
     fn linear_memory_growth_is_capped() {
         let wat = r#"(module
@@ -353,6 +450,31 @@ mod process_faults {
                 "a {body}-byte response is inside the declared 1 MiB limit"
             );
         }
+    }
+
+    /// A child that keeps writing after its answer must still deliver it.
+    /// Reading only the first frame left the child blocked on a full pipe, so the
+    /// host waited for an exit that could not come and killed it at the deadline,
+    /// reporting `Timeout` and discarding an answer it already had.
+    /// 已经给出答案却继续写入的子进程仍必须交付那个答案。只读第一帧会让子进程阻塞在满管道
+    /// 上，于是宿主去等一个不可能到来的退出、在超时点杀掉它，报出 `Timeout` 并丢掉它其实
+    /// 已经拿到的答案。
+    #[test]
+    fn a_child_that_writes_past_its_answer_still_delivers_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let payload = b"answer";
+        let frame = directory.path().join("answer.frame");
+        std::fs::write(&frame, framed(payload)).unwrap();
+        let plugin = script(
+            directory.path(),
+            "chatty",
+            &format!(
+                "#!/bin/sh\ncat {}\nhead -c 200000 /dev/zero\n",
+                frame.display()
+            ),
+        );
+        let loaded = load(&plugin, ProcessLimits::default());
+        assert_eq!(loaded.call("run", &[]).unwrap(), payload);
     }
 
     /// The declared output cap is refused as `Limit`, and the refusal survives the

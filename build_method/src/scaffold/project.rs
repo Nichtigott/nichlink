@@ -165,11 +165,46 @@ pub fn create_project(
     {
         return Err(format!("{} is not empty", root.display()));
     }
-    write_project_files(root, &project_files(package, kind, source))?;
-    // A new project gets the face-field snippets too, so `kind: ` is one pick
-    // away from the first field the author writes.
-    // 新项目同时得到注册面字段 snippet，因此作者写下的第一个字段就能一键得到 `kind: `。
-    write_editor_snippets(root, Editor::Vscode)?;
+    // A half-scaffolded project is worse than none: the manifest may name modules
+    // whose files never arrived, and the next attempt refuses the directory as
+    // non-empty. The emptiness check above means everything under `root` is ours,
+    // so a failure removes what we wrote — unless the directory already existed,
+    // in which case the error says what was left behind rather than deleting a
+    // directory the reader made.
+    // 半成品的项目比没有更糟：清单可能引用从未出现的模块文件，而下一次尝试会以"非空"拒绝
+    // 该目录。上面的空目录检查意味着 `root` 下的一切都是我们写的，因此失败时移除我们写下的
+    // 内容——除非该目录本来就存在，那种情况下错误会说明留下了什么，而不是删掉读者建的目录。
+    let existed = root.exists();
+    write_project(root, &project_files(package, kind, source), existed)
+}
+
+/// Write every part of a project, removing it again when any step fails.
+/// 写下一个项目的每个部分；任何一步失败时再把它移除。
+///
+/// The emptiness check in `create_project` means everything under `root` is ours,
+/// so a failure removes what we wrote — unless the directory already existed, in
+/// which case the error says what was left behind rather than deleting a
+/// directory the reader made.
+/// `create_project` 的空目录检查意味着 `root` 下的一切都是我们写的，因此失败时移除我们
+/// 写下的内容——除非该目录本来就存在，那种情况下错误会说明留下了什么，而不是删掉读者建的
+/// 目录。
+fn write_project(root: &Path, files: &[(&str, String)], existed: bool) -> Result<(), String> {
+    let outcome = write_project_files(root, files).and_then(|()| {
+        // A new project gets the face-field snippets too, so `kind: ` is one pick
+        // away from the first field the author writes.
+        // 新项目同时得到注册面字段 snippet，因此作者写下的第一个字段就能一键得到 `kind: `。
+        write_editor_snippets(root, Editor::Vscode)
+    });
+    if let Err(error) = outcome {
+        if existed {
+            return Err(format!(
+                "{error}; a partial project was left in {}",
+                root.display()
+            ));
+        }
+        let _ = fs::remove_dir_all(root);
+        return Err(format!("{error}; the partial project was removed"));
+    }
     Ok(())
 }
 
@@ -210,6 +245,39 @@ mod tests {
                 .expect("clock")
                 .as_nanos()
         ))
+    }
+
+    /// A failure part-way through leaves no half-project behind, and a directory
+    /// the reader already had is reported rather than deleted.
+    /// 进行到一半时的失败不会留下半个项目，而读者本来就有的目录会被如实报告而不是删掉。
+    #[test]
+    fn a_failed_scaffold_removes_what_it_wrote() {
+        let root = temporary_directory("project-partial");
+        // The first entry creates `a` as a directory, so the second cannot write
+        // `a` as a file: the failure happens after something was written.
+        // 第一条把 `a` 建成目录，因此第二条无法把 `a` 当文件写入：失败发生在已经写下东西之后。
+        let files = vec![
+            ("a/b.txt", "written first".to_owned()),
+            ("a", "cannot be written".to_owned()),
+        ];
+
+        let error =
+            super::write_project(&root, &files, false).expect_err("the second write must fail");
+        assert!(error.contains("the partial project was removed"), "{error}");
+        assert!(
+            !root.exists(),
+            "nothing of the failed scaffold is left behind"
+        );
+
+        fs::create_dir_all(&root).expect("a directory the reader already had");
+        let error =
+            super::write_project(&root, &files, true).expect_err("the second write must fail");
+        assert!(error.contains("a partial project was left in"), "{error}");
+        assert!(
+            root.join("a/b.txt").is_file(),
+            "a pre-existing directory is reported, not deleted"
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// A scaffolded project already carries the file, so the author never runs

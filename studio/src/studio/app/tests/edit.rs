@@ -215,3 +215,79 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A rewrite rebuilds the face from the fields the form models, so anything
+/// hand-added to the file is dropped. It is no longer dropped *irrecoverably*:
+/// the previous text is kept under the trash the delete path already uses, and
+/// the event line says where it went.
+/// 重写会用表单建模的字段重建注册面，因此手工加进文件的内容会被丢掉。它不再**不可恢复**
+/// 地丢掉：先前的文本留在删除路径本就使用的回收目录下，而事件行说明它去了哪里。
+#[test]
+fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-trash-{suffix}"));
+    let control = root.join("src/control/control.rs");
+    let rule = root.join("src/control/registry_rule/registry_rule.rs");
+    std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
+    // One line no form field models: the rewrite cannot keep it, and the reader
+    // must still be able to get it back.
+    // 一行没有任何表单字段建模的内容：重写留不住它，而读者仍然必须能把它拿回来。
+    let hand_written = "// hand-written note that no form field models\n";
+    std::fs::write(
+        &control,
+        format!(
+            "{hand_written}pub struct ControlRegistry;\n\ncrate::control_object! {{\n    kind: ControlRegistry,\n    needs_registry: true,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n}}\n"
+        ),
+    )
+    .expect("write control");
+    std::fs::write(
+        &rule,
+        "use crate::RegistrationRule;\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::ANY;\n",
+    )
+    .expect("write legacy rule");
+    select_project(root.clone(), root.join("Cargo.toml"), "trash-app");
+
+    let mut app = App::load();
+    app.selected = app.registry.depth_first()[0].id;
+    app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+    let Some(Overlay::Edit(id, mut edit)) = app.overlay.take() else {
+        panic!("e should open the Edit form");
+    };
+    edit.values[face_field::SUMMARY_ZH] = "重写后的摘要。".to_owned();
+    app.overlay = Some(Overlay::Edit(id, edit));
+    app.handle_key(KeyEvent::from(KeyCode::Char('s')));
+
+    assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
+    let rewritten = std::fs::read_to_string(&control).expect("rewritten control");
+    assert!(
+        !rewritten.contains("hand-written note"),
+        "the rewrite drops what the form does not model: {rewritten}"
+    );
+    assert!(
+        app.event.contains("previous text kept at"),
+        "the reader has to be told where the old text went: {}",
+        app.event
+    );
+
+    let faces = root.join(".nichlink/trash/faces");
+    let entries = std::fs::read_dir(&faces)
+        .expect("the trash directory exists")
+        .map(|entry| entry.expect("trash entry").path())
+        .collect::<Vec<_>>();
+    assert_eq!(entries.len(), 1, "one rewrite, one backup: {entries:?}");
+    let backup = std::fs::read_to_string(&entries[0]).expect("backup text");
+    assert!(
+        backup.contains("hand-written note"),
+        "the backup holds the text that was overwritten: {backup}"
+    );
+    assert!(
+        app.event.contains(&entries[0].display().to_string()),
+        "the message names the backup path: {}",
+        app.event
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

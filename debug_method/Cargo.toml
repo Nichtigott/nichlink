@@ -7,6 +7,8 @@ license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
 description = "Optional MIR, CallTrace, data-flow, and graph evidence for NichLink"
+keywords = ["mir", "call-graph", "diagnostics", "data-flow"]
+categories = ["development-tools::debugging", "development-tools", "visualization"]
 readme = "README.md"
 documentation = "https://docs.rs/nichlink-debug-method"
 

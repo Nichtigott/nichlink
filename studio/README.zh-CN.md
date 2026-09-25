@@ -10,9 +10,13 @@
 
 ```sh
 cargo run --manifest-path studio/Cargo.toml
+# 或者直接点名项目：
+nichlink-studio /path/to/project
 ```
 
-设置 `NICH_LINK_PACKAGE_ROOT` 指向要读取或编辑的项目目录；设置 `NICH_LINK_HOST_MANIFEST` 可指定用于 MIR 检查和 release 构建的 Cargo manifest；设置 `NICH_LINK_NAMESPACE` 可隔离多个库的 authored snapshot。Studio 是开发工具，不会被带入 core 的发布运行时。
+`--help` 列出该参数。没有参数时依次使用 `NICH_LINK_PACKAGE_ROOT`、持有 `Cargo.toml` 的当前
+目录。**有意没有别的兜底**：没有项目的启动会带着消息以非零退出，而不是在别的目录上打开一棵
+空树。设置 `NICH_LINK_PACKAGE_ROOT` 指向要读取或编辑的项目目录；设置 `NICH_LINK_HOST_MANIFEST` 可指定用于 MIR 检查和 release 构建的 Cargo manifest；设置 `NICH_LINK_NAMESPACE` 可隔离多个库的 authored snapshot。Studio 是开发工具，不会被带入 core 的发布运行时。
 
 `g` 为选中注册面打开外部 graft 界面。它只写
 `.nichlink/external-grafts/<selector>/graft.plan`，绝不写宿主源码，并且把 graft 的三个

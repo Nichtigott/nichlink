@@ -50,7 +50,7 @@ use nichlink::lexicon;
 use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
 use nichlink::registry_core::syntax::split_face_fields;
 
-use crate::front_end::{error_at, render, split_mirror_fields, split_semicolons};
+use crate::front_end::{error_at, render, splice, split_mirror_fields, split_semicolons};
 use crate::mirror::{Field, mirror_item, punct};
 
 #[path = "front_end.rs"]
@@ -109,10 +109,33 @@ pub fn face_rule_or(input: TokenStream) -> TokenStream {
         .map(|token| token.to_string())
         .collect::<String>();
     if owns_registry == "true" {
-        return "super :: registry_rule :: REGISTRATION_RULE"
-            .parse::<Tokens>()
-            .expect("the canonical rule path is a static path")
-            .into();
+        // The canonical sibling path is relative, and the IDE's view of a nested
+        // face is a crate-root shadow — rust-analyzer applies `#[path]` only at
+        // the top level, which is why the shadow exists at all — so `super` is
+        // the crate root there and no `registry_rule` module is in scope. A block
+        // that picks the real path for `rustc` and the caller's fallback for the
+        // IDE keeps the mirror type-correct without changing what `rustc`
+        // compiles; the fallback tokens are spliced in verbatim so their
+        // `$crate` keeps the hygiene the caller gave it.
+        // 规范的同目录路径是相对路径，而嵌套面在 IDE 眼里的视图是 crate 根影子——
+        // rust-analyzer 只在顶层应用 `#[path]`，影子正因此存在——那里 `super` 就是 crate
+        // 根，作用域内没有 `registry_rule` 模块。用一个块为 `rustc` 选真实路径、为 IDE 选
+        // 调用方的兜底值，即可让镜像保持类型正确，同时不改变 `rustc` 编译的东西；兜底 token
+        // 原样拼接，因此它的 `$crate` 保留调用方给的卫生性。
+        // The template parses as a whole; the caller's fallback is spliced in for
+        // the placeholder, so nothing about its tokens is rewritten.
+        // 模板整体可解析；调用方的兜底值被拼进占位符的位置，因此它的 token 一个字节都没有被
+        // 改写。
+        // `let` rather than `use`: the fallback is a struct's associated constant,
+        // and `use` cannot import one. A `let` binding in a const initializer needs
+        // no type annotation, which is what keeps this template free of a type the
+        // resolver would have to name.
+        // 用 `let` 而不是 `use`：兜底值是结构体的关联常量，而 `use` 导不进来。const 初始化
+        // 器里的 `let` 绑定不需要类型标注，这正是让模板不必说出一个解析器无从命名的类型的原因。
+        let template: Tokens = "{ #[cfg(not(rust_analyzer))] let __nichlink_rule = super::registry_rule::REGISTRATION_RULE; #[cfg(rust_analyzer)] let __nichlink_rule = __NICHLINK_IDE_FALLBACK; __nichlink_rule }"
+            .parse()
+            .expect("the derived rule template is static");
+        return splice(template, "__NICHLINK_IDE_FALLBACK", &fallback).into();
     }
     fallback.into()
 }

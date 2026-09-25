@@ -27,6 +27,27 @@ use terminal::{install_panic_restore, open_editor_in_terminal};
 /// restored on return as well as on panic.
 /// 原始模式、备用屏幕与鼠标捕获都在此安装，并在返回和 panic 时恢复。
 pub fn launch() -> io::Result<()> {
+    launch_with(None)
+}
+
+/// Run Studio on the project named on the command line.
+/// 在命令行指定的项目上运行 Studio。
+///
+/// The path goes through the same resolution the environment variable does, so an
+/// unusable one is refused with a message rather than opening the wrong tree.
+/// 该路径走与环境变量相同的解析，因此不可用的路径会带着消息被拒绝，而不是打开错的树。
+pub fn launch_with(project: Option<std::path::PathBuf>) -> io::Result<()> {
+    // Refuse before taking over the terminal. An empty user interface that exits
+    // zero is worse than a message here: the process would look healthy, and the
+    // next authoring command would write into whatever directory it happened to
+    // be in instead of the project the reader thought was open.
+    // 在接管终端之前就拒绝。此处"空界面 + 退出 0"比一条消息更糟：进程看上去是健康的，而
+    // 随后的创作命令会写进它恰好所在的目录，而不是读者以为打开的那个项目。
+    // The caller reports it: `main` prints this one line, and the CLI maps it
+    // into its own error channel, so the message is never rendered twice.
+    // 由调用方报告：`main` 打印这一行，CLI 把它映射进自己的错误通道，因此这条消息不会
+    // 被渲染两次。
+    app::preflight(project.as_deref()).map_err(io::Error::other)?;
     install_panic_restore();
     enable_raw_mode()?;
     let _terminal_guard = TerminalGuard;

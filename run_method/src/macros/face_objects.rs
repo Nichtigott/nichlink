@@ -117,6 +117,17 @@ macro_rules! __control_object {
             // macro because the canonical spelling is a *relative* path.
             // 作者写下的表达式优先；拥有注册机的面省略规则时解析到同目录的规范
             // 规则模块，其余面保留 `ANY`。解析器是过程宏，因为规范写法是**相对**路径。
+            // The author's expression wins; an omitted rule on a
+            // registry-owning face resolves to the canonical sibling rule
+            // module, and every other face keeps `ANY`. The resolver is a proc
+            // macro because the canonical spelling is a *relative* path — and it
+            // is the resolver, not this matcher, that answers the IDE too: the
+            // IDE's view of a nested face is a crate-root shadow where that
+            // relative path does not resolve.
+            // 作者写下的表达式优先；拥有注册机的面省略规则时解析到同目录的规范规则模块，
+            // 其余面保留 `ANY`。解析器是过程宏，因为规范写法是**相对**路径——而回答 IDE 的
+            // 也是解析器而不是本匹配器：嵌套面在 IDE 眼里的视图是 crate 根影子，那条相对路径
+            // 在那里解析不了。
             registry_rule: $crate::__face_rule_or!(
                 $crate::RegistrationRule::ANY;
                 $($needs_registry)?;

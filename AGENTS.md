@@ -125,29 +125,57 @@ name; every other noun is reached through its module path
 cargo fmt --all
 cargo test --workspace --offline
 cargo clippy --workspace --all-targets --offline -- -D warnings
+tools/nichlink-publish --check-table
 ```
 
-Those three run with `--offline` because this checkout is developed offline. CI
-has a network and deliberately does **not** pass the flag: a cold runner has an
-empty registry cache, so `--offline` there would fail every job instead of making
-it stricter.
-这三条带 `--offline`,因为本检出在离线环境下开发。CI 有网络,因此有意**不**传该标志:冷启动
-的 runner 注册表缓存为空,在那里加 `--offline` 只会让每个任务失败,而不是让它更严格。
+The last line is the release tables' gate: `tools/nichlink-publish` publishes in a
+hand-maintained dependency order, so it derives the truth from the manifests and
+compares both of its tables against them. It needs no network and no token.
+最后一行是发布表的门禁：`tools/nichlink-publish` 按一份手工维护的依赖顺序发布，因此它从清单
+推导事实，并把自己那两张表与清单对比。它不需要网络也不需要 token。
+
+The three `cargo` commands run with `--offline` because this checkout is
+developed offline. CI has a network and deliberately does **not** pass the flag: a
+cold runner has an empty registry cache, so `--offline` there would fail every job
+instead of making it stricter. The table check takes no such flag: it reads only
+this checkout.
+那三条 `cargo` 命令带 `--offline`,因为本检出在离线环境下开发。CI 有网络,因此有意**不**传
+该标志:冷启动的 runner 注册表缓存为空,在那里加 `--offline` 只会让每个任务失败,而不是让它
+更严格。表检查不需要这类标志:它只读本检出。
 
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
 default gate already fails on: I/O in `core/src`, a `mod.rs`, a second `include!`,
 a file pushed past the 450-line ratchet, a missing `#![warn(missing_docs)]`, an
 `#[allow(missing_docs)]`, or a fenced Rust block in a README that no longer
-parses. Add a new repository-wide rule there rather than to a prose document. CI
-additionally runs `cargo test --workspace --all-features --doc`: `--all-targets`
+parses. Add a new repository-wide rule there rather than to a prose document. The
+kernel's parse entries carry a nesting guard for the same reason — a stack
+overflow is not a `Result`, so a pathological source would take the whole surface
+down — and `core/tests/nesting_budget.rs` is the other half of it: the guard must
+refuse nothing this repository ships. Adding a shape to the guard means adding a
+case to `deep_input_tests.rs` and re-running that gate. CI additionally runs `cargo test --workspace --all-features --doc`: `--all-targets`
 skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `--all-features`.
 `cargo test --workspace` 也会跑 `conventions` crate 里的门禁,因此默认门禁已经会在下列情形
 失败:`core/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、文件越过 450 行棘轮、缺少
 `#![warn(missing_docs)]`、出现 `#[allow(missing_docs)]`、或 README 里有不再能解析的 Rust
-围栏。新增全仓规则请加到那里,而不是加到散文文档里。CI 另跑
+围栏。新增全仓规则请加到那里,而不是加到散文文档里。内核的解析入口同样带一道嵌套守卫——
+栈溢出不是 `Result`,畸形源码会带走整个执行面——而 `core/tests/nesting_budget.rs` 是它的
+另一半:守卫不得拒绝本仓库出厂的任何东西。给守卫加一种形状,就要在 `deep_input_tests.rs` 里
+加一条用例,并重跑那道门禁。CI 另跑
 `cargo test --workspace --all-features --doc`:`--all-targets` 会跳过 doctest,而门控在
 `authoring` 之后的 `compile_fail` 钉子只在 `--all-features` 下存在。
+
+`tools/nichlink-external-rehearsal` copies the two example hosts outside the
+checkout, repoints their `path` dependencies here, detaches them from the
+workspace and builds them from scratch. Every other check builds the examples
+where the workspace's members, relative paths, shared `target/` and shared
+lockfile all happen to be right; this is the one that fails when a host layout
+assumption only holds in-tree. `tools/nichlink-publish --verify-consumers` is its
+counterpart for published crates, and it needs the index.
+`tools/nichlink-external-rehearsal` 把两个示例宿主复制到检出之外，把它们的 `path` 依赖指向
+这里，让它们脱离工作区并从零构建。其他所有检查都在"工作区成员、相对路径、共享 `target/` 与
+共享 lockfile 恰好都成立"的地方构建示例；只有这一条会在"宿主布局假设只在树内成立"时失败。
+`tools/nichlink-publish --verify-consumers` 是它在已发布 crate 上的对应物，那条需要 index。
 
 `tools/nichlink-package-audit` checks two different things. Package *contents* —
 every `src/**/*.rs` module and the declared README must be in the package — are
@@ -165,9 +193,11 @@ exists.
 
 All nine crates carry `#![warn(missing_docs)]`, so the clippy gate above already
 refuses an undocumented public item: document it (English `///` then Chinese
-`///`) rather than adding `#[allow(missing_docs)]`. The two `publish = false`
-example hosts are not linted; a host is expected to document its own types, and
-`conventions` carries the lint along with the published crates.
+`///`) rather than adding `#[allow(missing_docs)]`. Three workspace members set
+`publish = false` — `conventions` and the two example hosts; of those, the two
+example hosts are not linted (a host is expected to document its own types),
+while `conventions` carries the lint along with the published crates.
 九个 crate 都开了 `#![warn(missing_docs)]`，因此上面的 clippy 门禁已经会拒绝没有文档的
-公开项：请补上文档（先英文 `///` 再中文 `///`），不要加 `#[allow(missing_docs)]`。两个
-`publish = false` 的示例 crate 没有开该 lint；宿主自己的类型由宿主负责文档化。
+公开项：请补上文档（先英文 `///` 再中文 `///`），不要加 `#[allow(missing_docs)]`。有三个
+工作区成员设了 `publish = false`——`conventions` 与两个示例宿主；其中两个示例宿主没有开该
+lint（宿主自己的类型由宿主负责文档化），而 `conventions` 与已发布的 crate 一样带着它。

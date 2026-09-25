@@ -5,7 +5,8 @@ use std::sync::Mutex;
 
 use nichlink_run_method::{PluginAdapter, VerifiedPluginArtifact};
 use wasmi::{
-    Config, Engine, Instance, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder,
+    Config, EnforcedLimits, Engine, Instance, Linker, Memory, Module, Store, StoreLimits,
+    StoreLimitsBuilder,
 };
 
 use crate::{HostError, PluginInstance};
@@ -35,6 +36,43 @@ pub struct WasmLimits {
     /// Largest response payload accepted, in bytes.
     /// 接受的最大响应负载字节数。
     pub max_output_bytes: usize,
+    /// Largest number of table elements a module may instantiate.
+    /// 模块可实例化的表元素上限。
+    ///
+    /// The memory ceiling does not bound a table: a table is a separate array of
+    /// function references, instantiated eagerly, so a module that declares
+    /// `(table 100000000 funcref)` costs hundreds of megabytes of host memory
+    /// without touching a single memory page. This is the ceiling for that array,
+    /// and a module over it fails to instantiate rather than being honoured.
+    /// 内存上限并不约束表：表是一块独立的函数引用数组，会即时实例化，因此声明
+    /// `(table 100000000 funcref)` 的模块会花掉宿主数百兆内存，而一页线性内存都没碰。
+    /// 这里是那块数组的上限，超过它的模块实例化失败，而不是被照办。
+    ///
+    /// Measured rather than estimated: a function reference costs the host 8 bytes
+    /// (`plugin-host/tests/wasm_table_cost.rs`), so the default ceiling of 4096 is
+    /// 32 KiB and the hundred-million-entry module above would be 762 MiB. The
+    /// limiter denies the allocation before the table exists, so refusing it was
+    /// measured at 5 KiB of peak allocation, not 762 MiB. This field is the only
+    /// bound on a single table's size: wasmi's `EnforcedLimits::strict()`, which
+    /// `WasmBackend::load` also applies, caps how many tables a module may declare
+    /// (`max_tables`) and how many element segments it may carry
+    /// (`max_element_segments`), but not how large one table may grow.
+    /// 实测而非估计：一个函数引用在宿主一侧占 8 字节（`plugin-host/tests/wasm_table_cost.rs`），
+    /// 因此默认上限 4096 是 32 KiB，而上面那个一亿条目的模块本来会是 762 MiB。限制器在表存在
+    /// 之前就拒绝这次分配，因此拒绝它的实测峰值是 5 KiB，而不是 762 MiB。本字段是单张表大小的
+    /// 唯一约束：wasmi 的 `EnforcedLimits::strict()`（`WasmBackend::load` 也会施加）限制的是一个
+    /// 模块可以声明多少张表（`max_tables`）与多少个元素段（`max_element_segments`），而不是
+    /// 单张表能长到多大。
+    pub table_elements: usize,
+    /// Largest artifact the backend will compile, in bytes.
+    /// 后端愿意编译的最大工件字节数。
+    ///
+    /// Compilation happens before any limit below can apply, so this is the one
+    /// bound that has to be checked by hand; it is what keeps a huge artifact from
+    /// spending the host's memory and time before the sandbox is even entered.
+    /// 编译发生在下面任何限制生效之前，因此这是唯一必须手工检查的上限；正是它阻止一个巨大
+    /// 工件在沙箱都没进入之前就花掉宿主的内存与时间。
+    pub max_module_bytes: usize,
 }
 
 impl Default for WasmLimits {
@@ -44,6 +82,8 @@ impl Default for WasmLimits {
             fuel_per_call: 1_000_000,
             max_input_bytes: 1024 * 1024,
             max_output_bytes: 1024 * 1024,
+            table_elements: 4096,
+            max_module_bytes: 16 * 1024 * 1024,
         }
     }
 }
@@ -67,13 +107,29 @@ impl WasmBackend {
     /// 编译并实例化工件；返回实例前要求宿主 ABI 版本与 `nichlink_health` 导出一致。
     pub fn load(&self, artifact: VerifiedPluginArtifact) -> Result<WasmInstance, HostError> {
         let (_, bytes) = artifact.into_parts();
+        if bytes.len() > self.limits.max_module_bytes {
+            return Err(HostError::Limit(format!(
+                "artifact is {} bytes; limit is {}",
+                bytes.len(),
+                self.limits.max_module_bytes
+            )));
+        }
         let mut config = Config::default();
         config.consume_fuel(true);
+        // wasmi's own strict limits bound what a module may contain and refuse one
+        // whose functions could be compiled lazily; its defaults leave all of that
+        // unlimited, so a small artifact could otherwise buy unbounded compile-time
+        // work. `strict` is wasmi's number, not one invented here.
+        // wasmi 自带的 strict 限制约束模块可以包含什么，并拒绝那些函数可能被惰性编译的模块；
+        // 它的默认值把这一切都留成无限，因此一个很小的工件本来可以换来无界的编译期工作量。
+        // `strict` 是 wasmi 自己的数值，不是这里编的。
+        config.enforced_limits(EnforcedLimits::strict());
         let engine = Engine::new(&config);
         let module = Module::new(&engine, &bytes)
             .map_err(|error| HostError::InvalidArtifact(error.to_string()))?;
         let store_limits = StoreLimitsBuilder::new()
             .memory_size(self.limits.memory_bytes)
+            .table_elements(self.limits.table_elements)
             .instances(1)
             .memories(1)
             .tables(1)

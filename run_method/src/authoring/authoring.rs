@@ -3,7 +3,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{NodeId, ROOT_NODE_ID, RegistrationSnapshot, Registry};
 

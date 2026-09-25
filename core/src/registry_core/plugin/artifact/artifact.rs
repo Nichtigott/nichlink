@@ -88,6 +88,213 @@ impl PluginArtifact {
             assurance: PluginAssurance::Digest,
         })
     }
+
+    /// Verify the bytes under `policy` **and** ask the host's signature verifier,
+    /// recording the stronger assurance that second check buys.
+    /// 在 `policy` 下校验字节，**并**询问宿主的签名验证器，记录第二次校验换来的更强保证。
+    ///
+    /// This is the only constructor of [`PluginAssurance::Signature`], and therefore
+    /// the only way into a channel that requires it
+    /// ([`PluginChannel::Official`](crate::plugin::PluginChannel)). Revocation is
+    /// consulted before the verifier is asked, because the policy runs first:
+    /// a revoked version is refused here exactly as it is on the digest-only path,
+    /// whatever the signature says. Without this entry point the Official lane
+    /// could never admit anything, and the control the threat model names would
+    /// never run.
+    /// 这是 [`PluginAssurance::Signature`] 的唯一构造入口，因而也是进入要求该等级的通道
+    /// （[`PluginChannel::Official`](crate::plugin::PluginChannel)）的唯一途径。撤销在询问
+    /// 验证器**之前**就被检查，因为策略先运行：无论签名说什么，已吊销版本在这里与纯摘要路径上
+    /// 一样被拒。没有这个入口，Official 通道永远接纳不了任何东西，威胁模型点名的那个控制也就
+    /// 永远不会运行。
+    pub fn verify_signed(
+        self,
+        policy: PluginTrustPolicy,
+        verifier: &impl PluginSignatureVerifier,
+    ) -> Result<VerifiedPluginArtifact, PluginTrustError> {
+        let manifest = self
+            .registration
+            .plugin
+            .ok_or(PluginTrustError::MissingManifest)?;
+        policy.verify_with(
+            manifest,
+            &self.bytes,
+            self.key_fingerprint.as_deref(),
+            verifier,
+        )?;
+        Ok(VerifiedPluginArtifact {
+            registration: self.registration,
+            bytes: self.bytes,
+            assurance: PluginAssurance::Signature,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::declaration::{LocalizedText, ObjectContract, SourceLocation};
+    use crate::plugin::{PluginChannel, validate_artifact};
+    use crate::{
+        Admission, FlowContract, FrameworkId, NodeId, PluginManifest, PluginMode, PluginSource,
+        RegistrationInfo, RegistrationRule,
+    };
+
+    /// A signing-key fingerprint the policy trusts, and a verifier that accepts
+    /// exactly the signature this fixture carries.
+    /// 策略信任的签名密钥指纹，以及一个只接受本夹具所带签名的验证器。
+    const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const BYTES: &[u8] = b"abc";
+    /// SHA-256 of `abc`, so the manifest's checksum matches the bytes.
+    /// `abc` 的 SHA-256，使 manifest 的校验和与字节一致。
+    const CHECKSUM: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    struct AcceptingVerifier;
+
+    impl PluginSignatureVerifier for AcceptingVerifier {
+        fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool {
+            manifest.signature == Some("adapter-verified-signature")
+                && bytes == BYTES
+                && key_fingerprint.len() == 64
+        }
+    }
+
+    struct RejectingVerifier;
+
+    impl PluginSignatureVerifier for RejectingVerifier {
+        fn verify(&self, _: PluginManifest, _: &[u8], _: &str) -> bool {
+            false
+        }
+    }
+
+    /// One official plugin artifact: the only source the Official channel accepts.
+    /// 一个官方插件工件：Official 通道唯一接受的来源。
+    fn official_artifact() -> PluginArtifact {
+        PluginArtifact {
+            registration: RegistrationInfo {
+                namespace: "plugin-test",
+                id: NodeId::from_path("plugin.rs", "Plugin"),
+                parent: crate::ROOT_NODE_ID,
+                kind: "Plugin",
+                preset: "",
+                parts: "",
+                params: "",
+                handle: "PluginHandle",
+                stable_name: None,
+                name: LocalizedText {
+                    zh: "插件",
+                    en: "Plugin",
+                },
+                summary: LocalizedText { zh: "", en: "" },
+                exports: &[],
+                needs_registry: false,
+                registry_name: "plugin",
+                getting_from_other_registry: None,
+                registry_rule_path: "<test>",
+                registry_rule: RegistrationRule::ANY,
+                admission: Admission::ANY,
+                requires: &[],
+                provides: &[],
+                contract: ObjectContract {
+                    required_parts: &[],
+                    provided_parts: &[],
+                },
+                flow: FlowContract::NONE,
+                flow_provider: None,
+                handle_traits: &[],
+                part_traits: &[],
+                runtime_checks: &[],
+                plugin: Some(PluginManifest {
+                    name: "official.canvas",
+                    crate_name: "official_canvas",
+                    version: "1.0.0",
+                    framework: FrameworkId::new("nichlink.test"),
+                    source: PluginSource::Official,
+                    mode: PluginMode::Extension,
+                    checksum: CHECKSUM,
+                    signature: Some("adapter-verified-signature"),
+                    public_key_fingerprint: Some(KEY),
+                    revocation_list: Some("official-2026"),
+                }),
+                source: SourceLocation {
+                    file: "plugin.rs",
+                    line: 1,
+                    column: 1,
+                    function: "plugin",
+                },
+            },
+            bytes: BYTES.to_vec(),
+            key_fingerprint: Some(KEY.to_owned()),
+        }
+    }
+
+    /// The admission the Official channel gives one artifact.
+    /// Official 通道给某个工件的准入结论。
+    fn official_channel(artifact: &VerifiedPluginArtifact) -> Result<(), SlotValidationError> {
+        validate_artifact(
+            "canvas",
+            FrameworkId::new("nichlink.test"),
+            PluginMode::Extension,
+            FlowContract::NONE,
+            &[PluginChannel::Official],
+            PluginChannel::Official,
+            artifact,
+        )
+    }
+
+    /// A verified signature is the only way into the Official lane: the digest-only
+    /// path keeps the lower assurance and is refused there.
+    /// 已验证的签名是进入 Official 通道的唯一途径：纯摘要路径保持较低等级，并在那里被拒。
+    #[test]
+    fn a_signed_artifact_is_the_only_way_into_the_official_channel() {
+        let policy = PluginTrustPolicy::official(&[KEY], &[]);
+        let signed = official_artifact()
+            .verify_signed(policy, &AcceptingVerifier)
+            .expect("a trusted signature verifies");
+        assert_eq!(signed.assurance(), PluginAssurance::Signature);
+
+        let digest_only = official_artifact()
+            .verify_artifact(policy)
+            .expect("the checksum path still works");
+        assert_eq!(digest_only.assurance(), PluginAssurance::Digest);
+
+        assert!(
+            official_channel(&signed).is_ok(),
+            "a verified signature must open the official lane"
+        );
+        assert!(
+            official_channel(&digest_only).is_err(),
+            "a checksum alone must not"
+        );
+    }
+
+    /// Revocation is consulted before the signature is accepted: a revoked version
+    /// is refused even with a signature the host would otherwise accept.
+    /// 撤销在接受签名之前就被检查：即使签名本来会被宿主接受，已吊销版本仍被拒绝。
+    #[test]
+    fn a_revoked_version_is_refused_even_with_a_good_signature() {
+        let policy = PluginTrustPolicy::official(
+            &[KEY],
+            &[PluginRevocation {
+                package: "official.canvas",
+                version: "1.0.0",
+            }],
+        );
+        assert!(matches!(
+            official_artifact().verify_signed(policy, &AcceptingVerifier),
+            Err(PluginTrustError::Revoked)
+        ));
+    }
+
+    /// A refused signature never earns the stronger assurance.
+    /// 被拒绝的签名永远换不到更强的保证。
+    #[test]
+    fn a_refused_signature_never_earns_the_stronger_assurance() {
+        assert!(matches!(
+            official_artifact()
+                .verify_signed(PluginTrustPolicy::official(&[KEY], &[]), &RejectingVerifier),
+            Err(PluginTrustError::SignatureNotVerified)
+        ));
+    }
 }
 
 /// One auditable plugin-selection result.

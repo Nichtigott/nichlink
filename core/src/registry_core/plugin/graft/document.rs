@@ -72,6 +72,7 @@ impl GraftPlanDocument {
         let mut target_path = None;
         let mut graft = None;
         let mut full = None;
+        let mut seen: Vec<&str> = Vec::new();
         for (index, raw) in source.lines().enumerate() {
             let line = raw.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -85,6 +86,19 @@ impl GraftPlanDocument {
                     })?;
             let key = key.trim();
             let value = value.trim();
+            // Every other reader in this workspace refuses a repeated field
+            // (`from_jsonl` and the face parser both do), and a plan is written by
+            // a program: a second value silently winning would make the file mean
+            // something its text does not say.
+            // 本工作区其他每个读取者都拒绝重复字段（`from_jsonl` 与注册面解析器都是），而计划
+            // 是程序写出来的：让第二个取值静默获胜，会让文件表达出它的文本没有说的意思。
+            if seen.contains(&key) {
+                return Err(GraftPlanDocumentError::Malformed {
+                    line: index + 1,
+                    message: format!("duplicate key `{key}`"),
+                });
+            }
+            seen.push(key);
             match key {
                 "version" => {
                     let parsed =
@@ -268,6 +282,24 @@ impl From<GraftPlanDocumentError> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A repeated key is refused, like every other reader in this workspace
+    /// refuses a repeated field: a plan is written by a program, and a second
+    /// value silently winning would make the file mean something its text does
+    /// not say.
+    /// 重复的键会被拒绝，正如本工作区其他每个读取者都拒绝重复字段：计划是程序写出来的，让
+    /// 第二个取值静默获胜会让文件表达出它的文本没有说的意思。
+    #[test]
+    fn a_repeated_key_is_refused() {
+        let target = NodeId::from_path("control/object/button/button.rs", "Button");
+        let text = format!(
+            "version=1\ntarget={target}\ntarget_path=root/control/button\ngraft=first\ngraft=second\n"
+        );
+        let error = GraftPlanDocument::parse(&text).expect_err("a repeated key must be refused");
+        let message = error.to_string();
+        assert!(message.contains("duplicate"), "{message}");
+        assert!(message.contains("graft"), "{message}");
+    }
 
     fn document() -> GraftPlanDocument {
         GraftPlanDocument::new(

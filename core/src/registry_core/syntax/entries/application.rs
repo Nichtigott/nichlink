@@ -22,8 +22,7 @@ use super::super::{
 /// declarations before it attempts scope inference.
 /// 解析宏 token 流可以排除注释和字符串，构建阶段能在推导作用域前拒绝重复或损坏声明。
 pub fn application_entries(source: &str) -> Result<Vec<(String, SyntaxLocation)>, FaceSyntaxError> {
-    let file =
-        syn::parse_file(source).map_err(|error| syntax_error(error.span(), error.to_string()))?;
+    let file = super::super::nesting::parse_file(source)?;
     let mut entries = Vec::new();
     let mut visitor = ApplicationVisitor {
         entries: &mut entries,

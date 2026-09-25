@@ -42,6 +42,18 @@ use nichlink_run_method::{
     face_field,
 };
 
+/// Refuse to start when there is no project to open, with the reason.
+/// 没有可打开的项目时拒绝启动，并给出原因。
+///
+/// Called before the terminal is taken over, so a launch with nothing to edit
+/// fails with a message and a non-zero exit instead of showing an empty tree and
+/// letting the next authoring command write into whatever directory was left.
+/// 在接管终端之前调用，因此"没有东西可编辑"的启动会带着消息与非零退出失败，而不是先显示
+/// 一棵空树，再让随后的创作命令写进剩下那个目录。
+pub(super) fn preflight(explicit: Option<&std::path::Path>) -> Result<PathBuf, String> {
+    support::resolve_project(explicit)
+}
+
 /// Studio's top-level state: the loaded registry, active page, and UI cursors.
 /// Studio 的顶层状态：已加载的注册表、当前页面与界面游标。
 ///

@@ -42,6 +42,16 @@ pub struct GraftState {
     /// Index of the highlighted plan row.
     /// 当前高亮计划行的下标。
     pub plan_selected: usize,
+    /// Selector a first `d` armed for deletion.
+    /// 第一次按 `d` 时进入待删状态的选择器。
+    ///
+    /// Deleting a record moves a directory into the trash; one keypress is too
+    /// little for that, so the first press arms and names the record, and any
+    /// other key clears the arm. The field lives in the state rather than in a
+    /// local so the prompt can be drawn.
+    /// 删除一条记录会把目录移进回收目录；一个按键对这件事太少，因此第一次按只进入待删状态并
+    /// 点名该记录，任何其他键都会解除。字段放在状态里而不是局部变量里，是为了能把提示画出来。
+    pub pending_delete: Option<String>,
     /// What the host entry declares for this target.
     /// 宿主入口为这个目标声明了什么。
     pub declaration: GraftDeclaration,

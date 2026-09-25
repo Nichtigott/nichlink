@@ -89,7 +89,9 @@ pub(crate) use cache::{
     source_is_active, update_discovery_cache, write_if_changed,
 };
 pub(crate) use contracts::aggregate_contract_errors;
-pub(crate) use discovery::{discover_root, discovery_fingerprint, emit_rerun_paths};
+pub(crate) use discovery::{
+    discover_root, discover_root_reporting, discovery_fingerprint, emit_rerun_paths,
+};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone
 // would be an unused import in a non-test build.
@@ -110,7 +112,7 @@ pub(crate) use scope::SourceScope;
 pub(crate) use static_plan::static_plan;
 pub(crate) use validation::{
     aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
-    parsed_face,
+    face_syntax_errors, parsed_face, unplaced_face_errors,
 };
 
 /// Run the build-time discovery and validation pipeline from a Cargo build

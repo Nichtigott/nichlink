@@ -13,5 +13,8 @@
 #![warn(missing_docs)]
 
 fn main() {
-    nichlink_mcp::run();
+    if let Err(error) = nichlink_mcp::run() {
+        eprintln!("nichlink-mcp: {error}");
+        std::process::exit(1);
+    }
 }

@@ -222,6 +222,7 @@ mod tests {
                 error: None,
             }],
             plan_selected: 0,
+            pending_delete: None,
             declaration: super::super::app::GraftDeclaration::Declared {
                 expression: "cut \"root/control/button\" graft \"button_fast\"".to_owned(),
                 line: 48,

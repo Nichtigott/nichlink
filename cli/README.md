@@ -66,15 +66,20 @@ deduplicated count. `phase` is a stable machine string. The human renderer maps
 
 ### Fields by phase
 
-| `phase` | Construction site | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
+| `phase` | Constructed by | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `requirements` | `core/src/registry_core/requirements/requirements.rs:70` | always | always | always | always | always | always | always | never | only when an ancestor provides the capability under a different kind (`:80-82`) | always |
-| `contract` | `build_method/src/contracts.rs:136`, `:173`, `:192`, `:216` | never | always | always | always | always | always | always | only for the output-contract mismatch (`:142`) | never | always |
-| `stable-identity` | `build_method/src/validation.rs:149` | never | never | always | always | never | always | always | always | never | always |
-| `parent-macro` | `build_method/src/validation.rs:59`, `:85`, `:113` | never | never | always | always | never | always | always | always | never | always |
-| `static-plan` | `build_method/src/static_plan.rs:131`; `build_method/src/graft_plan_check.rs:157`; `core/src/registry_core/diagnostic/topology.rs:41`, `:49`, `:68` | never | never | always | always `0` | never | topology checks only | missing-parent and no-registry only | topology checks only | never | always |
-| `face-cfg` | `build_method/src/static_plan.rs:109` | never | never | always | always | never | never | never | never | never | always |
-| `out-dir` | `build_method/src/lib.rs:158` | never | never | never | always `0` | never | never | never | never | never | always |
+| `requirements` | `core` `requirements::missing` | always | always | always | always | always | always | always | never | only when an ancestor provides the capability under a different kind | always |
+| `contract` | `build_method` `contracts::check_parent_rule` | never | always | always | always | always | always | always | only for the output-contract mismatch | never | always |
+| `stable-identity` | `build_method` `validation::collect_stable_names` | never | never | always | always | never | always | always | always | never | always |
+| `parent-macro` | `build_method` `validation::collect_parent_macro_errors` | never | never | always | always | never | always | always | always | never | always |
+| `static-plan` | `build_method` `static_plan::collect_static_faces`, `graft_plan_check::undeclared_plan_errors`; `core` `topology::validate_face_topology` | never | never | always | always `0` | never | topology checks only | missing-parent and no-registry only | topology checks only | never | always |
+| `face-cfg` | `build_method` `static_plan::collect_static_faces` | never | never | always | always | never | never | never | never | never | always |
+| `out-dir` | `build_method` `check_for` | never | never | never | always `0` | never | never | never | never | never | always |
+| `face-layout` | `build_method` `validation::unplaced_face_errors` (the phase is chosen by `discovery::record_unplaced`) | never | never | always | `0` when the file has no position | never | never | never | never | never | always |
+| `face-syntax` | `build_method` `validation::collect_face_syntax_errors` | never | never | always | `0` when the parse error has no position | never | never | never | never | never | always |
+| `entry` | `build_method` `entry::application_entry_source`, `entry::resolve_host_entry_reporting`, `entry::rejected_entry` | never | never | always | `0` when the failure is about the package rather than a line | never | never | never | never | never | always |
+| `scope` | `build_method` `scope::from_raw` | never | never | never | always `0` | never | never | never | never | never | always |
+| `graft-entry` | `build_method` `scope::auto_from_entry_reporting` | never | never | never | always `0` | never | never | never | never | never | always |
 
 One `static-plan` diagnostic comes from the graft-plan cross-check
 (`build_method/src/graft_plan_check.rs`): it points `source` at the offending
@@ -85,7 +90,7 @@ The three `static-plan` topology checks are `parent node is missing`, `parent
 does not own a registry`, and `parent cycle detected`; all three set
 `field=parent` and `actual`, the first two also set `expected`, and the cycle
 check does not. The fourth `static-plan` diagnostic, `parent declaration cannot
-be resolved` (`static_plan.rs:131`), sets only `phase`, `source`, `line=0`, and
-`message`.
+be resolved` (`static_plan::collect_static_faces`), sets only `phase`, `source`,
+`line=0`, and `message`.
 
 简体中文见 [README.zh-CN.md](README.zh-CN.md)。

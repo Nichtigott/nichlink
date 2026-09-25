@@ -34,6 +34,28 @@ set -eu
 #   CARGO_REGISTRY_TOKEN=... tools/nichlink-publish --publish --yes
 #   tools/nichlink-publish --publish --yes --allow-dirty   # from a dirty tree
 #
+# The dependency table is hand-maintained, and a hand-maintained table goes
+# stale silently; check it against the manifests before trusting the order:
+#   tools/nichlink-publish --check-table
+# 依赖表是手工维护的，而手工维护的表会静默过期；在信任这个顺序之前先拿清单核对：
+#   tools/nichlink-publish --check-table
+#
+# Both modes above are checks: they upload nothing, and neither combines with
+# `--publish` (that combination is refused rather than quietly doing nothing).
+# 上面两个模式都是检查：不上传任何东西，也不与 `--publish` 组合（该组合会被直接拒绝，
+# 而不是静默地什么都不做）。
+#
+# After it finishes, prove that a stranger can consume the release:
+#   tools/nichlink-publish --verify-consumers
+# That builds a throwaway crate outside this checkout and `cargo add`s all nine
+# crates by version, so resolution runs against the index rather than against the
+# local paths. Packaging was verified before the upload; this is the half that
+# only the published crates can answer.
+# 发布完成后，证明陌生人能消费这个版本：
+#   tools/nichlink-publish --verify-consumers
+# 它在本检出之外建一个一次性 crate，按版本 `cargo add` 九个 crate，因此解析发生在 index 上
+# 而不是本地路径上。打包在上传前已经验证过；这一半只有已发布的 crate 才答得出来。
+#
 # The index probe below is deliberately duplicated from
 # `tools/nichlink-package-audit` rather than shared: both tools must stay
 # runnable on their own from any directory (CI runs the audit, a maintainer runs
@@ -62,14 +84,22 @@ nichlink-cli
 publish=false
 yes=false
 allow_dirty=false
+verify_consumers=false
+check_table=false
 
 for arg in "$@"; do
   case "$arg" in
     --publish) publish=true ;;
     --yes) yes=true ;;
     --allow-dirty) allow_dirty=true ;;
+    --verify-consumers) verify_consumers=true ;;
+    --check-table) check_table=true ;;
     -h|--help)
-      sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
+      # Print the leading comment block: every `#` line, skipping the blank
+      # line after `set -eu`, and stopping at the first line of code.
+      # 打印文件开头的注释块：所有 `#` 行，跳过 `set -eu` 后的空行，遇到第一行代码即停。
+      awk 'NR <= 2 { next } /^#/ { print; next } /^[[:space:]]*$/ { next } { exit }' "$0" |
+        sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -81,6 +111,20 @@ done
 
 if [ "$publish" = true ] && [ "$yes" != true ]; then
   echo "error: --publish also needs --yes; publishing is irreversible" >&2
+  exit 2
+fi
+
+# The two check modes exit on their own, so combining either with `--publish`
+# would upload nothing and still exit 0 — a maintainer could read that as a
+# finished release. Refuse the combination instead.
+# 两个检查模式各自独立退出，因此任何一个与 `--publish` 组合都会什么都不上传却退出 0——
+# 维护者可能把它读成"发布完成"。宁可拒绝这个组合。
+if [ "$check_table" = true ] && [ "$verify_consumers" = true ]; then
+  echo "error: --check-table and --verify-consumers are separate modes" >&2
+  exit 2
+fi
+if [ "$publish" = true ] && { [ "$check_table" = true ] || [ "$verify_consumers" = true ]; }; then
+  echo "error: --publish does not combine with --check-table or --verify-consumers" >&2
   exit 2
 fi
 
@@ -154,17 +198,27 @@ nichlink-run-method:nichlink-core nichlink-macro
 nichlink-debug-method:nichlink-run-method
 nichlink-plugin-host:nichlink-run-method
 nichlink-studio:nichlink-run-method nichlink-debug-method nichlink-build-method
-nichlink-cli:nichlink-build-method nichlink-mcp nichlink-studio
+nichlink-cli:nichlink-build-method nichlink-core nichlink-mcp nichlink-studio
 '
 
 # The internal dependencies of one crate, read from the table above.
+# The internal dependencies of one crate, read from the table above as whole
+# lines. Reading it word-wise would hand back an edge line's dependencies as
+# entries of their own, and stopping at the first word would drop every
+# dependency after the first — which is what let `nichlink-cli` look publishable
+# while `nichlink-mcp` and `nichlink-studio` were still missing from the index.
+# 读取上表中某个 crate 的内部依赖，按整行读取。按词读取会把一条边行的被依赖者当成独立条目，
+# 而在第一个词处停下会丢掉第一个之后的每个依赖——正是这一点让 `nichlink-cli` 在
+# `nichlink-mcp` 与 `nichlink-studio` 尚未进入 index 时看起来可以发布。
 deps_of() {
-  for entry in $dependencies; do
-    if [ "${entry%%:*}" = "$1" ]; then
-      printf '%s' "${entry#*:}"
-      return 0
-    fi
-  done
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    case "$entry" in
+      "$1":*) printf '%s' "${entry#"$1":}"; return 0 ;;
+    esac
+  done <<EOF
+$dependencies
+EOF
   return 1
 }
 
@@ -175,6 +229,173 @@ if [ "$allow_dirty" = true ] || [ "$publish" != true ]; then
   # state while preparing a release.
   # dry-run 校验的是打包而不是来源；准备发布期间工作区通常就是脏的。
   cargo_flags="$cargo_flags --allow-dirty"
+fi
+
+# Every crate in the dependency table, in the table's own order, one name per
+# line: reading the table as words instead of as lines would hand back an edge
+# line's dependencies as if they were crates of their own.
+# 依赖表里的每个 crate，按表内顺序，每行一个名字：按词而不是按行读取，会把一条边行的
+# 被依赖者当成独立 crate 交出来。
+all_crates=$(
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    printf '%s\n' "${entry%%:*}"
+  done <<EOF
+$dependencies
+EOF
+)
+# Prove that a crate outside this checkout can resolve the release from the
+# index. This is the verification a dry run cannot do: packaging reads local
+# paths, and only a consumer reads the published requirements.
+# 证明本检出之外的一个 crate 能从 index 解析这次发布。这是 dry-run 做不到的验证：打包读的是
+# 本地路径，只有消费者读的是已发布的要求。
+if [ "$verify_consumers" = true ]; then
+  directory=$(mktemp -d)
+  trap 'rm -rf "$directory"' EXIT INT TERM
+  consumer="$directory/consumer"
+  # `--vcs none`: this is a throwaway crate, and nothing here should run `git`.
+  # `--vcs none`：这是一次性 crate，这里任何东西都不该去动 `git`。
+  if ! cargo new --lib --quiet --vcs none "$consumer" 2>/dev/null; then
+    echo "error: cannot create a throwaway crate in $directory" >&2
+    exit 1
+  fi
+  resolved=""
+  unresolved=""
+  for crate in $all_crates; do
+    if (cd "$consumer" && cargo add "$crate@$workspace_version" --quiet >/dev/null 2>&1); then
+      resolved="$resolved $crate"
+    else
+      unresolved="$unresolved $crate"
+    fi
+  done
+  if [ -n "$unresolved" ]; then
+    cat >&2 <<EOF
+error: the index does not serve this version for: ${unresolved# }
+Nothing is wrong with the checkout: those crates are not published yet, or the
+tag was published for a different version than $workspace_version. Publish first
+(\`tools/nichlink-publish --publish --yes\`), then run this again.
+错误：index 上还没有这些 crate 的该版本：${unresolved# }
+本检出没有问题：这些 crate 尚未发布，或者标签对应的版本不是 $workspace_version。请先发布
+（\`tools/nichlink-publish --publish --yes\`），再重跑本命令。
+EOF
+    exit 1
+  fi
+  if ! (cd "$consumer" && cargo check --quiet); then
+    echo "error: a consumer resolved every crate but could not build them together" >&2
+    exit 1
+  fi
+  printf 'consumer resolved and built:%s\n' "$resolved"
+  exit 0
+fi
+
+# Derive the release order's truth from the manifests and compare it with the
+# table above. Nothing here needs the network: it is the check that keeps the
+# table from rotting between releases.
+# 从清单推导发布顺序的事实，并与上表对比。这里不需要网络：它是让表在两次发布之间不腐烂的检查。
+if [ "$check_table" = true ]; then
+  problems=""
+  # Workspace members, one directory per line. `sed -n '/^members = \[/,/\]/p'`
+  # does not do this: a sed range does not test its end address on the start
+  # line, so a one-line array would make the range run on to the next line that
+  # contains a `]` — in this workspace that is `[workspace.package]`, which then
+  # entered the member list as a directory name. It happened not to exist, which
+  # is exactly how such a bug stays invisible.
+  # 工作区成员，每行一个目录。`sed -n '/^members = \[/,/\]/p'` 做不到这一点：sed 的范围在
+  # 起始行上不测试结束地址，因此单行数组会让范围一直跑到下一个含 `]` 的行——在本工作区就是
+  # `[workspace.package]`，它于是作为一个目录名进入了成员列表。它恰好不存在，而这正是这类
+  # 缺陷得以隐形的方式。
+  members=$(awk '
+    /^members *= *\[/ { inside = 1 }
+    inside {
+      line = $0
+      sub(/^[^[]*\[/, "", line)
+      sub(/\].*$/, "", line)
+      gsub(/[",]/, "", line)
+      count = split(line, parts, / +/)
+      for (i = 1; i <= count; i++) if (parts[i] != "") print parts[i]
+      if ($0 ~ /\]/) exit
+    }
+  ' Cargo.toml)
+  # Crates that ship: a member without `publish = false`.
+  shipped=""
+  for member in $members; do
+    manifest="$member/Cargo.toml"
+    [ -f "$manifest" ] || continue
+    if grep -qE '^publish *= *false' "$manifest"; then
+      continue
+    fi
+    name=$(sed -n 's/^name = "\(.*\)"/\1/p' "$manifest" | head -n 1)
+    [ -n "$name" ] || continue
+    shipped="$shipped $name"
+    # `[dependencies]` and `[build-dependencies]` both have to resolve on the
+    # index, including a target-specific section and a dotted
+    # `[dependencies.nichlink-x]` table; `[dev-dependencies]` never ships, so it
+    # is deliberately ignored. Any other spelling is not read here, so a crate
+    # declared that way shows up as a disagreement with the table — which is the
+    # direction that gets looked at.
+    # `[dependencies]` 与 `[build-dependencies]` 都必须在 index 上解析，包括按目标限定的段
+    # 与 `[dependencies.nichlink-x]` 这种点表；`[dev-dependencies]` 不会出厂，因此有意忽略。
+    # 其他拼法这里读不到，因此那样声明的 crate 会表现为与表不一致——正是会被看见的那个方向。
+    actual=$(awk '
+      /^\[/ {
+        section = $0
+        if (section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\.nichlink-[a-z-]+\]$/) {
+          name = section
+          sub(/^\[.*dependencies\./, "", name)
+          sub(/\]$/, "", name)
+          print name
+        }
+        next
+      }
+      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+ *=/ { print $1 }
+    ' "$manifest" | sort)
+    tabled=$(deps_of "$name" | tr ' ' '\n' | sed '/^$/d' | sort)
+    if [ "$actual" != "$tabled" ]; then
+      problems="$problems
+$name:
+  manifest: $(printf '%s' "$actual" | tr '\n' ' ')
+  table:    $(printf '%s' "$tabled" | tr '\n' ' ')"
+    fi
+  done
+  shipped=$(printf '%s' "$shipped" | tr ' ' '\n' | sed '/^$/d' | sort)
+  listed=$(printf '%s\n' "$all_crates" | sort)
+  if [ "$shipped" != "$listed" ]; then
+    problems="$problems
+the set of published crates differs:
+  manifest: $(printf '%s' "$shipped" | tr '\n' ' ')
+  table:    $(printf '%s' "$listed" | tr '\n' ' ')"
+  fi
+  # The level table is the second hand-maintained ordering. Publishing a crate
+  # before something it depends on fails resolution, so check that every crate
+  # is listed exactly once and always after its dependencies.
+  # 层表是第二份手工维护的顺序。在依赖之前发布某个 crate 会导致解析失败，因此检查每个
+  # crate 恰好出现一次，且总在其依赖之后。
+  seen=""
+  for level in $levels; do
+    for crate in $level; do
+      for dep in $(deps_of "$crate"); do
+        case " $seen " in
+          *" $dep "*) ;;
+          *) problems="$problems
+$crate is listed before its dependency $dep" ;;
+        esac
+      done
+      seen="$seen $crate"
+    done
+  done
+  if [ "$(printf '%s\n' $seen | sort)" != "$listed" ]; then
+    problems="$problems
+the level table and the dependency table disagree about which crates ship:
+  levels:       $(printf '%s\n' $seen | sort | tr '\n' ' ')
+  dependencies: $(printf '%s\n' "$listed" | tr '\n' ' ')"
+  fi
+  if [ -n "$problems" ]; then
+    printf 'error: the release tables in %s no longer match the manifests:%s\n' "$0" "$problems" >&2
+    printf '错误：%s 里的发布表已与清单不符：%s\n' "$0" "$problems" >&2
+    exit 1
+  fi
+  printf 'dependency table matches the manifests (%s crates)\n' "$(printf '%s\n' "$listed" | wc -l | tr -d ' ')"
+  exit 0
 fi
 
 published=""
