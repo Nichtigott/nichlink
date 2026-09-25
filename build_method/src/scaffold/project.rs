@@ -96,9 +96,9 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
             let build = toml_path(&workspace.join("build_method"));
             (
                 format!(
-                    "nichlink-run-method = {{ package = \"nichlink-run-method\", path = \"{runtime}\" }}"
+                    "nichlink-run-method = {{ package = \"nichlink-run-method\", path = \"{runtime}\", version = \"0.1.0\" }}"
                 ),
-                format!("nichlink-build-method = {{ path = \"{build}\" }}"),
+                format!("nichlink-build-method = {{ path = \"{build}\", version = \"0.1.0\" }}"),
             )
         }
         DependencySource::Git { url } => (
@@ -128,8 +128,15 @@ pub fn project_files(
             "\nfn main() { println!(\"registered faces: {}\", builtin_static_plan().len()); }"
         }
     );
+    // The inner `[workspace]` table makes the generated manifest its own workspace root.
+    // Without it, scaffolding inside an existing workspace fails `cargo metadata`,
+    // `check` and `build` with "current package believes it's in a workspace when it's
+    // not" — the repository's own rehearsal script had to append the table by hand.
+    // 内部的 `[workspace]` 表让生成的清单成为它自己的工作区根。没有它，在已有工作区内脚手架会
+    // 让 `cargo metadata`、`check` 与 `build` 报 "current package believes it's in a workspace
+    // when it's not"——本仓库自己的演练脚本不得不手工追加这张表。
     let cargo = format!(
-        "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{runtime_dependency}\n\n[build-dependencies]\n{build_dependency}\n"
+        "[workspace]\n\n[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{runtime_dependency}\n\n[build-dependencies]\n{build_dependency}\n"
     );
     vec![
         ("Cargo.toml", cargo),
@@ -230,7 +237,7 @@ fn toml_path(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{DependencySource, ProjectKind, create_project};
+    use super::{DependencySource, ProjectKind, create_project, dependency_specs, project_files};
     use crate::scaffold::{Editor, SNIPPET_FILE, editor_snippets};
     use std::fs;
     use std::path::PathBuf;
@@ -298,5 +305,44 @@ mod tests {
         let snippets = fs::read_to_string(root.join(SNIPPET_FILE)).expect("snippet file");
         assert_eq!(snippets, editor_snippets(Editor::Vscode));
         fs::remove_dir_all(root.parent().expect("project parent")).expect("cleanup");
+    }
+    /// Every internal requirement in a generated manifest carries a version, from both
+    /// dependency sources, and the manifest is its own workspace root.
+    /// 生成的清单里每处内部要求都带版本（两种依赖来源都算），且该清单是自己的根工作区。
+    ///
+    /// `cargo publish --dry-run` refuses a manifest whose path dependency has no
+    /// `version`, and a manifest without its own `[workspace]` table cannot be built
+    /// inside an existing workspace ("current package believes it's in a workspace when
+    /// it's not"). Both were measured on a scaffolded project.
+    /// `cargo publish --dry-run` 会拒绝带无版本路径依赖的清单，而缺少自己的 `[workspace]`
+    /// 表的清单无法在已有工作区里构建（"current package believes it's in a workspace when
+    /// it's not"）。两者都在脚手架产物上实测过。
+    #[test]
+    fn a_generated_project_can_be_published_and_built_in_a_workspace() {
+        let local = DependencySource::Local {
+            workspace: std::path::PathBuf::from("/tmp/nichlink"),
+        };
+        let git = DependencySource::Git {
+            url: "https://github.com/Nichtigall/nichlink".to_owned(),
+        };
+        for source in [&local, &git] {
+            let (runtime, build) = dependency_specs(source);
+            for spec in [&runtime, &build] {
+                assert!(
+                    spec.contains("version = \"0.1.0\""),
+                    "a published package needs a version requirement: {spec}"
+                );
+            }
+            let files = project_files("probe", ProjectKind::Binary, source);
+            let cargo = &files
+                .iter()
+                .find(|(name, _)| *name == "Cargo.toml")
+                .expect("the manifest is generated")
+                .1;
+            assert!(
+                cargo.starts_with("[workspace]"),
+                "the generated manifest is its own workspace root: {cargo}"
+            );
+        }
     }
 }

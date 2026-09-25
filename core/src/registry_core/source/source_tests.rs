@@ -130,3 +130,71 @@ fn registration_kinds_are_compact_and_deduplicated() {
     );
     assert_eq!(kinds, ["Button"]);
 }
+
+/// A raw string is not closed by its first interior quote, so the code inside it is
+/// prose: braces do not close a body, `fn` does not declare, and a call is not a call.
+/// 原始字符串不由第一个内部引号闭合，因此它内部的代码是散文：花括号不闭合函数体、`fn` 不声明、
+/// 调用也不是调用。
+#[test]
+fn raw_strings_do_not_leak_code() {
+    // A JSON payload with an interior quote used to close the function early.
+    // 带内部引号的 JSON 载荷过去会提前闭合函数。
+    let lines = vec![
+        "fn a() {",
+        "    let s = r#\"x\" } \"#;",
+        "    let t = 1;",
+        "}",
+        "fn b() {",
+        "}",
+    ];
+    assert_eq!(
+        function_source_range(&lines, "a"),
+        Some((0, 3)),
+        "the brace inside the raw string must not close the body"
+    );
+
+    // A declaration inside the payload is not a declaration.
+    // 载荷内部的声明不是声明。
+    let names = function_symbols("fn outer() {\n    let s = r#\"x\" fn ghost() {} \"#;\n}\n")
+        .into_iter()
+        .map(|function| function.name)
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["outer"], "`ghost` lives inside a raw string");
+
+    // A call inside the payload is not a call, and the `br`/`cr` prefixes are raw
+    // strings too.
+    // 载荷内部的调用不是调用，而 `br`/`cr` 前缀同样是原始字符串。
+    assert!(direct_calls("let s = r#\"{\"k\": \"drop()\"}\"#;", "f").is_empty());
+    assert!(direct_calls("let s = br#\"drop()\"#;", "f").is_empty());
+}
+
+/// The function-range start test runs on masked text and needs a whole identifier.
+/// 函数范围的起点判断跑在屏蔽文本上，并要求完整标识符。
+#[test]
+fn a_phantom_function_range_needs_real_code() {
+    // A name that appears only in a comment declares nothing.
+    // 只出现在注释里的名字不声明任何东西。
+    assert_eq!(
+        function_source_range(
+            &["// fn ghost() { details", "fn real() {", "    body();", "}"],
+            "ghost"
+        ),
+        None
+    );
+    // `new` is a substring of `renew`, not a function name here.
+    // 在这里 `new` 是 `renew` 的子串，而不是函数名。
+    assert_eq!(function_source_range(&["fn renew() {", "}"], "new"), None);
+    assert_eq!(
+        function_source_range(&["fn new() {", "}"], "new"),
+        Some((0, 1))
+    );
+}
+
+/// A `kind:` in a comment is prose, not a declaration.
+/// 注释里的 `kind:` 是散文，而不是声明。
+#[test]
+fn registration_kinds_come_from_code_only() {
+    assert!(registration_kinds("// kind: Ghost").is_empty());
+    let kinds = registration_kinds("crate::object! {\n    kind: Widget,\n}\n");
+    assert_eq!(kinds, ["Widget"], "a real declaration is still collected");
+}

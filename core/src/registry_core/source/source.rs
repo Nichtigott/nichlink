@@ -7,6 +7,8 @@
 //! Function discovery lives here; `calls` scans call sites inside an extracted
 //! body and `walk` owns the recursive source traversal.
 //! 函数发现位于本页；`calls` 扫描已提取函数体内的调用点，`walk` 拥有递归源码遍历。
+#[path = "lex.rs"]
+pub(crate) mod lex;
 
 #[path = "calls.rs"]
 mod calls;
@@ -39,9 +41,25 @@ pub struct SourceFunction {
 /// Find the 0-based inclusive line range of a function by name.
 /// 按名称查找函数的 0 起始闭区间行范围。
 pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize)> {
+    // The start test runs on masked text and requires the name to be a whole
+    // identifier. On the raw line, `// fn ghost() {` started a range for `ghost` that
+    // closed on the next real function, and `fn renew(` matched the name `new`.
+    // 起点判断跑在屏蔽后的文本上，并要求名字是完整标识符。按原始行时，`// fn ghost() {`
+    // 会为 `ghost` 开出一个到下一个真实函数才闭合的范围，而 `fn renew(` 会匹配名字 `new`。
     let start = lines.iter().position(|line| {
-        let trimmed = line.trim_start();
-        trimmed.contains("fn ") && trimmed.contains(&format!("{name}("))
+        let masked = mask_non_code(line);
+        let mut from = 0usize;
+        while let Some(offset) = masked[from..].find("fn ") {
+            let at = from + offset;
+            let after = masked[at + "fn ".len()..].trim_start();
+            if let Some(rest) = after.strip_prefix(name)
+                && rest.trim_start().starts_with('(')
+            {
+                return true;
+            }
+            from = at + "fn ".len();
+        }
+        false
     })?;
     let mut depth = 0usize;
     let mut opened = false;
@@ -256,6 +274,22 @@ pub fn mask_non_code(source: &str) -> String {
             }
             continue;
         }
+        // A raw string is not closed by the quote that follows its opening `#`s, so the
+        // ordinary branch below stopped at the first interior `"` and the rest of the
+        // literal — braces, `fn`, call sites — was read as code. `r#"…"#` is ordinary
+        // Rust, and JSON payloads inside it are full of interior quotes.
+        // 原始字符串不由其开头 `#` 之后的那个引号闭合，因此下面的普通分支会在第一个内部 `"`
+        // 处停下，而字面量剩下的部分——花括号、`fn`、调用点——会被读成代码。`r#"…"#` 是普通
+        // Rust，而它里面的 JSON 载荷满是内部引号。
+        if let Some(end) = lex::raw_string_end(bytes, index) {
+            for byte in &mut masked[index..end] {
+                if *byte != b'\n' {
+                    *byte = b' ';
+                }
+            }
+            index = end;
+            continue;
+        }
         if bytes[index] == b'"' {
             let quote = bytes[index];
             masked[index] = b' ';
@@ -335,7 +369,12 @@ pub fn mask_non_code(source: &str) -> String {
 pub fn registration_kinds(source: &str) -> Vec<String> {
     let mut kinds = Vec::new();
     for line in source.lines() {
-        let trimmed = line.trim();
+        // A `kind:` in a comment or a string is prose, not a declaration: the raw line
+        // scan reported a kind named `Ghost` for `// kind: Ghost`.
+        // 注释或字符串里的 `kind:` 是散文而不是声明：按原始行扫描会为 `// kind: Ghost`
+        // 报出一个名叫 `Ghost` 的 kind。
+        let masked = mask_non_code(line);
+        let trimmed = masked.trim();
         if let Some(kind) = trimmed.split_once("kind:").map(|(_, remainder)| remainder) {
             let kind = kind
                 .trim()
