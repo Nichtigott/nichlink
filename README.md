@@ -696,7 +696,7 @@ Studio is a resident Ratatui application, not a stream of printed snapshots. It
 opens an alternate terminal screen, watches the selected project, and redraws
 on input, resize, or a file event.
 
-![NichLink Studio](./picture/NichLink_studio.png)
+![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
 
 | Key | Action |
 | --- | --- |

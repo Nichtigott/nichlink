@@ -621,7 +621,7 @@ tools/nichlink-release-audit
 Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本。它使用
 备用屏幕，监听项目文件，只有输入、窗口变化或文件事件发生时才重绘。
 
-![NichLink Studio](./picture/NichLink_studio.png)
+![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
 
 | 按键 | 操作 |
 | --- | --- |

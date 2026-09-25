@@ -18,7 +18,7 @@ What stays here:
   `GraftOverlay`, and the re-exported `RecordReport`/`RecordedGraft`/
   `ResolvedRecord`. It is deliberately outside `authoring`, so a host reads
   `.nichlink/external-grafts/` without pulling in `syn`; the precedence policy
-  and reports are in [`docs/graft.md`](../docs/graft.md). `apply_recorded_grafts`
+  and reports are in [`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md). `apply_recorded_grafts`
   prints one `warning:`/`note:` line per report to stderr before returning, so a
   record that is skipped (a graft that silently never happens) cannot go
   unnoticed; the same items stay in `GraftOverlay` for a host that routes evidence
@@ -95,6 +95,6 @@ fn validate(registry: &Registry, node: nichlink_run_method::NodeId, label: &str)
 ```
 
 A runnable version lives at
-[`examples/control-button/examples/health_check.rs`](../examples/control-button/examples/health_check.rs):
+[`examples/control-button/examples/health_check.rs`](https://github.com/Nichtigott/nichlink/blob/main/examples/control-button/examples/health_check.rs):
 `cargo run -p nichlink-example-control-button --example health_check`.
 

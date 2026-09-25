@@ -30,8 +30,14 @@ pub struct WasmLimits {
     /// 能买到多少工作"的承诺。引擎大版本升级可能重新标定它，因此针对旧引擎调过这个值的宿主
     /// 应当重新实测，而不是假设同一个数字仍然够用。
     pub fuel_per_call: u64,
-    /// Largest request payload accepted, in bytes.
-    /// 接受的最大请求负载字节数。
+    /// Largest request payload accepted, in bytes — but the host writes the input at
+    /// offset 0 of the plugin's *initial* memory before calling the handler, so the real
+    /// ceiling is the smaller of this and that memory. A one-page plugin therefore
+    /// refuses every input above 64 KiB however large this number is; a plugin that needs
+    /// more declares it in its initial memory (or grows it from `start`).
+    /// 接受的最大请求负载字节数——但宿主在调用处理函数之前把输入写在插件**初始**内存的偏移 0
+    /// 处，因此真正的上限是这个值与那块内存中较小的一个。于一页内存的插件无论这里多大都会拒绝
+    /// 超过 64 KiB 的输入；需要更多输入的插件应在初始内存里声明（或在 `start` 里增长）。
     pub max_input_bytes: usize,
     /// Largest response payload accepted, in bytes.
     /// 接受的最大响应负载字节数。
@@ -127,9 +133,19 @@ impl WasmBackend {
         Self { limits }
     }
 
-    /// Compile and instantiate the artifact, requiring the host ABI version and the
-    /// `nichlink_health` export to match before an instance is returned.
-    /// 编译并实例化工件；返回实例前要求宿主 ABI 版本与 `nichlink_health` 导出一致。
+    /// Compile and instantiate the artifact, checking the limits, the host ABI version
+    /// *when the plugin exports one* (a missing `nichlink_abi_version` is a legacy
+    /// plugin, as `README.md` says), and the `nichlink_health` export.
+    /// 编译并实例化工件，检查各项上限、宿主 ABI 版本（**当插件导出它时**；缺少
+    /// `nichlink_abi_version` 的是旧插件，见 `README.md`）以及 `nichlink_health` 导出。
+    ///
+    /// This performs **no slot policy**: channel, framework, mode and flow are checked by
+    /// [`WasmPluginTable::install`](crate::WasmPluginTable::install) and
+    /// `validate_artifact`. A host that calls the backend directly gets the wasm limits
+    /// and nothing else.
+    /// 本方法**不做槽位策略**：通道、框架、模式与 flow 由
+    /// [`WasmPluginTable::install`](crate::WasmPluginTable::install) 与 `validate_artifact`
+    /// 检查。直接调用后端的宿主只得到 wasm 上限，别的什么都没有。
     pub fn load(&self, artifact: VerifiedPluginArtifact) -> Result<WasmInstance, HostError> {
         let (_, bytes) = artifact.into_parts();
         if bytes.len() > self.limits.max_module_bytes {

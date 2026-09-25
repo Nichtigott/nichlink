@@ -49,4 +49,4 @@ the record could never take effect, and shipping a binary whose graft silently
 does not happen is exactly what must not leave the build. A declaration whose
 `#[cfg]` is off in this build still counts, so a legitimately gated slot is not an
 error. The record→overlay layer is described in
-[`docs/graft.md`](../docs/graft.md).
+[`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md).

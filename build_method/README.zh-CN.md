@@ -38,4 +38,4 @@ nichlink_run_method::application!(entry = crate::main);
 一条计划而**没有**任何声明可能命名其目标时，构建**失败**，并交出可直接粘贴的
 `static_graft_plan!` 子句：这条记录永远无法生效，而发布一个嫁接静默不发生的二进制，
 正是绝不能离开构建的东西。本次构建里 `#[cfg]` 关掉的声明也算数，因此合法门控的槽位
-不会报错。记录→覆盖层见 [`docs/graft.md`](../docs/graft.md)。
+不会报错。记录→覆盖层见 [`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md)。

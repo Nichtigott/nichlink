@@ -10,9 +10,11 @@
 //! 审计实测源码树，发现 15 个文件超过它，最大 751 行。没有东西去量的上限不是上限，因此本
 //! 模块去量它，并把当前的例外显式钉住。
 //!
-//! The list holds twelve today: moving the shared JSON encoder out of
-//! `diagnostic/build.rs` brought that file back under the ceiling, and the
-//! ratchet made removing its entry mandatory rather than optional.
+//! The list is short and only shrinks: moving the shared JSON encoder out of
+//! `diagnostic/build.rs` brought that file back under the ceiling, and the ratchet made
+//! removing its entry mandatory rather than optional. The count is deliberately not
+//! restated here — it is `BASELINE.len()`, and prose that repeats a number drifts from
+//! it (this sentence claimed twelve while the list held nine).
 //! 这份清单今天有 12 项：把共用的 JSON 编码器移出 `diagnostic/build.rs` 让该文件缩回上限
 //! 之内，而棘轮让删除对应项成为必然而不是可选。
 //!

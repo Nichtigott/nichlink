@@ -89,10 +89,26 @@ fn inspect(files: &[PathBuf]) -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest
         .parent()
-        .expect("the kernel lives in a workspace")
+        .expect("the kernel is unpacked somewhere")
         .to_path_buf();
+    // This test ships inside the published crate, and a consumer has no workspace around
+    // it: from a registry unpack the parent is the registry's `src/` directory, so the
+    // walk used to "pass" by scanning whichever unrelated crates happened to be unpacked
+    // next to it. It says so and stands down instead — the promise it keeps ("the guard
+    // refuses nothing this repository ships") is about this repository.
+    // 本测试随已发布 crate 出厂，而消费者周围没有工作区：从 registry 解包后父目录是 registry
+    // 的 `src/`，于是遍历过去靠"恰好解包在旁边的无关 crate"来"通过"。现在它说明情况并退出——
+    // 它守的承诺（"守卫不拒绝本仓库出厂的任何东西"）是关于本仓库的。
+    if !root.join("core").is_dir() || !root.join("build_method").is_dir() {
+        eprintln!(
+            "skipping: {} is not a NichLink checkout; this gate is about that repository",
+            root.display()
+        );
+        return;
+    }
     let mut files = Vec::new();
     rust_files(&root, &mut files);
     // A floor, so a walk that silently finds nothing cannot pass. The workspace

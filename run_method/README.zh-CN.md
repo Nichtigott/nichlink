@@ -17,7 +17,7 @@ trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件
   `LoadedGraft`、`GraftOverlay`，以及重导出的
   `RecordReport`/`RecordedGraft`/`ResolvedRecord`。它刻意放在 `authoring`
   之外，宿主读取 `.nichlink/external-grafts/` 无需引入 `syn`；优先级策略与
-  报告见 [`docs/graft.md`](../docs/graft.md)。`apply_recorded_grafts` 在返回前为
+  报告见 [`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md)。`apply_recorded_grafts` 在返回前为
   每条报告向 stderr 打印一行 `warning:`/`note:`，因此被跳过的记录（一次悄无声息从未
   发生的嫁接）不可能被忽略；同样的条目仍留在 `GraftOverlay` 中，供把证据转往自己
   日志的宿主使用。解析不了的计划、目录与计划里的 `graft` 不一致、以及身份与路径矛盾的
@@ -88,6 +88,6 @@ fn validate(registry: &Registry, node: nichlink_run_method::NodeId, label: &str)
 ```
 
 可运行的版本在
-[`examples/control-button/examples/health_check.rs`](../examples/control-button/examples/health_check.rs)：
+[`examples/control-button/examples/health_check.rs`](https://github.com/Nichtigott/nichlink/blob/main/examples/control-button/examples/health_check.rs)：
 `cargo run -p nichlink-example-control-button --example health_check`。
 
