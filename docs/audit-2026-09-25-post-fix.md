@@ -825,3 +825,40 @@ Windows 任务，以及空的发布密钥，都不在本文件的审计角度清
 只发剩下的四个；step 14 `--verify-consumers` 在发布成功之后运行，是"陌生人能消费"的最终证明。
 **钉子**：MAJOR 7 的假 index 对照覆盖了"重跑跳过已发布"这一半；速率窗口本身由 registry 决定，
 本地钉不住。
+
+### P4 outcome: the release completed on the first re-run after the window
+### P4 结局：发布在窗口过去后的第一次重跑完成
+
+`gh run rerun 36137486348 --failed` (14:14Z) published the remaining three and ran
+`--verify-consumers`: **all fifteen steps `success`**, and the crates.io API reports
+`versions = ["0.1.0"]` for all nine (`nichlink-core` through `nichlink-cli`). No
+version bump was needed, because the five crates published before the rate limit are
+byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
+`[实测]`：`gh run rerun 36137486348 --failed`（14:14Z）发完剩下三个并跑通
+`--verify-consumers`——**十五步全部 `success`**，crates.io API 对九个 crate 都报
+`versions = ["0.1.0"]`（`nichlink-core` 到 `nichlink-cli`）。不需要升版本号：速率限制前发布的
+五个与 tag 逐字节相同，因为其后的提交只动了 `tools/` 与 `docs/`。
+
+## Gate hardening landed in the post-release round / 发布后一轮落地的门禁加固
+
+- **MAJOR 6——手动发布路径被移除，并有了门禁。** `release.yml` 不再声明 `publish` 输入，两个
+  上传步骤都带上 `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')`，而不是
+  依赖触发列表。新门禁 `conventions/src/release_workflow.rs` 拒绝这样的发布工作流：读取任何
+  输入、把 tag 要求只留在版本检查那一步、丢掉 `workflow_dispatch`、或把受守卫的步骤改名消失。
+  钉子：实际工作流干净，另有三份夹具（旧条件、在受守卫步骤旁仍带输入、受守卫步骤被改名）都会
+  被报出——修复前全部为红。
+- **被链接的目录不再被遍历（低严重度备注）。** `rust_sources` 与 `collect_markdown` 改用
+  `symlink_metadata`，于是 `core/src/zz -> /tmp/elsewhere` 不再把检出之外的文件拉进每一个门禁。
+  钉子：`conventions::tests::a_linked_directory_is_not_walked_into`（Unix）。
+- **构建产物不再被遍历。** `<member>/target/nichlink/out/*.rs` 是 `build_method` 写生成 Rust 的
+  地方；过期产物不再能被读成源码声明。钉子：`conventions::tests::build_output_is_not_walked_into`。
+- **注释与字符串不再被当作代码扫描。** `purity` 改在内核的 `mask_non_code` 上运行，取代按行的
+  `//` 判断，于是 `/* std::fs */` 与 `let probe = "std::fs";` 不再是违规；`is_comment` 随其唯一
+  调用方一起删除。钉子：`purity::comments_and_strings_are_not_the_code_that_is_scanned`。
+- **新门禁 `conventions/src/doc_anchors.rs`。** 活文档里每个 `<path>.rs:<line>` 引用都必须可解析：
+  文件要存在（先是精确的根相对路径，否则是以它结尾的唯一路径），行号要落在文件内。审计与设计
+  文档作为记录豁免。它第一次运行就抓到一处真实漂移——`docs/roadmap-1.0.md` 引用了
+  `run_method/src/macros/face_objects.rs:242-243`，而该文件只有 172 行——现改为该 arm 当前的
+  行号。边界写在模块文档里：它抓不到"只差几行"的语义漂移，那仍然只能由人读出来。
+- **MINOR 16。** 两份 `run_method/README*.md` 改为点名真实存在的 `trace_mode_from_env()`，而不是
+  从未存在过的 `TraceMode::from_env`。

@@ -8,7 +8,7 @@ trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件
 
 留在这里的部分：
 
-- `CallTrace` 帧栈、局部值与数据边（`TraceMode::from_env` 读取
+- `CallTrace` 帧栈、局部值与数据边（`trace_mode_from_env` 读取
   `NICH_LINK_TRACE`；枚举与解析器是 kernel 类型）
 - 声明宏：`host!`、`application!`、`static_graft_plan!`、`graft_plan!`、
   `trace_call!` 以及生成的 `*_object!` 族

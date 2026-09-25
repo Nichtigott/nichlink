@@ -103,8 +103,8 @@ what blocks 1.0, not by when they were found.
 
 | # | 项 | 证据 | 验收 |
 | --- | --- | --- | --- |
-| 1 | `face_objects` arm 绑定 `$preset`/`$parts` 却展开成 `NoPreset`/`NoParts`（已复核机制） | `run_method/src/macros/face_objects.rs:242-243,274-277` | 先写一条**失败**测试钉住"自定义 preset/parts 不被吞"，再修；测试进 `run_method/tests/` |
-| 2 | arm 5 不可达 | 同上 `:326-356` | 删除后既有宏测试全绿 |
+| 1 | ✅ `face_objects` arm 绑定 `$preset`/`$parts` 却展开成 `NoPreset`/`NoParts`（已复核机制，已修） | `run_method/src/macros/face_objects.rs:92-95` | 已落地：`__face_ty_or!`/`__face_ty_name_or!` 按每个绑定分别判有无，省略者保持默认、写下的原样转发；钉子 `run_method/tests/face_preset_parts.rs`、`run_method/tests/face_arm_defaults.rs` |
+| 2 | ✅ arm 5 不可达（已修：该 arm 已删除） | `run_method/src/macros/face_objects.rs`（无行号：被删的 arm 不再有位置） | 删除后既有宏测试全绿 |
 | 3 | `register_snapshot_batch` 尾部缺父循环不可达，且重复构造同一错误 | `declaration/../../tree/transaction/transaction.rs:58-71` | 删除；transaction 全部测试绿 |
 | 4 | `UnknownReplacement`/`UnknownTarget` 用原树根 id 报错，丢掉选择器 | `tree/graft_ops/overlay.rs:151-156`、`resolution.rs:43-51` | 错误携带选择器字符串；新增测试断错文案含 selector |
 | 5 | `same_symbol` 每次比较两次堆分配且在双重循环内 | `mir/merge.rs:53-55` | 改 `strip_suffix` 零分配；既有 merge 测试绿 |

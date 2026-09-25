@@ -102,8 +102,10 @@ fn collect_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            collect_markdown(&path, files);
+        if crate::is_real_directory(&path) {
+            if !crate::is_skipped_directory(&path) {
+                collect_markdown(&path, files);
+            }
         } else if path.extension().is_some_and(|extension| extension == "md") {
             files.push(path);
         }

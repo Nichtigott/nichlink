@@ -8,12 +8,20 @@ name: nichlink-release
 on:
   push:
     tags: ["v*"]
+  # A manual run is the rehearsal path: every check, and no upload. Publishing is
+  # reachable only from a tag ref, because `cargo publish` is irreversible and
+  # only the tag ties an upload to a version. A `publish` input used to live here
+  # and let a branch run upload whatever version the manifests carried, with the
+  # tag check skipped — so the sentence above ("a release is a tag and nothing
+  # else starts it") was false whenever someone ticked it. Recovering a partial
+  # publication does not need it: re-run the failed jobs of the tag's own run,
+  # which keeps `GITHUB_REF` pointing at the tag.
+  # 手动运行是演练路径：跑全部检查，不上传。发布只能从 tag ref 到达，因为 `cargo publish`
+  # 不可撤销，而只有 tag 把一次上传绑定到某个版本。这里曾有一个 `publish` 输入，能让一次分支
+  # 运行上传清单里写着的任何版本、且跳过 tag 检查——于是只要有人勾上它，上面那句"一次发布就是
+  # 一个 tag，且只有 tag 会启动它"就是假的。恢复一次部分发布不需要它：重跑 tag 那次运行的失败
+  # 任务即可，重跑保留 `GITHUB_REF` 指向 tag。
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Upload to crates.io (off: stop after the checks)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -75,9 +83,14 @@ jobs:
         # `--publish --yes` is the only invocation that uploads: every other mode
         # of `tools/nichlink-publish` is a dry run, so a mistaken tag is caught by
         # the gates above rather than by an upload nobody can take back.
+        # The condition repeats the tag requirement instead of relying on the
+        # trigger list: an upload must be unable to happen on a ref that the check
+        # above did not guard, whatever events are added here later.
         # `--publish --yes` 是唯一会真正上传的调用：`tools/nichlink-publish` 的其他模式都是
         # dry run，因此打错的 tag 会被上面的门禁挡住，而不是被一次收不回的上传发现。
-        if: github.event_name == 'push' || inputs.publish
+        # 这个条件重复写出 tag 要求，而不是依赖触发列表：无论以后在这里加什么事件，上传都不能
+        # 发生在上面的检查没有守住的那个 ref 上。
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: tools/nichlink-publish --publish --yes
@@ -86,8 +99,10 @@ jobs:
         # Packaging reads local paths; only a consumer reads the published
         # requirements. This builds a throwaway crate outside the checkout and
         # `cargo add`s all nine by version, which is the half of the rehearsal
-        # that cannot run before the upload.
+        # that cannot run before the upload — and it is worth nothing unless the
+        # upload happened, so it carries the same condition.
         # 打包读的是本地路径，只有消费者读的是已发布的要求。这一步在本检出之外建一个一次性
-        # crate，按版本 `cargo add` 九个 crate——这是演练中无法在上传之前跑的那一半。
-        if: github.event_name == 'push' || inputs.publish
+        # crate，按版本 `cargo add` 九个 crate——这是演练中无法在上传之前跑的那一半；而上传没
+        # 发生的话它毫无意义，因此它带着同一个条件。
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: tools/nichlink-publish --verify-consumers

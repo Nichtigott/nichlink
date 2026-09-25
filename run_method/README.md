@@ -9,7 +9,7 @@ the kernel (`nichlink-core`); this crate binds it to the process lifetime.
 
 What stays here:
 
-- `CallTrace` frame stacks, locals, and data edges (`TraceMode::from_env`
+- `CallTrace` frame stacks, locals, and data edges (`trace_mode_from_env`
   reads `NICH_LINK_TRACE`; the enum and its parser are kernel types)
 - Declaration macros: `host!`, `application!`, `static_graft_plan!`,
   `graft_plan!`, `trace_call!`, and the generated `*_object!` family

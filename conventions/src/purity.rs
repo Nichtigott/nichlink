@@ -23,9 +23,10 @@
 //! `core/tests/`，那不在遍历范围内，宿主同样如此。`std::path` 有意放行：它是取值词汇而
 //! 不是 I/O 能力，禁掉它只会把调用方推向手写的字符串切分。
 
+use std::fs;
 use std::path::Path;
 
-use crate::{is_comment, lines, relative, rust_sources};
+use crate::{relative, rust_sources};
 
 /// Tokens that must not appear in the kernel outside comments.
 /// 内核中除注释外不得出现的词。
@@ -98,10 +99,19 @@ pub struct Finding {
 pub fn findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     for path in rust_sources(&root.join("core").join("src")) {
-        for (index, line) in lines(&path).iter().enumerate() {
-            if is_comment(line) {
-                continue;
-            }
+        // What counts as code is the kernel's own rule rather than a second one
+        // kept here: `mask_non_code` blanks string literals and both comment
+        // forms while keeping every line break, so `/* std::fs */` and
+        // `let probe = "std::fs";` are prose while the code around them is not.
+        // The line-based `//` test this replaced reported a block comment, and
+        // `is_comment` had no caller left once it went.
+        // 什么算代码由内核自己的规则决定，而不是这里另留一份：`mask_non_code` 抹白字符串字面量
+        // 与两种注释形式并保留每一个换行，因此 `/* std::fs */` 与 `let probe = "std::fs";`
+        // 是散文，而它们周围的代码不是。这里替换掉的按行 `//` 判断会把块注释报出来，而在它退场
+        // 之后 `is_comment` 已无调用方。
+        let text = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        for (index, line) in nichlink::source::mask_non_code(&text).lines().enumerate() {
             let searchable = expand_imports(line);
             for token in FORBIDDEN {
                 if searchable.contains(token) {
@@ -170,6 +180,30 @@ mod tests {
         assert!(
             tokens.contains("std::env") && tokens.contains("std::fs"),
             "a brace import names both modules: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Prose that names a forbidden module is not a violation, and the code
+    /// beside it still is.
+    /// 点名被禁模块的散文不是违规，而它旁边的代码依然是。
+    #[test]
+    fn comments_and_strings_are_not_the_code_that_is_scanned() {
+        let root = synthetic(&[(
+            "core/src/probe.rs",
+            "/* std::fs is banned here, and this block comment says so */\n\
+             /// `let probe = \"std::env\";` is prose too.\n\
+             pub fn probe() -> usize {\n    \
+             let _note = \"std::thread::spawn\";\n    \
+             let _ = std::fs::metadata(\"/tmp\");\n    1\n}\n",
+        )]);
+        let found = findings(&root);
+        let lines = found.iter().map(|finding| finding.line).collect::<Vec<_>>();
+        assert_eq!(
+            lines,
+            vec![5],
+            "only the real call is a violation: a block comment, a doc comment and a \
+             string literal are prose, and line 5 is the code beside them: {found:#?}"
         );
         let _ = fs::remove_dir_all(&root);
     }

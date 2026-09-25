@@ -30,6 +30,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "doc_anchors.rs"]
+pub mod doc_anchors;
 #[path = "doc_blocks.rs"]
 pub mod doc_blocks;
 #[path = "lint.rs"]
@@ -38,6 +40,8 @@ pub mod lint;
 pub mod mounting;
 #[path = "purity.rs"]
 pub mod purity;
+#[path = "release_workflow.rs"]
+pub mod release_workflow;
 #[path = "size.rs"]
 pub mod size;
 
@@ -89,7 +93,7 @@ pub fn crate_directories(root: &Path) -> Vec<PathBuf> {
 /// Collect `directory` and, one level down, any child owning a `src/` tree.
 /// 收集 `directory` 本身，以及下一层中任何拥有 `src/` 树的子目录。
 fn collect_crate_directories(directory: &Path, found: &mut Vec<PathBuf>) {
-    if directory.join("src").is_dir() {
+    if is_real_directory(&directory.join("src")) {
         found.push(directory.to_path_buf());
     }
     let Ok(entries) = fs::read_dir(directory) else {
@@ -97,10 +101,52 @@ fn collect_crate_directories(directory: &Path, found: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() && path.join("src").is_dir() {
+        if is_skipped_directory(&path) {
+            continue;
+        }
+        if is_real_directory(&path) && is_real_directory(&path.join("src")) {
             found.push(path);
         }
     }
+}
+
+/// Directory names a walk never enters.
+/// 遍历永不进入的目录名。
+///
+/// `target/` holds build output, and `build_method` writes generated Rust into it
+/// (`<member>/target/nichlink/out/*.rs`). A generated file is not source: the
+/// mounting gate once read `include!` out of a stale artifact, which is a failure
+/// a maintainer cannot fix by editing the file the gate names.
+/// `target/` 存放构建产物，而 `build_method` 会把生成的 Rust 写进去
+/// （`<member>/target/nichlink/out/*.rs`）。生成的文件不是源码：挂载门禁曾从一份过期产物里
+/// 读到 `include!`，而那是维护者无法通过编辑门禁点名的那个文件来修复的失败。
+const SKIPPED_DIRECTORIES: &[&str] = &["target"];
+
+/// Whether `path` names a directory that a walk should skip by name.
+/// `path` 是否是按名字应当跳过的目录。
+pub(crate) fn is_skipped_directory(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| SKIPPED_DIRECTORIES.contains(&name))
+}
+
+/// Whether `path` is a directory that is really there, as opposed to a symbolic
+/// link to one.
+/// `path` 是否是一个真实存在的目录，而不是指向某个目录的符号链接。
+///
+/// [`rust_sources`] promises not to follow symlinks, and `Path::is_dir` breaks
+/// that promise: a link such as `core/src/zz -> /tmp/elsewhere` used to pull files
+/// from outside the checkout into every gate that walks a crate, and the purity
+/// gate reported `/tmp/elsewhere/evil.rs` as kernel I/O.
+/// [`rust_sources`] 承诺不跟随符号链接，而 `Path::is_dir` 会破坏这个承诺：像
+/// `core/src/zz -> /tmp/elsewhere` 这样的链接过去会把检出之外的文件拉进每一个遍历 crate 的
+/// 门禁，纯净性门禁曾把 `/tmp/elsewhere/evil.rs` 报成内核 I/O。
+///
+/// `symlink_metadata` describes the link itself, so a linked directory is not a
+/// directory here.
+/// `symlink_metadata` 描述的是链接本身，因此被链接的目录在这里不算目录。
+pub(crate) fn is_real_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
 }
 
 /// Every `.rs` file under `directory`, sorted, without following symlinks.
@@ -120,8 +166,10 @@ fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            collect_rust_sources(&path, files);
+        if is_real_directory(&path) {
+            if !is_skipped_directory(&path) {
+                collect_rust_sources(&path, files);
+            }
         } else if path.extension().is_some_and(|extension| extension == "rs") {
             files.push(path);
         }
@@ -145,15 +193,70 @@ pub fn relative(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// Whether a line is a Rust comment rather than code.
-/// 某一行是注释而不是代码。
-///
-/// The gates below look for tokens that also appear in prose (`std::fs` in a
-/// doc comment explaining why it is banned, for example), so comments are
-/// skipped instead of being reported.
-/// 下面的门禁查找的词也会出现在散文里（例如解释为何禁止 `std::fs` 的文档注释），因此跳过
-/// 注释而不是把它们报出来。
-pub fn is_comment(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("//")
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A throwaway directory tree for a walker test.
+    /// 供遍历器测试使用的一次性目录树。
+    fn synthetic(name: &str) -> PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-conventions-{name}-{}-{}",
+            std::process::id(),
+            sequence
+        ));
+        fs::create_dir_all(&root).expect("fixture root");
+        root
+    }
+
+    /// A linked directory is not entered. The walk promises not to follow
+    /// symlinks, and `Path::is_dir` used to break that promise by pulling files
+    /// from outside the checkout into every gate.
+    /// 被链接的目录不会被进入。遍历承诺不跟随符号链接，而 `Path::is_dir` 过去会破坏这个承诺，
+    /// 把检出之外的文件拉进每一个门禁。
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_directory_is_not_walked_into() {
+        let root = synthetic("link");
+        let outside = root.join("outside");
+        fs::create_dir_all(&outside).expect("outside dir");
+        fs::write(outside.join("evil.rs"), "fn evil() {}\n").expect("outside file");
+        let inside = root.join("inside");
+        fs::create_dir_all(&inside).expect("inside dir");
+        fs::write(inside.join("good.rs"), "fn good() {}\n").expect("inside file");
+        std::os::unix::fs::symlink(&outside, inside.join("zz_link")).expect("fixture link");
+        let found = rust_sources(&inside);
+        assert_eq!(
+            found,
+            vec![inside.join("good.rs")],
+            "a linked directory must not contribute files: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Build output is not source. `<member>/target/nichlink/out/*.rs` is where
+    /// `build_method` writes generated Rust, and a stale artifact must not be read
+    /// as a declaration the repository ships.
+    /// 构建产物不是源码。`<member>/target/nichlink/out/*.rs` 是 `build_method` 写生成 Rust 的
+    /// 地方，而一份过期产物不得被读成仓库出厂的声明。
+    #[test]
+    fn build_output_is_not_walked_into() {
+        let root = synthetic("target");
+        fs::create_dir_all(root.join("target/nichlink/out")).expect("artifact dir");
+        fs::write(
+            root.join("target/nichlink/out/generated.rs"),
+            "include!(\"stale\");\n",
+        )
+        .expect("artifact file");
+        fs::write(root.join("lib.rs"), "fn kept() {}\n").expect("source file");
+        let found = rust_sources(&root);
+        assert_eq!(
+            found,
+            vec![root.join("lib.rs")],
+            "a build artifact must not be read as source: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
 }
