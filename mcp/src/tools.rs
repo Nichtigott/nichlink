@@ -219,10 +219,21 @@ fn read_source(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("context")
         .and_then(Value::as_u64)
         .map_or(40, |value| value.min(120) as usize);
+    // A caller-supplied line number is unbounded, and `center + context` used to
+    // overflow: a panic in a debug build, and in release a wrapped range whose start is
+    // past its end while the reply still says `isError: false` — a wrong answer an agent
+    // would trust. Clamp the centre to the file first, then do the arithmetic
+    // saturating.
+    // 调用方给的行号没有上界，而 `center + context` 过去会溢出：debug 构建里 panic，release
+    // 里回绕成一个起点超过终点的区间、回复却仍写着 `isError: false`——这是 agent 会相信的错误
+    // 答案。先把中心夹到文件内，再用饱和运算做后面的加法。
+    let total = total.max(1);
+    let center = center.min(total);
     let start = center.saturating_sub(context).max(1);
-    let end = (center + context)
-        .min(total.max(1))
-        .min(start + MAX_READ_LINES - 1);
+    let end = center
+        .saturating_add(context)
+        .min(total)
+        .min(start.saturating_add(MAX_READ_LINES - 1));
     let mut output = format!("{}:{}-{}\n", file.relative, start, end);
     for (index, line) in file.source.lines().enumerate() {
         let line_number = index + 1;
@@ -257,5 +268,31 @@ mod tests {
                 .iter()
                 .all(|tool| tool["inputSchema"]["type"] == "object")
         );
+    }
+    /// A line number a caller sends is unbounded; the range must stay forward and
+    /// inside the file whatever it is.
+    /// 调用方发来的行号没有上界；无论它是什么，区间都必须朝前且落在文件内。
+    ///
+    /// `center + context` used to overflow: debug panicked, release produced
+    /// `start > end` with an empty body and `isError: false`.
+    /// `center + context` 过去会溢出：debug 直接 panic，release 产出 `start > end`、正文为空、
+    /// 却仍报 `isError: false`。
+    #[test]
+    fn a_huge_line_number_still_yields_a_forward_range() {
+        let root = std::env::temp_dir().join(format!("nichlink-mcp-read-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("src")).expect("fixture dir");
+        std::fs::write(root.join("src/lib.rs"), "fn a() {}\nfn b() {}\n").expect("fixture file");
+        for line in [u64::MAX, u64::MAX / 2, usize::MAX as u64, 1] {
+            let arguments = serde_json::json!({"path": "src/lib.rs", "line": line});
+            let output = read_source(&root, &arguments).expect("the read succeeds");
+            let header = output.lines().next().expect("a header");
+            let range = header.split_once(':').expect("path:range").1;
+            let (start, end) = range.split_once('-').expect("start-end");
+            let start: usize = start.parse().expect("a start");
+            let end: usize = end.parse().expect("an end");
+            assert!(start <= end, "line {line} inverted the range: {header}");
+            assert!(end <= 2, "line {line} read past the file: {header}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

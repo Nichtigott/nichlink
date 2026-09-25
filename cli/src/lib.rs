@@ -89,7 +89,28 @@ OPTIONS:
 /// returns a failure as `Err` so the binary decides the exit code.
 /// 读取真实进程参数，把命令报告写到 stdout，失败以 `Err` 返回，由二进制决定退出码。
 pub fn main() -> Result<(), String> {
-    run(std::env::args())
+    run(argv_strings(std::env::args_os())?)
+}
+
+/// Convert process arguments to text, naming the first that is not UTF-8.
+/// 把进程参数转成文本，并点名第一个不是 UTF-8 的参数。
+///
+/// An argument on Linux may be any byte string, and `std::env::args()` *unwraps* the
+/// conversion: `nichlink check "/tmp/proj\xff"` died with a Rust backtrace instead of
+/// printing a usage error, which is not what a command-line tool owes a caller.
+/// Linux 上的参数可以是任意字节串，而 `std::env::args()` 会对转换 **unwrap**：
+/// `nichlink check "/tmp/proj\xff"` 会带着 Rust backtrace 死掉，而不是打印一条用法错误——
+/// 这不是命令行工具该给调用方的答复。
+pub fn argv_strings(
+    argv: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<Vec<String>, String> {
+    argv.into_iter()
+        .map(|argument| {
+            argument
+                .into_string()
+                .map_err(|bad| format!("argument {bad:?} is not valid UTF-8"))
+        })
+        .collect()
 }
 
 /// Dispatch one command from an argv-style iterator (the program name is

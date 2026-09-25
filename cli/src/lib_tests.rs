@@ -608,3 +608,24 @@ fn temporary_root(label: &str) -> PathBuf {
     std::fs::create_dir_all(&root).expect("temporary directory");
     root
 }
+
+/// A non-UTF-8 argument is refused by name instead of panicking.
+/// 非 UTF-8 参数会被点名拒绝，而不是 panic。
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_argument_is_refused_by_name() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let bad = OsString::from_vec(b"/tmp/proj\xff".to_vec());
+    let error = super::argv_strings([OsString::from("nichlink"), bad]).expect_err("refused");
+    assert!(
+        error.contains("is not valid UTF-8"),
+        "the refusal names the reason: {error}"
+    );
+    // A valid argv still converts, so the check refuses bytes rather than the feature.
+    // 合法 argv 照常转换，因此这道检查拒绝的是字节而不是功能。
+    let argv = super::argv_strings([OsString::from("nichlink"), OsString::from("check")])
+        .expect("valid arguments");
+    assert_eq!(argv, ["nichlink", "check"]);
+}
