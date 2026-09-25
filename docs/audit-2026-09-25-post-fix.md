@@ -315,6 +315,18 @@ crate 自己**；`$failed` 是粘性的，既参与层级等待又参与 `publis
 **证据 `[代码]`**：委派审计未能真正上传（无 token、且被要求不传 `--publish`、cargo 限 `--offline`），
 因此 crate 侧的"已上传"响应是文档化的 registry 行为而非实测。
 
+**已修，并改用假 index 实测**：发布前先 `is_published "$crate" "$workspace_version"`，已在 index 上
+就按已发布记账并跳过；`published` 改为按本层真正送上 index 的 crate（`level_published`）记账，
+不再受全局 `$failed` 影响，等待可见也只等这些。对照实验（让 index 声称九个 crate 的 `0.1.0` 全在，
+不触碰 crates.io）：
+
+- 修复前：退出 1，对九个 crate 逐个 `cargo publish`（各自 `no token found`），摘要
+  `verified: none` / `failed:` 九个——把一次**已经全在 index 上**的发布报成全坏；
+- 修复后：退出 0，九行 `already on the index`，**零次上传尝试**，`verified:` 九个 / `failed: none`。
+
+**钉子**：`tools/nichlink-publish` 没有测试框架，因此这条的钉子就是上面那份可重跑的对照实验；
+P4 是它在真实 registry 上的对应场景。
+
 **最小修法**：发布前先 `if is_published "$crate" "$workspace_version"; then published="$published $crate"; continue; fi`；
 把 `published` 改成按 crate（而非按层、且受全局 `$failed` 影响）记账。
 **钉子**：无。
@@ -783,5 +795,33 @@ Windows 任务，以及空的发布密钥，都不在本文件的审计角度清
 **恢复路径**：为仓库配置 `CARGO_REGISTRY_TOKEN` secret，然后 `gh run rerun 36132054983 --failed`
 （重跑的是同一次 tag push，`Tag names this version` 仍然生效）。**不要**用
 `workflow_dispatch` + `publish: true` 来恢复：那正是 MAJOR 6——dispatch 运行的
-`github.ref` 是分支，tag 检查被跳过，而 `if` 仍然允许上传。MAJOR 7（`--publish --yes` 非幂等）
-这次没有触发，因为第一次上传就失败了；一旦真的部分发布，它就是恢复路上的坑。
+`github.ref` 是分支，tag 检查被跳过，而 `if` 仍然允许上传。
+
+### P4. The crates.io new-crate rate limit means a nine-crate first release cannot finish in one run
+### P4. crates.io 对新 crate 的速率上限使九连发无法在一次运行里完成
+
+`Angle: release/CI`. The second release run — the secret configured, the tag moved to
+`f3c2b98` — passed all twelve checks and hit the limit after publishing **five** crates in
+`Publish in dependency order`.
+`Angle: release/CI`。第二次发布运行（已配置 secret、tag 已移到 `f3c2b98`）通过了全部十二个检查，
+在 `Publish in dependency order` 里发完**五个**之后撞上限速。
+
+- **已发布**（index 返回 200）：`nichlink-core`、`nichlink-macro`、`nichlink-build-method`、
+  `nichlink-mcp`、`nichlink-run-method`。`[实测]`
+  `https://crates.io/api/v1/crates/nichlink-core` 的 `versions` 为 `["0.1.0"]`。
+- **被拒**（index 404，各一次）：`nichlink-debug-method`、`nichlink-plugin-host`、
+  `nichlink-studio`、`nichlink-cli`，错误为
+  `status 429 Too Many Requests: You have published too many new crates in a short period of
+  time. Please try again after Fri, 25 Sep 2026 12:55:31 GMT`。
+
+`[实测]`：从第一个上传（约 12:44:30Z）到窗口结束（12:55:31Z）约十一分钟、五个新 crate，因此这是
+"每窗口 N 个新 crate"的批量额度，而不是两次发布之间的间隔限制——九连发必然越过它。这**不是**本
+仓库的缺陷，而是发布链必须按窗口分批的约束。cargo 侧同类问题见
+[rust-lang/cargo#15754](https://github.com/rust-lang/cargo/issues/15754)（工作区发布中途失败，
+错误信息不可操作）与 [mesh-llm#691](https://github.com/Mesh-LLM/mesh-llm/issues/691)（同一条 429
+断链）。
+
+**恢复方式**：等窗口过去后重跑，路径由 MAJOR 7 的修复支撑——重跑时已在 index 上的五个被跳过，
+只发剩下的四个；step 14 `--verify-consumers` 在发布成功之后运行，是"陌生人能消费"的最终证明。
+**钉子**：MAJOR 7 的假 index 对照覆盖了"重跑跳过已发布"这一半；速率窗口本身由 registry 决定，
+本地钉不住。
