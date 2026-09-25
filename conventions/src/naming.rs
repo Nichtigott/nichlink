@@ -129,7 +129,7 @@ fn manifest_value(text: &str, section: &str, key: &str) -> Option<String> {
         }
         let value = right.trim();
         let value = value.split('#').next().unwrap_or(value).trim();
-        return Some(value.trim_matches('"').to_owned());
+        return Some(value.trim_matches(['"', '\'']).to_owned());
     }
     None
 }

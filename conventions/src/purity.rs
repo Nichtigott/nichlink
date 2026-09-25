@@ -55,6 +55,38 @@ pub const FORBIDDEN: &[&str] = &[
     "option_env!",
 ];
 
+/// Blank the lines an `#[cfg(any())]` attribute governs.
+/// 把 `#[cfg(any())]` 属性所管辖的那些行抹白。
+///
+/// The attribute governs the item on the following lines (and its indented body), so the
+/// scan skips lines from the attribute until the indentation returns to the attribute's
+/// own level.
+/// 该属性管辖其后若干行的条目（以及它缩进的主体），因此扫描从该属性起跳过，直到缩进回到属性
+/// 自身的层级。
+fn drop_never_compiled(masked: &str) -> String {
+    let mut kept = String::with_capacity(masked.len());
+    let mut skipped_indent: Option<usize> = None;
+    for line in masked.lines() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if let Some(level) = skipped_indent {
+            if trimmed.is_empty() || indent > level {
+                kept.push('\n');
+                continue;
+            }
+            skipped_indent = None;
+        }
+        if trimmed == "#[cfg(any())]" {
+            skipped_indent = Some(indent);
+            kept.push('\n');
+            continue;
+        }
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
+}
+
 /// The masked text with every whitespace character removed, and the source line each
 /// remaining character came from.
 /// 屏蔽后的文本去掉每一个空白字符，外加剩下每个字符来自的源码行。
@@ -186,6 +218,12 @@ pub fn findings(root: &Path) -> Vec<Finding> {
         // 三种——路径是 token 流而不是行——别名表关闭第四种。`expand_imports` 随后看到的每个树形
         // 导入都在同一行上，因为折叠已经把其中的换行去掉了。
         let masked = nichlink::source::mask_non_code(&text);
+        // `#[cfg(any())]` is the workspace's idiom for code that is never compiled, so a
+        // line carrying it is not a capability the kernel has. Reporting it was a false
+        // positive that made the gate look wrong about a file it had read correctly.
+        // `#[cfg(any())]` 是本工作区表示"永不编译"的写法，因此带它的那一行不是内核拥有的能力。
+        // 把它报出来是误报，会让门禁在一份它其实读对了的文件上显得不对。
+        let masked = drop_never_compiled(&masked);
         let (folded, lines) = folded_for_search(&masked);
         let (searchable, search_lines) = expand_folded_imports(folded, lines);
         let aliases = std_aliases(&searchable);
