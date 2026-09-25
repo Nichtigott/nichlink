@@ -862,3 +862,43 @@ byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
   行号。边界写在模块文档里：它抓不到"只差几行"的语义漂移，那仍然只能由人读出来。
 - **MINOR 16。** 两份 `run_method/README*.md` 改为点名真实存在的 `trace_mode_from_env()`，而不是
   从未存在过的 `TraceMode::from_env`。
+
+## Remaining post-release items, finished / 发布后剩余待办，做完
+
+- **备注 4——`core/tests/nesting_budget.rs` 不再跳过读不到的文件。** 读取移进 `inspect`，它同时
+  返回被拒绝的文件与读不到的文件，工作区那条测试断言后者为空：遍历找到却读不到的文件，就是守卫
+  从未检查过的文件，把工作区称作"干净"会变成关于"它碰巧能打开哪些文件"的断言。钉子：
+  `a_file_that_cannot_be_read_is_reported`（临时文件里放非法 UTF-8），修复前为红。
+- **备注 5——AGENTS 改动规则 4 现在有门禁。** `conventions/src/naming.rs` 检查 `examples/` 之外的
+  每个成员：`nichlink-<目录名，`_`→`-`>`、`nichlink_<目录名，`-`→`_`>`（没有 `[lib] name` 也
+  可以——cargo 会推导），外加 crate 表里已经记录的唯一实测例外：`core/` 的 lib 是 `nichlink`。
+  它第一次运行就抓到一个真实的 bug——**在门禁自己身上**：缺了连字符折叠时它把工作区自己的
+  `plugin-host` 报了出来，这现在正是钉子
+  `a_hyphenated_directory_maps_to_an_underscored_lib_name`。
+- **条目 31——重新实测而不是照抄。** `json` 缺失于四份模块清单与两份 README 的 core 行（该模块挂在
+  `core/src/registry_core.rs:19-20`）；`cli/README.md` 的命令表缺
+  `nichlink snippets [path] [--editor vscode|nvim|blink|auto] [--stdout]`（`cli/src/lib.rs:46`）；
+  `LICENSE` 那行改为"每个**已发布**的 crate 目录"，这样它恰好为真（`conventions/` 是
+  `publish = false`）；裸 `mod` 的数字则删掉了——审核声称 196，而按规则本身（前面没有 `#[path]`
+  的 `mod`）实测是 31（12 处在 crate 根、19 处在 `#[path]` 载入的父文件里），且一个随每个新模块
+  变化的数字不该写在散文里。
+
+### P5. The index probes had no retry, so one network blip read as "not published"
+### P5. index 探针没有重试，于是一次网络抖动会被读成"未发布"
+
+`Angle: release/CI`. `tools/nichlink-publish` 与 `tools/nichlink-package-audit` 的 `is_published`
+都用单次 `curl -fsS --max-time 20` 判定某个精确版本是否已发布，失败即 `return 1`，而两个工具的
+注释都明说"网络失败按'未发布'处理"。两种后果：在 `--publish` 模式下，一次抖动让依赖看起来缺失，
+脚本就在 `error: cannot publish X: waiting for Y` 处**退出 1**，中断整次发布；在审计里，它把
+crate 报成 `skipped`，或者在探针成功、而校验构建从只传播了一半的 index 取依赖时报成 `failed`。
+
+**证据 `[实测]`**：首次发布之后，同一条 `tools/nichlink-package-audit` 在相邻两次运行里对**同一棵
+静止的树**给出了不同的可检查集合——一次 `verified` 了 `cli`/`debug-method`，却把一小时前就已发布的
+`run-method` 报成 `skipped`，并把 `plugin-host` 报成 `failed`；五分钟后以及随后的三次运行都是
+`verified: 九个 / skipped: none / failed: none`。树没有变，index 的可见性变了。
+
+**最小修法（已修）**：探针请求加重试——`curl --retry 3 --retry-connrefused --retry-delay 2`、
+`wget --tries=3 --waitretry=2`；"未发布"这个结论现在必须经受住 registry 短暂不可达。
+**钉子**：本地"前两次 503、第三次 200"的对照——旧命令行 1 次请求、退出 22、判定"未发布"；
+新命令行 3 次请求、退出 0、取到正确正文。**残留风险**（记在这里，不假装没有）：重试耗尽之后，
+`--publish` 仍会因为一个看起来缺失的依赖而停止——这是保守方向而不是错误方向。

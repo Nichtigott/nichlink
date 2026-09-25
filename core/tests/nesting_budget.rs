@@ -54,6 +54,39 @@ fn rust_files(directory: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
+/// What the guard says about a set of files: the ones it refused, and the ones it
+/// could not read at all.
+/// 守卫对一组文件的结论：它拒绝的那些，以及它根本读不到的那些。
+fn inspect(files: &[PathBuf]) -> (Vec<String>, Vec<String>) {
+    let mut refused = Vec::new();
+    let mut unreadable = Vec::new();
+    for path in files {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            // A file the walk found but cannot read is not "clean". The guard never
+            // saw it, and this test's whole point is that the guard sees everything
+            // the repository ships; skipping it silently is how a budget test decays
+            // into a test of whatever it happened to be able to open.
+            // 遍历找到却读不到的文件不算"干净"。守卫从未见过它，而本测试的全部意义正是守卫见过
+            // 仓库出厂的每一样东西；静默跳过它，就是一道预算测试退化成"只测它碰巧能打开的那些
+            // 文件"的方式。
+            unreadable.push(path.display().to_string());
+            continue;
+        };
+        // A file that is not a face source is allowed to fail to parse: what must
+        // never happen is a *nesting* refusal, because that means the guard would
+        // reject a file this repository ships.
+        // 不是注册面源码的文件允许解析失败：绝不允许发生的是**嵌套**拒绝，因为那意味着守卫会
+        // 拒绝一个本仓库出厂的文件的。
+        if let Err(error) = nichlink::registry_core::syntax::parse_faces(&text) {
+            let message = error.to_string();
+            if message.contains(REFUSAL) {
+                refused.push(format!("{}: {message}", path.display()));
+            }
+        }
+    }
+    (refused, unreadable)
+}
+
 #[test]
 fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -74,23 +107,14 @@ fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
         root.display()
     );
 
-    let mut refused = Vec::new();
-    for path in &files {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        // A file that is not a face source is allowed to fail to parse: what must
-        // never happen is a *nesting* refusal, because that means the guard would
-        // reject a file this repository ships.
-        // 不是注册面源码的文件允许解析失败：绝不允许发生的是**嵌套**拒绝，因为那意味着守卫会
-        // 拒绝一个本仓库出厂的文件的。
-        if let Err(error) = nichlink::registry_core::syntax::parse_faces(&text) {
-            let message = error.to_string();
-            if message.contains(REFUSAL) {
-                refused.push(format!("{}: {message}", path.display()));
-            }
-        }
-    }
+    let (refused, unreadable) = inspect(&files);
+    assert!(
+        unreadable.is_empty(),
+        "the walk found {} file(s) it could not read, so the budget does not cover \
+         them and cannot claim the workspace is clean:\n{}",
+        unreadable.len(),
+        unreadable.join("\n")
+    );
     assert!(
         refused.is_empty(),
         "the nesting guard refuses {} of this workspace's own files:\n{}",
@@ -98,4 +122,27 @@ fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
         refused.join("\n")
     );
     println!("the nesting guard accepted all {} Rust files", files.len());
+}
+
+/// A file that cannot be read is reported rather than skipped, because a skipped
+/// file is one the guard never checked.
+/// 读不到的文件会被报出而不是被跳过，因为被跳过的文件就是守卫从未检查过的文件。
+#[test]
+fn a_file_that_cannot_be_read_is_reported() {
+    let path = std::env::temp_dir().join(format!(
+        "nichlink-nesting-unreadable-{}-{}.rs",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    // Invalid UTF-8 in a file that exists: exactly the shape of a silently skipped
+    // source, and `read_to_string` refuses it.
+    // 一个存在但含非法 UTF-8 的文件：正是被静默跳过的源码的形状，而 `read_to_string` 会拒绝它。
+    std::fs::write(&path, [0x66, 0x6e, 0x20, 0xff, 0xfe, 0x0a]).expect("fixture file");
+    let (refused, unreadable) = inspect(std::slice::from_ref(&path));
+    let _ = std::fs::remove_file(&path);
+    assert!(refused.is_empty(), "{refused:#?}");
+    assert_eq!(unreadable.len(), 1, "{unreadable:#?}");
 }

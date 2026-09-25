@@ -149,14 +149,27 @@ index_path() {
 # published or the endpoint cannot be reached.
 # index 为每个已发布版本提供一行 JSON，因此精确匹配版本号就是发布判定。crate 版本未
 # 发布或端点不可达时返回非零。
+#
+# The request is retried before "not published" is believed. A transient failure
+# used to be indistinguishable from an absent version, and the two runs that
+# followed the first publish disagreed about which crates were checkable for
+# exactly that reason: the same tree reported `skipped` for a crate published an
+# hour earlier, then `failed` for one whose dependency the verify build fetched
+# from a half-propagated index. A claim about the registry has to survive the
+# registry being briefly unreachable.
+# 在相信"未发布"之前会重试。过去，瞬时失败与版本不存在无法区分，而首次发布之后的相邻两次运行
+# 对"哪些 crate 可检查"给出了不同答案，原因正是这个：同一棵树上，一小时前就发布的 crate 被报成
+# `skipped`，随后又有一个 crate 因为校验构建从只传播了一半的 index 取依赖而被报成 `failed`。
+# 关于 registry 的断言必须能经受"registry 短暂不可达"。
 is_published() {
   name=$1
   version=$2
   path=$(index_path "$name")
   if command -v curl >/dev/null 2>&1; then
-    body=$(curl -fsS --max-time 20 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(curl -fsS --max-time 20 --retry 3 --retry-connrefused --retry-delay 2 \
+      "$index_url/$path" 2>/dev/null) || return 1
   elif command -v wget >/dev/null 2>&1; then
-    body=$(wget -q -O - --timeout=20 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || return 1
   else
     return 1
   fi

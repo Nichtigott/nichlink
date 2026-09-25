@@ -21,6 +21,7 @@ Modules under `registry_core`:
 | `diagnostic` | `RegistryError` tree, `BuildDiagnostic` model, face topology validation |
 | `syntax` (feature `syntax`) | Registration face parser, application/graft entry discovery |
 | `authoring` | Face authoring data that is always available: the field-name table, presentation metadata, and pure `validation`; only its `parse` and `snapshot` submodules are behind feature `syntax` |
+| `json` | Shared JSON string encoding for every artifact this workspace writes: the build-diagnostics document, the MIR JSONL artifact, the editor-snippet file |
 | `lexicon` | Shared text contracts: generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions |
 
 The boundary rule: anything with no I/O and no `std::env`/time/process binding

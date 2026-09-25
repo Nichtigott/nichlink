@@ -31,9 +31,9 @@ line to `1.0.0` is a separate decision that would move the fourteen internal
   `cargo check --workspace --no-default-features --all-targets`. This is what
   first compiles `studio`'s `prototype-fixtures` tests, and it re-checks
   `plugin-host`'s `process-tools` through `--all-features`.
-- A `LICENSE` copy inside every crate directory, so each published package
-  carries its own licence text (Cargo only auto-includes a crate-local
-  `LICENSE*`).
+- A `LICENSE` copy inside every published crate directory, so each published
+  package carries its own licence text (Cargo only auto-includes a crate-local
+  `LICENSE*`). `conventions/` has none and needs none: it is `publish = false`.
 - `macro/README.md` plus the matching `readme` field for `nichlink-macro`.
 - `repository` and `homepage` on all nine manifests, `documentation` where it
   was missing (`nichlink-macro`, `nichlink-run-method`), and
@@ -667,8 +667,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `cargo check --workspace --no-default-features --all-targets`。`studio` 的
   `prototype-fixtures` 测试首次因此被编译，`plugin-host` 的 `process-tools` 也经
   `--all-features` 再检查一遍；
-- 每个 crate 目录内各放一份 `LICENSE`，使每个发布的包自带许可证文本（Cargo 只会自动
-  包含 crate 目录下的 `LICENSE*`）；
+- 每个已发布的 crate 目录内各放一份 `LICENSE`，使每个发布的包自带许可证文本（Cargo 只会自动
+  包含 crate 目录下的 `LICENSE*`）；`conventions/` 没有也不需要：它是 `publish = false`。
 - `macro/README.md` 与 `nichlink-macro` 的 `readme` 字段；
 - 九个 manifest 补上 `repository` 与 `homepage`，缺失处补 `documentation`
   （`nichlink-macro`、`nichlink-run-method`）；非默认特性属于公开 API 的 crate 补

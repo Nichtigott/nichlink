@@ -843,7 +843,7 @@ execution surface, so it has no row above.
 ```text
 core/         nichlink-core (kernel): protocol vocabulary and pure methods — identity,
               declaration, diagnostic, tree, plugin, mir, requirements, release,
-              source, authoring, syntax, lexicon
+              source, authoring, syntax, json, lexicon
 macro/        nichlink-macro: compile-time face-field front end (tolerant
               separators and order, spanned diagnostics, editor mirror)
 build_method/ nichlink-build-method: build-time discovery, cache, coarse StaticPlan

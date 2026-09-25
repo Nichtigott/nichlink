@@ -73,6 +73,7 @@ remains only as the optional source-scope discovery hint.
 - `mir` — MIR text/JSONL parsing, call-graph merge
 - `source` — lexical source scanning (functions, spans, calls)
 - `release` — release-time pruning/plan vocabulary
+- `json` — shared JSON string encoding for every artifact this workspace writes (build diagnostics, MIR JSONL, editor snippets)
 - `lexicon` — shared text contracts (generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions)
 
 Module mounting is uniform workspace-wide: a module file is declared by its parent
@@ -80,7 +81,8 @@ with `#[path = "<dir>/<name>.rs"] pub mod <name>;`. There is no `mod.rs`. The
 `#[path]` is what gives a module directory-relative resolution for its own
 children — the behaviour `mod.rs` would give — which is why the `<dir>/<name>.rs`
 layout works without one. A bare `mod x;` is equally correct when the parent is a
-crate root or is itself loaded with `#[path]`, and the tree contains 29 of those;
+crate root or is itself loaded with `#[path]`, and the tree uses that form in both
+positions (the count is not restated here: it changes with every new module);
 the rule that actually matters is that a module is never spliced in with
 `include!`. A splice changes the `file!()` a face records and therefore its
 `NodeId`, silently; identities are written into on-disk graft records, so the
@@ -92,7 +94,7 @@ gates both rules.
 `#[path = "<dir>/<name>.rs"] pub mod <name>;` 声明，没有 `mod.rs`。`#[path]` 的作用是让
 模块以所在目录为基准解析自己的子模块——也就是 `mod.rs` 能给出的行为——这正是
 `<dir>/<name>.rs` 布局无需 `mod.rs` 的原因。当父文件是 crate 根或本身经 `#[path]` 载入时，
-裸 `mod x;` 同样正确，树里有 29 处这样的写法；真正要守的规则是绝不用 `include!` 把模块拼进来。
+裸 `mod x;` 同样正确，树里两种位置都有这种写法（这里不再复述具体数字：它随每个新模块变化）；真正要守的规则是绝不用 `include!` 把模块拼进来。
 拼接会改变注册面记录的 `file!()`，从而静默改变它的 `NodeId`；身份会写入落盘的 graft 记录，
 损害会在以后表现为不再解析的记录。唯一的 `include!` 是 `host!()` 的
 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，它引入的是生成的计划而不是源码

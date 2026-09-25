@@ -38,6 +38,8 @@ pub mod doc_blocks;
 pub mod lint;
 #[path = "mounting.rs"]
 pub mod mounting;
+#[path = "naming.rs"]
+pub mod naming;
 #[path = "purity.rs"]
 pub mod purity;
 #[path = "release_workflow.rs"]

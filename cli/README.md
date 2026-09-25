@@ -18,6 +18,7 @@ cd my-app && nichlink studio
 | `nichlink explain <node-id \| logical/path> [--path <dir>] [--json]` | Report one node's identity, build scope, pruning state, and the declared cuts that name it |
 | `nichlink explain --overlay [--path <dir>] [--json]` | Render the static overlay projection of every slot and plan (not a live tree) |
 | `nichlink grafts [path] [--json]` | List `.nichlink/external-grafts/*/graft.plan`, their targets, and whether the host entry declares the slot |
+| `nichlink snippets [path] [--editor vscode \| nvim \| blink \| auto] [--stdout]` | Inject the face-field editor snippets into a project or an editor config |
 | `nichlink studio` | Launch the Studio TUI for the current project |
 | `nichlink mcp` | Run the read-only MCP stdio bridge |
 

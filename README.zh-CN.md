@@ -749,7 +749,7 @@ crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像
 ```text
 core/         nichlink-core（kernel）：协议名词 + 纯方法全集——identity、
               declaration、diagnostic、tree、plugin、mir、requirements、
-              release、source、authoring、syntax、lexicon
+              release、source、authoring、syntax、json、lexicon
 macro/        nichlink-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span
               诊断、编辑器镜像）
 build_method/ nichlink-build-method：构建期源码发现、缓存、第一阶段 StaticPlan

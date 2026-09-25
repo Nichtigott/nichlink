@@ -163,18 +163,24 @@ index_path() {
   fi
 }
 
-# Whether one exact version is served by the index; a network failure counts as
-# "not published" so the caller waits rather than publishing into a bad order.
-# 某个精确版本是否已由 index 提供；网络失败按"未发布"处理，使调用方等待，而不是按错误顺序
-# 发布。
+# Whether one exact version is served by the index. A network failure still counts
+# as "not published" so the caller waits rather than publishing into a bad order,
+# but the request is retried first: in `--publish` mode a blip used to be
+# indistinguishable from a missing dependency, and the caller's response to a
+# missing dependency is to refuse to publish at all (`cannot publish X: waiting
+# for Y`, exit 1).
+# 某个精确版本是否已由 index 提供。网络失败仍按"未发布"处理，使调用方等待，而不是按错误顺序
+# 发布，但请求会先重试：在 `--publish` 模式下，一次抖动过去与"依赖缺失"无法区分，而调用方对
+# 依赖缺失的响应是彻底拒绝发布（`cannot publish X: waiting for Y`，退出 1）。
 is_published() {
   name=$1
   version=$2
   path=$(index_path "$name")
   if command -v curl >/dev/null 2>&1; then
-    body=$(curl -fsS --max-time 20 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(curl -fsS --max-time 20 --retry 3 --retry-connrefused --retry-delay 2 \
+      "$index_url/$path" 2>/dev/null) || return 1
   elif command -v wget >/dev/null 2>&1; then
-    body=$(wget -q -O - --timeout=20 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || return 1
   else
     return 1
   fi
