@@ -3,6 +3,8 @@
 
 use super::*;
 
+use nichlink_run_method::registry_core::declaration::source_file_matches;
+
 impl App {
     /// Flat, deduplicated rows for one search query.
     /// 一次搜索查询的扁平、已去重结果行。
@@ -32,7 +34,7 @@ impl App {
         for info in self.registry.depth_first() {
             let path = self.registry.path_for(info.id).unwrap_or_default();
             let source = source_path_for(&info.source.file);
-            let file_match = info.source.file.to_ascii_lowercase().contains(&needle)
+            let file_match = source_file_matches(&info.source.file, &needle)
                 || path.to_ascii_lowercase().contains(&needle)
                 || info.registry_name.to_ascii_lowercase().contains(&needle)
                 || info.kind.to_ascii_lowercase().contains(&needle);

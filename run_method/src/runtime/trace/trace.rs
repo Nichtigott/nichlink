@@ -15,6 +15,7 @@ use crate::registry_core::identity::NodeId;
 
 pub use frames::FramePath;
 pub use nichlink::CallSite;
+pub use nichlink::declaration::source_file_matches;
 
 pub use self::call_trace::*;
 

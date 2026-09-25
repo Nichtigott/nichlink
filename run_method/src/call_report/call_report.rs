@@ -3,6 +3,7 @@
 
 use std::fmt::Write as _;
 
+use crate::registry_core::declaration::source_file_matches;
 use crate::{CallTrace, Registry};
 
 /// Render the compact fallback frame used by integration diagnostics.
@@ -196,7 +197,7 @@ fn matching_call_paths(
                         || call.function.to_ascii_lowercase().contains(&query)
                         || call
                             .source
-                            .is_some_and(|source| source.file.to_ascii_lowercase().contains(&query))
+                            .is_some_and(|source| source_file_matches(source.file, &query))
                         || registry
                             .find(call.node)
                             .is_some_and(|info| registration_matches(registry, info, &query))

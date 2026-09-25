@@ -135,7 +135,7 @@ impl CallTrace {
                 || frame
                     .call
                     .source
-                    .is_some_and(|source| source.file.to_ascii_lowercase().contains(query))
+                    .is_some_and(|source| source_file_matches(source.file, query))
             {
                 return true;
             }
@@ -286,7 +286,7 @@ impl CallTrace {
                     || frame
                         .call
                         .source
-                        .is_some_and(|source| source.file.to_ascii_lowercase().contains(&query))
+                        .is_some_and(|source| source_file_matches(source.file, &query))
             })
             .map(|frame| self.path_for(frame.call.frame_id))
     }

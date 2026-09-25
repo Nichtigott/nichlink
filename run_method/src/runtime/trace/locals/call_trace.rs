@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::registry_core::declaration::SourceLocation;
+use crate::registry_core::declaration::{SourceLocation, source_file_matches};
 use crate::runtime::trace::{CallSite, CallTrace, TraceMode};
 
 use super::{LocalId, LocalKind, LocalValue, Observation};
@@ -217,7 +217,7 @@ impl CallTrace {
                 local.name.to_ascii_lowercase().contains(&query)
                     || local.type_name.to_ascii_lowercase().contains(&query)
                     || local.value.to_ascii_lowercase().contains(&query)
-                    || local.source.file.to_ascii_lowercase().contains(&query)
+                    || source_file_matches(local.source.file, &query)
                     || local.source.function.to_ascii_lowercase().contains(&query)
                     || local
                         .frame_id

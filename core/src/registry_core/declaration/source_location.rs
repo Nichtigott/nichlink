@@ -38,6 +38,34 @@ pub fn portable_path(file: &str) -> String {
     }
 }
 
+/// Whether a recorded source path matches a lowercase search needle.
+/// 记录的源码路径是否匹配一个小写的搜索关键词。
+///
+/// The search surfaces match a `file!()`-recorded path against what a user
+/// typed, and on Windows that path is spelled with backslashes while the path
+/// the same surface *displays* is [`portable_path`]'s `/` form. Comparing the
+/// raw value therefore misses the query a user can see and retype — the search
+/// for `control/widget.rs` finds nothing where the screen says
+/// `control/widget.rs`. The fold has to happen here, at the comparison, for the
+/// same reason it happens at the display.
+/// 搜索面把 `file!()` 记录的路径与用户输入做匹配，而在 Windows 上该路径以反斜杠拼写，
+/// 同一个面**显示**的却是 [`portable_path`] 的 `/` 形式。因此比较原始值时，用户
+/// 照着屏幕重敲的查询会落空——搜 `control/widget.rs` 什么都找不到，而屏幕上写的就是
+/// `control/widget.rs`。与显示时同理，折叠必须发生在比较处。
+///
+/// `needle` must already be lowercase: every caller lowercases its query once and
+/// reuses it across all the fields it searches, and folding case here would
+/// allocate a second time on every candidate.
+/// `needle` 必须已经是小写：每个调用方把查询小写一次并在它搜索的所有字段间复用，在这里
+/// 折叠大小写会让每个候选再多分配一次。
+pub fn source_file_matches(file: &str, needle: &str) -> bool {
+    if file.contains('\\') {
+        portable_path(file).to_ascii_lowercase().contains(needle)
+    } else {
+        file.to_ascii_lowercase().contains(needle)
+    }
+}
+
 impl fmt::Display for SourceLocation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -81,3 +109,7 @@ pub struct LocalizedText {
     /// 创作与诊断界面显示的英文文本。
     pub en: &'static str,
 }
+
+#[cfg(test)]
+#[path = "source_location_tests.rs"]
+mod source_location_tests;

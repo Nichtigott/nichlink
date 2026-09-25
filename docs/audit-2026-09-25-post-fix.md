@@ -703,3 +703,85 @@ is still open.
 - 文档真实性（一份委派审计）尚未回报，其发现不在本文中；在它回来之前，把文档真实性这一面
   当作未审。
 - 构建期与宏前端在第一份失败后重新发起，仍在运行；其发现同样不在本文中。
+
+## Post-release round: what the `v0.1.0` push turned up / 发布后一轮：`v0.1.0` 的推送查出了什么
+
+`v0.1.0` was pushed to `origin` at 2026-09-25T11:55:34Z, starting
+`nichlink-release` run `36132054983` and `nichlink-ci` run `36132054937`. Neither
+the Windows job that had been failing on `main` for three consecutive runs nor the
+empty publish secret was in this document's angle list, so both are recorded here.
+`v0.1.0` 于 2026-09-25T11:55:34Z 推到 `origin`，启动了 `nichlink-release` 运行
+`36132054983` 与 `nichlink-ci` 运行 `36132054937`。那个在 `main` 上连续三次失败的
+Windows 任务，以及空的发布密钥，都不在本文件的审计角度清单里，因此记在这里。
+
+### P1. Windows CI was red on `main`, and that hid the lint, doc and package gates there
+### P1. Windows CI 在 `main` 上一直是红的，而它藏住了那边的 lint、文档与打包门禁
+
+`Angle: release/CI`. `run_method/tests/external_compact_face.rs:99` compared
+`REGISTRATION.source.file` against the `/`-spelled
+`"run_method/tests/external_compact_face.rs"`.
+`Angle: release/CI`。`run_method/tests/external_compact_face.rs:99` 把
+`REGISTRATION.source.file` 与 `/` 拼写的 `"run_method/tests/external_compact_face.rs"` 比较。
+
+**证据 `[实测]`**：`gh run view 36013106327` → `verify (windows-latest, stable)` 与
+`verify (windows-latest, 1.96.0)` 都停在 `Tests`，值为
+`left: "run_method\\tests\\external_compact_face.rs"` 对
+`right: "run_method/tests/external_compact_face.rs"`。该任务在此中止，`Release tests`、
+`Clippy`、`Documentation`、`Package standalone crates`、`Package audit` 全部 `skipped`——
+**Windows 上 clippy、文档与打包门禁从来没有真正跑过**，这才是这条红测试的代价，而不只是
+它自己失败。同一批的三个 `main` 提交结果相同。
+
+**根因**：`file!()` 记录宿主分隔符，而声明在编译期无法在不分配的前提下改写它。同目录的
+`external_source_default.rs` 早已写明这一点并做了归一化，这条测试漏了。
+
+**最小修法（已修）**：比较 `portable_path(...)` 产出的可移植形式。
+**钉子**：`external_compact_face.rs` 自身（折叠一旦坏掉，它在 Windows 上就红），加上新的
+`source_location_tests.rs::a_recorded_path_renders_portably_on_every_platform`。
+
+### P2. The search surfaces compared a `file!()` path against a `/`-spelled query
+### P2. 搜索面把 `file!()` 路径与 `/` 拼写的查询做比较
+
+`Angle: surfaces`. 五处 `.contains(query)` 直接吃原始值：
+`run_method/src/runtime/trace/frames/frames.rs:138,289`、
+`run_method/src/runtime/trace/locals/call_trace.rs:220`、
+`run_method/src/call_report/call_report.rs:199`、
+`studio/src/studio/app/search_queries.rs:35`。这些面的 `source.file` 来自运行期宏里的
+`file!()`（P1 已在 Windows 上实测出反斜杠），而同一个面**显示**源码位置时走
+`SourceLocation` 的 `Display`/`describe`，那是 `portable_path` 的 `/` 形式。于是用户照着
+屏幕重敲的查询在 Windows 上落空。`call_report.rs:164` 与 `search_queries.rs:36` 的 `path`
+不受影响：那是 `Registry::path_for` 用 `format!("{}/{}")` 造的逻辑注册路径，与 `file!()` 无关。
+
+**最小修法（已修）**：内核新增 `declaration::source_file_matches(file, needle)`（`needle` 由
+调用方小写一次），五处改用它；四处用无分配的分支，只有真含反斜杠时才产出可移植副本。
+**钉子**：`source_location_tests.rs::a_query_with_slashes_matches_a_backslashed_source`
+（在 Linux 上以反斜杠输入运行，与 `identity.rs` 的 Windows 分隔符用例同法）。逻辑只有一份，
+调用点已无逻辑可钉。
+
+### P3. Withdrawn: the kind and module migrations do **not** have this defect
+### P3. 撤回：kind 与模块迁移**没有**这个缺陷
+
+我起初把 `migration.rs` 的两处 `snapshot.source.file == normalized_path(...)` 读成 Windows
+缺陷并按此修了一遍。核实后撤回：`FaceManifest::parse_source` 先把
+`source_path_from_file(path)` 写进 `values["source"]`（`run_method/src/authoring/manifest/parse/parse.rs:35-36`），
+而该函数的**每个**返回分支都经 `normalized_path`（`run_method/src/authoring/parse/parse.rs:27-42`），
+`snapshot_from_values` 又只读这个值（`core/src/registry_core/authoring/snapshot/snapshot.rs:30`）。
+因此 authoring 快照里的 `source.file` 永远是 `/` 拼写，原比较在 Windows 上同样成立。
+
+改动已完全回滚（`git diff run_method/src/authoring/operations/migration.rs` 为空），
+`migration_tests.rs` 已删除。**记在这里的目的**：让下一个读到
+`source.file == normalized_path(...)` 的人不必重新推导一遍，也不要再"修"它一次。
+
+### Release run `36132054983` outcome / 发布运行的结局
+
+**失败在 step 13 `Publish in dependency order`，但没有造成任何损害。**
+`CARGO_REGISTRY_TOKEN:` 在日志里是空值（仓库 secret 未设置），`cargo publish` 在第一次
+上传时以 `error: please provide a non-empty token` 失败，随后
+`cannot publish nichlink-macro: waiting for nichlink-core`。
+`[实测]`：`https://index.crates.io/ni/ch/<crate>` 与 crates.io API 对九个名字全部返回
+**404**，因此**一个 crate 都没有发出**，`0.1.0` 这个版本号没有被烧掉，也不需要改版本号。
+
+**恢复路径**：为仓库配置 `CARGO_REGISTRY_TOKEN` secret，然后 `gh run rerun 36132054983 --failed`
+（重跑的是同一次 tag push，`Tag names this version` 仍然生效）。**不要**用
+`workflow_dispatch` + `publish: true` 来恢复：那正是 MAJOR 6——dispatch 运行的
+`github.ref` 是分支，tag 检查被跳过，而 `if` 仍然允许上传。MAJOR 7（`--publish --yes` 非幂等）
+这次没有触发，因为第一次上传就失败了；一旦真的部分发布，它就是恢复路上的坑。

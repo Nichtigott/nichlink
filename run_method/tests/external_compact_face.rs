@@ -93,11 +93,20 @@ fn a_kind_only_external_face_defaults_the_remaining_fields() {
     // `file!()` reaches an integration-test target as a workspace-relative path,
     // so `manifest_relative_source` has no manifest prefix to strip and returns
     // it unchanged; the default `source` is therefore this test file itself.
+    // It keeps the host's separator as well — Windows records
+    // `run_method\tests\external_compact_face.rs` — because a declaration cannot
+    // rewrite `file!()` at compile time without allocating. The comparison is
+    // therefore made on the portable form, exactly as
+    // `external_source_default.rs` does. Identity is unaffected: `NodeId` folds
+    // both separators to the same byte, so the two spellings are one face.
     // `file!()` 在集成测试目标里是相对工作区的路径，因此
     // `manifest_relative_source` 没有清单前缀可剥，原样返回；默认 `source`
-    // 就是本测试文件。
+    // 就是本测试文件。它同时保留宿主的分隔符——Windows 记录
+    // `run_method\tests\external_compact_face.rs`——因为声明在编译期无法在不分配的前提下
+    // 改写 `file!()`。因此比较在可移植形式上做，与 `external_source_default.rs` 一致。
+    // 身份不受影响：`NodeId` 把两种分隔符折叠为同一字节，两种拼法是同一张面。
     assert_eq!(
-        REGISTRATION.source.file,
+        nichlink_run_method::registry_core::portable_path(REGISTRATION.source.file),
         "run_method/tests/external_compact_face.rs"
     );
 }
