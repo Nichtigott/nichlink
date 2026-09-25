@@ -187,7 +187,30 @@ is_published() {
   printf '%s\n' "$body" | grep -F "\"vers\":\"$version\"" >/dev/null 2>&1
 }
 
-workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+# The workspace release version, read from `[workspace.package]` and nowhere else.
+# A `version = "…"` line anywhere else in the root manifest — a centralized
+# dependency requirement, say — used to be read as *the* release version: with such a
+# line above `[workspace.package]` the tag step accepted `v0.1.0` and `--check-table`
+# stayed green while every member, inheriting `0.1.1`, uploaded 0.1.1 — and the index
+# wait then failed only *after* the irreversible upload.
+# 工作区发布版本，只从 `[workspace.package]` 读取。根清单其他任何位置的一行 `version = "…"`
+# ——比如集中写的依赖要求——过去会被读成**发布版本**：当这样一行位于 `[workspace.package]` 之前，
+# tag 检查会接受 `v0.1.0`、`--check-table` 报绿，而每个成员继承 `0.1.1` 并上传 0.1.1，index
+# 等待要到**不可逆上传之后**才失败。
+workspace_version=$(awk '
+  /^\[/ { section = $0; next }
+  section == "[workspace.package]" && /^version *=/ {
+    value = $0
+    sub(/^version *= *"/, "", value)
+    sub(/".*$/, "", value)
+    print value
+    exit
+  }
+' Cargo.toml)
+if [ -z "$workspace_version" ]; then
+  echo "error: [workspace.package] names no version in Cargo.toml" >&2
+  exit 1
+fi
 if [ -z "$workspace_version" ]; then
   echo "error: could not read [workspace.package] version from Cargo.toml" >&2
   exit 1

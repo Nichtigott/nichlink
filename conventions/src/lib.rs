@@ -42,6 +42,8 @@ pub mod mounting;
 pub mod naming;
 #[path = "purity.rs"]
 pub mod purity;
+#[path = "release_version.rs"]
+pub mod release_version;
 #[path = "release_workflow.rs"]
 pub mod release_workflow;
 #[path = "size.rs"]

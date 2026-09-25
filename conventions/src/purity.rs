@@ -46,37 +46,98 @@ pub const FORBIDDEN: &[&str] = &[
     "std::io",
     "std::thread",
     "std::os",
+    // The compile-time readers of the environment. They were measured green against the
+    // old line scan, and they are the same capability as `std::env::var`: a constant
+    // baked from the build machine.
+    // 环境的编译期读取器。它们对旧的逐行扫描实测为绿，而它们与 `std::env::var` 是同一种能力：
+    // 一个从构建机烤进二进制的常量。
+    "env!",
+    "option_env!",
 ];
 
-/// The text of one line with `use std::{a, b}` expanded into the paths it names.
-/// 一行的文本，其中 `use std::{a, b}` 展开为它命名的那些路径。
+/// The masked text with every whitespace character removed, and the source line each
+/// remaining character came from.
+/// 屏蔽后的文本去掉每一个空白字符，外加剩下每个字符来自的源码行。
+fn folded_for_search(masked: &str) -> (String, Vec<usize>) {
+    let mut folded = String::with_capacity(masked.len());
+    let mut lines = Vec::with_capacity(masked.len());
+    for (index, line) in masked.lines().enumerate() {
+        for character in line.chars() {
+            if character.is_whitespace() {
+                continue;
+            }
+            folded.push(character);
+            lines.push(index + 1);
+        }
+    }
+    (folded, lines)
+}
+
+/// Every `std::{a, b}` in the folded text expanded into the paths it names, with the
+/// line map kept aligned.
+/// 折叠文本里每个 `std::{a, b}` 展开成它命名的那些路径，并保持行映射对齐。
 ///
-/// A brace import never spells `std::fs`, so the literal search below missed it.
-/// The import line *is* the violation, which is why no alias resolution is needed:
-/// `use std::fs as filesystem;` already contains `std::fs`, and a bare `fs::read`
-/// after `use std::{env, fs}` is caught at the import that made it possible.
-/// 树形导入从不拼出 `std::fs`，因此下面的字面量搜索看不到它。导入行**就是**违规本身，这也正是
-/// 无需解析别名的原因：`use std::fs as filesystem;` 里已经有 `std::fs`，而
-/// `use std::{env, fs}` 之后的裸 `fs::read` 在使其成为可能的那个导入处被抓到。
-fn expand_imports(line: &str) -> String {
-    let Some(start) = line.find("std::{") else {
-        return line.to_owned();
-    };
-    let mut expanded = line.to_owned();
-    let rest = &line[start + "std::{".len()..];
-    let Some(end) = rest.find('}') else {
-        return expanded;
-    };
-    for item in rest[..end].split(',') {
-        let item = item.trim();
-        if item.is_empty() || item == "self" {
+/// Folding removed the newlines a multi-line brace import used to hide behind, so this
+/// sees every one of them.
+/// 折叠去掉了多行树形导入曾用来藏身的换行，因此这里能看到每一个。
+fn expand_folded_imports(folded: String, lines: Vec<usize>) -> (String, Vec<usize>) {
+    let mut expanded = String::with_capacity(folded.len());
+    let mut expanded_lines = Vec::with_capacity(lines.len());
+    let characters = folded.chars().collect::<Vec<_>>();
+    let mut index = 0usize;
+    while index < characters.len() {
+        let head = characters[index..].iter().take(6).collect::<String>();
+        if head == "std::{"
+            && let Some(end) = characters[index..].iter().position(|c| *c == '}')
+        {
+            let end = index + end;
+            for (offset, character) in characters[index..=end].iter().enumerate() {
+                expanded.push(*character);
+                expanded_lines.push(lines.get(index + offset).copied().unwrap_or(1));
+            }
+            let line = lines.get(index).copied().unwrap_or(1);
+            let inner = characters[index + 6..end].iter().collect::<String>();
+            for item in inner.split(',') {
+                let item = item.trim();
+                if item.is_empty() || item == "self" {
+                    continue;
+                }
+                expanded.push(' ');
+                expanded_lines.push(line);
+                for character in format!("std::{item}").chars() {
+                    expanded.push(character);
+                    expanded_lines.push(line);
+                }
+            }
+            index = end + 1;
             continue;
         }
-        expanded.push(' ');
-        expanded.push_str("std::");
-        expanded.push_str(item);
+        expanded.push(characters[index]);
+        expanded_lines.push(lines.get(index).copied().unwrap_or(1));
+        index += 1;
     }
-    expanded
+    (expanded, expanded_lines)
+}
+
+/// Every local alias of `std`, from `use std as <alias>;` — whitespace-free, since the
+/// search text is folded.
+/// 每个 `std` 的局部别名，来自 `use std as <alias>;`——搜索文本已折叠，因此没有空白。
+fn std_aliases(searchable: &str) -> Vec<String> {
+    const NEEDLE: &str = "usestdas";
+    let mut aliases = Vec::new();
+    let mut rest = searchable;
+    while let Some(offset) = rest.find(NEEDLE) {
+        let after = &rest[offset + NEEDLE.len()..];
+        let alias = after
+            .chars()
+            .take_while(|character| character.is_alphanumeric() || *character == '_')
+            .collect::<String>();
+        if !alias.is_empty() {
+            aliases.push(alias);
+        }
+        rest = after;
+    }
+    aliases
 }
 
 /// One forbidden token on one line of the kernel.
@@ -111,17 +172,66 @@ pub fn findings(root: &Path) -> Vec<Finding> {
         // 之后 `is_comment` 已无调用方。
         let text = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-        for (index, line) in nichlink::source::mask_non_code(&text).lines().enumerate() {
-            let searchable = expand_imports(line);
+        // The search runs on a whitespace-free copy of the masked text, not line by
+        // line. Four spellings were measured green against the line-based scan: a brace
+        // import whose braces are on different lines, `std :: fs` with spaces around the
+        // separators, a path split across a newline (`std::` ↵ `fs::metadata`), and
+        // `use std as s;` followed by `s::fs::…`. Removing whitespace closes the first
+        // three — a path is a token stream, not a line — and the alias table closes the
+        // fourth. `expand_imports` then sees every brace import on one line, because
+        // folding removed the newlines inside it.
+        // 搜索跑在屏蔽后文本的**去空白副本**上，而不是逐行。对逐行扫描实测有四种写法是绿的：
+        // 花括号分处两行的树形导入、分隔符两旁有空格的 `std :: fs`、被换行切开的路径
+        // （`std::` ↵ `fs::metadata`）、以及 `use std as s;` 之后的 `s::fs::…`。去掉空白关闭前
+        // 三种——路径是 token 流而不是行——别名表关闭第四种。`expand_imports` 随后看到的每个树形
+        // 导入都在同一行上，因为折叠已经把其中的换行去掉了。
+        let masked = nichlink::source::mask_non_code(&text);
+        let (folded, lines) = folded_for_search(&masked);
+        let (searchable, search_lines) = expand_folded_imports(folded, lines);
+        let aliases = std_aliases(&searchable);
+        let mut reported = std::collections::BTreeSet::new();
+        for token in FORBIDDEN {
+            let mut from = 0usize;
+            while let Some(offset) = searchable[from..].find(token) {
+                let at = from + offset;
+                // An identifier character immediately before a token means the token is
+                // part of a longer name (`my_env!`, `reth::fs`), not the path.
+                // 紧邻 token 之前的标识符字符意味着它是更长名字的一部分（`my_env!`、`reth::fs`），
+                // 而不是那个路径。
+                let boundary = at == 0
+                    || !searchable[..at]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|previous| previous.is_alphanumeric() || previous == '_');
+                if boundary {
+                    reported.insert((search_lines.get(at).copied().unwrap_or(1), *token));
+                }
+                from = at + token.len();
+            }
+        }
+        // An alias declared anywhere in the file makes `alias::fs` the same capability
+        // as `std::fs`.
+        // 文件里任何位置声明的别名都让 `alias::fs` 与 `std::fs` 是同一种能力。
+        for alias in aliases {
             for token in FORBIDDEN {
-                if searchable.contains(token) {
-                    found.push(Finding {
-                        file: relative(root, &path),
-                        line: index + 1,
-                        token,
-                    });
+                let Some(module) = token.strip_prefix("std::") else {
+                    continue;
+                };
+                let aliased = format!("{alias}::{module}");
+                let mut from = 0usize;
+                while let Some(offset) = searchable[from..].find(&aliased) {
+                    let at = from + offset;
+                    reported.insert((search_lines.get(at).copied().unwrap_or(1), *token));
+                    from = at + aliased.len();
                 }
             }
+        }
+        for (line, token) in reported {
+            found.push(Finding {
+                file: relative(root, &path),
+                line,
+                token,
+            });
         }
     }
     found
@@ -205,6 +315,58 @@ mod tests {
             vec![5],
             "only the real call is a violation: a block comment, a doc comment and a \
              string literal are prose, and line 5 is the code beside them: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The four spellings a line-based scan was measured to miss: a brace import split
+    /// across lines, spaces around the separators, a path split across a newline, and a
+    /// compile-time environment read.
+    /// 逐行扫描实测漏掉的四种写法：跨行的树形导入、分隔符两旁的空格、被换行切开的路径，以及
+    /// 编译期读环境。
+    #[test]
+    fn the_ways_a_path_can_hide_from_a_line_scan_are_violations() {
+        let root = synthetic(&[(
+            "core/src/probe.rs",
+            "use std::{\n    env,\n    fs,\n};\n\n\
+             pub fn probe() {\n    \
+             let _ = std :: fs :: metadata(\"/tmp\");\n    \
+             let _ = std::\n        env::var(\"HOME\");\n    \
+             let _ = option_env!(\"HOME\");\n}\n",
+        )]);
+        let found = findings(&root);
+        let tokens = found
+            .iter()
+            .map(|finding| finding.token)
+            .collect::<BTreeSet<_>>();
+        assert!(
+            tokens.contains("std::fs"),
+            "spaces around the separators: {found:#?}"
+        );
+        assert!(
+            tokens.contains("std::env"),
+            "a split path and a brace import: {found:#?}"
+        );
+        assert!(
+            tokens.contains("option_env!"),
+            "a compile-time env read: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// An aliased `std` is the same capability, and the alias is found wherever it is
+    /// declared in the file.
+    /// 别名化的 `std` 是同一种能力，而别名在文件里任何位置声明都能被找到。
+    #[test]
+    fn an_aliased_std_is_still_std() {
+        let root = synthetic(&[(
+            "core/src/probe.rs",
+            "use std as s;\n\npub fn probe() {\n    let _ = s::fs::metadata(\"/tmp\");\n}\n",
+        )]);
+        let found = findings(&root);
+        assert!(
+            found.iter().any(|finding| finding.token == "std::fs"),
+            "`s::fs` is `std::fs` under an alias: {found:#?}"
         );
         let _ = fs::remove_dir_all(&root);
     }

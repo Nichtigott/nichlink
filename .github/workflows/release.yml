@@ -53,7 +53,28 @@ jobs:
         # 到本应描述它的 tag 上，而一旦不匹配就再也无法挽回。
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          # The release version lives in `[workspace.package]` and nowhere else. Reading
+          # the first `version = "…"` line of the root manifest used to be enough for a
+          # tag to pass while `cargo publish` uploaded a different version: members
+          # inherit `[workspace.package]`, so a stale centralized requirement above that
+          # section named the tag check's version instead of the release's.
+          # 发布版本只存在于 `[workspace.package]`。读根清单里第一行 `version = "…"` 曾足以让一个
+          # tag 通过、而 `cargo publish` 上传另一个版本：成员继承 `[workspace.package]`，因此位于
+          # 该节之上的一行陈旧的集中依赖要求会冒充 tag 检查所用的版本。
+          version=$(awk '
+            /^\[/ { section = $0; next }
+            section == "[workspace.package]" && /^version *=/ {
+              value = $0
+              sub(/^version *= *"/, "", value)
+              sub(/".*$/, "", value)
+              print value
+              exit
+            }
+          ' Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "Cargo.toml names no version in [workspace.package]" >&2
+            exit 1
+          fi
           if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
             echo "tag ${GITHUB_REF_NAME} does not name workspace version $version" >&2
             exit 1

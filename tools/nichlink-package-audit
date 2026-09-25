@@ -57,11 +57,25 @@ cd "$root"
 
 index_url="https://index.crates.io"
 
-# The version every internal dependency requires (caret `0.1.0`).
-# 所有内部依赖要求的版本（caret `0.1.0`）。
-workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+# The version every internal dependency requires (caret `0.1.0`), read from
+# `[workspace.package]` and nowhere else: a `version = "…"` line elsewhere in the root
+# manifest (a centralized dependency requirement, say) is not the release version, and
+# reading the first matching line made a stale one look like the release.
+# 所有内部依赖要求的版本（caret `0.1.0`），只从 `[workspace.package]` 读取：根清单其他位置的
+# `version = "…"`（比如集中写的依赖要求）不是发布版本，而读第一处匹配会让一行陈旧的版本看起来像
+# 发布版本。
+workspace_version=$(awk '
+  /^\[/ { section = $0; next }
+  section == "[workspace.package]" && /^version *=/ {
+    value = $0
+    sub(/^version *= *"/, "", value)
+    sub(/".*$/, "", value)
+    print value
+    exit
+  }
+' Cargo.toml)
 if [ -z "$workspace_version" ]; then
-  echo "error: could not read [workspace.package] version from Cargo.toml" >&2
+  echo "error: [workspace.package] names no version in Cargo.toml" >&2
   exit 1
 fi
 
