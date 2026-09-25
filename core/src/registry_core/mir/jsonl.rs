@@ -145,22 +145,92 @@ fn quoted(bytes: &[u8], cursor: &mut usize) -> Result<String, String> {
             b'\\' => {
                 let escaped = bytes.get(*cursor).copied().ok_or("unterminated escape")?;
                 *cursor += 1;
-                value.push(match escaped {
-                    b'"' => '"',
-                    b'\\' => '\\',
-                    b'n' => '\n',
-                    b'r' => '\r',
-                    b't' => '\t',
+                match escaped {
+                    b'"' => value.push('"'),
+                    b'\\' => value.push('\\'),
+                    b'/' => value.push('/'),
+                    b'b' => value.push('\u{8}'),
+                    b'f' => value.push('\u{c}'),
+                    b'n' => value.push('\n'),
+                    b'r' => value.push('\r'),
+                    b't' => value.push('\t'),
+                    b'u' => value.push(decode_unicode_escape(bytes, cursor)?),
                     _ => return Err("unsupported string escape".to_owned()),
-                });
+                }
             }
             byte if byte.is_ascii() => value.push(byte as char),
-            _ => return Err("non-ASCII strings must be JSON escaped".to_owned()),
+            _ => {
+                // Raw UTF-8 is valid JSON, and it is exactly what this crate's own writer
+                // emits: rejecting every byte at or above 0x80 made a non-ASCII symbol
+                // (`crate::héllo`, and Rust identifiers may be non-ASCII) impossible to
+                // read back in any encoding — the error told the producer to escape the
+                // string while `\u` was refused too.
+                // 原始 UTF-8 是合法的 JSON，而且正是本 crate 自己的写入器产出的形式：拒绝所有
+                // ≥ 0x80 的字节让非 ASCII 符号（`crate::héllo`，而 Rust 标识符可以是非 ASCII）
+                // 在任何编码下都读不回来——那条错误让生产者去转义，而 `\u` 同样被拒。
+                let start = *cursor - 1;
+                let width = utf8_width(byte);
+                let end = start + width;
+                if width == 0 || end > bytes.len() {
+                    return Err("invalid UTF-8 in string".to_owned());
+                }
+                let text = core::str::from_utf8(&bytes[start..end])
+                    .map_err(|_| "invalid UTF-8 in string".to_owned())?;
+                value.push_str(text);
+                *cursor = end;
+            }
         }
     }
     Err("unterminated string".to_owned())
 }
 
+/// How many bytes the UTF-8 sequence that starts with `byte` occupies, or zero when it
+/// cannot start one.
+/// 以 `byte` 开头的 UTF-8 序列占几个字节；它不能作为起始时为零。
+fn utf8_width(byte: u8) -> usize {
+    match byte {
+        0xC2..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF4 => 4,
+        _ => 0,
+    }
+}
+
+/// Decode a `\uXXXX` escape, pairing a surrogate when JSON wrote one.
+/// 解码 `\uXXXX` 转义；JSON 写成代理对时把一对合起来解。
+fn decode_unicode_escape(bytes: &[u8], cursor: &mut usize) -> Result<char, String> {
+    let code = hex4(bytes, cursor)?;
+    if (0xD800..0xDC00).contains(&code) {
+        // A high surrogate must be followed by a low one: JSON writes an astral code
+        // point as two escapes, and neither half is a `char` on its own.
+        // 高代理后面必须跟一个低代理：JSON 把星平面码点写成两个转义，而任何一半单独都不是 `char`。
+        if bytes.get(*cursor..*cursor + 2) != Some(b"\\u") {
+            return Err("a high surrogate needs a low surrogate".to_owned());
+        }
+        *cursor += 2;
+        let low = hex4(bytes, cursor)?;
+        if !(0xDC00..0xE000).contains(&low) {
+            return Err("a high surrogate needs a low surrogate".to_owned());
+        }
+        let combined = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+        return char::from_u32(combined).ok_or_else(|| "invalid \\u escape".to_owned());
+    }
+    char::from_u32(code).ok_or_else(|| "invalid \\u escape".to_owned())
+}
+
+/// Read four hex digits at `cursor`.
+/// 在 `cursor` 处读四位十六进制。
+fn hex4(bytes: &[u8], cursor: &mut usize) -> Result<u32, String> {
+    let digits = bytes
+        .get(*cursor..*cursor + 4)
+        .ok_or_else(|| "truncated \\u escape".to_owned())?;
+    let text = core::str::from_utf8(digits).map_err(|_| "invalid \\u escape".to_owned())?;
+    let code = u32::from_str_radix(text, 16).map_err(|_| "invalid \\u escape".to_owned())?;
+    *cursor += 4;
+    Ok(code)
+}
+
+/// Parse one line of JSONL into a graph.
 fn skip_space(bytes: &[u8], cursor: &mut usize) {
     while bytes
         .get(*cursor)
@@ -183,5 +253,42 @@ mod tests {
         assert!(graph.functions.contains("crate::a"));
         assert_eq!(graph.calls[0].mir_line, 12);
         assert_eq!(graph.locals[0].type_name, "f32");
+    }
+    /// A non-ASCII symbol round-trips, and an escaped form decodes.
+    /// 非 ASCII 符号能往返，转义形式也能解码。
+    ///
+    /// The writer emits raw UTF-8; the reader used to reject every byte at or above
+    /// 0x80 *and* every `\u` escape, so no encoding of `crate::héllo` could be read
+    /// back — while the refusal message told the producer to escape the string.
+    /// 写入器产出原始 UTF-8；读取器过去既拒绝所有 ≥ 0x80 的字节，也拒绝每一个 `\u` 转义，
+    /// 因此 `crate::héllo` 在任何编码下都读不回来——而拒绝信息还在让生产者去转义。
+    #[test]
+    fn a_non_ascii_symbol_round_trips() {
+        let line = "{\"kind\":\"function\",\"name\":\"crate::héllo\"}\n";
+        let graph = MirGraph::from_jsonl(line).expect("raw UTF-8 is valid JSON");
+        assert!(
+            graph.functions.iter().any(|name| name == "crate::héllo"),
+            "the raw form reads back: {:?}",
+            graph.functions
+        );
+        let again = MirGraph::from_jsonl(&graph.to_jsonl()).expect("the writer's own output");
+        assert!(
+            again.functions.iter().any(|name| name == "crate::héllo"),
+            "the artifact round-trips: {:?}",
+            again.functions
+        );
+
+        // An escaped form is accepted too, including an astral code point written as a
+        // surrogate pair.
+        // 转义形式同样被接受，包括写成代理对的星平面码点。
+        let escaped = MirGraph::from_jsonl(
+            "{\"kind\":\"function\",\"name\":\"caf\\u00e9 \\ud83d\\ude00\"}\n",
+        )
+        .expect("escapes are accepted");
+        assert!(
+            escaped.functions.iter().any(|name| name == "café 😀"),
+            "escapes decode: {:?}",
+            escaped.functions
+        );
     }
 }
