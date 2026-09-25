@@ -76,17 +76,18 @@ There are two supported ways to try NichLink.
 ### Install the NichLink CLI
 
 This keeps the NichLink source outside your application. Install the CLI from
-the Git repository; it provides the `nichlink` command, including `nichlink
+crates.io; it provides the `nichlink` command, including `nichlink
 studio` for the Ratatui Studio:
 
 ```sh
-cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli
+cargo install nichlink-cli
 nichlink new my-app
 cd my-app && nichlink studio
 ```
 
-Nothing is on crates.io yet, so the Git source is the only one that resolves
-today; once 0.1.0 is out, replace it with `cargo install nichlink-cli`.
+`0.1.0` is published. The Git source still works if you want the checkout's tip
+rather than the released version: `cargo install --git
+https://github.com/Nichtigott/nichlink nichlink-cli`.
 The plugin binary also answers to `cargo nichlink <command>`. To inspect an
 existing project instead, point the CLI at it:
 

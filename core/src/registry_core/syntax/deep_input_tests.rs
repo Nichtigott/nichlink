@@ -15,7 +15,7 @@
 //! 下面的用例比 rustc 能接受的深出几个数量级（它自己的默认递归上限是 128），因此拒绝它们
 //! 不会让任何真实源码付出代价。
 
-use super::parse_faces;
+use super::{guard_nesting, parse_faces};
 
 /// Deep enough to overflow an eight-megabyte stack in the unguarded parser.
 /// 深到足以让没有守卫的解析器在八兆栈上溢出。
@@ -162,12 +162,41 @@ fn the_refusal_names_the_limit_that_applies() {
         .to_string();
     assert!(error.contains("limit of 128"), "{error}");
 
-    let run = format!("pub const X: u8 = {}1;", "Vec::<".repeat(2000));
+    let run = format!("pub const X: u8 = {}1;", "&".repeat(2000));
     let error = parse_faces(&run)
         .expect_err("nesting is refused")
         .to_string();
     assert!(
         error.contains("limit of 1024"),
         "a linear run is measured against its own limit: {error}"
+    );
+
+    // A generic-argument chain is refused by the *parser* limit, and it has to be
+    // measured on the angle brackets themselves: `X<u8, X<u8, …>>` carries a comma at
+    // every level, so the linear-run counter — which a comma resets, because a comma
+    // really does end a run — saw a run of one while the parser descended hundreds of
+    // levels and overflowed the stack.
+    // 泛型实参链由**解析器**上限拒绝，而且必须在尖括号本身上度量：`X<u8, X<u8, …>>`
+    // 每一层都带一个逗号，因此（逗号会重置的）线性串计数器看到的串长度是 1，而解析器下潜了几百层
+    // 并撑爆了栈。
+    let arguments = format!(
+        "pub struct S(pub X{}u8{});",
+        "<u8, X".repeat(200),
+        ">".repeat(200)
+    );
+    // The guard alone is asked here, not `parse_faces`: on the unfixed guard this
+    // input returned `Ok` and the *parser* aborted the process, and a test cannot
+    // assert anything on the far side of an abort. Measuring the guard directly makes
+    // the red half of this pin reproducible — it fails as an assertion instead of
+    // taking the test binary down.
+    // 这里只问守卫,不经过 `parse_faces`:在未修复的守卫上,这个输入返回 `Ok`,而**解析器**会让
+    // 进程 abort,测试无法在 abort 的另一侧断言任何东西。直接度量守卫,让这条钉子的"红"可复现——
+    // 它表现为断言失败,而不是把测试二进制带走。
+    let error = guard_nesting(&arguments)
+        .expect_err("nesting is refused")
+        .to_string();
+    assert!(
+        error.contains("limit of 128") && error.contains("generic arguments"),
+        "a comma-separated generic chain is measured on its brackets: {error}"
     );
 }

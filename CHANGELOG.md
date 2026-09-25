@@ -11,15 +11,21 @@ kept**. Release order and the reasoning behind the one-line release are in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Release state:** nothing in this file is on crates.io yet. The first release is
-`0.1.0` — the version in `[workspace.package]` — and "1.0" names the milestone in
-[`docs/roadmap-1.0.md`](docs/roadmap-1.0.md), not a published version. Raising the
-line to `1.0.0` is a separate decision that would move the fourteen internal
-`version = "0.1.0"` requirements with it.
-**发布状态：** 本文件里的任何东西都还没有上 crates.io。首个发布的版本是 `0.1.0`——
-即 `[workspace.package]` 里的版本——而"1.0"是
+**Release state:** `0.1.0` is published. All nine crates went to crates.io together
+on 2026-09-25, and the release workflow's last step built a throwaway consumer
+outside the checkout and resolved all nine by version. The version line stays on
+**0.1.x** while the design is still being deepened: each later release is a small
+step (`0.1.1`, `0.1.2`, …), and "1.0" names the milestone in
+[`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
+Raising the line to `1.0.0` is a separate decision that would move every internal
+`version = "0.1.0"` requirement with it, and that step is what freezes the public
+surface.
+**发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
+一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。设计仍在深化期间，版本线保持
+**0.1.x**：其后的每次发布都是小步（`0.1.1`、`0.1.2`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同十四处内部 `version = "0.1.0"` 要求一起移动。
+`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.0"` 要求一起移动——那一步才是冻结
+公开面。
 
 ## [Unreleased]
 
@@ -615,10 +621,11 @@ line to `1.0.0` is a separate decision that would move the fourteen internal
   range does not test its end address on the start line: the one-line `members`
   array made the range run on to `[workspace.package]`, whose name then entered
   the member list — invisible only because no directory of that name exists.
-## [0.1.0] — not published yet
+## [0.1.0] — 2026-09-25
 
-The first release, not cut yet. All nine crates go out together in dependency
-order when it is:
+The first release. All nine crates went out together in dependency order on
+2026-09-25, and the workflow's last step resolved all nine from crates.io in a
+throwaway consumer outside the checkout. The chain was:
 `nichlink-core` → `nichlink-macro` / `nichlink-build-method` / `nichlink-mcp`
 → `nichlink-run-method` → `nichlink-debug-method` / `nichlink-plugin-host`
 → `nichlink-studio` → `nichlink-cli`. Dependency requirements are written as
@@ -1036,7 +1043,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `nichlink-core`，而表里只列了另外三个。同一个检查用 `awk` 而不是 `sed` 地址范围读取工作区成员，
   因为 sed 的范围不在起始行上测试结束地址：单行的 `members` 数组会让范围一直跑到
   `[workspace.package]`，它的名字随后进入成员列表——只因不存在同名目录才隐形。
-### [0.1.0] 首次发布（尚未发布）
+### [0.1.0] 首次发布（2026-09-25 已发布）
 
 九个 crate 在发布时按依赖顺序一同发布：`nichlink-core` → `nichlink-macro` /
 `nichlink-build-method` / `nichlink-mcp` → `nichlink-run-method` →

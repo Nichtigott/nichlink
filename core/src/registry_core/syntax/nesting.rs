@@ -92,16 +92,26 @@ pub(crate) enum Shape {
     /// `1 + 1 + …`、`Vec<Vec<…>>`。
     ///
     /// A generic-argument chain used to have its own counter here
-    /// ([`Shape::Arguments`]). It could never fire: the counter reset on every
-    /// identifier and every generic argument begins with one, so the deepest
-    /// `Vec<Vec<u8>>` the counter ever saw was one. The cases it was meant to catch
-    /// are linear runs — `Vec<` repeated is a run of tokens the parser folds — which
-    /// is why the variant is gone and the chain shape below covers it.
-    /// 泛型实参链过去在这里有自己的计数器（[`Shape::Arguments`]）。它永远不会触发：计数器每遇到
-    /// 一个标识符就清零，而每个泛型实参都以标识符开头，因此它见过的最深 `Vec<Vec<u8>>` 只有一层。
-    /// 它本想抓的那些情况都是线性串——重复的 `Vec<` 正是解析器会折叠的 token 串——因此该变体已
-    /// 删除，由下面的串形状覆盖。
+    /// ([`Shape::Arguments`]) that could never fire: it reset on every identifier and
+    /// every generic argument begins with one, so the deepest `Vec<Vec<u8>>` it ever
+    /// saw was one. The variant was deleted, and the chain shape above was supposed to
+    /// cover the cases — but a comma resets a chain, and `X<u8, X<u8, …>>` has a comma
+    /// at *every* level, so the chain saw a run of one while `syn` descended hundreds
+    /// of levels. The counter is therefore back, measuring angle brackets directly
+    /// instead of identifiers. See [`Shape::Arguments`].
+    /// 泛型实参链过去在这里有自己的计数器（[`Shape::Arguments`]），却永远不会触发：它每遇到一个
+    /// 标识符就清零，而每个泛型实参都以标识符开头，因此它见过的最深 `Vec<Vec<u8>>` 只有一层。
+    /// 该变体被删除，并指望上面的串形状覆盖这些情况——但逗号会重置一条串，而
+    /// `X<u8, X<u8, …>>` **每一层**都有逗号，于是链看到的串长度是 1，而 `syn` 下潜了几百层。
+    /// 因此这个计数器回来了，直接度量尖括号而不是标识符。见 [`Shape::Arguments`]。
     Chain,
+    /// Angle-bracket nesting: `<` opens, `>` closes.
+    /// 尖括号嵌套：`<` 打开，`>` 闭合。
+    ///
+    /// Counted on the brackets themselves rather than on the identifiers between them,
+    /// which is the only way a comma-separated generic chain is measurable at all.
+    /// 数的是括号本身，而不是它们之间的标识符——这是带逗号的泛型链唯一可度量的方式。
+    Arguments,
 }
 
 impl fmt::Display for Shape {
@@ -109,6 +119,7 @@ impl fmt::Display for Shape {
         formatter.write_str(match self {
             Self::Delimiters => "delimiters",
             Self::Chain => "tokens folded into one expression",
+            Self::Arguments => "generic arguments",
         })
     }
 }
@@ -167,6 +178,20 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
     // 自上一个分隔符以来被折叠进同一棵树的 token 数。每个延续串的分支里都写着 `chain += 1`，
     // 因此新增一种词法单元不会像前缀运算符逃过本扫描的第一版那样，静默地逃过这个度量。
     let mut chain = 0usize;
+    // Angle brackets nest the parser too, and a comma does not end that nesting:
+    // `X<u8, X<u8, …>>` has a comma at every level, so the chain counter below — which
+    // a comma resets, because a comma really does end a linear run — saw a run of one
+    // while `syn` descended hundreds of levels and overflowed the stack. This counter
+    // measures that shape directly. The walk pops from a stack, so it visits a group's
+    // tokens right to left; for balanced nesting that means every closer is seen before
+    // its opener, and the maximum reached is the true depth. Unbalanced input that still
+    // lexes either trips this counter or fails in `syn` on its own terms.
+    // 尖括号同样让解析器下潜，而逗号并不结束这种嵌套：`X<u8, X<u8, …>>` 每一层都有逗号，因此
+    // 下面的链计数（逗号会重置它，因为逗号确实结束一条线性串）看到的串长度是 1，而 `syn` 下潜了
+    // 几百层并撑爆栈。这个计数器直接度量那种形状。遍历从栈里 pop，因此它按从右到左访问一个组的
+    // token；对配平的嵌套而言，每个闭合都在其打开之前出现，于是达到的最大值就是真实深度。能词法
+    // 通过却不配平的输入，要么触发这个计数器，要么在 `syn` 那里按它自己的规则失败。
+    let mut angle = 0usize;
     while let Some((tree, depth)) = stack.pop() {
         let mut grows = true;
         match tree {
@@ -188,6 +213,23 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
                     grows = false;
                 }
                 stack.extend(group.stream().into_iter().map(|tree| (tree, depth)));
+            }
+            proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '<' => {
+                angle += 1;
+                if angle > LIMIT {
+                    return Err(TooDeep {
+                        shape: Shape::Arguments,
+                        depth: angle,
+                        limit: LIMIT,
+                    });
+                }
+            }
+            proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '>' => {
+                // `->` and `=>` also carry a `>`; saturating at zero keeps a close
+                // without an open from borrowing depth from the next chain.
+                // `->` 与 `=>` 也带一个 `>`；在零处饱和，使没有对应打开的闭合不会从下一条串借
+                // 深度。
+                angle = angle.saturating_sub(1);
             }
             proc_macro2::TokenTree::Punct(punct)
                 if punct.as_char() == ',' || punct.as_char() == ';' =>

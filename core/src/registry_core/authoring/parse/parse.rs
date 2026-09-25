@@ -22,6 +22,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::registry_core::declaration::RuntimeCheckSpec;
+use crate::registry_core::syntax::nesting::guard_nesting;
 use crate::registry_core::syntax::parse_face as parse_face_syntax;
 
 use super::validation::{normalized_path, rust_string};
@@ -207,6 +208,13 @@ pub fn trait_names_from_paths(value: &str) -> Result<String, FaceParseError> {
         .map(str::trim)
         .filter(|path| !path.is_empty())
         .map(|source| {
+            // A trait path is a *type path*, so it can carry generic arguments —
+            // `Trait<A<B<…>>>` — and this value comes from the manifest or the editor.
+            // Without the guard the parser overflows the stack on a deeply nested one
+            // instead of returning an error.
+            // 特性路径是**类型路径**，因此可以携带泛型实参——`Trait<A<B<…>>>`——而这个值来自
+            // 清单或编辑器。没有守卫时，遇到深度嵌套的它会撑爆栈，而不是返回错误。
+            guard_nesting(source).map_err(|error| FaceParseError::new(error.to_string()))?;
             let path = syn::parse_str::<syn::Path>(source)
                 .map_err(|_| FaceParseError::new(format!("`{source}` is not a Rust trait path")))?;
             path.segments

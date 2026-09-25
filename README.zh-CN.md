@@ -63,16 +63,17 @@ Rust 源码查询。
 
 ### 方式一：安装 NichLink CLI
 
-这种方式不会把 NichLink 源码放进你的应用目录。先安装 CLI，它提供
+这种方式不会把 NichLink 源码放进你的应用目录。从 crates.io 安装 CLI，它提供
 `nichlink` 命令（包含 Ratatui Studio 的 `nichlink studio` 子命令）：
 
 ```sh
-cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli
+cargo install nichlink-cli
 nichlink new my-app
 cd my-app && nichlink studio
 ```
 
-发布到 crates.io 后，可以把 Git 地址替换为 `cargo install nichlink-cli`。
+`0.1.0` 已发布。想要检出里的最新提交而不是已发布版本时，Git 源依然可用：
+`cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli`。
 插件二进制同时支持 `cargo nichlink <命令>` 形式。如果要检查已有项目：
 
 ```sh

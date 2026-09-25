@@ -151,6 +151,7 @@ mod tests {
             fs::write(base.join("Cargo.toml"), manifest).expect("fixture manifest");
             fs::write(base.join("src/lib.rs"), "\n").expect("fixture lib");
         }
+        crate::fixture_manifest(&root);
         root
     }
 

@@ -80,11 +80,21 @@ Updated as the fixes landed; this is the state after the tenth batch.
   LSP-only), U7 (the revisions the second and third rounds compared against are
   not in this repository's history), U8 (an online `cargo publish --dry-run`
   needs the network and a token).
-- **What is left is a human's to do, not the code's**: `git tag -a v0.1.0` and
-  push plus a `CARGO_REGISTRY_TOKEN` secret (R2), then
-  `tools/nichlink-publish --publish --yes` followed by
-  `tools/nichlink-publish --verify-consumers` (R1); the `0.1.0` versus `1.0.0`
-  version line (m2). Each of those rows says so where it belongs.
+- **What was left to a human is done, and one decision is now made**: `v0.1.0` was
+  tagged and pushed, the `CARGO_REGISTRY_TOKEN` secret was set, and on 2026-09-25
+  `tools/nichlink-publish --publish --yes` took all nine crates to crates.io —
+  stopping once on crates.io's new-crate rate window and finishing on a re-run —
+  with `--verify-consumers` green in the same run. **The version line stays on
+  `0.1.x`** (decided 2026-09-25): the public surface is not frozen, each release is
+  a small step, and raising the line to `1.0.0` remains a separate later decision.
+  The run's evidence is in the P4 section of
+  [`audit-2026-09-25-post-fix.md`](audit-2026-09-25-post-fix.md).
+- **已交给人的事已完成，其中一个决定也已经做出**：`v0.1.0` 已打 tag 并推送、
+  `CARGO_REGISTRY_TOKEN` 已配置；2026-09-25，`tools/nichlink-publish --publish --yes`
+  把九个 crate 送上 crates.io——中途因 crates.io 的新 crate 速率窗口停过一次，重跑后完成——
+  同一次运行的 `--verify-consumers` 通过。**版本线保持 `0.1.x`**（2026-09-25 决定）：公开面
+  未冻结、每次发布都是一小步，抬到 `1.0.0` 仍是以后单独的决定。运行的证据见
+  [`audit-2026-09-25-post-fix.md`](audit-2026-09-25-post-fix.md) 的 P4 节。
 - **40 / 48 行是 `✅ FIXED`**——四条 CRITICAL、十五条 MAJOR、十六条 MINOR 与五条 RELEASE
   全部在内。每行都带自己的修法、跑过的证据，以及防止它复发的测试、门禁或工具。
 - **5 行是实测而不是修复，并已标为已测**：U1（已链接产物不含 `.inventory` 段）、U2（发布读路径
@@ -358,21 +368,28 @@ Updated as the fixes landed; this is the state after the tenth batch.
   都写着 `[0.1.0] - 2026-09-23`／`首次发布（2026-09-23）` 与"九个 crate 已一起发布"，而
   `index.crates.io` 上九个名字全是 404、`git tag --list` 为空。
   **Fixed:** 标题改为 `[0.1.0] — not published yet`／`首次发布（尚未发布）`，正文改为"发布时一同
-  发布"，并在文件头部加了一条**发布状态**说明（见 m2）。中英同步。
-- **m2 ✅ FIXED（文档口径；版本决定权在你） MINOR 版本口径三处不一致，且没有 tag 与发布流程**
+  发布"，并在文件头部加了一条**发布状态**说明（见 m2）。中英同步。**发布之后这处措辞已被再次
+  更新**：标题现在是 `[0.1.0] — 2026-09-25`／`首次发布（2026-09-25 已发布）`，头部说明也改成
+  "已发布 + 版本线 0.1.x"——记录在这里，免得读者把 m1 当时的措辞当成现状。
+- **m2 ✅ FIXED（决策已下：版本线走 0.1.x） MINOR 版本口径三处不一致，且没有 tag 与发布流程**
   `[实测]` — 根 `Cargo.toml` 是 `version = "0.1.0"`（十二个成员全继承，历史里只出现过这一行），
   而提交信息写着 "NichLink 0.1.1"/"1.0.0"（都没改任何版本号），`docs/roadmap-1.0.md` 以 1.0 为名。
   **Fixed（口径）:** CHANGELOG 头部现在一句话说清：首个发布的版本是 `0.1.0`（即
-  `[workspace.package]` 的值），"1.0"是里程碑名，抬到 `1.0.0` 需要连同十四处内部
-  `version = "0.1.0"` 一起移动。**仍属你的决定:** 首次发布用 0.1.0（现状，公开面未冻结，0.x 也
-  如实说明这点）还是抬到 1.0.0 并冻结公开面；tag 与发布流程见 R2。
+  `[workspace.package]` 的值），"1.0"是里程碑名。原文里的"十四处内部 `version = "0.1.0"`"是个
+  腐烂的数字（2026-09-25 实测 45 处），已改为不带数字的"每一处"。
+  **已决定（2026-09-25）：版本线继续走 `0.1.x`。** 公开面尚未冻结，深化期间的每次发布都是 0.1.x
+  的一小步（`0.1.1`、`0.1.2`……）；抬到 `1.0.0` 并冻结公开面是以后单独的一步，届时才需要连同每一处
+  内部 `version = "0.1.0"` 要求一起移动。tag 与发布流程见 R2，实际运行见
+  `docs/audit-2026-09-25-post-fix.md` 的 P4 节。
 - **m3 ✅ FIXED MINOR README 安装说明面向 checkout，且一条命令跑不通** `[实测]` —
   `README.md` 的 `cargo run -p nichlink-cli -- studio` 因该包有两个 bin 且无 `default-run` 而
   报 "could not determine which binary to run"（实测退出 101）。
   **Fixed:** `cli/Cargo.toml` 加 `default-run = "nichlink"`（`cargo-nichlink` 按名字照常可用），
-  并给 README 的安装段补上事实：**现在 crates.io 上什么都没有**，Git 源是今天唯一能解析的来源，
-  0.1.0 发布后才换成 `cargo install nichlink-cli`。实测该命令现在解析到
+  并给 README 的安装段补上事实（当时 crates.io 上什么都没有，Git 源是唯一能解析的来源，0.1.0
+  发布后才换成 `cargo install nichlink-cli`）。实测该命令现在解析到
   `Running target/debug/nichlink studio`，只在无 TTY 时于终端步骤失败（预期）。
+  **发布之后这处也已被再次更新**：两份 README 的安装段现在以 `cargo install nichlink-cli` 为主，
+  Git 源作为"想要检出最新提交时"的备选（原文"现在 crates.io 上什么都没有"已不成立）。
 - **m4 ✅ FIXED MINOR README 仍有两条与代码不符的描述** `[实测]` — 键位表把 `1`–`4` 说成
   "Search, inspect, data, compare pages"，而只有三个页面（`4` 是空操作）；crate 表把
   `nichlink-debug-method` 说成做 "MIR subprocess orchestration"，而该 crate 里没有任何

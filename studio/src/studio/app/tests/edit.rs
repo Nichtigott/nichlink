@@ -363,3 +363,75 @@ fn delete_moves_the_module_of_the_open_project() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Delete refuses a face that is not inside its own same-named directory.
+/// 删除拒绝不在自己同名目录里的面。
+///
+/// The trash move renames the *parent* directory, so a generated face that sits
+/// directly under `src/` — the shape a flattened or hand-written module has — would
+/// take all of `src/` with it. Such a file carries the generated marker, so the
+/// scanner lists it as an ordinary, deletable face; nothing else marks it as
+/// unusual. The rename path refuses this shape already, and deleting needs the same
+/// rule.
+/// 回收搬走的是**父**目录，因此直接位于 `src/` 下的生成面——已被拍平或手写的模块就是这种
+/// 形状——会把整个 `src/` 一起带走。这样的文件带生成标记，因此扫描器把它列为普通可删除面；
+/// 没有别的东西把它标记为异常。改名路径已经拒绝这种形状，删除需要同一条规则。
+#[test]
+fn delete_refuses_a_face_outside_its_own_directory() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-flat-delete-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("create fixture");
+    select_project(root.clone(), root.join("Cargo.toml"), "flat-delete-app");
+
+    // Create a standard module through the authoring path, then flatten it: the file
+    // keeps its generated marker and moves out of its own directory.
+    // 经创作路径建一个标准模块，然后把它拍平：文件保留生成标记，同时离开它自己的目录。
+    let mut app = App::load();
+    let mut add = AddState::new(app.registry.id());
+    add.values[face_field::MODULE] = "widget".to_owned();
+    add.values[face_field::KIND] = "Widget".to_owned();
+    app.submit_add(&add);
+    let generated = root.join("src/widget/widget.rs");
+    assert!(
+        generated.is_file(),
+        "the add form wrote the standard module"
+    );
+    std::fs::rename(&generated, root.join("src/widget.rs")).expect("flatten the module");
+    std::fs::remove_dir_all(root.join("src/widget")).expect("remove the emptied directory");
+
+    let mut app = App::load();
+    let flattened = app
+        .registry
+        .depth_first()
+        .into_iter()
+        .find(|face| face.source.file.ends_with("widget.rs"))
+        .expect("the flattened face is registered")
+        .id;
+    app.selected = flattened;
+    app.handle_key(KeyEvent::from(KeyCode::Char('d')));
+    assert!(
+        matches!(app.overlay, Some(Overlay::Delete(_))),
+        "d opens the delete overlay"
+    );
+    app.handle_key(KeyEvent::from(KeyCode::Char('y')));
+
+    assert!(
+        app.event.starts_with("Delete failed"),
+        "the delete must be refused rather than moving the whole source tree: {}",
+        app.event
+    );
+    assert!(
+        app.event.contains("only standard"),
+        "the refusal names the layout it accepts: {}",
+        app.event
+    );
+    assert!(
+        root.join("src/widget.rs").is_file(),
+        "the face file survives"
+    );
+    assert!(root.join("src").is_dir(), "src/ survives");
+    let _ = std::fs::remove_dir_all(&root);
+}

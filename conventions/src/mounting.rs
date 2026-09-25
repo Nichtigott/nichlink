@@ -124,6 +124,7 @@ mod tests {
             std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
             std::fs::write(&path, contents).expect("fixture file");
         }
+        crate::fixture_manifest(&root);
         root
     }
 

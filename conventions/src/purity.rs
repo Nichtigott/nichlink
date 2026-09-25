@@ -153,6 +153,7 @@ mod tests {
             fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
             fs::write(&path, contents).expect("fixture file");
         }
+        crate::fixture_manifest(&root);
         root
     }
 

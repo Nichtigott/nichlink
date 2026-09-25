@@ -30,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::size::is_test_file;
+use crate::size::looks_test_only;
 use crate::{crate_directories, lines, relative, rust_sources};
 
 /// One Rust-tagged fence that neither parses as a file nor as a statement block.
@@ -214,7 +214,7 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     for directory in crate_directories(root) {
         for path in rust_sources(&directory.join("src")) {
-            if is_test_file(&path) {
+            if looks_test_only(&path) {
                 continue;
             }
             let file = relative(root, &path);
@@ -405,6 +405,7 @@ mod tests {
             std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
             std::fs::write(&path, contents).expect("fixture file");
         }
+        crate::fixture_manifest(&root);
         root
     }
     /// Every Rust block in the READMEs and docs parses.
@@ -424,6 +425,7 @@ mod tests {
     #[test]
     fn a_broken_block_is_reported() {
         let directory = tempfile::tempdir().unwrap();
+        crate::fixture_manifest(directory.path());
         std::fs::write(
             directory.path().join("README.md"),
             "# A host\n\n```rust\npub struct Broken {\n```\n",

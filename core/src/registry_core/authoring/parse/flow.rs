@@ -9,6 +9,7 @@
 
 use crate::registry_core::authoring::validation::rust_string;
 use crate::registry_core::declaration::OwnedFlowContract;
+use crate::registry_core::syntax::nesting::guard_nesting;
 
 use super::FaceParseError;
 
@@ -95,6 +96,15 @@ pub fn render_flow_provider(value: &str) -> Result<String, FaceParseError> {
     if value.is_empty() {
         return Ok(String::new());
     }
+    // The value arrives from a manifest or the editor, which makes it untrusted input
+    // to a recursive-descent parser: without this guard a 542-byte type path aborts the
+    // process with a stack overflow instead of returning an error. `guard_nesting` is
+    // the kernel's one nesting measurement, and this module is why it is public rather
+    // than private to the syntax module.
+    // 这个值来自清单或编辑器，因此对递归下降解析器而言是不可信输入：没有这道守卫时，一条 542
+    // 字节的类型路径会以栈溢出 abort 进程，而不是返回错误。`guard_nesting` 是内核唯一的嵌套
+    // 度量，而本模块正是它公开而非限于 syntax 模块私有的原因。
+    guard_nesting(value).map_err(|error| FaceParseError::new(error.to_string()))?;
     syn::parse_str::<syn::Path>(value)
         .map_err(|_| "flow_provider must be a Rust type path".to_owned())?;
     Ok(format!("    flow_provider: {value},\n"))
@@ -107,6 +117,10 @@ pub fn parse_flow_expression(value: &str) -> Result<String, FaceParseError> {
     if value.is_empty() || value.ends_with("FlowContract::NONE") {
         return Ok(String::new());
     }
+    // Same untrusted value, same guard: a generated face's flow expression is read back
+    // from a file that an editor or a previous version wrote.
+    // 同一个不可信值，同一道守卫：生成面的 flow 表达式是从编辑器或旧版本写下的文件里读回来的。
+    guard_nesting(value).map_err(|error| FaceParseError::new(error.to_string()))?;
     let expression = syn::parse_str::<syn::Expr>(value)
         .map_err(|_| "generated face has an invalid flow expression".to_owned())?;
     let syn::Expr::Call(call) = expression else {
@@ -233,3 +247,7 @@ mod tests {
         assert_eq!(parse_flow_value("").unwrap(), None);
     }
 }
+
+#[cfg(test)]
+#[path = "flow_tests.rs"]
+mod flow_tests;
