@@ -57,15 +57,14 @@ fn confirmed_edges(app: &App) -> Vec<(String, String)> {
 
 /// The fixture project, loaded the way the graph tests load it.
 /// 夹具工程，按调用图测试的方式加载。
-fn load_fixture() -> App {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+fn load_fixture() -> Option<App> {
+    let fixture = node_editor_fixture()?;
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
         "nichlink.fixture.node-editor",
     );
-    App::load()
+    Some(App::load())
 }
 
 /// `U5` in `docs/audit-production-readiness.md` recorded an argument — the
@@ -78,7 +77,9 @@ fn load_fixture() -> App {
 /// 那次观察，而且它不是"没有追踪就没有实测边"这种废话：样本**确实**装上了，却仍然什么都没确认。
 #[test]
 fn the_shipped_trace_confirms_nothing_in_a_real_project() {
-    let app = load_fixture();
+    let Some(app) = load_fixture() else {
+        return;
+    };
 
     // The premise, asserted rather than assumed: a trace is installed and it does
     // carry an edge.
@@ -119,7 +120,9 @@ fn the_shipped_trace_confirms_nothing_in_a_real_project() {
 /// 上面那条测试在 `call_evidence` 根本答不出 `Live` 时也会通过——而 `U5` 问的正是这个区别。
 #[test]
 fn a_trace_over_the_loaded_faces_confirms_the_edge_it_observed() {
-    let mut app = load_fixture();
+    let Some(mut app) = load_fixture() else {
+        return;
+    };
     let node_editor = app
         .registry
         .depth_first()

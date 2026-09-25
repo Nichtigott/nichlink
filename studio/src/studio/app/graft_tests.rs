@@ -6,6 +6,8 @@
 //! 独立一页，使被测模块留在尺寸棘轮之内：测试模块不受棘轮约束，而这一份是文件里更大的
 //! 那一半。
 
+#[cfg(feature = "prototype-fixtures")]
+use super::support::node_editor_fixture;
 use super::*;
 
 fn declared(cut: DeclaredGraft) -> DeclaredGrafts {
@@ -171,8 +173,9 @@ fn selectors_that_escape_the_plan_directory_are_refused() {
 #[cfg(feature = "prototype-fixtures")]
 fn the_graft_screen_renders_before_any_plan_exists() {
     use crossterm::event::{KeyCode, KeyEvent};
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     super::super::support::select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),

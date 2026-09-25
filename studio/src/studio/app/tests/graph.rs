@@ -12,8 +12,9 @@ use super::*;
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_navigation_moves_across_real_call_edges() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -69,8 +70,9 @@ fn graph_navigation_moves_across_real_call_edges() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_tab_reaches_both_tree_and_data_panels() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -134,8 +136,9 @@ fn graph_tab_reaches_both_tree_and_data_panels() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_enter_promotes_callers_and_opens_center_source() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -181,8 +184,9 @@ fn graph_enter_promotes_callers_and_opens_center_source() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn call_tree_targets_keep_rows_navigable() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),

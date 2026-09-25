@@ -315,3 +315,30 @@ impl App {
             .collect()
     }
 }
+
+/// The node-editor fixture host, when this checkout has it.
+/// node-editor 夹具宿主，当本检出有它时。
+///
+/// The fixture is a nested package, and cargo does not put a nested package into a
+/// published `.crate`: a consumer who runs `cargo test --all-features` on the published
+/// `nichlink-studio` has no fixture to index. The contract `prototype-fixtures` names is
+/// a *checkout* contract — `AGENTS.md` says the fixture is not part of the published
+/// surface — so the tests that need it skip when it is absent instead of panicking. It
+/// is always present in this checkout, so they always run here.
+/// 该夹具是嵌套包，而 cargo 不会把嵌套包放进发布的 `.crate`：在已发布
+/// `nichlink-studio` 上跑 `cargo test --all-features` 的消费者没有夹具可索引。
+/// `prototype-fixtures` 命名的契约是**检出**契约——`AGENTS.md` 说该夹具不属于发布面——
+/// 因此需要它的测试在夹具缺席时跳过而不是 panic。本检出里它始终存在，因此这些测试始终运行。
+#[cfg(all(test, feature = "prototype-fixtures"))]
+pub(super) fn node_editor_fixture() -> Option<std::path::PathBuf> {
+    let root =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    if root.join("Cargo.toml").is_file() {
+        Some(root)
+    } else {
+        eprintln!(
+            "skipping: the node-editor fixture is a checkout fixture and is not in this package"
+        );
+        None
+    }
+}

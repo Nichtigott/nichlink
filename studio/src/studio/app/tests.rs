@@ -27,6 +27,10 @@ pub(super) use super::{
 // 导入。
 #[cfg(feature = "prototype-fixtures")]
 pub(super) use super::SearchState;
+// The fixture helper exists only with the feature that names the fixture.
+// 该夹具助手只在命名该夹具的特性下存在。
+#[cfg(feature = "prototype-fixtures")]
+pub(super) use super::support::node_editor_fixture;
 
 // The prototype-fixture tests read call relations and build a compiler snapshot
 // directly, so they name these instead of reaching them through `app`'s private

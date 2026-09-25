@@ -89,8 +89,9 @@ fn call_scanner_ignores_use_and_macro_but_accepts_qualified_calls() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn call_relations_report_real_cross_file_function_calls() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -131,8 +132,9 @@ fn call_relations_report_real_cross_file_function_calls() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn mir_candidates_are_optional_and_keep_live_evidence_distinct() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -176,8 +178,9 @@ fn mir_candidates_are_optional_and_keep_live_evidence_distinct() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn directory_style_source_paths_resolve_to_attached_files() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -191,8 +194,9 @@ fn directory_style_source_paths_resolve_to_attached_files() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_file_adds_compact_source_symbols() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -207,8 +211,9 @@ fn searching_a_file_adds_compact_source_symbols() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_function_name_finds_the_source_symbol() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
@@ -226,8 +231,9 @@ fn searching_a_function_name_finds_the_source_symbol() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_parameter_name_finds_its_function() {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    let Some(fixture) = node_editor_fixture() else {
+        return;
+    };
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),

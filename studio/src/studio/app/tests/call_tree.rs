@@ -33,15 +33,14 @@ fn canvas_drawn(mut state: SearchState) -> SearchState {
 
 /// The node-editor fixture, whose call graph the graph tests already pin.
 /// node-editor 夹具，它的调用图已被调用图测试钉住。
-fn fixture_app() -> App {
-    let fixture =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+fn fixture_app() -> Option<App> {
+    let fixture = node_editor_fixture()?;
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
         "nichlink.fixture.node-editor",
     );
-    App::load()
+    Some(App::load())
 }
 
 /// The registered functions of the loaded project, one per name.
@@ -188,7 +187,9 @@ fn box_text(page: &[Vec<char>], rect: Rect) -> String {
 
 #[test]
 fn every_shape_the_tree_promises_holds_around_a_real_focus() {
-    let app = fixture_app();
+    let Some(app) = fixture_app() else {
+        return;
+    };
     let functions = registered_functions(&app, 3);
     assert!(
         functions.len() >= 2,
@@ -243,7 +244,9 @@ fn every_shape_the_tree_promises_holds_around_a_real_focus() {
 
 #[test]
 fn the_memo_answers_the_same_focus_and_a_different_one() {
-    let app = fixture_app();
+    let Some(app) = fixture_app() else {
+        return;
+    };
     let functions = registered_functions(&app, 2);
     let focus = functions.first().expect("a focus to build around").clone();
     let first = app.call_tree_view(&focus);
@@ -261,7 +264,9 @@ fn the_memo_answers_the_same_focus_and_a_different_one() {
 /// 方向键跟随画出来的图，而不是模型自己的轴：四个键在两种绘制方里都保持字面含义。
 #[test]
 fn the_arrows_follow_the_drawn_grid() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "paint_node_editor");
     search.graph_focus = 0;
     search.outline_selected = 0;
@@ -326,7 +331,9 @@ fn the_arrows_follow_the_drawn_grid() {
 
 #[test]
 fn enter_re_centres_on_a_tree_node_and_opens_the_editor_only_at_the_focus() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     search.outline_selected = 1;
@@ -352,7 +359,9 @@ fn enter_re_centres_on_a_tree_node_and_opens_the_editor_only_at_the_focus() {
 
 #[test]
 fn the_drawn_tree_states_its_axis_and_keeps_the_focus_in_view() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     app.overlay = Some(Overlay::Search(canvas_drawn(search)));
@@ -399,7 +408,9 @@ fn the_drawn_tree_states_its_axis_and_keeps_the_focus_in_view() {
 /// 矩形（也就是点击命中的那些），因此测试用它们从页面读回盒子。
 #[test]
 fn the_drawn_tree_is_the_shape_the_model_describes() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     // Wider than the default split: the shape under test is the columns on both
     // sides of the focus, and 60% leaves room for two of them at this size.
     // 比默认分栏更宽：被测形状是焦点两侧的列，而 60% 在这个尺寸下只放得下其中两列。
@@ -563,7 +574,9 @@ fn the_drawn_tree_is_the_shape_the_model_describes() {
 /// 因此点击不可能落在读者看不见的矩形上。
 #[test]
 fn a_click_lands_on_the_box_under_the_pointer() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     app.graph_split_percent = 80;
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
@@ -600,7 +613,9 @@ fn a_click_lands_on_the_box_under_the_pointer() {
 /// 且与分隔线拖动使用同一范围。
 #[test]
 fn a_narrow_panel_names_the_keys_that_widen_it() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     // The panel would draw this tree downwards at this width; the hint exists for
@@ -631,7 +646,9 @@ fn a_narrow_panel_names_the_keys_that_widen_it() {
     // The keys are named in the page footer, which needs a page wide enough to
     // hold the sentence: assert that where it is readable.
     // 这些按键写在页面页脚里，而页脚需要足够宽的页面才放得下整句：因此在那读得清的地方断言。
-    let mut wide = fixture_app();
+    let Some(mut wide) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut wide, "preview_canvas_width");
     search.graph_focus = 0;
     wide.overlay = Some(Overlay::Search(search));
@@ -673,7 +690,9 @@ fn a_narrow_panel_names_the_keys_that_widen_it() {
 /// 写在面板腾不出的标尺里。
 #[test]
 fn a_narrow_panel_draws_the_tree_downwards() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     // A tree pane narrower than the width that fits two readable columns: the
     // page draws the tree downwards instead.
     // 比"两列都可读"所需宽度更窄的树面板：页面改为向下画树。
@@ -712,7 +731,9 @@ fn a_narrow_panel_draws_the_tree_downwards() {
 
     // Forced top-down in a wide panel, the title names the mode it is in.
     // 在宽面板里强制自上而下时，标题写出它所在的模式。
-    let mut wide = fixture_app();
+    let Some(mut wide) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut wide, "preview_canvas_width");
     search.graph_focus = 0;
     search.tree_vertical = Some(true);
@@ -751,7 +772,9 @@ fn a_narrow_panel_draws_the_tree_downwards() {
 /// `v` 循环切换树的排布，面板写出它最终采用的方向。
 #[test]
 fn v_cycles_the_tree_layout() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     assert_eq!(search.tree_vertical, None, "the panel decides by default");
@@ -773,7 +796,9 @@ fn v_cycles_the_tree_layout() {
 #[cfg(feature = "node-graph")]
 #[test]
 fn the_library_drawer_shows_the_same_tree() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     app.overlay = Some(Overlay::Search(search));
@@ -820,7 +845,9 @@ fn the_library_drawer_shows_the_same_tree() {
 #[cfg(feature = "node-graph")]
 #[test]
 fn the_library_drawer_marks_the_cursor_where_it_is() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     app.graph_split_percent = 80;
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
@@ -869,7 +896,9 @@ fn the_library_drawer_marks_the_cursor_where_it_is() {
 /// 带着守卫。
 #[test]
 fn the_graph_pages_letters_are_commands() {
-    let mut app = fixture_app();
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
     let mut search = open_graph(&mut app, "preview_canvas_width");
     search.graph_focus = 0;
     app.overlay = Some(Overlay::Search(search));
