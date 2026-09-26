@@ -39,22 +39,12 @@ fn graph_navigation_moves_across_real_call_edges() {
             .expect("the cursor stands on a function");
         (search.outline_selected, app.call_tree_view(&center))
     };
-    // Draw once before navigating: that is what tells the arrows which model axis
-    // runs down the screen, and the panel is the authority on it. The key that
-    // means "down the screen" must therefore reach a callee in either drawer.
-    // 导航前先绘制一次：正是它告诉方向键哪个模型轴沿屏幕向下，而面板是这件事的权威。因此
-    // "沿屏幕向下"的那个键在两种绘制方里都必须到达被调用者。
-    let mut terminal =
-        ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 48)).expect("a terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
-    let down_the_screen = if app.tree_top_down {
-        crossterm::event::KeyCode::Down
-    } else {
-        crossterm::event::KeyCode::Right
-    };
-    app.handle_overlay_key(crossterm::event::KeyEvent::from(down_the_screen));
+    // The one drawer runs the calls down the screen, so ↓ is the key that means
+    // "toward the callees"; it must reach a callee.
+    // 唯一的绘制方把调用沿屏幕向下排，因此表示"走向被调用者"的键是 ↓；它必须到达被调用者。
+    app.handle_overlay_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Down,
+    ));
     let Some(Overlay::Search(search)) = app.overlay.as_ref() else {
         panic!("search graph should remain open");
     };
@@ -62,7 +52,7 @@ fn graph_navigation_moves_across_real_call_edges() {
     assert_ne!(landed, before, "the arrow moves the cursor");
     assert!(
         view.tree.nodes[landed].level > 0,
-        "down the screen reaches a callee: {}",
+        "down reaches a callee: {}",
         view.tree.nodes[landed].symbol
     );
 }
@@ -153,10 +143,11 @@ fn graph_enter_promotes_callers_and_opens_center_source() {
         crossterm::event::KeyCode::Enter,
     ));
 
-    // → hops downstream to a callee, and Enter makes that callee the centre.
-    // → 跳向下游的被调用者，Enter 让那个被调用者成为新的圆心。
+    // ↓ hops downstream to a callee — the one drawer runs the calls down the
+    // screen — and Enter makes that callee the centre.
+    // ↓ 跳向下游的被调用者——唯一的绘制方把调用沿屏幕向下排——Enter 让那个被调用者成为新的圆心。
     app.handle_overlay_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Right,
+        crossterm::event::KeyCode::Down,
     ));
     app.handle_overlay_key(crossterm::event::KeyEvent::from(
         crossterm::event::KeyCode::Enter,

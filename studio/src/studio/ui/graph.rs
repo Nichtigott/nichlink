@@ -11,23 +11,13 @@
 //! 面板都只剩读者真正想要的一半。
 //!
 //! The module root owns the overlay entry point and the two-pane layout; the tree's
-//! geometry, its drawing and the live-value panel live in the mounted submodules.
-//! 模块根承载浮层入口与两栏布局；树的几何、绘制与实时取值面板位于挂载的子模块。
+//! panel and the live-value panel live in the mounted submodules.
+//! 模块根承载浮层入口与两栏布局；树面板与实时取值面板位于挂载的子模块。
 
 use super::*;
 
-#[path = "graph/box_draw.rs"]
-mod box_draw;
-#[path = "graph/box_draw_vertical.rs"]
-mod box_draw_vertical;
-#[path = "graph/box_vertical.rs"]
-mod box_vertical;
-#[path = "graph/boxes.rs"]
-mod boxes;
 #[path = "graph/data.rs"]
 mod data;
-#[path = "graph/glyphs.rs"]
-mod glyphs;
 #[cfg(feature = "node-graph")]
 #[path = "graph/node_graph.rs"]
 mod node_graph;
@@ -65,7 +55,7 @@ pub(super) fn draw_search_graph(
     // 详情面板就是数据面板：注册面检视器与搜索栏指向的，是游标所在函数运行时的取值。
     app.hot.graph_detail_area = columns[1];
     app.hot.graph_provenance_area = columns[1];
-    app.hot.graph_tree_boxes = draw_call_tree(
+    draw_call_tree(
         frame,
         columns[0],
         app,
@@ -74,9 +64,6 @@ pub(super) fn draw_search_graph(
             cursor: search.outline_selected,
             focused: search.graph_focus == 0,
             title: "CALL TREE",
-            vertical: search.tree_vertical,
-            #[cfg(feature = "node-graph")]
-            canvas: search.tree_canvas,
         },
     );
     let item = app.graph_tree_item(search, search.outline_selected);

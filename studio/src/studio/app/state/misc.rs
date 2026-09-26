@@ -97,6 +97,11 @@ impl CallTreeView {
 
     /// Reference at one node index.
     /// 某个节点下标对应的引用。
+    ///
+    /// Only the widget drawer's status row reads this, so it is compiled with the
+    /// `node-graph` feature.
+    /// 只有控件绘制方的状态行读它，因此与 `node-graph` 特性一同编译。
+    #[cfg(feature = "node-graph")]
     pub fn item(&self, index: usize) -> Option<CallRef> {
         self.refs.get(index).and_then(Option::clone)
     }

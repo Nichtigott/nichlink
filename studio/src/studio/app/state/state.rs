@@ -36,6 +36,10 @@ pub(crate) use misc::{CallTreeMemo, push_call_ref, source_path_for};
 // 分配一个 `format!`，这会让它画出的图与内核归并的证据不一致。
 pub(crate) use nichlink_run_method::mir::same_symbol;
 // The layered call tree is kernel vocabulary too: Studio builds the relation
-// list, the kernel decides the levels, lanes and cuts.
-// 分层调用树同样是内核词汇：Studio 提供关系列表，内核决定层、车道与裁剪。
-pub(crate) use nichlink_run_method::mir::{CallRelation, CallTreeNode, call_tree};
+// list, the kernel decides the levels, lanes and cuts. `CallTreeNode` is named
+// only by the widget drawer's node text, so it is re-exported with that feature.
+// 分层调用树同样是内核词汇：Studio 提供关系列表，内核决定层、车道与裁剪。`CallTreeNode`
+// 只被控件绘制方的节点文本命名，因此与该特性一同重导出。
+#[cfg(feature = "node-graph")]
+pub(crate) use nichlink_run_method::mir::CallTreeNode;
+pub(crate) use nichlink_run_method::mir::{CallRelation, call_tree};

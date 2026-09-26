@@ -212,7 +212,7 @@ impl CallTrace {
         self.rebuild_indexes();
     }
 
-    fn rebuild_indexes(&mut self) {
+    pub(super) fn rebuild_indexes(&mut self) {
         self.frame_index.clear();
         for (index, frame) in self.frames.iter().enumerate() {
             self.frame_index.insert(frame.call.frame_id, index);

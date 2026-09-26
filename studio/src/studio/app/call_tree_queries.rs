@@ -166,15 +166,12 @@ impl App {
     /// *drawn* picture rather than along the model's own axes.
     /// 让树游标朝读者按下的方向走一步，沿**画出来的**图走，而不是沿模型自己的轴。
     ///
-    /// Which model axis is "up" depends on how the panel draws: a top-down tree has
-    /// levels running down the screen, a left-to-right one has them running across
-    /// it. The picture is the authority — the panel's own sentence says which way
-    /// the calls run — so the four keys keep their printed meaning in both layouts,
-    /// and a level step follows a drawn edge that exists instead of jumping to
-    /// whatever happens to be numbered next.
-    /// 哪个模型轴是"上"取决于面板怎么画：自上而下的树让层沿屏幕向下延伸，从左到右的树让层横着
-    /// 延伸。以图为准——面板自己的那句话写明了调用方向——因此四个键在两种排布里都保持字面含义，
-    /// 而沿层的移动走的是确实存在的那条画出来的边，而不是跳到"编号恰好下一个"的节点上。
+    /// The one drawer, the `rataflow` widget, runs the levels down the screen, so
+    /// the four keys keep their printed meaning: down follows a drawn edge toward
+    /// the callees, up toward the callers, and left/right move between the lanes of
+    /// one band.
+    /// 唯一的绘制方 `rataflow` 控件把层画在向下方向，因此四个键保持字面含义：下沿一条画出的
+    /// 边走向被调用者，上走向调用者，左右在一条带的车道间移动。
     pub(super) fn hop_call_tree(&mut self, search: &mut SearchState, step: TreeStep) {
         let Some(focus) = self.graph_item(search) else {
             return;
@@ -185,13 +182,13 @@ impl App {
         let Some(node) = nodes.get(cursor) else {
             return;
         };
-        // The grid the panel drew: which model coordinate runs down the screen.
-        // 面板画出的网格：哪个模型坐标沿屏幕向下。
-        let (level_step, lane_step) = match (self.tree_top_down, step) {
-            (true, TreeStep::Up) | (false, TreeStep::Left) => (-1, 0),
-            (true, TreeStep::Down) | (false, TreeStep::Right) => (1, 0),
-            (true, TreeStep::Left) | (false, TreeStep::Up) => (0, -1),
-            _ => (0, 1),
+        // The grid the panel drew: levels run down the screen, lanes across it.
+        // 面板画出的网格：层沿屏幕向下，车道横着延伸。
+        let (level_step, lane_step) = match step {
+            TreeStep::Up => (-1, 0),
+            TreeStep::Down => (1, 0),
+            TreeStep::Left => (0, -1),
+            TreeStep::Right => (0, 1),
         };
         let target = if level_step != 0 {
             // One hop along a drawn edge: the node that placed this one, or one it

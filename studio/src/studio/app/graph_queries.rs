@@ -12,6 +12,12 @@ use super::*;
 impl App {
     /// Extract a few value-changing statements for the compact call tree.
     /// 提取紧凑调用树中少量改变值的语句。
+    ///
+    /// Only the widget drawer's status row reads this, so it is compiled with the
+    /// `node-graph` feature; without the feature the tree has no cursor row.
+    /// 只有控件绘制方的状态行读它，因此与 `node-graph` 特性一同编译；没有该特性时调用树没有
+    /// 游标行。
+    #[cfg(feature = "node-graph")]
     pub(crate) fn call_tree_transforms(&self, item: &CallRef) -> Vec<String> {
         let Some(info) = self.registry.find(item.node) else {
             return Vec::new();

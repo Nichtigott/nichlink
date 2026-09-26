@@ -37,10 +37,15 @@ mod status;
 use status::{draw_event, draw_keys};
 
 use super::app::{
-    AddState, App, CallRef, CallTreeNode, CallTreeView, Focus, Overlay, SearchState,
-    app_function_source_range, face_field_indices, new_project_field, plugin_field,
-    source_path_for,
+    AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
+    face_field_indices, new_project_field, plugin_field, source_path_for,
 };
+// The call-tree model types are named only by the widget drawing path, so they are
+// imported with it: without the `node-graph` feature the import would be unused.
+// 调用树模型类型只被控件绘制路径命名，因此与它一同导入：没有 `node-graph` 特性时该导入会
+// 未使用。
+#[cfg(feature = "node-graph")]
+use super::app::{CallTreeNode, CallTreeView};
 // The authoring layout's slot names: the form, the appliers and the tests index
 // one array, so they all read the same constants.
 // 创作布局的槽位名：表单、写入方与测试索引同一个数组，因此都读同一批常量。

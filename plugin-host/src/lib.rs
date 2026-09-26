@@ -8,6 +8,7 @@
 // `clippy -D warnings` 会让新增的、没有文档的公开项变成失败。
 #![warn(missing_docs)]
 
+mod admission;
 mod deployment;
 mod error;
 #[cfg(feature = "wasm")]
@@ -18,6 +19,9 @@ mod verifier;
 #[cfg(feature = "wasm")]
 mod wasm;
 
+pub use admission::{
+    OFFICIAL_LOCK, PLUGIN_LOCK_DIRECTORY, PluginAdmission, USER_LOCK, lane_for, plugin_catalog,
+};
 pub use deployment::{Deployment, HotDeployment};
 pub use error::HostError;
 #[cfg(feature = "wasm")]

@@ -64,12 +64,6 @@ pub struct HotZones {
     /// Click area of the call-tree pane.
     /// 调用树面板的点击区域。
     pub graph_tree_area: Rect,
-    /// The tree's drawn boxes with the node each one shows, for click hit testing.
-    /// The canvas publishes these as it draws, so a click lands on the same
-    /// rectangles the reader sees.
-    /// 树画出的盒子及各自展示的节点，供点击命中测试。画布在绘制时公布它们，因此点击落在读者
-    /// 看到的同一批矩形上。
-    pub graph_tree_boxes: Vec<(Rect, usize)>,
     /// Click area of the data-flow pane.
     /// 数据流面板的点击区域。
     pub graph_data_area: Rect,

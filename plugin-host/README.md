@@ -10,6 +10,26 @@ instantiated array, so the memory ceiling alone does not bound it. Enable
 `process-tools` for timeout-controlled process adapters. `HotDeployment` stages a validated graft and publishes it
 atomically, leaving the last healthy snapshot visible after a failure.
 
+## Admission: from the host's lock to a loadable artifact
+
+`PluginAdmission` is the host-side path from the lock a host writes to an artifact that
+can be installed. It reads `<package_root>/.nichlink/plugins/official.lock` and
+`user.lock` — a missing file is an empty catalogue, not an error — selects the manifest
+against that catalogue, and then verifies: an official artifact must pass
+`verify_signed` under a configured trust root, while a user artifact takes the digest
+path. `admit` returns the verified artifact, `lane_for` names the lane the assurance it
+earned buys, and `install` (Wasm) or `load_process` (process) does admission and loading
+in one step.
+
+A lock line is `source|framework|package|version|crate|checksum|mode`, optionally
+followed by `|signature|key-fingerprint|revocation-list`. The three trailing fields are
+expectations: a record that carries one pins it, and a record written without one leaves
+it to the signature check, so a lock written by a host's own plugin UI admits a signed
+official plugin. An official plugin that is not in the lock is refused before any
+verifier is asked, a revoked version is refused before the signature, a host with no
+trust root gets `MissingOfficialKey` rather than a silent downgrade to checksums, and the
+signature covers the registration that travels with the plugin bytes.
+
 ## Wasm ABI handshake
 
 Wasm plugins may export `nichlink_abi_version() -> i32`. The host compares that

@@ -1,0 +1,121 @@
+//! File half of the trace artifact: the default path, reader, and writer.
+//! trace artifact 的文件一半：默认路径、读取方与写入方。
+//!
+//! This is the execution surface's half: it touches the environment for the
+//! namespace anchor and the filesystem for the document. The document itself is
+//! pure and lives in the parent module.
+//! 这是执行面的一半：为命名空间锚点读取环境，为文档读写文件系统。文档本身是纯的，住在父模块。
+
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
+use crate::registry_core::identity::root_node_id;
+use crate::registry_core::lexicon::{
+    NAMESPACE_ENV, NICHLINK_DIR, TRACE_DIR, TRACE_FILE, TRACE_FILE_ENV, resolve_namespace,
+};
+
+use super::{CallTrace, TraceArtifact};
+
+/// The path a host writes a trace artifact to, and a reader looks in.
+/// 宿主写入 trace artifact、读取方查找它的路径。
+///
+/// `NICH_LINK_TRACE_FILE` wins when it names a non-empty path — absolute, or
+/// relative to `package_root` — and otherwise the shared
+/// `NICHLINK_DIR`/`TRACE_DIR`/`TRACE_FILE` contracts give
+/// `package_root/.nichlink/traces/nichlink.trace`. Both the writer and the reader
+/// ask this one function, so an override cannot move the file for one of them and
+/// not the other.
+/// `NICH_LINK_TRACE_FILE` 给出非空路径时以它为准——绝对路径，或相对 `package_root` 的路径——
+/// 否则由共享的 `NICHLINK_DIR`/`TRACE_DIR`/`TRACE_FILE` 契约给出
+/// `package_root/.nichlink/traces/nichlink.trace`。写入方与读取方问的是同一个函数，因此覆盖不会
+/// 只挪动其中一方的文件。
+pub fn trace_artifact_path(package_root: &Path) -> PathBuf {
+    resolve_artifact_path(package_root, std::env::var_os(TRACE_FILE_ENV).as_deref())
+}
+
+/// The path decision itself, separated so it can be tested without the process
+/// environment.
+/// 路径判断本身；单独拆出，以便不依赖进程环境地测试它。
+pub(super) fn resolve_artifact_path(package_root: &Path, configured: Option<&OsStr>) -> PathBuf {
+    if let Some(configured) = configured {
+        let configured = Path::new(configured);
+        if !configured.as_os_str().is_empty() {
+            return if configured.is_absolute() {
+                configured.to_path_buf()
+            } else {
+                package_root.join(configured)
+            };
+        }
+    }
+    package_root
+        .join(NICHLINK_DIR)
+        .join(TRACE_DIR)
+        .join(TRACE_FILE)
+}
+
+/// Write a recorded trace as an artifact, replacing `path` atomically.
+/// 把已记录的追踪写成 artifact，并以原子方式替换 `path`。
+///
+/// The namespace and root anchors are stamped from the process environment
+/// (`NICH_LINK_NAMESPACE`, defaulting to `DEFAULT_NAMESPACE`), because only the
+/// host that owns the package knows its name.
+/// namespace 与 root 锚点由进程环境盖戳（`NICH_LINK_NAMESPACE`，默认为
+/// `DEFAULT_NAMESPACE`），因为只有拥有该包的宿主才知道它的名字。
+pub fn write_trace_artifact(trace: &CallTrace, path: &Path) -> Result<(), String> {
+    let configured = std::env::var(NAMESPACE_ENV).ok();
+    let namespace = resolve_namespace(configured.as_deref());
+    let mut artifact = TraceArtifact::from_trace(trace);
+    artifact.namespace = namespace.to_owned();
+    artifact.root = root_node_id(namespace);
+    atomic_write(path, &artifact.render())
+}
+
+/// Read an artifact and rebuild the trace it records.
+/// 读取 artifact 并重建它记录的追踪。
+pub fn read_trace_artifact(path: &Path) -> Result<(TraceArtifact, CallTrace), String> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let artifact = TraceArtifact::parse(&source).map_err(|error| error.to_string())?;
+    let trace = artifact
+        .clone()
+        .into_trace()
+        .map_err(|error| error.to_string())?;
+    Ok((artifact, trace))
+}
+
+/// Write `contents` to `path` through a unique sibling and one rename.
+/// 经由唯一的同级文件与一次重命名把 `contents` 写到 `path`。
+///
+/// The same pattern as the authoring executor's writer, and for the same reason:
+/// a fixed temporary name must be deleted before it can be reused, and that
+/// deletion could destroy a sibling this writer never created.
+/// 与 authoring 执行器的写入方同一模式，理由也相同：固定临时名必须先删除才能复用，而那次删除
+/// 可能毁掉一个本写入方从未创建的同级文件。
+fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
+    use std::io::Write as _;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file");
+    let temporary = path.with_file_name(format!(
+        ".{name}.nichlink-{}-{sequence}.tmp",
+        std::process::id()
+    ));
+    let outcome = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|error| format!("cannot create {}: {error}", temporary.display()))?;
+        file.write_all(contents.as_bytes())
+            .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+        std::fs::rename(&temporary, path)
+            .map_err(|error| format!("cannot replace {}: {error}", path.display()))
+    })();
+    if outcome.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    outcome
+}

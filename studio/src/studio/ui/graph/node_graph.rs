@@ -1,17 +1,15 @@
 //! The call tree drawn by the `rataflow` node-editor widget.
 //! 由 `rataflow` 节点编辑器控件绘制的调用树。
 //!
-//! This is the default drawer; the hand-drawn canvases in `boxes` and
-//! `box_vertical` stay one key (`g`) away. What the widget does not know, this
-//! page tells it: the kernel's own facts go into the node text and the edge
-//! labels — the cut counts (`←n`/`→n`, what the budgets left out), the evidence
-//! kind of each edge, whether the compiler was the only witness (`?`), and which
-//! node the cursor is on, which is written into the title as well as the border
-//! style so it survives a terminal with no colour.
-//! 这是默认绘制方；`boxes` 与 `box_vertical` 的手绘画布只差一个按键（`g`）。控件不知道的
-//! 事情由本页告诉它：内核自身的事实进入节点文本与边标签——裁剪计数（`←n`/`→n`，预算漏掉了
-//! 谁）、每条边的证据种类、是否只有编译器作证（`?`），以及游标在哪个节点上（除了边框样式，
-//! 还写进标题，因此在没有颜色的终端里也读得出来）。
+//! This is the only drawer. What the widget does not know, this page tells it:
+//! the kernel's own facts go into the node text and the edge labels — the cut
+//! counts (`←n`/`→n`, what the budgets left out), the evidence kind of each edge,
+//! whether the compiler was the only witness (`?`), and which node the cursor is
+//! on, which is written into the title as well as the border style so it survives
+//! a terminal with no colour.
+//! 这是唯一的绘制方。控件不知道的事情由本页告诉它：内核自身的事实进入节点文本与边标签——
+//! 裁剪计数（`←n`/`→n`，预算漏掉了谁）、每条边的证据种类、是否只有编译器作证（`?`），以及
+//! 游标在哪个节点上（除了边框样式，还写进标题，因此在没有颜色的终端里也读得出来）。
 
 use super::*;
 

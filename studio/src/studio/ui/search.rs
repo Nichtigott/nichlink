@@ -41,14 +41,12 @@ pub(super) fn draw_search(
         draw_search_graph(frame, inner[1], app, search);
         // Graph-mode footer. Every key below is matched in the `search.graph_mode`
         // branch of `handle_search_overlay_key`: Tab moves focus, ↑↓ move the
-        // selection, Enter re-centres or opens, `m` loads the MIR snapshot, `v`
-        // cycles the tree's layout, `g` swaps its drawer, `[`/`]` move the split,
-        // and Esc goes back.
+        // selection, Enter re-centres or opens, `m` loads the MIR snapshot,
+        // `[`/`]` move the split, and Esc goes back.
         // 调用图页脚。下列按键都在 `handle_search_overlay_key` 的
         // `search.graph_mode` 分支匹配：Tab 切换焦点、↑↓ 移动选择、Enter 重新居中或打开、
-        // `m` 载入 MIR 快照、`v` 循环切换树的排布、`g` 换它的绘制方、`[`/`]` 移动分栏，
-        // Esc 返回。
-        let footer = "↑↓ select   ←→ hop   Enter re-centre/open   e source   Tab pane   wheel zoom   v layout   g drawer   [ ] split   m MIR   / search field   Esc back";
+        // `m` 载入 MIR 快照、`[`/`]` 移动分栏，Esc 返回。
+        let footer = "↑↓ select   ←→ hop   Enter re-centre/open   e source   Tab pane   wheel zoom   [ ] split   m MIR   / search field   Esc back";
         frame.render_widget(
             Paragraph::new(footer)
                 .alignment(Alignment::Center)

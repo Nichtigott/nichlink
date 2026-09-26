@@ -35,6 +35,52 @@ without a red package audit.
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因。
 
+## [Unreleased]
+
+### Added
+
+- `nichlink-plugin-host`'s `PluginAdmission`: the host-side path from the plugin
+  locks to a loadable artifact. It reads
+  `<package_root>/.nichlink/plugins/{official,user}.lock`, selects the manifest
+  against that catalogue, verifies it (`verify_signed` for an official source,
+  `verify_artifact` for a user one), and names the lane the earned assurance
+  buys; `install` (Wasm) and `load_process` (process) do admission and loading in
+  one step. Before this, **no in-tree code outside `core` called
+  `verify_signed`**, so the Official lane was unreachable.
+- The trace artifact's first slice in `nichlink-run-method`: `TraceArtifact`
+  (`from_trace`, `render`, `parse`, `into_trace`), `write_trace_artifact`,
+  `read_trace_artifact`, and `trace_artifact_path`, plus the
+  `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` contracts in the kernel lexicon. A
+  host can now write its recorded `CallTrace` as a versioned document that a
+  separate reader can rebuild; the Studio loader is the next slice
+  (`docs/design-trace-ingest.md` §3.5).
+
+### Changed
+
+- Studio's hand-drawn call-tree canvases are gone: `rataflow` (the `node-graph`
+  feature, default on) is the only call-tree drawer, 1756 lines of canvas code
+  and their geometry tests went with them, and the `g` (drawer) and `v` (layout)
+  keys no longer exist. A build without `node-graph` keeps the panel and says
+  which feature the tree needs instead of drawing nothing.
+- Forwarding a mouse *release* to the `rataflow` widget, which emits
+  `NodeClicked` on release while Studio only forwarded the press — so widget
+  click-to-select could never fire. It does now.
+
+### Fixed
+
+- `PluginCatalog::contains_manifest` compared the three optional provenance
+  fields — signature, key fingerprint, revocation-list snapshot — for equality,
+  so a seven-field official record (what a host's own plugin UI writes) could
+  never match a signed official manifest, and an official plugin could not be
+  admitted through a lock the host itself wrote. They are expectations now: a
+  record that carries one pins it, a record that omits it leaves it to the
+  signature check.
+- Documentation claims re-measured and corrected: the in-flight design said
+  Studio's sample records no locals (it records one, pinned by its own test), the
+  post-fix audit's items 21/22/26/27/28 and its `build.rs` scope finding are fixed
+  and now annotated as such, and the roadmap no longer calls the first publish the
+  only remaining 1.0 item.
+
 ## [0.1.1] — 2026-09-26
 
 ### Added
@@ -680,6 +726,38 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)；版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
+
+### [Unreleased] 未发布
+
+新增：
+
+- `nichlink-plugin-host` 的 `PluginAdmission`：宿主侧从插件锁到可加载工件的那条路。它读
+  `<package_root>/.nichlink/plugins/{official,user}.lock`、按这份目录筛选 manifest、校验它
+  （官方来源走 `verify_signed`，用户来源走 `verify_artifact`），并给出换来的保证等级所对应的
+  通道；`install`（Wasm）与 `load_process`（进程）一步完成准入与加载。在此之前**树内 `core`
+  之外没有任何代码调用过 `verify_signed`**，Official 通道因此不可达。
+- `nichlink-run-method` 里 trace artifact 的第一片：`TraceArtifact`（`from_trace`、`render`、
+  `parse`、`into_trace`）、`write_trace_artifact`、`read_trace_artifact` 与
+  `trace_artifact_path`，以及内核词典里的 `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` 契约。
+  宿主现在能把已记录的 `CallTrace` 写成带版本的文档，由独立读取方重建；Studio 的加载方是下一片
+  （`docs/design-trace-ingest.md` §3.5）。
+
+变更：
+
+- Studio 的手绘调用树画布已删除：`rataflow`（`node-graph` 特性，默认开启）成为唯一的调用树
+  绘制者，1756 行画布代码与它们的几何测试随之消失，`g`（切换绘制者）与 `v`（切换排布）两个按键
+  不再存在。未链接 `node-graph` 的构建保留面板，并说明这棵树需要哪个特性，而不是什么都不画。
+- 向 `rataflow` 控件转发鼠标**抬起**事件：它在抬起时发出 `NodeClicked`，而 Studio 此前只转发
+  按下，因此控件的点击选中从来不会触发。现在会。
+
+修复：
+
+- `PluginCatalog::contains_manifest` 用相等比较三个可选来源字段——签名、密钥指纹、撤销列表
+  快照——于是宿主自己的插件界面写下的七字段官方记录永远匹配不上已签名的官方 manifest，官方插件
+  无法经宿主自己写下的锁准入。现在它们是**期望**：记录携带某个值就把它钉住，省略它就交给签名校验。
+- 重新实测并更正了若干文档主张：设计文档说 Studio 示例不记录 locals（它记录一个，由该文件自己的
+  测试钉住）；post-fix 审核的第 21/22/26/27/28 条与它的 `build.rs` 作用域发现都已修完，并就地
+  标注；路线图不再把首次发布称作 1.0 唯一剩余项。
 
 ### [0.1.1] 2026-09-26
 

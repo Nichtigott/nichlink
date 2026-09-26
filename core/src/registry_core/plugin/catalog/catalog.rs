@@ -224,6 +224,22 @@ impl PluginCatalog {
 
     /// Check an embedded manifest against the lock record for its source.
     /// 将嵌入注册面的 manifest 与对应来源锁文件中的记录比对。
+    ///
+    /// The seven identity fields must match exactly. The three provenance fields
+    /// the parser accepts as an extension — signature, key fingerprint, and
+    /// revocation-list snapshot — are *expectations*: a record that carries one
+    /// pins it, and a record written without it (the seven-field form, which is
+    /// what a host's own plugin UI writes) leaves it to the signature check.
+    /// Comparing them for equality instead made the seven-field official record
+    /// unsatisfiable in the only direction that matters: it can equal a manifest
+    /// with no signature, and an official manifest with no signature is refused
+    /// by every trust policy that has a trust root, so an official plugin could
+    /// not be admitted end to end through a lock the host itself wrote.
+    /// 七个身份字段必须完全一致。解析器作为扩展接受的三个来源字段——签名、密钥指纹与撤销列表
+    /// 快照——是**期望**：记录携带某个值就把它钉住，记录没写（七字段形式，宿主自己的插件界面写下
+    /// 的就是这种）就交给签名校验。此前用相等比较它们，会让七字段的官方记录在唯一要紧的方向上无法
+    /// 满足：它只能等于一个没有签名的 manifest，而没有签名的官方 manifest 会被任何配置了信任根的
+    /// 策略拒绝——于是官方插件根本无法经宿主自己写下的锁端到端准入。
     pub fn contains_manifest(&self, manifest: PluginManifest) -> bool {
         self.records.iter().any(|record| {
             record.source == manifest.source
@@ -233,9 +249,18 @@ impl PluginCatalog {
                 && record.crate_name == manifest.crate_name
                 && record.checksum == manifest.checksum
                 && record.mode == manifest.mode
-                && record.signature.as_deref() == manifest.signature
-                && record.public_key_fingerprint.as_deref() == manifest.public_key_fingerprint
-                && record.revocation_list.as_deref() == manifest.revocation_list
+                && record
+                    .signature
+                    .as_deref()
+                    .is_none_or(|recorded| Some(recorded) == manifest.signature)
+                && record
+                    .public_key_fingerprint
+                    .as_deref()
+                    .is_none_or(|recorded| Some(recorded) == manifest.public_key_fingerprint)
+                && record
+                    .revocation_list
+                    .as_deref()
+                    .is_none_or(|recorded| Some(recorded) == manifest.revocation_list)
         })
     }
 }
@@ -269,6 +294,51 @@ mod tests {
         let error = PluginCatalog::parse(lock).unwrap_err().to_string();
         assert!(error.contains("line 2"));
         assert!(error.contains("duplicates package identity"));
+    }
+
+    /// The seven-field record leaves the three provenance fields to the
+    /// signature check, and a record that carries one pins it.
+    /// 七字段记录把三个来源字段交给签名校验；携带某个值的记录则把它钉住。
+    fn manifest() -> PluginManifest {
+        PluginManifest {
+            name: "canvas",
+            crate_name: "canvas",
+            version: "1.0.0",
+            framework: crate::FrameworkId::new("com.nichui.editor"),
+            source: PluginSource::Official,
+            mode: PluginMode::Extension,
+            checksum: "sha256:a",
+            signature: Some("sig-v1"),
+            public_key_fingerprint: Some("key-v1"),
+            revocation_list: Some("official-2026"),
+        }
+    }
+
+    #[test]
+    fn a_record_without_provenance_fields_does_not_pin_them() {
+        let bare = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
+        )
+        .expect("a seven-field lock parses");
+        assert!(
+            bare.contains_manifest(manifest()),
+            "a record the host's own UI wrote must match a signed official manifest"
+        );
+
+        let pinned = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
+        )
+        .expect("a ten-field lock parses");
+        assert!(pinned.contains_manifest(manifest()));
+
+        let other = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
+        )
+        .expect("a ten-field lock parses");
+        assert!(
+            !other.contains_manifest(manifest()),
+            "a record that names a signature must pin it"
+        );
     }
 
     #[test]

@@ -56,7 +56,16 @@ impl App {
                 MouseEventKind::Drag(MouseButton::Left) if self.graph_dragging_divider => {
                     self.resize_graph_split(column)
                 }
-                MouseEventKind::Up(MouseButton::Left) => self.graph_dragging_divider = false,
+                MouseEventKind::Up(MouseButton::Left) => {
+                    // The widget reports a node click on release, so the release
+                    // has to reach it; forwarding only the press left every click
+                    // half-finished in the widget's internal drag state.
+                    // 控件在松开时报告节点点击，因此松开事件必须到达它；只转发按下会让每次点击都
+                    // 停在控件内部的拖拽状态里。
+                    #[cfg(feature = "node-graph")]
+                    self.forward_mouse_to_flow(kind, column, row);
+                    self.graph_dragging_divider = false;
+                }
                 MouseEventKind::Down(MouseButton::Left) => self.handle_overlay_click(column, row),
                 _ => {}
             }
@@ -116,9 +125,9 @@ impl App {
         }
     }
 
-    /// Hand a mouse event to the call tree's widget when it is the drawer, and
-    /// turn the widget's own `NodeClicked` into a cursor move.
-    /// 当调用树由控件绘制时，把鼠标事件交给它，并把控件自己的 `NodeClicked` 变成游标移动。
+    /// Hand a mouse event to the call tree's widget, and turn the widget's own
+    /// `NodeClicked` into a cursor move.
+    /// 把鼠标事件交给调用树的控件，并把控件自己的 `NodeClicked` 变成游标移动。
     ///
     /// The widget owns its viewport, so pan and zoom are its gestures, not ours;
     /// what stays ours is what the cursor *means*, which is why a click comes
@@ -130,10 +139,7 @@ impl App {
         let Some(Overlay::Search(search)) = self.overlay.as_ref() else {
             return false;
         };
-        if !search.graph_mode
-            || search.tree_canvas
-            || !self.hot.graph_tree_area.contains((column, row).into())
-        {
+        if !search.graph_mode || !self.hot.graph_tree_area.contains((column, row).into()) {
             return false;
         }
         let event = crossterm::event::MouseEvent {
@@ -194,21 +200,14 @@ impl App {
             && search.graph_mode
         {
             if self.hot.graph_tree_area.contains(point) {
-                // The tree is a canvas, not a list: a click lands on the box the
-                // reader aimed at, which the drawing published as it drew.
-                // 调用树是画布而不是清单：点击落在读者瞄准的那个盒子上，而该矩形由绘制时公布。
-                let landed = self
-                    .hot
-                    .graph_tree_boxes
-                    .iter()
-                    .find(|(rect, _)| rect.contains(point))
-                    .map(|(_, index)| *index);
+                // A click that the widget did not claim still gives the tree the
+                // focus; which node is under the pointer is the widget's answer,
+                // reported above as `NodeClicked`.
+                // 控件没有认领的点击仍把焦点交给树；指针下是哪个节点由控件回答，在上面的
+                // `NodeClicked` 里报告。
                 if let Some(Overlay::Search(search)) = self.overlay.as_mut() {
                     search.graph_focus = 0;
                     search.outline_focus = true;
-                    if let Some(index) = landed {
-                        search.outline_selected = index;
-                    }
                 }
                 return;
             }

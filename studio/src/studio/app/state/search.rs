@@ -7,21 +7,6 @@ use nichlink_run_method::NodeId;
 /// 一次或两次查询的搜索会话状态，含调用图导航。
 #[derive(Clone, Debug, Default)]
 pub struct SearchState {
-    /// How the call tree is drawn: `None` follows the panel's shape,
-    /// `Some(true)` forces the top-down layout and `Some(false)` forces
-    /// left-to-right. A narrow pane fits one column horizontally, and one column
-    /// has no edges, so the default falls back to top-down there.
-    /// 调用树怎么画：`None` 跟随面板形状，`Some(true)` 强制自上而下，`Some(false)` 强制
-    /// 从左到右。窄面板横向只放得下一列，而一列没有边，因此默认在那里回退为自上而下。
-    pub tree_vertical: Option<bool>,
-    /// Whether the call tree is drawn by the hand-drawn canvas rather than the
-    /// `rataflow` widget, and only when the `node-graph` feature is linked. The
-    /// canvases are the exception because they draw what the kernel knows and fit
-    /// the narrowest column; the widget is what a reader sees first.
-    /// 调用树是否由手绘画布而不是 `rataflow` 控件绘制；仅在链接 `node-graph` 特性时存在。
-    /// 画布是例外，因为它画的正是内核知道的东西、也塞得进最窄的列；读者首先看到的是控件。
-    #[cfg(feature = "node-graph")]
-    pub tree_canvas: bool,
     /// Primary search text.
     /// 主搜索文本。
     pub query: String,

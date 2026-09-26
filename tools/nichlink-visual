@@ -50,7 +50,6 @@ scene_marker() {
         home) echo "FACE INSPECTOR" ;;
         search) echo "/ $QUERY" ;;
         graph) echo "CALL TREE" ;;
-        graph-canvas) echo "CALL TREE" ;;
         tree-demo) echo "CALL TREE" ;;
         tree-steps) echo "CALL TREE" ;;
         tree) echo "CALL TREE" ;;
@@ -72,7 +71,6 @@ scene_keys() {
     case "$1" in
         home | search) echo "" ;;
         graph) echo "Enter" ;;
-        graph-canvas) echo "Enter g" ;;
         tree-demo) echo "Enter" ;;
         tree-steps) echo "Enter Down Down Right" ;;
         tree) echo "Enter Tab" ;;
@@ -82,7 +80,7 @@ scene_keys() {
 }
 
 scenes() {
-    echo "home search add-form graph graph-canvas tree-demo tree-steps tree data"
+    echo "home search add-form graph tree-demo tree-steps tree data"
 }
 
 usage() {

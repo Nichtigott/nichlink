@@ -14,12 +14,14 @@ documentation = "https://docs.rs/nichlink-studio"
 default-run = "nichlink-studio"
 
 [features]
-# The call tree is drawn by the `rataflow` widget by default; the hand-drawn
-# canvases in `ui/graph` stay compiled in and one key (`g`) away, because they are
-# the ones that draw what the kernel knows (evidence kinds, cut counts, the cursor
-# versus the focus) and the ones that fit a seven-cell column.
-# 调用树默认由 `rataflow` 控件绘制；`ui/graph` 里的手绘画布仍然编入并只差一个按键（`g`）：
-# 画的正是内核知道的东西（证据种类、裁剪计数、游标与焦点的区分），也是塞得进七格宽列的那个。
+# One drawer: the call tree is drawn by the `rataflow` node-graph widget, and
+# `node-graph` is what links it. The feature is on by default because the widget
+# is what a reader sees; without it Studio still compiles and the call-tree panel
+# renders its border plus a line saying the feature is needed, rather than a blank
+# pane or a panic.
+# 只有一个绘制方：调用树由 `rataflow` 节点图控件绘制，`node-graph` 就是链接它的开关。该特性
+# 默认开启，因为读者看到的就是这个控件；关闭后 Studio 仍能编译，调用树面板会画边框并加一行
+# 说明需要该特性，而不是留一块空白面板或 panic。
 default = ["node-graph"]
 node-graph = ["dep:rataflow"]
 # Test-only fixtures for a checkout, not a published capability. The fixture host
@@ -59,17 +61,17 @@ ratatui = { version = "0.30", default-features = false, features = [
     "crossterm",
     "layout-cache",
 ] }
-# The node-editor widget, behind a non-default feature: it is a 0.1.0 dependency
-# with its own opinion about who owns pan, zoom and selection, so it runs beside
-# the hand-drawn canvas instead of replacing it until it earns the place.
-# 节点编辑器控件，放在非默认特性之后：它是 0.1.0 的依赖，对"平移、缩放、选择归谁"有自己的
-# 主张，因此它与手绘的画布并存，而不是直接取代它。
+# The node-editor widget that draws the call tree: a 0.1.0 dependency with its own
+# opinion about who owns pan, zoom and selection, linked by the default
+# `node-graph` feature and optional so a build without it still compiles.
+# 绘制调用树的节点编辑器控件：0.1.0 的依赖，对"平移、缩放、选择归谁"有自己的主张，由默认
+# 开启的 `node-graph` 特性链接；设为可选，使不带它的构建仍能编译。
 rataflow = { version = "0.1", optional = true, default-features = false, features = [
     "crossterm",
 ] }
-nichlink-run-method = { path = "../run_method", version = "0.1.1", features = ["authoring"] }
-nichlink-debug-method = { path = "../debug_method", version = "0.1.1" }
-nichlink-build-method = { path = "../build_method", version = "0.1.1" }
+nichlink-run-method = { path = "../run_method", version = "0.1.2", features = ["authoring"] }
+nichlink-debug-method = { path = "../debug_method", version = "0.1.2" }
+nichlink-build-method = { path = "../build_method", version = "0.1.2" }
 
 [[bin]]
 name = "nichlink-studio"

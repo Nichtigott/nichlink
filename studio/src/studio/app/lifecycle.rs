@@ -62,7 +62,6 @@ impl App {
             hot: HotZones::default(),
             #[cfg(feature = "node-graph")]
             graph_flow: None,
-            tree_top_down: false,
             tree_offset: 0,
             split_percent: 45,
             graph_split_percent: 60,

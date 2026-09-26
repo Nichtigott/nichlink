@@ -54,3 +54,13 @@ pub use nichlink_macro::face_trait_labels_or as __face_trait_labels_or;
 pub use authoring::*;
 pub use call_report::*;
 pub use runtime::*;
+
+// The trace artifact is the one document a host hands to a separate reader, so
+// its entry points are worth a crate-root path: `runtime::trace::*` stays the
+// module path, and this is the short one the design document shows.
+// 写入方交给独立读取方的唯一文档就是 trace artifact，因此它的入口值得一条 crate 根部路径：
+// `runtime::trace::*` 仍是模块路径，这一条是设计文档里写的那条短路径。
+pub use runtime::trace::artifact::{
+    TRACE_ARTIFACT_VERSION, TraceArtifact, TraceArtifactError, TraceFrame, read_trace_artifact,
+    trace_artifact_path, write_trace_artifact,
+};

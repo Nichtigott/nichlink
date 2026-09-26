@@ -40,18 +40,14 @@ impl App {
                 KeyCode::Char('m') => self.load_mir_snapshot_report(),
                 KeyCode::Tab => advance_graph_focus(&mut search),
                 KeyCode::BackTab => retreat_graph_focus(&mut search),
-                // In the single-pane graph the arrows are free, so they mean what
-                // the drawing says: ← walks upstream (who calls this), → walks
-                // downstream (what this calls). With a comparison pane the same
-                // keys keep switching sides, because there is no room for both.
-                // 单面板调用图里方向键是空闲的，因此它们表示画面上写着的东西：← 走上游
-                // （谁在调它），→ 走下游（它调用了谁）。开了对比面板时这两个键仍用于切换
-                // 左右侧，因为放不下两种含义。
-                // `[`/`]` move the split, `v` cycles the tree layout, and `g`
-                // swaps the hand-drawn canvas for the `rataflow` widget.
-                // `[`/`]` 移动分栏，`v` 循环切换树的排布，`g` 在手绘画布与 `rataflow` 间切换。
-                KeyCode::Char('v') if search.graph_focus == 0 => self.cycle_tree(&mut search),
-                KeyCode::Char('g') if search.graph_focus == 0 => self.toggle_drawer(&mut search),
+                // The one drawer runs the calls down the screen, so the arrows
+                // mean what the drawing says: ↓ walks downstream (what this
+                // calls), ↑ walks upstream (who calls this), and ←/→ move between
+                // the lanes of one band.
+                // 唯一的绘制方把调用沿屏幕向下排，因此方向键表示画面上写着的东西：↓ 走下游
+                // （它调用了谁），↑ 走上游（谁在调它），←/→ 在同一条带的车道间移动。
+                // `[`/`]` move the split.
+                // `[`/`]` 移动分栏。
                 KeyCode::Char('[') | KeyCode::Char(']') if search.graph_focus == 0 => {
                     self.shift_graph_split(key.code == KeyCode::Char('['))
                 }
@@ -112,12 +108,12 @@ impl App {
                     }
                 }
                 // No typing arm here on purpose. In this page the letters are
-                // commands (`m`, `v`, `g`, `e`), and a catch-all typing arm would
+                // commands (`m`, `e`), and a catch-all typing arm would
                 // shadow them — which is exactly what it did: `e` was listed after
                 // it and could never fire. The query is edited in the list page,
                 // which `/` returns to, so one mode owns the letters and the other
                 // owns the text.
-                // 这里有意不设输入分支。本页的字母是命令（`m`、`v`、`g`、`e`），而一个兜底的输入
+                // 这里有意不设输入分支。本页的字母是命令（`m`、`e`），而一个兜底的输入
                 // 分支会遮蔽它们——事实正是如此：`e` 排在它后面，永远轮不到。查询在列表页编辑，
                 // `/` 回到那里，因此一种模式拥有字母、另一种拥有文本。
                 _ => {}

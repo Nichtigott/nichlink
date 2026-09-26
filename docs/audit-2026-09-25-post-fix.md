@@ -509,11 +509,19 @@ package root`。
   `nichlink check --json /nonexistent-xyz` → 退出 1、stdout 为空、stderr 一行
   `nichlink: cannot resolve …`；而 `cli/README.md:40-43` 承诺失败也把同一份文档写到 stdout。
   修法：解析失败也发一份带单条诊断的文档，或收窄 README。
+  **已修（2026-09-26）:** `check --json` 现在先写出 `nichlink.build-diagnostics/1` 文档（含一条
+  `phase=resolve` 诊断）再返回错误；`grafts --json` 与 `explain --json`/`--overlay --json` 同轮
+  一并修掉。钉子在 `cli::check_json_reports_a_resolution_failure_as_json`、
+  `::grafts_json_reports_a_resolution_failure_as_json`、`::explain_json_reports_a_resolution_failure_as_json`。
 - **22. `nichlink new --path <不存在>` 报成功并写出不可用的清单** `Angle: surfaces` —
   `cli/src/commands/new.rs:25-29` 把 `canonicalize` 的失败吞掉并写回原始字符串。`[实测]`：
   `--path /nonexistent-checkout broken` → 退出 0、`created binary project at …`，而清单里写着
   `path = "/nonexistent-checkout/run_method"`；`--git ""` 同样退出 0。修法：要求 `--path` 能
   canonicalize 到一个含 `core/` + `run_method/` 的目录，并要求 `--git` 非空。
+  **已修（2026-09-26）:** `new` 在写任何东西之前先解析 `--path` 并要求它是一个 NichLink 检出
+  （`cli/src/commands/new.rs`，判定放在 CLI 而不是 `build_method`，因为打包后的 CLI 要对着已
+  发布的核心编译）。钉子 `new_command::tests::only_a_real_checkout_is_accepted`，外加实测：
+  `--path /tmp` 报 "is not a NichLink checkout" 且不创建目录。
 - **23. MCP 的 JSON-RPC 收尾三处不合规** `Angle: surfaces` — `mcp/src/protocol.rs:96-116`。
   `[实测]`：`{"method":"some/notification"}`（无 id）被**回复**了；`{"id":5,"method":
   "notifications/initialized"}` 反而**没有**任何输出（客户端会一直等）；缺 `"jsonrpc"` 的请求被
@@ -529,13 +537,22 @@ package root`。
   `fetch_add` 在 `pending` 锁之前，所以并发安装中后拿到锁的那个（可能是更低的一代）获胜，
   `install` 返回 N 而激活发布 N-1。`[代码]`。修法：在锁内分配/赋值，或只在
   `generation > pending.generation` 时覆盖。
+  **已修（2026-09-26）:** 代际改为在 `pending` 锁内分配。钉子
+  `fault_matrix::the_highest_generation_is_the_one_that_stays_pending`（8 线程 × 64 轮，每轮用
+  屏障让编号顺序与取锁顺序独立）；旧顺序下第 0 轮即红：pending 6，而发出的最大代际是 8。
 - **27. 激活失败对就绪轮询不可见，旧代码继续服务** `Angle: plugin` — `slot_state.rs:71-80`、
   `lazy_wasm.rs:148-152`。`[实测]`（委派审计）：`install bad -> Ok(2)`，首次 `call` 报
   `Health(…)`，随后 `is_loaded=Ok(true) generation=Ok(Some(1))`，再次 `call` 返回**旧的**
   `Ok([122,122])`。修法：把激活错误留在槽状态里，或让 `is_loaded` 对比已安装代际。
+  **已修（2026-09-26）:** 槽状态记下最近一次激活失败，`WasmPluginTable::activation_error`
+  报告它，成功的激活清除它（`lazy_wasm.rs`、`lazy_wasm/slot_state.rs`）。钉子
+  `fault_matrix::a_failed_activation_is_observable`；关掉记录即红。
 - **28. 进程通道没有工件字节上限** `Angle: plugin` — `plugin-host/src/process.rs:108-120`：
   `ProcessLimits` 只有超时/输入/输出，`load` 先 `fs::read` 整个可执行文件再比较，还多留一份副本。
   `[代码]`。修法：先按 `metadata.len()` 与声明上限比较。
+  **已修（2026-09-26）:** `load` 先比对 `metadata.len()`，一致才读。钉子
+  `process_load_cost::a_wrong_length_executable_is_refused_without_reading_it`（计数分配器实测：
+  修前一个 256 MiB 长度不符的文件峰值分配 268 435 478 字节，修后不足 1 MiB）。
 - **29. `call_tree` 的泳道分配按树深递归，`limit`/`depth` 由调用方给** `Angle: kernel` —
   `core/.../mir/call_tree.rs:359-405`。树内调用方都传 `CALL_TREE_NODES=16`，因此是潜伏的公开 API
   风险而非现实崩溃。修法：显式栈的迭代后序。
@@ -660,6 +677,11 @@ its test-only exemption is by file name, and it walks only `*/src`, so `build.rs
 never measured and `crate_directories` sees nothing deeper than two levels.
 未修、仍开放的门禁发现只有一条：尺寸棘轮的作用域（第 8 条）——它按文件名豁免测试文件，且只遍历
 `*/src`，因此 `build.rs` 从不被度量，`crate_directories` 也看不到深度超过两层的 `src/`。
+**已修（2026-09-26）:** 两条都不再成立。`conventions/src/size.rs` 现在也度量 crate 根的
+`build.rs`，而"看起来像测试"的文件只有确实挂在 `#[cfg(test)]` 之后才豁免（钉子
+`size::the_crate_root_build_script_is_measured`、`::an_unmounted_test_shaped_file_is_measured`、
+`::a_mounted_test_file_is_exempt`）；`crate_directories` 改为从根清单的 `members` 推导，因此任意
+深度的成员都被覆盖（`conventions::tests::a_deeply_nested_member_is_a_crate_directory`）。
 
 
 ## Fixes landed while this audit was running / 审核进行期间已落地的修复

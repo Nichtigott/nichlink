@@ -36,7 +36,12 @@ use support::host_manifest;
 use std::cell::RefCell;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
-use nichlink_debug_method::{CallEvidence, CallTrace, MirCall, MirGraph};
+use nichlink_debug_method::{CallEvidence, CallTrace, MirGraph};
+// `MirCall` is named only by the widget drawer's compiler-candidate query, so it
+// is imported with that feature.
+// `MirCall` 只被控件绘制方的编译器候选查询命名，因此与该特性一同导入。
+#[cfg(feature = "node-graph")]
+use nichlink_debug_method::MirCall;
 use nichlink_run_method::{
     NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
     face_field,
@@ -111,14 +116,6 @@ pub struct App {
     /// 重置视口。键记录它是从哪棵树构建的，因此重新居中会重建它，而游标移动不会。
     #[cfg(feature = "node-graph")]
     pub graph_flow: Option<(String, usize, rataflow::Flow)>,
-    /// Which model axis the call tree was last drawn down the screen: `true` when
-    /// levels run downwards (the widget, or the top-down canvas), `false` when
-    /// they run across it. The arrow keys read this, so they mean what the picture
-    /// shows instead of what the model is called.
-    /// 调用树上次把哪个模型轴画在屏幕向下的方向：`true` 表示层向下延伸（控件，或自上而下的
-    /// 画布），`false` 表示层横着延伸。方向键读它，因此键的含义与图一致，而不是与模型的叫法
-    /// 一致。
-    pub tree_top_down: bool,
     /// Index of the first visible tree row.
     /// 树中首个可见行的下标。
     pub tree_offset: usize,
@@ -140,6 +137,12 @@ pub struct App {
 impl App {
     /// Static candidates whose caller or callee mentions a selected function.
     /// 返回涉及所选函数的静态候选调用。
+    ///
+    /// Only the widget drawer marks these on its nodes, so it is compiled with the
+    /// `node-graph` feature; without the feature no drawing consults it.
+    /// 只有控件绘制方把它们标在节点上，因此与 `node-graph` 特性一同编译；没有该特性时没有绘制
+    /// 方需要它。
+    #[cfg(feature = "node-graph")]
     pub fn mir_candidates_for(&self, function: &str) -> Vec<&MirCall> {
         let Some(graph) = self.mir_graph.as_ref() else {
             return Vec::new();

@@ -16,8 +16,8 @@ documentation = "https://docs.rs/nichlink-run-method"
 authoring = ["nichlink-core/syntax", "dep:syn"]
 
 [dependencies]
-nichlink-core = { path = "../core", version = "0.1.1" }
-nichlink-macro = { path = "../macro", version = "0.1.1" }
+nichlink-core = { path = "../core", version = "0.1.2" }
+nichlink-macro = { path = "../macro", version = "0.1.2" }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
 
 [lib]

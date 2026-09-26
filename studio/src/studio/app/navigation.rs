@@ -100,12 +100,6 @@ pub(super) fn stamp_directory(
 /// disagree about how wide the tree may get.
 /// 加宽或收窄调用树在页面上所占的份额：每次一步，且与拖动分隔线使用同一范围，因此按键与鼠标
 /// 不会对"树最多能多宽"各说一套。
-///
-/// This exists because a narrow terminal fits a single call-tree column, and one
-/// column has no edges: without a way to give the tree room, the panel reports a
-/// chain of one and the reader believes it.
-/// 它存在的理由：窄终端只放得下调用树的一列，而一列没有边；如果没有办法给树腾地方，面板就会
-/// 报告一条只有一个节点的链，而读者会相信它。
 impl App {
     pub(super) fn shift_graph_split(&mut self, narrower: bool) {
         let step: i16 = if narrower { -4 } else { 4 };
@@ -116,60 +110,6 @@ impl App {
             "tree share {}% — [ narrows it, ] widens it",
             self.graph_split_percent
         );
-    }
-}
-
-/// Cycle how the call tree is laid out: follow the panel, top-down, left-to-right,
-/// then follow the panel again. The panel names the mode it ended up in, so the
-/// key needs no other feedback.
-/// 循环切换调用树的排布：跟随面板、自上而下、从左到右，再回到跟随面板。面板会写出它最终采用的
-/// 模式，因此这个按键不需要别的反馈。
-impl App {
-    pub(super) fn cycle_tree(&mut self, search: &mut SearchState) {
-        #[cfg(feature = "node-graph")]
-        {
-            // Layout is a canvas idea: the widget lays the graph out itself, so
-            // asking for a layout means asking for the canvas.
-            // 排布是画布的概念：控件自己排版，因此要求排布就等于要求画布。
-            search.tree_canvas = true;
-        }
-        search.tree_vertical = match search.tree_vertical {
-            None => Some(true),
-            Some(true) => Some(false),
-            Some(false) => None,
-        };
-        self.event = match search.tree_vertical {
-            None => "call tree: panel decides".to_owned(),
-            Some(true) => "call tree: top-down".to_owned(),
-            Some(false) => "call tree: left-to-right".to_owned(),
-        };
-    }
-}
-
-/// Switch the call tree between the hand-drawn canvas and the `rataflow` widget.
-/// 在手绘画布与 `rataflow` 控件之间切换调用树。
-///
-/// Without the feature the library is not linked, so the key says that instead of
-/// doing nothing: a binding that silently does nothing is worse than one that
-/// explains itself.
-/// 没有该特性时库未链接，因此这个按键会说明这一点而不是什么都不做：静默无动作的绑定比会自我
-/// 解释的绑定更糟。
-impl App {
-    pub(super) fn toggle_drawer(&mut self, search: &mut SearchState) {
-        #[cfg(feature = "node-graph")]
-        {
-            search.tree_canvas = !search.tree_canvas;
-            self.event = if search.tree_canvas {
-                "call tree: hand-drawn canvas".to_owned()
-            } else {
-                "call tree: rataflow widget".to_owned()
-            };
-        }
-        #[cfg(not(feature = "node-graph"))]
-        {
-            let _ = search;
-            self.event = "call tree: hand-drawn canvas (built without node-graph)".to_owned();
-        }
     }
 }
 

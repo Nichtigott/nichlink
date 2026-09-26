@@ -6,6 +6,28 @@ Design only; no `.rs` file is edited and no git command is run. Citations are
 `docs/design-graft-record-and-health-check.md`; an English-only body is
 deliberate (same choice as that file), not an oversight.
 
+**Status (2026-09-26) / 状态.** Slice 1 is **built**: the pure document
+(`run_method/src/runtime/trace/artifact/artifact.rs`), its parser and interner
+(`artifact/parse.rs`), and the file half (`artifact/io.rs`) — `TraceArtifact`
+with `from_trace`/`render`/`parse`/`into_trace`, `trace_artifact_path`,
+`write_trace_artifact`, `read_trace_artifact` — plus `TRACE_DIR`/`TRACE_FILE`/
+`TRACE_FILE_ENV` in the kernel lexicon, re-exported at the `run_method` crate
+root. The Studio loader (§3.4–3.5) is slice 2 and remains unbuilt; §3.6's
+"no `.rs` file is edited" sentence describes the design's own moment, and this
+paragraph is the correction.
+The citations below were measured at that moment; re-measured against `0.1.1`
+they had drifted, so a reader should take the names as the anchor and the line
+numbers as approximate: `TraceMode::parse` 121→142, `CallSite.function` 11→15,
+`LocalKind::label` 14–22→25, `Observation::label` 13–18→19, `NodeId`
+`Display`/`FromStr` 109/150→134/178, `local_value.rs` value 20→28, `edges.rs`
+label/source 19,20→25,28, `render_tree` 284→296, `matching_locals` 164–200→191,
+`GRAFT_PLAN_FILE` 76–80→94, and the lexicon published-value test now lives in
+`conventions`-checked `lexicon_tests.rs`. `filesystem.rs::atomic_write` 18–27
+held.
+**状态（2026-09-26）。** 第一片**已建成**：纯文档、解析器与驻留表、文件一半，外加内核词典里的
+三个常量，并在 `run_method` 根部重导出。Studio 的加载方（§3.4–3.5）是第二片，尚未建。下面引用
+的行号是设计当时实测的；对着 `0.1.1` 重测已经漂移，因此读者应把名字当锚、把行号当近似值。
+
 **Verdict / 结论.** Full ingest is a **1.x** feature. 1.0 should keep the demo
 label it already has (`docs/roadmap-1.0.md:61`) and add nothing but a one-line
 regression test; the concrete artifact API below is the 1.x target, and the 1.0
@@ -50,17 +72,24 @@ through every frame, local, and edge. A derived `Deserialize` cannot produce a
 This is the strongest single argument against "just add serde".
 
 ### 1.4 Studio's sample is inert, not merely fake
-`sample_live_trace()` records **frames only** — two `with_at` calls and no
-`local`, `transform`, or `return_value` (`studio/src/studio/app/sample.rs:15-27`).
+`sample_live_trace()` records frames only — two `with_at` calls — plus, since a
+later round, **one** observed local (`studio/src/studio/app/sample.rs:27`,
+pinned by that file's own test). The identity half below still stands; the
+"emptiness" half no longer does, and is corrected under the bullets.
+`sample_live_trace()` 只记录帧——两次 `with_at`——以及后来某一轮补上的**一个**被观测局部值
+（`studio/src/studio/app/sample.rs:27`，由该文件自己的测试钉住）。下面的身份那一半仍然成立；
+"空"那一半不再成立，已在条目下更正。
 Consequences, all verifiable:
-- `App::runtime_trace.locals()` is empty, so `graph_locals`
-  (`studio/src/studio/app/support.rs:199-211`) returns empty for every registry
-  function and the DATA panel always draws `"· no live locals captured"`
-  (`studio/src/studio/ui/graph/data.rs:38-42`). The panel shows **no** values,
-  sample or otherwise.
+- `graph_locals` (`studio/src/studio/app/support.rs:199-211`) filters locals by the
+  *centre function's* node, so the sample's single local is invisible for every
+  registry function and the DATA panel draws `"· no live locals captured"`
+  (`studio/src/studio/ui/graph/data.rs:38-42`) there. The panel can render the
+  sample's value only for the sample's own node, which the registry never holds.
+  （原文此处说样本不记录 locals，因此面板永远只画空状态；那一半已被后一轮修正，
+  其余仍然成立：局部值按中心函数的节点过滤，样本的节点不在注册树里。）
 - `call_evidence` returns `Live` only on an exact `(node, function)` match
   (`studio/src/studio/app/graph_queries.rs:196-204`). The sample's nodes come
-  from `NodeId::from_path("<studio-sample>", …)` (`sample.rs:16,21`), while
+  from `NodeId::from_path("<studio-sample>", …)` (`sample.rs:16,23`), while
   registry nodes come from `NodeId::from_namespaced_path(...)`
   (`run_method/src/macros/face_registration.rs:45-49`); the two hash domains
   differ, so the match never happens.
@@ -68,10 +97,11 @@ Consequences, all verifiable:
   sample's node (`graph_queries.rs:152-168`), so its two fake frames never enter
   the graph either.
 So the `LIVE SAMPLE` legend (`studio/src/studio/ui/panels.rs:17-33`) and the
-`· built-in sample ·` panel title (`ui/graph/data.rs:114`) label a value that
-has no visible effect at all. The honest 1.0 statement is "no trace attached",
-not "sample values shown".（样例只记录帧、不记录值；其 `NodeId` 与注册树不同域，
-LIVE 永不点亮；其边也进不了图。因此现有标注标的是一个完全不可见的值。）
+`· built-in sample ·` panel title (`ui/graph/data.rs:114`) label a trace that no
+registry node can ever select. The honest 1.0 statement is "no trace attached",
+not "sample values shown" — a local that exists but cannot be reached is not a
+visible effect.（因此那两处标注标的是一条任何注册节点都选不中的 trace；"看得见的效果"
+不成立，但"看得见"也不成立。）
 
 ### 1.5 Plain answer: can a host hand its trace to a separate Studio process today?
 **No.** A `cargo install`ed `nichlink-studio` is a different process; the trace
