@@ -114,14 +114,19 @@ to its designed waiting state.
   refused; the DATA panel drops `· built-in sample ·` and says `no trace
   attached` or the mismatch reason. A session can no longer label evidence it
   does not have.
-- Studio reads the host crate's own package name from the target `Cargo.toml`
-  (`[package] name`) and authors under it, instead of defaulting to
-  `nichlink.default`. The two ends have to agree — the host's build script stamps
-  `env!("CARGO_PKG_NAME")` as the identity namespace — and a session that rebuilt
-  the tree under a different name put every recorded `NodeId` (a trace, a graft
-  record) out of reach. `NICH_LINK_NAMESPACE` still overrides both ends verbatim,
-  and a manifest with no `[package]` (a virtual workspace root) still falls back
-  to the documented default.
+- Studio reads the host crate's own package name and authors under it, instead of
+  defaulting to `nichlink.default`. The two ends have to agree — the host's build
+  script stamps `env!("CARGO_PKG_NAME")` as the identity namespace — and a session
+  that rebuilt the tree under a different name put every recorded `NodeId` (a
+  trace, a graft record) out of reach. The name now comes from Cargo
+  (`nichlink_build_method::package_name`), the same authority the CLI and the MCP
+  bridge use, rather than from a literal `[package] name` line scan: TOML's dotted
+  `package.name = "x"` form is the same table without a `[package]` header, so the
+  scan found nothing and Studio authored such a project in the wrong identity
+  domain. `NICH_LINK_NAMESPACE` still overrides everything verbatim, and a
+  manifest Cargo names no package for (a virtual workspace root) still falls back
+  to the documented default — authoring creates a tree, so a default is meaningful
+  there.
 - Studio's hand-drawn call-tree canvases are gone: `rataflow` (the `node-graph`
   feature, default on) is the only call-tree drawer, 1756 lines of canvas code
   and their geometry tests went with them, and the `g` (drawer) and `v` (layout)
@@ -133,6 +138,14 @@ to its designed waiting state.
 
 ### Fixed
 
+- Studio derived the wrong identity namespace for a TOML manifest that names its
+  package in the dotted `package.name = "x"` form: that is the same table as
+  `[package]`, a line scan sees no header, and the session fell back to
+  `nichlink.default` while the host compiled under the real name — so the same
+  faces existed in two identity domains and a trace or graft record written on one
+  side could not resolve on the other. The literal reader is gone and Studio takes
+  Cargo's answer, one subprocess per project adoption (the adopted namespace is
+  cached in the project context, so no write path pays for it).
 - The trace artifact's writer creates the directory it writes into. The
   documented host usage pairs `write_trace_artifact` with `trace_artifact_path`,
   and on a fresh project that path's `.nichlink/traces/` does not exist yet: the
@@ -875,11 +888,14 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `TRACE: none`、在 artifact 通过身份检查时读 `LIVE`、在被拒绝时读 `TRACE mismatch`；DATA
   面板不再有 `· built-in sample ·`，而是显示 `no trace attached` 或拒绝原因。会话再也不能为
   自己并不拥有的证据贴标签。
-- Studio 从目标 `Cargo.toml` 的 `[package] name` 读出宿主 crate 自己的包名，并在它之下创作，
-  不再默认 `nichlink.default`。两端必须一致——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成
-  身份命名空间——而一个在别的名字下重建注册树的会话会让每个已记录的 `NodeId`（trace、graft
-  记录）都指不到东西。`NICH_LINK_NAMESPACE` 仍原样覆盖两端，而没有 `[package]` 的清单
-  （虚拟工作区根）仍回落到文档化的默认值。
+- Studio 读出宿主 crate 自己的包名，并在它之下创作，不再默认 `nichlink.default`。两端必须一致
+  ——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成身份命名空间——而一个在别的名字下重建注册树的
+  会话会让每个已记录的 `NodeId`（trace、graft 记录）都指不到东西。包名现在来自 Cargo
+  （`nichlink_build_method::package_name`），也就是 CLI 与 MCP 桥所用的同一个权威，而不再来自对
+  `[package] name` 的逐行字面扫描：TOML 的点式写法 `package.name = "x"` 是同一张表却没有
+  `[package]` 表头，扫描什么也找不到，于是 Studio 把这样的项目创作在错误的身份域里。
+  `NICH_LINK_NAMESPACE` 仍原样覆盖一切，而 Cargo 说不出包名的清单（虚拟工作区根）仍回落到文档化
+  的默认值——创作是在创建一棵树，默认值在那里是有意义的。
 - Studio 的手绘调用树画布已删除：`rataflow`（`node-graph` 特性，默认开启）成为唯一的调用树
   绘制者，1756 行画布代码与它们的几何测试随之消失，`g`（切换绘制者）与 `v`（切换排布）两个按键
   不再存在。未链接 `node-graph` 的构建保留面板，并说明这棵树需要哪个特性，而不是什么都不画。
@@ -888,6 +904,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- Studio 对以点式 `package.name = "x"` 命名包的 TOML 清单推导出**错误的**身份命名空间：那是与
+  `[package]` 相同的表，逐行扫描看不到表头，于是会话回落到 `nichlink.default`，而宿主在真实包名
+  之下编译——同一批面因此存在于两个身份域里，一侧写下的 trace 或 graft 记录在另一侧解析不了。
+  字面读取方已删除，Studio 改为取 Cargo 的答案，每次采纳项目一次子进程（已采纳的命名空间缓存在
+  项目上下文里，因此没有写入路径为它付代价）。
 - trace artifact 的写入方创建自己要写入的目录。文档化的宿主用法把 `write_trace_artifact` 与
   `trace_artifact_path` 配成一对，而在一个全新的项目里那条路径的 `.nichlink/traces/` 还不存在：
   写入以 "No such file or directory" 失败，而且消息点名的是写入方自己的临时文件，而不是缺失的

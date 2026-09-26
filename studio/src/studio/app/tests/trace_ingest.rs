@@ -91,16 +91,24 @@ fn fixture(label: &str) -> Fixture {
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
     std::fs::write(&control, CONTROL_SOURCE).expect("write control face");
     std::fs::write(&rule, RULE_SOURCE).expect("write rule");
+    // A library target, because the fixture is asked about through Cargo now and
+    // `cargo metadata` refuses a manifest with no target — which is what a real
+    // host has anyway.
+    // 一个库目标，因为本夹具现在要经 Cargo 询问，而 `cargo metadata` 拒绝没有目标的清单——真实
+    // 宿主本来也有。
+    std::fs::write(root.join("src/lib.rs"), "// host entry\n").expect("write library target");
     let manifest = root.join("Cargo.toml");
     std::fs::write(
         &manifest,
         format!("[package]\nname = \"ingest-{label}\"\nversion = \"0.1.0\"\n"),
     )
     .expect("write manifest");
-    // The namespace comes from the manifest, exactly as a launched session takes
-    // it, so this test pins the chain a host relies on.
-    // 命名空间来自清单，与已启动会话取得它的方式一致，因此本条测试钉住宿主所依赖的那条链。
-    let name = package_name(&manifest).expect("the fixture manifest names its package");
+    // The namespace comes from Cargo's answer for the manifest, exactly as a
+    // launched session takes it, so this test pins the chain a host relies on.
+    // 命名空间来自 Cargo 对该清单的回答，与已启动会话取得它的方式一致，因此本条测试钉住宿主所依赖
+    // 的那条链。
+    let name = nichlink_build_method::package_name(&manifest)
+        .expect("the fixture manifest names its package");
     select_project(root.clone(), manifest, name.clone());
     let app = App::load();
     let face = app

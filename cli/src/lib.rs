@@ -178,7 +178,7 @@ pub(crate) fn resolve_package(directory: &str) -> Result<(PathBuf, String), Stri
     if !manifest.join("Cargo.toml").is_file() {
         return Err(format!("{} has no Cargo.toml", manifest.display()));
     }
-    let package = nichlink_build_method::package_name(&manifest)?;
+    let package = nichlink_build_method::package_name(&manifest.join("Cargo.toml"))?;
     Ok((manifest, package))
 }
 

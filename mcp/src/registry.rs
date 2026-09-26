@@ -64,7 +64,7 @@ fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, Strin
     if let Some(configured) = configured {
         return Ok(configured.to_owned());
     }
-    package_name(root).map_err(|error| {
+    package_name(&root.join("Cargo.toml")).map_err(|error| {
         format!(
             "cannot learn the identity namespace of {}: {error}; \
              set {} to name it explicitly",

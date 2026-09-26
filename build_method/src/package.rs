@@ -23,8 +23,19 @@
 
 use std::path::Path;
 
-/// Ask Cargo for the package name of the package rooted at `manifest`.
-/// 向 Cargo 询问以 `manifest` 为根的那个包的包名。
+/// Ask Cargo for the package name of the package whose manifest is `manifest`.
+/// 向 Cargo 询问清单为 `manifest` 的那个包的包名。
+///
+/// The parameter is the manifest **file**, not its directory: that is the thing
+/// the caller actually has — a surface that resolved a project holds a manifest
+/// path, possibly one an environment variable named — and it is also what Cargo
+/// itself takes. A directory would bake in the assumption that the manifest is
+/// called `Cargo.toml`; Cargo refuses any other name anyway ("the manifest-path
+/// must be a path to a Cargo.toml file"), so the assumption is not even useful.
+/// 参数是清单**文件**而不是它所在目录：那正是调用方实际持有的东西——解析了项目的执行面拿到的是一条
+/// 清单路径，还可能来自环境变量——而且这也是 Cargo 自己接受的取值。传目录会把"清单就叫
+/// `Cargo.toml`"这个假设烤进接口；Cargo 反正拒绝别的名字（"the manifest-path must be a path to a
+/// Cargo.toml file"），所以这个假设连用处都没有。
 ///
 /// Reading `[package] name` by hand was wrong three ways at once: it did not
 /// know TOML sections, so a `[lib]` or `[[bin]]` name key could answer first; it
@@ -41,7 +52,7 @@ pub fn package_name(manifest: &Path) -> Result<String, String> {
     let output = std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .arg("--manifest-path")
-        .arg(manifest.join("Cargo.toml"))
+        .arg(manifest)
         .output()
         .map_err(|error| format!("cannot run cargo metadata: {error}"))?;
     if !output.status.success() {
@@ -65,9 +76,9 @@ pub fn package_name(manifest: &Path) -> Result<String, String> {
         .iter()
         .find(|package| {
             package["manifest_path"].as_str().is_some_and(|path| {
-                Path::new(path)
-                    .parent()
-                    .is_some_and(|parent| same_directory(parent, manifest))
+                Path::new(path).parent().is_some_and(|parent| {
+                    same_directory(parent, manifest.parent().unwrap_or_else(|| Path::new(".")))
+                })
             })
         })
         .ok_or_else(|| {
@@ -139,7 +150,7 @@ mod tests {
             std::fs::write(manifest_dir.join("src/main.rs"), "").expect("binary source");
             std::fs::write(manifest_dir.join("src/lib.rs"), "").expect("library source");
             assert_eq!(
-                package_name(&manifest_dir).expect("cargo answers"),
+                package_name(&manifest_dir.join("Cargo.toml")).expect("cargo answers"),
                 expected,
                 "{directory}"
             );
@@ -159,20 +170,20 @@ mod tests {
             "[workspace]\nmembers = []\nresolver = \"2\"\n",
         )
         .expect("manifest");
-        let error = package_name(&root).expect_err("a virtual manifest names no package");
+        let error = package_name(&root.join("Cargo.toml"))
+            .expect_err("a virtual manifest names no package");
         assert!(error.contains("not a package"), "{error}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A directory with no manifest at all is an error too, and the message
-    /// names the directory: this is the case a caller reaches by pointing at a
-    /// source directory instead of a package root.
-    /// 完全没有清单的目录同样是错误，而且消息点名该目录：调用方把源码目录当成包根传进来时
-    /// 走到的正是这一种。
+    /// A path that is not a manifest is an error too, and the message names the
+    /// path: this is the case a caller reaches by passing a directory instead of
+    /// the manifest file.
+    /// 不是清单的路径同样是错误，而且消息点名该路径：调用方传目录而不是清单文件时走到的正是这一种。
     #[test]
-    fn a_directory_without_a_manifest_is_an_error() {
+    fn a_path_that_is_not_a_manifest_is_an_error() {
         let root = temporary_root("no-manifest");
-        let error = package_name(&root).expect_err("no manifest means no package");
+        let error = package_name(&root).expect_err("a directory is not a manifest");
         assert!(error.contains("cargo metadata failed"), "{error}");
         let _ = std::fs::remove_dir_all(&root);
     }

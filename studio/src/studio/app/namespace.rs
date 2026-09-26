@@ -1,4 +1,4 @@
-//! The identity namespace Studio authors under, read from the host manifest.
+//! The identity namespace Studio authors under, from the host manifest.
 //! Studio 创作所用的身份命名空间，读自宿主清单。
 //!
 //! A host's build script stamps `env!("CARGO_PKG_NAME")` as the identity namespace
@@ -6,14 +6,25 @@
 //! `(namespace, source path, declared name)`. Studio rebuilds the same tree from
 //! source, so it has to derive the *same* namespace or its ids name nodes the host
 //! never compiled: a recorded trace, a graft record on disk, and the editor's tree
-//! would each live in a different identity domain. Reading `[package] name` out of
-//! the target manifest is what makes the two agree without asking the user to
-//! export `NICH_LINK_NAMESPACE`.
+//! would each live in a different identity domain. Cargo's answer for the adopted
+//! manifest is what makes the two agree without asking the user to export
+//! `NICH_LINK_NAMESPACE`.
 //! 宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成它编译的每个注册面的身份命名空间，而每个
 //! `NodeId` 都是对 `(命名空间, 源码路径, 声明名)` 的散列。Studio 从源码重建同一棵树，因此必须
 //! 推出**同一个**命名空间，否则它的 id 指的是宿主从未编译过的节点：已记录的 trace、落盘的 graft
-//! 记录、编辑器里的树会各处在不同的身份域。从目标清单读 `[package] name` 正是让两端在不要求用户
+//! 记录、编辑器里的树会各处在不同的身份域。Cargo 对已采纳清单的回答，正是让两端在不要求用户
 //! 导出 `NICH_LINK_NAMESPACE` 的情况下取得一致的东西。
+//!
+//! This used to be a literal `[package] name` line scan, and the difference is not
+//! academic: TOML's dotted form (`package.name = "x"`) is the same table with no
+//! `[package]` header, so the scan found nothing and Studio authored that project
+//! under the documented default — an identity domain none of its recorded ids live
+//! in. The authority is now `nichlink_build_method::package_name`, shared with the
+//! CLI and the MCP bridge, so all three name a package the same way.
+//! 这里曾经是对 `[package] name` 的逐行字面扫描，而差别不是学理上的：TOML 的点式写法
+//! （`package.name = "x"`）是同一张表却没有 `[package]` 表头，因此扫描什么也找不到，Studio
+//! 就在文档化的默认值之下创作那个项目——而它记录的任何 id 都不住在那个身份域里。现在的权威是
+//! `nichlink_build_method::package_name`，与 CLI 和 MCP 桥共用，因此三者对包的命名方式一致。
 //!
 //! Split out of `support` when that file reached the size ceiling; the boundary is
 //! the concern, not the line count: `support` is interaction geometry and editor
@@ -52,67 +63,27 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// 一份宿主清单所代表的身份命名空间。
 ///
 /// `NICH_LINK_NAMESPACE` wins verbatim when it is set — the same rule the build
-/// side reads, so an override moves both ends together — and otherwise the
-/// `[package] name` is the namespace, because that is exactly what the build
-/// script's `env!("CARGO_PKG_NAME")` stamps. A manifest with no `[package]` (a
-/// virtual workspace root, say) falls back to the documented default.
+/// side reads, so an override moves both ends together — and otherwise the package
+/// name Cargo reports is the namespace, because that is exactly what the build
+/// script's `env!("CARGO_PKG_NAME")` stamps.
 /// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出——与构建侧读的同一条规则，因此覆盖会把两端一起
-/// 挪动——否则 `[package] name` 就是命名空间，因为构建脚本的 `env!("CARGO_PKG_NAME")` 盖的正是
-/// 它。没有 `[package]` 的清单（比如虚拟工作区根）回落到文档化的默认值。
+/// 挪动——否则 Cargo 报告的包名就是命名空间，因为构建脚本的 `env!("CARGO_PKG_NAME")` 盖的
+/// 正是它。
+///
+/// The documented default is the last resort here, and that is the deliberate
+/// asymmetry with the MCP bridge's registry query: **authoring creates** a tree, so
+/// for a project nobody has built yet — a virtual workspace root, or a directory
+/// with no manifest — `nichlink.default` is a real answer, and the wizard that
+/// scaffolds a new project depends on it. A *query* about an existing tree must not
+/// invent an identity domain, which is why the bridge refuses instead.
+/// 这里把文档化的默认值留作最后兜底，这正是与 MCP 桥的注册树查询之间有意的不对称：**创作是在
+/// 创建**一棵树，因此对一个还没人构建过的项目——虚拟工作区根，或没有清单的目录——
+/// `nichlink.default` 是真实答案，而搭建新项目的向导依赖它。针对已存在树的**查询**则不能凭空
+/// 造出身份域，因此桥选择拒绝。
 pub(super) fn namespace_for(manifest: &Path, configured: Option<&str>) -> String {
     if let Some(configured) = configured {
         return configured.to_owned();
     }
-    package_name(manifest)
-        .unwrap_or_else(|| nichlink_run_method::lexicon::DEFAULT_NAMESPACE.to_owned())
-}
-
-/// The literal `[package] name` in a manifest, when it is a package manifest.
-/// 清单里字面的 `[package] name`；该清单是包的清单时才有值。
-///
-/// Scoped to the section and to a literal value: a `name` under `[dependencies]`
-/// is another package's name, a commented-out `name` is not a name, and Cargo does
-/// not allow `name` to be inherited from a workspace — so a missing literal means
-/// this is not a package manifest rather than a value read from somewhere else.
-/// 限定在该节内、且必须是字面值：`[dependencies]` 下的 `name` 是别的包的名字，被注释掉的
-/// `name` 不是名字，而 Cargo 不允许 `name` 从工作区继承——因此找不到字面值只说明这不是一份包的
-/// 清单，而不是某个别处读来的取值。
-pub(super) fn package_name(manifest: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(manifest).ok()?;
-    let mut in_package = false;
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if let Some(header) = trimmed.strip_prefix('[') {
-            in_package = header.trim_end_matches(']').trim() == "package";
-            continue;
-        }
-        if !in_package || trimmed.starts_with('#') {
-            continue;
-        }
-        let Some((left, right)) = trimmed.split_once('=') else {
-            continue;
-        };
-        if left.trim() != "name" {
-            continue;
-        }
-        let rest = right.trim_start();
-        let value = match rest.chars().next() {
-            Some(quote @ ('"' | '\'')) => rest[1..]
-                .split(quote)
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_owned(),
-            _ => rest
-                .split(['#', ' ', '\t'])
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_owned(),
-        };
-        if !value.is_empty() {
-            return Some(value);
-        }
-    }
-    None
+    nichlink_build_method::package_name(manifest)
+        .unwrap_or_else(|_| nichlink_run_method::lexicon::DEFAULT_NAMESPACE.to_owned())
 }

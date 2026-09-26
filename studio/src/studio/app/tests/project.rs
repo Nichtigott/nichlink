@@ -15,16 +15,20 @@ fn standalone_studio_resolves_one_project_root_and_manifest() {
     );
 }
 
-/// A throwaway project directory holding one manifest.
-/// 一个只含一份清单的一次性项目目录。
+/// A throwaway project directory holding one manifest and a library target, so
+/// Cargo can be asked about it: `cargo metadata` refuses a manifest with no
+/// target, and the name's authority is Cargo.
+/// 一个只含一份清单与一个库目标的一次性项目目录，因此可以向 Cargo 询问它：`cargo metadata`
+/// 拒绝没有目标的清单，而包名的权威是 Cargo。
 fn temp_project(label: &str, manifest: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
     let root = std::env::temp_dir().join(format!("nichlink-studio-namespace-{label}-{suffix}"));
-    std::fs::create_dir_all(&root).expect("project directory");
+    std::fs::create_dir_all(root.join("src")).expect("project directory");
     std::fs::write(root.join("Cargo.toml"), manifest).expect("manifest");
+    std::fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
     root
 }
 
@@ -54,32 +58,53 @@ fn a_launched_session_authors_under_the_host_crates_package_name() {
     // 回落到 `package_root()` 的测试仍须找到一个存在的目录。
 }
 
-/// The name is read from `[package]` only, and only as a literal: a commented-out
-/// line, a `[dependencies]` entry, or the inherited `name.workspace` form is not
-/// this package's name.
-/// 名字只从 `[package]` 读，且只认字面值：注释掉的行、`[dependencies]` 里的条目、继承写法
-/// `name.workspace` 都不是本包的名字。
+/// The namespace comes from Cargo's answer for the adopted manifest, not from a
+/// literal line scan. The load-bearing case is TOML's dotted form: it is the same
+/// table as `[package]`, a line scan sees no header and answers nothing, and
+/// Studio then authored the project under `nichlink.default` — an identity domain
+/// none of that project's recorded ids live in, so a trace or a graft record on
+/// disk could not resolve. The remaining cases are the ones the old scan already
+/// had to get right, kept so the authority change cannot quietly lose them.
+/// 命名空间来自 Cargo 对已采纳清单的回答，而不是字面逐行扫描。承重的情形是 TOML 的点式写法：
+/// 它与 `[package]` 是同一张表，逐行扫描看不到任何表头、什么也答不出，于是 Studio 会在
+/// `nichlink.default` 之下创作该项目——而该项目记录的任何 id 都不住在那个身份域里，落盘的
+/// trace 或 graft 记录因此解析不了。其余情形是旧扫描本来就必须答对的那些，保留它们是为了让这次
+/// 权威更替不会悄悄丢掉它们。
 #[test]
-fn the_package_name_comes_from_a_literal_package_key() {
-    let cases: &[(&str, Option<&str>)] = &[
-        ("[package]\nname = \"demo-app\"\n", Some("demo-app")),
-        ("[package]\nname = 'single-quoted'\n", Some("single-quoted")),
+fn the_namespace_comes_from_cargo_not_from_a_literal_manifest_scan() {
+    let default = nichlink_run_method::lexicon::DEFAULT_NAMESPACE;
+    let cases: &[(&str, &str)] = &[
         (
-            "# name = \"commented\"\n[package]\nname = \"real\"\n",
-            Some("real"),
+            "[package]\nname = \"demo-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            "demo-app",
         ),
         (
-            "[package]\nname = \"inline\" # trailing comment\n",
-            Some("inline"),
+            "[package]\nname = 'single-quoted'\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            "single-quoted",
         ),
-        ("[dependencies]\nname = \"another-package\"\n", None),
-        ("[package]\nname.workspace = true\n", None),
-        ("[workspace]\nmembers = [\"app\"]\n", None),
+        (
+            "# name = \"commented\"\n[package]\nname = \"real\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            "real",
+        ),
+        (
+            "[package]\nname = \"inline\" # trailing comment\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            "inline",
+        ),
+        (
+            "package.name = \"dotted-name\"\npackage.version = \"0.1.0\"\npackage.edition = \"2021\"\n",
+            "dotted-name",
+        ),
+        ("[dependencies]\nname = \"another-package\"\n", default),
+        ("[package]\nname.workspace = true\n", default),
+        ("[workspace]\nmembers = [\"app\"]\n", default),
     ];
     for (index, (manifest, expected)) in cases.iter().enumerate() {
-        let root = temp_project(&format!("key-{index}"), manifest);
-        let read = package_name(&root.join("Cargo.toml"));
-        assert_eq!(read.as_deref(), *expected, "{manifest:?}");
+        let root = temp_project(&format!("cargo-{index}"), manifest);
+        assert_eq!(
+            namespace_for(&root.join("Cargo.toml"), None),
+            *expected,
+            "{manifest:?}"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 }
@@ -145,7 +170,10 @@ fn a_delete_without_a_selected_project_is_refused() {
 /// 命名空间跟随清单，除非环境给出一个；没有 `[package]` 的清单回落到文档化的默认值。
 #[test]
 fn the_namespace_follows_the_manifest_unless_the_environment_names_one() {
-    let host = temp_project("ns-host", "[package]\nname = \"demo-app\"\n");
+    let host = temp_project(
+        "ns-host",
+        "[package]\nname = \"demo-app\"\nversion = \"0.1.0\"\n",
+    );
     let manifest = host.join("Cargo.toml");
     assert_eq!(namespace_for(&manifest, None), "demo-app");
     assert_eq!(namespace_for(&manifest, Some("pinned")), "pinned");
