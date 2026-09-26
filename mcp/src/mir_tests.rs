@@ -103,13 +103,41 @@ fn a_missing_trace_degrades_to_candidates_rather_than_failing() {
 /// out, because "produce a dump with nightly" is the answer an agent needs.
 /// 缺失的 artifact 与逃出根目录的路径都会被拒绝并给出出路，因为"用 nightly 产出一份转储"正是代理
 /// 需要的答案。
+///
+/// The escaping case writes a real file *outside* the root, because existence is
+/// answered before containment (canonicalization cannot judge a path that is not
+/// there). Pointing at `../../etc/passwd` instead made this test platform-dependent:
+/// under Linux's `/tmp` that path exists and the containment check refuses it, while
+/// under macOS's `/var/folders/…` and Windows' temp directory nothing is there, so the
+/// existence check refuses first with a different sentence. The security claim is
+/// about an artifact that *is* there — an outside file must not be read — so the
+/// fixture puts one there.
+/// 逃逸那一条会在根**之外**写一个真实文件，因为存在性先于归属作答（规范化无法判断一个不存在的
+/// 路径）。改用 `../../etc/passwd` 会让这条测试依赖平台：Linux 的 `/tmp` 下该路径存在、由归属检查
+/// 拒绝，而 macOS 的 `/var/folders/…` 与 Windows 的临时目录下什么都不存在、由存在性检查先以另一句
+/// 话拒绝。安全主张针对的是**确实存在**的 artifact——根之外的文件不得被读取——因此夹具自己放一个。
 #[test]
 fn a_missing_artifact_and_an_escaping_path_are_refused() {
     let (directory, _) = root("refused");
     let missing = mir(&directory, &json!({"path": "nope.mir"})).expect_err("missing is refused");
     assert!(missing.contains("Zunpretty=mir"), "{missing}");
-    let escaping = mir(&directory, &json!({"path": "../../etc/passwd"}))
-        .expect_err("an escaping path is refused");
+
+    let name = directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a fixture directory name")
+        .to_owned();
+    let outside = directory.with_file_name(format!("{name}-outside"));
+    let _ = std::fs::remove_dir_all(&outside);
+    std::fs::create_dir_all(&outside).expect("the outside directory");
+    std::fs::write(outside.join("secret.mir"), MIR_TEXT).expect("the outside artifact");
+    let escaping = mir(
+        &directory,
+        &json!({"path": format!("../{name}-outside/secret.mir")}),
+    )
+    .expect_err("an escaping path is refused");
     assert!(escaping.contains("must stay inside"), "{escaping}");
+
+    let _ = std::fs::remove_dir_all(&outside);
     let _ = std::fs::remove_dir_all(&directory);
 }
