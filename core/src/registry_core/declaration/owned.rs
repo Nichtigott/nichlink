@@ -177,6 +177,7 @@ pub struct OwnedSourceLocation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegistrationSnapshot {
     /// Package namespace that owns this declaration.
+    /// 拥有本声明的包命名空间。
     pub namespace: String,
     /// Stable node id assigned to this declaration.
     /// 分配给本声明的稳定节点 id。

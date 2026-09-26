@@ -19,6 +19,10 @@ use super::super::build_out_dir;
 use super::json::{render_json, write_error};
 use super::report::{cut_endpoint, cut_form};
 
+/// The note every overlay projection carries, success or failure.
+/// 每一次覆盖投影（无论成功或失败）都携带的说明。
+pub(super) const OVERLAY_NOTE: &str = "static projection of the build's scope and declared cuts; the live effective tree is `Registry::dump_effective` (overlay_static + dump) inside a host that links both registries";
+
 /// Render the static overlay projection: which of the build's slots a declared
 /// cut replaces, and which faces the scope prunes.
 /// 渲染静态覆盖投影：构建的哪些槽位被已声明切口替换，以及作用域剪掉了哪些面。
@@ -133,7 +137,7 @@ pub(super) fn overlay_report(
             "slots": slots,
             "pruned": pruned,
             "plans": plans,
-            "note": "static projection of the build's scope and declared cuts; the live effective tree is `Registry::dump_effective` (overlay_static + dump) inside a host that links both registries",
+            "note": OVERLAY_NOTE,
         });
         writeln!(out, "{}", render_json(&report)).map_err(write_error)?;
         return Ok(());

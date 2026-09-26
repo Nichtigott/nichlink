@@ -312,3 +312,62 @@ fn a_relative_candidate_resolves_against_the_working_directory() {
     );
     let _ = std::fs::remove_dir_all(&child);
 }
+
+/// Build a throwaway package with the requested targets and run the MIR target
+/// resolver against it, returning whether the selected target compiled.
+/// 构建一个带有所请求 target 的一次性包，对其运行 MIR target 解析器，返回所选 target
+/// 是否编译通过。
+fn mir_target_resolves(label: &str, library: bool, binary: bool) -> bool {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-mir-{label}-{suffix}"));
+    std::fs::create_dir_all(root.join("src")).expect("fixture src");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"mir-{label}-host\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
+        ),
+    )
+    .expect("manifest");
+    if library {
+        std::fs::write(root.join("src/lib.rs"), "pub fn placeholder() {}\n")
+            .expect("library entry");
+    }
+    if binary {
+        std::fs::write(root.join("src/main.rs"), "fn main() {}\n").expect("binary entry");
+    }
+    // `--emit=metadata` is stable, so the pin is the target *selection*; the
+    // production call site adds the nightly-only `-Zunpretty=mir`.
+    // `--emit=metadata` 在 stable 上可用，因此这条钉子钉的是 target **选择**；生产调用点
+    // 才加上仅 nightly 的 `-Zunpretty=mir`。
+    let output =
+        cargo_rustc_mir(&root.join("Cargo.toml"), &["--emit=metadata"]).expect("cargo runs");
+    let compiled = output.status.success();
+    if !compiled {
+        eprintln!("{label}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+    let _ = std::fs::remove_dir_all(&root);
+    compiled
+}
+
+/// A binary-only package — the default output of `nichlink new` — resolves a
+/// target for MIR inspection instead of failing on the hardcoded `--lib`.
+/// 仅含二进制的包——`nichlink new` 的默认产物——会为 MIR 检视解析出一个 target，而不是在
+/// 硬编码的 `--lib` 上失败。
+#[test]
+fn mir_inspection_resolves_the_target_a_package_actually_has() {
+    assert!(
+        mir_target_resolves("bin", false, true),
+        "a binary-only package must resolve its binary target"
+    );
+    assert!(
+        mir_target_resolves("lib", true, false),
+        "a library-only package must still resolve its library target"
+    );
+    assert!(
+        mir_target_resolves("both", true, true),
+        "a package with both targets must resolve one of them"
+    );
+}

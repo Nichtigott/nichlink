@@ -50,15 +50,23 @@ impl Ed25519Verifier {
 }
 
 impl PluginSignatureVerifier for Ed25519Verifier {
-    fn verify(&self, manifest: PluginManifest, bytes: &[u8], fingerprint: &str) -> bool {
+    /// Check `manifest.signature` against the canonical `payload`.
+    /// 用给定的规范化 `payload` 校验 `manifest.signature`。
+    ///
+    /// The payload is the message the kernel built for the artifact — manifest
+    /// fields, the registration that travels with the bytes, and the bytes
+    /// themselves — so this verifier never reassembles it and cannot drop a
+    /// field the kernel added.
+    /// 载荷是内核为工件构造的消息——manifest 字段、随字节同行的注册声明，以及字节本身——因此
+    /// 本验证器不自行拼装消息，也不会丢掉内核加入的字段。
+    fn verify(&self, manifest: PluginManifest, payload: &[u8], fingerprint: &str) -> bool {
         let Some(key) = self.key(fingerprint) else {
             return false;
         };
         let Some(signature) = manifest.signature.and_then(decode_signature) else {
             return false;
         };
-        key.verify(&manifest.signing_payload(bytes), &signature)
-            .is_ok()
+        key.verify(payload, &signature).is_ok()
     }
 }
 
@@ -78,13 +86,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn verifies_metadata_and_artifact_bytes() {
+    fn verifies_a_signature_over_the_payload_the_kernel_built() {
         let signing = SigningKey::from_bytes(&[7; 32]);
         let verifying = signing.verifying_key();
         let fingerprint = Box::leak(sha256_hex(verifying.as_bytes()).into_boxed_str());
-        let unsigned = manifest(None, fingerprint);
+        // The host never rebuilds this message: it verifies whatever the kernel
+        // handed it, which is what makes the registration part of the signature.
+        // 宿主从不重建这条消息：它验证内核交给它的字节，注册声明因此进入签名覆盖范围。
+        let payload = b"manifest+registration+bytes";
         let encoded = signing
-            .sign(&unsigned.signing_payload(b"abc"))
+            .sign(payload)
             .to_bytes()
             .iter()
             .map(|byte| format!("{byte:02x}"))
@@ -94,10 +105,10 @@ mod tests {
 
         assert!(verifier.verify(
             manifest(Some(Box::leak(encoded.into_boxed_str())), fingerprint),
-            b"abc",
+            payload,
             fingerprint,
         ));
-        assert!(!verifier.verify(manifest(Some("bad"), fingerprint), b"abc", fingerprint));
+        assert!(!verifier.verify(manifest(Some("bad"), fingerprint), payload, fingerprint));
     }
 
     fn manifest(signature: Option<&'static str>, fingerprint: &'static str) -> PluginManifest {

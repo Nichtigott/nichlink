@@ -227,6 +227,7 @@ impl Default for RegistrationRule {
 #[derive(Clone, Copy, Debug)]
 pub struct RegistrationInfo {
     /// Package namespace that owns this declaration.
+    /// 拥有本声明的包命名空间。
     pub namespace: &'static str,
     /// Stable node identity assigned to this face.
     /// 分配给本注册面的稳定节点身份。

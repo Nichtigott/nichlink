@@ -76,25 +76,57 @@ pub fn run_with(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), S
         if line.trim().is_empty() {
             continue;
         }
-        let response = match serde_json::from_str::<Value>(&line) {
-            Ok(request) => dispatch(&root, &request),
-            Err(error) => error_response(Value::Null, -32700, format!("invalid JSON: {error}")),
+        let responses: Vec<Value> = match serde_json::from_str::<Value>(&line) {
+            // A batch is a JSON array of requests, and JSON-RPC answers it with
+            // one response per request that is not a notification. Dispatching
+            // the array as if it were a request collapsed it into one error.
+            // 批处理是请求的 JSON 数组，JSON-RPC 对其中每个非通知请求各回一个响应。把数组
+            // 当成单个请求分派会把它折叠成一个错误。
+            Ok(Value::Array(requests)) if requests.is_empty() => vec![error_response(
+                Value::Null,
+                -32600,
+                "invalid request: empty batch".to_owned(),
+            )],
+            Ok(Value::Array(requests)) => requests
+                .iter()
+                .map(|request| dispatch(&root, request))
+                .filter(|response| !response.is_null())
+                .collect(),
+            Ok(request) => {
+                let response = dispatch(&root, &request);
+                if response.is_null() {
+                    Vec::new()
+                } else {
+                    vec![response]
+                }
+            }
+            Err(error) => vec![error_response(
+                Value::Null,
+                -32700,
+                format!("invalid JSON: {error}"),
+            )],
         };
-        if response.is_null() {
-            continue;
+        for response in responses {
+            serde_json::to_writer(&mut *output, &response)
+                .map_err(|error| format!("cannot write stdout: {error}"))?;
+            output
+                .write_all(b"\n")
+                .and_then(|()| output.flush())
+                .map_err(|error| format!("cannot write stdout: {error}"))?;
         }
-        serde_json::to_writer(&mut *output, &response)
-            .map_err(|error| format!("cannot write stdout: {error}"))?;
-        output
-            .write_all(b"\n")
-            .and_then(|()| output.flush())
-            .map_err(|error| format!("cannot write stdout: {error}"))?;
     }
     Ok(())
 }
 
 fn dispatch(root: &Path, request: &Value) -> Value {
-    let id = request.get("id").cloned().unwrap_or(Value::Null);
+    // JSON-RPC 2.0: a request without an `id` member is a notification and MUST
+    // NOT be answered. An explicit `null` id is still a request, which is why
+    // the check is for the member's absence rather than for a null value.
+    // JSON-RPC 2.0：没有 `id` 成员的请求是通知，**不得**作答。显式的 `null` id 仍是
+    // 请求，因此这里判断的是成员缺失，而不是值为 null。
+    let Some(id) = request.get("id").cloned() else {
+        return Value::Null;
+    };
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
     let params = request.get("params").unwrap_or(&Value::Null);
     match method {
@@ -162,5 +194,42 @@ mod tests {
         let mut output = Vec::new();
         run_with(&mut input, &mut output).expect("an empty stdin is a clean end");
         assert!(output.is_empty());
+    }
+
+    /// A notification — a request with no `id` member — is never answered:
+    /// JSON-RPC forbids a response to it, and the client that sent it is not
+    /// waiting for one.
+    /// 通知——没有 `id` 成员的请求——绝不被作答：JSON-RPC 禁止对它作答，发送它的客户端
+    /// 也不在等回复。
+    #[test]
+    fn a_notification_gets_no_reply() {
+        let mut input = &b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n{\"jsonrpc\":\"2.0\",\"method\":\"ping\"}\n"[..];
+        let mut output = Vec::new();
+        run_with(&mut input, &mut output).expect("a notification is not a failure");
+        assert!(
+            output.is_empty(),
+            "no reply may be written for a notification: {}",
+            String::from_utf8_lossy(&output)
+        );
+    }
+
+    /// A batch is answered element by element: each request in the array gets
+    /// its own response object, and the array is never collapsed into one error.
+    /// 批处理逐元素作答：数组里的每个请求得到自己的响应对象，数组绝不会被折叠成一个错误。
+    #[test]
+    fn a_batch_gets_one_reply_per_element() {
+        let mut input = &b"[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}]\n"[..];
+        let mut output = Vec::new();
+        run_with(&mut input, &mut output).expect("a batch is not a failure");
+        let text = String::from_utf8(output).expect("utf-8 replies");
+        let replies = text
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("one reply per line"))
+            .collect::<Vec<_>>();
+        assert_eq!(replies.len(), 2, "one reply per element: {text}");
+        assert_eq!(replies[0]["id"], 1, "{text}");
+        assert!(replies[0]["result"].is_object(), "{text}");
+        assert_eq!(replies[1]["id"], 2, "{text}");
+        assert!(replies[1]["result"]["tools"].is_array(), "{text}");
     }
 }

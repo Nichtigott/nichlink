@@ -235,6 +235,33 @@ fn is_ident_continue(byte: u8) -> bool {
 /// `include!`/`std::fs` 不被读成违规。宏内容有意保留——宏名与它的定界符是代码，而查找宏调用的
 /// 门禁必须看见它们。
 pub fn mask_non_code(source: &str) -> String {
+    mask(source, true)
+}
+
+/// Replace quoted literals with spaces while preserving offsets, keeping comments.
+/// 用空格替换引号字面量，同时保留原始偏移量，并保留注释。
+///
+/// The same scan as [`mask_non_code`], with the comment writes disabled: what
+/// survives is code *plus comment text*, which is what a rule about what a
+/// comment says needs. A gate that read the raw lines instead was fooled by a
+/// test fixture whose string literal carried a `///` line — the fixture's text
+/// looked like a doc comment and was reported as one.
+/// 与 [`mask_non_code`] 同一次扫描，只是关掉写注释的空白：留下的是代码**加上注释文本**，
+/// 而一条关于注释说了什么的规则正需要这个。直接读原始行的门禁曾被一个测试夹具骗过：那个字符串
+/// 字面量里带着一行 `///`，夹具文本看起来像文档注释，于是被当成文档注释报了出来。
+pub fn mask_literals(source: &str) -> String {
+    mask(source, false)
+}
+
+/// The shared scan behind [`mask_non_code`] and [`mask_literals`].
+/// [`mask_non_code`] 与 [`mask_literals`] 共用的扫描。
+///
+/// `blank_comments` decides whether comment text is replaced. Literals are always
+/// replaced, because a quote inside a comment must not be read as the start of a
+/// string and a quote inside a string must not be read as code.
+/// `blank_comments` 决定注释文本是否被替换。字面量总会被替换，因为注释里的引号不能被读成字符串的
+/// 开始，字符串里的引号也不能被读成代码。
+fn mask(source: &str, blank_comments: bool) -> String {
     let bytes = source.as_bytes();
     let mut masked = bytes.to_vec();
     let mut index = 0usize;
@@ -242,31 +269,39 @@ pub fn mask_non_code(source: &str) -> String {
         if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'/') {
             index += 2;
             while index < bytes.len() && bytes[index] != b'\n' {
-                masked[index] = b' ';
+                if blank_comments {
+                    masked[index] = b' ';
+                }
                 index += 1;
             }
             continue;
         }
         if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
-            masked[index] = b' ';
-            if index + 1 < bytes.len() {
-                masked[index + 1] = b' ';
+            if blank_comments {
+                masked[index] = b' ';
+                if index + 1 < bytes.len() {
+                    masked[index + 1] = b' ';
+                }
             }
             index += 2;
             let mut depth = 1usize;
             while index < bytes.len() && depth > 0 {
                 if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
                     depth += 1;
-                    masked[index] = b' ';
-                    masked[index + 1] = b' ';
+                    if blank_comments {
+                        masked[index] = b' ';
+                        masked[index + 1] = b' ';
+                    }
                     index += 2;
                 } else if bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'/') {
                     depth = depth.saturating_sub(1);
-                    masked[index] = b' ';
-                    masked[index + 1] = b' ';
+                    if blank_comments {
+                        masked[index] = b' ';
+                        masked[index + 1] = b' ';
+                    }
                     index += 2;
                 } else {
-                    if bytes[index] != b'\n' {
+                    if blank_comments && bytes[index] != b'\n' {
                         masked[index] = b' ';
                     }
                     index += 1;

@@ -110,6 +110,20 @@ impl ProcessBackend {
             )));
         }
         let (_, verified_bytes) = artifact.into_parts();
+        // The length the filesystem reports decides before anything is read: the
+        // comparison below used to be the first use of the size, so a file whose
+        // digest could not possibly match — a 2 GiB sparse file, say — was read
+        // into memory in full before the mismatch could refuse it. Once the
+        // lengths agree, reading it costs exactly what the verified bytes
+        // already cost.
+        // 由文件系统报告的长度在读取之前先做判断：下面那次比较过去是第一次用到尺寸，因此一个
+        // 摘要不可能匹配的文件——比如 2 GiB 的稀疏文件——会被整份读进内存后才被拒绝。长度一致
+        // 之后，读取的代价与已持有的已验证字节相同。
+        if metadata.len() != verified_bytes.len() as u64 {
+            return Err(HostError::InvalidArtifact(
+                "process executable differs from the verified bytes".to_owned(),
+            ));
+        }
         if fs::read(program.executable())? != verified_bytes {
             return Err(HostError::InvalidArtifact(
                 "process executable differs from the verified bytes".to_owned(),

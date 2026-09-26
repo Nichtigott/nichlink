@@ -45,14 +45,19 @@ pub struct CallEdge {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EvidenceKind {
     /// Confirmed by a live `CallTrace` observation.
+    /// 由一次实时 `CallTrace` 观测确认。
     Live,
     /// Candidate found by source analysis without runtime confirmation.
+    /// 源码分析找到、未经运行期确认的候选。
     Source,
     /// Candidate inferred from MIR; it may not have executed.
+    /// 由 MIR 推断出的候选；它可能并未执行。
     Mir,
     /// Supplied by an external adapter without a local trace.
+    /// 由外部适配器提供，没有本地追踪。
     External,
     /// A relation whose producer is not known.
+    /// 产出方未知的关系。
     Unknown,
 }
 

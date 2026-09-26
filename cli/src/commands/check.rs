@@ -37,7 +37,24 @@ pub(crate) fn check(
         }
     }
     let directory = directory.unwrap_or_else(|| ".".to_owned());
-    let (manifest, package) = resolve_package(&directory)?;
+    let (manifest, package) = match resolve_package(&directory) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            // The `--json` contract is "stdout is one JSON document"; a
+            // resolution failure used to return before writing anything, so a
+            // machine reader got an empty stream instead of a document that
+            // names the failure. The document keeps the success shape.
+            // `--json` 契约是"stdout 是一个 JSON 文档"；解析失败此前在写出任何东西之前
+            // 就返回，机器读者拿到的是空流，而不是点名失败的文档。该文档保持成功时的形状。
+            if json_output {
+                let mut diagnostics = nichlink::BuildDiagnostics::default();
+                diagnostics.push(nichlink::BuildDiagnostic::new("resolve", error.clone()));
+                writeln!(out, "{}", diagnostics.to_json())
+                    .map_err(|error| format!("cannot write output: {error}"))?;
+            }
+            return Err(error);
+        }
+    };
     let out_dir = build_out_dir(&manifest);
     if json_output {
         return match nichlink_build_method::check_for(&manifest, &out_dir, &package) {

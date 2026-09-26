@@ -163,28 +163,69 @@ index_path() {
   fi
 }
 
-# Whether one exact version is served by the index. A network failure still counts
-# as "not published" so the caller waits rather than publishing into a bad order,
-# but the request is retried first: in `--publish` mode a blip used to be
-# indistinguishable from a missing dependency, and the caller's response to a
-# missing dependency is to refuse to publish at all (`cannot publish X: waiting
-# for Y`, exit 1).
-# 某个精确版本是否已由 index 提供。网络失败仍按"未发布"处理，使调用方等待，而不是按错误顺序
-# 发布，但请求会先重试：在 `--publish` 模式下，一次抖动过去与"依赖缺失"无法区分，而调用方对
-# 依赖缺失的响应是彻底拒绝发布（`cannot publish X: waiting for Y`，退出 1）。
+# Whether one exact version is served by the index and still unyanked. The
+# matched version's own JSON object must also say `"yanked":false`: a yanked
+# version is still served by the index, but no new dependent can resolve it, so
+# counting it as published reported a crate as `verified` that no consumer could
+# actually use.
+# 某个精确版本是否由 index 提供且仍未被撤回。匹配到的那个版本自己的 JSON 对象还必须写着
+# `"yanked":false`：被撤回的版本仍由 index 提供，但新的依赖方已无法解析它，因此把它算作
+# 已发布会把一个没有消费者用得上的 crate 报成 `verified`。
+#
+# A transport failure is not an answer from the registry. It is reported to
+# stderr and exits non-zero here rather than being folded into "not published":
+# against a dead endpoint the dry run used to print `verified: 1, skipped: 8` and
+# exit 0, a claim nothing had actually asked the registry about. HTTP 404 keeps
+# its meaning — the sparse index serves one file per crate, so a missing file is
+# a real "no versions published" — and the retries below stay, so only a failure
+# that outlives them stops the run.
+# 传输失败不是 registry 给出的答案。这里把它报到 stderr 并以非零退出，而不是并进"未发布"：
+# 面对一个死端点时，dry-run 过去会打印 `verified: 1, skipped: 8` 并以 0 退出——一个根本没向
+# registry 问过的断言。HTTP 404 保持原意——sparse index 每个 crate 一个文件，文件缺失就是
+# 真实的"没有发布过版本"——下面的重试保留，因此只有熬过重试的失败才会中止运行。
 is_published() {
   name=$1
   version=$2
   path=$(index_path "$name")
+  status=0
   if command -v curl >/dev/null 2>&1; then
     body=$(curl -fsS --max-time 20 --retry 3 --retry-connrefused --retry-delay 2 \
-      "$index_url/$path" 2>/dev/null) || return 1
+      "$index_url/$path" 2>/dev/null) || status=$?
+    # curl exit 22 is "HTTP page not retrieved": the server answered with a
+    # 4xx/5xx status. `--retry` already retried the 5xx statuses, so what
+    # survives to here is the 404 that means "no such crate file"; every other
+    # exit code is the request itself failing.
+    # curl 退出码 22 是"未能取得 HTTP 页面"：服务端以 4xx/5xx 作答。`--retry` 已经重试过
+    # 5xx，因此留到这里的是表示"没有该 crate 文件"的 404；其他退出码都是请求本身失败。
+    if [ "$status" -ne 0 ] && [ "$status" -ne 22 ]; then
+      printf 'error: cannot reach the index at %s (curl exit %s); refusing to report crates as unpublished from an unreachable registry\n' \
+        "$index_url" "$status" >&2
+      exit 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || status=$?
+    # wget exit 8 is "server issued an error response" (the 404 above); every
+    # other code is a network-level failure.
+    # wget 退出码 8 是"服务端返回了错误响应"（即上面的 404）；其余都是网络层失败。
+    if [ "$status" -ne 0 ] && [ "$status" -ne 8 ]; then
+      printf 'error: cannot reach the index at %s (wget exit %s); refusing to report crates as unpublished from an unreachable registry\n' \
+        "$index_url" "$status" >&2
+      exit 1
+    fi
   else
+    printf 'error: neither curl nor wget is available; cannot probe the index at %s\n' "$index_url" >&2
+    exit 1
+  fi
+  if [ "$status" -ne 0 ]; then
     return 1
   fi
-  printf '%s\n' "$body" | grep -F "\"vers\":\"$version\"" >/dev/null 2>&1
+  # One JSON object per version per line, so the second match tests the same
+  # version's object rather than any object in the crate's file.
+  # 每个版本每行一个 JSON 对象，因此第二次匹配检查的是同一个版本对象，而不是该 crate 文件里
+  # 任意一个对象。
+  printf '%s\n' "$body" |
+    grep -F "\"vers\":\"$version\"" |
+    grep -F '"yanked":false' >/dev/null 2>&1
 }
 
 # The workspace release version, read from `[workspace.package]` and nowhere else.
@@ -202,7 +243,7 @@ workspace_version=$(awk '
   section == "[workspace.package]" && /^version *=/ {
     value = $0
     sub(/^version *= *"/, "", value)
-    sub(/".*$/, "", value)
+    sub(/"$/, "", value)
     print value
     exit
   }
@@ -347,7 +388,7 @@ version_problems() {
     section == "[package]" && /^version *= *"/ {
       value = $0
       sub(/^version *= *"/, "", value)
-      sub(/".*$/, "", value)
+      sub(/"$/, "", value)
       if (value != want) {
         printf "%s declares version %s, but the workspace version is %s; a tag for %s would publish %s\n", crate, value, want, want, value
       }
@@ -356,7 +397,7 @@ version_problems() {
     dotted != "" && /^version *= *"/ {
       value = $0
       sub(/^version *= *"/, "", value)
-      sub(/".*$/, "", value)
+      sub(/"$/, "", value)
       if (value != want) {
         printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, dotted, value, want
       }
@@ -502,7 +543,16 @@ the set of published crates differs:
   # 层表是第二份手工维护的顺序。在依赖之前发布某个 crate 会导致解析失败，因此检查每个
   # crate 恰好出现一次，且总在其依赖之后。
   seen=""
-  for level in $levels; do
+  # One level per line, as the table is documented: reading it word-wise made
+  # every crate a level of its own, so the batching the release depends on never
+  # happened and one crate that did not reappear stopped the release before its
+  # mutually independent siblings on the same line were attempted. The inner
+  # loop still splits the crates written on one line.
+  # 每行一层，与表的文档一致：按词读取会让每个 crate 各成一层，发布所依赖的批量因此从不发生，
+  # 而某个不再出现的 crate 会在同一行里互不依赖的兄弟被尝试之前中止发布。内层循环仍会拆分
+  # 写在同一行上的 crate。
+  while IFS= read -r level; do
+    [ -n "$level" ] || continue
     for crate in $level; do
       for dep in $(deps_of "$crate"); do
         case " $seen " in
@@ -513,7 +563,9 @@ $crate is listed before its dependency $dep" ;;
       done
       seen="$seen $crate"
     done
-  done
+  done <<EOF
+$levels
+EOF
   if [ "$(printf '%s\n' $seen | sort)" != "$listed" ]; then
     problems="$problems
 the level table and the dependency table disagree about which crates ship:
@@ -538,7 +590,14 @@ published=""
 skipped=""
 failed=""
 
-for level in $levels; do
+# One level per line, in dependency order; each line's crates are batched
+# together so a level is waited for as a whole. The batching is the point: a
+# failed crate only stops the run if the next level actually depends on it, not
+# because a sibling it never depended on did not reappear.
+# 每行一层，按依赖顺序；同一行里的 crate 作为一批一起处理，等待也按整层进行。批量正是关键：
+# 某个 crate 失败只在下一层真的依赖它时才中止运行，而不是因为一个与它无关的兄弟没有出现。
+while IFS= read -r level; do
+  [ -n "$level" ] || continue
   pending=""
   for crate in $level; do
     deps=$(deps_of "$crate")
@@ -620,7 +679,9 @@ for level in $levels; do
     done
   fi
   published="$published $level_published"
-done
+done <<EOF
+$levels
+EOF
 
 cat <<EOF
 Publish summary (version $workspace_version)

@@ -379,8 +379,13 @@ Updated as the fixes landed; this is the state after the tenth batch.
   腐烂的数字（2026-09-25 实测 45 处），已改为不带数字的"每一处"。
   **已决定（2026-09-25）：版本线继续走 `0.1.x`。** 公开面尚未冻结，深化期间的每次发布都是 0.1.x
   的一小步（`0.1.1`、`0.1.2`……）；抬到 `1.0.0` 并冻结公开面是以后单独的一步，届时才需要连同每一处
-  内部 `version = "0.1.0"` 要求一起移动。tag 与发布流程见 R2，实际运行见
+  内部 `version = "0.1.x"` 要求一起移动。tag 与发布流程见 R2，实际运行见
   `docs/audit-2026-09-25-post-fix.md` 的 P4 节。
+  **这一步已迈出（2026-09-25）：本检出是 `0.1.1`** —— 三方审查的收尾把工作区版本与每一处内部
+  要求一同移到 `0.1.1`（`release_version` 门禁守住"一个来源"），`CHANGELOG` 的 `[Unreleased]`
+  随之成为 `[0.1.1]`。这次推进同时让 P1 的签名 API 改动得以上线：包审计按设计跳过依赖尚未出现在
+  index 上的 crate，因此它是绿的等待态，而不是红。剩下的只有打 `v0.1.1` tag 本身（不可逆，
+  等一句明确的"发"）。记录见 `docs/audit-3p-2026-09-25.md` 的续做一节。
 - **m3 ✅ FIXED MINOR README 安装说明面向 checkout，且一条命令跑不通** `[实测]` —
   `README.md` 的 `cargo run -p nichlink-cli -- studio` 因该包有两个 bin 且无 `default-run` 而
   报 "could not determine which binary to run"（实测退出 101）。

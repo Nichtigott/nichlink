@@ -112,6 +112,7 @@ impl NodeId {
 }
 
 /// Return the root identity for one isolated package namespace.
+/// 返回某个隔离包命名空间的根身份。
 pub const fn root_node_id(namespace: &str) -> NodeId {
     NodeId::from_namespaced_path(namespace, "<root>", "root")
 }

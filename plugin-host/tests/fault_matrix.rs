@@ -129,6 +129,116 @@ mod wasm_faults {
         assert_eq!(table.generation("test").unwrap(), Some(1));
     }
 
+    /// A failed activation changes nothing a poller can already see — the
+    /// previous generation keeps answering and `is_loaded` stays `true` — so the
+    /// failure has to be reported somewhere other than the load flag.
+    /// 失败的激活不会改变轮询方已经能看到的东西——上一代继续作答，`is_loaded` 保持 `true`
+    /// ——因此失败必须报在加载标志之外的地方。
+    #[test]
+    fn a_failed_activation_is_observable() {
+        let good = wat::parse_str(ECHO).expect("valid WAT");
+        let bad = wat::parse_str(
+            r#"(module
+              (memory (export "memory") 1)
+              (func (export "nichlink_abi_version") (result i32) (i32.const 99))
+              (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#,
+        )
+        .expect("valid WAT");
+        let table =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+
+        table
+            .install(
+                "test",
+                ValidationChannel::Local,
+                artifact(good, PluginMode::Extension),
+            )
+            .expect("the first install queues");
+        assert_eq!(table.call("test", "echo", b"abc").unwrap(), b"abc");
+        assert_eq!(table.activation_error("test").unwrap(), None);
+
+        table
+            .install(
+                "test",
+                ValidationChannel::Local,
+                artifact(bad, PluginMode::Extension),
+            )
+            .expect("the second install queues as well");
+        assert!(table.call("test", "echo", b"abc").is_err());
+        let reported = table
+            .activation_error("test")
+            .unwrap()
+            .expect("the failed activation must be reported");
+        assert!(reported.contains("ABI"), "{reported}");
+        // The old generation still answers; a poller that only reads `is_loaded`
+        // sees a healthy slot while every call fails.
+        // 旧代仍在作答；只读 `is_loaded` 的轮询方会看到一个健康的槽，而每次调用都失败。
+        assert!(table.is_loaded("test").unwrap());
+        assert_eq!(table.generation("test").unwrap(), Some(1));
+    }
+
+    /// The generation an install returns is the one that stays pending, even
+    /// when installs race: the number used to be allocated before the state lock
+    /// was taken, so the caller that took the lock second stored a *lower*
+    /// generation last and the higher one was silently dropped. The barrier makes
+    /// every install in a round start together, so the order they are numbered in
+    /// and the order they take the lock in are independent; activation then says
+    /// which generation actually stayed.
+    /// 安装返回的代际就是留在待发布位的那个，即使安装并发也是如此：编号过去在取得状态锁之前
+    /// 分配，因此后拿到锁的调用方最后写入一个**更小**的代际，更大的那个被静默丢弃。屏障让每轮
+    /// 所有安装同时开始，编号顺序与取锁顺序因而相互独立；随后由激活来说明实际留下的是哪一代。
+    #[test]
+    fn the_highest_generation_is_the_one_that_stays_pending() {
+        const THREADS: usize = 8;
+        const ROUNDS: usize = 64;
+        let bytes = wat::parse_str(ECHO).expect("valid WAT");
+        let table =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+
+        for round in 0..ROUNDS {
+            let barrier = std::sync::Barrier::new(THREADS);
+            let returned = std::sync::Mutex::new(Vec::new());
+            std::thread::scope(|scope| {
+                for _ in 0..THREADS {
+                    let barrier = &barrier;
+                    let returned = &returned;
+                    let bytes = &bytes;
+                    let table = &table;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let generation = table
+                            .install(
+                                "test",
+                                ValidationChannel::Local,
+                                artifact(bytes.clone(), PluginMode::Extension),
+                            )
+                            .expect("every install queues");
+                        returned
+                            .lock()
+                            .expect("the collector lock")
+                            .push(generation);
+                    });
+                }
+            });
+            let highest = returned
+                .into_inner()
+                .expect("the collector lock")
+                .into_iter()
+                .max()
+                .expect("every thread returned a generation");
+            table
+                .call("test", "echo", b"abc")
+                .expect("the pending generation activates");
+            assert_eq!(
+                table.generation("test").unwrap(),
+                Some(highest),
+                "round {round}: the pending generation must be the greatest one handed out"
+            );
+        }
+    }
+
     #[test]
     fn incompatible_abi_is_rejected_before_instance_is_published() {
         let wat = r#"(module

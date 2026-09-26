@@ -22,6 +22,14 @@ default-run = "nichlink-studio"
 # 画的正是内核知道的东西（证据种类、裁剪计数、游标与焦点的区分），也是塞得进七格宽列的那个。
 default = ["node-graph"]
 node-graph = ["dep:rataflow"]
+# Test-only fixtures for a checkout, not a published capability. The fixture host
+# lives in `studio/tests/fixtures/node-editor/`, a nested package that cargo does
+# not put in the `.crate`, so the tests behind this feature skip when the fixture
+# is absent — a consumer cannot satisfy it. It is listed because CI compiles the
+# whole workspace with `--all-features`, and `AGENTS.md` records the same boundary.
+# 仅测试用的检出夹具，不是已发布的能力。夹具宿主位于 `studio/tests/fixtures/node-editor/`，
+# 那是 cargo 不会放进 `.crate` 的嵌套包，因此该特性之后的测试在夹具缺席时跳过——消费方无法满足
+# 它。它列在这里是因为 CI 以 `--all-features` 编译整个工作区，`AGENTS.md` 记录了同一条边界。
 prototype-fixtures = []
 # `nichlink-dev` rebuilds Studio from this checkout and launches the workspace's
 # `target/debug` build, so an installed copy can do neither. Gating the bin keeps
@@ -59,9 +67,9 @@ ratatui = { version = "0.30", default-features = false, features = [
 rataflow = { version = "0.1", optional = true, default-features = false, features = [
     "crossterm",
 ] }
-nichlink-run-method = { path = "../run_method", version = "0.1.0", features = ["authoring"] }
-nichlink-debug-method = { path = "../debug_method", version = "0.1.0" }
-nichlink-build-method = { path = "../build_method", version = "0.1.0" }
+nichlink-run-method = { path = "../run_method", version = "0.1.1", features = ["authoring"] }
+nichlink-debug-method = { path = "../debug_method", version = "0.1.1" }
+nichlink-build-method = { path = "../build_method", version = "0.1.1" }
 
 [[bin]]
 name = "nichlink-studio"

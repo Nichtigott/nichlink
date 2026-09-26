@@ -1,7 +1,7 @@
 //! App construction, reload, and registry lifecycle.
 //! App 构造、重载与注册表生命周期。
 
-use super::support::package_root;
+use super::support::{cargo_rustc_mir, package_root};
 use super::*;
 
 impl App {
@@ -198,15 +198,7 @@ impl App {
 
     pub fn load_mir_snapshot(&mut self) -> Result<usize, String> {
         let manifest = host_manifest();
-        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let output = Command::new(cargo)
-            .args(["rustc", "--manifest-path"])
-            .arg(&manifest)
-            .args(["--lib", "--quiet", "--", "-Zunpretty=mir"])
-            .output()
-            .map_err(|error| {
-                format!("cannot run cargo rustc for {}: {error}", manifest.display())
-            })?;
+        let output = cargo_rustc_mir(&manifest, &["-Zunpretty=mir"])?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr);
             return Err(if detail.trim().is_empty() {

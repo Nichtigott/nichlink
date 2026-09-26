@@ -45,10 +45,13 @@ pub(crate) fn freeze_test_namespace() {
 }
 
 /// Return the namespace of the package whose build script is currently running.
+/// 返回当前正在运行的构建脚本所属包的命名空间。
 ///
 /// Cargo exposes the consuming package name to a build-script process. Using
 /// that value keeps build-time identities byte-for-byte compatible with the
 /// `env!("CARGO_PKG_NAME")` value captured by the declaration macros.
+/// Cargo 把消费方包名暴露给构建脚本进程。使用该值让构建期身份与声明宏捕获的
+/// `env!("CARGO_PKG_NAME")` 逐字节一致。
 pub fn package_namespace() -> String {
     PACKAGE_NAMESPACE_OVERRIDE
         .get()
@@ -59,12 +62,14 @@ pub fn package_namespace() -> String {
 }
 
 /// Compute the identity used by generated plans and caches.
+/// 计算生成计划与缓存所使用的身份。
 pub fn package_node_id(relative_path: &str, declared_name: &str) -> NodeId {
     let namespace = package_namespace();
     NodeId::from_namespaced_path(&namespace, relative_path, declared_name)
 }
 
 /// Compute the root identity used by generated plans and caches.
+/// 计算生成计划与缓存所使用的根身份。
 pub fn package_root_node_id() -> NodeId {
     let namespace = package_namespace();
     NodeId::from_namespaced_path(&namespace, "<root>", "root")

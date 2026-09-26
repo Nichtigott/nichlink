@@ -23,6 +23,8 @@ mod grafts;
 mod new_command;
 #[path = "commands/snippets.rs"]
 mod snippets_command;
+#[path = "commands/studio.rs"]
+mod studio_command;
 
 // Split decision: the dispatch surface (`main`/`run`/`run_to`), the USAGE text
 // and the shared helpers stay here, so the public entry points keep their exact
@@ -47,7 +49,7 @@ USAGE:
     nichlink explain <node-id|logical/path> [--path <dir>] [--json]
     nichlink explain --overlay [--path <dir>] [--json]
     nichlink grafts [path] [--json]
-    nichlink studio
+    nichlink studio [path]
     nichlink mcp
 
 COMMANDS:
@@ -62,7 +64,7 @@ COMMANDS:
     grafts    List every .nichlink/external-grafts/*/graft.plan, with its
               selector, target path, graft, full flag, and whether the host
               entry declares that slot (read-only)
-    studio    Launch the Studio TUI for the current project
+    studio    Launch the Studio TUI for the current project, or for `path`
     mcp       Run the read-only MCP stdio bridge
 
 OPTIONS:
@@ -143,7 +145,7 @@ pub fn run_to(argv: impl IntoIterator<Item = String>, out: &mut dyn Write) -> Re
         Some("snippets") => snippets_command::snippets(&mut args),
         Some("explain") => explain::explain(&mut args, out),
         Some("grafts") => grafts::grafts(&mut args, out),
-        Some("studio") => nichlink_studio::launch().map_err(|error| error.to_string()),
+        Some("studio") => studio_command::studio(&mut args, out),
         Some("mcp") => nichlink_mcp::run().map_err(|error| format!("mcp: {error}")),
         Some(other) => Err(format!("unknown command '{other}' (see --help)")),
     }

@@ -7,6 +7,9 @@
 //! 这些是纯协议名词。它们住在 plugin 模块，因为描述的正是插件；`declaration`
 //! 再导出它们，让声明继续以原名引用，而不在树里出现第二份副本。
 
+#[path = "signing/signing.rs"]
+mod signing;
+
 use std::fmt;
 
 /// A stable host identity. Package names are not enough when several
@@ -470,31 +473,22 @@ impl PluginManifest {
 
     /// Build the canonical bytes covered by an official plugin signature.
     /// 构造官方插件签名覆盖的规范化字节。
-    pub fn signing_payload(self, bytes: &[u8]) -> Vec<u8> {
-        let source = match self.source {
-            PluginSource::Official => "official",
-            PluginSource::User => "user",
-        };
-        let mode = match self.mode {
-            PluginMode::Extension => "extension",
-            PluginMode::Replacement => "replacement",
-        };
-        let fields = [
-            self.name,
-            self.crate_name,
-            self.version,
-            self.framework.0,
-            source,
-            mode,
-            self.checksum,
-            self.public_key_fingerprint.unwrap_or(""),
-            self.revocation_list.unwrap_or(""),
-        ];
-        let mut payload = Vec::with_capacity(bytes.len() + 128);
-        for field in fields {
-            payload.extend_from_slice(&(field.len() as u64).to_le_bytes());
-            payload.extend_from_slice(field.as_bytes());
-        }
+    ///
+    /// The payload covers the manifest's own fields, the plugin bytes, **and**
+    /// every field of the `registration` those bytes are claimed to produce. A
+    /// signature over only the first two left the registration unauthenticated:
+    /// a tampered `parent` or `flow` still verified as `Signature` and could
+    /// pass a slot contract check the honest artifact failed. The manifest's
+    /// `signature` field is excluded, because a signature cannot cover the bytes
+    /// that carry it.
+    /// 载荷覆盖 manifest 自身字段、插件字节，**以及**这些字节声称产出的 `registration` 的每个
+    /// 字段。只覆盖前两者的签名让注册声明完全未被认证：被篡改的 `parent` 或 `flow` 仍会验证为
+    /// `Signature`，甚至能通过诚实工件通不过的槽位合同检查。manifest 的 `signature` 字段被排除，
+    /// 因为签名无法覆盖承载它的那段字节。
+    pub fn signing_payload(self, registration: &crate::RegistrationInfo, bytes: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(bytes.len() + 512);
+        signing::manifest(&mut payload, self);
+        signing::registration(registration, &mut payload);
         payload.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
         payload.extend_from_slice(bytes);
         payload

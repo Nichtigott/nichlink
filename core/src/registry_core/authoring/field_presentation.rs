@@ -1,5 +1,5 @@
 //! Registration-face field presentation metadata.
-// 注册面字段的展示元数据。
+//! 注册面字段的展示元数据。
 //
 // One row per slot of the authoring layout (`super::face_field`), shared by the
 // Studio form and the file authoring API. Values stay in the caller; only static

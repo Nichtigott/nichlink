@@ -30,6 +30,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "bilingual.rs"]
+pub mod bilingual;
 #[path = "doc_anchors.rs"]
 pub mod doc_anchors;
 #[path = "doc_blocks.rs"]
@@ -46,6 +48,8 @@ pub mod purity;
 pub mod release_version;
 #[path = "release_workflow.rs"]
 pub mod release_workflow;
+#[path = "shims.rs"]
+pub mod shims;
 #[path = "size.rs"]
 pub mod size;
 

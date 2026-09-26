@@ -15,7 +15,8 @@ pub(super) use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind
 pub(super) use ratatui::layout::Rect;
 
 pub(super) use super::support::{
-    host_manifest, package_root, resolve_project_from, select_project, with_authoring_context,
+    cargo_rustc_mir, host_manifest, package_root, resolve_project_from, select_project,
+    with_authoring_context,
 };
 pub(super) use super::{
     AddState, App, GraftDeclaration, Overlay, StudioPage, app_function_source_range, body_calls,

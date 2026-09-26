@@ -51,6 +51,7 @@ impl Registry {
     }
 
     /// Create an isolated root for one package or application namespace.
+    /// 为一个包或应用命名空间创建隔离的根。
     pub fn root_for_namespace(framework: FrameworkId, namespace: impl Into<String>) -> Self {
         let namespace = namespace.into();
         let id = root_node_id(&namespace);

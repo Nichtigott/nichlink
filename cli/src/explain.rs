@@ -17,7 +17,7 @@ use std::io::Write;
 
 use nichlink::identity::NodeId;
 use nichlink_build_method::{FaceView, face_views};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{build_out_dir, resolve_package};
 
@@ -61,7 +61,15 @@ pub(crate) fn explain(
         }
     }
     let directory = directory.unwrap_or_else(|| ".".to_owned());
-    let (manifest, package) = resolve_package(&directory)?;
+    let (manifest, package) = match resolve_package(&directory) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            if json_output {
+                write_unresolved(&target, overlay, &error, out)?;
+            }
+            return Err(error);
+        }
+    };
     let faces = face_views(&manifest, &package)?;
     if overlay {
         if target.is_some() {
@@ -170,6 +178,49 @@ pub(crate) fn explain(
         }
     }
     Ok(())
+}
+
+/// Write the one JSON document a machine reader gets when the package cannot be
+/// resolved, in the shape the requested output mode publishes.
+/// 当包解析不出来时，为机器读者写出一个 JSON 文档，形状与所请求的输出模式一致。
+///
+/// `check` and `grafts` already emit a document on this path; `explain` used to
+/// return before writing anything, so a consumer that asked for JSON got an
+/// empty stdout. The per-node document is the same `resolved: false` shape the
+/// command already uses for an unresolvable query; the overlay document keeps
+/// the projection's schema and carries the failure in `error`.
+/// `check` 与 `grafts` 在这条路径上已经会输出文档；`explain` 此前在写出任何东西之前就
+/// 返回，因此要 JSON 的消费者拿到空 stdout。逐节点文档沿用本命令对无法解析查询所用的
+/// `resolved: false` 形状；覆盖文档保持投影的 schema，并把失败放在 `error` 里。
+fn write_unresolved(
+    target: &Option<String>,
+    overlay: bool,
+    error: &str,
+    out: &mut dyn Write,
+) -> Result<(), String> {
+    let report = if overlay {
+        json!({
+            "schema": "nichlink.explain-overlay/1",
+            "kind": "static-projection",
+            "entry": Value::Null,
+            "entry_error": Value::Null,
+            "scope": {"known": false},
+            "slots": [],
+            "pruned": [],
+            "plans": [],
+            "note": overlay::OVERLAY_NOTE,
+            "error": error,
+        })
+    } else {
+        json!({
+            "schema": "nichlink.explain/1",
+            "query": target,
+            "resolved": false,
+            "reason": error,
+            "candidate_count": 0,
+        })
+    };
+    writeln!(out, "{}", json::render_json(&report)).map_err(json::write_error)
 }
 
 /// Resolve the argument the operator wrote: a 32-hex node identity, or the

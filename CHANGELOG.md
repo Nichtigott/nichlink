@@ -18,16 +18,19 @@ outside the checkout and resolved all nine by version. The version line stays on
 step (`0.1.1`, `0.1.2`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
-`version = "0.1.0"` requirement with it, and that step is what freezes the public
-surface.
+`version = "0.1.1"` requirement with it, and that step is what freezes the public
+surface. This checkout is `0.1.1`: the third-party audit's fixes below moved the
+workspace version and every internal requirement together, which is what lets a
+cross-crate API change ship without a red package audit.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。设计仍在深化期间，版本线保持
 **0.1.x**：其后的每次发布都是小步（`0.1.1`、`0.1.2`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.0"` 要求一起移动——那一步才是冻结
-公开面。
+`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.1"` 要求一起移动——那一步才是冻结
+公开面。本检出是 `0.1.1`：下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让
+一次跨 crate 的 API 改动得以随版本发布、而不让包审计变红的原因。
 
-## [Unreleased]
+## [0.1.1] — 2026-09-25
 
 ### Added
 
@@ -352,6 +355,15 @@ surface.
 
 ### Fixed
 
+- The third-party audit recorded in
+  [`docs/audit-3p-2026-09-25.md`](docs/audit-3p-2026-09-25.md): every finding it
+  lists, from the kernel's stack-overflow refusals and the Studio delete guard to
+  the four release-tool defects and the new repository gates. The signature
+  payload now covers the `RegistrationInfo` that travels with a plugin's bytes,
+  which is a public-API change — `PluginManifest::signing_payload` and
+  `PluginTrustPolicy::verify_with` take the registration, and
+  `PluginSignatureVerifier::verify` receives the canonical payload instead of the
+  raw bytes — so it ships with this version rather than as an unreleasable edit.
 - The documentation gate now parses Rust fenced in `///` doc comments, not only
   in markdown. Rustdoc skips a block tagged `ignore`, so a macro-usage example
   that can never be a doctest of its crate was shown to every reader and checked
@@ -664,7 +676,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)；版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-### [Unreleased] 未发布
+### [0.1.1] 2026-09-25
 
 新增：
 
@@ -876,6 +888,12 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- 记录在 [`docs/audit-3p-2026-09-25.md`](docs/audit-3p-2026-09-25.md) 的三方审查：该文件列出的
+  每一条都已修完，从内核的栈溢出拒绝与 Studio 删除守卫，到发布工具的四个缺陷与新增的仓库门禁。
+  签名载荷现在覆盖随插件字节同行的 `RegistrationInfo`，这是一次公开 API 改动——
+  `PluginManifest::signing_payload` 与 `PluginTrustPolicy::verify_with` 接收注册声明，
+  `PluginSignatureVerifier::verify` 收到的是规范化载荷而不是原始字节——因此它随本版本发布，
+  而不是作为一条发布不出去的改动留在树上。
 - 文档门禁现在也解析 `///` 文档注释里的 Rust 围栏，而不只是 markdown。rustdoc 会跳过标了
   `ignore` 的块，因此一个永远无法成为本 crate doctest 的宏用法示例会给每个读者看到、却没有任何
   程序检查；24 个注册面宏示例现在标为 `rust,ignore`，其中 21 个进入门禁解析（另外 3 个的形状由宏

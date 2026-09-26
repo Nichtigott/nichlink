@@ -11,7 +11,7 @@ name = "control_button"
 path = "src/lib.rs"
 
 [dependencies]
-nichlink-run-method = { path = "../../run_method", version = "0.1.0", features = ["authoring"] }
+nichlink-run-method = { path = "../../run_method", version = "0.1.1", features = ["authoring"] }
 # A statically grafted implementation is named by a Rust path at the host entry,
 # so it has to be linked in. A string-named graft would not need this.
 nichlink-example-control-button-graft = { path = "../control-button-graft" }

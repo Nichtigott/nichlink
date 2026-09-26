@@ -17,6 +17,7 @@ thread_local! {
 
 /// Switch this Studio session to a project without mutating process-global
 /// environment variables. This remains safe when file watchers use threads.
+/// 把本 Studio 会话切换到一个项目，且不改动进程级环境变量。文件监听器使用线程时这依然安全。
 pub(super) fn select_project(root: PathBuf, manifest: PathBuf, namespace: impl Into<String>) {
     PROJECT_CONTEXT.with(|current| {
         *current.borrow_mut() = Some(ProjectContext {
@@ -183,6 +184,7 @@ fn usable(
 }
 
 /// Resolve the Cargo manifest used for MIR inspection and rebuilds.
+/// 解析用于 MIR 检查与重建的 Cargo 清单。
 pub(super) fn host_manifest() -> PathBuf {
     if let Some(manifest) = PROJECT_CONTEXT.with(|current| {
         current
@@ -206,6 +208,44 @@ pub(super) fn host_manifest() -> PathBuf {
         };
     }
     package_root().join("Cargo.toml")
+}
+
+/// Run `cargo rustc` against the host target that actually exists, passing
+/// `rustc_args` through to that target.
+/// 针对宿主实际存在的 target 运行 `cargo rustc`，并把 `rustc_args` 透传给该 target。
+///
+/// MIR inspection passed `--lib` unconditionally, so a binary-only host —
+/// including the default output of `nichlink new` — could not be inspected at
+/// all. A library target is preferred; when cargo reports that the package has
+/// none, the binary targets are tried instead. Cargo decides, so a custom
+/// `[lib]`/`[[bin]]` path cannot make the answer wrong.
+/// MIR 检视此前无条件传 `--lib`，因此仅含二进制的宿主——包括 `nichlink new` 的默认
+/// 产物——完全无法被检视。优先选择库 target；当 cargo 报告该包没有库 target 时，改试
+/// 二进制 target。由 cargo 决定，因此自定义 `[lib]`/`[[bin]]` 路径不会让答案出错。
+pub(super) fn cargo_rustc_mir(
+    manifest: &Path,
+    rustc_args: &[&str],
+) -> Result<std::process::Output, String> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let invoke = |selector: &[&str]| {
+        std::process::Command::new(&cargo)
+            .args(["rustc", "--manifest-path"])
+            .arg(manifest)
+            .args(selector)
+            .arg("--quiet")
+            .arg("--")
+            .args(rustc_args)
+            .output()
+    };
+    let missing_target = |error: std::io::Error| {
+        format!("cannot run cargo rustc for {}: {error}", manifest.display())
+    };
+    let output = invoke(&["--lib"]).map_err(missing_target)?;
+    let no_library = String::from_utf8_lossy(&output.stderr).contains("no library targets");
+    if output.status.success() || !no_library {
+        return Ok(output);
+    }
+    invoke(&["--bins"]).map_err(missing_target)
 }
 
 use super::*;

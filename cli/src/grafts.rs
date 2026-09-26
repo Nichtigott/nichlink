@@ -48,7 +48,29 @@ pub(crate) fn grafts(
         }
     }
     let directory = directory.unwrap_or_else(|| ".".to_owned());
-    let (manifest, package) = resolve_package(&directory)?;
+    let (manifest, package) = match resolve_package(&directory) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            // The `--json` contract is "stdout is one JSON document"; a
+            // resolution failure used to return before writing anything, so a
+            // machine reader got an empty stream instead of a document that
+            // names the failure. The success shape is kept, with the reason.
+            // `--json` 契约是"stdout 是一个 JSON 文档"；解析失败此前在写出任何东西之前
+            // 就返回，机器读者拿到的是空流，而不是点名失败的文档。这里保持成功时的形状，
+            // 并带上原因。
+            if json_output {
+                let report = json!({
+                    "schema": "nichlink.grafts/1",
+                    "entry": Value::Null,
+                    "entry_error": Value::Null,
+                    "plans": [],
+                    "error": error.clone(),
+                });
+                writeln!(out, "{}", render_json(&report)).map_err(write_error)?;
+            }
+            return Err(error);
+        }
+    };
     // Every read failure here is collected and reported at the end. This command
     // answers one question — "does the host entry declare the slot each plan
     // addresses" — and a source tree, an entry or a plans directory it cannot

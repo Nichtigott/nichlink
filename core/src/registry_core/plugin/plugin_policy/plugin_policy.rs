@@ -109,8 +109,20 @@ impl PluginPolicy {
 
     /// Whether the manifest is admitted, collapsing the reason to a boolean.
     /// 该 manifest 是否被接纳；原因被折叠成一个布尔值。
-    pub fn accepts(self, plugin: PluginManifest) -> bool {
-        matches!(self.decision(plugin, None), PluginDecision::Accepted)
+    ///
+    /// `catalog` is the host's official lock record. Pass it whenever the host
+    /// has one: an official manifest is only compared against the lock when a
+    /// catalog is supplied, so `None` skips that check. The predicate takes the
+    /// catalog rather than assuming it away because the old form hardcoded
+    /// `None`, which made `PluginRejectReason::LockMismatch` unreachable for
+    /// every caller — a self-declared `Official` manifest was admitted on its
+    /// own word.
+    /// `catalog` 是宿主的官方锁记录；宿主手上有它就应当传入：只有提供目录时，官方 manifest 才会
+    /// 与锁记录比对，`None` 会跳过该检查。本谓词把目录作为参数、而不是假称它不存在，因为旧写法
+    /// 硬编码 `None`，使 `PluginRejectReason::LockMismatch` 对每个调用方都不可达——一个自称
+    /// `Official` 的 manifest 仅凭自述就被接纳。
+    pub fn accepts(self, plugin: PluginManifest, catalog: Option<&PluginCatalog>) -> bool {
+        matches!(self.decision(plugin, catalog), PluginDecision::Accepted)
     }
 
     /// Explain selection instead of silently dropping a linked plugin.
@@ -191,10 +203,43 @@ mod tests {
             source: PluginSource::User,
             ..official
         };
-        assert!(PluginPolicy::open(framework).accepts(official));
-        assert!(!PluginPolicy::local(framework).accepts(official));
-        assert!(PluginPolicy::open(framework).accepts(user));
-        assert!(!PluginPolicy::open(FrameworkId::new("com.other.app")).accepts(official));
+        assert!(PluginPolicy::open(framework).accepts(official, None));
+        assert!(!PluginPolicy::local(framework).accepts(official, None));
+        assert!(PluginPolicy::open(framework).accepts(user, None));
+        assert!(!PluginPolicy::open(FrameworkId::new("com.other.app")).accepts(official, None));
+    }
+
+    /// The official lock check is reachable through `accepts`: a manifest the
+    /// host's catalog does not list is refused when the catalog is supplied,
+    /// and was admitted on its own word when the predicate hardcoded `None`.
+    /// 官方锁检查可以经 `accepts` 抵达：宿主目录里没有的 manifest 在传入目录时被拒；而谓词硬编码
+    /// `None` 时，它仅凭自述就被接纳。
+    #[test]
+    fn the_official_lock_check_is_reachable_through_accepts() {
+        let framework = FrameworkId::new("com.nichui.editor");
+        let manifest = PluginManifest {
+            name: "official.canvas",
+            crate_name: "official_canvas",
+            version: "1.0.0",
+            framework,
+            source: PluginSource::Official,
+            mode: PluginMode::Replacement,
+            checksum: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            signature: Some("adapter-verified-signature"),
+            public_key_fingerprint: None,
+            revocation_list: None,
+        };
+        let elsewhere = PluginCatalog::parse(
+            "official|com.nichui.editor|official.other|1.0.0|official_other|sha256:aa|replacement",
+        )
+        .expect("a lock with another package parses");
+
+        assert!(PluginPolicy::open(framework).accepts(manifest, None));
+        assert_eq!(
+            PluginPolicy::open(framework).decision(manifest, Some(&elsewhere)),
+            PluginDecision::Rejected(PluginRejectReason::LockMismatch)
+        );
+        assert!(!PluginPolicy::open(framework).accepts(manifest, Some(&elsewhere)));
     }
 
     #[test]

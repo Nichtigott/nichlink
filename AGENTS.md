@@ -100,13 +100,16 @@ gates both rules.
 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，它引入的是生成的计划而不是源码
 模块。两条规则都由 `conventions` crate 门控。
 
-`core`'s crate root re-exports the module hierarchy plus a whitelist of vocabulary
-that host code, the build step, and the runtime-check surfaces write as a bare
-name; every other noun is reached through its module path
-(`nichlink::identity::NodeId`). The module hierarchy is the official path.
-`core` 的 crate 根部重导出模块层级，外加一份白名单词汇——宿主代码、构建步骤与运行期
-校验面会以裸名书写它们；其余名词一律经模块路径取得（`nichlink::identity::NodeId`）。
-模块层级就是官方路径。
+`core`'s crate root re-exports the module hierarchy plus a curated vocabulary that
+host code, the build step, and the runtime-check surfaces write as a bare name.
+The kernel's modules also glob into the root, so every other noun is *reachable*
+there as well — that is convenience, not a second contract: the module path
+(`nichlink::identity::NodeId`) is the official address, and only the curated names
+are promised as bare ones.
+`core` 的 crate 根部重导出模块层级，外加一份精选词汇——宿主代码、构建步骤与运行期校验面
+会以裸名书写它们。内核各模块也会平铺 glob 到根部，因此其余名词同样**可以**在那里取得——
+那是便利，不是第二份契约：官方地址是模块路径（`nichlink::identity::NodeId`），只有精选
+清单上的名字被承诺为裸名可用。
 
 ## Change rules
 
@@ -147,7 +150,10 @@ this checkout.
 
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
 default gate already fails on: I/O in `core/src`, a `mod.rs`, a second `include!`,
-a file pushed past the 450-line ratchet, a missing `#![warn(missing_docs)]`, an
+a kernel module file no `mod` declaration names, a deleted execution-surface shim
+re-export, a doc block with only one language, a crate name referenced by a
+scaffold template or a CI `-p` that no manifest defines, a file pushed past the
+450-line ratchet, a missing `#![warn(missing_docs)]`, an
 `#[allow(missing_docs)]`, or a fenced Rust block in a README that no longer
 parses. Add a new repository-wide rule there rather than to a prose document. The
 kernel's parse entries carry a nesting guard for the same reason — a stack
@@ -158,7 +164,9 @@ case to `deep_input_tests.rs` and re-running that gate. CI additionally runs `ca
 skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `--all-features`.
 `cargo test --workspace` 也会跑 `conventions` crate 里的门禁,因此默认门禁已经会在下列情形
-失败:`core/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、文件越过 450 行棘轮、缺少
+失败:`core/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、没有任何 `mod` 声明指名的
+内核模块文件、被删掉的执行面 shim 重导出、只有一种语言的文档块、脚手架模板或 CI `-p` 指名而
+清单里不存在的 crate 名、文件越过 450 行棘轮、缺少
 `#![warn(missing_docs)]`、出现 `#[allow(missing_docs)]`、或 README 里有不再能解析的 Rust
 围栏。新增全仓规则请加到那里,而不是加到散文文档里。内核的解析入口同样带一道嵌套守卫——
 栈溢出不是 `Result`,畸形源码会带走整个执行面——而 `core/tests/nesting_budget.rs` 是它的

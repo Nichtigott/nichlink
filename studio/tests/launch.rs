@@ -58,6 +58,32 @@ fn a_configured_root_that_is_not_a_directory_fails_with_the_variable_named() {
     );
 }
 
+/// With stdout redirected, Studio refuses with a message naming the stream
+/// rather than dying on the bare `os error 6` that opening `/dev/tty` produced.
+/// stdout 被重定向时，Studio 以点名该流的消息拒绝，而不是因打开 `/dev/tty` 抛出的裸
+/// `os error 6` 而死。
+#[test]
+fn redirected_output_fails_with_a_message_instead_of_an_errno() {
+    let output = studio()
+        .arg(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("run the Studio binary");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("stdout"),
+        "the message must name the stream: {stderr}"
+    );
+    assert!(
+        stderr.contains("not a terminal") || stderr.contains("not one"),
+        "the message must name the cause: {stderr}"
+    );
+    assert!(
+        !stderr.contains("os error 6"),
+        "a bare errno is not a message: {stderr}"
+    );
+}
+
 /// `--help` explains the argument and succeeds without touching the terminal.
 /// `--help` 解释该参数，并且不触碰终端就成功返回。
 #[test]

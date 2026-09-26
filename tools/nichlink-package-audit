@@ -69,7 +69,7 @@ workspace_version=$(awk '
   section == "[workspace.package]" && /^version *=/ {
     value = $0
     sub(/^version *= *"/, "", value)
-    sub(/".*$/, "", value)
+    sub(/"$/, "", value)
     print value
     exit
   }
@@ -78,6 +78,127 @@ if [ -z "$workspace_version" ]; then
   echo "error: [workspace.package] names no version in Cargo.toml" >&2
   exit 1
 fi
+
+# Package dependencies and the declared readme/license-file come from `cargo
+# metadata --no-deps`, not from a scan of the TOML. Three spellings the scan
+# missed are ordinary manifest syntax: a dotted `[dependencies.nichlink-x]`
+# table, a target-specific `[target.'cfg(…)'.dependencies]` table, and an
+# inherited `readme.workspace = true` / `license-file.workspace = true`. The
+# scan disagreed with `tools/nichlink-publish --check-table` about the first two
+# and silently skipped the readme check for the third, so a crate whose declared
+# readme was not the one it packaged could still be reported as contents-checked.
+# `--no-deps` keeps the call offline: it asks only about the workspace members,
+# so no registry is consulted and a cold CI cache behaves like a warm local one.
+# 包的依赖与清单声明的 readme/license-file 改从 `cargo metadata --no-deps` 读取，而不是
+# 扫描 TOML。扫描漏掉的三种拼法都是普通清单语法：点表 `[dependencies.nichlink-x]`、按目标
+# 限定的 `[target.'cfg(…)'.dependencies]` 表，以及继承的 `readme.workspace = true` /
+# `license-file.workspace = true`。扫描在前两者上与 `tools/nichlink-publish --check-table`
+# 不一致，在第三者上则静默跳过 readme 检查，因此一个声明的 readme 与实际打包不符的 crate 仍
+# 可能被报成内容已检查。`--no-deps` 让这次调用保持离线：它只问工作区成员，因此不查 registry，
+# 冷启动的 CI 缓存与本地热缓存行为一致。
+metadata_json=$(cargo metadata --no-deps --format-version 1 2>/dev/null) || {
+  echo "error: cargo metadata --no-deps failed; cannot derive package dependencies" >&2
+  exit 1
+}
+
+# One field ("deps", "readme" or "license_file") of one workspace package, from
+# the metadata snapshot above. The compact JSON is split at every `{"name":"`
+# object boundary: a piece that names a `path+file` id is a package header, a
+# piece that carries `"source":…,"req":…,"kind":…` is one of that package's
+# dependencies, and the piece after a package's last dependency still carries
+# that package's trailing `readme`/`license_file`. This is deliberately not a
+# JSON parser: a real one would be a fourth thing to keep in step with Cargo,
+# and every field read here is one Cargo writes unconditionally.
+# 上面元数据快照里某个工作区包的一个字段（"deps"、"readme" 或 "license_file"）。紧凑 JSON
+# 在每个 `{"name":"` 对象边界切开：带 `path+file` id 的片段是包首部，带
+# `"source":…,"req":…,"kind":…` 的片段是该包的一个依赖，而某个包最后一个依赖之后的片段仍
+# 带着该包尾部的 `readme`/`license_file`。这里刻意不写成 JSON 解析器：真正的解析器会成为第四件
+# 要与 Cargo 保持同步的东西，而这里读到的每个字段都是 Cargo 无条件写出的。
+metadata_field() {
+  crate=$1
+  field=$2
+  printf '%s\n' "$metadata_json" | awk -v crate="$crate" -v field="$field" '
+    function package_start(p) {
+      return p ~ /^[^"]*","version":"[^"]*","id":"path[+]file/
+    }
+    function is_dependency(p) {
+      return p ~ /^[^"]*","source":[^,]*,"req":"[^"]*","kind":/
+    }
+    function name_of(p,   s) {
+      s = p
+      sub(/".*$/, "", s)
+      return s
+    }
+    function readme_of(p,   s, v, out) {
+      out = ""
+      s = p
+      while (match(s, /"readme":("[^"]*"|null)/)) {
+        v = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+        if (v ~ /^"readme":"/) {
+          sub(/^"readme":"/, "", v)
+          sub(/"$/, "", v)
+          out = v
+        }
+      }
+      return out
+    }
+    function license_of(p,   v) {
+      if (match(p, /"license_file":("[^"]*"|null)/)) {
+        v = substr(p, RSTART, RLENGTH)
+        if (v ~ /^"license_file":"/) {
+          sub(/^"license_file":"/, "", v)
+          sub(/"$/, "", v)
+          return v
+        }
+      }
+      return ""
+    }
+    function emit() {
+      if (current != crate) return
+      if (field == "readme" && readme != "") print readme
+      if (field == "license_file" && license != "") print license
+    }
+    {
+      line = $0
+      gsub(/[{]"name":"/, "\n", line)
+      n = split(line, piece, "\n")
+      current = ""
+      readme = ""
+      license = ""
+      for (i = 1; i <= n; i++) {
+        p = piece[i]
+        if (package_start(p)) {
+          emit()
+          current = name_of(p)
+          readme = readme_of(p)
+          license = license_of(p)
+        }
+        if (current != crate) continue
+        if (field == "deps") {
+          if (is_dependency(p)) {
+            kind = ""
+            if (match(p, /","source":[^,]*,"req":"[^"]*","kind":("[a-z]*"|null),/)) {
+              kind = substr(p, RSTART, RLENGTH)
+              sub(/^.*"kind":/, "", kind)
+              sub(/,$/, "", kind)
+              gsub(/"/, "", kind)
+            }
+            d = name_of(p)
+            if (kind != "dev" && d ~ /^nichlink-/) print d
+          }
+        } else if (field == "readme") {
+          r = readme_of(p)
+          if (r != "") readme = r
+        } else if (field == "license_file") {
+          l = license_of(p)
+          if (l != "") license = l
+        }
+      }
+      emit()
+    }
+  '
+}
 
 # The shipped crates are derived from the workspace, not listed: a hand-kept table
 # is one a new member can simply not appear in. The audit added a tenth published
@@ -113,19 +234,12 @@ for member in $members; do
   fi
   name=$(sed -n 's/^name = "\(.*\)"/\1/p' "$manifest" | head -n 1)
   [ -n "$name" ] || continue
-  # Internal dependencies, in either spelling: inline
-  # (`nichlink-core = { path = … }`) or inherited (`nichlink-core.workspace = true`).
-  # 内部依赖，两种拼法都算：行内（`nichlink-core = { path = … }`）或继承
-  # （`nichlink-core.workspace = true`）。
-  deps=$(awk '
-    /^\[/ { section = $0; next }
-    section ~ /^\[(build-)?dependencies\]$/ && /^nichlink-[a-z-]+ *=/ { print $1 }
-    section ~ /^\[(build-)?dependencies\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ {
-      name = $1
-      sub(/\.workspace.*/, "", name)
-      print name
-    }
-  ' "$manifest" | sort -u | tr '\n' ',')
+  # Internal dependencies (normal and build kinds, target-specific ones
+  # included, dev-dependencies excluded because they never ship), resolved by
+  # Cargo rather than read out of the manifest.
+  # 内部依赖（normal 与 build 两种 kind，含按目标限定的，排除永不出厂的
+  # dev-dependencies），由 Cargo 解析，而不是从清单里读出。
+  deps=$(metadata_field "$name" deps | sort -u | tr '\n' ',')
   deps=${deps%,}
   crates="$crates
 $name:$member:$deps"
@@ -133,8 +247,8 @@ $name:$member:$deps"
 done
 
 if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-  echo "warn: neither curl nor wget is available; cannot probe $index_url," \
-    "so every crate with an internal dependency is skipped" >&2
+  echo "warn: neither curl nor wget is available; the index probe cannot run," \
+    "so the audit will stop rather than report crates as unpublished" >&2
 fi
 
 # Sparse-index path for a crate name: 1/<n>, 2/<n>, 3/<c>/<n>, else
@@ -159,10 +273,13 @@ index_path() {
 }
 
 # The index serves one JSON object per published version, so an exact version
-# match is the publication test. Returns non-zero when the crate version is not
-# published or the endpoint cannot be reached.
-# index 为每个已发布版本提供一行 JSON，因此精确匹配版本号就是发布判定。crate 版本未
-# 发布或端点不可达时返回非零。
+# match is the publication test, and the matched object must also say
+# `"yanked":false`: a yanked version is still served by the index but can no
+# longer be resolved by a new dependent, so counting it as published reported a
+# crate as checkable that no consumer could actually use.
+# index 为每个已发布版本提供一行 JSON，因此精确匹配版本号就是发布判定，且匹配到的对象还必须
+# 写着 `"yanked":false`：被撤回的版本仍由 index 提供，但新的依赖方已无法解析它，因此把它算作
+# 已发布会把一个没有消费者用得上的 crate 报成可检查。
 #
 # The request is retried before "not published" is believed. A transient failure
 # used to be indistinguishable from an absent version, and the two runs that
@@ -175,28 +292,72 @@ index_path() {
 # 对"哪些 crate 可检查"给出了不同答案，原因正是这个：同一棵树上，一小时前就发布的 crate 被报成
 # `skipped`，随后又有一个 crate 因为校验构建从只传播了一半的 index 取依赖而被报成 `failed`。
 # 关于 registry 的断言必须能经受"registry 短暂不可达"。
+#
+# A failure that outlives the retries is not an answer from the registry, so it
+# is reported and exits non-zero here instead of turning into "not published":
+# against a dead endpoint the audit used to report `verified: 1, skipped: 8` and
+# exit 0. HTTP 404 keeps its meaning — the sparse index serves one file per
+# crate, so a missing file is a real "no versions published" — and only that
+# status is treated as the registry's answer.
+# 熬过重试的失败不是 registry 给出的答案，因此这里会报出它并以非零退出，而不是把它变成
+# "未发布"：面对一个死端点时，审计过去会报 `verified: 1, skipped: 8` 并以 0 退出。HTTP 404
+# 保持原意——sparse index 每个 crate 一个文件，文件缺失就是真实的"没有发布过版本"——且只有
+# 该状态被当作 registry 的答案。
 is_published() {
   name=$1
   version=$2
   path=$(index_path "$name")
+  status=0
   if command -v curl >/dev/null 2>&1; then
     body=$(curl -fsS --max-time 20 --retry 3 --retry-connrefused --retry-delay 2 \
-      "$index_url/$path" 2>/dev/null) || return 1
+      "$index_url/$path" 2>/dev/null) || status=$?
+    # curl exit 22 is "HTTP page not retrieved": the server answered with a
+    # 4xx/5xx status. `--retry` already retried the 5xx statuses, so what
+    # survives to here is the 404 that means "no such crate file"; every other
+    # exit code is the request itself failing.
+    # curl 退出码 22 是"未能取得 HTTP 页面"：服务端以 4xx/5xx 作答。`--retry` 已经重试过
+    # 5xx，因此留到这里的是表示"没有该 crate 文件"的 404；其他退出码都是请求本身失败。
+    if [ "$status" -ne 0 ] && [ "$status" -ne 22 ]; then
+      printf 'error: cannot reach the index at %s (curl exit %s); refusing to report crates as unpublished from an unreachable registry\n' \
+        "$index_url" "$status" >&2
+      exit 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || return 1
+    body=$(wget -q -O - --timeout=20 --tries=3 --waitretry=2 "$index_url/$path" 2>/dev/null) || status=$?
+    # wget exit 8 is "server issued an error response" (the 404 above); every
+    # other code is a network-level failure.
+    # wget 退出码 8 是"服务端返回了错误响应"（即上面的 404）；其余都是网络层失败。
+    if [ "$status" -ne 0 ] && [ "$status" -ne 8 ]; then
+      printf 'error: cannot reach the index at %s (wget exit %s); refusing to report crates as unpublished from an unreachable registry\n' \
+        "$index_url" "$status" >&2
+      exit 1
+    fi
   else
+    printf 'error: neither curl nor wget is available; cannot probe the index at %s\n' "$index_url" >&2
+    exit 1
+  fi
+  if [ "$status" -ne 0 ]; then
     return 1
   fi
-  printf '%s\n' "$body" | grep -F "\"vers\":\"$version\"" >/dev/null 2>&1
+  # One JSON object per version per line, so the second match tests the same
+  # version's object rather than any object in the crate's file.
+  # 每个版本每行一个 JSON 对象，因此第二次匹配检查的是同一个版本对象，而不是该 crate 文件里
+  # 任意一个对象。
+  printf '%s\n' "$body" |
+    grep -F "\"vers\":\"$version\"" |
+    grep -F '"yanked":false' >/dev/null 2>&1
 }
 
-# Every source module and the declared README must be in the package. Runs for
-# every crate, published or not, because the listing needs no registry.
-# 每个源码模块与清单声明的 README 都必须在包里。对每个 crate 都运行，无论是否已发布，
-# 因为列清单不需要 registry。
+# Every source module and the declared readme/license-file must be in the
+# package. Runs for every crate, published or not, because the listing needs no
+# registry.
+# 每个源码模块与清单声明的 readme/license-file 都必须在包里。对每个 crate 都运行，无论是否
+# 已发布，因为列清单不需要 registry。
 check_contents() {
   crate=$1
   directory=$2
+  readme=$3
+  license_file=$4
   if ! listing=$(cargo package --list -p "$crate" --locked --allow-dirty 2>/dev/null); then
     printf 'error: cargo package --list failed for %s:\n' "$crate" >&2
     cargo package --list -p "$crate" --locked --allow-dirty >&2 || true
@@ -211,10 +372,26 @@ check_contents() {
       status=1
     fi
   done
-  readme=$(sed -n 's/^readme = "\(.*\)"/\1/p' "$directory/Cargo.toml" | head -n 1)
+  # A declared file cargo copies in from outside the package (the
+  # `readme.workspace = true` / `license-file.workspace = true` inherited from
+  # the workspace root) is reported by `cargo metadata` relative to the member as
+  # `../README.md`, while `cargo package --list` names the copy at the package
+  # root `README.md`. Either spelling satisfies the check; its point is that the
+  # declared file reaches the package.
+  # 由 cargo 从包外复制进来的声明文件（从工作区根继承的 `readme.workspace = true` /
+  # `license-file.workspace = true`）在 `cargo metadata` 里相对成员报成 `../README.md`，
+  # 而 `cargo package --list` 把它在包根的副本命名为 `README.md`。两种拼法都满足检查；检查的
+  # 要点是声明的文件确实进了包。
   if [ -n "$readme" ] &&
-    ! printf '%s\n' "$listing" | grep -Fx "$readme" >/dev/null; then
+    ! printf '%s\n' "$listing" | grep -Fx "$readme" >/dev/null &&
+    ! printf '%s\n' "$listing" | grep -Fx "${readme##*/}" >/dev/null; then
     printf 'error: %s does not package its declared readme %s\n' "$crate" "$readme" >&2
+    status=1
+  fi
+  if [ -n "$license_file" ] &&
+    ! printf '%s\n' "$listing" | grep -Fx "$license_file" >/dev/null &&
+    ! printf '%s\n' "$listing" | grep -Fx "${license_file##*/}" >/dev/null; then
+    printf 'error: %s does not package its declared license file %s\n' "$crate" "$license_file" >&2
     status=1
   fi
   return $status
@@ -232,7 +409,8 @@ for entry in $crates; do
   deps=${rest#*:}
 
   printf 'checking contents of %s\n' "$crate"
-  if check_contents "$crate" "$directory"; then
+  if check_contents "$crate" "$directory" \
+    "$(metadata_field "$crate" readme)" "$(metadata_field "$crate" license_file)"; then
     :
   else
     content_failed="$content_failed $crate"

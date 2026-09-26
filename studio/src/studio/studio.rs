@@ -7,7 +7,7 @@ mod terminal;
 #[path = "ui/ui.rs"]
 mod ui;
 
-use std::io::{self, stdout};
+use std::io::{self, IsTerminal, stdout};
 
 use crossterm::event;
 use crossterm::execute;
@@ -48,6 +48,23 @@ pub fn launch_with(project: Option<std::path::PathBuf>) -> io::Result<()> {
     // 由调用方报告：`main` 打印这一行，CLI 把它映射进自己的错误通道，因此这条消息不会
     // 被渲染两次。
     app::preflight(project.as_deref()).map_err(io::Error::other)?;
+    // A TUI owes the caller a message, not an errno. Without a terminal the raw
+    // -mode setup used to fail with a bare `os error 6` (ENXIO) from opening
+    // `/dev/tty`; naming the stream and the cause is what a reader can act on.
+    // TUI 欠调用方的是一条消息，而不是一个 errno。没有终端时，原始模式初始化会因打开
+    // `/dev/tty` 失败而抛出裸的 `os error 6`（ENXIO）；点名是哪个流、什么原因，读者
+    // 才能据此行动。
+    if !stdout().is_terminal() {
+        return Err(io::Error::other(
+            "nichlink-studio draws to a terminal, but stdout is not one (it is redirected or a \
+             pipe); run it directly",
+        ));
+    }
+    if !io::stdin().is_terminal() {
+        return Err(io::Error::other(
+            "nichlink-studio reads keys from a terminal, but stdin is not one; run it directly",
+        ));
+    }
     install_panic_restore();
     enable_raw_mode()?;
     let _terminal_guard = TerminalGuard;

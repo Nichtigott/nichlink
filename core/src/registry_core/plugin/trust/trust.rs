@@ -1,7 +1,7 @@
 //! Plugin trust policy and verification errors.
 //! 插件信任策略与验证错误。
 
-use crate::registry_core::declaration::{PluginManifest, PluginSource};
+use crate::registry_core::declaration::{PluginManifest, PluginSource, RegistrationInfo};
 use std::fmt;
 
 /// A small, dependency-free trust policy for plugin bytes.
@@ -35,17 +35,27 @@ pub struct PluginTrustPolicy {
 /// NichLink 刻意不实现具体签名算法。宿主可以接入现有的 Ed25519、平台密钥库或
 /// 隔离进程验证器，而不让注册机依赖这些实现。
 pub trait PluginSignatureVerifier {
-    /// Return whether the host accepts this signature for the given bytes and key.
-    /// 宿主是否接受该签名用于给定字节与密钥。
-    fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool;
+    /// Return whether the host accepts this signature over the canonical payload.
+    /// 宿主是否接受该签名用于给定的规范化载荷。
+    ///
+    /// `payload` is the bytes the kernel built for this artifact: the manifest
+    /// fields, the registration that travels beside the plugin bytes, and the
+    /// bytes themselves. The host supplies the cryptography and does not
+    /// reassemble the message, so a payload field added later is covered by
+    /// every verifier without a change on the host side — and no verifier can
+    /// quietly drop a field core put in.
+    /// `payload` 是内核为该工件构造的字节：manifest 字段、随插件字节同行的注册声明，以及字节
+    /// 本身。宿主只提供密码学、不自行拼装消息：日后新增的载荷字段无需宿主改动即被每个验证器覆盖，
+    /// 任何验证器也无法悄悄丢掉内核放进去的字段。
+    fn verify(&self, manifest: PluginManifest, payload: &[u8], key_fingerprint: &str) -> bool;
 }
 
 impl<F> PluginSignatureVerifier for F
 where
     F: Fn(PluginManifest, &[u8], &str) -> bool,
 {
-    fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool {
-        self(manifest, bytes, key_fingerprint)
+    fn verify(&self, manifest: PluginManifest, payload: &[u8], key_fingerprint: &str) -> bool {
+        self(manifest, payload, key_fingerprint)
     }
 }
 
@@ -123,9 +133,17 @@ impl PluginTrustPolicy {
 
     /// Verify metadata and delegate the actual signature operation to the host.
     /// 校验元数据，并把真正的签名操作委托给宿主。
+    ///
+    /// The verifier is handed `manifest.signing_payload(registration, bytes)`,
+    /// the canonical message that covers the registration as well as the
+    /// manifest and the bytes; the policy's own checks still read the raw
+    /// `bytes`, because a checksum is over the bytes and not over the message.
+    /// 交给验证器的是 `manifest.signing_payload(registration, bytes)`——同时覆盖注册声明、
+    /// manifest 与字节的规范消息；策略自身的检查仍读原始 `bytes`，因为摘要是对字节而不是对消息。
     pub fn verify_with<V: PluginSignatureVerifier>(
         self,
         manifest: PluginManifest,
+        registration: &RegistrationInfo,
         bytes: &[u8],
         key_fingerprint: Option<&str>,
         verifier: &V,
@@ -145,7 +163,8 @@ impl PluginTrustPolicy {
         let fingerprint = key_fingerprint
             .or(manifest.public_key_fingerprint)
             .ok_or(PluginTrustError::MissingOfficialKey)?;
-        if !verifier.verify(manifest, bytes, fingerprint) {
+        let payload = manifest.signing_payload(registration, bytes);
+        if !verifier.verify(manifest, &payload, fingerprint) {
             return Err(PluginTrustError::SignatureNotVerified);
         }
         Ok(())
@@ -293,10 +312,59 @@ mod tests {
     struct AcceptingVerifier;
 
     impl PluginSignatureVerifier for AcceptingVerifier {
-        fn verify(&self, manifest: PluginManifest, bytes: &[u8], key_fingerprint: &str) -> bool {
+        fn verify(&self, manifest: PluginManifest, payload: &[u8], key_fingerprint: &str) -> bool {
             manifest.signature == Some("adapter-verified-signature")
-                && bytes == b"abc"
+                && !payload.is_empty()
                 && key_fingerprint.len() == 64
+        }
+    }
+
+    /// The registration that carries one test manifest, so `verify_with` has a
+    /// message to build. Every field is empty except the manifest: this test is
+    /// about delegation, not about what the payload covers.
+    /// 承载某个测试 manifest 的注册声明，供 `verify_with` 构造消息。除 manifest 外每个字段都为
+    /// 空：本测试关心的是委托，而不是载荷覆盖了什么。
+    fn registration(manifest: PluginManifest) -> crate::RegistrationInfo {
+        use crate::registry_core::declaration::{
+            Admission, LocalizedText, ObjectContract, RegistrationRule, SourceLocation,
+        };
+        crate::RegistrationInfo {
+            namespace: "trust-test",
+            id: crate::NodeId::from_path("trust.rs", "Trust"),
+            parent: crate::ROOT_NODE_ID,
+            kind: "Trust",
+            preset: "",
+            parts: "",
+            params: "",
+            handle: "",
+            stable_name: None,
+            name: LocalizedText { zh: "", en: "" },
+            summary: LocalizedText { zh: "", en: "" },
+            exports: &[],
+            needs_registry: false,
+            registry_name: "",
+            getting_from_other_registry: None,
+            registry_rule_path: "",
+            registry_rule: RegistrationRule::ANY,
+            admission: Admission::ANY,
+            requires: &[],
+            provides: &[],
+            contract: ObjectContract {
+                required_parts: &[],
+                provided_parts: &[],
+            },
+            flow: crate::FlowContract::NONE,
+            flow_provider: None,
+            handle_traits: &[],
+            part_traits: &[],
+            runtime_checks: &[],
+            plugin: Some(manifest),
+            source: SourceLocation {
+                file: "trust.rs",
+                line: 1,
+                column: 1,
+                function: "registration",
+            },
         }
     }
 
@@ -315,13 +383,26 @@ mod tests {
             public_key_fingerprint: Some(KEY),
             revocation_list: Some("official-2026"),
         };
+        let registration = registration(manifest);
         let policy = PluginTrustPolicy::official(&[KEY], &[]);
         assert_eq!(
-            policy.verify_with(manifest, b"abc", Some(KEY), &AcceptingVerifier),
+            policy.verify_with(
+                manifest,
+                &registration,
+                b"abc",
+                Some(KEY),
+                &AcceptingVerifier
+            ),
             Ok(())
         );
         assert_eq!(
-            policy.verify_with(manifest, b"abc", Some(KEY), &RejectingVerifier),
+            policy.verify_with(
+                manifest,
+                &registration,
+                b"abc",
+                Some(KEY),
+                &RejectingVerifier
+            ),
             Err(PluginTrustError::SignatureNotVerified)
         );
     }

@@ -13,7 +13,7 @@ readme = "README.md"
 documentation = "https://docs.rs/nichlink-debug-method"
 
 [dependencies]
-nichlink-run-method = { path = "../run_method", version = "0.1.0" }
+nichlink-run-method = { path = "../run_method", version = "0.1.1" }
 # `petgraph` backs `CallGraph`'s private fields only, so a major bump is not a
 # change to this crate's public API; the fourth audit round moved it off the
 # 0.6 line, which was two majors behind.

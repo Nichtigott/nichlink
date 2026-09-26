@@ -236,6 +236,7 @@ pub fn generated_snapshots() -> Result<Vec<RegistrationSnapshot>, String> {
 }
 
 /// Load generated registration faces from an explicit project root.
+/// 从显式的项目根加载生成的注册面。
 pub fn generated_snapshots_from(root: &Path) -> Result<Vec<RegistrationSnapshot>, String> {
     let mut sources = Vec::new();
     collect_face_sources(root, &mut sources)?;

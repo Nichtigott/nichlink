@@ -40,3 +40,11 @@ MIR candidates and unobserved values are labeled as evidence with conservative
 fallbacks. Wasm memory limits do not make a malicious plugin logically safe;
 applications must still choose contracts and capabilities appropriate to their
 data.
+
+A **process** plugin is the weakest boundary here: the host frames its I/O,
+bounds input, output, and wall time, and terminates a child that overruns, but
+the child inherits the host's environment, working directory, filesystem access,
+and network access. The README's plugin section says so and disclaims a sandbox;
+this paragraph is the residual-risk half of that statement. A host that runs
+untrusted process plugins must confine the child outside NichLink — a container,
+a user, or an OS sandbox — because nothing in this workspace does it.

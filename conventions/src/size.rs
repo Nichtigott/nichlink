@@ -57,10 +57,10 @@ pub const CEILING: usize = 450;
 pub const BASELINE: &[(&str, usize)] = &[
     ("core/src/registry_core/declaration/runtime_checks.rs", 551),
     ("build_method/src/entry.rs", 478),
-    ("core/src/registry_core/plugin/contracts/contracts.rs", 645),
+    ("core/src/registry_core/plugin/contracts/contracts.rs", 639),
     ("core/src/registry_core/tree/connector/connector.rs", 504),
     ("core/src/registry_core/syntax/entries/graft.rs", 502),
-    ("core/src/registry_core/declaration/registration.rs", 460),
+    ("core/src/registry_core/declaration/registration.rs", 461),
     ("build_method/src/graft_plan_check.rs", 465),
     ("core/src/registry_core/tree/graft_ops/overlay.rs", 463),
     ("run_method/src/runtime/trace/frames/frames.rs", 452),

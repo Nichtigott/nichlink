@@ -230,7 +230,8 @@ fn hex4(bytes: &[u8], cursor: &mut usize) -> Result<u32, String> {
     Ok(code)
 }
 
-/// Parse one line of JSONL into a graph.
+/// Skip the whitespace between two JSON tokens.
+/// 跳过两个 JSON token 之间的空白。
 fn skip_space(bytes: &[u8], cursor: &mut usize) {
     while bytes
         .get(*cursor)

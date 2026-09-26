@@ -104,6 +104,7 @@ impl WasmPluginTable {
                         pending: Mutex::new(None),
                         has_pending: AtomicBool::new(false),
                         next_generation: AtomicU64::new(0),
+                        activation_error: Mutex::new(None),
                     },
                 )
                 .is_some()
@@ -158,6 +159,27 @@ impl WasmPluginTable {
             .active
             .load_full()
             .map(|active| active.generation))
+    }
+
+    /// Report why the last activation attempt failed.
+    /// 报告上一次激活尝试失败的原因。
+    ///
+    /// `None` means the last attempt succeeded or no pending generation has been
+    /// activated yet. The report exists because a failed activation changes
+    /// nothing a poller can already see: `active` keeps the previous generation,
+    /// so `is_loaded` stays `true` and `generation` keeps returning the old
+    /// number while every later call fails. Silence was the one answer a
+    /// readiness poll could not act on.
+    /// `None` 表示上次尝试成功，或还没有待发布代被激活过。之所以需要这份报告：激活失败不会
+    /// 改变轮询方已经能看到的东西——`active` 仍是上一代，因此 `is_loaded` 保持 `true`、
+    /// `generation` 继续返回旧编号，而此后每次调用都失败。沉默正是就绪轮询唯一无法据以行动的
+    /// 回报。
+    pub fn activation_error(&self, slot: &str) -> Result<Option<String>, HostError> {
+        self.slot(slot)?
+            .activation_error
+            .lock()
+            .map(|error| error.clone())
+            .map_err(|_| HostError::State("plugin slot lock was poisoned".to_owned()))
     }
 
     fn slot(&self, name: &str) -> Result<&SlotState, HostError> {

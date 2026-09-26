@@ -27,6 +27,7 @@ pub use inventory;
 
 /// Local inventory payload avoids orphan-rule coupling to core's declaration
 /// type while keeping the collected value zero-copy.
+/// 本地的 inventory 载荷避免与内核声明类型产生孤儿规则耦合，同时让收集到的值保持零拷贝。
 #[doc(hidden)]
 pub struct CollectedRegistration(pub &'static nichlink_run_method::RegistrationInfo);
 

@@ -25,9 +25,10 @@
 //! 以这种方式挂载的注册面会静默改变自己的 `NodeId`；又因为身份会写入落盘的 graft 记录，损害
 //! 会在以后表现为未解析的选择器，而不是构建失败。这是隐性行为风险，因此设门禁。
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
-use crate::{crate_directories, relative, rust_sources};
+use crate::{crate_directories, is_real_directory, relative, rust_sources};
 
 /// What the mounting walk found.
 /// 挂载遍历的结果。
@@ -39,6 +40,261 @@ pub struct Findings {
     /// Every `include!(...)` at statement position, with file and line.
     /// 每一处位于语句位置的 `include!(...)`，含文件与行号。
     pub includes: Vec<String>,
+}
+
+/// What the kernel's own module tree looks like when it is walked as a tree.
+/// 把内核自己的模块树当作树来遍历时看到的样子。
+///
+/// `AGENTS.md` change rule 1 says new pure logic is registered in
+/// `core/src/registry_core.rs`, and nothing checked it: a module file that no
+/// declaration names is still in the package, still passes `cargo package
+/// --list` (the package audit's content half), and is simply never compiled.
+/// The kernel is the scope because it mounts every module by hand; the example
+/// hosts mount faces from `host!()`'s generated plan, which no declaration in
+/// the tree names, so the same walk would report their faces as unmounted.
+/// `AGENTS.md` 改动规则 1 说新的纯逻辑注册在 `core/src/registry_core.rs`，而此前无人检查：
+/// 没有任何声明指名的模块文件仍在包里、仍能通过 `cargo package --list`（包审计的内容那一半），
+/// 只是从未被编译。范围限于内核，因为内核的每个模块都靠手写声明挂载；示例宿主从 `host!()` 的
+/// 生成计划挂载注册面，树里没有任何声明为它们命名，同样的遍历会把那些注册面报成未挂载。
+#[derive(Debug, Default)]
+pub struct Mounts {
+    /// Kernel module files no declaration resolves to.
+    /// 没有任何声明指向的内核模块文件。
+    pub unmounted: Vec<String>,
+    /// Declarations whose `#[path]`/name resolves to no file.
+    /// `#[path]`/名字解析不到文件的声明。
+    pub dangling: Vec<String>,
+    /// Files named by more than one declaration.
+    /// 被多于一个声明指名的文件。
+    pub duplicated: Vec<String>,
+}
+
+/// One `mod` declaration: its name and its `#[path]`, when it has one.
+/// 一条 `mod` 声明：名字，以及可选的 `#[path]`。
+struct Declaration {
+    name: String,
+    path: Option<String>,
+}
+
+/// Module declarations in one file, in order.
+/// 单个文件里的模块声明，按顺序。
+///
+/// The `mod` keyword and the attribute shape are read from `masked`, so a fixture
+/// string cannot fake a declaration; the `#[path]` *value* is read from `raw`,
+/// because masking blanks string literals and a blanked path is no path at all.
+/// `mod` 关键字与属性形状读自 `masked`，因此夹具字符串伪造不出声明；`#[path]` 的**取值**读自
+/// `raw`，因为屏蔽会把字符串字面量抹白，而被抹白的路径根本不是路径。
+fn declarations(raw: &str, masked: &str) -> Vec<Declaration> {
+    let bytes = masked.as_bytes();
+    let mut found = Vec::new();
+    let mut from = 0usize;
+    while let Some(offset) = masked[from..].find("mod") {
+        let at = from + offset;
+        from = at + 3;
+        // An identifier character before `mod` means it is part of a longer name.
+        // `mod` 之前紧邻标识符字符意味着它是更长名字的一部分。
+        if at > 0 && (bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_') {
+            continue;
+        }
+        let after_keyword = &masked[at + 3..];
+        let rest = after_keyword.trim_start();
+        let name_len = rest
+            .find(|character: char| !(character.is_alphanumeric() || character == '_'))
+            .unwrap_or(rest.len());
+        if name_len == 0 {
+            continue;
+        }
+        let name = &rest[..name_len];
+        if !rest[name_len..].trim_start().starts_with(';') {
+            continue;
+        }
+        // Resume *after* the name, or the next search finds the `mod` inside it:
+        // `mod model;` used to yield a second declaration named `el`.
+        // 从名字**之后**继续，否则下一次搜索会在名字里找到 `mod`：`mod model;` 过去会再产出一条
+        // 名叫 `el` 的声明。
+        from = at + 3 + (after_keyword.len() - rest.len()) + name_len;
+        found.push(Declaration {
+            name: name.to_owned(),
+            path: path_attribute_before(raw, masked, at),
+        });
+    }
+    found
+}
+
+/// The value of a `#[path = "…"]` attribute immediately before `at`, if any.
+/// 紧邻 `at` 之前的 `#[path = "…"]` 属性的值（如果有）。
+///
+/// The walk crosses whatever sits between the attribute and the `mod` keyword: a
+/// visibility qualifier (`pub`, `pub(crate)`), other attributes (`#[cfg(test)]`),
+/// and whitespace. Stopping at the first of those was measured to hide every
+/// `#[path]` in `core/src/registry_core.rs`, whose declarations are all spelled
+/// `#[path = …]` newline `pub mod …;`.
+/// 遍历会穿过属性与 `mod` 关键字之间的任何东西：可见性限定（`pub`、`pub(crate)`）、其他属性
+/// （`#[cfg(test)]`）与空白。停在其中任何一个之前，实测会漏掉 `core/src/registry_core.rs` 里的
+/// 每一个 `#[path]`——那里的声明全都写成 `#[path = …]` 换行 `pub mod …;`。
+fn path_attribute_before(raw: &str, masked: &str, at: usize) -> Option<String> {
+    let bytes = masked.as_bytes();
+    let mut index = at;
+    loop {
+        while index > 0 && bytes[index - 1].is_ascii_whitespace() {
+            index -= 1;
+        }
+        if index == 0 {
+            return None;
+        }
+        if let Some(before) = visibility_start(masked, index) {
+            index = before;
+            continue;
+        }
+        if bytes[index - 1] != b']' {
+            return None;
+        }
+        let mut depth = 0usize;
+        let mut start = index;
+        while start > 0 {
+            start -= 1;
+            match bytes[start] {
+                b']' => depth += 1,
+                b'[' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if start == 0 || bytes[start - 1] != b'#' {
+            return None;
+        }
+        let attribute = &raw[start..index];
+        if let Some(value) = attribute_path(attribute) {
+            return Some(value.to_owned());
+        }
+        index = start - 1;
+    }
+}
+
+/// Where a visibility qualifier ending at `index` starts, if one does.
+/// 结束于 `index` 的可见性限定符的起始位置（如果存在）。
+fn visibility_start(masked: &str, index: usize) -> Option<usize> {
+    let trimmed = masked[..index].trim_end();
+    if let Some(head) = trimmed.strip_suffix("pub") {
+        return identifier_boundary(head).then_some(head.len());
+    }
+    let open = matching_open_paren(trimmed, trimmed.len().checked_sub(1)?)?;
+    let head = trimmed[..open].trim_end().strip_suffix("pub")?;
+    identifier_boundary(head).then_some(head.len())
+}
+
+/// Whether the text ends at an identifier boundary.
+/// 文本是否结束在标识符边界上。
+fn identifier_boundary(head: &str) -> bool {
+    head.chars()
+        .next_back()
+        .is_none_or(|previous| !(previous.is_alphanumeric() || previous == '_'))
+}
+
+/// The index of the `(` matching the `)` at `close`, if there is one.
+/// `close` 处的 `)` 所配对的 `(` 的下标（如果存在）。
+fn matching_open_paren(masked: &str, close: usize) -> Option<usize> {
+    let bytes = masked.as_bytes();
+    if bytes.get(close) != Some(&b')') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut index = close + 1;
+    while index > 0 {
+        index -= 1;
+        match bytes[index] {
+            b')' => depth += 1,
+            b'(' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The string in one `path = "…"` attribute body.
+/// 一个 `path = "…"` 属性体里的字符串。
+fn attribute_path(attribute: &str) -> Option<&str> {
+    let rest = attribute.split_once("path")?.1.trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    Some(&rest[..end])
+}
+
+/// The file one declaration mounts, relative to the declaring file's directory.
+/// 一条声明所挂载的文件，以声明文件所在目录为基准。
+fn target_of(declaration: &Declaration, directory: &Path) -> PathBuf {
+    if let Some(path) = &declaration.path {
+        return directory.join(path);
+    }
+    let nested = directory
+        .join(&declaration.name)
+        .join(format!("{}.rs", declaration.name));
+    if nested.is_file() {
+        return nested;
+    }
+    directory.join(format!("{}.rs", declaration.name))
+}
+
+/// Walk the kernel's module tree and report what does not add up.
+/// 遍历内核的模块树，报告对不上的地方。
+pub fn mounts(root: &Path) -> Mounts {
+    let mut found = Mounts::default();
+    let kernel = root.join("core/src");
+    if !is_real_directory(&kernel) {
+        return found;
+    }
+    let files = rust_sources(&kernel);
+    let mut mounted: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
+    for path in &files {
+        let text = std::fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        let masked = nichlink::source::mask_non_code(&text);
+        let directory = path.parent().unwrap_or(&kernel);
+        for declaration in declarations(&text, &masked) {
+            mounted
+                .entry(target_of(&declaration, directory))
+                .or_default()
+                .push(relative(root, path));
+        }
+    }
+    for path in &files {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if name == "lib.rs" || name == "build.rs" {
+            continue;
+        }
+        if !mounted.contains_key(path) {
+            found.unmounted.push(relative(root, path));
+        }
+    }
+    for (target, declarers) in &mounted {
+        if !target.is_file() {
+            found.dangling.push(format!(
+                "{} (declared by {})",
+                relative(root, target),
+                declarers.join(", ")
+            ));
+        } else if declarers.len() > 1 {
+            found.duplicated.push(format!(
+                "{} (declared by {})",
+                relative(root, target),
+                declarers.join(", ")
+            ));
+        }
+    }
+    found
 }
 
 /// Walk the workspace for mounting violations.
@@ -91,106 +347,5 @@ pub fn findings(root: &Path) -> Findings {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::workspace_root;
-
-    /// The only `include!` is the generated plan, and no file is named `mod.rs`.
-    /// `include!` is recognised by the macro, not by one exact spelling: a
-    /// delimiter change (`include! { … }`) splices a module just as well, and the
-    /// workspace gate must see it.
-    /// `include!` 靠宏本身识别，而不是靠一种拼法：换个定界符（`include! { … }`）照样拼接模块，
-    /// 工作区门禁必须看见它。
-    #[test]
-    fn an_include_with_another_delimiter_is_still_a_splice() {
-        let root = synthetic(&[(
-            "cli/src/zz_audit_probe.rs",
-            "pub mod spliced {\n    include! {\"zz_body.rs\"}\n}\n",
-        )]);
-        let found = findings(&root);
-        assert_eq!(
-            found.includes.len(),
-            1,
-            "a brace-delimited include! is a splice too: {:#?}",
-            found.includes
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A throwaway checkout with the given files under it.
-    /// 一个只含给定文件的一次性检出。
-    fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-mounting-{}-{}-{sequence}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        for (relative, contents) in files {
-            let path = root.join(relative);
-            std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
-            std::fs::write(&path, contents).expect("fixture file");
-        }
-        crate::fixture_manifest(&root);
-        root
-    }
-
-    /// 唯一的 `include!` 是生成计划，且没有文件叫 `mod.rs`。
-    #[test]
-    fn modules_are_mounted_without_splicing_identity() {
-        let root = workspace_root();
-        let found = findings(&root);
-        assert!(
-            found.mod_rs.is_empty(),
-            "the workspace mounts modules with #[path], never mod.rs: {:#?}",
-            found.mod_rs
-        );
-        assert_eq!(
-            found.includes.len(),
-            1,
-            "exactly one include! mounts the generated plan; a second one would \
-             splice a file and silently change the NodeId of every face it declares: {:#?}",
-            found.includes
-        );
-        assert!(
-            found.includes[0].contains("generated_lib.rs"),
-            "the single include! must be host!()'s generated plan, found: {:#?}",
-            found.includes
-        );
-    }
-    /// The three spellings the line-based literal search missed.
-    /// 逐行字面搜索漏掉的三种写法。
-    #[test]
-    fn a_splice_is_seen_however_it_is_spelled() {
-        let cases: &[(&str, &str)] = &[
-            ("a space before the bang", "include ! (\"body.rs\");"),
-            (
-                "a delimiter on the next line",
-                "include!\n        (\"body.rs\");",
-            ),
-            (
-                "a comment between the name and the bang",
-                "include/* spliced */!(\"body.rs\");",
-            ),
-            ("a brace delimiter", "include! { \"body.rs\" }"),
-        ];
-        for (shape, splice) in cases {
-            let root = synthetic(&[(
-                "zzprobe/src/lib.rs",
-                &format!("pub mod spliced {{\n    {splice}\n}}\n"),
-            )]);
-            let found = findings(&root);
-            assert_eq!(
-                found.includes.len(),
-                1,
-                "{shape} must be seen as a splice: {:#?}",
-                found.includes
-            );
-            let _ = std::fs::remove_dir_all(&root);
-        }
-    }
-}
+#[path = "mounting_tests.rs"]
+mod mounting_tests;

@@ -272,6 +272,71 @@ fn explain_reports_why_a_node_cannot_be_resolved() {
     fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// `explain --json` emits one JSON document even when the package cannot be
+/// resolved, so a machine reader is never handed an empty stdout; the human
+/// path still writes nothing.
+/// 包解析不出来时 `explain --json` 仍输出一个 JSON 文档，机器读者绝不会拿到空 stdout；
+/// 人类可读路径仍然什么都不写。
+#[test]
+fn explain_json_reports_a_resolution_failure_as_json() {
+    let missing = temporary_root("cli-explain-unresolvable").join("no-such-project");
+    let path = missing.display().to_string();
+    let (result, stdout) = run_capture(&[
+        "nichlink",
+        "explain",
+        "--json",
+        "--path",
+        &path,
+        "root/anything",
+    ]);
+    assert!(result.is_err(), "an unresolvable package must fail");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
+    assert_eq!(document["schema"], "nichlink.explain/1");
+    assert_eq!(document["resolved"], false, "{document}");
+    assert!(
+        document["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cannot resolve"),
+        "{document}"
+    );
+
+    let (result, stdout) = run_capture(&["nichlink", "explain", "--path", &path, "root/anything"]);
+    assert!(result.is_err());
+    assert!(
+        stdout.is_empty(),
+        "without --json stdout stays empty: {stdout}"
+    );
+}
+
+/// `explain --overlay --json` emits the projection's own schema on the same
+/// failure, carrying the reason instead of an empty stdout.
+/// 同样的失败下 `explain --overlay --json` 输出投影自己的 schema，携带原因而不是空 stdout。
+#[test]
+fn explain_overlay_json_reports_a_resolution_failure_as_json() {
+    let missing = temporary_root("cli-overlay-unresolvable").join("no-such-project");
+    let path = missing.display().to_string();
+    let (result, stdout) = run_capture(&[
+        "nichlink",
+        "explain",
+        "--overlay",
+        "--json",
+        "--path",
+        &path,
+    ]);
+    assert!(result.is_err(), "an unresolvable package must fail");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
+    assert_eq!(document["schema"], "nichlink.explain-overlay/1");
+    assert_eq!(document["kind"], "static-projection");
+    assert!(
+        document["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cannot resolve"),
+        "{document}"
+    );
+}
+
 /// `grafts` lists a readable plan with its selector, target path, graft,
 /// `full`, and declared state, and reports an unreadable one with its
 /// reason. Read-only: no file under the host changes.
@@ -424,6 +489,88 @@ fn explain_overlay_renders_the_static_projection() {
         1
     );
     fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// `nichlink studio` honours its path argument, so the path Studio's own error
+/// text tells the reader to pass actually reaches project resolution. Before
+/// this, the subcommand dropped the argument and opened whatever directory the
+/// process happened to be in.
+/// `nichlink studio` 采纳它的路径参数，因此 Studio 自己的错误文本让读者传的路径确实
+/// 到达项目解析。此前该子命令丢弃参数，打开的是进程恰好所在的那个目录。
+#[test]
+fn studio_honours_its_path_argument() {
+    let missing = temporary_root("cli-studio-arg").join("no-such-project");
+    let path = missing.display().to_string();
+    let (result, _stdout) = run_capture(&["nichlink", "studio", &path]);
+    let error = result.expect_err("an unusable path argument must be refused");
+    assert!(
+        error.contains("no-such-project"),
+        "the refusal must name the path argument: {error}"
+    );
+
+    let (result, _stdout) = run_capture(&["nichlink", "studio", "one", "two"]);
+    let error = result.expect_err("two paths must be refused");
+    assert!(error.contains("at most one"), "{error}");
+
+    let (result, stdout) = run_capture(&["nichlink", "studio", "--help"]);
+    assert!(result.is_ok(), "{result:?}");
+    assert!(
+        stdout.contains("nichlink studio [path]"),
+        "help and dispatch must agree on the argument: {stdout}"
+    );
+}
+
+/// `check --json` emits one JSON document even when the package cannot be
+/// resolved, so a machine reader is never handed an empty stdout.
+/// 包解析不出来时 `check --json` 仍输出一个 JSON 文档，机器读者绝不会拿到空的 stdout。
+#[test]
+fn check_json_reports_a_resolution_failure_as_json() {
+    let missing = temporary_root("cli-check-unresolvable").join("no-such-project");
+    let path = missing.display().to_string();
+    let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
+    assert!(result.is_err(), "an unresolvable package must fail");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
+    assert_eq!(document["schema"], "nichlink.build-diagnostics/1");
+    assert_eq!(document["count"], 1, "{document}");
+    assert!(
+        document["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cannot resolve"),
+        "{document}"
+    );
+
+    // Without `--json`, stdout stays reserved for the human line it has always
+    // been; the error still names the failure on stderr.
+    // 不带 `--json` 时 stdout 仍是它一直以来的那条人类可读行；错误仍在 stderr 上点名失败。
+    let (result, stdout) = run_capture(&["nichlink", "check", &path]);
+    assert!(result.is_err());
+    assert!(stdout.is_empty(), "{stdout}");
+}
+
+/// `grafts --json` emits one JSON document even when the package cannot be
+/// resolved, and the document carries the failure.
+/// 包解析不出来时 `grafts --json` 仍输出一个 JSON 文档，且文档携带该失败。
+#[test]
+fn grafts_json_reports_a_resolution_failure_as_json() {
+    let missing = temporary_root("cli-grafts-unresolvable").join("no-such-project");
+    let path = missing.display().to_string();
+    let (result, stdout) = run_capture(&["nichlink", "grafts", "--json", &path]);
+    assert!(result.is_err(), "an unresolvable package must fail");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
+    assert_eq!(document["schema"], "nichlink.grafts/1");
+    assert_eq!(
+        document["plans"].as_array().map(Vec::len),
+        Some(0),
+        "{document}"
+    );
+    assert!(
+        document["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cannot resolve"),
+        "{document}"
+    );
 }
 
 #[test]
