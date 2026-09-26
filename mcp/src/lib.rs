@@ -81,3 +81,6 @@ mod diff;
 
 #[path = "usages.rs"]
 mod usages;
+
+#[path = "converge.rs"]
+mod converge;

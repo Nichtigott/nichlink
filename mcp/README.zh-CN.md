@@ -34,6 +34,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   traits/contracts、registration rule、admission、flow、runtime checks），以及哪些别的面提到同一批
   能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；手写模块没有生成的
   字段清单，因此那些面被计为不可读，而不是被显示成空的。
+- `nichlink.converge`：代理着手处理一个面所需的全部，集中在一个答案里——构建的作用域与剪枝判断、
+  树的边、声明的字段、每条 `capability=>ProviderKind` 需求是否真的有答案（有就点名是谁）、该读哪些
+  文件，以及细节在哪个工具里。当本包自己的面**确实**被内核拒绝时，那次拒绝在这里就是判断本身而不是
+  一个错误：它已经点名了出问题的节点与源码位置，而那正是这个答案最重要的时刻。
 
 写入类工具：
 

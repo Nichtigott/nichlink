@@ -43,6 +43,13 @@ The server exposes compact tools. Reads:
   tokens rather than a resolved graph, and the reply says so; a hand-written module
   has no generated field list, so those faces are counted as unreadable rather than
   shown empty.
+- `nichlink.converge`: everything an agent needs to start on one face in a single
+  answer — the build's scope and pruning verdicts, the tree's edges, the declared
+  fields, whether each `capability=>ProviderKind` requirement is actually answered
+  (named when it is), the files to read, and which tool has the detail. When the
+  package's own faces *are* rejected by the kernel, that rejection is the verdict
+  here rather than an error: it already names the offending node and its source
+  location, which is the moment this answer matters most.
 
 And one that writes:
 

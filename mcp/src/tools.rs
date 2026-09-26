@@ -23,6 +23,7 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 use crate::apply::apply;
+use crate::converge::converge;
 use crate::diff::diff;
 use crate::evidence::explain;
 use crate::index::{display_list, load_one, load_sources, required_path, resolve_root};
@@ -135,6 +136,16 @@ pub(crate) fn tools() -> Vec<Value> {
              here; the CLI's `explain --json` carries them.",
             json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
+        tool(
+            "nichlink.converge",
+            "The converged starting point for one face in a single answer: the build's scope and \
+             pruning verdicts, the tree's edges, the declared fields, and — the verdict no single \
+             tool can give — whether each `capability=>ProviderKind` requirement is actually \
+             answered by something in the package, named when it is and UNANSWERED when it is not. \
+             Ends with the files to read (this face, its parent, its children) and which tool has \
+             the detail. Everything is composed from what the other tools report.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
+        ),
     ]
 }
 
@@ -168,6 +179,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.diff" => diff(&root, arguments),
         "nichlink.trace" => trace(&root, arguments),
         "nichlink.usages" => usages(&root, arguments),
+        "nichlink.converge" => converge(&root, arguments),
         "nichlink.apply" => apply(&root, arguments),
         _ => Err(format!("unknown tool `{name}`")),
     };

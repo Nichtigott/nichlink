@@ -81,6 +81,18 @@ waiting state that change opened.
   pins taught the authoring contract twice: a parent must own a registry before the
   kernel admits a child, and a requirement is written `capability=>ProviderKind` —
   the kernel refuses a bare capability name by name.
+- `nichlink.converge` joins those answers into the one an agent needs before touching
+  a face: the build's scope and pruning verdicts, the tree's edges, the declared
+  fields, whether each `capability=>ProviderKind` requirement is answered (named when
+  it is), the files to read, and which tool carries the detail. The interesting half
+  is the rejected case, and writing its pin found it: loading the package's own faces
+  *validates* them, so a tree whose requirement has no provider makes every
+  registry-backed tool refuse to load — which is exactly when an agent wants a
+  verdict. `converge` now reports that rejection as its headline finding (the kernel
+  already names the offending node and its source location) and still prints the read
+  plan, because that needs only the source-derived tree. The write path has the other
+  half: an edit that would orphan a descendant's requirement is refused by name, with
+  the descendant and its `file:line` in the diagnostic.
 
 ### Changed
 
@@ -982,6 +994,14 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   手写模块没有生成的字段清单，因此那些面被计为不可读，而不是显示成空的。写这些钉子时作者契约教了两次：
   父级必须先拥有注册机内核才准入子面，而需求要写成 `capability=>ProviderKind`——裸能力名会被内核按名
   拒绝。
+
+- `nichlink.converge` 把那些答案拼成代理在动一个面之前真正需要的那一个：构建的作用域与剪枝判断、
+  树的边、声明的字段、每条 `capability=>ProviderKind` 需求是否有答案（有就点名是谁）、该读哪些文件，
+  以及细节在哪个工具里。有意思的是被拒绝的那一半，而写它的钉子发现了它：加载本包自己的面会**校验**它们，
+  因此一棵需求没有提供者的树会让所有依赖注册机的工具拒绝加载——而那恰恰是代理最想要一个判断的时刻。
+  现在 `converge` 把那次拒绝当作头条发现报出来（内核已经点名了出问题的节点与源码位置），并且仍然打印
+  读计划，因为那只需要源码推导出的树。另一半在写入路径上：会让后代的需求失去答案的编辑会被按名拒绝，
+  诊断里带着那个后代与它的 `file:line`。
 
 修复：
 

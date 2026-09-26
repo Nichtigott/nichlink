@@ -37,6 +37,23 @@ pub(crate) fn out_dir(root: &Path) -> PathBuf {
     root.join("target/nichlink/out")
 }
 
+/// The three pieces of build evidence, read once for every caller that needs them.
+/// 三块构建证据，为每个需要它们的调用方读一次。
+///
+/// A missing or stale build is not an error: it is the answer to "why does this
+/// face not know whether it ships".
+/// 缺失或过期的构建不是错误：它正是"这个面为什么不知道自己发不发布"的答案。
+pub(crate) fn build_evidence(
+    root: &Path,
+) -> (bool, Option<BuildScopeView>, Option<Vec<PruningRow>>) {
+    let out = out_dir(root);
+    (
+        build_output_is_current(root, &out),
+        read_build_scope(&out).ok(),
+        read_pruning_manifest(&out).ok(),
+    )
+}
+
 /// Report the build's evidence for one face, or for the whole scoped tree.
 /// 报告构建对某个面的证据，或对整棵被划定作用域的树给出的证据。
 ///
@@ -48,13 +65,10 @@ pub(crate) fn out_dir(root: &Path) -> PathBuf {
 pub(crate) fn explain(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
     let faces = face_views(root, &namespace)?;
-    let out = out_dir(root);
     // A missing or stale build is not an error: it is the answer to "why does
     // this face not know whether it ships".
     // 缺失或过期的构建不是错误：它正是"这个面为什么不知道自己发不发布"的答案。
-    let current = build_output_is_current(root, &out);
-    let scope = read_build_scope(&out).ok();
-    let pruning = read_pruning_manifest(&out).ok();
+    let (current, scope, pruning) = build_evidence(root);
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -124,7 +138,7 @@ fn node_report(
 
 /// Whether the scope selected this face, and why.
 /// 作用域是否选中了这个面，以及原因。
-fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> String {
+pub(crate) fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> String {
     let Some(scope) = scope else {
         return "scope unknown (no source_scope.tsv; run `nichlink check`)\n".to_owned();
     };
@@ -152,7 +166,7 @@ fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> String {
 /// "a row exists" is not "something is stripped" — the symbol has to be named.
 /// 符号为 `-` 的清单行记录的是一个没有可跟踪符号的面，因此"行存在"不等于"有东西被剥掉"——必须点名
 /// 那个符号。
-fn pruning_line(pruning: Option<&[PruningRow]>, face: &FaceView) -> String {
+pub(crate) fn pruning_line(pruning: Option<&[PruningRow]>, face: &FaceView) -> String {
     let Some(rows) = pruning else {
         return "pruning unknown (no pruning_manifest.tsv; run `nichlink check`)\n".to_owned();
     };
