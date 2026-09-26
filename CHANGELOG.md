@@ -13,24 +13,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Release state:** `0.1.0` is published. All nine crates went to crates.io together
 on 2026-09-25, and the release workflow's last step built a throwaway consumer
-outside the checkout and resolved all nine by version. The version line stays on
+outside the checkout and resolved all nine by version. `0.1.1` followed on
+2026-09-26, the same way and with the same last step; `tools/nichlink-package-audit`
+now builds all nine packaged tarballs instead of skipping the eight whose
+requirements had not reached the index. The version line stays on
 **0.1.x** while the design is still being deepened: each later release is a small
-step (`0.1.1`, `0.1.2`, …), and "1.0" names the milestone in
+step (`0.1.2`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
 `version = "0.1.1"` requirement with it, and that step is what freezes the public
-surface. This checkout is `0.1.1`: the third-party audit's fixes below moved the
-workspace version and every internal requirement together, which is what lets a
-cross-crate API change ship without a red package audit.
+surface. The third-party audit's fixes below moved the workspace version and every
+internal requirement together, which is what lets a cross-crate API change ship
+without a red package audit.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
-一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。设计仍在深化期间，版本线保持
-**0.1.x**：其后的每次发布都是小步（`0.1.1`、`0.1.2`……），而"1.0"是
+一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
+方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
+跳过那八个依赖尚未进入 index 的 crate。设计仍在深化期间，版本线保持
+**0.1.x**：其后的每次发布都是小步（`0.1.2`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
 `1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.1"` 要求一起移动——那一步才是冻结
-公开面。本检出是 `0.1.1`：下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让
-一次跨 crate 的 API 改动得以随版本发布、而不让包审计变红的原因。
+公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
+改动得以随版本发布、而不让包审计变红的原因。
 
-## [0.1.1] — 2026-09-25
+## [0.1.1] — 2026-09-26
 
 ### Added
 
@@ -676,7 +681,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)；版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-### [0.1.1] 2026-09-25
+### [0.1.1] 2026-09-26
 
 新增：
 
