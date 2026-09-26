@@ -22,6 +22,19 @@ The server exposes compact tools. Reads:
 - `nichlink.status`: report the indexed source root and counts.
 - `nichlink.registry`: report the registration faces this package declares —
   logical path, kind, source, and the `NodeId` the host compiled.
+- `nichlink.explain`: report the build's own evidence for one face (identity,
+  path, kind, source, module, parent, slot) or the tree projection it scoped. The
+  registry answer above is derived from source text and is therefore always fresh;
+  this one reads the files the build *published* under `target/nichlink/out`, so it
+  answers what ships: whether the scope selected the face and whether release
+  pruning strips its symbols. A missing or stale build is reported as such.
+- `nichlink.diff`: the face-level delta between the sources now and the build's
+  manifest — added, gone, and re-identified under an unmoved file (a `kind` change
+  is an identity change, so only this comparison sees it).
+- `nichlink.trace`: read this package's recorded trace artifact and answer with the
+  headless call report it implies — what actually ran, which no static read can
+  tell you. The artifact's identity is checked first (namespace, registry root,
+  every frame's node); a foreign artifact is refused by name rather than drawn.
 
 And one that writes:
 

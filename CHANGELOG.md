@@ -45,6 +45,32 @@ waiting state that change opened.
 
 ## [Unreleased]
 
+### Added
+
+- **The build's evidence, the tree delta, and the runtime trace — three tools that
+  answer from something other than source text.** `nichlink.explain` reads the
+  files the build published under `target/nichlink/out` and answers what actually
+  ships per face: whether the scope selected it and whether release pruning strips
+  its symbols, plus identity, path, kind, source, module, parent and slot — or the
+  whole scoped tree, bounded by `limit`. `nichlink.diff` states the face-level
+  delta between the sources now and the build's manifest: added, gone, and
+  re-identified under an unmoved file (a `kind` change is an identity change, which
+  no text diff sees). `nichlink.trace` reads a recorded trace artifact and renders
+  the headless call report — what actually ran — after checking the artifact's
+  identity (namespace, registry root, every frame's node); a foreign artifact is
+  refused by name rather than drawn, absence names the way to produce one, and a
+  long report is truncated with its total named. Declared graft state and the
+  contract/admission fields stay out: the first belongs to `nichlink grafts`, the
+  second needs a loaded registry and a build.
+- Two read-path defects the NichUI test project measured are fixed. The scan no
+  longer indexes `.nichlink/`, so a deleted fact stops answering `status` and
+  `search` from its own recoverable backup. And `nichlink.callgraph` is bounded —
+  definitions by `limit`, callers by a cap — names a multi-definition match as
+  ambiguous and tells the reader to pass `path`, and labels its caller lists as
+  name-matched. Measured before the fix: one `{"function":"new"}` reply against a
+  350-file corpus was 4.5 MB, because 151 definitions each listed every call site
+  of the name.
+
 ### Changed
 
 - `mcp`'s READMEs say which path `nichlink.apply`'s `node`/`parent` take: the
@@ -921,6 +947,23 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
 ### [Unreleased] 未发布
+
+新增：
+
+- **构建的证据、树的差量与运行期的 trace——三个不靠源码文本作答的工具。** `nichlink.explain`
+  读构建发布在 `target/nichlink/out` 下的文件，逐个面回答真正会发布什么——作用域是否选中它、发布
+  剪枝是否剥掉它的符号——外加身份、路径、kind、源码、模块、父级与槽位；也可以给出整棵被划定作用域的
+  树（受 `limit` 限制）。`nichlink.diff` 说出源码现在与构建清单之间的面级差异：新增、消失，以及文件
+  没动而身份变了（`kind` 变化就是身份变化，文本 diff 看不见）。`nichlink.trace` 读取已记录的 trace
+  artifact，在核验它的身份（命名空间、注册机根、每个帧的节点）之后渲染无终端调用报告——真正跑了
+  什么；异树 artifact 被按名拒绝而不是画出来，缺失时说出产出它的办法，报告过长会截断并给出总行数。
+  声明的 graft 状态与 contract/admission 字段仍不在内：前者归 `nichlink grafts`，后者需要一个已加载
+  的注册机与一次构建。
+- 修掉 NichUI 测试项目实测到的两个读路径缺陷。扫描不再索引 `.nichlink/`，因此被删掉的东西不再从
+  自己的可恢复备份里回答 `status` 与 `search`。`nichlink.callgraph` 也有了上限——定义数由 `limit`
+  限制、调用者由上限截断——多定义命中会说明歧义并提示传 `path`，调用者清单也标明是按名字匹配的。
+  修复前的实测：在 350 文件的语料上，一条 `{"function":"new"}` 回复是 4.5 MB，因为 151 个定义各自
+  列出了该名字的每一个调用点。
 
 修复：
 

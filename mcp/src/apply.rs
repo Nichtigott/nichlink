@@ -374,7 +374,7 @@ fn text<'a>(fields: &'a Value, key: &str) -> &'a str {
 /// Build the registry the executor validates against: the package's own faces,
 /// under the namespace Cargo reports.
 /// 构建执行器据以校验的注册树：该包自己的注册面，位于 Cargo 报告的命名空间之下。
-fn load_registry(root: &Path, namespace: &str) -> Result<Registry, String> {
+pub(crate) fn load_registry(root: &Path, namespace: &str) -> Result<Registry, String> {
     let mut registry =
         Registry::root_for_namespace(nichlink::FrameworkId::new("nichlink.mcp"), namespace);
     let source_root = source_layout(root)?.scan_root;

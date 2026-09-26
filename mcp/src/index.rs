@@ -112,7 +112,18 @@ fn collect_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> 
         },
         |_, _| nichlink::source::Keep::Yes,
         paths,
-    )
+    )?;
+    // The write path's own recoverable trash lives under `.nichlink/` and holds
+    // `.rs` files, so without this filter a deleted fact keeps answering `status`
+    // and `search` from its backup — the bridge indexing its own private state.
+    // 写入路径自己的可恢复回收目录在 `.nichlink/` 下，而里面就是 `.rs` 文件；没有这道过滤，一个被
+    // 删掉的东西会一直从它的备份里回答 `status` 与 `search`——桥在索引自己的私有状态。
+    paths.retain(|path| {
+        !path
+            .components()
+            .any(|component| component.as_os_str() == nichlink::lexicon::NICHLINK_DIR)
+    });
+    Ok(())
 }
 
 pub(crate) fn load_one(root: &Path, relative: &str) -> Result<SourceFile, String> {
@@ -207,6 +218,38 @@ pub(crate) fn display_list(items: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The write path's recoverable trash lives under `.nichlink/` and holds
+    /// `.rs` files, so a deleted fact must not keep answering `status` and
+    /// `search` from its own backup.
+    /// 写入路径的可恢复回收目录在 `.nichlink/` 下、里面就是 `.rs` 文件，因此被删掉的东西不得继续
+    /// 从它自己的备份里回答 `status` 与 `search`。
+    #[test]
+    fn the_recoverable_trash_is_not_indexed() {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!("mcp-scan-{}-{sequence}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).expect("source directory");
+        std::fs::create_dir_all(root.join(".nichlink/trash/faces")).expect("trash directory");
+        std::fs::write(root.join("src/live.rs"), "pub fn live() {}\n").expect("live file");
+        std::fs::write(
+            root.join(".nichlink/trash/faces/deleted.rs"),
+            "pub fn deleted() {}\n",
+        )
+        .expect("backup file");
+        let files = load_sources(&root).expect("the scan reads the tree");
+        let names = files
+            .iter()
+            .map(|file| file.relative.clone())
+            .collect::<Vec<_>>();
+        assert!(names.iter().any(|name| name == "src/live.rs"), "{names:?}");
+        assert!(
+            !names.iter().any(|name| name.contains(".nichlink")),
+            "the trash must not be indexed: {names:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn parser_indexes_functions_and_direct_calls() {

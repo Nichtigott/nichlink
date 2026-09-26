@@ -18,9 +18,12 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 use crate::apply::apply;
+use crate::diff::diff;
+use crate::evidence::explain;
 use crate::index::{display_list, load_one, load_sources, required_path, resolve_root};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
+use crate::trace::trace;
 
 pub(crate) fn tools() -> Vec<Value> {
     vec![
@@ -78,6 +81,41 @@ pub(crate) fn tools() -> Vec<Value> {
              a package root; omitting it uses NICH_LINK_PACKAGE_ROOT.",
             json!({"type":"object","properties":{"root":{"type":"string"}}}),
         ),
+        tool(
+            "nichlink.explain",
+            "Report the build's own evidence for one face — identity, logical path, kind, source, \
+             module, parent, slot — or the tree projection the build scoped. `nichlink.registry` \
+             derives from source text and is therefore always fresh; this reads the files the build \
+             *published* under `target/nichlink/out`, so it answers what ships: whether the scope \
+             selected the face and whether release pruning strips its symbols. A missing or stale \
+             build is reported as such, and an unbuilt project is told which command publishes the \
+             evidence. `node` names one face by logical path or identity; omit it for the projection, \
+             bounded by `limit`. Declared graft state stays in `nichlink grafts`; contract and \
+             admission fields need a loaded registry and are not reported here.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+        ),
+        tool(
+            "nichlink.diff",
+            "Report the face-level delta between the sources now and the build's own manifest: which \
+             faces were added, which are gone, and which changed identity under a file that did not \
+             move (a `kind` change is an identity change, so only this comparison sees it). The unit \
+             is the face rather than the line, because the face is what the registry ships. Needs a \
+             prior `nichlink check` or `build`; a project with no build evidence is told so instead \
+             of being handed an empty diff.",
+            json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+        ),
+        tool(
+            "nichlink.trace",
+            "Read this package's recorded trace artifact (`NICH_LINK_TRACE_FILE`, else \
+             `<root>/.nichlink/traces/nichlink.trace`) and answer with the headless call report it \
+             implies — what actually ran, which no static read can tell you. The artifact's identity \
+             is checked first (namespace, registry root, every frame's node), and an artifact that \
+             describes a different tree is refused by name rather than rendered, because frames are \
+             node identities and foreign ones would draw a plausible, wrong call tree. Absence is \
+             reported together with the way to produce one; `query` filters the report and a long \
+             report is truncated with its total named.",
+            json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"}}}),
+        ),
     ]
 }
 
@@ -107,6 +145,9 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.read" => read_source(&root, arguments),
         "nichlink.status" => status(&root),
         "nichlink.registry" => registry(&root),
+        "nichlink.explain" => explain(&root, arguments),
+        "nichlink.diff" => diff(&root, arguments),
+        "nichlink.trace" => trace(&root, arguments),
         "nichlink.apply" => apply(&root, arguments),
         _ => Err(format!("unknown tool `{name}`")),
     };
@@ -187,6 +228,14 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
 }
 
 fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
+    // Two bounds, because this answer is the one that grows without limit: a
+    // common name like `new` had 151 definitions and every call site of the name
+    // in the tree, which arrived as a 4.5 MB reply. Definitions and callers are
+    // capped separately, and both say how much they withheld.
+    // 两道上限，因为这是唯一会无界增长的答案：像 `new` 这样的常见名有 151 个定义、外加树里该名字
+    // 的每一个调用点，曾以 4.5 MB 的回复抵达。定义数与调用者各自设上限，且都说出自己扣下了多少。
+    const DEFINITIONS: usize = 5;
+    const CALLERS: usize = 20;
     let query = arguments
         .get("function")
         .and_then(Value::as_str)
@@ -195,14 +244,15 @@ fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     if query.is_empty() {
         return Err("function must not be empty".to_owned());
     }
+    let path_filter = arguments.get("path").and_then(Value::as_str);
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(DEFINITIONS, |value| value.clamp(1, 50) as usize);
     let files = load_sources(root)?;
     let mut found = Vec::new();
     for file in &files {
-        if arguments
-            .get("path")
-            .and_then(Value::as_str)
-            .is_some_and(|path| file.relative != path)
-        {
+        if path_filter.is_some_and(|path| file.relative != path) {
             continue;
         }
         for function in &file.functions {
@@ -214,9 +264,21 @@ fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     if found.is_empty() {
         return Ok(format!("no static function match for `{query}`"));
     }
-    let mut output = String::from("evidence: static-heuristic\n");
-    for (file, function) in found {
-        let callers = files
+    let total = found.len();
+    let mut output = format!("evidence: static-heuristic\nmatches {total}\n");
+    if total > 1 && path_filter.is_none() {
+        // Naming the ambiguity is the difference between a usable answer and a
+        // dump: with several definitions the reader has to choose, and `path` is
+        // how they choose.
+        // 把歧义说出来，是好答案与一坨倾倒之间的区别：有多个定义时读取方必须选一个，而 `path`
+        // 就是他们选的工具。
+        output.push_str(&format!(
+            "note: {total} definitions match `{query}`; pass `path` to select one. Callers are matched \
+             by name across the whole tree, so for a common name they include unrelated call sites.\n"
+        ));
+    }
+    for (file, function) in found.into_iter().take(limit) {
+        let mut callers = files
             .iter()
             .flat_map(|candidate| {
                 candidate.functions.iter().filter_map(|caller| {
@@ -228,13 +290,32 @@ fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
                 })
             })
             .collect::<Vec<_>>();
+        callers.sort();
+        callers.dedup();
+        let callers_total = callers.len();
+        let callers_text = if callers_total > CALLERS {
+            format!(
+                "{} … +{} more",
+                callers[..CALLERS].join(", "),
+                callers_total - CALLERS
+            )
+        } else {
+            display_list(&callers)
+        };
         output.push_str(&format!(
-            "{}:{} fn {}\n  callers: {}\n  callees: {}\n",
+            "{}:{} fn {}\n  callers ({}): {}\n  callees: {}\n",
             file.relative,
             function.line,
             function.name,
-            display_list(&callers),
+            callers_total,
+            callers_text,
             display_list(&function.calls),
+        ));
+    }
+    if total > limit {
+        output.push_str(&format!(
+            "… +{} more definitions (raise `limit` or pass `path`)\n",
+            total - limit
         ));
     }
     output.push_str("dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.\n");
@@ -288,6 +369,10 @@ fn status(root: &Path) -> Result<String, String> {
         functions
     ))
 }
+
+#[cfg(test)]
+#[path = "tools_tests.rs"]
+mod tools_tests;
 
 #[cfg(test)]
 mod tests {

@@ -20,6 +20,15 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.status`：报告源码根目录和索引数量；
 - `nichlink.registry`：报告本包声明的注册面——逻辑路径、kind、源码与宿主编译出的
   `NodeId`。
+- `nichlink.explain`：报告构建对某个面给出的证据（身份、路径、kind、源码、模块、父级、槽位），或
+  它划定作用域的整棵树投影。上面那个注册树答案由源码文本推导，因此永远新鲜；这一个读构建**发布**在
+  `target/nichlink/out` 下的文件，因此回答真正会发布什么：作用域是否选中该面、发布剪枝是否剥掉它的
+  符号。缺失或过期的构建会被如实报告。
+- `nichlink.diff`：源码现在与构建清单之间的面级差异——新增、消失，以及文件没动而身份变了
+  （`kind` 变化就是身份变化，只有这个比较看得见）。
+- `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
+  什么，这是任何静态读取都说不出的。artifact 的身份会先被核验（命名空间、注册机根、每个帧的节点）；
+  异树 artifact 会被按名拒绝，而不是画出来。
 
 写入类工具：
 

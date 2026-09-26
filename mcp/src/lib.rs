@@ -2,16 +2,24 @@
 //! previewed authoring writes.
 //! 面向紧凑 NichLink 源码与注册树查询、以及先预览后落盘的创作写入的 MCP stdio 桥。
 //!
-//! Five tools index Rust source text; `nichlink.registry` is the sixth and the
-//! first that does not: it reports the registration tree the *build* derives,
-//! through the same `face_views` the CLI's `explain` uses, so an agent can ask
-//! what the registry is instead of reconstructing it from macro names. Contract,
-//! admission, and registration-rule fields are still absent: those need the
-//! built face snapshots, not a source scan.
-//! 五个工具索引 Rust 源码文本；`nichlink.registry` 是第六个，也是第一个不这么做的：它报告
-//! **构建**推导出的注册树，走的是 CLI 的 `explain` 所用的同一个 `face_views`，因此代理可以
-//! 直接问注册树是什么，而不是从宏名重建。contract、admission 与 registration rule 字段仍然
-//! 没有：那些需要已构建的面快照，而不是源码扫描。
+//! Five tools index Rust source text; the rest answer from evidence that is not
+//! source text. `nichlink.registry` reports the registration tree the *build*
+//! derives, through the same `face_views` the CLI's `explain` uses, so an agent
+//! can ask what the registry is instead of reconstructing it from macro names.
+//! `nichlink.explain` reads the build's *published* files (`target/nichlink/out`)
+//! and answers what actually ships — scope and release pruning — which the source
+//! cannot; `nichlink.diff` states the face-level delta between those two sides,
+//! and `nichlink.trace` reads a recorded trace artifact and answers what actually
+//! ran, refusing an artifact that describes a different tree. Contract, admission,
+//! and registration-rule fields are still absent: those need a loaded registry,
+//! not a source scan.
+//! 五个工具索引 Rust 源码文本；其余工具用非源码文本的证据作答。`nichlink.registry` 报告**构建**
+//! 推导出的注册树，走的是 CLI 的 `explain` 所用的同一个 `face_views`，因此代理可以直接问注册树是
+//! 什么，而不是从宏名重建。`nichlink.explain` 读构建**发布**的文件（`target/nichlink/out`），回答
+//! 真正会发布什么——作用域与发布剪枝——这是源码答不出来的；`nichlink.diff` 说出两侧的面级差异；
+//! `nichlink.trace` 读取已记录的 trace artifact，回答真正跑了什么，并拒绝描述另一棵树的 artifact。
+//! contract、admission 与 registration rule 字段仍然没有：那些需要一个已加载的注册机，而不是
+//! 源码扫描。
 //!
 //! JSON-RPC frames arrive on stdin and responses leave on stdout. Reads stay
 //! below the configured `NICH_LINK_PACKAGE_ROOT`. Writes exist — `nichlink.apply`
@@ -61,3 +69,12 @@ mod preview;
 
 #[path = "index.rs"]
 mod index;
+
+#[path = "evidence.rs"]
+mod evidence;
+
+#[path = "trace.rs"]
+mod trace;
+
+#[path = "diff.rs"]
+mod diff;
