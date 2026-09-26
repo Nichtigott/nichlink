@@ -28,7 +28,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   `edit`（只改请求点名的 `fields`，其余保持——会先读回该面，因此一次只改两个字段的请求不会抹掉
   另外二十一个）、`rename`（改 `fields.module`，其余字段全保留）或 `delete`（把模块移入 NichLink
   的可恢复回收目录）。`node` 命名该面、`parent` 命名父级，都可用逻辑路径或身份——`nichlink.registry`
-  报告的路径可以直接用。**除非 `apply: true`，请求只做预览**：预览在一份一次性的包副本上运行真实
+  报告的路径可以直接用，而那是**注册树**路径（`root/control/button`），不是文件的路径
+  （`control/object/button/button.rs`）；拿后者去瞄准会被按名拒绝。**除非 `apply: true`，请求只做
+  预览**：预览在一份一次性的包副本上运行真实
   操作，返回文件 diff 与将得到的注册树；只有 `apply: true` 才写入项目，给出它写下的文件，并把产生的
   声明锚成 `<path>:<line>`——与拒绝时 `file:line:column` 同一种形状。每条回复都以当前这棵树收尾，
   因此下一次调用可以用它来瞄准。

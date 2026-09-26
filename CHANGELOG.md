@@ -45,6 +45,13 @@ waiting state that change opened.
 
 ## [Unreleased]
 
+### Changed
+
+- `mcp`'s READMEs say which path `nichlink.apply`'s `node`/`parent` take: the
+  *registry* path `nichlink.registry` reports (`root/control/button`), not the
+  file's (`control/object/button/button.rs`). Aiming with the file-shaped one is
+  refused by name, which a play session against a scaffolded host walked into.
+
 ### Fixed
 
 - A preview no longer reports the operation as done. `nichlink.apply` runs the real

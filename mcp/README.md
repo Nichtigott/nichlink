@@ -33,7 +33,9 @@ And one that writes:
   `fields.module`, keeping every other field), or `delete` (move the module into
   NichLink's recoverable trash). `node` names the face and `parent` the parent, by
   logical path or identity — the path `nichlink.registry` reports is directly
-  usable. **A request is previewed unless `apply: true`**: the preview runs the real
+  usable, and it is the *registry* path (`root/control/button`), not the file's
+  (`control/object/button/button.rs`); aiming with the file-shaped one is refused
+  by name. **A request is previewed unless `apply: true`**: the preview runs the real
   operation on a throwaway copy of the package and returns the file diff plus the
   registration tree that results; only `apply: true` writes to the project, and then
   it names the files it wrote and anchors the declaration it produced as
