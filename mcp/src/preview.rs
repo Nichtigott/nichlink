@@ -63,6 +63,29 @@ pub(crate) fn remove_copy(root: &Path, work: &Path) {
     }
 }
 
+/// Where a written face's declaration sits, as `<path>:<line>`.
+/// 被写入的面的声明位置，写作 `<path>:<line>`。
+///
+/// The executor validates and reports refusals with a position (the kernel's
+/// diagnostics carry `file:line:column`), so a *successful* write has to answer the
+/// same question or the caller has to guess: a face's declaration is the macro
+/// invocation, which is the line an editor or a follow-up edit wants.
+/// 执行器在拒绝时带着位置报告（内核诊断携带 `file:line:column`），因此**成功**的写入必须回答同一个
+/// 问题，否则调用方只能猜：一个面的声明就是那次宏调用，而那正是编辑器或后续编辑想要的那一行。
+pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(file).ok()?;
+    let line = text.lines().position(|line| line.contains("! {"))?;
+    // Forward slashes, like every other tree-relative path this bridge reports
+    // (`FaceView.source`, the diff headers): a caller comparing the anchor with a
+    // path out of `nichlink.registry` must not have to know which platform produced
+    // it. The absolute path in the line above stays native, like `status`'s root.
+    // 正斜杠，与本桥报告的每一条树内相对路径一致（`FaceView.source`、diff 头）：把锚点与
+    // `nichlink.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
+    // 路径保持本机写法，与 `status` 的 root 一致。
+    let relative = relative.to_string_lossy().replace('\\', "/");
+    Some(format!("{relative}:{}", line + 1))
+}
+
 /// A line diff between the project and the copy it was previewed in.
 /// 项目与它据以预览的副本之间的逐行 diff。
 ///
