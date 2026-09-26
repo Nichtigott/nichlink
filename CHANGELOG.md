@@ -101,6 +101,16 @@ without a red package audit.
 
 ### Fixed
 
+- `nichlink-build-method` no longer aborts when the source tree is missing. A
+  package whose `[lib] path` points outside `src/` — a legal Cargo layout — used
+  to reach `expect("src directory must exist")` inside discovery: the build script
+  died with exit 101 and `check --json` printed nothing at all, which is the
+  contract that command keeps. It is a `face-layout` diagnostic now, naming the
+  tree it looked for: structured callers get it back (`check --json` writes the
+  document) and the build script fails loudly with the rendered text. A directory
+  that disappears mid-walk is reported the same way instead of panicking.
+  `check_for`'s doc now also says its first parameter is the package **root**,
+  which is what every call site already passed.
 - The MCP bridge's request framing is bounded: a line past `MAX_REQUEST_BYTES`
   (1 MiB) is refused with `-32600` and its remainder drained, so a hostile or
   buggy client can no longer make the long-lived stdio server allocate without
@@ -811,6 +821,12 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- `nichlink-build-method` 在源树缺失时不再中止。`[lib] path` 指向 `src/` 之外的包——一种合法的
+  Cargo 布局——过去会走到 discovery 里的 `expect("src directory must exist")`：构建脚本以退出
+  101 死掉，而 `check --json` 什么都不打印，而那正是那条命令要守住的契约。现在是一条
+  `face-layout` 诊断，点名它找的是哪棵树：结构化调用方拿回它（`check --json` 写出文档），构建
+  脚本带着渲染后的文本响亮失败。遍历中途消失的目录也以同样方式报告，而不是 panic。
+  `check_for` 的文档也补上了"第一个参数是包**根目录**"——每个调用点本来就是这么传的。
 - MCP 桥的请求分帧有了上限：超过 `MAX_REQUEST_BYTES`（1 MiB）的行以 `-32600` 被拒并排空其余
   部分，敌对或有 bug 的客户端再也不能让这个长期存活的 stdio 服务无限分配。排空停在换行处——
   直接读进暂存缓冲会把下一帧一起带走，因为切片或管道会给到能装下的全部内容。请求还必须携带

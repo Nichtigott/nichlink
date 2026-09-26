@@ -125,13 +125,16 @@ pub fn run() {
 }
 
 /// Run the discovery and validation pipeline for an explicit host project,
-/// outside a Cargo build script. `package` pins the identity namespace that
-/// Cargo would otherwise inject through `CARGO_PKG_NAME`. `out_dir` receives
-/// the generated plan and manifests; when validation fails the rendered
-/// diagnostics are returned.
-/// 在 Cargo build script 之外为显式指定的宿主项目运行发现与校验管线。
-/// `package` 固定身份命名空间（Cargo 本来会通过 `CARGO_PKG_NAME` 注入）。
-/// `out_dir` 接收生成的计划与清单；校验失败时返回渲染后的诊断。
+/// outside a Cargo build script. `manifest` is the package **root directory** —
+/// the one holding `Cargo.toml`, not the file — because every path this builds on
+/// (`src/`, the cache, the generated output) is resolved against it. `package`
+/// pins the identity namespace that Cargo would otherwise inject through
+/// `CARGO_PKG_NAME`. `out_dir` receives the generated plan and manifests; when
+/// validation fails the rendered diagnostics are returned.
+/// 在 Cargo build script 之外为显式指定的宿主项目运行发现与校验管线。`manifest` 是包的
+/// **根目录**——装着 `Cargo.toml` 的那个目录，而不是文件本身——因为本管线搭出的每条路径
+/// （`src/`、缓存、生成产物）都以它为基准。`package` 固定身份命名空间（Cargo 本来会通过
+/// `CARGO_PKG_NAME` 注入）。`out_dir` 接收生成的计划与清单；校验失败时返回渲染后的诊断。
 pub fn run_for(manifest: &Path, out_dir: &Path, package: &str) -> Result<(), String> {
     // Keep the historical plain-text IO error: `check_for` reports an unwritable
     // `out_dir` as a diagnostic so its structured caller sees it too, but a

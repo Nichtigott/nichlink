@@ -548,6 +548,55 @@ fn check_json_reports_a_resolution_failure_as_json() {
     assert!(stdout.is_empty(), "{stdout}");
 }
 
+/// A package whose library lives outside `src/` is diagnosed through the same
+/// document, instead of taking the build down and printing nothing.
+/// 库不在 `src/` 的包经同一份文档被诊断，而不是打死构建并什么都不打印。
+///
+/// The manifest is legal — `[lib] path` is how Cargo is told where the library
+/// is — so `cargo metadata` accepts it and the pipeline is reached. It used to
+/// reach `expect("src directory must exist")` there: exit 101 and an empty
+/// stdout, which is exactly the contract `check --json` was fixed to keep.
+/// manifest 是合法的——`[lib] path` 正是告诉 Cargo 库在哪里的方式——因此 `cargo metadata`
+/// 接受它，管线会被走到。它过去会在那里走到 `expect("src directory must exist")`：退出 101 与
+/// 空 stdout，而那正是 `check --json` 被修好要守住的契约。
+#[test]
+fn check_reports_a_source_tree_outside_src_as_a_diagnostic() {
+    let root = temporary_root("cli-check-missing-src");
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"probe\"\nversion = \"0.1.0\"\n\n[lib]\nname = \"probe\"\npath = \"host/lib.rs\"\n",
+    )
+    .expect("manifest");
+    fs::create_dir_all(root.join("host")).expect("library directory");
+    fs::write(root.join("host/lib.rs"), "\n").expect("library root");
+    let path = root.display().to_string();
+
+    let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
+    assert!(result.is_err(), "a package without src/ must fail");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
+    assert_eq!(document["count"], 1, "{document}");
+    assert_eq!(
+        document["diagnostics"][0]["phase"], "face-layout",
+        "{document}"
+    );
+    assert!(
+        document["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("src"),
+        "the refusal must name the tree it looked for: {document}"
+    );
+
+    // The human run keeps its shape: the failure is the returned error, and
+    // stdout stays reserved for the document `--json` would have written.
+    // 人类可读运行保持原样：失败由返回的错误给出，stdout 仍留给 `--json` 本会写出的文档。
+    let (result, stdout) = run_capture(&["nichlink", "check", &path]);
+    assert!(result.is_err());
+    assert!(stdout.is_empty(), "{stdout}");
+
+    let _ = fs::remove_dir_all(&root);
+}
+
 /// `grafts --json` emits one JSON document even when the package cannot be
 /// resolved, and the document carries the failure.
 /// 包解析不出来时 `grafts --json` 仍输出一个 JSON 文档，且文档携带该失败。

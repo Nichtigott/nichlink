@@ -48,8 +48,18 @@ pub(crate) fn discover_root(src: &Path) -> Vec<Node> {
 /// 会让工具在真实 crate 上不可用。而**是**注册面的文件、或本意是面却解析不了的文件会被
 /// 报告：构建永远编译不到它，此处沉默正是本项目存在的意义所在——拒绝的那种失败。
 pub(crate) fn discover_root_reporting(src: &Path, unplaced: &mut Vec<UnplacedFace>) -> Vec<Node> {
-    let mut nodes: Vec<Node> = fs::read_dir(src)
-        .expect("src directory must exist")
+    // A tree the build cannot read is a layout problem, reported where layout
+    // problems are reported. This used to `expect("src directory must exist")`,
+    // which took the build script down with exit 101 and left `check --json` with
+    // an empty stdout — the contract that command was fixed to keep.
+    // 构建读不到的树是布局问题，报到布局问题该报的地方。这里过去是
+    // `expect("src directory must exist")`，那会以退出 101 打死构建脚本，并让
+    // `check --json` 的 stdout 一片空白——而那正是那条命令被修好要守住的契约。
+    let Ok(entries) = fs::read_dir(src) else {
+        unplaced.push(unreadable(src, src));
+        return Vec::new();
+    };
+    let mut nodes: Vec<Node> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let path = entry.path();
@@ -77,8 +87,14 @@ pub(crate) fn discover_root_reporting(src: &Path, unplaced: &mut Vec<UnplacedFac
 }
 
 fn discover_children(src: &Path, dir: &Path, unplaced: &mut Vec<UnplacedFace>) -> Vec<Node> {
-    let mut nodes: Vec<Node> = fs::read_dir(dir)
-        .expect("module directory must exist")
+    // The same refusal as the root's: a directory that vanished or cannot be read
+    // between the walk reaching it and this call is reported, not fatal.
+    // 与根目录同样的拒绝：在遍历到达它之后、本次调用之前消失或读不了的目录会被报告，而不是致命。
+    let Ok(entries) = fs::read_dir(dir) else {
+        unplaced.push(unreadable(src, dir));
+        return Vec::new();
+    };
+    let mut nodes: Vec<Node> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let path = entry.path();
@@ -108,6 +124,30 @@ fn discover_children(src: &Path, dir: &Path, unplaced: &mut Vec<UnplacedFace>) -
     nodes.sort_by(|left, right| left.name.cmp(&right.name));
     nodes.retain(has_source);
     nodes
+}
+
+/// One directory the walk could not read, reported like an unplaceable face.
+/// 遍历读不到的一个目录，像无法安放的注册面一样被报告。
+///
+/// `src` is the source root the message and the relative path are measured
+/// against, and `directory` is the one that failed; they are the same path when
+/// the root itself is the problem.
+/// `src` 是消息与相对路径所依据的源根，`directory` 是失败的那个；根本身出问题时两者相同。
+fn unreadable(src: &Path, directory: &Path) -> UnplacedFace {
+    let problem = match fs::symlink_metadata(directory) {
+        Ok(metadata) if metadata.is_dir() => "cannot be read".to_owned(),
+        Ok(_) => "is not a directory".to_owned(),
+        Err(error) => format!("does not exist ({error})"),
+    };
+    UnplacedFace {
+        relative: super::relative_display(src, directory),
+        line: 0,
+        phase: "face-layout",
+        message: format!(
+            "{} {problem}; the build reads registration faces from this source tree",
+            directory.display()
+        ),
+    }
 }
 
 /// Record a `.rs` file that cannot become a module, unless it is an ordinary one.
