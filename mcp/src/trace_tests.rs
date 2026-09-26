@@ -52,8 +52,12 @@ fn an_absent_trace_names_the_way_to_produce_one() {
     let (root, _, _) = package("absent");
     let reply = trace(&root, &json!({})).expect("the report renders");
     assert!(reply.contains("trace absent"), "{reply}");
-    assert!(reply.contains("write_trace_artifact"), "{reply}");
-    assert!(reply.contains("NICH_LINK_TRACE=full"), "{reply}");
+    assert!(reply.contains("trace_call!"), "{reply}");
+    assert!(reply.contains("NICH_LINK_TRACE"), "{reply}");
+    assert!(
+        reply.contains("nichlink new"),
+        "the answer must point at a host that really records one: {reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

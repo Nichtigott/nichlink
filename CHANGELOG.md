@@ -47,6 +47,19 @@ waiting state that change opened.
 
 ### Added
 
+- A scaffolded host now demonstrates the whole runtime-evidence chain, which is the
+  half nothing in this workspace did. `nichlink new` writes a `src/main.rs` that
+  records one frame under the mode the environment asks for and, when
+  `NICH_LINK_TRACE` (the mode) or `NICH_LINK_TRACE_FILE` (the path) is set, writes the
+  artifact where every reader looks — `.nichlink/traces/nichlink.trace`. Without one
+  of those variables it records and writes nothing at all, so the release path still
+  collects nothing; the point is that the chain is visible and runnable. Measured end
+  to end: scaffold → build → run (no file) → run with `NICH_LINK_TRACE=full` (a
+  141-byte artifact with `mode=full` and one `main` frame) → `nichlink.trace` renders
+  the call tree. A library host gets the pointer instead of the demo, because it has
+  no `main` to write at the end of. Writing this also caught a stale claim of my own:
+  the bridge's "no project in this workspace records one yet" message is now false.
+
 - **The build's evidence, the tree delta, and the runtime trace — three tools that
   answer from something other than source text.** `nichlink.explain` reads the
   files the build published under `target/nichlink/out` and answers what actually
@@ -972,6 +985,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 ### [Unreleased] 未发布
 
 新增：
+
+- 脚手架出来的宿主现在演示整条运行期证据链，而这正是本工作区里别的任何东西都不做的那一半。
+  `nichlink new` 写出的 `src/main.rs` 会按环境要求的模式记录一个帧，并在设置了 `NICH_LINK_TRACE`
+  （模式）或 `NICH_LINK_TRACE_FILE`（路径）时，把 artifact 写到所有读取方都看的地方——
+  `.nichlink/traces/nichlink.trace`。没有这两个变量之一时它什么都不记录、也不写文件，因此发布路径
+  仍然什么都不收集；意义在于那条链可见且可跑。端到端实测：脚手架 → 构建 → 运行（无文件）→
+  `NICH_LINK_TRACE=full` 运行（141 字节 artifact、`mode=full`、一个 `main` 帧）→ `nichlink.trace`
+  渲染出调用树。库宿主拿到的是指引而不是演示，因为它没有可在结尾写入的 `main`。写这一条时还抓到自己
+  一处陈旧的说法：桥那句"本工作区还没有宿主记录"现在是假的。
 
 - **构建的证据、树的差量与运行期的 trace——三个不靠源码文本作答的工具。** `nichlink.explain`
   读构建发布在 `target/nichlink/out` 下的文件，逐个面回答真正会发布什么——作用域是否选中它、发布

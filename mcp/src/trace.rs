@@ -36,9 +36,10 @@ pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
         // produce one instead of a bare "not found".
         // 缺失是今天的常态，因此答案要带上产出它的办法，而不是一句光秃秃的 "not found"。
         return Ok(format!(
-            "trace absent: {}\nA host writes one by recording with the `trace_call!` family and calling \
-             `write_trace_artifact`; set `NICH_LINK_TRACE=full` while running it. No project in this \
-             workspace does that yet — `nichlink check` reports the static side only.\n",
+            "trace absent: {}\nA host writes one by recording with the `trace_call!` family and running \
+             with `NICH_LINK_TRACE` (the mode) or `NICH_LINK_TRACE_FILE` (the path) set; a project \
+             scaffolded by `nichlink new` demonstrates that whole chain in its `src/main.rs`. \
+             `nichlink check` reports the static side only.\n",
             path.display()
         ));
     }

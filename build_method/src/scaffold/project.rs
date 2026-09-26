@@ -120,12 +120,41 @@ pub fn project_files(
     source: &DependencySource,
 ) -> Vec<(&'static str, String)> {
     let (runtime_dependency, build_dependency) = dependency_specs(source);
+    // A binary host demonstrates the whole runtime-evidence chain, because that is
+    // the half nothing else in this workspace does: record under the mode the
+    // environment asks for, then write the artifact where every reader looks
+    // (`NICH_LINK_TRACE_FILE`, else `.nichlink/traces/nichlink.trace`). It is inert
+    // until someone opts in — `CallTrace::runtime()` is `off` in a release build and
+    // `errors-only` in a debug one — so the release path collects nothing; the point
+    // is that the chain is visible and runnable, not that evidence always exists.
+    // 二进制宿主演示整条运行期证据链，因为这是本工作区里别的任何东西都不做的那一半：按环境要求的模式
+    // 记录，再把 artifact 写到所有读取方都看的地方（`NICH_LINK_TRACE_FILE`，否则
+    // `.nichlink/traces/nichlink.trace`）。在有人 opt-in 之前它是惰性的——`CallTrace::runtime()`
+    // 在 release 构建里是 `off`、在 debug 里是 `errors-only`——因此发布路径什么都不收集；意义在于那条
+    // 链可见且可跑，而不是永远存在证据。
     let prelude = format!(
         "nichlink_run_method::host!();\n{}",
         if kind == ProjectKind::Library {
-            ""
+            "\n// A library host has no `main` to write at the end of: record around the work you\n\
+             // actually run (`CallTrace::runtime`, `trace_call!`), then write it with\n\
+             // `trace_artifact_path` + `write_trace_artifact`, or scaffold a binary for the demo.\n"
         } else {
-            "\nfn main() { println!(\"registered faces: {}\", builtin_static_plan().len()); }"
+            "\nfn main() {\n    \
+             // Evidence is opt-in: neither `NICH_LINK_TRACE` (the collection mode) nor\n    \
+             // `NICH_LINK_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
+             // host records and writes nothing at all.\n    \
+             let asked = std::env::var_os(nichlink_run_method::lexicon::TRACE_FILE_ENV).is_some()\n        \
+             || std::env::var_os(\"NICH_LINK_TRACE\").is_some();\n    \
+             let mut trace = nichlink_run_method::CallTrace::runtime();\n    \
+             let root = nichlink_run_method::root_node_id(env!(\"CARGO_PKG_NAME\"));\n    \
+             let faces = trace.with(root, \"main\", |_| builtin_static_plan().len());\n    \
+             println!(\"registered faces: {faces}\");\n    \
+             if !asked {\n        return;\n    }\n    \
+             let path = nichlink_run_method::trace_artifact_path(std::path::Path::new(env!(\n        \
+             \"CARGO_MANIFEST_DIR\",\n    )));\n    \
+             match nichlink_run_method::write_trace_artifact(&trace, &path, env!(\"CARGO_PKG_NAME\")) {\n        \
+             Ok(()) => println!(\"trace written: {}\", path.display()),\n        \
+             Err(error) => eprintln!(\"nichlink: trace not written: {error}\"),\n    }\n}\n"
         }
     );
     // The inner `[workspace]` table makes the generated manifest its own workspace root.
@@ -242,6 +271,53 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// A new binary host demonstrates the runtime-evidence chain, because no
+    /// other project in this repository does: record under the mode the
+    /// environment asks for, then write the artifact where every reader looks.
+    /// It stays inert until someone opts in, so the release path collects
+    /// nothing — the point of the demo is that the *chain* is visible and
+    /// runnable, not that evidence is always collected.
+    /// 新的二进制宿主演示运行期证据链，因为本仓库里没有别的项目做这件事：按环境要求的模式记录，再把
+    /// artifact 写到所有读取方都看的地方。在有人 opt-in 之前它保持惰性，因此发布路径什么都不收集——
+    /// 这个演示的意义在于那条**链**可见且可跑，而不是永远在收集证据。
+    #[test]
+    fn a_binary_host_records_and_writes_a_trace() {
+        let source = DependencySource::Local {
+            workspace: PathBuf::from("/checkout"),
+        };
+        let entry = project_files("probe", ProjectKind::Binary, &source)
+            .into_iter()
+            .find(|(name, _)| *name == "src/main.rs")
+            .expect("the binary entry is generated")
+            .1;
+        for needed in [
+            "CallTrace::runtime()",
+            "trace_artifact_path",
+            "write_trace_artifact",
+            "TRACE_FILE_ENV",
+            "NICH_LINK_TRACE",
+        ] {
+            assert!(
+                entry.contains(needed),
+                "the demo must contain {needed}: {entry}"
+            );
+        }
+        // A library host has no `main` to write at the end of, so it gets the pointer
+        // instead of a demo that cannot run. The pointer names both APIs, which is why
+        // the assertion is about the absent `main` rather than about a name appearing
+        // in a comment.
+        // 库宿主没有可在结尾写入的 `main`，因此它拿到的是指引，而不是一段跑不起来的演示。指引里两个
+        // API 都会被点名，所以断言落在"没有 `main`"上，而不是落在"某个名字出现在注释里"。
+        let library = project_files("probe", ProjectKind::Library, &source)
+            .into_iter()
+            .find(|(name, _)| *name == "src/lib.rs")
+            .expect("the library entry is generated")
+            .1;
+        assert!(!library.contains("fn main"), "{library}");
+        assert!(library.contains("trace_artifact_path"), "{library}");
+        assert!(library.contains("CallTrace::runtime"), "{library}");
+    }
 
     fn temporary_directory(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
