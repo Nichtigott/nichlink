@@ -14,9 +14,10 @@ pub(super) use std::time::{SystemTime, UNIX_EPOCH};
 pub(super) use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEventKind};
 pub(super) use ratatui::layout::Rect;
 
+pub(super) use super::namespace::{namespace_for, package_name};
 pub(super) use super::support::{
-    cargo_rustc_mir, host_manifest, package_root, resolve_project_from, select_project,
-    with_authoring_context,
+    cargo_rustc_mir, host_manifest, package_namespace, package_root, resolve_project,
+    resolve_project_from, select_project, with_authoring_context,
 };
 pub(super) use super::{
     AddState, App, GraftDeclaration, Overlay, StudioPage, app_function_source_range, body_calls,

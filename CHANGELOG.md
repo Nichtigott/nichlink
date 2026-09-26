@@ -57,6 +57,14 @@ without a red package audit.
 
 ### Changed
 
+- Studio reads the host crate's own package name from the target `Cargo.toml`
+  (`[package] name`) and authors under it, instead of defaulting to
+  `nichlink.default`. The two ends have to agree — the host's build script stamps
+  `env!("CARGO_PKG_NAME")` as the identity namespace — and a session that rebuilt
+  the tree under a different name put every recorded `NodeId` (a trace, a graft
+  record) out of reach. `NICH_LINK_NAMESPACE` still overrides both ends verbatim,
+  and a manifest with no `[package]` (a virtual workspace root) still falls back
+  to the documented default.
 - Studio's hand-drawn call-tree canvases are gone: `rataflow` (the `node-graph`
   feature, default on) is the only call-tree drawer, 1756 lines of canvas code
   and their geometry tests went with them, and the `g` (drawer) and `v` (layout)
@@ -744,6 +752,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
+- Studio 从目标 `Cargo.toml` 的 `[package] name` 读出宿主 crate 自己的包名，并在它之下创作，
+  不再默认 `nichlink.default`。两端必须一致——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成
+  身份命名空间——而一个在别的名字下重建注册树的会话会让每个已记录的 `NodeId`（trace、graft
+  记录）都指不到东西。`NICH_LINK_NAMESPACE` 仍原样覆盖两端，而没有 `[package]` 的清单
+  （虚拟工作区根）仍回落到文档化的默认值。
 - Studio 的手绘调用树画布已删除：`rataflow`（`node-graph` 特性，默认开启）成为唯一的调用树
   绘制者，1756 行画布代码与它们的几何测试随之消失，`g`（切换绘制者）与 `v`（切换排布）两个按键
   不再存在。未链接 `node-graph` 的构建保留面板，并说明这棵树需要哪个特性，而不是什么都不画。

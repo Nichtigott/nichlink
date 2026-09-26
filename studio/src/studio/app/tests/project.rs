@@ -15,6 +15,94 @@ fn standalone_studio_resolves_one_project_root_and_manifest() {
     );
 }
 
+/// A throwaway project directory holding one manifest.
+/// 一个只含一份清单的一次性项目目录。
+fn temp_project(label: &str, manifest: &str) -> std::path::PathBuf {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("nichlink-studio-namespace-{label}-{suffix}"));
+    std::fs::create_dir_all(&root).expect("project directory");
+    std::fs::write(root.join("Cargo.toml"), manifest).expect("manifest");
+    root
+}
+
+/// A launched session authors under the host crate's own package name, read from
+/// the manifest it adopted — the value the host's build script stamps as
+/// `CARGO_PKG_NAME`, and therefore the identity domain its recorded node ids live
+/// in.
+/// 已启动的会话在宿主 crate 自己的包名之下创作，读自它采纳的清单——也就是宿主构建脚本盖成
+/// `CARGO_PKG_NAME` 的那个值，因此也是它记录的节点身份所在的域。
+#[test]
+fn a_launched_session_authors_under_the_host_crates_package_name() {
+    let root = temp_project(
+        "launched",
+        "[package]\nname = \"demo-app\"\nversion = \"0.1.0\"\n",
+    );
+    let resolved = resolve_project(Some(&root)).expect("the fixture is a project");
+    assert_eq!(resolved, root);
+    assert_eq!(host_manifest(), root.join("Cargo.toml"));
+    // The environment override still wins verbatim, exactly as the build side reads
+    // it; without one the manifest names the namespace.
+    let expected = std::env::var("NICH_LINK_NAMESPACE").unwrap_or_else(|_| "demo-app".to_owned());
+    assert_eq!(package_namespace(), expected);
+    // The adopted context is thread-local and the harness reuses threads, so the
+    // fixture directory stays: a later test on this thread that falls back to
+    // `package_root()` must still find a directory.
+    // 采纳的上下文是线程局部的，而测试框架会复用线程，因此夹具目录留在原处：本线程上随后
+    // 回落到 `package_root()` 的测试仍须找到一个存在的目录。
+}
+
+/// The name is read from `[package]` only, and only as a literal: a commented-out
+/// line, a `[dependencies]` entry, or the inherited `name.workspace` form is not
+/// this package's name.
+/// 名字只从 `[package]` 读，且只认字面值：注释掉的行、`[dependencies]` 里的条目、继承写法
+/// `name.workspace` 都不是本包的名字。
+#[test]
+fn the_package_name_comes_from_a_literal_package_key() {
+    let cases: &[(&str, Option<&str>)] = &[
+        ("[package]\nname = \"demo-app\"\n", Some("demo-app")),
+        ("[package]\nname = 'single-quoted'\n", Some("single-quoted")),
+        (
+            "# name = \"commented\"\n[package]\nname = \"real\"\n",
+            Some("real"),
+        ),
+        (
+            "[package]\nname = \"inline\" # trailing comment\n",
+            Some("inline"),
+        ),
+        ("[dependencies]\nname = \"another-package\"\n", None),
+        ("[package]\nname.workspace = true\n", None),
+        ("[workspace]\nmembers = [\"app\"]\n", None),
+    ];
+    for (index, (manifest, expected)) in cases.iter().enumerate() {
+        let root = temp_project(&format!("key-{index}"), manifest);
+        let read = package_name(&root.join("Cargo.toml"));
+        assert_eq!(read.as_deref(), *expected, "{manifest:?}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// The namespace follows the manifest unless the environment names one, and a
+/// manifest with no `[package]` falls back to the documented default.
+/// 命名空间跟随清单，除非环境给出一个；没有 `[package]` 的清单回落到文档化的默认值。
+#[test]
+fn the_namespace_follows_the_manifest_unless_the_environment_names_one() {
+    let host = temp_project("ns-host", "[package]\nname = \"demo-app\"\n");
+    let manifest = host.join("Cargo.toml");
+    assert_eq!(namespace_for(&manifest, None), "demo-app");
+    assert_eq!(namespace_for(&manifest, Some("pinned")), "pinned");
+
+    let workspace = temp_project("ns-workspace", "[workspace]\nmembers = [\"app\"]\n");
+    assert_eq!(
+        namespace_for(&workspace.join("Cargo.toml"), None),
+        nichlink_run_method::lexicon::DEFAULT_NAMESPACE
+    );
+    let _ = std::fs::remove_dir_all(&host);
+    let _ = std::fs::remove_dir_all(&workspace);
+}
+
 #[test]
 fn installed_studio_never_exports_cargo_git_cache_paths() {
     let suffix = SystemTime::now()

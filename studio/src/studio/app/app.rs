@@ -25,6 +25,8 @@ mod keyboard;
 mod keyboard_overlay;
 mod lifecycle;
 mod mutations;
+#[path = "namespace.rs"]
+mod namespace;
 mod pointer;
 mod search_queries;
 #[path = "state/state.rs"]

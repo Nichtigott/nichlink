@@ -264,13 +264,18 @@ the env var achieves the same end for 1.x.
 Load once in `App::load` (beside `NICH_LINK_INITIAL_QUERY`, `lifecycle.rs:91-96`),
 into `TraceStatus { Absent, Loaded, Mismatch }`; refuse, do not guess:
 1. `version != TRACE_ARTIFACT_VERSION` → `Mismatch`.
-2. `artifact.namespace != package_namespace()` → `Mismatch`. This is the real
-   trap: hosts stamp `env!("CARGO_PKG_NAME")`
-   (`macros/face_registration.rs:45-49`) while Studio's scanned snapshot uses
-   `authoring_namespace()` = active context, else `NICH_LINK_NAMESPACE`, else
-   `"nichlink.default"` (`authoring/validation/validation.rs:56-66`,
-   `studio/src/studio/app/support.rs:30-44`). Defaults differ, so an unconfigured
-   Studio would otherwise draw nothing and blame itself.
+2. `artifact.namespace != package_namespace()` → `Mismatch`. This was the real
+   trap: hosts stamp `env!("CARGO_PKG_NAME")` (`macros/face_registration.rs:45-49`)
+   while Studio's scanned snapshot used `authoring_namespace()` = active context,
+   else `NICH_LINK_NAMESPACE`, else `"nichlink.default"`
+   (`authoring/validation/validation.rs:56-66`,
+   `studio/src/studio/app/support.rs:30-44`), so the defaults differed and an
+   unconfigured Studio would draw nothing and blame itself. **Decided and built
+   (2026-09-26):** a launched session now adopts its project and takes the
+   namespace from `[package] name` in the target manifest, so the two ends agree
+   without the environment; `NICH_LINK_NAMESPACE` still overrides both ends
+   verbatim. Pin: `studio::app::tests::project::a_launched_session_authors_under_the_host_crates_package_name`
+   (red before the change: `nichlink.default` against the fixture's `demo-app`).
 3. `artifact.root != registry.id()` → `Mismatch`; both are
    `root_node_id(namespace)` (`identity/node_id.rs:93`, `tree/registry.rs:55-68`).
 4. Every frame/local/edge `NodeId` must resolve via `registry.find(node)`; an
@@ -363,10 +368,14 @@ End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
 
 1. **1.0 vs 1.x:** accept the §3.0 deferral, or freeze `CallTrace` for one
    signature (`from_records`/`into_trace`) so ingest can land in 1.0?
-2. **Identity:** should Studio default `package_namespace()` to the host
-   crate name read from the target `Cargo.toml`, instead of `nichlink.default`
-   (`support.rs:30-40`)? Without that, every ingest requires the user to export
-   `NICH_LINK_NAMESPACE`, and the mismatch path fires by default.
+2. **Identity — decided (2026-09-26): yes.** A launched session reads `[package]
+   name` from the target `Cargo.toml` and authors under it, so ingest does not
+   require exporting `NICH_LINK_NAMESPACE` and the mismatch path no longer fires
+   by default. Built in `studio/src/studio/app/support.rs` (`namespace_for`,
+   `package_name`, `manifest_for`), pinned by
+   `studio::app::tests::project::{a_launched_session_authors_under_the_host_crates_package_name,
+   the_package_name_comes_from_a_literal_package_key,
+   the_namespace_follows_the_manifest_unless_the_environment_names_one}`.
 3. **Writer name:** `NICH_LINK_TRACE_FILE` — accept, or fold discovery into a
    `nichlink trace --host-output <path>` CLI verb?
 4. **Escaping vs length-prefix:** is backslash escaping of `\t`/`\n`/`\`

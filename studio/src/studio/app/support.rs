@@ -4,6 +4,8 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
+use super::namespace::{manifest_for, namespace_for};
+
 #[derive(Clone)]
 struct ProjectContext {
     root: PathBuf,
@@ -31,6 +33,13 @@ pub(super) fn select_project(root: PathBuf, manifest: PathBuf, namespace: impl I
 /// The namespace Studio authors under: the selected project first, then the
 /// environment, then the documented default.
 /// Studio 创作所用的命名空间：先选中的项目，再环境变量，最后文档化的默认值。
+///
+/// A launched session always has a selected project, because `resolve_project`
+/// adopts one before the terminal is taken over; its namespace came from the
+/// project's own manifest, so the environment branch below is what an
+/// *unselected* session (a library caller, a test) still gets.
+/// 已启动的会话总有选中的项目，因为 `resolve_project` 在接管终端之前就采纳了一个；它的命名空间
+/// 来自项目自己的清单，因此下面的环境分支是**未选中**项目的会话（库调用方、测试）仍然会走的。
 ///
 /// Studio used to carry its own copy of this fallback chain and of
 /// `package_root`'s; both now come from `lexicon`, so the editor and the
@@ -100,11 +109,23 @@ pub(super) fn package_root() -> PathBuf {
 
 /// Resolve the project Studio should open, or say why it cannot.
 /// 解析 Studio 应当打开的项目，或说明为什么不能。
+///
+/// Resolving and adopting are one step: the caller gets the root, and the session
+/// starts with that root, its manifest, and the identity namespace the manifest
+/// names. Splitting them left the namespace at `nichlink.default` for a launched
+/// Studio even though the host's own build script stamps
+/// `env!("CARGO_PKG_NAME")` — so Studio rebuilt the registration tree in a
+/// different identity domain from the one the host compiled, and every recorded
+/// `NodeId` (a trace, a graft record) named a node this session could not find.
+/// 解析与采纳是同一步：调用方拿到根，会话同时带着该根、它的清单，以及清单写明的身份命名空间启动。
+/// 把两者分开会让启动后的 Studio 停在 `nichlink.default`，而宿主自己的构建脚本盖的是
+/// `env!("CARGO_PKG_NAME")`——于是 Studio 在一个与宿主编译产物不同的身份域里重建注册树，任何
+/// 已记录的 `NodeId`（trace、graft 记录）都指不到本会话能找的节点。
 pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String> {
     let configured =
         std::env::var_os(nichlink_run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = std::env::current_dir().ok();
-    resolve_project_from(
+    let root = resolve_project_from(
         PROJECT_CONTEXT
             .with(|session| {
                 session
@@ -119,7 +140,16 @@ pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String
         current
             .as_ref()
             .is_some_and(|directory| directory.join("Cargo.toml").is_file()),
-    )
+    )?;
+    let manifest = manifest_for(&root);
+    let namespace = namespace_for(
+        &manifest,
+        std::env::var(nichlink_run_method::lexicon::NAMESPACE_ENV)
+            .ok()
+            .as_deref(),
+    );
+    select_project(root.clone(), manifest, namespace);
+    Ok(root)
 }
 
 /// The resolution rule itself, with every input a parameter so it can be pinned.
@@ -194,20 +224,7 @@ pub(super) fn host_manifest() -> PathBuf {
     }) {
         return manifest;
     }
-    if let Some(configured) = std::env::var_os("NICH_LINK_HOST_MANIFEST") {
-        let path = PathBuf::from(configured);
-        let path = if path.is_absolute() {
-            path
-        } else {
-            package_root().join(path)
-        };
-        return if path.is_dir() {
-            path.join("Cargo.toml")
-        } else {
-            path
-        };
-    }
-    package_root().join("Cargo.toml")
+    manifest_for(&package_root())
 }
 
 /// Run `cargo rustc` against the host target that actually exists, passing
