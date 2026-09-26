@@ -1,18 +1,23 @@
 //! Tool catalog, the query implementations, and the write path's dispatch.
 //! 工具目录、查询实现与写入路径的分派。
 //!
-//! Five tools read Rust source text; `nichlink.registry` reads the same tree the
-//! build does (`nichlink_build_method::face_views`) and reports the faces it
-//! derives; `nichlink.apply` is the write path and previews before it writes
-//! (`apply.rs` explains the contract). What none of them reports yet is contract,
-//! admission, or registration-rule data: that lives in the built
-//! `RegistrationSnapshot`s, not in the source, and reaching it needs the build
-//! output rather than a scan.
-//! 五个工具读取 Rust 源码文本；`nichlink.registry` 读取构建所读的同一棵树
-//! （`nichlink_build_method::face_views`）并报告它推导出的面；`nichlink.apply` 是写入路径，
-//! 落盘前先预览（契约见 `apply.rs`）。它们都还没有报告的是 contract、admission 与
-//! registration rule 数据：那些住在已构建的 `RegistrationSnapshot` 里而不是源码里，要拿到它
-//! 需要构建产物而不是扫描。
+//! Five tools read Rust source text. Four more answer from evidence that is not
+//! source text: `nichlink.registry` derives the tree the build derives
+//! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
+//! build *published* (`target/nichlink/out`) for scope and release pruning,
+//! `nichlink.diff` states the face-level delta between those two sides, and
+//! `nichlink.trace` reads a recorded trace artifact, refusing one that describes
+//! another tree. `nichlink.apply` is the write path and previews before it writes
+//! (`apply.rs` explains the contract). What none of them reports is contract,
+//! admission, or registration-rule data: those live in the built
+//! `RegistrationSnapshot`s, which need the compiled registrations rather than a
+//! scan or a manifest.
+//! 五个工具读取 Rust 源码文本，另外四个用非源码文本的证据作答：`nichlink.registry` 推导出构建
+//! 所推导的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
+//! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
+//! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份。`nichlink.apply` 是写入
+//! 路径，落盘前先预览（契约见 `apply.rs`）。它们都没有报告的是 contract、admission 与 registration
+//! rule 数据：那些住在已构建的 `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
 
 use serde_json::{Value, json};
 use std::path::Path;
