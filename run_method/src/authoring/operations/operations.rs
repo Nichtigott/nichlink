@@ -2,6 +2,9 @@
 //! 文件化的新增、编辑和删除操作。
 
 use super::*;
+#[path = "authored.rs"]
+mod authored;
+pub use authored::{AuthoredFace, authored_face};
 #[path = "create.rs"]
 mod create;
 use create::create_module;

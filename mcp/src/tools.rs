@@ -52,18 +52,20 @@ pub(crate) fn tools() -> Vec<Value> {
         tool(
             "nichlink.apply",
             "Edit this package's registration faces through the same authoring executor Studio \
-             uses, so the kernel's admission and topology checks run on the change. `action` is \
-             `add` or `edit`; `fields` carries the face fields (`module`, `kind`, `name_zh`, \
-             `needs_registry`, …) and `parent` names the parent by logical path or identity. \
-             **A request is previewed unless `apply` is true**: the preview runs the real \
-             operation on a throwaway copy and returns the file diff plus the registration tree \
-             it produces; `apply: true` writes it and returns the files it wrote. Every reply \
-             is the tree that results, so the next call can be aimed with it.",
+             uses, so the kernel's admission, parent-rule, and topology checks run on the change. \
+             `action` is `add` (create `fields.module` under `parent`), `edit` (change the \
+             `fields` the request names and keep the rest), `rename` (change `fields.module`), or \
+             `delete` (move the face's module into NichLink's recoverable trash). `node` names \
+             the face and `parent` the parent, by logical path — the one nichlink.registry \
+             reports — or by identity. **A request is previewed unless `apply` is true**: the \
+             preview runs the real operation on a throwaway copy and returns the file diff plus \
+             the registration tree it produces; `apply: true` writes it and names the files it \
+             wrote. Every reply is the tree that results, so the next call can be aimed with it.",
             json!({"type":"object","properties":{
-                "action":{"type":"string","enum":["add","edit"]},
-                "node":{"type":"string","description":"edit: the face to rewrite, by logical path or identity"},
+                "action":{"type":"string","enum":["add","edit","rename","delete"]},
+                "node":{"type":"string","description":"edit/rename/delete: the face, by logical path or identity"},
                 "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
-                "fields":{"type":"object","description":"the face's fields"},
+                "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults"},
                 "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},
                 "root":{"type":"string"}
             },"required":["action"]}),

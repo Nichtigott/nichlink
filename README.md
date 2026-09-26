@@ -752,9 +752,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
 `nichlink.read`, `nichlink.status`, and `nichlink.registry` — the last reports the
 registration tree the build derives, so an agent can read the registry instead of
-reconstructing it from macro names — plus `nichlink.apply`, which edits a face
-through the same authoring executor Studio uses and previews the change on a
-throwaway copy unless `apply: true` is given. Static call-graph answers are labelled
+reconstructing it from macro names — plus `nichlink.apply`, which adds, edits, renames, or deletes a face through the
+same authoring executor Studio uses and previews the change on a throwaway copy
+unless `apply: true` is given. Static call-graph answers are labelled
 heuristic; dynamic calls and runtime values are authoritative only when a host
 records a real `CallTrace`, which Studio loads from the artifact that host writes
 (`docs/design-trace-ingest.md`); a session with no artifact says `TRACE: none`

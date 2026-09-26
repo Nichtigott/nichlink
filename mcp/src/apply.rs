@@ -22,11 +22,12 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink::{NodeId, Registry};
+use nichlink::Registry;
 use nichlink_build_method::{face_views, source_layout};
 use nichlink_run_method::{AuthoringContext, NewModuleFace};
 use serde_json::Value;
 
+use crate::nodes::{parent_id, resolve_node};
 use crate::preview::{copy_package, diff_package, remove_copy};
 use crate::registry::namespace;
 
@@ -36,9 +37,15 @@ enum Action {
     /// Create a module registration face.
     /// 创建一个模块注册面。
     Add,
-    /// Rewrite one existing face's fields.
-    /// 重写一个已存在注册面的字段。
+    /// Rewrite the fields a request names, keeping the rest of the face.
+    /// 重写请求点名的字段，面的其余部分保持不动。
     Edit,
+    /// Change a face's module name, keeping every other field.
+    /// 改一个面的模块名，其余字段全部保留。
+    Rename,
+    /// Move one face's module subtree into the recoverable trash.
+    /// 把一个面的模块子树移入可恢复的回收目录。
+    Delete,
 }
 
 /// Run one edit request, previewing unless `apply` is true.
@@ -54,12 +61,20 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
     let action = match arguments.get("action").and_then(Value::as_str) {
         Some("add") => Action::Add,
         Some("edit") => Action::Edit,
+        Some("rename") => Action::Rename,
+        Some("delete") => Action::Delete,
         Some(other) => {
             return Err(format!(
-                "action `{other}` is not implemented; this tool supports `add` and `edit`"
+                "action `{other}` is not implemented; this tool supports `add`, `edit`, \
+                 `rename`, and `delete`"
             ));
         }
-        None => return Err("nichlink.apply requires `action` (`add` or `edit`)".to_owned()),
+        None => {
+            return Err(
+                "nichlink.apply requires `action` (`add`, `edit`, `rename`, or `delete`)"
+                    .to_owned(),
+            );
+        }
     };
     let namespace = namespace(root)?;
     let apply = arguments
@@ -73,7 +88,8 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
     };
     let outcome = match action {
         Action::Add => run_add(&work, &namespace, arguments),
-        Action::Edit => run_edit(&work, &namespace, arguments),
+        Action::Edit | Action::Rename => run_edit(&work, &namespace, arguments, action),
+        Action::Delete => run_delete(&work, &namespace, arguments),
     };
     let outcome = match outcome {
         // A preview ran in the copy, so the path the executor reported belongs to
@@ -85,6 +101,13 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Ok(mut outcome) => {
             if let Ok(relative) = outcome.source.strip_prefix(&work) {
                 outcome.source = root.join(relative);
+            }
+            // The executor's own message names paths too, so a preview would
+            // otherwise print a directory that is deleted a moment later.
+            // 执行器自己的消息也会点名路径，否则预览会打印出一个随后就被删掉的目录。
+            let from = work.display().to_string();
+            if from != root.display().to_string() {
+                outcome.message = outcome.message.replace(&from, &root.display().to_string());
             }
             outcome
         }
@@ -117,9 +140,13 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
 /// 一次成功的执行器调用改了什么。
 struct Outcome {
     message: String,
-    /// The file the executor wrote, inside whichever tree it ran in.
-    /// 执行器写入的文件，位于它运行的那棵树里。
+    /// The file the executor wrote — or, for a delete, the trash path it moved the
+    /// module to.
+    /// 执行器写入的文件——对删除而言，则是它把模块搬到的回收路径。
     source: PathBuf,
+    /// Whether the path is a destination rather than a rewritten source.
+    /// 该路径是目的地，而不是被重写的源文件。
+    moved: bool,
 }
 
 /// Create a face.
@@ -175,12 +202,30 @@ fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, S
     Ok(Outcome {
         message: change.message,
         source: change.source,
+        moved: false,
     })
 }
 
-/// Rewrite one face's fields.
-/// 重写一个注册面的字段。
-fn run_edit(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
+/// Rewrite the fields a request names, keeping everything it does not.
+/// 重写请求点名的字段，其余全部保留。
+///
+/// The executor's own contract is the opposite — it rebuilds a face from the values
+/// it is given, blank included — and that contract is right for an editor showing
+/// every field. An agent asking for two changes would have had to restate
+/// twenty-three fields and would silently blank any it forgot, so this path reads
+/// the face back through `authored_face`, overlays the request, and hands the
+/// complete set to the executor. The executor still decides everything that
+/// matters; only the *input* is completed for the caller.
+/// 执行器自己的契约相反——它用拿到的取值整体重建一个面，包括空值——而那对展示所有字段的编辑器是
+/// 正确的。一个只要求两处改动的代理否则必须复述二十三个字段，且会静默抹掉它忘掉的任何一个，因此
+/// 这条路径经 `authored_face` 读回该面、覆盖请求、再把完整的一组交给执行器。仍然由执行器决定所有
+/// 要紧的事；只是**输入**替调用方补全了。
+fn run_edit(
+    root: &Path,
+    namespace: &str,
+    arguments: &Value,
+    action: Action,
+) -> Result<Outcome, String> {
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
@@ -188,111 +233,121 @@ fn run_edit(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, 
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
     let registry = load_registry(root, namespace)?;
     let id = resolve_node(root, namespace, target)?;
-    // An edit rewrites the whole face from the fields this surface models, so the
-    // caller has to state what it wants the face to be, not only what differs —
-    // that is the executor's contract, and half a patch would silently erase the
-    // fields it did not mention.
-    // 编辑会用本执行面建模的字段整体重写该面，因此调用方必须说出它要这个面**成为**什么，而不只是
-    // 差异——这是执行器的契约，半个补丁会静默抹掉它没有提到的字段。
-    let patch = nichlink_run_method::ModuleFacePatch {
-        module: text(fields, "module"),
-        kind: text(fields, "kind"),
-        preset: text(fields, "preset"),
-        parts: text(fields, "parts"),
-        name_zh: text(fields, "name_zh"),
-        name_en: text(fields, "name_en"),
-        summary_zh: text(fields, "summary_zh"),
-        summary_en: text(fields, "summary_en"),
-        exports: text(fields, "exports"),
-        stable_name: text(fields, "stable_name"),
-        needs_registry: fields
-            .get("needs_registry")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        getting_from_other_registry: text(fields, "getting_from_other_registry"),
-        registration_rule: text(fields, "registration_rule"),
-        admission: text(fields, "admission"),
-        handle_traits: text(fields, "handle_traits"),
-        handle_contracts: text(fields, "handle_contracts"),
-        part_traits: text(fields, "part_traits"),
-        part_contracts: text(fields, "part_contracts"),
-        requires: text(fields, "requires"),
-        provides: text(fields, "provides"),
-        runtime_checks: text(fields, "runtime_checks"),
-        flow: text(fields, "flow"),
-        flow_provider: text(fields, "flow_provider"),
-    };
-    let change = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
-        .scope(|| nichlink_run_method::edit_module_face(&registry, id, &patch))?;
+    if matches!(action, Action::Rename) {
+        let module = fields.get("module").and_then(Value::as_str).unwrap_or("");
+        if module.is_empty() {
+            return Err("rename requires `fields.module`, the new module name".to_owned());
+        }
+    }
+    // Both halves run inside one context, and not only the write: reading the face
+    // back resolves its path from the context's package root, so a read outside it
+    // would look for the face under whatever directory the process happens to be in
+    // — a bug this pin caught, because the CLI-shaped manual run had
+    // `NICH_LINK_PACKAGE_ROOT` set and the unit test did not.
+    // 两半都在同一个上下文里运行，而且不只是写入那一半：读回该面时它的路径由上下文的包根解析，因此
+    // 在上下文之外读会去进程碰巧所在的目录里找那个面——正是这个缺陷被钉子抓住：手工的 CLI 式运行设了
+    // `NICH_LINK_PACKAGE_ROOT`，而单元测试没设。
+    let context = AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
+    let change = context.scope(|| -> Result<_, String> {
+        let mut authored = nichlink_run_method::authored_face(&registry, id)?;
+        overlay(&mut authored, fields)?;
+        nichlink_run_method::edit_module_face(&registry, id, &authored.as_patch())
+    })?;
     Ok(Outcome {
         message: change.message,
         source: change.source,
+        moved: false,
     })
+}
+
+/// Move a face's module subtree into the trash.
+/// 把一个面的模块子树移入回收目录。
+///
+/// Deletion is recoverable by design — the executor moves the directory rather than
+/// unlinking it — and the request has to say `confirm` for the same reason the CLI
+/// does: a delete is the one operation whose preview a caller can skip past by
+/// accident.
+/// 删除按设计是可恢复的——执行器搬走目录而不是删掉它——而请求必须像 CLI 一样说出 `confirm`：
+/// 删除是唯一一种调用方可能不小心跳过其预览的操作。
+fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
+    let target = arguments
+        .get("node")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "delete requires `node`: a logical path or a 32-digit identity".to_owned()
+        })?;
+    let registry = load_registry(root, namespace)?;
+    let id = resolve_node(root, namespace, target)?;
+    let change = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
+        .scope(|| nichlink_run_method::delete_module(&registry, &format!("{id} confirm")))?;
+    Ok(Outcome {
+        message: change.message,
+        source: change.source,
+        moved: true,
+    })
+}
+
+/// Overlay a request's fields onto a face read back from the tree.
+/// 把请求的字段覆盖到从树上读回的那个面上。
+///
+/// Every key is matched by name: a misspelled field is refused instead of being
+/// dropped, which is the direction that keeps an agent from believing it changed
+/// something it did not.
+/// 每个键按名字匹配：拼错的字段被拒绝而不是被丢弃——正是这个方向让代理不会以为自己改了什么而
+/// 其实没改。
+fn overlay(authored: &mut nichlink_run_method::AuthoredFace, fields: &Value) -> Result<(), String> {
+    let Some(object) = fields.as_object() else {
+        return Ok(());
+    };
+    for (key, value) in object {
+        let text = || {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| format!("`{key}` must be a string"))
+        };
+        match key.as_str() {
+            "module" => authored.module = text()?,
+            "kind" => authored.kind = text()?,
+            "preset" => authored.preset = text()?,
+            "parts" => authored.parts = text()?,
+            "name_zh" => authored.name_zh = text()?,
+            "name_en" => authored.name_en = text()?,
+            "summary_zh" => authored.summary_zh = text()?,
+            "summary_en" => authored.summary_en = text()?,
+            "exports" => authored.exports = text()?,
+            "stable_name" => authored.stable_name = text()?,
+            "needs_registry" => {
+                authored.needs_registry = value
+                    .as_bool()
+                    .ok_or_else(|| "`needs_registry` must be true or false".to_owned())?;
+            }
+            "getting_from_other_registry" => authored.getting_from_other_registry = text()?,
+            "registration_rule" => authored.registration_rule = text()?,
+            "admission" => authored.admission = text()?,
+            "handle_traits" => authored.handle_traits = text()?,
+            "handle_contracts" => authored.handle_contracts = text()?,
+            "part_traits" => authored.part_traits = text()?,
+            "part_contracts" => authored.part_contracts = text()?,
+            "requires" => authored.requires = text()?,
+            "provides" => authored.provides = text()?,
+            "runtime_checks" => authored.runtime_checks = text()?,
+            "flow" => authored.flow = text()?,
+            "flow_provider" => authored.flow_provider = text()?,
+            other => {
+                return Err(format!(
+                    "`{other}` is not an editable registration-face field"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The one string field of a request, or the empty string.
 /// 请求里的一个字符串字段；没有时为空串。
 fn text<'a>(fields: &'a Value, key: &str) -> &'a str {
     fields.get(key).and_then(Value::as_str).unwrap_or("")
-}
-
-/// The parent identity a request names, by identity or by logical path.
-/// 请求命名的父身份，可按身份或按逻辑路径给出。
-///
-/// A logical path is the agent-friendly spelling, and it is resolved against the
-/// same derivation the registry query reports — so an agent can take a path from
-/// `nichlink.registry` and use it here without translating it.
-/// 逻辑路径是对代理友好的写法，而且它按注册树查询所报告的那份推导解析——因此代理可以把
-/// `nichlink.registry` 给出的路径直接用在这里，不必翻译。
-fn parent_id(
-    root: &Path,
-    namespace: &str,
-    arguments: &Value,
-    fields: &Value,
-) -> Result<NodeId, String> {
-    // `parent` is a sibling of `fields` in the request, because it names a place in
-    // the tree rather than a field of the new face; `fields.parent` is accepted as
-    // an alias so a caller that puts every value in one object still works.
-    // `parent` 在请求里与 `fields` 平级，因为它命名的是树里的位置而不是新面的一个字段；
-    // `fields.parent` 作为别名接受，因此把所有取值放进一个对象的调用方也能用。
-    let configured = arguments
-        .get("parent")
-        .or_else(|| fields.get("parent"))
-        .and_then(Value::as_str);
-    match configured {
-        // The default is the *namespaced* root: the bare `ROOT_NODE_ID` is a
-        // different identity, and a face hung under it would report a logical path
-        // of `root/...` while living in no tree the host compiled.
-        // 默认值是**带命名空间的**根：裸的 `ROOT_NODE_ID` 是另一个身份，挂在它下面的面会报告
-        // `root/...` 的逻辑路径，却不住在宿主编译过的任何树里。
-        None | Some("") => Ok(nichlink::root_node_id(namespace)),
-        Some(value) => match value.parse::<NodeId>() {
-            Ok(id) => Ok(id),
-            Err(_) => resolve_node(root, namespace, value),
-        },
-    }
-}
-
-/// Resolve a logical path or an identity to a face identity.
-/// 把逻辑路径或身份解析成一个面的身份。
-fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result<NodeId, String> {
-    if let Ok(id) = target.parse::<NodeId>() {
-        return Ok(id);
-    }
-    let wanted = target.trim_start_matches('/');
-    let mut faces = face_views(root, namespace)?;
-    // The registry root has no face row of its own unless something declares it,
-    // so `root` is answered from the namespace directly.
-    // 注册树根没有自己的面行（除非有东西声明了它），因此 `root` 直接由命名空间作答。
-    if wanted == "root" {
-        return Ok(nichlink::root_node_id(namespace));
-    }
-    faces.retain(|face| face.path == wanted);
-    match faces.len() {
-        0 => Err(format!("no registration face at `{target}`")),
-        1 => Ok(faces[0].id),
-        _ => Err(format!("`{target}` is ambiguous")),
-    }
 }
 
 /// Build the registry the executor validates against: the package's own faces,
@@ -318,7 +373,12 @@ fn report(
     outcome: &Outcome,
     applied: bool,
 ) -> Result<String, String> {
-    let verb = if applied { "applied" } else { "would write" };
+    let verb = match (outcome.moved, applied) {
+        (false, true) => "applied",
+        (false, false) => "would write",
+        (true, true) => "moved",
+        (true, false) => "would move",
+    };
     // The tree the change produces is the strongest part of the preview: it is the
     // same derivation the registry query reports, run on the tree the executor just
     // changed, so a validation failure shows up here rather than after a write.

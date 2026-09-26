@@ -669,7 +669,8 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 `nichlink.read`、`nichlink.status` 和 `nichlink.registry`——最后一个报告构建推导出的
 注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.apply`：它经与 Studio 相同的
-authoring 执行器编辑注册面，除非给出 `apply: true`，改动会先在一份一次性副本上预览。静态调用图会标为 heuristic；动态调用
+authoring 执行器新增、编辑、改名或删除注册面，除非给出 `apply: true`，改动会先在一份一次性副本上
+预览。静态调用图会标为 heuristic；动态调用
 和运行时数值只有在宿主真实记录 `CallTrace` 后才具权威性，而 Studio 从宿主写出的 artifact
 读入它（`docs/design-trace-ingest.md`）；没有 artifact 的会话显示 `TRACE: none`，
 而不是展示它并不拥有的数值。

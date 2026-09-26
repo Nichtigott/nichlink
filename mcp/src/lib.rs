@@ -52,6 +52,9 @@ mod registry;
 #[path = "apply.rs"]
 mod apply;
 
+#[path = "nodes.rs"]
+mod nodes;
+
 #[path = "preview.rs"]
 mod preview;
 

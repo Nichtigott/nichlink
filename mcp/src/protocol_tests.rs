@@ -194,7 +194,7 @@ fn the_apply_tool_is_listed_and_dispatched() {
 
     let called = replies(
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
-         \"params\":{\"name\":\"nichlink.apply\",\"arguments\":{\"action\":\"delete\"}}}\n",
+         \"params\":{\"name\":\"nichlink.apply\",\"arguments\":{\"action\":\"graft\"}}}\n",
     );
     assert_eq!(called.len(), 1, "{called:?}");
     assert_eq!(called[0]["result"]["isError"], true, "{called:?}");

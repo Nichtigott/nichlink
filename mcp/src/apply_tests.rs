@@ -35,6 +35,12 @@ fn written(reply: &str) -> PathBuf {
         .lines()
         .find_map(|line| line.strip_prefix("would write "))
         .or_else(|| reply.lines().find_map(|line| line.strip_prefix("applied ")))
+        .or_else(|| {
+            reply
+                .lines()
+                .find_map(|line| line.strip_prefix("would move "))
+        })
+        .or_else(|| reply.lines().find_map(|line| line.strip_prefix("moved ")))
         .map(PathBuf::from)
         .unwrap_or_else(|| panic!("no written path in: {reply}"))
 }
@@ -140,6 +146,162 @@ fn an_apply_writes_the_face_and_its_path_can_aim_the_next_call() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A partial edit keeps every field the request did not name. The executor rebuilds
+/// a face from the values it is given, so without reading the face back first this
+/// request would blank the kind, the exports, and everything else it stayed silent
+/// about — and the kernel would either reject it or, worse, accept a face the author
+/// never wrote.
+/// 局部编辑保留请求没有点名的每个字段。执行器用拿到的取值整体重建一个面，因此若不先读回该面，这次
+/// 请求就会抹掉 kind、exports 以及它未提及的一切——内核要么拒绝，要么更糟：接受一个作者从未写过的面。
+#[test]
+fn a_partial_edit_keeps_the_fields_it_does_not_name() {
+    let (root, name) = package("partial-edit");
+    let created = apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {
+                "module": "button",
+                "kind": "Button",
+                "name_en": "Button",
+                "exports": "root.render",
+                "handle_contracts": "ControlHandle",
+            },
+        }),
+    )
+    .expect("the face is created");
+    let file = written(&created);
+    let before = std::fs::read_to_string(&file).expect("the written face");
+
+    let edited = apply(
+        &root,
+        &json!({
+            "action": "edit",
+            "node": "root/button",
+            "apply": true,
+            "fields": {"name_en": "Push button"},
+        }),
+    )
+    .expect("only one field is named");
+    let after = std::fs::read_to_string(written(&edited)).expect("the edited face");
+    assert!(after.contains("en: \"Push button\""), "{after}");
+    assert!(
+        after.contains("kind: Button"),
+        "the kind the request did not name must survive: {after}"
+    );
+    assert!(
+        after.contains("ControlHandle"),
+        "the contract the request did not name must survive: {after}"
+    );
+    assert_ne!(before, after, "the named field did change");
+    let faces = face_views(&root, &name).expect("the project reads");
+    assert_eq!(faces.len(), 1, "{faces:?}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A rename moves the module and keeps the face. Its preview shows both halves —
+/// the file that goes and the file that arrives — because a rename that only
+/// reported the new file would hide the removal from the caller confirming it.
+/// 改名搬走模块并保留这个面。它的预览把两半都显示出来——走掉的文件与到来的文件——因为只报告新文件的
+/// 改名会把删除这一半藏起来，而调用方正要据此确认。
+#[test]
+fn a_rename_moves_the_module_and_keeps_the_face() {
+    let (root, name) = package("rename");
+    apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {"module": "button", "kind": "Button", "name_en": "Button"},
+        }),
+    )
+    .expect("the face is created");
+
+    let preview = apply(
+        &root,
+        &json!({
+            "action": "rename",
+            "node": "root/button",
+            "fields": {"module": "dial"},
+        }),
+    )
+    .expect("the rename previews");
+    assert!(preview.contains("- src/button/button.rs"), "{preview}");
+    assert!(preview.contains("+ src/dial/dial.rs"), "{preview}");
+    assert!(preview.contains("root/dial"), "{preview}");
+    assert!(
+        root.join("src/button/button.rs").is_file(),
+        "the preview must not move anything: {preview}"
+    );
+
+    let applied = apply(
+        &root,
+        &json!({
+            "action": "rename",
+            "node": "root/button",
+            "apply": true,
+            "fields": {"module": "dial"},
+        }),
+    )
+    .expect("the rename is applied");
+    assert!(applied.contains("root/dial"), "{applied}");
+    assert!(root.join("src/dial/dial.rs").is_file(), "{applied}");
+    assert!(!root.join("src/button/button.rs").exists(), "{applied}");
+    let faces = face_views(&root, &name).expect("the project reads");
+    assert_eq!(faces.len(), 1, "{faces:?}");
+    assert_eq!(faces[0].path, "root/dial");
+    assert_eq!(faces[0].kind, "Button", "the face itself is unchanged");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A delete preview removes nothing, and the applied delete moves the module out of
+/// the tree. It is recoverable by design — the executor moves the directory into
+/// NichLink's trash rather than unlinking it — which is why the request can be
+/// confirmed rather than merely trusted.
+/// 删除预览不搬走任何东西，而落盘的删除把模块移出树。它按设计可恢复——执行器把目录移进 NichLink
+/// 的回收目录而不是删掉——这正是这次请求可以被"确认"而不只是被信任的原因。
+#[test]
+fn a_delete_removes_nothing_until_it_is_applied() {
+    let (root, name) = package("delete");
+    apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {"module": "button", "kind": "Button", "name_en": "Button"},
+        }),
+    )
+    .expect("the face is created");
+
+    let preview = apply(&root, &json!({"action": "delete", "node": "root/button"}))
+        .expect("the delete previews");
+    assert!(preview.contains("faces 0"), "{preview}");
+    assert!(preview.contains("- src/button/button.rs"), "{preview}");
+    assert!(
+        root.join("src/button/button.rs").is_file(),
+        "a preview must not delete anything: {preview}"
+    );
+
+    let applied = apply(
+        &root,
+        &json!({"action": "delete", "node": "root/button", "apply": true}),
+    )
+    .expect("the delete is applied");
+    assert!(applied.contains("faces 0"), "{applied}");
+    assert!(!root.join("src/button/button.rs").exists(), "{applied}");
+    assert!(
+        face_views(&root, &name)
+            .expect("the project reads")
+            .is_empty(),
+        "the face is gone from the tree"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A package Cargo cannot name is refused before anything is copied or written:
 /// the namespace is the identity of every face the edit would create, and a guess
 /// would author faces no host compiles.
@@ -161,13 +323,13 @@ fn a_package_that_cannot_be_named_is_refused_with_the_way_out() {
 }
 
 /// An action the tool does not implement is refused by name instead of being
-/// guessed at; `delete` moves a directory and will be added with its own guards.
-/// 工具没有实现的动作按名字被拒，而不是被猜着执行；`delete` 会搬走目录，将带着自己的守卫再加。
+/// guessed at; `graft` and the rest of the production chain are still to come.
+/// 工具没有实现的动作按名字被拒，而不是被猜着执行；`graft` 与生产链路其余部分仍待做。
 #[test]
 fn an_action_that_is_not_implemented_is_refused_by_name() {
     let (root, _) = package("unsupported");
-    let error = apply(&root, &json!({"action": "delete", "node": "root/button"}))
-        .expect_err("delete is not implemented yet");
+    let error = apply(&root, &json!({"action": "graft", "node": "root/button"}))
+        .expect_err("graft is not implemented yet");
     assert!(error.contains("not implemented"), "{error}");
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -76,9 +76,9 @@ pub use super::external_graft::{
     list_external_grafts, read_external_graft, remove_external_graft, rewrite_external_graft,
 };
 pub use super::operations::{
-    AuthoringChange, ModuleFacePatch, NewModuleFace, add_module, add_module_from_face,
-    add_module_with_registration, delete_module, edit_module_face, generated_snapshots,
-    generated_snapshots_from,
+    AuthoredFace, AuthoringChange, ModuleFacePatch, NewModuleFace, add_module,
+    add_module_from_face, add_module_with_registration, authored_face, delete_module,
+    edit_module_face, generated_snapshots, generated_snapshots_from,
 };
 pub use super::validation::AuthoringContext;
 
