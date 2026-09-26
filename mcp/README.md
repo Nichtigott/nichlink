@@ -50,6 +50,13 @@ The server exposes compact tools. Reads:
   package's own faces *are* rejected by the kernel, that rejection is the verdict
   here rather than an error: it already names the offending node and its source
   location, which is the moment this answer matters most.
+- `nichlink.verify`: run the kernel's registration validation over this package and
+  report the tree delta the run just published. It drives the same entry the CLI's
+  `check` drives, so its verdict cannot drift from `nichlink check`, and it refreshes
+  the build evidence as a side effect — which is why the delta describes the tree that
+  was just verified. A failed verdict is the answer, not a tool failure: the reply
+  says `verdict failed` with the diagnostics (phase, node, source and line) and stays
+  `isError: false`, because the verification itself succeeded.
 
 And one that writes:
 

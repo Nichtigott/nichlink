@@ -47,6 +47,18 @@ waiting state that change opened.
 
 ### Added
 
+- `nichlink.verify` closes the loop the other tools opened: it re-runs the kernel's
+  registration validation over a package and reports the tree delta the run just
+  published, so an edit is *confirmed* rather than merely written. It drives the same
+  entry the CLI's `check` drives, which is why its verdict cannot drift from
+  `nichlink check`, and it refreshes the build evidence as a side effect. A failed
+  verdict is the answer, not a tool failure: the diagnostics name the phase, node,
+  source line, field and expected provider, and the reply stays `isError: false`.
+  Writing it also pinned an API asymmetry that had been surviving review: `check_for`
+  takes the package *directory* while `package_name` takes its manifest *file* — pass
+  the file to the first and the pipeline looks for `<Cargo.toml>/src` and reports
+  "is not a source directory". The CLI's local is named `manifest` and holds the
+  directory, which is how the confusion hid.
 - A scaffolded host now demonstrates the whole runtime-evidence chain, which is the
   half nothing in this workspace did. `nichlink new` writes a `src/main.rs` that
   records one frame under the mode the environment asks for and, when
@@ -986,6 +998,13 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- `nichlink.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
+  的树差异，因此一次编辑是被**确认过**的，而不只是被写下。它驱动 CLI 的 `check` 所驱动的同一个入口，
+  所以它的判断不可能与 `nichlink check` 漂移；它还顺带刷新构建证据。判断失败是答案而不是工具故障：
+  诊断点名阶段、节点、源码行、字段与期望的提供者，而回复的 `isError` 仍为 false。写它时还钉住了一个
+  一直躲过审阅的 API 不对称：`check_for` 收包**目录**，而 `package_name` 收它的清单**文件**——把文件
+  传给前者，管线就会去找 `<Cargo.toml>/src` 并报 "is not a source directory"。CLI 的局部变量名叫
+  `manifest` 却装着目录，混淆就是这样藏起来的。
 - 脚手架出来的宿主现在演示整条运行期证据链，而这正是本工作区里别的任何东西都不做的那一半。
   `nichlink new` 写出的 `src/main.rs` 会按环境要求的模式记录一个帧，并在设置了 `NICH_LINK_TRACE`
   （模式）或 `NICH_LINK_TRACE_FILE`（路径）时，把 artifact 写到所有读取方都看的地方——

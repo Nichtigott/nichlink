@@ -23,14 +23,16 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 use crate::apply::apply;
+use crate::callgraph::callgraph;
 use crate::converge::converge;
 use crate::diff::diff;
 use crate::evidence::explain;
-use crate::index::{display_list, load_one, load_sources, required_path, resolve_root};
+use crate::index::{load_one, load_sources, required_path, resolve_root};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
 use crate::trace::trace;
 use crate::usages::usages;
+use crate::verify::verify;
 
 pub(crate) fn tools() -> Vec<Value> {
     vec![
@@ -146,6 +148,17 @@ pub(crate) fn tools() -> Vec<Value> {
              the detail. Everything is composed from what the other tools report.",
             json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
+        tool(
+            "nichlink.verify",
+            "Run the kernel's registration validation over this package and report the tree delta the \
+             run just published. It drives the same entry the CLI's `check` drives, so a verdict here \
+             cannot drift from `nichlink check`, and it refreshes the build evidence as a side effect — \
+             which is why the delta below it describes the tree that was just verified rather than the \
+             last build. A failed verdict is the answer and not a tool failure: the reply says `verdict \
+             failed` with the diagnostics (each naming its phase, node, source and line) and `isError` \
+             stays false, because the verification itself succeeded.",
+            json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+        ),
     ]
 }
 
@@ -180,6 +193,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.trace" => trace(&root, arguments),
         "nichlink.usages" => usages(&root, arguments),
         "nichlink.converge" => converge(&root, arguments),
+        "nichlink.verify" => verify(&root, arguments),
         "nichlink.apply" => apply(&root, arguments),
         _ => Err(format!("unknown tool `{name}`")),
     };
@@ -256,101 +270,6 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
     if file.functions.is_empty() && registrations.is_empty() {
         output.push_str("no function or registration declaration found\n");
     }
-    Ok(output)
-}
-
-fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
-    // Two bounds, because this answer is the one that grows without limit: a
-    // common name like `new` had 151 definitions and every call site of the name
-    // in the tree, which arrived as a 4.5 MB reply. Definitions and callers are
-    // capped separately, and both say how much they withheld.
-    // 两道上限，因为这是唯一会无界增长的答案：像 `new` 这样的常见名有 151 个定义、外加树里该名字
-    // 的每一个调用点，曾以 4.5 MB 的回复抵达。定义数与调用者各自设上限，且都说出自己扣下了多少。
-    const DEFINITIONS: usize = 5;
-    const CALLERS: usize = 20;
-    let query = arguments
-        .get("function")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.callgraph requires function".to_owned())?
-        .trim();
-    if query.is_empty() {
-        return Err("function must not be empty".to_owned());
-    }
-    let path_filter = arguments.get("path").and_then(Value::as_str);
-    let limit = arguments
-        .get("limit")
-        .and_then(Value::as_u64)
-        .map_or(DEFINITIONS, |value| value.clamp(1, 50) as usize);
-    let files = load_sources(root)?;
-    let mut found = Vec::new();
-    for file in &files {
-        if path_filter.is_some_and(|path| file.relative != path) {
-            continue;
-        }
-        for function in &file.functions {
-            if function.name == query || function.name.ends_with(&format!("::{query}")) {
-                found.push((file, function));
-            }
-        }
-    }
-    if found.is_empty() {
-        return Ok(format!("no static function match for `{query}`"));
-    }
-    let total = found.len();
-    let mut output = format!("evidence: static-heuristic\nmatches {total}\n");
-    if total > 1 && path_filter.is_none() {
-        // Naming the ambiguity is the difference between a usable answer and a
-        // dump: with several definitions the reader has to choose, and `path` is
-        // how they choose.
-        // 把歧义说出来，是好答案与一坨倾倒之间的区别：有多个定义时读取方必须选一个，而 `path`
-        // 就是他们选的工具。
-        output.push_str(&format!(
-            "note: {total} definitions match `{query}`; pass `path` to select one. Callers are matched \
-             by name across the whole tree, so for a common name they include unrelated call sites.\n"
-        ));
-    }
-    for (file, function) in found.into_iter().take(limit) {
-        let mut callers = files
-            .iter()
-            .flat_map(|candidate| {
-                candidate.functions.iter().filter_map(|caller| {
-                    caller
-                        .calls
-                        .iter()
-                        .any(|call| call == &function.name || call.ends_with(&format!("::{query}")))
-                        .then_some(format!("{}::{}", candidate.relative, caller.name))
-                })
-            })
-            .collect::<Vec<_>>();
-        callers.sort();
-        callers.dedup();
-        let callers_total = callers.len();
-        let callers_text = if callers_total > CALLERS {
-            format!(
-                "{} … +{} more",
-                callers[..CALLERS].join(", "),
-                callers_total - CALLERS
-            )
-        } else {
-            display_list(&callers)
-        };
-        output.push_str(&format!(
-            "{}:{} fn {}\n  callers ({}): {}\n  callees: {}\n",
-            file.relative,
-            function.line,
-            function.name,
-            callers_total,
-            callers_text,
-            display_list(&function.calls),
-        ));
-    }
-    if total > limit {
-        output.push_str(&format!(
-            "… +{} more definitions (raise `limit` or pass `path`)\n",
-            total - limit
-        ));
-    }
-    output.push_str("dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.\n");
     Ok(output)
 }
 

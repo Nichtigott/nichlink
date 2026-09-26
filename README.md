@@ -763,7 +763,8 @@ read back, and the capability tokens other faces mention in either direction), a
 `nichlink.converge` (one call that returns the converged starting point for a face:
 scope and pruning verdicts, its neighbourhood, whether each requirement is answered,
 and the files to read — reporting a kernel rejection as its verdict rather than as an
-error), and
+error), `nichlink.verify` (re-run the kernel's validation and report the tree delta the
+run published, so an edit is confirmed rather than merely written), and
 `nichlink.apply`, which adds, edits, renames, or deletes a face through the
 same authoring executor Studio uses and previews the change on a throwaway copy
 unless `apply: true` is given. Static call-graph answers are labelled
