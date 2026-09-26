@@ -101,6 +101,15 @@ without a red package audit.
 
 ### Fixed
 
+- The trace artifact's writer creates the directory it writes into. The
+  documented host usage pairs `write_trace_artifact` with `trace_artifact_path`,
+  and on a fresh project that path's `.nichlink/traces/` does not exist yet: the
+  write failed with "No such file or directory", and the message named the
+  writer's own temporary file instead of the missing directory. Creating it is
+  what the authoring executor's writer already does for
+  `.nichlink/external-grafts/`. The `run_method` READMEs now document the
+  writer/reader pair and the `NICH_LINK_TRACE_FILE` override — the public API had
+  no host-facing page, because the design document is not in the package.
 - Studio's writers require the project the reader opened. `package_root()` still
   falls back — the session, then the environment, then the working directory — and
   that guess is reasonable for a read, because reading the wrong tree is visible.
@@ -831,6 +840,12 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- trace artifact 的写入方创建自己要写入的目录。文档化的宿主用法把 `write_trace_artifact` 与
+  `trace_artifact_path` 配成一对，而在一个全新的项目里那条路径的 `.nichlink/traces/` 还不存在：
+  写入以 "No such file or directory" 失败，而且消息点名的是写入方自己的临时文件，而不是缺失的
+  目录。创建它正是 authoring 执行器的写入方对 `.nichlink/external-grafts/` 已经在做的事。
+  `run_method` 的两份 README 现在也记下了这一对写入方/读取方与 `NICH_LINK_TRACE_FILE` 覆盖
+  ——这份公开 API 此前没有任何面向宿主的页面，因为设计文档并不在包里。
 - Studio 的写入方要求"读者打开的那个项目"。`package_root()` 仍会回落——先会话、再环境、最后
   工作目录——而这个猜测对读取是合理的，因为读错树看得见。写入承担不起：一次删除曾这样解析根，
   把模块从环境变量指到的那个项目里搬走。现在每个写入方都走 `with_selected_project`（或

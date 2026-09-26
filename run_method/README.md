@@ -33,6 +33,42 @@ What stays here:
 A host crate depends on this crate and calls `nichlink_run_method::host!();`
 once at the crate root; the build-time half is `nichlink-build-method`.
 
+## Trace artifacts
+
+A trace a host recorded can leave the process as one file that another process
+reads back. `write_trace_artifact` and `read_trace_artifact` are the two ends, and
+`trace_artifact_path` is the single path decision both ask for, so an override
+cannot move the file for one end and not the other:
+
+```rust
+use std::path::Path;
+
+use nichlink_run_method::{
+    CallTrace, read_trace_artifact, trace_artifact_path, write_trace_artifact,
+};
+
+fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
+    let path = trace_artifact_path(package_root);
+    // The namespace is what the declaration macros stamped this crate with.
+    // A process cannot read `CARGO_PKG_NAME` back, so the host passes it.
+    write_trace_artifact(trace, &path, env!("CARGO_PKG_NAME"))?;
+    let (artifact, rebuilt) = read_trace_artifact(&path)?;
+    eprintln!("{}: {} local(s)", artifact.namespace, rebuilt.locals().len());
+    Ok(())
+}
+```
+
+`NICH_LINK_TRACE_FILE` overrides the path for both ends — absolute, or relative
+to the package root — and otherwise it is
+`<package_root>/.nichlink/traces/nichlink.trace`; the directory is created by the
+writer. Write only when `NICH_LINK_TRACE` selected a collecting mode: under `off`
+the trace is empty, and an empty artifact is worse than none. The document is one
+recording, not the newest of a series — each write replaces the file — and a
+reader refuses another version, an unknown key, or an identity that disagrees
+with what it resolved. The format, the identity checks, and the reasoning behind
+each are in
+[`docs/design-trace-ingest.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/design-trace-ingest.md).
+
 ## Runtime checks
 
 `runtime_checks: [...]` on a face is a host API, not an automatic hook: the

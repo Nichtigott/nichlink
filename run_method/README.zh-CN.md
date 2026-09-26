@@ -30,6 +30,36 @@ trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件
 宿主 crate 依赖本 crate 并在 crate 根部调用一次
 `nichlink_run_method::host!();`；构建期另一半是 `nichlink-build-method`。
 
+## trace artifact
+
+宿主记录的 trace 可以作为一个文件离开进程，由另一个进程读回。`write_trace_artifact`
+与 `read_trace_artifact` 是两端，`trace_artifact_path` 是两端共同询问的唯一路径判断，
+因此覆盖不会只挪动其中一方的文件：
+
+```rust
+use std::path::Path;
+
+use nichlink_run_method::{
+    CallTrace, read_trace_artifact, trace_artifact_path, write_trace_artifact,
+};
+
+fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
+    let path = trace_artifact_path(package_root);
+    // 命名空间就是声明宏盖给本 crate 的那个值。进程读不回 `CARGO_PKG_NAME`，因此由宿主传入。
+    write_trace_artifact(trace, &path, env!("CARGO_PKG_NAME"))?;
+    let (artifact, rebuilt) = read_trace_artifact(&path)?;
+    eprintln!("{}: {} local(s)", artifact.namespace, rebuilt.locals().len());
+    Ok(())
+}
+```
+
+`NICH_LINK_TRACE_FILE` 为两端覆盖路径——绝对路径，或相对包根的路径——否则是
+`<package_root>/.nichlink/traces/nichlink.trace`；目录由写入方创建。只在
+`NICH_LINK_TRACE` 选中了收集模式时才写：`off` 之下 trace 是空的，而空 artifact 比没有更糟。
+该文档是**一次**录制，不是一串中的最新一份——每次写入都替换该文件——而读取方会拒绝另一个
+版本、未知键，或与它自己解析出的身份不符的身份。格式、身份检查以及每条背后的理由见
+[`docs/design-trace-ingest.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/design-trace-ingest.md)。
+
 ## 运行期校验
 
 面上的 `runtime_checks: [...]` 是宿主 API，而不是自动钩子：内核从不观测取值，

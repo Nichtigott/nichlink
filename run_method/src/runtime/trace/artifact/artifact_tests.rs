@@ -392,6 +392,29 @@ fn writing_and_reading_an_artifact_round_trips() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The documented pair works on a fresh project: `trace_artifact_path` names a
+/// file whose `.nichlink/traces/` directory does not exist yet, and the writer
+/// creates it. It used to fail with "No such file or directory", naming its own
+/// temporary file instead of the missing directory.
+/// 文档化的那一对在全新的项目里就能用：`trace_artifact_path` 指名的文件所在的
+/// `.nichlink/traces/` 还不存在，由写入方创建它。它过去会以 "No such file or directory" 失败，
+/// 并且点名的是自己的临时文件而不是缺失的目录。
+#[test]
+fn writing_to_the_convention_path_creates_its_directory() {
+    let root = fixture("fresh-root");
+    let path = trace_artifact_path(&root);
+    assert!(
+        !path.parent().expect("parent").exists(),
+        "the fixture must start without the traces directory"
+    );
+    let trace = recorded_trace();
+    write_trace_artifact(&trace, &path, "host-crate").expect("the writer creates its directory");
+    let (artifact, rebuilt) = read_trace_artifact(&path).expect("the artifact it wrote reads back");
+    assert_eq!(artifact.namespace, "host-crate");
+    assert_eq!(rebuilt.locals(), trace.locals());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn reading_a_missing_artifact_is_a_named_error() {
     let root = fixture("missing");

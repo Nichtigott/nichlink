@@ -69,6 +69,24 @@ pub(super) fn resolve_artifact_path(package_root: &Path, configured: Option<&OsS
 /// 每个读取方都会拒绝该 artifact。root 锚点由同一个名字推出，因为注册树根就是
 /// `root_node_id(namespace)`。
 pub fn write_trace_artifact(trace: &CallTrace, path: &Path, namespace: &str) -> Result<(), String> {
+    // The directory is this writer's own output directory, so it creates it: the
+    // documented host usage pairs `write_trace_artifact` with
+    // `trace_artifact_path`, and on a fresh project that path's
+    // `.nichlink/traces/` does not exist yet — the write failed with
+    // "No such file or directory", and the message named the writer's temporary
+    // file rather than the missing directory. Creating it is what the authoring
+    // executor's artifact writer does for `.nichlink/external-grafts/`.
+    // 目录是本写入方自己的输出目录，因此由它创建：文档化的宿主用法把 `write_trace_artifact` 与
+    // `trace_artifact_path` 配成一对，而在一个全新的项目里，那条路径的 `.nichlink/traces/` 还
+    // 不存在——写入以 "No such file or directory" 失败，而且消息点名的是写入方自己的临时文件，
+    // 而不是缺失的目录。创作执行器自己的产物写入方对 `.nichlink/external-grafts/` 也是这么做的。
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
     let mut artifact = TraceArtifact::from_trace(trace);
     artifact.namespace = namespace.to_owned();
     artifact.root = root_node_id(namespace);
