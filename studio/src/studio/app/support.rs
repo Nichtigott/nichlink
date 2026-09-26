@@ -64,8 +64,41 @@ pub(super) fn package_namespace() -> String {
         })
 }
 
+/// Run one **read** in an authoring context, resolving the project if the session
+/// has not adopted one.
+/// 在一个创作上下文里执行一次**读取**；会话尚未采纳项目时按规则解析它。
 pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
     nichlink_run_method::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
+}
+
+/// The selected project's root, when the session has adopted one.
+/// 已选中项目的根目录（会话采纳了项目时）。
+///
+/// The write guards in `super::writers` are built on this, and they are the only
+/// callers that need the distinction: `package_root` deliberately falls back, and
+/// a writer must not.
+/// `super::writers` 里的写入守卫建立在它之上，而它们是唯一需要这个区分的调用方：
+/// `package_root` 有意回落，而写入方不得回落。
+pub(super) fn selected_root() -> Option<PathBuf> {
+    PROJECT_CONTEXT.with(|current| {
+        current
+            .borrow()
+            .as_ref()
+            .map(|project| project.root.clone())
+    })
+}
+
+/// Forget the selected project.
+/// 忘掉已选中的项目。
+///
+/// Test-only, and the reason it exists is the thread-local: a test harness reuses
+/// threads, so a test that needs the refusal cannot assume this thread has no
+/// selection — it clears one first.
+/// 仅测试用，它存在的理由是线程局部：测试框架会复用线程，因此需要这条拒绝的测试不能假设本线程
+/// 没有选择——它先清掉一个。
+#[cfg(test)]
+pub(super) fn clear_project_context() {
+    PROJECT_CONTEXT.with(|current| *current.borrow_mut() = None);
 }
 
 /// Resolve the project whose sources Studio reads and edits.

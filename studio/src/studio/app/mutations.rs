@@ -1,7 +1,8 @@
 //! App mutations and editor handoff.
 //! App 文件变更与编辑器交接。
 
-use super::support::{package_root, select_project, with_authoring_context};
+use super::support::{package_root, select_project};
+use super::writers::{selected_package_root, with_selected_project};
 use super::*;
 use nichlink_run_method::pascal_case;
 
@@ -133,7 +134,7 @@ impl App {
             flow: &add.values[face_field::FLOW],
             flow_provider: &add.values[face_field::FLOW_PROVIDER],
         };
-        match with_authoring_context(|| {
+        match with_selected_project(|| {
             nichlink_run_method::add_module_from_face(&self.registry, &face)
         }) {
             Ok((change, info)) => {
@@ -181,7 +182,7 @@ impl App {
             flow: &edit.values[face_field::FLOW],
             flow_provider: &edit.values[face_field::FLOW_PROVIDER],
         };
-        match with_authoring_context(|| {
+        match with_selected_project(|| {
             nichlink_run_method::edit_module_face(&self.registry, id, &patch)
         }) {
             Ok(change) => {
@@ -234,7 +235,18 @@ impl App {
             self.event = "Plugin failed: mode must be extension or replacement".to_owned();
             return;
         }
-        let package_root = package_root();
+        // One of Studio's writers, so it needs the project the reader opened, not
+        // one resolved from the environment or the working directory: it creates
+        // `.nichlink/plugins/` and appends to a lock file in it.
+        // Studio 的写入方之一，因此它需要读者打开的那个项目，而不是从环境或工作目录解析出来的
+        // 一个：它会创建 `.nichlink/plugins/` 并往其中的锁文件里追加。
+        let package_root = match selected_package_root() {
+            Ok(root) => root,
+            Err(error) => {
+                self.event = format!("Plugin failed: {error}");
+                return;
+            }
+        };
         let plugin_root = package_root.join(".nichlink/plugins");
         let lock_name = if source == "official" {
             "official.lock"

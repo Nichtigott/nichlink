@@ -32,6 +32,7 @@ mod search_queries;
 #[path = "state/state.rs"]
 mod state;
 mod support;
+mod writers;
 pub use state::*;
 use support::host_manifest;
 

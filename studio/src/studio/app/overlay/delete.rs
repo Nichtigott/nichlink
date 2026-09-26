@@ -17,7 +17,7 @@ impl App {
                 // 每个创作调用都会建立"Studio 打开的是哪个项目"这一上下文；只有这一处没有，于是
                 // `delete_module` 改为经环境变量、进程 CWD 或本 crate 的清单目录解析根路径——并把
                 // 模块从那个恰好命中的项目里搬走。删除模块是最不能靠猜根路径的操作。
-                let result = super::super::support::with_authoring_context(|| {
+                let result = super::super::writers::with_selected_project(|| {
                     nichlink_run_method::delete_module(&self.registry, &spec)
                 });
                 self.event = match result {

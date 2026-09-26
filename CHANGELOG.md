@@ -101,6 +101,16 @@ without a red package audit.
 
 ### Fixed
 
+- Studio's writers require the project the reader opened. `package_root()` still
+  falls back — the session, then the environment, then the working directory — and
+  that guess is reasonable for a read, because reading the wrong tree is visible.
+  A write cannot afford it: a delete once resolved its root that way and moved a
+  module out of whichever project the environment named. Every writer now goes
+  through `with_selected_project` (or `selected_package_root`), which refuses with
+  a named error when no project is selected, so no future call site can repeat the
+  bug by forgetting to establish a context. Reads keep the fallback, and a launched
+  session still adopts its project before the terminal is taken over, so nothing
+  user-visible changes.
 - `nichlink-build-method` no longer aborts when the source tree is missing. A
   package whose `[lib] path` points outside `src/` — a legal Cargo layout — used
   to reach `expect("src directory must exist")` inside discovery: the build script
@@ -821,6 +831,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- Studio 的写入方要求"读者打开的那个项目"。`package_root()` 仍会回落——先会话、再环境、最后
+  工作目录——而这个猜测对读取是合理的，因为读错树看得见。写入承担不起：一次删除曾这样解析根，
+  把模块从环境变量指到的那个项目里搬走。现在每个写入方都走 `with_selected_project`（或
+  `selected_package_root`），没有选中项目时以具名错误拒绝，因此将来的调用点不会因为忘记建立
+  上下文而重演。读取保留回落；已启动的会话仍在接管终端之前采纳项目，因此用户可见行为不变。
 - `nichlink-build-method` 在源树缺失时不再中止。`[lib] path` 指向 `src/` 之外的包——一种合法的
   Cargo 布局——过去会走到 discovery 里的 `expect("src directory must exist")`：构建脚本以退出
   101 死掉，而 `check --json` 什么都不打印，而那正是那条命令要守住的契约。现在是一条

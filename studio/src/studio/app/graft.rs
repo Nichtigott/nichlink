@@ -21,6 +21,7 @@
 //!   `Registry::overlay_recorded`）也会消费它。
 
 use super::support::{package_root, with_authoring_context};
+use super::writers::with_selected_project;
 use super::*;
 use nichlink_build_method::{DeclaredGraft, DeclaredGrafts};
 
@@ -107,7 +108,7 @@ impl App {
             );
             return;
         }
-        let created = with_authoring_context(|| {
+        let created = with_selected_project(|| {
             nichlink_run_method::create_external_graft(
                 &self.registry,
                 state.target,
@@ -176,9 +177,8 @@ impl App {
     /// Switch one plan between node and subtree replacement.
     /// 在"只替换节点"与"替换整棵子树"之间切换一条计划。
     pub(super) fn toggle_graft_plan(&mut self, selector: &str, full: bool) {
-        match with_authoring_context(|| {
-            nichlink_run_method::rewrite_external_graft(selector, !full)
-        }) {
+        match with_selected_project(|| nichlink_run_method::rewrite_external_graft(selector, !full))
+        {
             Ok(plan) => {
                 self.event = format!(
                     "External graft `{selector}` now {} `{}`",
@@ -197,7 +197,7 @@ impl App {
     /// Move one plan to the recoverable trash.
     /// 把一条计划移到可恢复的回收目录。
     pub(super) fn delete_graft_plan(&mut self, selector: &str) {
-        match with_authoring_context(|| nichlink_run_method::remove_external_graft(selector)) {
+        match with_selected_project(|| nichlink_run_method::remove_external_graft(selector)) {
             Ok(trash) => {
                 self.event = format!(
                     "External graft `{selector}` moved to {}; press r to reload",

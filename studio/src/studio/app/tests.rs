@@ -16,9 +16,10 @@ pub(super) use ratatui::layout::Rect;
 
 pub(super) use super::namespace::{namespace_for, package_name};
 pub(super) use super::support::{
-    cargo_rustc_mir, host_manifest, package_namespace, package_root, resolve_project,
-    resolve_project_from, select_project, with_authoring_context,
+    cargo_rustc_mir, clear_project_context, host_manifest, package_namespace, package_root,
+    resolve_project, resolve_project_from, select_project, with_authoring_context,
 };
+pub(super) use super::writers::{selected_package_root, with_selected_project};
 pub(super) use super::{
     AddState, App, GraftDeclaration, Overlay, StudioPage, TraceStatus, app_function_source_range,
     body_calls, function_bodies, function_symbols,

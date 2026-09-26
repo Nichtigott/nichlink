@@ -84,6 +84,62 @@ fn the_package_name_comes_from_a_literal_package_key() {
     }
 }
 
+/// Every write goes through the selected project. With none selected the wrapper
+/// refuses; it never resolves a root from the environment or the working
+/// directory, which is how a delete once moved a module out of the wrong project.
+/// 每次写入都经过已选中的项目。没有选中时包装函数拒绝执行，绝不从环境或工作目录解析根——正是
+/// 那样一次解析让删除把模块从错误的项目里搬走了。
+#[test]
+fn a_write_without_a_selected_project_is_refused() {
+    clear_project_context();
+    assert_eq!(
+        with_selected_project(|| Ok::<_, String>("wrote")),
+        Err("no project is selected; open a project before writing to it".to_owned()),
+        "a write must not fall back to a guessed root"
+    );
+    assert!(selected_package_root().is_err());
+
+    let root = temp_project(
+        "writers",
+        "[package]\nname = \"writers-app\"\nversion = \"0.1.0\"\n",
+    );
+    select_project(root.clone(), root.join("Cargo.toml"), "writers-app");
+    assert_eq!(
+        with_selected_project(|| Ok::<_, String>("wrote")),
+        Ok("wrote")
+    );
+    assert_eq!(selected_package_root(), Ok(root.clone()));
+    // The context a write runs in carries the selected project's namespace, so
+    // `delete_module` and friends resolve ids in the domain the reader opened.
+    // 写入所运行的上下文带着已选中项目的命名空间，因此 `delete_module` 之类的调用在读者打开的
+    // 那个域里解析 id。
+    assert_eq!(
+        with_selected_project(|| Ok::<_, String>(package_namespace())),
+        Ok("writers-app".to_owned())
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A delete with no project selected is refused before it can act on a guessed
+/// root. This is the operation the overlay's own comment remembers: it used to
+/// resolve its root through the environment or the working directory and move a
+/// module out of whichever project that named.
+/// 没有选中项目时的删除会在作用于猜来的根之前被拒绝。这正是删除浮层自己的注释记得的那个操作：
+/// 它过去会经环境变量或工作目录解析根，并把模块从那个恰好命名的项目里搬走。
+#[test]
+fn a_delete_without_a_selected_project_is_refused() {
+    clear_project_context();
+    let mut app = App::load();
+    let target = app.selected;
+    app.overlay = Some(Overlay::Delete(target));
+    app.handle_key(KeyEvent::from(KeyCode::Char('y')));
+    assert!(
+        app.event.contains("no project is selected"),
+        "a delete must refuse a guessed root: {}",
+        app.event
+    );
+}
+
 /// The namespace follows the manifest unless the environment names one, and a
 /// manifest with no `[package]` falls back to the documented default.
 /// 命名空间跟随清单，除非环境给出一个；没有 `[package]` 的清单回落到文档化的默认值。
