@@ -387,6 +387,10 @@ Updated as the fixes landed; this is the state after the tenth batch.
   index 上的 crate，因此它是绿的等待态，而不是红。**`v0.1.1` 已于 2026-09-26 打 tag 并推送**：
   发布工作流（run 36206756375）全部步骤成功，九个 crate 都上了 index，包审计现在报告九个全部
   `verified`、`skipped: none`。记录见 `docs/audit-3p-2026-09-25.md` 的续做一节。
+  **再迈一步（2026-09-26）：本检出是 `0.1.3`** —— MCP 的写入路径（`nichlink.apply`）与实测队列
+  让版本线移到 `0.1.3`（`0.1.2` 从未发布，改动随 `0.1.3` 一起走），`v0.1.3` 已打 tag 并推送：
+  发布工作流（run 36236583886）全部步骤成功，九个 crate 都上了 index，`--verify-consumers` 在
+  同一次运行里按版本解析到全部九个，包审计报告九个全部 `verified`、`skipped: none`。
 - **m3 ✅ FIXED MINOR README 安装说明面向 checkout，且一条命令跑不通** `[实测]` —
   `README.md` 的 `cargo run -p nichlink-cli -- studio` 因该包有两个 bin 且无 `default-run` 而
   报 "could not determine which binary to run"（实测退出 101）。

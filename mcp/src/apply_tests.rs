@@ -282,9 +282,13 @@ fn a_rename_moves_the_module_and_keeps_the_face() {
 /// A delete preview removes nothing, and the applied delete moves the module out of
 /// the tree. It is recoverable by design — the executor moves the directory into
 /// NichLink's trash rather than unlinking it — which is why the request can be
-/// confirmed rather than merely trusted.
+/// confirmed rather than merely trusted. The preview also has to *say* it removed
+/// nothing: the executor reports what it did in the past tense, and a preview reply
+/// that repeated that sentence bare would tell the agent the move had happened.
 /// 删除预览不搬走任何东西，而落盘的删除把模块移出树。它按设计可恢复——执行器把目录移进 NichLink
-/// 的回收目录而不是删掉——这正是这次请求可以被"确认"而不只是被信任的原因。
+/// 的回收目录而不是删掉——这正是这次请求可以被"确认"而不只是被信任的原因。预览还必须**说出**
+/// 它没有搬走任何东西：执行器用过去时报告它做了什么，而预览回复若把那句话原样重复一遍，就等于
+/// 告诉代理这次搬移已经发生。
 #[test]
 fn a_delete_removes_nothing_until_it_is_applied() {
     let (root, name) = package("delete");
@@ -303,6 +307,15 @@ fn a_delete_removes_nothing_until_it_is_applied() {
         .expect("the delete previews");
     assert!(preview.contains("faces 0"), "{preview}");
     assert!(preview.contains("- src/button/button.rs"), "{preview}");
+    assert!(preview.contains("would move"), "{preview}");
+    assert!(
+        preview.contains("preview effect: moved `button`"),
+        "{preview}"
+    );
+    assert!(
+        !preview.lines().any(|line| line.starts_with("moved ")),
+        "a preview may not report the move as done: {preview}"
+    );
     assert!(
         root.join("src/button/button.rs").is_file(),
         "a preview must not delete anything: {preview}"

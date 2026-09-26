@@ -416,11 +416,23 @@ fn report(
         .as_ref()
         .map(|anchor| format!("declaration {anchor}\n"))
         .unwrap_or_default();
+    // The executor reports what it did in the past tense, and in a preview it did
+    // that on the copy: printing the sentence bare reads as a claim that this
+    // project changed, which is the one thing a preview must never say. The label
+    // scopes it to the preview instead of hiding it, because the sentence carries
+    // the parent identity and the old-to-new module names the diff does not.
+    // 执行器用过去时报告它做了什么，而在预览里它是在副本上做的：把这句原样打印，读起来就是
+    // "本项目已改变"，而这正是预览绝对不能说的话。给它一个标签、把它限定在预览里，而不是藏
+    // 起来——那句话里带着 diff 没有的父级身份与改名前后。
+    let reported = if applied {
+        outcome.message.clone()
+    } else {
+        format!("preview effect: {}", outcome.message)
+    };
     Ok(format!(
-        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{}\nfaces {}\n{list}\n",
+        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n",
         if applied { "apply" } else { "preview" },
         outcome.source.display(),
-        outcome.message,
         faces.len()
     ))
 }

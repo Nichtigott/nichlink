@@ -16,29 +16,46 @@ on 2026-09-25, and the release workflow's last step built a throwaway consumer
 outside the checkout and resolved all nine by version. `0.1.1` followed on
 2026-09-26, the same way and with the same last step; `tools/nichlink-package-audit`
 now builds all nine packaged tarballs instead of skipping the eight whose
-requirements had not reached the index. The version line stays on
+requirements had not reached the index. `0.1.3` followed on 2026-09-26 (run
+`36236583886`, with `--verify-consumers` green in the same run); `0.1.2` was never
+published, so its changes shipped in `0.1.3`, and the audit is back to `verified:`
+all nine with `skipped: none`. The version line stays on
 **0.1.x** while the design is still being deepened: each later release is a small
-step (`0.1.2`, …), and "1.0" names the milestone in
+step (`0.1.4`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
-`version = "0.1.1"` requirement with it, and that step is what freezes the public
+`version = "0.1.3"` requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
 without a red package audit; `0.1.3` moved the same way and for the same reason
-(`mcp` now uses `nichlink_build_method::face_views`), so the package audit returns
-to its designed waiting state.
+(`mcp` now uses `nichlink_build_method::face_views`), and publishing it closed the
+waiting state that change opened.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
 方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
-跳过那八个依赖尚未进入 index 的 crate。设计仍在深化期间，版本线保持
-**0.1.x**：其后的每次发布都是小步（`0.1.2`……），而"1.0"是
+跳过那八个依赖尚未进入 index 的 crate。`0.1.3` 于 2026-09-26 跟进（run `36236583886`，
+`--verify-consumers` 在同一次运行里通过）；`0.1.2` 从未发布，它的改动随 `0.1.3` 一起走，包审计
+也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
+**0.1.x**：其后的每次发布都是小步（`0.1.4`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.1"` 要求一起移动——那一步才是冻结
+`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.3"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
-使用 `nichlink_build_method::face_views`），包审计因此回到设计中的等待态。
+使用 `nichlink_build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。
 
 ## [Unreleased]
+
+### Fixed
+
+- A preview no longer reports the operation as done. `nichlink.apply` runs the real
+  operation on a throwaway copy, and the executor describes what it did in the past
+  tense, so a delete preview printed `would move …` and then, in the same reply,
+  ``moved `button` to …`` — a sentence true of the copy and false of the project.
+  The reply now scopes that sentence (`preview effect: …`) rather than dropping it,
+  because it carries the parent identity and the old-to-new module names the diff
+  does not; an apply still prints it bare. Found by playing the bridge against a
+  scaffolded host: the real project had no trash entry and the reply said it had
+  moved one.
 
 ## [0.1.3] — 2026-09-26
 
@@ -897,6 +914,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
 ### [Unreleased] 未发布
+
+修复：
+
+- 预览不再把操作报告成已完成。`nichlink.apply` 在一份一次性副本上运行真实操作，而执行器用过去时
+  描述它做了什么，因此删除预览会先打印 `would move …`，又在同一份回复里打印
+  ``moved `button` to …``——这句话对副本成立、对项目不成立。现在回复给这句话限定作用域
+  （`preview effect: …`）而不是丢掉它，因为它带着 diff 没有的父级身份与改名前后的模块名；落盘
+  时仍然原样打印。这是拿桥对着脚手架出来的宿主玩的时候抓到的：真实项目里没有任何回收条目，而
+  回复说它搬走了一个。
 
 ### [0.1.3] 2026-09-26
 
