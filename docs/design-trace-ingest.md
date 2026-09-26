@@ -253,12 +253,17 @@ the write rather than publish an empty artifact.
 
 ### 3.4 How Studio finds it
 Precedence: (1) `NICH_LINK_TRACE_FILE` (absolute or `package_root()`-relative);
-(2) convention path `package_root()/.nichlink/traces/latest.trace`, mirroring
+(2) convention path `package_root()/.nichlink/traces/nichlink.trace`, mirroring
 `external_graft_root()` (`external_graft/plan.rs:26-30`); (3) none → no trace.
-A CLI `--trace <path>` flag is deferred: `nichlink_studio::launch()` takes no
-arguments (`studio/src/studio/studio.rs:23`) and `cli` dispatches `studio` with
-no trailing parsing (`cli/src/lib.rs:59`), so a flag changes two public surfaces;
-the env var achieves the same end for 1.x.
+**Decided (2026-09-26) and built:** both ends call `trace_artifact_path`, which
+applies exactly that precedence, so an override cannot move the file for the
+writer and not the reader. A CLI `--trace <path>` flag is deferred and stays
+deferred: it would only move the *reader* (the host still decides where to write),
+so the user would have to type one path into two processes and a mismatch shows up
+as "no trace attached"; `nichlink_studio::launch_with` is also published API with
+three call sites, while the variable costs none. Add the flag when a workflow
+genuinely needs to *name* one artifact rather than point at the convention one,
+and have it share this same resolution function.
 
 ### 3.5 Version / identity check and what Studio shows
 Load once in `App::load` (beside `NICH_LINK_INITIAL_QUERY`, `lifecycle.rs:91-96`),
@@ -352,7 +357,7 @@ End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
 2. Record `CallTrace::full()` with `NodeId::from_namespaced_path("ingest-test",
    <real source>, <real kind>)` for a face in the fixture, plus one `local`
    input and one `return_value` output; `write_trace_artifact` to
-   `<root>/.nichlink/traces/latest.trace`.
+   `<root>/.nichlink/traces/nichlink.trace`.
 3. `App::load()`; assert `app.graph_locals(&center)` for that face's node
    returns the recorded values (the exact call `draw_data_flow_panel` makes,
    `ui/graph/data.rs:36`).
@@ -366,8 +371,12 @@ End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
 ## Open questions for the owner
 ## 给 owner 的待决问题
 
-1. **1.0 vs 1.x:** accept the §3.0 deferral, or freeze `CallTrace` for one
-   signature (`from_records`/`into_trace`) so ingest can land in 1.0?
+1. **1.0 vs 1.x — resolved by events (2026-09-26): the 0.1.x line.** Slice 1 is
+   built and shipping on `0.1.2` (unreleased), so the §3.0 deferral no longer
+   applies to the artifact: no `CallTrace` signature had to be frozen, because the
+   document is built from the flat arenas through `rebuild_indexes` rather than by
+   replaying the recording API. The version line stays `0.1.x` until the public
+   surface is deliberately frozen.
 2. **Identity — decided (2026-09-26): yes.** A launched session reads `[package]
    name` from the target `Cargo.toml` and authors under it, so ingest does not
    require exporting `NICH_LINK_NAMESPACE` and the mismatch path no longer fires
@@ -376,13 +385,35 @@ End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
    `studio::app::tests::project::{a_launched_session_authors_under_the_host_crates_package_name,
    the_package_name_comes_from_a_literal_package_key,
    the_namespace_follows_the_manifest_unless_the_environment_names_one}`.
-3. **Writer name:** `NICH_LINK_TRACE_FILE` — accept, or fold discovery into a
-   `nichlink trace --host-output <path>` CLI verb?
-4. **Escaping vs length-prefix:** is backslash escaping of `\t`/`\n`/`\`
-   acceptable for 1.x, or should records be length-prefixed to make byte-exact
-   round-trip trivial at the cost of unreadable files?
-5. **Convention path lifetime:** `latest.trace` overwritten per run, or one file
-   per run with an explicit path always passed? Overwrite keeps Studio's search
-   simple but loses the previous run.
+3. **Writer name — decided (2026-09-26): `NICH_LINK_TRACE_FILE`.** One variable
+   both ends read, matching the existing `NICH_LINK_PACKAGE_ROOT` /
+   `NICH_LINK_HOST_MANIFEST` / `NICH_LINK_NAMESPACE` family. No CLI verb: it would
+   move only the reader, and the env var already names a file that is not the
+   convention one. Built and pinned
+   (`run_method/src/runtime/trace/artifact/io.rs`,
+   `the_artifact_path_prefers_the_override_and_falls_back_to_the_lexicon`).
+4. **Escaping vs length-prefix — decided (2026-09-26): escaping.** The interface
+   promises exact round-trip and refusal of malformed input, and both encodings can
+   give that, so the tie-breaker is which one a maintainer can hold and verify:
+   escaping keeps the artifact readable and `git diff`-able (the `graft.plan`
+   precedent), and its failure mode is loud and local — an unescaped tab is
+   `local expects 10 tab-separated fields, found 11` at *that* line, where
+   length-prefix corruption shifts the rest of the record. Pinned by
+   `the_values_that_break_naive_escaping_round_trip_exactly` (trailing backslash,
+   backslash-`n`, lone backslash, CR, empty, quotes, multi-byte) plus the rule that
+   no raw control character reaches the file — the `\r` case is the one a round-trip
+   assertion alone does not catch, which is why the assertion is on the bytes.
+5. **Convention path lifetime — decided (2026-09-26): one fixed file, overwritten;
+   no history.** The artifact is one *recording*, not the newest of a series, so
+   the name says what kind of thing it is (`nichlink.trace`, like `graft.plan`)
+   rather than a recency the system does not enforce. Keeping runs was rejected on
+   three measured grounds: §3.5's identity gate refuses an artifact whose nodes no
+   longer resolve, so history would mostly be unloadable bytes; CI evidence wants an
+   explicit path and the CI artifact store, not the project directory; and the one
+   standing comparison need (run N times hunting a flaky value) is served by the
+   harness naming each run through the env var
+   (`NICH_LINK_TRACE_FILE=/tmp/run-$i.trace`). A host that wants to keep a run
+   writes it to a path of its own.
 6. **1.0 label wording:** keep `LIVE SAMPLE`, or strengthen it to
-   `TRACE: none` given §1.4 shows the sample renders nothing?
+   `TRACE: none` given §1.4 shows the sample is unreachable rather than empty?
+   Still open; it belongs to the Studio loader slice.

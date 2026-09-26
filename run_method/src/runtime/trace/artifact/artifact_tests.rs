@@ -150,6 +150,56 @@ fn every_enum_spelling_and_escaped_value_survives() {
     assert_eq!(parsed.locals[4].observation, Observation::Unobserved);
 }
 
+/// The escaping rules are pinned against the values that break naive writers: a
+/// trailing backslash (it must not escape the record separator), a backslash
+/// followed by `n` (it must come back as two characters, not a newline), a lone
+/// backslash, a carriage return, an empty value, quotes, and a multi-byte value.
+/// 转义规则对着能击穿朴素写入方的取值钉死：结尾反斜杠（不能让它转义记录分隔符）、反斜杠加
+/// `n`（必须回来成两个字符而不是换行）、单独一个反斜杠、回车、空值、引号，以及多字节值。
+#[test]
+fn the_values_that_break_naive_escaping_round_trip_exactly() {
+    let cases = [
+        "trailing\\",
+        "back\\nslash",
+        "\\",
+        "carriage\rreturn",
+        "",
+        "quote\"and'apostrophe",
+        "line\rs\nend",
+        "中文值",
+    ];
+    let mut trace = CallTrace::full();
+    trace.with(node(5), "escaping", |trace| {
+        for (index, value) in cases.iter().enumerate() {
+            trace.local(format!("v{index}"), "String", *value, LocalKind::Binding);
+        }
+    });
+    let text = TraceArtifact::from_trace(&trace).render();
+    // No raw control character may reach the file. A carriage return is the one
+    // that bites: it survives the round trip *inside* a field (Rust's `lines()`
+    // only strips a CR that ends a line), so a round-trip assertion alone does not
+    // pin the `\r` escape — but a raw CR in the data is exactly what a tool that
+    // normalises line endings (git's `autocrlf`, an editor, a copy through a
+    // Windows filesystem) can rewrite, and then the value changes. The record
+    // terminator is the only newline-shaped byte this format may contain.
+    // 文件里不允许出现裸控制字符。真正会咬人的是回车：字段**内部**的 CR 能活着往返
+    // （Rust 的 `lines()` 只剥掉行尾的 CR），因此单靠往返断言钉不住 `\r` 转义——而数据里的
+    // 裸 CR 正是那些会规范化行尾的工具（git 的 `autocrlf`、编辑器、经 Windows 文件系统的
+    // 拷贝）可能改写的字节，改写之后取值就变了。本格式里唯一允许出现的换行形状字节是记录
+    // 终止符。
+    assert!(
+        !text.contains('\r'),
+        "a raw carriage return reached the artifact:\n{text}"
+    );
+    let parsed = TraceArtifact::parse(&text).expect("every escaped value parses");
+    for (index, value) in cases.iter().enumerate() {
+        assert_eq!(
+            parsed.locals[index].value, *value,
+            "value {index} must survive byte for byte; rendered:\n{text}"
+        );
+    }
+}
+
 #[test]
 fn parse_refuses_another_version_and_unknown_keys() {
     let text = TraceArtifact::from_trace(&recorded_trace()).render();

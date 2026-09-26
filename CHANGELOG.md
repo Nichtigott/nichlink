@@ -53,7 +53,10 @@ without a red package audit.
   `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` contracts in the kernel lexicon. A
   host can now write its recorded `CallTrace` as a versioned document that a
   separate reader can rebuild; the Studio loader is the next slice
-  (`docs/design-trace-ingest.md` §3.5).
+  (`docs/design-trace-ingest.md` §3.5). The document is line-oriented text:
+  values escape `\\`, `\t`, `\n`, `\r`, no raw control character reaches the
+  file, and a malformed or unknown-key document is refused by line rather than
+  guessed.
 
 ### Changed
 
@@ -748,7 +751,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `parse`、`into_trace`）、`write_trace_artifact`、`read_trace_artifact` 与
   `trace_artifact_path`，以及内核词典里的 `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` 契约。
   宿主现在能把已记录的 `CallTrace` 写成带版本的文档，由独立读取方重建；Studio 的加载方是下一片
-  （`docs/design-trace-ingest.md` §3.5）。
+  （`docs/design-trace-ingest.md` §3.5）。该文档是逐行文本：取值转义 `\\`、`\t`、`\n`、`\r`，
+  文件里不出现任何裸控制字符，畸形或含未知键的文档按行拒绝而不是猜测。
 
 变更：
 
