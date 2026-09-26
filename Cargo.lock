@@ -732,6 +732,7 @@ version = "0.1.3"
 dependencies = [
  "nichlink-build-method",
  "nichlink-core",
+ "nichlink-debug-method",
  "nichlink-run-method",
  "serde_json",
 ]

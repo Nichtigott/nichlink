@@ -29,6 +29,15 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
   什么，这是任何静态读取都说不出的。artifact 的身份会先被核验（命名空间、注册机根、每个帧的节点）；
   异树 artifact 会被按名拒绝，而不是画出来。
+- `nichlink.mir`：读一个 MIR artifact——`rustc -Zunpretty=mir` 文本转储或紧凑 JSONL 形式，
+  按扩展名选择——报告编译器给出的调用候选。`jsonl: true` 输出那份 JSONL：Studio 本来就能渲染、
+  也能解析这条可移植通道，而工作区里从没有任何东西写出过一份。JSONL 有一行畸形就整体失败；文本转储
+  从不失败，只给出它确实包含的调用。文本的生产者是 nightly 工具链上的
+  `cargo rustc -Zunpretty=mir`；artifact 缺失时工具会这么说，而不是报一棵空图。
+- `nichlink.unified`：把 MIR artifact 与本包已记录的 trace 经
+  `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——被 trace 确认的调用带
+  `evidence=Live` 并**取代**它的编译器候选，其余保持 `evidence=Mir`。没有已记录的 trace 时合并仍会
+  作答，并把每条关系标为编译器候选。
 - `nichlink.usages`：一个面的邻域——它在树里的父级与子面、`nichlink.apply` 作为输入接受的那些字段
   从生成模块里读回的结果（preset、parts、名称、exports、`requires`、`provides`、handle 与 part 的
   traits/contracts、registration rule、admission、flow、runtime checks），以及哪些别的面提到同一批
@@ -76,4 +85,4 @@ contract、admission 与 registration rule 的**数据**仍然不报告：那些
 `RegistrationSnapshot` 里而不是源码里，需要构建产物而不是扫描（`docs/roadmap-1.0.md` 第 10 条）。
 graft 写入、插件、项目脚手架、树 diff 与一致性分析仍待做（`docs/roadmap-1.0.md` 第 7 条）。
 
-调用图标记为 `static-heuristic`。动态分派、函数指针、FFI 和运行时选择的调用不保证静态解析，应结合 `nichlink-debug-method` 和实时 `CallTrace`。
+调用图标记为 `static-heuristic`。动态分派、函数指针、FFI 和运行时选择的调用不保证静态解析，应结合 `nichlink-debug-method` 和实时 `CallTrace`——MIR 转储与已记录的 trace 都在手边时，`nichlink.unified` 做的正是这件事。

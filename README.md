@@ -757,7 +757,12 @@ reconstructing it from macro names — plus `nichlink.explain` (the build's publ
 scope and release pruning, which source text cannot answer), `nichlink.diff` (the
 face-level delta between the sources and the build, including identities that
 changed under an unmoved file), and `nichlink.trace` (the recorded trace's call
-report — what actually ran — refused when the artifact describes another tree), and
+report — what actually ran — refused when the artifact describes another tree),
+`nichlink.mir` (a `-Zunpretty=mir` text dump or the compact JSONL artifact, read
+either way and *written* when `jsonl: true` — the portable channel nothing in the
+workspace produced before), `nichlink.unified` (that graph merged with the recorded
+trace through `debug_method`'s own `UnifiedCallGraph`, where a live call confirms its
+compiler candidate instead of sitting beside it), and
 `nichlink.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
 read back, and the capability tokens other faces mention in either direction), and
 `nichlink.converge` (one call that returns the converged starting point for a face:
@@ -771,7 +776,8 @@ unless `apply: true` is given. Static call-graph answers are labelled
 heuristic; dynamic calls and runtime values are authoritative only when a host
 records a real `CallTrace`, which Studio loads from the artifact that host writes
 (`docs/design-trace-ingest.md`); a session with no artifact says `TRACE: none`
-rather than showing values it does not have.
+rather than showing values it does not have, and `nichlink.unified` is where a
+recorded trace and the compiler's MIR candidates are joined.
 
 ## When NichLink is worth it
 

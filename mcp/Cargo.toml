@@ -31,6 +31,12 @@ nichlink-build-method = { path = "../build_method", version = "0.1.3" }
 # 写入路径调用与 Studio 相同的 authoring 执行器,因此代理的编辑走内核的准入与拓扑校验,而不是在
 # 这里重新实现一遍。`authoring` 就是承载它的特性。
 nichlink-run-method = { path = "../run_method", version = "0.1.3", features = ["authoring"] }
+# The unified call graph is the one place static compiler candidates and live
+# recorded calls are merged, and it lives in `debug_method`; taking the dependency
+# is what keeps the bridge from re-implementing that merge.
+# 统一调用图是静态编译器候选与真实记录调用唯一合并的地方，它在 `debug_method` 里；
+# 引入这个依赖，正是让桥不必自己再实现一遍那次合并。
+nichlink-debug-method = { path = "../debug_method", version = "0.1.3" }
 nichlink-core = { path = "../core", version = "0.1.3" }
 serde_json = "1"
 

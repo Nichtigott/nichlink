@@ -672,7 +672,10 @@ MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.explain`（构建发布的
 作用域与发布剪枝，源码文本答不出来）、`nichlink.diff`（源码与构建之间的面级差异，包括文件没动而
 身份变了的那种）与 `nichlink.trace`（已记录 trace 的调用报告——真正跑了什么——artifact 描述的是
-另一棵树时会被拒绝）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
+另一棵树时会被拒绝）、`nichlink.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
+都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过）、
+`nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
+真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
 能力记号），以及 `nichlink.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
 每条需求是否有答案、该读哪些文件——并把内核的拒绝当成判断而不是错误报出来）、
 `nichlink.verify`（重跑内核校验并报告那次运行发布的树差异，因此一次编辑是被确认过的，而不只是被写下），还有
@@ -681,7 +684,8 @@ authoring 执行器新增、编辑、改名或删除注册面，除非给出 `ap
 预览。静态调用图会标为 heuristic；动态调用
 和运行时数值只有在宿主真实记录 `CallTrace` 后才具权威性，而 Studio 从宿主写出的 artifact
 读入它（`docs/design-trace-ingest.md`）；没有 artifact 的会话显示 `TRACE: none`，
-而不是展示它并不拥有的数值。
+而不是展示它并不拥有的数值；而把已记录的 trace 与编译器的 MIR 候选汇合的，正是
+`nichlink.unified`。
 
 ## 什么时候值得用 NichLink
 

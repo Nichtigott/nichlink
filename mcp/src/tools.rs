@@ -1,23 +1,28 @@
 //! Tool catalog, the query implementations, and the write path's dispatch.
 //! 工具目录、查询实现与写入路径的分派。
 //!
-//! Five tools read Rust source text. Four more answer from evidence that is not
+//! Five tools read Rust source text. Six more answer from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
 //! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
 //! build *published* (`target/nichlink/out`) for scope and release pruning,
 //! `nichlink.diff` states the face-level delta between those two sides, and
 //! `nichlink.trace` reads a recorded trace artifact, refusing one that describes
-//! another tree. `nichlink.apply` is the write path and previews before it writes
+//! another tree; `nichlink.mir` reads a `-Zunpretty=mir` dump or a JSONL artifact
+//! and can emit that JSONL, which nothing in the workspace ever wrote; and
+//! `nichlink.unified` merges the two, where a live call confirms a compiler
+//! candidate. `nichlink.apply` is the write path and previews before it writes
 //! (`apply.rs` explains the contract). What none of them reports is contract,
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
-//! 五个工具读取 Rust 源码文本，另外四个用非源码文本的证据作答：`nichlink.registry` 推导出构建
+//! 五个工具读取 Rust 源码文本，另外六个用非源码文本的证据作答：`nichlink.registry` 推导出构建
 //! 所推导的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
-//! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份。`nichlink.apply` 是写入
-//! 路径，落盘前先预览（契约见 `apply.rs`）。它们都没有报告的是 contract、admission 与 registration
-//! rule 数据：那些住在已构建的 `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
+//! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
+//! `-Zunpretty=mir` 转储或 JSONL artifact，并能输出那份无人写过的 JSONL；`nichlink.unified` 把两者
+//! 合并，真实调用在其中确认编译器候选。`nichlink.apply` 是写入路径，落盘前先预览（契约见 `apply.rs`）。
+//! 它们都没有报告的是 contract、admission 与 registration rule 数据：那些住在已构建的
+//! `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
 
 use serde_json::{Value, json};
 use std::path::Path;
@@ -28,6 +33,7 @@ use crate::converge::converge;
 use crate::diff::diff;
 use crate::evidence::explain;
 use crate::index::{load_one, load_sources, required_path, resolve_root};
+use crate::mir::{mir, unified};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
 use crate::trace::trace;
@@ -126,6 +132,31 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"}}}),
         ),
         tool(
+            "nichlink.mir",
+            "Read a MIR artifact and report the compiler's call candidates, or emit it as canonical \
+             JSONL. A `rustc -Zunpretty=mir` text dump and the compact JSONL artifact are both \
+             accepted, chosen by extension: JSONL parses strictly, so a malformed line fails the \
+             whole read, while a text dump never fails because a line that is not a call is simply \
+             not a call. The JSONL form is the portable channel Studio could already render and \
+             parse and nothing in this workspace ever wrote — `jsonl: true` makes this tool that \
+             writer, and what it prints reads back here. The text producer stays \
+             `cargo rustc -Zunpretty=mir` on a nightly toolchain; a missing artifact says exactly \
+             that instead of reporting an empty graph.",
+            json!({"type":"object","properties":{"path":{"type":"string"},"jsonl":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
+        ),
+        tool(
+            "nichlink.unified",
+            "Merge a MIR artifact with this package's recorded trace: the compiler's call candidates \
+             together with what actually ran, where a live call confirms its candidate and carries \
+             `evidence=Live` while the rest stay `evidence=Mir`. This is `debug_method`'s \
+             `UnifiedCallGraph`, the one place the two evidence sources are joined, so the merge \
+             cannot drift from the library's own. The trace is read from this package's artifact \
+             path; when none has been recorded the merge still answers and labels every relation a \
+             compiler candidate rather than failing, because an absent trace is a weaker answer and \
+             not a broken one.",
+            json!({"type":"object","properties":{"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
+        ),
+        tool(
             "nichlink.usages",
             "Report the neighbourhood of one face: its parent and children as the tree has them, the \
              fields the write path accepts read back from the generated module (preset, parts, the \
@@ -191,6 +222,8 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.explain" => explain(&root, arguments),
         "nichlink.diff" => diff(&root, arguments),
         "nichlink.trace" => trace(&root, arguments),
+        "nichlink.mir" => mir(&root, arguments),
+        "nichlink.unified" => unified(&root, arguments),
         "nichlink.usages" => usages(&root, arguments),
         "nichlink.converge" => converge(&root, arguments),
         "nichlink.verify" => verify(&root, arguments),

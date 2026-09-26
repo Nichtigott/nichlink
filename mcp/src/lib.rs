@@ -90,3 +90,6 @@ mod callgraph;
 
 #[path = "verify.rs"]
 mod verify;
+
+#[path = "mir.rs"]
+mod mir;

@@ -76,7 +76,8 @@ levels='
 nichlink-core
 nichlink-macro nichlink-build-method
 nichlink-run-method
-nichlink-debug-method nichlink-mcp nichlink-plugin-host
+nichlink-debug-method nichlink-plugin-host
+nichlink-mcp
 nichlink-studio
 nichlink-cli
 '
@@ -263,7 +264,7 @@ dependencies='
 nichlink-core:
 nichlink-macro:nichlink-core
 nichlink-build-method:nichlink-core
-nichlink-mcp:nichlink-build-method nichlink-core nichlink-run-method
+nichlink-mcp:nichlink-build-method nichlink-core nichlink-debug-method nichlink-run-method
 nichlink-run-method:nichlink-core nichlink-macro
 nichlink-debug-method:nichlink-run-method
 nichlink-plugin-host:nichlink-run-method

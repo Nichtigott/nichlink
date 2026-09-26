@@ -188,7 +188,15 @@ pub fn check_for(
     })?;
     registry_identity::set_package_namespace(package.to_owned());
     let input = BuildInput::new(manifest.to_path_buf(), out_dir.to_path_buf(), false);
-    match pipeline::run(&input) {
+    // `package` is the authority for this run, not the process-wide pin: a
+    // bridge or a test binary runs several packages in one process, and the pin
+    // is first-write-wins, so a second run would otherwise publish identities
+    // stamped with the first package's namespace. The scope also serializes
+    // concurrent runs, because that namespace is process-wide.
+    // 本次运行的权威是 `package` 而不是进程级固定值：桥或测试二进制会在一个进程里跑多个包，而该
+    // 固定值先到先得，因此第二次运行发布的身份会盖着第一个包的命名空间。这个作用域同时串行化并发
+    // 运行，因为那个命名空间是进程级的。
+    match registry_identity::run_as_package(package, || pipeline::run(&input)) {
         Some(diagnostics) => Err(diagnostics),
         None => Ok(()),
     }

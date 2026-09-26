@@ -35,6 +35,20 @@ The server exposes compact tools. Reads:
   headless call report it implies — what actually ran, which no static read can
   tell you. The artifact's identity is checked first (namespace, registry root,
   every frame's node); a foreign artifact is refused by name rather than drawn.
+- `nichlink.mir`: read a MIR artifact — a `rustc -Zunpretty=mir` text dump or the
+  compact JSONL form, chosen by extension — and report the compiler's call
+  candidates. `jsonl: true` emits that JSONL, the portable channel Studio could
+  already render and parse while nothing in the workspace ever wrote one. A
+  malformed JSONL line fails the whole read; a text dump never fails and only ever
+  yields the calls it contains. The text producer is `cargo rustc -Zunpretty=mir`
+  on a nightly toolchain, and a missing artifact says so instead of reporting an
+  empty graph.
+- `nichlink.unified`: merge a MIR artifact with this package's recorded trace
+  through `nichlink_debug_method::UnifiedCallGraph`, the one place the two evidence
+  sources are joined — a call the trace confirms carries `evidence=Live` and
+  *replaces* its compiler candidate, while the rest stay `evidence=Mir`. With no
+  recorded trace the merge still answers, labelling every relation a compiler
+  candidate.
 - `nichlink.usages`: a face's neighbourhood — its parent and children as the tree
   has them, the fields `nichlink.apply` accepts read back from the generated module
   (preset, parts, names, exports, `requires`, `provides`, handle and part traits and
@@ -107,4 +121,5 @@ scaffolding, tree diffs, and the consistency analysis are still to come
 
 Call-graph results are labelled `static-heuristic`. They intentionally do not
 claim to resolve dynamic dispatch, function pointers, FFI, or runtime-selected
-calls; use `nichlink-debug-method` and a live `CallTrace` for those edges.
+calls; use `nichlink-debug-method` and a live `CallTrace` for those edges, which is
+what `nichlink.unified` does once a MIR dump and a recorded trace are both present.

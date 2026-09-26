@@ -164,7 +164,7 @@ fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
     })
 }
 
-fn is_safe_child(root: &Path, path: &Path) -> bool {
+pub(crate) fn is_safe_child(root: &Path, path: &Path) -> bool {
     let root = fs::canonicalize(root).ok();
     let path = fs::canonicalize(path).ok();
     match (root, path) {

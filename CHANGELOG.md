@@ -47,6 +47,23 @@ waiting state that change opened.
 
 ### Added
 
+- **The MIR channel now has a reader, a writer, and a merge.** `nichlink.mir` reads
+  either a `rustc -Zunpretty=mir` text dump or the compact JSONL artifact, chosen by
+  extension, and keeps the formats' asymmetry instead of flattening it: JSONL parses
+  strictly, so a malformed line fails the whole read, while a text dump never fails
+  because a line that is not a call is simply not a call. `jsonl: true` makes the tool
+  the writer that existed nowhere in the workspace — Studio could render and parse
+  this artifact and nothing ever produced one. `nichlink.unified` then merges that
+  graph with the package's recorded trace through
+  `nichlink_debug_method::UnifiedCallGraph`, the one place the two evidence sources
+  are joined, so a call the trace confirms carries `evidence=Live` and *replaces* its
+  compiler candidate rather than sitting beside it, while the rest stay `evidence=Mir`.
+  An absent trace is a weaker answer and not a broken one: the merge still answers and
+  labels every relation a compiler candidate. `mcp` gained a `nichlink-debug-method`
+  dependency for it, and the version line does not move, because `0.1.3` is still
+  unreleased. The producer of the *text* stays outside the bridge, and the tool says
+  so rather than hiding it: that is `cargo rustc -Zunpretty=mir` on a nightly
+  toolchain.
 - `nichlink.verify` closes the loop the other tools opened: it re-runs the kernel's
   registration validation over a package and reports the tree delta the run just
   published, so an edit is *confirmed* rather than merely written. It drives the same
@@ -128,6 +145,24 @@ waiting state that change opened.
 
 ### Fixed
 
+- **A second package built or verified in one process is no longer stamped with the
+  first one's namespace.** `build_method`'s identity namespace was a first-write-wins
+  process pin, and `check_for` set it from the package it was given — so in a
+  long-lived process (the MCP bridge, a Studio session) the *second* package's
+  published evidence carried the first package's namespace, and `nichlink.diff`
+  reported every face as re-identified. CI caught it in `verify`'s own test:
+  `reidentified 1`, `ba9a8808…` on the run's side and `77fc3680…` on the sources',
+  which the ids decode to `namespace=mcp-verify-broken path=label/label.rs
+  name=Label` and `namespace=mcp-verify-healthy …` — the build side had been stamped
+  by the test that ran first. The namespace is now scoped to the run, on the running
+  thread (`run_as_package`), so a run's identities belong to the package being run
+  while every other thread keeps reading what the process pinned; the process-wide
+  pin stays for build scripts, and `freeze_test_namespace` keeps working. Pinned by
+  `a_run_namespace_wins_over_the_pin_and_puts_it_back` and, through the tool an agent
+  actually calls, `a_second_package_in_one_process_keeps_its_own_namespace`. Both
+  measured red by neutering the scope, and the second by neutering the wiring
+  separately — the unit pin tests the mechanism, the bridge pin tests that the
+  mechanism is used.
 - A preview no longer reports the operation as done. `nichlink.apply` runs the real
   operation on a throwaway copy, and the executor describes what it did in the past
   tense, so a delete preview printed `would move …` and then, in the same reply,
@@ -998,6 +1033,16 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- **MIR 通道现在有读取方、写入方与合并。** `nichlink.mir` 读 `rustc -Zunpretty=mir`
+  文本转储或紧凑 JSONL artifact，按扩展名选择，并保留两种格式的不对称而不是抹平它：JSONL 严格解析，
+  一行畸形就整体失败；文本转储从不失败，因为不是调用的行就只是不是调用。`jsonl: true` 让这个工具成为
+  工作区里从来不存在的那个写入方——Studio 能渲染、也能解析这种 artifact，而从没有任何东西产出过一份。
+  `nichlink.unified` 随后把该图与本包已记录的 trace 经
+  `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
+  带 `evidence=Live` 并**取代**它的编译器候选、而不是与它并列，其余保持 `evidence=Mir`。缺失 trace
+  是更弱的答案、不是坏掉的答案：合并仍然作答，并把每条关系标为编译器候选。`mcp` 为此新增
+  `nichlink-debug-method` 依赖，而版本线不动，因为 `0.1.3` 仍未发布。*文本*的生产者仍在桥之外，工具
+  把这一点说出来而不是藏起来：那是 nightly 工具链上的 `cargo rustc -Zunpretty=mir`。
 - `nichlink.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
   的树差异，因此一次编辑是被**确认过**的，而不只是被写下。它驱动 CLI 的 `check` 所驱动的同一个入口，
   所以它的判断不可能与 `nichlink check` 漂移；它还顺带刷新构建证据。判断失败是答案而不是工具故障：
@@ -1046,6 +1091,18 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- **在一个进程里构建或校验第二个包时，它不再被盖上第一个包的命名空间。** `build_method` 的身份
+  命名空间过去是"先到先得"的进程固定值，而 `check_for` 用它收到的包去设置它——于是在长生命周期进程
+  （MCP 桥、Studio 会话）里，**第二个**包发布的证据带着第一个包的命名空间，`nichlink.diff` 于是把
+  每个面都报成身份变了。CI 在 `verify` 自己的测试里抓到它：`reidentified 1`，运行侧
+  `ba9a8808…`、源码侧 `77fc3680…`，而这两个 id 解出来分别是
+  `namespace=mcp-verify-broken path=label/label.rs name=Label` 与 `namespace=mcp-verify-healthy …`
+  ——构建侧被**先跑的那个测试**盖了章。现在命名空间被限定在这一次运行、且落在运行线程上
+  （`run_as_package`），因此一次运行的身份属于正在运行的那个包，而其它线程继续读到进程固定的值；
+  进程级固定值仍服务于构建脚本，`freeze_test_namespace` 也照常工作。钉住它的有
+  `a_run_namespace_wins_over_the_pin_and_puts_it_back`，以及通过代理真正调用的工具实现的
+  `a_second_package_in_one_process_keeps_its_own_namespace`。前者把作用域去掉即实测为红；后者分别
+  去掉作用域、去掉接线各测一次——单元钉子钉的是机制，桥的钉子钉的是"机制确实被用上"。
 - 预览不再把操作报告成已完成。`nichlink.apply` 在一份一次性副本上运行真实操作，而执行器用过去时
   描述它做了什么，因此删除预览会先打印 `would move …`，又在同一份回复里打印
   ``moved `button` to …``——这句话对副本成立、对项目不成立。现在回复给这句话限定作用域
