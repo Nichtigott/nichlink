@@ -3,17 +3,21 @@
 //!
 //! Five tools read Rust source text; `nichlink.registry` reads the same tree the
 //! build does (`nichlink_build_method::face_views`) and reports the faces it
-//! derives. What none of them reports yet is contract, admission, or
-//! registration-rule data: that lives in the built `RegistrationSnapshot`s, not
-//! in the source, and reaching it needs the build output rather than a scan.
+//! derives; `nichlink.apply` is the write path and previews before it writes
+//! (`apply.rs` explains the contract). What none of them reports yet is contract,
+//! admission, or registration-rule data: that lives in the built
+//! `RegistrationSnapshot`s, not in the source, and reaching it needs the build
+//! output rather than a scan.
 //! 五个工具读取 Rust 源码文本；`nichlink.registry` 读取构建所读的同一棵树
-//! （`nichlink_build_method::face_views`）并报告它推导出的面。它们都还没有报告的是 contract、
-//! admission 与 registration rule 数据：那些住在已构建的 `RegistrationSnapshot` 里而不是源码
-//! 里，要拿到它需要构建产物而不是扫描。
+//! （`nichlink_build_method::face_views`）并报告它推导出的面；`nichlink.apply` 是写入路径，
+//! 落盘前先预览（契约见 `apply.rs`）。它们都还没有报告的是 contract、admission 与
+//! registration rule 数据：那些住在已构建的 `RegistrationSnapshot` 里而不是源码里，要拿到它
+//! 需要构建产物而不是扫描。
 
 use serde_json::{Value, json};
 use std::path::Path;
 
+use crate::apply::apply;
 use crate::index::{display_list, load_one, load_sources, required_path, resolve_root};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
@@ -44,6 +48,25 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.status",
             "Report the source root and indexed Rust file/function counts.",
             json!({"type":"object","properties":{"root":{"type":"string"}}}),
+        ),
+        tool(
+            "nichlink.apply",
+            "Edit this package's registration faces through the same authoring executor Studio \
+             uses, so the kernel's admission and topology checks run on the change. `action` is \
+             `add` or `edit`; `fields` carries the face fields (`module`, `kind`, `name_zh`, \
+             `needs_registry`, …) and `parent` names the parent by logical path or identity. \
+             **A request is previewed unless `apply` is true**: the preview runs the real \
+             operation on a throwaway copy and returns the file diff plus the registration tree \
+             it produces; `apply: true` writes it and returns the files it wrote. Every reply \
+             is the tree that results, so the next call can be aimed with it.",
+            json!({"type":"object","properties":{
+                "action":{"type":"string","enum":["add","edit"]},
+                "node":{"type":"string","description":"edit: the face to rewrite, by logical path or identity"},
+                "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
+                "fields":{"type":"object","description":"the face's fields"},
+                "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},
+                "root":{"type":"string"}
+            },"required":["action"]}),
         ),
         tool(
             "nichlink.registry",
@@ -82,6 +105,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.read" => read_source(&root, arguments),
         "nichlink.status" => status(&root),
         "nichlink.registry" => registry(&root),
+        "nichlink.apply" => apply(&root, arguments),
         _ => Err(format!("unknown tool `{name}`")),
     };
     match result {

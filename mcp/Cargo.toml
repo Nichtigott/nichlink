@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
 homepage = "https://github.com/Nichtigott/nichlink"
-description = "MCP stdio bridge for the compact NichLink source and registry queries"
+description = "MCP stdio bridge for NichLink: source, registry, and validated authoring queries"
 keywords = ["mcp", "json-rpc", "ai", "stdio"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
@@ -25,6 +25,12 @@ path = "src/lib.rs"
 # ——`face_views`——而不是桥内部的第二个扫描器。这正是该工具的意义：代理去问注册树，
 # 而不是靠 grep 重新推导。
 nichlink-build-method = { path = "../build_method", version = "0.1.3" }
+# The write path calls the *same* authoring executor Studio does, so an agent's
+# edit goes through the kernel admission and topology checks instead of
+# re-implementing them here. `authoring` is the feature that carries it.
+# 写入路径调用与 Studio 相同的 authoring 执行器,因此代理的编辑走内核的准入与拓扑校验,而不是在
+# 这里重新实现一遍。`authoring` 就是承载它的特性。
+nichlink-run-method = { path = "../run_method", version = "0.1.3", features = ["authoring"] }
 nichlink-core = { path = "../core", version = "0.1.3" }
 serde_json = "1"
 

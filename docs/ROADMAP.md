@@ -49,9 +49,13 @@ Connect MCP and Studio to Registry snapshots, contracts, diagnostics, and live p
 
 ### 7. Validated MCP authoring tools
 
-Grow the MCP bridge from read-only queries to validated `add` / `edit` /
-`graft` tools. Every write goes through the same kernel admission, contract,
-and topology validation the build surface uses, and reports provenance back to
+**Started (2026-09-26):** `nichlink.apply` performs validated `add` / `edit`
+through the same authoring executor Studio uses, previewed on a throwaway copy of
+the package by default. Still to come: `delete` / `rename`, `graft` writes,
+plugins, project scaffolding, tree diffs, and the consistency analysis that lets
+an agent notice faces that should share behaviour. Every write goes through the
+same kernel admission, contract, and topology validation the build surface uses,
+and reports provenance back to
 the caller.
 
 ## Explicit boundaries

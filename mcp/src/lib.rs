@@ -12,15 +12,25 @@
 //! 直接问注册树是什么，而不是从宏名重建。contract、admission 与 registration rule 字段仍然
 //! 没有：那些需要已构建的面快照，而不是源码扫描。
 //!
-//! JSON-RPC frames arrive on stdin and responses leave on stdout. The bridge
-//! only reads below the configured `NICH_LINK_PACKAGE_ROOT`; it never writes to
-//! the registry or the filesystem. Naming a package does run `cargo metadata`
-//! (through `nichlink_build_method::package_name`), because the package name is
-//! the `NodeId` namespace and Cargo is its authority.
-//! JSON-RPC 帧从 stdin 进入、响应从 stdout 输出。桥只读取配置的
-//! `NICH_LINK_PACKAGE_ROOT` 之下的内容，绝不写入注册树或文件系统。为包命名确实会运行
-//! `cargo metadata`（经 `nichlink_build_method::package_name`），因为包名就是 `NodeId`
-//! 命名空间，而 Cargo 是它的权威。
+//! JSON-RPC frames arrive on stdin and responses leave on stdout. Reads stay
+//! below the configured `NICH_LINK_PACKAGE_ROOT`. Writes exist — `nichlink.apply`
+//! — and they go through the **same authoring executor Studio uses**, inside an
+//! `AuthoringContext` built from the resolved package root and the namespace
+//! Cargo reports, so an agent's edit passes the kernel's admission and topology
+//! checks instead of re-implementing them here. A write is previewed first: the
+//! tool runs the real operation against a throwaway copy of the package and
+//! reports the resulting tree and file diff; only `apply: true` touches the
+//! project. Naming a package runs `cargo metadata` (through
+//! `nichlink_build_method::package_name`), because the package name is the
+//! `NodeId` namespace and Cargo is its authority.
+//! JSON-RPC 帧从 stdin 进入、响应从 stdout 输出。读取仍在配置的
+//! `NICH_LINK_PACKAGE_ROOT` 之下。写入是存在的——`nichlink.apply`——而且它走**与 Studio
+//! 相同的 authoring 执行器**，运行在由已解析包根与 Cargo 报告的命名空间构成的
+//! `AuthoringContext` 里，因此代理的编辑会经过内核的准入与拓扑校验，而不是在这里重新实现一遍。
+//! 写入先预览：工具在一份一次性的包副本上运行真实操作，报告将得到的树与文件 diff；只有
+//! `apply: true` 才会碰真实项目。为包命名会运行 `cargo metadata`（经
+//! `nichlink_build_method::package_name`），因为包名就是 `NodeId` 命名空间，而 Cargo 是它
+//! 的权威。
 
 // The published surface must be readable on docs.rs without leaving the page,
 // so the lint is on for the whole crate; `clippy -D warnings` makes a new
@@ -38,6 +48,12 @@ mod tools;
 
 #[path = "registry.rs"]
 mod registry;
+
+#[path = "apply.rs"]
+mod apply;
+
+#[path = "preview.rs"]
+mod preview;
 
 #[path = "index.rs"]
 mod index;

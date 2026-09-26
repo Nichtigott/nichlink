@@ -75,8 +75,8 @@ wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
 levels='
 nichlink-core
 nichlink-macro nichlink-build-method
-nichlink-run-method nichlink-mcp
-nichlink-debug-method nichlink-plugin-host
+nichlink-run-method
+nichlink-debug-method nichlink-mcp nichlink-plugin-host
 nichlink-studio
 nichlink-cli
 '
@@ -263,7 +263,7 @@ dependencies='
 nichlink-core:
 nichlink-macro:nichlink-core
 nichlink-build-method:nichlink-core
-nichlink-mcp:nichlink-build-method nichlink-core
+nichlink-mcp:nichlink-build-method nichlink-core nichlink-run-method
 nichlink-run-method:nichlink-core nichlink-macro
 nichlink-debug-method:nichlink-run-method
 nichlink-plugin-host:nichlink-run-method

@@ -175,6 +175,35 @@ fn the_registry_tool_is_listed_and_answers_about_this_package() {
     assert!(text.contains("faces "), "{text}");
 }
 
+/// The write tool is listed and dispatched, and a request it cannot serve comes
+/// back as an error the client can read. The unsupported action is deliberate: it
+/// exercises the dispatch arm without copying or writing the package the test
+/// binary happens to run in.
+/// 写入工具被列出且已分派，而它无法服务的请求以客户端可读的错误回来。有意选一个不支持的动作：
+/// 这样既走到分派分支，又不会复制或写入测试二进制碰巧运行所在的那个包。
+#[test]
+fn the_apply_tool_is_listed_and_dispatched() {
+    let listed = replies("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n");
+    let names = listed[0]["result"]["tools"]
+        .as_array()
+        .expect("a tool array")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"nichlink.apply"), "{names:?}");
+
+    let called = replies(
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
+         \"params\":{\"name\":\"nichlink.apply\",\"arguments\":{\"action\":\"delete\"}}}\n",
+    );
+    assert_eq!(called.len(), 1, "{called:?}");
+    assert_eq!(called[0]["result"]["isError"], true, "{called:?}");
+    let text = called[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text reply");
+    assert!(text.contains("not implemented"), "{text}");
+}
+
 /// A member that is not an object is answered with `-32600` and a null id,
 /// in a single request and inside a batch alike; it used to be dropped
 /// silently, leaving the client waiting.

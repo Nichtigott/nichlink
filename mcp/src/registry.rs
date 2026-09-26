@@ -32,6 +32,12 @@ pub(crate) fn registry(root: &Path) -> Result<String, String> {
 /// The identity namespace this package's faces were stamped with.
 /// 本包的注册面被盖下的身份命名空间。
 ///
+/// Shared with the write path: an edit must author under the same namespace the
+/// query reports, or the face it writes lands in an identity domain the host never
+/// compiled.
+/// 与写入路径共用：编辑必须在查询所报告的同一个命名空间之下创作，否则它写下的面会落在宿主从未
+/// 编译过的身份域里。
+///
 /// `NICH_LINK_NAMESPACE` wins verbatim — the override every surface reads, so
 /// setting it moves the build and every reader together — and otherwise the
 /// package name Cargo reports is the namespace, because that is exactly what the
@@ -39,7 +45,7 @@ pub(crate) fn registry(root: &Path) -> Result<String, String> {
 /// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出——每个执行面都读这个覆盖，设置它会把构建与所有
 /// 读取方一起挪动——否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
 /// `env!("CARGO_PKG_NAME")` 正是它。
-fn namespace(root: &Path) -> Result<String, String> {
+pub(crate) fn namespace(root: &Path) -> Result<String, String> {
     namespace_from(std::env::var(lexicon::NAMESPACE_ENV).ok().as_deref(), root)
 }
 

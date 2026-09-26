@@ -103,7 +103,7 @@ pub(crate) use contracts::aggregate_contract_errors;
 pub(crate) use discovery::{
     discover_root, discover_root_reporting, discovery_fingerprint, emit_rerun_paths,
 };
-pub(crate) use source_layout::{SourceLayout, source_layout};
+pub use source_layout::{SourceLayout, source_layout};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone
 // would be an unused import in a non-test build.

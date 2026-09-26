@@ -51,7 +51,10 @@ rustc 不同的东西。
 
 ### 7. 经校验的 MCP 写入工具
 
-把 MCP 桥从只读查询扩展为经校验的 `add` / `edit` / `graft` 工具。每次写入都走与构建面相同的 kernel admission、合同与拓扑校验，并向调用方回报 provenance。
+**已开工(2026-09-26):** `nichlink.apply` 经与 Studio 相同的 authoring 执行器做经校验的
+`add` / `edit`,默认在一份一次性的包副本上预览。待做:`delete` / `rename`、`graft` 写入、
+插件、项目脚手架、树 diff,以及让代理察觉"这些面本该同行为"的一致性分析。每次写入都走与构建面
+相同的 kernel admission、合同与拓扑校验,并向调用方回报 provenance。
 
 ## 明确边界
 

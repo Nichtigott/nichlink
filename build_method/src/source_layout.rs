@@ -59,20 +59,26 @@ use std::path::{Path, PathBuf};
 
 /// One package's source layout.
 /// 一个包的源码布局。
-pub(crate) struct SourceLayout {
+///
+/// Public because a *writing* surface needs the same answer the build uses: the
+/// bridge authors into the tree the build will read, and guessing `src/` there
+/// would write a face the build never sees.
+/// 公开是因为**写入**执行面需要与构建相同的答案:桥创作到构建会读的那棵树里,而在那里猜 `src/`
+/// 会写下一个构建永远看不见的注册面。
+pub struct SourceLayout {
     /// The package root: the base a configured `NICH_LINK_ENTRY` resolves against,
     /// and the directory a target path is joined to.
     /// 包根：配置的 `NICH_LINK_ENTRY` 所相对的基准，也是目标路径拼接的起点。
-    pub(crate) package_root: PathBuf,
+    pub package_root: PathBuf,
     /// The directory the discovery walk reads.
     /// 发现遍历读取的目录。
-    pub(crate) scan_root: PathBuf,
+    pub scan_root: PathBuf,
     /// The base a face's identity path is taken relative to.
     /// 面的身份路径所相对的基准。
-    pub(crate) identity_base: PathBuf,
+    pub identity_base: PathBuf,
     /// The library target the manifest names, when it names one.
     /// 清单命名的库目标；清单没有命名时为空。
-    pub(crate) target: Option<PathBuf>,
+    pub target: Option<PathBuf>,
 }
 
 /// Resolve where one package's faces live.
@@ -91,7 +97,7 @@ pub(crate) struct SourceLayout {
 /// that names nothing is refused before anything is walked.
 /// 库目标**不是文件**时返回 `Err`，同时点名清单里的键与它产生的路径。这就是上面那次窄读的校验步：
 /// 读错的路径无法悄悄把遍历指向别的树，因为指向空处的路径在遍历任何东西之前就被拒绝。
-pub(crate) fn source_layout(package_root: &Path) -> Result<SourceLayout, String> {
+pub fn source_layout(package_root: &Path) -> Result<SourceLayout, String> {
     let src = package_root.join("src");
     let named = std::fs::read_to_string(package_root.join("Cargo.toml"))
         .ok()

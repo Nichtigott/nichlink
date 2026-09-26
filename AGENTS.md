@@ -19,7 +19,7 @@ surface that binds kernel methods to its own context.
 | `nichlink-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
 | `nichlink-plugin-host` | `plugin-host/` | Wasm/process plugin host execution |
 | `nichlink-studio` | `studio/` | Ratatui authoring/inspection surface |
-| `nichlink-mcp` | `mcp/` | AI-agent stdio bridge (currently read-only) |
+| `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path |
 | `nichlink-cli` | `cli/` | Process glue: argv dispatch, cargo subprocesses |
 | `nichlink-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
 

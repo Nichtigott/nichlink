@@ -42,6 +42,25 @@ to its designed waiting state.
 
 ### Added
 
+- The MCP bridge's write path, `nichlink.apply`: an agent can create or rewrite a
+  registration face through the **same authoring executor Studio uses**, so the
+  kernel's admission, parent-rule, and topology checks run on the change instead of
+  being re-implemented in the bridge. `mcp` gained a `nichlink-run-method`
+  dependency (feature `authoring`) for it; the version line stays `0.1.3`, which is
+  still unreleased, so no new symbol needed a new version to be distinguishable
+  from a published one. `action` is `add` or `edit`, `parent` takes a logical path
+  (the one `nichlink.registry` reports) or an identity, and **a request is previewed
+  unless `apply: true`**: the preview runs the real operation against a throwaway
+  copy of the package — copying, rather than writing and reverting, is what cannot
+  leave a half-edited tree behind — and returns the file diff plus the registration
+  tree that results; `apply: true` writes to the project and names the files it
+  wrote. Both ends of the preview are the same `run` call, which is why a preview
+  cannot drift from the apply. `delete`, `rename`, graft writes, plugins, project
+  scaffolding, tree diffs, and the consistency analysis are still to come
+  (`docs/roadmap-1.0.md` item 7).
+- `nichlink_build_method::source_layout` and `SourceLayout` are public API: the
+  write path needs the same answer the build uses about where a package's faces
+  live, and guessing `src/` there would author a face the build never reads.
 - `nichlink-mcp`'s `nichlink.registry` tool: the registration faces this package
   declares, one row per face with its logical path, kind, source, and the
   `NodeId` the host compiled. The rows are derived by
@@ -863,6 +882,17 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- MCP 桥的写入路径 `nichlink.apply`：代理可以经**与 Studio 相同的 authoring 执行器**创建或重写
+  注册面，因此内核的准入、父规则与拓扑校验会作用在改动上，而不是在桥里重新实现一遍。为此 `mcp`
+  新增 `nichlink-run-method` 依赖（`authoring` 特性）；版本线仍是尚未发布的 `0.1.3`，因此没有
+  新符号需要靠新版本与已发布版本区分。`action` 为 `add` 或 `edit`，`parent` 接受逻辑路径
+  （`nichlink.registry` 报告的那条）或身份，而**除非 `apply: true`，请求只做预览**：预览在一份
+  一次性的包副本上运行真实操作——用复制而不是"先写再回滚"，正是它不会留下改了一半的树的原因——
+  并返回文件 diff 与将得到的注册树；`apply: true` 才写入项目并给出它写下的文件。预览的两端都是
+  同一次 `run` 调用，这正是预览不可能与落盘漂移的原因。`delete`、`rename`、graft 写入、插件、
+  项目脚手架、树 diff 与一致性分析仍待做（`docs/roadmap-1.0.md` 第 7 条）。
+- `nichlink_build_method::source_layout` 与 `SourceLayout` 成为公开 API：写入路径需要与构建相同
+  的答案——包的注册面住在哪里——而在那里猜 `src/` 会创作出构建永远不读的注册面。
 - `nichlink-mcp` 的 `nichlink.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
   源码，以及宿主编译出的 `NodeId`。这些行由 `nichlink_build_method::face_views` 推导——也就是
   CLI 的 `explain` 所用的同一份推导——因此 `mcp` 新增了 `nichlink-build-method` 依赖，版本线随之
