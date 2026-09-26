@@ -171,13 +171,17 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.converge",
-            "The converged starting point for one face in a single answer: the build's scope and \
-             pruning verdicts, the tree's edges, the declared fields, and — the verdict no single \
-             tool can give — whether each `capability=>ProviderKind` requirement is actually \
-             answered by something in the package, named when it is and UNANSWERED when it is not. \
-             Ends with the files to read (this face, its parent, its children) and which tool has \
-             the detail. Everything is composed from what the other tools report.",
-            json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
+            "The converged starting point for one face in a single answer, or for a recorded run. With \
+             `node`, it returns the build's scope and pruning verdicts, the tree's edges, the declared \
+             fields, and — the verdict no single tool can give — whether each \
+             `capability=>ProviderKind` requirement is actually answered by something in the package, \
+             named when it is and UNANSWERED when it is not; it ends with the files to read (this \
+             face, its parent, its children) and which tool has the detail. With `trace: true` it \
+             starts from the recorded run instead and collapses the whole tree to the files that both \
+             declare a face and actually ran, with the frames that landed in each; frames are matched \
+             to faces by source file, which the reply states, because a face is a declaration and a \
+             frame is a function. Everything is composed from what the other tools report.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"trace":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.verify",

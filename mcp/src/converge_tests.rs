@@ -1,9 +1,12 @@
 //! Tests for the converged report: an answered requirement names its provider, an
-//! unanswered one is named as such, and the read plan lists the neighbourhood.
-//! 收敛报告的测试：被满足的需求点名它的提供者，未被满足的被如实点名，读计划列出邻域。
+//! unanswered one is named as such, the read plan lists the neighbourhood, and a
+//! recorded run collapses the tree to the faces that actually ran.
+//! 收敛报告的测试：被满足的需求点名它的提供者，未被满足的被如实点名，读计划列出邻域，而一次已记录的
+//! 运行会把整棵树收敛到真正跑过的那些面。
 
 use std::path::{Path, PathBuf};
 
+use nichlink_run_method::{CallTrace, SourceLocation, trace_artifact_path, write_trace_artifact};
 use serde_json::json;
 
 use super::converge;
@@ -20,11 +23,128 @@ fn package(label: &str) -> (PathBuf, String) {
     std::fs::create_dir_all(root.join("src")).expect("package directory");
     std::fs::write(
         root.join("Cargo.toml"),
-        format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+        format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
     )
     .expect("manifest");
     std::fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
     (root, name)
+}
+
+/// One recorded callsite.
+/// 一个已记录的调用点。
+fn at(file: &'static str, line: u32, function: &'static str) -> SourceLocation {
+    SourceLocation {
+        file,
+        line,
+        column: 1,
+        function,
+    }
+}
+
+/// A run whose frames are: `main` outside any face, then the `Label` face twice —
+/// once under the plain `src/…` spelling a standalone package's `file!()` records,
+/// and once under the workspace-relative spelling a package inside a workspace
+/// records. A face is matched by file, so both must land on the same face.
+/// 一次运行，帧为：任何面之外的 `main`，然后是 `Label` 面两次——一次用独立包的 `file!()` 记录的
+/// 平铺 `src/…` 拼法，一次用工作区内包记录的相对工作区拼法。面是按文件匹配的，因此两次都必须落到
+/// 同一个面上。
+fn recorded_run(root: &Path, namespace: &str, recorded_as: &str) {
+    apply(
+        root,
+        &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
+    )
+    .expect("the face is added");
+    let root_id = nichlink::root_node_id(namespace);
+    let label =
+        nichlink::identity::NodeId::from_namespaced_path(namespace, "label/label.rs", "Label");
+    let mut trace = CallTrace::full();
+    trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
+        trace.with_at(
+            label,
+            "Label::render",
+            at("src/label/label.rs", 12, "Label::render"),
+            |trace| {
+                trace.with_at(
+                    label,
+                    "Label::paint",
+                    at("crates/host/src/label/label.rs", 40, "Label::paint"),
+                    |_| {},
+                );
+            },
+        );
+    });
+    write_trace_artifact(&trace, &trace_artifact_path(root), recorded_as)
+        .expect("the artifact writes");
+}
+
+/// The convergence this step exists for: a recorded run turns the whole tree into
+/// the files that both declare a face and ran, names the frames that landed there,
+/// and counts what fell outside.
+/// 这一步存在的意义就是这次收敛：一次已记录的运行把整棵树变成"既声明了面、又真的跑了"的那些文件，
+/// 点名落在其中的帧，并把落在外面的一并计数。
+#[test]
+fn a_recorded_run_collapses_the_tree_to_the_faces_that_ran() {
+    let (root, name) = package("trace");
+    recorded_run(&root, &name, &name);
+    let reply = converge(&root, &json!({"trace": true})).expect("the report renders");
+    assert!(reply.contains("frames 3"), "{reply}");
+    assert!(
+        reply.contains("faces that ran (1 of 1 declared, matched by source file)"),
+        "{reply}"
+    );
+    assert!(reply.contains("root/label"), "{reply}");
+    assert!(reply.contains("kind=Label"), "{reply}");
+    assert!(reply.contains("2 frame(s)"), "{reply}");
+    assert!(
+        reply.contains("Label::render  src/label/label.rs:12"),
+        "the plain `src/…` spelling must land on the face: {reply}"
+    );
+    assert!(
+        reply.contains("Label::paint  crates/host/src/label/label.rs:40"),
+        "a workspace-relative spelling must land on the same face: {reply}"
+    );
+    assert!(
+        reply.contains("frames in a face 2 / outside any declared face 1"),
+        "{reply}"
+    );
+    assert!(reply.contains("src/main.rs (1)"), "{reply}");
+    assert!(reply.contains("read plan (1 files)"), "{reply}");
+    assert!(reply.contains("label/label.rs"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Absence is an answer, not an error — the same sentence `nichlink.trace` gives,
+/// because both tools read the same artifact and neither invents its own wording.
+/// 缺失是答案而不是错误——与 `nichlink.trace` 同一句话，因为两个工具读的是同一份 artifact，谁也不
+/// 另造一套说法。
+#[test]
+fn an_absent_run_is_answered_with_the_way_to_record_one() {
+    let (root, _) = package("trace-absent");
+    let reply = converge(&root, &json!({"trace": true})).expect("absence is an answer");
+    assert!(reply.contains("trace absent"), "{reply}");
+    assert!(reply.contains("NICH_LINK_TRACE"), "{reply}");
+    assert!(reply.contains("src/main.rs"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A run recorded under another namespace is refused, not silently mapped onto
+/// this tree's faces.
+/// 在另一个命名空间下记录的运行会被拒绝，而不是被悄悄映射到这棵树的面。
+#[test]
+fn a_run_from_another_tree_is_refused_by_name() {
+    let (root, name) = package("trace-foreign");
+    recorded_run(&root, &name, "some-other-package");
+    let reply = converge(&root, &json!({"trace": true})).expect("the refusal is an answer");
+    assert!(
+        reply.contains("REFUSED: the artifact does not describe this tree"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("some-other-package"),
+        "the refusal names what it found: {reply}"
+    );
+    assert!(!reply.contains("faces that ran"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Build the pair the kernel admits: a provider that owns a registry, and a

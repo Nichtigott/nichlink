@@ -63,7 +63,11 @@ The server exposes compact tools. Reads:
   (named when it is), the files to read, and which tool has the detail. When the
   package's own faces *are* rejected by the kernel, that rejection is the verdict
   here rather than an error: it already names the offending node and its source
-  location, which is the moment this answer matters most.
+  location, which is the moment this answer matters most. With `trace: true` it
+  starts from the recorded run instead — the files that both declare a face and
+  actually ran, the frames that landed in each, and the frames that fell outside any
+  declared face. Frames are matched to faces by source file and the reply says so,
+  because a face is a declaration while a frame is an active function.
 - `nichlink.verify`: run the kernel's registration validation over this package and
   report the tree delta the run just published. It drives the same entry the CLI's
   `check` drives, so its verdict cannot drift from `nichlink check`, and it refreshes

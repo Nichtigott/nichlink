@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use nichlink_build_method::face_views;
+use nichlink_build_method::{FaceView, face_views};
 use serde_json::Value;
 
 use crate::apply::load_registry;
@@ -25,6 +25,11 @@ use crate::evidence::{build_evidence, pruning_line, scope_line};
 use crate::nodes::resolve_node;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::trace::{RecordedTrace, read_verified};
+
+/// How many frames of one face, and how many files outside any face, are shown.
+/// 一个面最多展示几个帧、以及多少个不在任何面里的文件。
+const FRAMES_PER_FACE: usize = 5;
 
 /// One `capability=>provider` requirement, and who answers it.
 /// 一条 `capability=>provider` 需求，以及谁来满足它。
@@ -34,24 +39,39 @@ struct RequirementVerdict {
     answered_by: Option<String>,
 }
 
-/// Report the converged starting point for one face.
-/// 报告一个面的收敛起点。
+/// Report the converged starting point for one face, or for a recorded run.
+/// 报告一个面、或一次已记录运行的收敛起点。
+///
+/// Two entries, because a bug report arrives in two shapes: an agent already knows
+/// which face it is looking at (pass `node`), or it has a run that misbehaved and
+/// only the trace says what that run touched (pass `trace: true`). The second turns
+/// "58,792 lines of source" into "these files declared faces and ran", which is the
+/// convergence step a symbol graph cannot take.
+/// 两个入口，因为缺陷报告有两种形状：代理已经知道自己在看哪个面（传 `node`），或者它手上只有一次行为
+/// 不对的运行，而"那次运行碰了什么"只有 trace 说得出来（传 `trace: true`）。后者把"58,792 行源码"
+/// 变成"这些文件声明了面、而且真的跑了"，这是符号图迈不出的那一步收敛。
 pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
     let faces = face_views(root, &namespace)?;
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
+    if arguments.get("trace").and_then(Value::as_bool) == Some(true) {
+        return converge_from_trace(root, &faces, limit);
+    }
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.converge requires node".to_owned())?;
+        .ok_or_else(|| {
+            "nichlink.converge requires node (one face) or trace: true (the recorded run)"
+                .to_owned()
+        })?;
     let id = resolve_node(root, &namespace, target)?;
     let face = faces
         .iter()
         .find(|face| face.id == id)
         .ok_or_else(|| format!("no face in the derived tree has identity {id}"))?;
-    let limit = arguments
-        .get("limit")
-        .and_then(Value::as_u64)
-        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
     let (current, scope, pruning) = build_evidence(root);
     // Loading the package's own faces *validates* them — the registry rejects a
     // tree whose requirement has no provider — and that refusal is the most
@@ -164,6 +184,155 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
          nichlink.trace (what ran) · nichlink.diff (what changed since the build)\n",
     );
     Ok(output)
+}
+
+/// Converge from the run that happened rather than from a face name.
+/// 从真正发生过的那次运行收敛，而不是从一个面名收敛。
+///
+/// Frames are matched to faces **by their source file**, and the reply says so: a
+/// face is a declaration, a frame is an active function, and the only thing tying
+/// them is where the code lives. That is the honest boundary of this step, and it is
+/// still a large collapse — a 350-file tree becomes the handful of files that both
+/// declare a face and ran.
+/// 帧是**按源文件**匹配到面的，回复里也这么写：面是声明、帧是正在活动的函数，把两者连起来的只有代码
+/// 所在的位置。这是这一步诚实的边界，而它仍然是一次大幅收敛——350 个文件的树会变成"既声明了面、又真的
+/// 跑了"的那几个文件。
+fn converge_from_trace(root: &Path, faces: &[FaceView], limit: usize) -> Result<String, String> {
+    let (path, artifact, header) = match read_verified(root)? {
+        RecordedTrace::Absent(answer) | RecordedTrace::Refused(answer) => return Ok(answer),
+        RecordedTrace::Verified {
+            path,
+            artifact,
+            header,
+            ..
+        } => (path, artifact, header),
+    };
+    // Keyed by the face's source file: that is the key the match is made on, and
+    // grouping by it keeps two faces declared in one file from being counted twice.
+    // 以面的源文件为键：匹配就是按它做的，而按它分组可以避免"一个文件里声明两个面"被数两次。
+    let mut ran: BTreeMap<String, RanFile> = BTreeMap::new();
+    let mut outside: BTreeMap<String, usize> = BTreeMap::new();
+    let mut no_callsite = 0usize;
+    let mut matched_frames = 0usize;
+    for frame in &artifact.frames {
+        let Some(source) = frame.source.as_ref() else {
+            // The outermost frame of a `with` still carries its caller's location,
+            // so a frame without one is unusual rather than normal — counted, not
+            // invented.
+            // `with` 的最外层帧同样带着调用方位置，因此缺位置的帧是异常而非常态——只计数，不编造。
+            no_callsite += 1;
+            continue;
+        };
+        match faces
+            .iter()
+            .find(|face| matches_file(source.file, &face.source))
+        {
+            Some(face) => {
+                matched_frames += 1;
+                let entry = ran.entry(face.source.clone()).or_default();
+                entry.faces.insert(face.path.clone());
+                entry.kind = face.kind.clone();
+                entry.frames += 1;
+                if entry.samples.len() < FRAMES_PER_FACE {
+                    entry.samples.push(format!(
+                        "{}  {}:{}",
+                        frame.function, source.file, source.line
+                    ));
+                }
+            }
+            None => *outside.entry(source.file.to_owned()).or_insert(0) += 1,
+        }
+    }
+    let outside_frames: usize = outside.values().sum();
+
+    let mut output = header;
+    output.push_str(&format!(
+        "faces that ran ({} of {} declared, matched by source file)\n",
+        ran.len(),
+        faces.len()
+    ));
+    if ran.is_empty() {
+        output.push_str("  (none: no frame's file declares a face in this tree)\n");
+    }
+    for (index, (source, entry)) in ran.iter().enumerate() {
+        if index >= limit {
+            output.push_str(&format!("  … +{} more files\n", ran.len() - limit));
+            break;
+        }
+        output.push_str(&format!(
+            "  {:<40} kind={:<16} {} frame(s)  {}\n",
+            entry.faces.iter().cloned().collect::<Vec<_>>().join(" "),
+            entry.kind,
+            entry.frames,
+            source
+        ));
+        for frame in &entry.samples {
+            output.push_str(&format!("    {frame}\n"));
+        }
+        let omitted = entry.frames.saturating_sub(entry.samples.len());
+        if omitted > 0 {
+            output.push_str(&format!("    … +{omitted} more frame(s)\n"));
+        }
+    }
+    output.push_str(&format!(
+        "frames in a face {matched_frames} / outside any declared face {outside_frames}\n"
+    ));
+    for (file, count) in outside.iter().take(limit) {
+        output.push_str(&format!("  {file} ({count})\n"));
+    }
+    if outside.len() > limit {
+        output.push_str(&format!("  … +{} more files\n", outside.len() - limit));
+    }
+    if no_callsite > 0 {
+        output.push_str(&format!("frames with no recorded callsite {no_callsite}\n"));
+    }
+    output.push_str(&format!("read plan ({} files)\n", ran.len()));
+    for (index, source) in ran.keys().enumerate() {
+        if index >= limit {
+            break;
+        }
+        output.push_str(&format!("  {source:<44} (this face)\n"));
+    }
+    output.push_str(&format!(
+        "detail: nichlink.converge node=<path> (one face's constraints) · nichlink.trace ({}) · \
+         nichlink.usages (fields) · nichlink.diff (what changed)\n",
+        path.display()
+    ));
+    Ok(output)
+}
+
+/// One source file that ran, and the faces it declares.
+/// 一个跑过的源文件，以及它声明的面。
+#[derive(Default)]
+struct RanFile {
+    faces: BTreeSet<String>,
+    kind: String,
+    frames: usize,
+    samples: Vec<String>,
+}
+
+/// Whether a compiler-recorded file path names the file a face's identity path names.
+/// 编译器记录的路径是否就是某个面的身份路径所指的那个文件。
+///
+/// The declaration macros drop one leading `src/` — and nothing else — so the
+/// compiler's path (relative to whatever root cargo invoked rustc from) is rewritten
+/// through its **last complete `src/` segment** before comparison. A path with no
+/// `src/` segment is compared as it stands, which is the `[lib] path` case where an
+/// identity keeps its leading directory.
+/// 声明宏只去掉一个前导 `src/`、别的都不去，因此编译器的路径（相对 cargo 调用 rustc 的那个根）在比较
+/// 前会先被重写到它**最后一个完整的 `src/` 段**之后。没有 `src/` 段的路径原样比较，那正是身份保留其
+/// 前导目录的 `[lib] path` 情形。
+fn matches_file(recorded: &str, identity: &str) -> bool {
+    let normalized = recorded.replace('\\', "/");
+    let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
+    if normalized == identity {
+        return true;
+    }
+    let segments: Vec<&str> = normalized.split('/').collect();
+    match segments.iter().rposition(|segment| *segment == "src") {
+        Some(position) => segments[position + 1..].join("/") == identity,
+        None => false,
+    }
 }
 
 /// Parse `capability=>provider` entries and look up who offers each capability

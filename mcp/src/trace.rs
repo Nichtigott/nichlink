@@ -14,10 +14,13 @@
 //! 是另一棵树时拒绝出报告，因为帧是节点身份，而另一棵树的身份会渲染出一棵看似合理但错误的调用树。
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use nichlink_build_method::face_views;
-use nichlink_run_method::{read_trace_artifact, render_call_report_for_trace, trace_artifact_path};
+use nichlink_run_method::{
+    CallTrace, TraceArtifact, read_trace_artifact, render_call_report_for_trace,
+    trace_artifact_path,
+};
 use serde_json::Value;
 
 use crate::apply::load_registry;
@@ -27,21 +30,48 @@ use crate::registry::namespace;
 /// 一条回复在声明被截断之前最多携带的报告行数。
 const MAX_REPORT_LINES: usize = 400;
 
-/// Read this package's trace artifact and answer with the call report it implies.
-/// 读取本包的 trace artifact，并用它蕴含的调用报告作答。
-pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
+/// What reading this package's recorded trace produced.
+/// 读取本包已记录的 trace 得到了什么。
+///
+/// Absence and refusal are *answers*, not errors: "no host recorded one" and "this
+/// artifact describes another tree" are both things an agent can act on, and a
+/// second tool needing the same trace (the trace-driven `nichlink.converge`) must
+/// inherit both verbatim rather than inventing its own wording.
+/// 缺失与拒绝都是**答案**而不是错误：「没有宿主记录过」与「这份 artifact 描述的是另一棵树」都是代理
+/// 能据以行动的东西；而需要同一份 trace 的第二个工具（由 trace 驱动的 `nichlink.converge`）必须原样
+/// 继承两者，而不是另造一套说法。
+pub(crate) enum RecordedTrace {
+    /// The ready-to-print answer for "no artifact here", with the way to produce one.
+    /// 「这里没有 artifact」的现成答案，并带上产出它的办法。
+    Absent(String),
+    /// The header plus the refusal, when the artifact describes a different tree.
+    /// 当 artifact 描述另一棵树时：表头加上拒绝理由。
+    Refused(String),
+    /// The artifact, its call trace, and the header that describes it.
+    /// artifact、它的调用 trace，以及描述它的表头。
+    Verified {
+        path: PathBuf,
+        artifact: TraceArtifact,
+        call_trace: Box<CallTrace>,
+        header: String,
+    },
+}
+
+/// Read this package's trace artifact and check that it describes this tree.
+/// 读取本包的 trace artifact，并核验它描述的是这棵树。
+pub(crate) fn read_verified(root: &Path) -> Result<RecordedTrace, String> {
     let path = trace_artifact_path(root);
     if !path.is_file() {
         // Absence is the common case today, so the answer carries the way to
         // produce one instead of a bare "not found".
         // 缺失是今天的常态，因此答案要带上产出它的办法，而不是一句光秃秃的 "not found"。
-        return Ok(format!(
+        return Ok(RecordedTrace::Absent(format!(
             "trace absent: {}\nA host writes one by recording with the `trace_call!` family and running \
              with `NICH_LINK_TRACE` (the mode) or `NICH_LINK_TRACE_FILE` (the path) set; a project \
              scaffolded by `nichlink new` demonstrates that whole chain in its `src/main.rs`. \
              `nichlink check` reports the static side only.\n",
             path.display()
-        ));
+        )));
     }
     let (artifact, call_trace) = read_trace_artifact(&path)?;
     let namespace = namespace(root)?;
@@ -94,16 +124,35 @@ pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
         ));
     }
     if !mismatch.is_empty() {
-        return Ok(format!(
+        return Ok(RecordedTrace::Refused(format!(
             "{header}REFUSED: the artifact does not describe this tree\n  {}\nRerun the host after \
              `nichlink check` so the recorded identities match the compiled ones.\n",
             mismatch.join("\n  ")
-        ));
+        )));
     }
-    let registry = load_registry(root, &namespace)?;
-    let query = arguments.get("query").and_then(Value::as_str);
-    let report = render_call_report_for_trace(&registry, &call_trace, query);
-    Ok(bounded(header, &report))
+    Ok(RecordedTrace::Verified {
+        path,
+        artifact,
+        call_trace: Box::new(call_trace),
+        header,
+    })
+}
+
+/// Read this package's trace artifact and answer with the call report it implies.
+/// 读取本包的 trace artifact，并用它蕴含的调用报告作答。
+pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
+    match read_verified(root)? {
+        RecordedTrace::Absent(answer) | RecordedTrace::Refused(answer) => Ok(answer),
+        RecordedTrace::Verified {
+            call_trace, header, ..
+        } => {
+            let namespace = namespace(root)?;
+            let registry = load_registry(root, &namespace)?;
+            let query = arguments.get("query").and_then(Value::as_str);
+            let report = render_call_report_for_trace(&registry, &call_trace, query);
+            Ok(bounded(header, &report))
+        }
+    }
 }
 
 /// Keep one reply inside a size an agent can read, and say when it did not.

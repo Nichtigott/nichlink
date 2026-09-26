@@ -47,6 +47,26 @@ waiting state that change opened.
 
 ### Added
 
+- **`nichlink.converge` now also starts from a recorded run, not only from a face.**
+  A bug report arrives in two shapes: an agent knows which face it is looking at, or
+  it has a run that misbehaved and only the trace says what that run touched. With
+  `trace: true` the tool reads the package's trace artifact (through the same
+  identity check `nichlink.trace` applies, absent and refused answers included),
+  collapses the tree to the files that both declare a face and actually ran, names
+  the frames that landed in each, counts the frames that fell outside any declared
+  face, and ends with the read plan and a pointer to `nichlink.converge node=<path>`
+  for one face's constraints. Frames are matched to faces **by source file**, and the
+  reply says so, because a face is a declaration and a frame is an active function —
+  the honest boundary of this step, which is still the collapse that matters: a
+  350-file tree becomes the handful of files that ran. Measured on a real host: a
+  3-frame run over a one-face package answers `faces that ran (1 of 1 declared)` with
+  `frames in a face 1 / outside any declared face 2` and a one-file read plan. The
+  matching rewrites the compiler's path through its last complete `src/` segment, and
+  that turned out to be load-bearing: the same run records `main` as `src/main.rs`
+  and a frame inside the face's module as an **absolute**
+  `/home/…/src/slider/slider.rs`, because the generated library mounts that module by
+  absolute path. Pinned by three tests, the positive one measured red by reducing the
+  match to an exact string comparison.
 - **The MIR channel now has a reader, a writer, and a merge.** `nichlink.mir` reads
   either a `rustc -Zunpretty=mir` text dump or the compact JSONL artifact, chosen by
   extension, and keeps the formats' asymmetry instead of flattening it: JSONL parses
@@ -1033,6 +1053,19 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- **`nichlink.converge` 现在也能从一次已记录的运行出发，而不只是从一个面出发。** 缺陷报告有两种
+  形状：代理知道自己在看哪个面，或者它手上只有一次行为不对的运行、而"那次运行碰了什么"只有 trace
+  说得出来。给出 `trace: true` 时，工具读取本包的 trace artifact（走 `nichlink.trace` 那同一套身份
+  核验，缺失与拒绝的答案也一并继承），把整棵树收敛到"既声明了面、又真的跑了"的那些文件，点名落在
+  各自的帧，统计落在任何声明面之外的帧，最后给出读计划，并指向
+  `nichlink.converge node=<路径>` 去看某一个面的约束。帧是**按源文件**匹配到面的，回复里也这么写，
+  因为面是声明、帧是正在活动的函数——这是这一步诚实的边界，而它仍然是要紧的那次收敛：350 个文件的树
+  变成跑过的那几个文件。真实宿主实测：一次 3 帧的运行、一个面的包，回答
+  `faces that ran (1 of 1 declared)` + `frames in a face 1 / outside any declared face 2` + 一份
+  单文件读计划。匹配会把编译器的路径重写到它最后一个完整的 `src/` 段之后，而这一点后来被证明是必需的：
+  同一次运行把 `main` 记成 `src/main.rs`，却把面模块里的帧记成**绝对路径**
+  `/home/…/src/slider/slider.rs`，因为生成的库是按绝对路径挂载那个模块的。三条测试钉住它，其中正向
+  那条把匹配退化成精确字符串比较即实测为红。
 - **MIR 通道现在有读取方、写入方与合并。** `nichlink.mir` 读 `rustc -Zunpretty=mir`
   文本转储或紧凑 JSONL artifact，按扩展名选择，并保留两种格式的不对称而不是抹平它：JSONL 严格解析，
   一行畸形就整体失败；文本转储从不失败，因为不是调用的行就只是不是调用。`jsonl: true` 让这个工具成为

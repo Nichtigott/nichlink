@@ -677,7 +677,8 @@ MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 `nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
 真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
 能力记号），以及 `nichlink.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
-每条需求是否有答案、该读哪些文件——并把内核的拒绝当成判断而不是错误报出来）、
+每条需求是否有答案、该读哪些文件——并把内核的拒绝当成判断而不是错误报出来；给出 `trace: true` 时它
+从已记录的运行出发，把整棵树收敛到"既声明了面、又真的跑过"的那些文件）、
 `nichlink.verify`（重跑内核校验并报告那次运行发布的树差异，因此一次编辑是被确认过的，而不只是被写下），还有
 `nichlink.apply`：它经与 Studio 相同的
 authoring 执行器新增、编辑、改名或删除注册面，除非给出 `apply: true`，改动会先在一份一次性副本上
