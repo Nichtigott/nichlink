@@ -78,3 +78,6 @@ mod trace;
 
 #[path = "diff.rs"]
 mod diff;
+
+#[path = "usages.rs"]
+mod usages;

@@ -70,6 +70,17 @@ waiting state that change opened.
   name-matched. Measured before the fix: one `{"function":"new"}` reply against a
   350-file corpus was 4.5 MB, because 151 definitions each listed every call site
   of the name.
+- `nichlink.usages` closes the write path's read-back gap: the fields an agent can
+  *set* through `nichlink.apply` (preset, parts, localized names, exports,
+  `requires`, `provides`, handle and part traits and contracts, registration rule,
+  admission, flow, runtime checks) are now reportable, together with a face's parent
+  and children as the tree has them and the capability tokens other faces mention in
+  either direction. Capability matches are on declared tokens rather than a resolved
+  graph and the reply says so; a hand-written module has no generated field list, so
+  those faces are counted as unreadable instead of being shown empty. Writing the
+  pins taught the authoring contract twice: a parent must own a registry before the
+  kernel admits a child, and a requirement is written `capability=>ProviderKind` —
+  the kernel refuses a bare capability name by name.
 
 ### Changed
 
@@ -964,6 +975,13 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   限制、调用者由上限截断——多定义命中会说明歧义并提示传 `path`，调用者清单也标明是按名字匹配的。
   修复前的实测：在 350 文件的语料上，一条 `{"function":"new"}` 回复是 4.5 MB，因为 151 个定义各自
   列出了该名字的每一个调用点。
+- `nichlink.usages` 补上了写入路径的读回缺口：代理能经 `nichlink.apply` **设置**的那些字段
+  （preset、parts、本地化名称、exports、`requires`、`provides`、handle 与 part 的 traits/contracts、
+  registration rule、admission、flow、runtime checks）现在都能被报告，外加一个面在树里的父级与子面，
+  以及别的面双向提到的能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；
+  手写模块没有生成的字段清单，因此那些面被计为不可读，而不是显示成空的。写这些钉子时作者契约教了两次：
+  父级必须先拥有注册机内核才准入子面，而需求要写成 `capability=>ProviderKind`——裸能力名会被内核按名
+  拒绝。
 
 修复：
 

@@ -29,6 +29,11 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
   什么，这是任何静态读取都说不出的。artifact 的身份会先被核验（命名空间、注册机根、每个帧的节点）；
   异树 artifact 会被按名拒绝，而不是画出来。
+- `nichlink.usages`：一个面的邻域——它在树里的父级与子面、`nichlink.apply` 作为输入接受的那些字段
+  从生成模块里读回的结果（preset、parts、名称、exports、`requires`、`provides`、handle 与 part 的
+  traits/contracts、registration rule、admission、flow、runtime checks），以及哪些别的面提到同一批
+  能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；手写模块没有生成的
+  字段清单，因此那些面被计为不可读，而不是被显示成空的。
 
 写入类工具：
 

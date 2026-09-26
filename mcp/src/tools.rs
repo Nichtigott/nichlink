@@ -29,6 +29,7 @@ use crate::index::{display_list, load_one, load_sources, required_path, resolve_
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
 use crate::trace::trace;
+use crate::usages::usages;
 
 pub(crate) fn tools() -> Vec<Value> {
     vec![
@@ -121,6 +122,19 @@ pub(crate) fn tools() -> Vec<Value> {
              report is truncated with its total named.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"}}}),
         ),
+        tool(
+            "nichlink.usages",
+            "Report the neighbourhood of one face: its parent and children as the tree has them, the \
+             fields the write path accepts read back from the generated module (preset, parts, the \
+             localized names, exports, requires, provides, handle traits and contracts, registration \
+             rule, admission, flow, runtime checks) — so a contract `nichlink.apply` can set becomes \
+             reportable — and which other faces mention the same capability tokens. Capability matches \
+             are on declared tokens rather than a resolved graph, and the reply says so. A hand-written \
+             module has no generated field list and the executor refuses to invent one, so those faces \
+             are counted as unreadable rather than shown empty. Declared graft cuts are not reported \
+             here; the CLI's `explain --json` carries them.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
+        ),
     ]
 }
 
@@ -153,6 +167,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.explain" => explain(&root, arguments),
         "nichlink.diff" => diff(&root, arguments),
         "nichlink.trace" => trace(&root, arguments),
+        "nichlink.usages" => usages(&root, arguments),
         "nichlink.apply" => apply(&root, arguments),
         _ => Err(format!("unknown tool `{name}`")),
     };

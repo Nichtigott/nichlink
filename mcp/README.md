@@ -35,6 +35,14 @@ The server exposes compact tools. Reads:
   headless call report it implies — what actually ran, which no static read can
   tell you. The artifact's identity is checked first (namespace, registry root,
   every frame's node); a foreign artifact is refused by name rather than drawn.
+- `nichlink.usages`: a face's neighbourhood — its parent and children as the tree
+  has them, the fields `nichlink.apply` accepts read back from the generated module
+  (preset, parts, names, exports, `requires`, `provides`, handle and part traits and
+  contracts, registration rule, admission, flow, runtime checks), and which other
+  faces mention the same capability tokens. Capability matches are on declared
+  tokens rather than a resolved graph, and the reply says so; a hand-written module
+  has no generated field list, so those faces are counted as unreadable rather than
+  shown empty.
 
 And one that writes:
 

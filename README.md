@@ -758,6 +758,8 @@ scope and release pruning, which source text cannot answer), `nichlink.diff` (th
 face-level delta between the sources and the build, including identities that
 changed under an unmoved file), and `nichlink.trace` (the recorded trace's call
 report — what actually ran — refused when the artifact describes another tree), and
+`nichlink.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
+read back, and the capability tokens other faces mention in either direction), and
 `nichlink.apply`, which adds, edits, renames, or deletes a face through the
 same authoring executor Studio uses and previews the change on a throwaway copy
 unless `apply: true` is given. Static call-graph answers are labelled
