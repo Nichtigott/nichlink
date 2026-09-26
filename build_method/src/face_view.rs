@@ -124,13 +124,20 @@ enum ParentSpec {
 /// with namespace `package` would compute.
 /// `root` 的 `src/` 下每个注册面，身份使用命名空间 `package` 的构建会算出的值。
 pub fn face_views(root: &Path, package: &str) -> Result<Vec<FaceView>, String> {
-    let src = root.join("src");
+    // The build's own layout resolution, so this read-only view reports the paths
+    // and identities the build computes — including for a library target outside
+    // `src/`, where the identity path keeps its leading directory component.
+    // 用构建自己的布局解析，因此这个只读视图报告的路径与身份就是构建计算出的那些——包括 `src/`
+    // 之外的库目标，那种情况下身份路径保留它开头的目录分量。
+    let layout = super::source_layout(root)?;
+    let src = &layout.scan_root;
     if !src.is_dir() {
         return Err(format!("no source tree at {}", src.display()));
     }
-    let nodes = discover_root(&src);
+    let nodes = discover_root(src);
+    let identity = &layout.identity_base;
     let mut raw = Vec::new();
-    collect(&src, &nodes, package, &mut raw);
+    collect(identity, &nodes, package, &mut raw);
     let modules = raw
         .iter()
         .map(|face| (face.module.clone(), face.id))

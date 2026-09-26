@@ -9,9 +9,10 @@
 use std::path::PathBuf;
 
 use super::{
-    BuildDiagnostics, HostEntry, application_entry_source, calls_host, default_entry_source,
+    BuildDiagnostics, HostEntry, application_entry_source, default_entry_source,
     resolve_host_entry, resolve_host_entry_reporting,
 };
+use crate::entry_default::calls_host;
 
 /// A throwaway package root for the resolution fixtures, unique per call.
 /// 解析夹具使用的临时包根，每次调用唯一。
@@ -33,6 +34,13 @@ fn fixture(name: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(root.join("src")).expect("fixture dir");
     root
+}
+
+/// The layout of one fixture root: these fixtures all keep their sources under
+/// `src/`, so the scan root and the identity base are that directory.
+/// 一个夹具根的布局：这些夹具都把源码放在 `src/` 下，因此遍历根与身份基准就是该目录。
+fn layout(root: &std::path::Path) -> crate::SourceLayout {
+    crate::source_layout(root).expect("the fixture layout resolves")
 }
 
 /// A file that only mentions `host!()` — in a line comment, a block comment,
@@ -62,7 +70,7 @@ fn a_host_mention_in_a_comment_or_string_is_not_a_call() {
         "a real invocation is a call"
     );
     assert_eq!(
-        default_entry_source(&src),
+        default_entry_source(&layout(&root)),
         src.join("lib.rs"),
         "the file that really calls host!() is the entry"
     );
@@ -85,14 +93,14 @@ fn the_entry_is_the_file_that_calls_host() {
         "//! docs mentioning host!() in prose\nnichlink_run_method::host!();\n",
     )
     .expect("host lib");
-    assert_eq!(default_entry_source(&source), source.join("lib.rs"));
+    assert_eq!(default_entry_source(&layout(&root)), source.join("lib.rs"));
 
     std::fs::write(
         source.join("main.rs"),
         "nichlink_run_method::host!();\nfn main() {}\n",
     )
     .expect("host main");
-    assert_eq!(default_entry_source(&source), source.join("main.rs"));
+    assert_eq!(default_entry_source(&layout(&root)), source.join("main.rs"));
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -153,7 +161,7 @@ fn a_configured_entry_that_is_not_a_file_is_a_diagnostic() {
 
     let mut errors = BuildDiagnostics::default();
     let resolved = resolve_host_entry_reporting(
-        &src,
+        &layout(&root),
         &nodes,
         Some(PathBuf::from("src/nope.rs")),
         &mut errors,

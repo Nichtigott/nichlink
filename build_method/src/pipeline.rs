@@ -10,7 +10,26 @@ use nichlink::lexicon;
 
 pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let manifest = &input.manifest;
-    let src = &input.src;
+    // Two bases, resolved once: `scan` is the tree the walk reads, and `src` is
+    // what an identity path is taken relative to. They are the same directory for
+    // every package that keeps its sources under `src/`, and differ for one whose
+    // library target lives elsewhere (`source_layout` explains why, and why the
+    // identity answer has to match the declaration macros).
+    // 两个基准只解析一次：`scan` 是遍历读取的树，`src` 是身份路径所相对的基准。对每个把源码放在
+    // `src/` 下的包，它们是同一个目录；而库目标住在别处的包会让它们分开（`source_layout` 解释了
+    // 原因，以及为什么身份那一半必须与声明宏一致）。
+    let layout = match &input.layout {
+        Ok(layout) => layout,
+        // A layout the resolver had to refuse — a `[lib] path` naming no file — is
+        // reported exactly where a missing tree is, and with the same
+        // consequences: `check --json` writes the document, the build script stops
+        // with the rendered text.
+        // 解析器不得不拒绝的布局——`[lib] path` 指不到文件——报到"源树缺失"所报的同一处，后果也
+        // 相同：`check --json` 写出文档，构建脚本带着渲染后的文本停下。
+        Err(message) => return layout_diagnostic(input, message.clone()),
+    };
+    let scan = &layout.scan_root;
+    let src = &layout.identity_base;
     // A package with no source tree — or with something that is not a directory
     // where one is expected — is a layout diagnostic, and nothing below runs on a
     // tree that cannot be read. This used to reach
@@ -21,32 +40,18 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 读不到的树上运行。这里过去会走到 discovery 里的 `expect("src directory must exist")`：
     // 构建脚本以退出 101 死掉，而 `check --json` 什么都不打印——而那正是那条命令被修好要守住的
     // 契约。
-    if !src.is_dir() {
-        let mut diagnostics = BuildDiagnostics::default();
-        diagnostics.push(BuildDiagnostic::new(
-            "face-layout",
+    if !scan.is_dir() {
+        return layout_diagnostic(
+            input,
             format!(
                 "{} is not a source directory; the build reads registration faces from it, \
                  and a missing tree is not an empty one",
-                src.display()
+                scan.display()
             ),
-        ));
-        if input.emit_cargo_directives {
-            // A build script has no stdout contract to keep and no generated tree
-            // to carry the message — the tree is what would have carried it — so it
-            // fails loudly with the rendered diagnostic, the way the write path
-            // below fails. What it replaces is a bare
-            // `expect("src directory must exist")` that named neither the tree nor
-            // the reason.
-            // 构建脚本没有 stdout 契约要守，也没有生成树可以承载这条消息——生成树正是本该承载
-            // 它的东西——因此它带着渲染后的诊断响亮失败，与下面的写出路径一致。它取代的是一条
-            // 既没说清哪棵树、也没说清原因的裸 `expect("src directory must exist")`。
-            panic!("{}", diagnostics.render());
-        }
-        return Some(diagnostics);
+        );
     }
     let mut unplaced = Vec::new();
-    let nodes = discover_root_reporting(src, &mut unplaced);
+    let nodes = discover_root_reporting(scan, &mut unplaced);
     prime_node_id_cache(manifest, src, &nodes);
     let discovery_fingerprint = super::discovery_fingerprint(src, &nodes);
     // One entry, resolved once, for both readers below. Pruning and the generated
@@ -67,7 +72,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 解析入口与范围可能拒绝一个被配置的取值，而这些拒绝现在是诊断：它们过去会 panic，
     // 那会打死构建脚本，并让 `check --json` 什么都不打印。
     let mut early_errors = BuildDiagnostics::default();
-    let entry = super::host_entry_from_environment(src, &nodes, &mut early_errors);
+    let entry = super::host_entry_from_environment(layout, &nodes, &mut early_errors);
     let scope = SourceScope::from_environment(src, &nodes, &entry, &mut early_errors);
     let cache_units = cache_directory(manifest).join("units");
     let cache_state = update_discovery_cache(manifest, src, &nodes, &discovery_fingerprint);
@@ -195,7 +200,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         }
     }
     if input.emit_cargo_directives {
-        emit_rerun_paths(src, &nodes);
+        emit_rerun_paths(scan, &nodes);
         // The generated tree carries `cfg(rust_analyzer)` declarations that give
         // rust-analyzer a top-level view of every nested face file. rustc reads
         // none of them, so declare the cfg name to keep `unexpected_cfgs` quiet.
@@ -241,6 +246,26 @@ fn cache_status_line(cache_state: &str, fingerprint: &str, verbose: bool) -> Opt
 /// 保持生成的诊断流稳定且紧凑。
 fn append_error(target: &mut BuildDiagnostics, addition: BuildDiagnostics) {
     target.extend(addition);
+}
+
+/// Report a source layout the build cannot read, the way both callers need it.
+/// 以两种调用方各自需要的方式报告构建读不了的源码布局。
+///
+/// A build script has no stdout contract to keep and no generated tree to carry
+/// the message — the tree is what would have carried it — so it fails loudly with
+/// the rendered diagnostic, the way the write path below fails. What it replaces is
+/// a bare `expect("src directory must exist")` that named neither the tree nor the
+/// reason.
+/// 构建脚本没有 stdout 契约要守，也没有生成树可以承载这条消息——生成树正是本该承载它的东西——
+/// 因此它带着渲染后的诊断响亮失败，与下面的写出路径一致。它取代的是一条既没说清哪棵树、也没说清
+/// 原因的裸 `expect("src directory must exist")`。
+fn layout_diagnostic(input: &BuildInput, message: String) -> Option<BuildDiagnostics> {
+    let mut diagnostics = BuildDiagnostics::default();
+    diagnostics.push(BuildDiagnostic::new("face-layout", message));
+    if input.emit_cargo_directives {
+        panic!("{}", diagnostics.render());
+    }
+    Some(diagnostics)
 }
 
 #[cfg(test)]

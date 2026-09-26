@@ -29,14 +29,24 @@ nichlink_run_method::application!(entry = crate::main);
 ```
 
 There must be exactly one declaration, and its first module must resolve to a
-source file under `src/` (including `src/bin/`). Malformed, duplicate, or
-unresolvable entries fail the build with the declaration location.
+source file under the package's source root — `src/` (including `src/bin/`), or
+the directory the library target lives in when a `[lib] path` puts that
+elsewhere. Malformed, duplicate, or unresolvable entries fail the build with the
+declaration location.
 
 `NICH_LINK_ENTRY` overrides all of the above when set: a relative value resolves
 against the package root, and a value that does not name a file fails the build
 instead of falling back. The build resolves the entry once and hands the same
 value to `SourceScope` pruning and to the generated `BUILTIN_GRAFT_CUTS` table,
 so the two can never describe different files.
+
+The source root follows the **library** target. A package that declares
+`[lib] path = "host/lib.rs"` has its faces read from `host/`, and each face's
+identity path is then `host/…` — the manifest-relative path, because the
+declaration macros drop one leading `src/` and nothing else. A `[lib] path` that
+names no file is a `face-layout` diagnostic naming it, rather than a walk of some
+other tree. `[[bin]]` targets do not move the root: a package may have several of
+them and nothing chooses between them.
 
 `SourceScope` pruning keeps the community surface alive: graft cut targets and
 plugin-declaring faces are forced liveness roots, so a minimal tree never

@@ -11,9 +11,11 @@
 
 use std::path::Path;
 
-/// Whether an `application!(entry = …)` path names a module that exists under
-/// `src`.
-/// `application!(entry = …)` 的路径是否命名了 `src` 下存在的模块。
+/// Whether an `application!(entry = …)` path names a module that exists under the
+/// source root — `src/` for a conventional package, and the library target's own
+/// directory for one whose target lives elsewhere.
+/// `application!(entry = …)` 的路径是否命名了源码根下存在的模块——对约定布局的包就是 `src/`，
+/// 而库目标住在别处的包则是目标自己所在的目录。
 ///
 /// Every segment is resolved against the tree, not only the first. The spelling may
 /// end in the function the host wants (`crate::app::run`) or in the module itself

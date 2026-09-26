@@ -28,72 +28,15 @@ use std::path::{Path, PathBuf};
 
 use nichlink::lexicon;
 
+use super::default_entry_source;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::node::{Node, relative_display};
 use super::registry_syntax::application_entries;
+use super::{SourceLayout, source_layout};
 
 #[path = "entry_paths.rs"]
 mod entry_paths;
 pub(crate) use entry_paths::{entry_path_exists, path_mentions_module};
-
-/// Pick the ordinary Cargo entry when no `application!` declaration exists.
-/// 没有 `application!` 声明时，按 Cargo 约定选择默认入口。
-pub(crate) fn default_entry_source(src: &Path) -> PathBuf {
-    let candidates = [src.join("main.rs"), src.join("lib.rs")];
-    // Cargo prefers `main.rs`, but a lib+bin host calls `host!()` in whichever
-    // file owns the generated tree — often `lib.rs`, with `main.rs` left as a
-    // stub. An `application!` declaration is not the only thing that can live
-    // there: the declared graft plan does too, and picking the stub silently
-    // dropped it. The entry is the file that calls `host!()`; Cargo's order only
-    // breaks the tie.
-    // Cargo 偏好 `main.rs`，但库+二进制宿主会在拥有生成树的那个文件里调用
-    // `host!()`——常见情形是 `lib.rs`，而 `main.rs` 只是个空壳。那里不只可能放
-    // `application!` 声明，声明的 graft 计划也在其中，选中空壳会把它静默丢掉。
-    // 入口应当是调用 `host!()` 的文件；Cargo 的顺序只用来打破平局。
-    if let Some(entry) = candidates.iter().find(|path| calls_host(path)) {
-        return entry.clone();
-    }
-    let main = candidates[0].clone();
-    if main.is_file() {
-        return main;
-    }
-    let lib = candidates[1].clone();
-    if lib.is_file() {
-        return lib;
-    }
-    // Keep the existing missing-entry diagnostic and conservative fallback.
-    // 保留原有 missing-entry 诊断，并继续使用保守的全树回退。
-    main
-}
-
-/// Whether a source file declares this crate as a host.
-/// 源文件是否把本 crate 声明为宿主。
-///
-/// The decision is lexical, not line-based: the kernel's source scanner masks
-/// comments and string literals, so the `host!()` a doc comment documents never
-/// counts, while the real invocation at the crate root does. `host!()` is a
-/// macro invocation and the kernel's `body_calls` scanner deliberately skips
-/// macro names, so the bang is folded to a space before the scan: that keeps the
-/// scanner's masking — the part this needs — and turns the invocation into the
-/// call shape it matches.
-/// 判断是词法层面的，而不是逐行匹配：内核源码扫描器会屏蔽注释与字符串字面量，
-/// 因此文档注释里提到的 `host!()` 不算数，而 crate 根上的真实调用算数。
-/// `host!()` 是宏调用，内核的 `body_calls` 扫描器刻意跳过宏名，因此扫描前把感叹号
-/// 折成空格：这样既保留了这里需要的屏蔽语义，又把该调用变成扫描器能匹配的调用形状。
-fn calls_host(path: &Path) -> bool {
-    fs::read_to_string(path).is_ok_and(|source| host_macro_call(&source))
-}
-
-/// Whether `source` contains a real `host!()` invocation outside comments and
-/// string literals.
-/// `source` 是否在注释与字符串字面量之外包含真实的 `host!()` 调用。
-fn host_macro_call(source: &str) -> bool {
-    // Only the bang right after `host` is rewritten; comments and string
-    // literals are still masked by the kernel scanner itself.
-    // 只改写紧跟在 `host` 之后的感叹号；注释与字符串字面量仍由内核扫描器自己屏蔽。
-    let probe = source.replace("host!", "host ");
-    nichlink::source::body_calls(&probe, "host")
-}
 
 /// The file declaring `application!(entry = …)`, or `None` when none does.
 /// 声明 `application!(entry = …)` 的文件；没有声明时返回 `None`。
@@ -260,12 +203,12 @@ impl HostEntry {
 /// readers downstream cannot observe different values for it.
 /// 环境只在这里读取，构建中别无他处读取它，因此下游两个读取者不可能看到不同的值。
 pub(crate) fn host_entry_from_environment(
-    src: &Path,
+    layout: &SourceLayout,
     nodes: &[Node],
     errors: &mut BuildDiagnostics,
 ) -> HostEntry {
     resolve_host_entry_reporting(
-        src,
+        layout,
         nodes,
         env::var_os(lexicon::ENTRY_ENV).map(PathBuf::from),
         errors,
@@ -286,7 +229,14 @@ pub(crate) fn resolve_host_entry(
     nodes: &[Node],
     configured: Option<PathBuf>,
 ) -> HostEntry {
-    resolve_host_entry_reporting(src, nodes, configured, &mut BuildDiagnostics::default())
+    // Test glue, and the only place that assumes the conventional layout: the
+    // fixtures this serves keep their sources under `src/`, and the wrapper exists
+    // so their call sites stay one line shorter than the code they pin. Production
+    // callers take the layout, because they must not assume it.
+    // 测试胶水，也是唯一假定约定布局的地方：它服务的夹具把源码放在 `src/` 下，而这个包装的存在
+    // 是为了让那些调用点比它们钉住的代码少一行。生产调用方接收布局，因为它们不能做这个假定。
+    let layout = source_layout(src.parent().unwrap_or(src)).expect("fixture layout");
+    resolve_host_entry_reporting(&layout, nodes, configured, &mut BuildDiagnostics::default())
 }
 
 /// Resolve the host entry from an explicit `NICH_LINK_ENTRY` value.
@@ -324,11 +274,18 @@ pub(crate) fn resolve_host_entry(
 /// Resolve the host entry and report what it had to refuse.
 /// 解析宿主入口，并报告它不得不拒绝的东西。
 pub(crate) fn resolve_host_entry_reporting(
-    src: &Path,
+    layout: &SourceLayout,
     nodes: &[Node],
     configured: Option<PathBuf>,
     errors: &mut BuildDiagnostics,
 ) -> HostEntry {
+    // Identity paths are relative to the layout's identity base, while a configured
+    // entry and the conventional candidates are files under the tree: this is the
+    // one function that needs both bases, and taking the layout is what keeps each
+    // use honest instead of deriving one from the other.
+    // 身份路径相对布局的身份基准，而配置的入口与约定候选是树下的文件：本函数是唯一同时需要两个
+    // 基准的地方，接收布局正是让每次使用都诚实、而不是从一个推出另一个的原因。
+    let src = layout.identity_base.as_path();
     if let Some(path) = configured {
         let path = if path.is_absolute() {
             path
@@ -337,7 +294,7 @@ pub(crate) fn resolve_host_entry_reporting(
             // configured `main.rs` must both be able to name the same file.
             // 基准是包根而不是 `src`：`src/main.rs` 与 `main.rs` 两种写法都必须能
             // 指到同一个文件。
-            src.parent().unwrap_or(src).join(path)
+            layout.package_root.join(path)
         };
         if !path.is_file() {
             errors.push(
@@ -356,14 +313,14 @@ pub(crate) fn resolve_host_entry_reporting(
             // the convention entry keeps them flowing instead of aborting here.
             // 上面的诊断已经让构建失败，因此管线带着哪个入口只影响后面还要产出的诊断：
             // 约定入口让它们继续流出来，而不是在这里中止。
-            return HostEntry::Convention(default_entry_source(src));
+            return HostEntry::Convention(default_entry_source(layout));
         }
         return HostEntry::Configured(path);
     }
     if let Some(file) = application_entry_source(src, nodes, errors) {
         return HostEntry::Declared(file);
     }
-    HostEntry::Convention(default_entry_source(src))
+    HostEntry::Convention(default_entry_source(layout))
 }
 
 /// Resolve the host entry the build step reads graft declarations from.
@@ -382,7 +339,11 @@ pub(crate) fn resolve_host_entry_reporting(
 /// 源码（构建遍历已发现的注册目录），且无法表示的源码树返回 `Err` 而不是 panic——
 /// 创作界面必须活着把问题说出来。
 pub fn host_entry_source(root: &Path) -> Result<PathBuf, String> {
-    let src = root.join("src");
+    // The same layout the build resolves, so an authoring surface looks where the
+    // build will look — including a library target outside `src/`.
+    // 与构建解析的是同一个布局，因此创作界面看的地方就是构建会看的地方——包括 `src/` 之外的库目标。
+    let layout = source_layout(root)?;
+    let src = &layout.scan_root;
     if !src.is_dir() {
         return Err(format!("no source tree at {}", src.display()));
     }
@@ -402,10 +363,10 @@ pub fn host_entry_source(root: &Path) -> Result<PathBuf, String> {
         }
         return Ok(path);
     }
-    if let Some(entry) = declaring_application_entry(&src)? {
+    if let Some(entry) = declaring_application_entry(src)? {
         return Ok(entry);
     }
-    let entry = default_entry_source(&src);
+    let entry = default_entry_source(&layout);
     if !entry.is_file() {
         return Err(format!(
             "no host entry at {}; expected a source file that calls `host!()`",

@@ -34,12 +34,7 @@ fn a_build_script_without_a_source_tree_fails_with_the_layout_diagnostic() {
         std::process::id()
     ));
     std::fs::create_dir_all(&root).expect("fixture root");
-    let input = super::BuildInput {
-        manifest: root.clone(),
-        src: root.join("src"),
-        out_dir: root.join("target/nichlink/out"),
-        emit_cargo_directives: true,
-    };
+    let input = super::BuildInput::new(root.clone(), root.join("target/nichlink/out"), true);
     let _ = super::run(&input);
 }
 

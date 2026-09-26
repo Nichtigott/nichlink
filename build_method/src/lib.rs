@@ -33,6 +33,8 @@ mod diagnostics;
 mod discovery;
 #[path = "entry.rs"]
 mod entry;
+#[path = "entry_default.rs"]
+mod entry_default;
 #[path = "face_view.rs"]
 pub mod face_view;
 #[path = "faces.rs"]
@@ -65,6 +67,8 @@ mod renderer;
 pub mod scaffold;
 #[path = "scope.rs"]
 mod scope;
+#[path = "source_layout.rs"]
+mod source_layout;
 #[path = "static_plan.rs"]
 mod static_plan;
 #[path = "validation.rs"]
@@ -99,12 +103,14 @@ pub(crate) use contracts::aggregate_contract_errors;
 pub(crate) use discovery::{
     discover_root, discover_root_reporting, discovery_fingerprint, emit_rerun_paths,
 };
+pub(crate) use source_layout::{SourceLayout, source_layout};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone
 // would be an unused import in a non-test build.
 // 这里刻意不导出 `resolve_host_entry`：生产代码只经 `host_entry_from_environment`
 // 到达它，仅为测试而导出会在非测试构建里成为未使用导入。
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
+pub(crate) use entry_default::default_entry_source;
 pub(crate) use faces::{FaceSource, collect_faces, has_selected_face};
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
@@ -181,12 +187,7 @@ pub fn check_for(
         diagnostics
     })?;
     registry_identity::set_package_namespace(package.to_owned());
-    let input = BuildInput {
-        manifest: manifest.to_path_buf(),
-        src: manifest.join("src"),
-        out_dir: out_dir.to_path_buf(),
-        emit_cargo_directives: false,
-    };
+    let input = BuildInput::new(manifest.to_path_buf(), out_dir.to_path_buf(), false);
     match pipeline::run(&input) {
         Some(diagnostics) => Err(diagnostics),
         None => Ok(()),

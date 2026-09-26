@@ -56,6 +56,23 @@ to its designed waiting state.
   `nichlink.default`, because every id below such an answer names a node no host
   compiled. Contract, admission, and registration-rule data still need the built
   face snapshots and are still absent from the bridge.
+- A library target outside `src/` is read where it is. A package whose manifest
+  declares `[lib] path = "host/lib.rs"` now has its registration faces read from
+  `host/`, and each face's identity path is `host/…` — the manifest-relative path,
+  because the declaration macros drop one leading `src/` and nothing else. The two
+  decisions that had been one hardcoded constant, `<root>/src`, are now two bases
+  resolved once (`build_method/src/source_layout.rs`): the tree the walk reads and
+  the base an identity path is relative to; `relative_display` and the
+  `src.join(relative)` inversions keep working, and entry resolution — the one
+  place that needs both — takes the layout. A `[lib] path` naming no file is a
+  `face-layout` diagnostic naming it instead of a walk of some other tree; the
+  manifest read is deliberately narrow (one key, one table, quotes, comments, the
+  dotted `lib.path = "…"` spelling) and never spawns `cargo`, because the pipeline
+  runs inside a build script. `[[bin]]` targets do not move the root: a package may
+  have several and nothing chooses between them. `build_method/src/entry.rs` came
+  back **under** the 450-line ceiling on the way (its conventional-entry choice
+  moved to `entry_default.rs`), so its size-ratchet entry is deleted rather than
+  enlarged.
 - `nichlink_build_method::package_name`: the Cargo-authoritative package-name
   read moved out of `nichlink-cli`, so the command line and the MCP bridge ask one
   authority instead of each carrying a copy. The CLI's commands behave exactly as
@@ -854,6 +871,16 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   命名空间，因此工具先解 `NICH_LINK_NAMESPACE`，再解 Cargo 报告的包名，否则**拒绝作答**——绝不
   回落到 `nichlink.default`，因为那种答案之下的每个 id 都指的是宿主从未编译过的节点。contract、
   admission 与 registration rule 数据仍需已构建的面快照，桥里仍然没有。
+- `src/` 之外的库目标就地读取。清单声明 `[lib] path = "host/lib.rs"` 的包，其注册面现在从
+  `host/` 读入，而每个面的身份路径是 `host/…`——相对清单的路径，因为声明宏只去掉一个前导
+  `src/`，别的都不去。过去被写死为一个常量 `<root>/src` 的两个决定，现在是只解析一次的两个基准
+  （`build_method/src/source_layout.rs`）：遍历读取的树，以及身份路径所相对的基准；
+  `relative_display` 与 `src.join(relative)` 那些反向拼接照常工作，而入口解析——唯一同时需要
+  两者的地方——接收布局。`[lib] path` 指不到文件时是一条点名它的 `face-layout` 诊断，而不是去
+  遍历别的树；这次清单读取是有意窄的（一张表里的一个键、引号、注释、点式 `lib.path = "…"` 写法），
+  并且绝不 spawn `cargo`，因为管线是在构建脚本里运行的。`[[bin]]` 目标不移动源码根：一个包可能有
+  多个二进制目标，没有任何东西能在它们之间做选择。顺带把 `build_method/src/entry.rs` 带回 450 行
+  **上限之内**（它的约定入口选择移到 `entry_default.rs`），因此它的尺寸棘轮项是被删除而不是被放大。
 - `nichlink_build_method::package_name`：Cargo 权威的包名读取从 `nichlink-cli` 移出，因此命令行
   与 MCP 桥问的是同一个权威，而不是各带一份副本。CLI 各命令行为完全不变，钉住那份私有副本的两条
   测试随它一同移动。构建管线不调用它：构建脚本从 Cargo 拿到 `CARGO_PKG_NAME`，也就是同一个值。

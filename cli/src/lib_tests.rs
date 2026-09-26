@@ -411,15 +411,19 @@ fn grafts_reports_an_unreadable_plans_directory() {
 #[test]
 fn grafts_reports_a_host_whose_sources_cannot_be_read() {
     let root = temporary_root("cli-grafts-no-src");
-    // Cargo needs a target, so this package names one outside `src/`; the
-    // question `grafts` asks is about `src/`, which is absent.
-    // Cargo 需要一个 target，因此这个包把 target 指到 `src/` 之外；而 `grafts` 问的正是
-    // `src/`，它不存在。
-    fs::create_dir_all(root.join("library")).expect("library directory");
-    fs::write(root.join("library/lib.rs"), "pub fn placeholder() {}\n").expect("library target");
+    // Cargo needs a target, and this package has one that is not a library
+    // target: NichLink's source root follows the **library** target, so a
+    // bin-only package without `src/` keeps the conventional root and `grafts`
+    // reports that it is absent. (A `[lib] path` outside `src/` used to stand in
+    // for this, until the build learned to read that layout.)
+    // Cargo 需要一个 target，而这个包的 target 不是库目标：NichLink 的源码根跟随**库**目标，
+    // 因此没有 `src/` 的纯二进制包沿用约定根，`grafts` 报告它不存在。（过去用 `src/` 之外的
+    // `[lib] path` 来代替这一情形，直到构建学会读那种布局。）
+    fs::create_dir_all(root.join("app")).expect("binary directory");
+    fs::write(root.join("app/main.rs"), "fn main() {}\n").expect("binary target");
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"no-src\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"library/lib.rs\"\n",
+        "[package]\nname = \"no-src\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bin]]\nname = \"no-src\"\npath = \"app/main.rs\"\n",
     )
     .expect("manifest");
 
@@ -548,27 +552,32 @@ fn check_json_reports_a_resolution_failure_as_json() {
     assert!(stdout.is_empty(), "{stdout}");
 }
 
-/// A package whose library lives outside `src/` is diagnosed through the same
-/// document, instead of taking the build down and printing nothing.
-/// 库不在 `src/` 的包经同一份文档被诊断，而不是打死构建并什么都不打印。
+/// A library target the manifest names but the filesystem does not have is
+/// diagnosed through the same document, instead of taking the build down and
+/// printing nothing.
+/// 清单命名、而文件系统里没有的库目标经同一份文档被诊断，而不是打死构建并什么都不打印。
 ///
 /// The manifest is legal — `[lib] path` is how Cargo is told where the library
-/// is — so `cargo metadata` accepts it and the pipeline is reached. It used to
-/// reach `expect("src directory must exist")` there: exit 101 and an empty
-/// stdout, which is exactly the contract `check --json` was fixed to keep.
-/// manifest 是合法的——`[lib] path` 正是告诉 Cargo 库在哪里的方式——因此 `cargo metadata`
-/// 接受它，管线会被走到。它过去会在那里走到 `expect("src directory must exist")`：退出 101 与
-/// 空 stdout，而那正是 `check --json` 被修好要守住的契约。
+/// is — so `cargo metadata` is asked about a package, and the pipeline reaches its
+/// own layout resolution: the named file does not exist, which is a
+/// `face-layout` diagnostic naming it. A *present* target outside `src/` is
+/// supported now and builds (`cli::check_accepts_a_library_target_outside_src`).
+/// It used to reach `expect("src directory must exist")` for either case: exit 101
+/// and an empty stdout, which is exactly the contract `check --json` was fixed to
+/// keep.
+/// manifest 是合法的——`[lib] path` 正是告诉 Cargo 库在哪里的方式——因此包会被 `cargo metadata`
+/// 询问，管线走到自己的布局解析：被命名的文件不存在，这就是一条点名它的 `face-layout` 诊断。
+/// 位于 `src/` 之外但**存在**的目标现在被支持并能构建（`cli::check_accepts_a_library_target_outside_src`）。
+/// 过去两种情形都会走到 `expect("src directory must exist")`：退出 101 与空 stdout，而那正是
+/// `check --json` 被修好要守住的契约。
 #[test]
-fn check_reports_a_source_tree_outside_src_as_a_diagnostic() {
-    let root = temporary_root("cli-check-missing-src");
+fn check_reports_a_library_target_that_is_missing_as_a_diagnostic() {
+    let root = temporary_root("cli-check-missing-lib");
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"probe\"\nversion = \"0.1.0\"\n\n[lib]\nname = \"probe\"\npath = \"host/lib.rs\"\n",
+        "[package]\nname = \"probe\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"probe\"\npath = \"host/lib.rs\"\n",
     )
     .expect("manifest");
-    fs::create_dir_all(root.join("host")).expect("library directory");
-    fs::write(root.join("host/lib.rs"), "\n").expect("library root");
     let path = root.display().to_string();
 
     let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
@@ -583,8 +592,8 @@ fn check_reports_a_source_tree_outside_src_as_a_diagnostic() {
         document["diagnostics"][0]["message"]
             .as_str()
             .unwrap_or_default()
-            .contains("src"),
-        "the refusal must name the tree it looked for: {document}"
+            .contains("host/lib.rs"),
+        "the refusal must name the target it looked for: {document}"
     );
 
     // The human run keeps its shape: the failure is the returned error, and
@@ -595,6 +604,57 @@ fn check_reports_a_source_tree_outside_src_as_a_diagnostic() {
     assert!(stdout.is_empty(), "{stdout}");
 
     let _ = fs::remove_dir_all(&root);
+}
+
+/// A library target outside `src/` is read where it is: the build succeeds on a
+/// host whose faces live beside its library root, and `explain` reports the source
+/// path the host's own build would stamp — `host/control/control.rs`, the
+/// manifest-relative path, because the declaration macros drop only a leading
+/// `src/`. This is the positive half of the test above: that one pins the refusal
+/// for a target that is not there, this one pins the support for a target that is.
+/// `src/` 之外的库目标就地读取：注册面住在库根旁边的宿主能构建成功，而 `explain` 报告的源码路径
+/// 正是宿主自己的构建会盖下的那个——`host/control/control.rs`，相对清单的路径，因为声明宏只去掉
+/// 一个前导 `src/`。这是上一条测试的正向一半：那条钉住"目标不在"时的拒绝，这条钉住"目标在"时的
+/// 支持。
+#[test]
+fn check_accepts_a_library_target_outside_src() {
+    let root = temporary_root("cli-outside-src");
+    let face = root.join("host/control/control.rs");
+    fs::create_dir_all(face.parent().expect("face parent")).expect("face directory");
+    fs::write(
+        &face,
+        "crate::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \
+         parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+    )
+    .expect("face");
+    fs::write(root.join("host/lib.rs"), "// host entry\n").expect("library root");
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"cli-outside-src\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"host/lib.rs\"\n",
+    )
+    .expect("manifest");
+    let path = root.display().to_string();
+
+    let (checked, stdout) = run_capture(&["nichlink", "check", &path]);
+    assert!(checked.is_ok(), "{checked:?} {stdout}");
+
+    let (explained, stdout) = run_capture(&[
+        "nichlink",
+        "explain",
+        "--json",
+        "--path",
+        &path,
+        "root/control",
+    ]);
+    assert!(explained.is_ok(), "{explained:?} {stdout}");
+    let document: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
+    assert_eq!(document["resolved"], true, "{document}");
+    assert_eq!(
+        document["node"]["source"], "host/control/control.rs",
+        "the identity path keeps the directory the target lives in: {document}"
+    );
+    assert_eq!(document["node"]["path"], "root/control", "{document}");
+    fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `grafts --json` emits one JSON document even when the package cannot be
