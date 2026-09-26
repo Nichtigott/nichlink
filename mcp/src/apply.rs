@@ -99,6 +99,20 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         // 预览在副本里运行，因此执行器报告的路径属于副本。把它报告在**将要**写入的位置：读到
         // `would write /tmp/...` 的代理会被告知一个随后就被删掉的目录。
         Ok(mut outcome) => {
+            // The declaration anchor is read while the tree it happened in still
+            // exists: for a preview that is the copy, for an apply it is the project.
+            // 声明锚点是在改动发生的那棵树仍然存在时读取的：预览是副本，落盘是项目。
+            let original = outcome.source.clone();
+            let relative = original
+                .strip_prefix(&work)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|_| {
+                    original
+                        .strip_prefix(root)
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|_| original.clone())
+                });
+            outcome.declaration = declaration_line(&original, &relative);
             if let Ok(relative) = outcome.source.strip_prefix(&work) {
                 outcome.source = root.join(relative);
             }
@@ -138,8 +152,27 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
 
 /// What one successful executor call changed.
 /// 一次成功的执行器调用改了什么。
+/// Where a written face's declaration sits, as `<path>:<line>`.
+/// 被写入的面的声明位置，写作 `<path>:<line>`。
+///
+/// The executor validates and reports refusals with a position (the kernel's
+/// diagnostics carry `file:line:column`), so a *successful* write has to answer the
+/// same question or the caller has to guess: a face's declaration is the macro
+/// invocation, which is the line an editor or a follow-up edit wants.
+/// 执行器在拒绝时带着位置报告（内核诊断携带 `file:line:column`），因此**成功**的写入必须回答同一个
+/// 问题，否则调用方只能猜：一个面的声明就是那次宏调用，而那正是编辑器或后续编辑想要的那一行。
+fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(file).ok()?;
+    let line = text.lines().position(|line| line.contains("! {"))?;
+    Some(format!("{}:{}", relative.display(), line + 1))
+}
+
 struct Outcome {
     message: String,
+    /// `<path>:<line>` of the face declaration this change produced, when there is
+    /// one (a delete moves the file away and has none).
+    /// 本次改动产生的面声明所在的 `<path>:<line>`；删除把文件搬走，因此没有。
+    declaration: Option<String>,
     /// The file the executor wrote — or, for a delete, the trash path it moved the
     /// module to.
     /// 执行器写入的文件——对删除而言，则是它把模块搬到的回收路径。
@@ -202,6 +235,7 @@ fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, S
     Ok(Outcome {
         message: change.message,
         source: change.source,
+        declaration: None,
         moved: false,
     })
 }
@@ -256,6 +290,7 @@ fn run_edit(
     Ok(Outcome {
         message: change.message,
         source: change.source,
+        declaration: None,
         moved: false,
     })
 }
@@ -283,6 +318,7 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
     Ok(Outcome {
         message: change.message,
         source: change.source,
+        declaration: None,
         moved: true,
     })
 }
@@ -390,8 +426,13 @@ fn report(
         .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))
         .collect::<Vec<_>>()
         .join("\n");
+    let declaration = outcome
+        .declaration
+        .as_ref()
+        .map(|anchor| format!("declaration {anchor}\n"))
+        .unwrap_or_default();
     Ok(format!(
-        "action {}\nnamespace {namespace}\n{verb} {}\n{}\nfaces {}\n{list}\n",
+        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{}\nfaces {}\n{list}\n",
         if applied { "apply" } else { "preview" },
         outcome.source.display(),
         outcome.message,

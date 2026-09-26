@@ -29,8 +29,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   另外二十一个）、`rename`（改 `fields.module`，其余字段全保留）或 `delete`（把模块移入 NichLink
   的可恢复回收目录）。`node` 命名该面、`parent` 命名父级，都可用逻辑路径或身份——`nichlink.registry`
   报告的路径可以直接用。**除非 `apply: true`，请求只做预览**：预览在一份一次性的包副本上运行真实
-  操作，返回文件 diff 与将得到的注册树；只有 `apply: true` 才写入项目，并给出它写下的文件。每条回复
-  都以当前这棵树收尾，因此下一次调用可以用它来瞄准。
+  操作，返回文件 diff 与将得到的注册树；只有 `apply: true` 才写入项目，给出它写下的文件，并把产生的
+  声明锚成 `<path>:<line>`——与拒绝时 `file:line:column` 同一种形状。每条回复都以当前这棵树收尾，
+  因此下一次调用可以用它来瞄准。
 
 前五个工具索引 Rust 源码文本；`nichlink.registry` 报告的注册树来自**构建自己的推导**
 （`nichlink_build_method::face_views`，也就是 CLI 的 `explain` 所用的那一份），因此代理可以直接问

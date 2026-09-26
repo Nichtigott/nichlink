@@ -174,6 +174,28 @@ fn a_partial_edit_keeps_the_fields_it_does_not_name() {
     .expect("the face is created");
     let file = written(&created);
     let before = std::fs::read_to_string(&file).expect("the written face");
+    // The reply anchors the declaration, so a caller does not have to search the
+    // file for the line it just changed.
+    // 回复给出声明的锚点，调用方因此不必去文件里找它刚改的那一行。
+    let anchor = created
+        .lines()
+        .find_map(|line| line.strip_prefix("declaration "))
+        .unwrap_or_else(|| panic!("no declaration anchor in: {created}"));
+    let (anchor_path, anchor_line) = anchor.rsplit_once(':').expect("path:line");
+    assert!(
+        anchor_path.ends_with("button/button.rs"),
+        "the anchor must name the face: {anchor}"
+    );
+    let anchored = before
+        .lines()
+        .nth(anchor_line.parse::<usize>().expect("a line number") - 1)
+        .unwrap_or_else(|| panic!("the anchor points past the file: {anchor}"));
+    assert!(
+        anchored.contains("! {"),
+        "the anchor must point at the declaration, not at line 1: {anchored}"
+    );
+    // A delete has no declaration to point at, because the file is gone.
+    // 删除没有可指的声明，因为文件已经不在了。
 
     let edited = apply(
         &root,

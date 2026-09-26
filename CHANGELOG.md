@@ -54,8 +54,9 @@ to its designed waiting state.
   copy of the package — copying, rather than writing and reverting, is what cannot
   leave a half-edited tree behind — and returns the file diff plus the registration
   tree that results; `apply: true` writes to the project and names the files it
-  wrote. Both ends of the preview are the same `run` call, which is why a preview
-  cannot drift from the apply. `rename` changes `fields.module` and `delete` moves
+  wrote and anchors the declaration it produced as `<path>:<line>`, the same shape a
+  refusal uses for its `file:line:column`. Both ends of the preview are the same
+  `run` call, which is why a preview cannot drift from the apply. `rename` changes `fields.module` and `delete` moves
   the module into NichLink's recoverable trash; both reuse the same preview. And
   `edit` is a **patch**: the face is read back first (`authored_face`, new public
   API), the request's fields are overlaid, and the complete set is handed to the
@@ -897,7 +898,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   新符号需要靠新版本与已发布版本区分。`action` 为 `add` 或 `edit`，`parent` 接受逻辑路径
   （`nichlink.registry` 报告的那条）或身份，而**除非 `apply: true`，请求只做预览**：预览在一份
   一次性的包副本上运行真实操作——用复制而不是"先写再回滚"，正是它不会留下改了一半的树的原因——
-  并返回文件 diff 与将得到的注册树；`apply: true` 才写入项目并给出它写下的文件。预览的两端都是
+  并返回文件 diff 与将得到的注册树；`apply: true` 才写入项目，给出它写下的文件，并把产生的声明锚成
+  `<path>:<line>`（与拒绝时 `file:line:column` 同一种形状）。预览的两端都是
   同一次 `run` 调用，这正是预览不可能与落盘漂移的原因。`rename` 改 `fields.module`、`delete` 把
   模块移入 NichLink 的可恢复回收目录，两者复用同一套预览。而 `edit` 是**补丁**：先读回该面
   （`authored_face`，新增公开 API），覆盖请求的字段，再把完整的一组交给执行器——执行器自己的契约是

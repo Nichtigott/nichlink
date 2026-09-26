@@ -36,8 +36,9 @@ And one that writes:
   usable. **A request is previewed unless `apply: true`**: the preview runs the real
   operation on a throwaway copy of the package and returns the file diff plus the
   registration tree that results; only `apply: true` writes to the project, and then
-  it names the files it wrote. Every reply ends with the tree as it now stands, so
-  the next call can be aimed with it.
+  it names the files it wrote and anchors the declaration it produced as
+  `<path>:<line>` — the same shape a refusal uses for its `file:line:column`. Every
+  reply ends with the tree as it now stands, so the next call can be aimed with it.
 
 The first five index Rust source text; `nichlink.registry` reports the tree the
 **build** derives (`nichlink_build_method::face_views`, the same derivation the CLI's
