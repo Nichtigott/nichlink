@@ -24,7 +24,9 @@ Raising the line to `1.0.0` is a separate decision that would move every interna
 `version = "0.1.1"` requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
-without a red package audit.
+without a red package audit; `0.1.3` moved the same way and for the same reason
+(`mcp` now uses `nichlink_build_method::face_views`), so the package audit returns
+to its designed waiting state.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
 方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
@@ -33,12 +35,33 @@ without a red package audit.
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
 `1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.1"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
-改动得以随版本发布、而不让包审计变红的原因。
+改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
+使用 `nichlink_build_method::face_views`），包审计因此回到设计中的等待态。
 
 ## [Unreleased]
 
 ### Added
 
+- `nichlink-mcp`'s `nichlink.registry` tool: the registration faces this package
+  declares, one row per face with its logical path, kind, source, and the
+  `NodeId` the host compiled. The rows are derived by
+  `nichlink_build_method::face_views` — the same derivation the CLI's `explain`
+  uses — so `mcp` gained a `nichlink-build-method` dependency and the version line
+  moved to `0.1.3`. This closes a standing dishonesty in the bridge: it
+  registered only five source-text tools while its documentation had advertised a
+  registry query, so an agent re-derived the tree by grepping for macro names.
+  The namespace is the part that hides a real design question: a package name
+  *is* the `NodeId` namespace, so the tool resolves `NICH_LINK_NAMESPACE` first,
+  then the name Cargo reports, and otherwise **refuses** — it never falls back to
+  `nichlink.default`, because every id below such an answer names a node no host
+  compiled. Contract, admission, and registration-rule data still need the built
+  face snapshots and are still absent from the bridge.
+- `nichlink_build_method::package_name`: the Cargo-authoritative package-name
+  read moved out of `nichlink-cli`, so the command line and the MCP bridge ask one
+  authority instead of each carrying a copy. The CLI's commands behave exactly as
+  before, and the two tests that pinned the private copy moved with it. Nothing in
+  the build pipeline calls it: a build script receives `CARGO_PKG_NAME` from Cargo,
+  which is the same value.
 - `nichlink-plugin-host`'s `PluginAdmission`: the host-side path from the plugin
   locks to a loadable artifact. It reads
   `<package_root>/.nichlink/plugins/{official,user}.lock`, selects the manifest
@@ -76,6 +99,15 @@ without a red package audit.
 
 ### Changed
 
+- `nichlink-build-method` depends on `serde_json` for `package_name`. It is the
+  only JSON the crate reads, and `syn` was already there, so a host's build script
+  pays for one more leaf rather than a second implementation of the rule.
+- Documentation claims re-measured and corrected for the tool set and the trace
+  loader: the root READMEs and both discussion introductions still said Studio
+  rendered a built-in sample trace and had no ingest path, and that the bridge had
+  no registry query. The MCP tool lists now include `nichlink.registry`, and the
+  trace sentence says Studio loads the artifact its host writes and reports
+  `TRACE: none` without one.
 - Studio's built-in trace sample is gone. With a loader in place it could only
   mislead, so the legend reads `TRACE: none` when nothing is loaded, `LIVE` when
   an artifact passed the identity checks, and `TRACE mismatch` when one was
@@ -801,6 +833,17 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- `nichlink-mcp` 的 `nichlink.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
+  源码，以及宿主编译出的 `NodeId`。这些行由 `nichlink_build_method::face_views` 推导——也就是
+  CLI 的 `explain` 所用的同一份推导——因此 `mcp` 新增了 `nichlink-build-method` 依赖，版本线随之
+  移到 `0.1.3`。这修掉了桥里一处长期存在的不实：它只注册了五个源码文本工具，文档却宣称具备注册树
+  查询，于是代理靠 grep 宏名重建那棵树。命名空间是这里藏着的真正设计问题：包名**就是** `NodeId`
+  命名空间，因此工具先解 `NICH_LINK_NAMESPACE`，再解 Cargo 报告的包名，否则**拒绝作答**——绝不
+  回落到 `nichlink.default`，因为那种答案之下的每个 id 都指的是宿主从未编译过的节点。contract、
+  admission 与 registration rule 数据仍需已构建的面快照，桥里仍然没有。
+- `nichlink_build_method::package_name`：Cargo 权威的包名读取从 `nichlink-cli` 移出，因此命令行
+  与 MCP 桥问的是同一个权威，而不是各带一份副本。CLI 各命令行为完全不变，钉住那份私有副本的两条
+  测试随它一同移动。构建管线不调用它：构建脚本从 Cargo 拿到 `CARGO_PKG_NAME`，也就是同一个值。
 - Studio 的 trace **加载方**，即上面那份 artifact 的消费一半：`TraceStatus { Absent, Loaded,
   Mismatch { reason } }` 与启动时运行一次的 `App::install_trace`。发现路径来自
   `trace_artifact_path`，四条身份检查决定这份 artifact 是否属于本会话——解析器先拒绝不支持的
@@ -823,6 +866,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
+- `nichlink-build-method` 为 `package_name` 依赖 `serde_json`。这是本 crate 读取的唯一一份 JSON，
+  而 `syn` 本来就在，因此宿主的构建脚本多付的是一片叶子，而不是这条规则的第二份实现。
+- 重新实测并更正了工具集与 trace 加载方的文档主张：根 README 与两份讨论引言仍在说 Studio 渲染内置
+  样例 trace、尚无 ingest 路径，以及桥没有注册树查询。MCP 工具清单现在包含 `nichlink.registry`，
+  而 trace 那句改成：Studio 读入宿主写出的 artifact，没有 artifact 时报告 `TRACE: none`。
 - Studio 的内置 trace 示例已删除。有了加载方之后它只会误导，因此图例在什么都没装入时读
   `TRACE: none`、在 artifact 通过身份检查时读 `LIVE`、在被拒绝时读 `TRACE mismatch`；DATA
   面板不再有 `· built-in sample ·`，而是显示 `no trace attached` 或拒绝原因。会话再也不能为

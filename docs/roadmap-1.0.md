@@ -115,7 +115,7 @@ what blocks 1.0, not by when they were found.
 | 7 | Studio "live trace" 是硬编码样例，README 却声称权威 | `app/lifecycle.rs:46`、`app/sample.rs:7`、`README.md:714` | 面板与图例标注为示例，README 同步；真实 ingest 留到 B4 |
 | 8 | `tools/nichlink-package-audit` 引用不存在的包且不在 CI | `tools/nichlink-package-audit:8` | 改 `nichlink-build-method`，接入 CI；脚本能跑通（core 已发前仍会因版本依赖失败，脚本里注明） |
 | 9 | `README.zh-CN.md` 把 `StaticPlan::find` 写成 O(log n)，实际线性 | `README.zh-CN.md:569` vs `release/release.rs:203-217` | 更正为 O(n)，与英文 README 一致 |
-| 10 | MCP 宣称能查合同，5 个工具只读源码 | `mcp/Cargo.toml:7`、`mcp/README.md:5-6`、`mcp/src/tools.rs:10-38` | 二选一：补一个 registry/contract 工具，或删掉宣称（B1 先删宣称） |
+| 10 | MCP 宣称能查合同，5 个工具只读源码 | `mcp/Cargo.toml:7`、`mcp/README.md:5-6`、`mcp/src/tools.rs:10-38` | 已按"补工具"收口（2026-09-26）：`nichlink.registry` 报告构建推导出的注册树（`face_views`）。contract/admission 数据仍缺——它们在已构建的 `RegistrationSnapshot` 里，不在源码里；宣称已按此收紧 |
 
 ### B1 完成情况（已收口，附两条新增存疑）
 

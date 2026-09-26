@@ -10,7 +10,7 @@ NichLink: declarative recursive registration and atomic grafting for Rust object
 
 Hi everyone. I am open-sourcing NichLink, a Rust-first infrastructure project for large object graphs.
 
-It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. A host records its calls with `CallTrace`, and Studio exposes the registry tree that results. (MCP currently serves read-only Rust source queries; it has no registry or contract query yet.) Studio's DATA panel currently renders a built-in sample trace: there is no real trace-ingest path yet.
+It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. A host records its calls with `CallTrace`, and Studio exposes the registry tree that results and loads the trace artifact that host writes. (MCP serves read-only queries: it reports the registration tree the build derives, and still has no contract or admission query, which needs the built face snapshots.)
 
 ```rust
 crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_NAME")), }

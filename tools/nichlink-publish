@@ -74,8 +74,8 @@ wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
 # 每行一层，按依赖顺序。同一行内的 crate 互不依赖。
 levels='
 nichlink-core
-nichlink-macro nichlink-build-method nichlink-mcp
-nichlink-run-method
+nichlink-macro nichlink-build-method
+nichlink-run-method nichlink-mcp
 nichlink-debug-method nichlink-plugin-host
 nichlink-studio
 nichlink-cli
@@ -263,7 +263,7 @@ dependencies='
 nichlink-core:
 nichlink-macro:nichlink-core
 nichlink-build-method:nichlink-core
-nichlink-mcp:nichlink-core
+nichlink-mcp:nichlink-build-method nichlink-core
 nichlink-run-method:nichlink-core nichlink-macro
 nichlink-debug-method:nichlink-run-method
 nichlink-plugin-host:nichlink-run-method

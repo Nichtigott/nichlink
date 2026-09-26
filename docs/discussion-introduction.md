@@ -16,7 +16,7 @@ NichLink：面向 Rust 对象图的递归注册与原子嫁接
 - 子对象递归进入正确的 Registry；
 - 注册时检查 admission、结构 rule 和输入输出合同；
 - 在中间层进行原子 graft，而不要求重写整棵对象树；
-- 用 `CallTrace` 记录调用和数据流，并在 Studio 中查看（Studio 的 DATA 面板当前显示内置样例 trace，尚无真实 ingest 路径；MCP 目前只提供只读源码查询，不能查询注册树或合同）；
+- 用 `CallTrace` 记录调用和数据流，并在 Studio 中查看（Studio 读取宿主写出的 trace artifact；MCP 提供只读查询，能报告构建推导出的注册树，但仍没有合同或 admission 查询——那需要已构建的面快照）；
 
 最小声明可以很短：
 

@@ -49,6 +49,8 @@ mod manifests;
 mod node;
 #[path = "node_id.rs"]
 mod node_id;
+#[path = "package.rs"]
+mod package;
 #[path = "pipeline.rs"]
 mod pipeline;
 #[path = "registration_check.rs"]
@@ -76,6 +78,10 @@ pub use face_view::{
     read_pruning_manifest,
 };
 pub use graft_view::{DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, declared_grafts};
+/// The package name Cargo reports for a package root, which is the identity
+/// namespace of every face that package compiles.
+/// Cargo 为某个包根报告的包名，也就是该包编译的每个面的身份命名空间。
+pub use package::package_name;
 /// The module path a registration source declares, for authoring surfaces.
 /// 注册面源码声明的模块路径，供创作界面使用。
 pub use static_plan::source_module_path;

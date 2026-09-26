@@ -750,11 +750,13 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
 MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
-`nichlink.read`, and `nichlink.status`. Static call-graph answers are labelled
+`nichlink.read`, `nichlink.status`, and `nichlink.registry` — the last reports the
+registration tree the build derives, so an agent can read the registry instead of
+reconstructing it from macro names. Static call-graph answers are labelled
 heuristic; dynamic calls and runtime values are authoritative only when a host
-records a real `CallTrace`. Studio currently renders a built-in sample trace in
-its data panel and has no trace-ingest path yet, so it does not show observed
-runtime values.
+records a real `CallTrace`, which Studio loads from the artifact that host writes
+(`docs/design-trace-ingest.md`); a session with no artifact says `TRACE: none`
+rather than showing values it does not have.
 
 ## When NichLink is worth it
 

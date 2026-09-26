@@ -1,23 +1,22 @@
-//! Tool catalog and the five read-only query implementations.
-//! 工具目录与五个只读查询实现。
+//! Tool catalog and the read-only query implementations.
+//! 工具目录与只读查询实现。
 //!
-//! TODO(registry-tool): every tool here reads Rust source text. A registry or
-//! contract tool would need a different resource: load the host's generated
-//! face snapshots (or a serialized `Registry`), run
-//! `Registry::register_snapshot_batch`, and report `RegistrationSnapshot`
-//! fields such as contract, admission, and registration rule. That requires
-//! the authoring/build context, not a lexical source scan, and is deferred.
-//! TODO(registry-tool)：这里的每个工具都只读取 Rust 源码文本。若要提供注册树或
-//! 合同工具，需要另一种资源：载入宿主生成的 face 快照（或序列化的 `Registry`），
-//! 调用 `Registry::register_snapshot_batch`，再报告 `RegistrationSnapshot` 的
-//! contract、admission、registration rule 等字段。这需要 authoring/build 上下文，
-//! 不是词法源码扫描，因此推迟实现。
+//! Five tools read Rust source text; `nichlink.registry` reads the same tree the
+//! build does (`nichlink_build_method::face_views`) and reports the faces it
+//! derives. What none of them reports yet is contract, admission, or
+//! registration-rule data: that lives in the built `RegistrationSnapshot`s, not
+//! in the source, and reaching it needs the build output rather than a scan.
+//! 五个工具读取 Rust 源码文本；`nichlink.registry` 读取构建所读的同一棵树
+//! （`nichlink_build_method::face_views`）并报告它推导出的面。它们都还没有报告的是 contract、
+//! admission 与 registration rule 数据：那些住在已构建的 `RegistrationSnapshot` 里而不是源码
+//! 里，要拿到它需要构建产物而不是扫描。
 
 use serde_json::{Value, json};
 use std::path::Path;
 
 use crate::index::{display_list, load_one, load_sources, required_path, resolve_root};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
+use crate::registry::registry;
 
 pub(crate) fn tools() -> Vec<Value> {
     vec![
@@ -44,6 +43,14 @@ pub(crate) fn tools() -> Vec<Value> {
         tool(
             "nichlink.status",
             "Report the source root and indexed Rust file/function counts.",
+            json!({"type":"object","properties":{"root":{"type":"string"}}}),
+        ),
+        tool(
+            "nichlink.registry",
+            "Report the registration faces this package declares, as the build derives them: \
+             logical path, kind, source, and the NodeId the host compiled. Contract, admission, \
+             and registration-rule data need the built snapshots and are not included. `root` is \
+             a package root; omitting it uses NICH_LINK_PACKAGE_ROOT.",
             json!({"type":"object","properties":{"root":{"type":"string"}}}),
         ),
     ]
@@ -74,6 +81,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.callgraph" => callgraph(&root, arguments),
         "nichlink.read" => read_source(&root, arguments),
         "nichlink.status" => status(&root),
+        "nichlink.registry" => registry(&root),
         _ => Err(format!("unknown tool `{name}`")),
     };
     match result {

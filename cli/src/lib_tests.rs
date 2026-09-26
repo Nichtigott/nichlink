@@ -9,7 +9,7 @@
 //! `run`/`run_to` 入口与私有辅助函数，因此钉住分发行为，又不让分发页本身超出
 //! 文件预算。
 
-use super::{package_name, run, run_to, split_build_args};
+use super::{run, run_to, split_build_args};
 use nichlink::identity::NodeId;
 use nichlink::plugin::graft_document::GraftPlanDocument;
 use serde_json::Value;
@@ -738,57 +738,6 @@ fn snippets_injects_the_editor_file() {
         ])
         .is_err()
     );
-    std::fs::remove_dir_all(root).expect("cleanup");
-}
-
-/// A package name the old hand-rolled scan got wrong: a single-quoted name
-/// with a later `[[bin]]` name, and a `name` key with no space around `=`.
-/// 旧的手写扫描会读错的包名：单引号名字后面还跟着 `[[bin]]` 的 name；以及 `name`
-/// 键等号两侧没有空格。
-#[test]
-fn package_name_comes_from_cargo_not_from_a_manifest_scan() {
-    let root = temporary_root("package-name");
-    let fixtures = [
-        (
-            "single-quoted",
-            "[package]\nname = 'single-quoted'\nversion = \"0.1.0\"\n\n[[bin]]\nname = \"other-bin\"\npath = \"src/main.rs\"\n",
-            "single-quoted",
-        ),
-        (
-            "tight",
-            "[package]\nname=\"tight\"\nversion = \"0.1.0\"\n\n[lib]\nname = \"different_lib\"\npath = \"src/lib.rs\"\n",
-            "tight",
-        ),
-    ];
-    for (directory, manifest, expected) in fixtures {
-        let manifest_dir = root.join(directory);
-        std::fs::create_dir_all(manifest_dir.join("src")).expect("source directory");
-        std::fs::write(manifest_dir.join("Cargo.toml"), manifest).expect("manifest");
-        std::fs::write(manifest_dir.join("src/main.rs"), "").expect("binary source");
-        std::fs::write(manifest_dir.join("src/lib.rs"), "").expect("library source");
-        assert_eq!(
-            package_name(&manifest_dir).expect("cargo answers"),
-            expected,
-            "{directory}"
-        );
-    }
-    std::fs::remove_dir_all(root).expect("cleanup");
-}
-
-/// A virtual manifest names no package, so the identity cannot be guessed:
-/// the command has to say so instead of falling back to the directory name.
-/// 虚拟 manifest 不命名任何包，身份因此无从猜测：命令必须说出来，而不是回退到
-/// 目录名。
-#[test]
-fn a_manifest_without_a_package_is_an_error() {
-    let root = temporary_root("virtual-manifest");
-    std::fs::write(
-        root.join("Cargo.toml"),
-        "[workspace]\nmembers = []\nresolver = \"2\"\n",
-    )
-    .expect("manifest");
-    let error = package_name(&root).expect_err("a virtual manifest names no package");
-    assert!(error.contains("not a package"), "{error}");
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 

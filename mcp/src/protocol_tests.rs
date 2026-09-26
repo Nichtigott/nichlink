@@ -138,6 +138,43 @@ fn a_notification_with_another_version_is_still_silent() {
     assert!(replies.is_empty(), "{replies:?}");
 }
 
+/// The registry tool is listed and reachable, and it answers about *this*
+/// package: `cargo test` runs a unit-test binary with the package root as its
+/// working directory, which is where the bridge resolves its package from, so
+/// the namespace it reports has to be this crate's own `CARGO_PKG_NAME` — the
+/// same value the declaration macros bake into every identity. A tool missing
+/// from the catalog or from the dispatch table answers `unknown tool` here.
+/// 注册树工具被列出且可达，并且它作答的是**本**包：`cargo test` 以包根为工作目录运行单元测试
+/// 二进制，而桥正是从那里解析包的，因此它报告的命名空间必须是本 crate 自己的
+/// `CARGO_PKG_NAME`——也就是声明宏烤进每个身份的那个值。目录里缺失或分派表里缺失的工具会在这里
+/// 答 `unknown tool`。
+#[test]
+fn the_registry_tool_is_listed_and_answers_about_this_package() {
+    let listed = replies("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n");
+    let names = listed[0]["result"]["tools"]
+        .as_array()
+        .expect("a tool array")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"nichlink.registry"), "{names:?}");
+
+    let called = replies(
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
+         \"params\":{\"name\":\"nichlink.registry\",\"arguments\":{}}}\n",
+    );
+    assert_eq!(called.len(), 1, "{called:?}");
+    assert_eq!(called[0]["result"]["isError"], false, "{called:?}");
+    let text = called[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text reply");
+    assert!(
+        text.starts_with(&format!("namespace {}\n", env!("CARGO_PKG_NAME"))),
+        "{text}"
+    );
+    assert!(text.contains("faces "), "{text}");
+}
+
 /// A member that is not an object is answered with `-32600` and a null id,
 /// in a single request and inside a batch alike; it used to be dropped
 /// silently, leaving the client waiting.
