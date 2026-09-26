@@ -164,7 +164,15 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
 fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
     let text = std::fs::read_to_string(file).ok()?;
     let line = text.lines().position(|line| line.contains("! {"))?;
-    Some(format!("{}:{}", relative.display(), line + 1))
+    // Forward slashes, like every other tree-relative path this bridge reports
+    // (`FaceView.source`, the diff headers): a caller comparing the anchor with a
+    // path out of `nichlink.registry` must not have to know which platform produced
+    // it. The absolute path in the line above stays native, like `status`'s root.
+    // 正斜杠，与本桥报告的每一条树内相对路径一致（`FaceView.source`、diff 头）：把锚点与
+    // `nichlink.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
+    // 路径保持本机写法，与 `status` 的 root 一致。
+    let relative = relative.to_string_lossy().replace('\\', "/");
+    Some(format!("{relative}:{}", line + 1))
 }
 
 struct Outcome {
