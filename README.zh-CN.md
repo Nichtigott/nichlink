@@ -54,8 +54,8 @@ NichLink 目前处于早期阶段：核心协议已可用于真实工程，静�
 `StaticPlan`；之后交给正常的 rustc、LLVM 和链接器做最终代码/符号裁剪。
 前者减少注册元数据和编译范围，后者负责最终机器码体积，它们不是一件事。
 - **按需调试。** `off`、`errors-only`、`full` 三档追踪让发布路径默认不收集
-证据。Studio 消费这套注册树、调用链和数据流模型；MCP 桥目前只提供只读的
-Rust 源码查询。
+证据。Studio 消费这套注册树、调用链和数据流模型；MCP 桥提供这些查询，并在落盘
+写入之前先给出预览。
 
 ## 开始使用
 
@@ -658,7 +658,8 @@ snippet。`nichlink grafts` 列出 `.nichlink/external-grafts/` 记录以及宿�
 它们的槽位，`nichlink explain <node|path>` 报告单个节点的身份、构建作用域、剪枝状态与
 命名它的切口（`explain --overlay` 渲染构建的静态覆盖投影而不是活的树；真正的有效树是
 宿主侧的 `Registry::dump_effective`）。`nichlink studio` 负责交互式编辑和调试，
-`nichlink mcp` 是给 AI 客户端使用的只读 JSON-RPC/MCP 桥。`cargo
+`nichlink mcp` 是给 AI 客户端使用的 JSON-RPC/MCP 桥：源码与注册树查询，加上
+除非给出 `apply: true` 否则先预览的创作写入。`cargo
 check` 仍是构建校验命令：
 
 ```sh
@@ -690,7 +691,7 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 | `inventory` / `linkme` | 分布式收集静态条目 | 树语义、合同、溯源、原子嫁接 |
 | Bevy 风格插件 | 显式组合一个应用 | 通用源码路径和中间层合同校验 |
 | CodeGraph / CodeQL | 符号和调用证据 | 运行时注册与替换决策 |
-| NichLink | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与只读 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
+| NichLink | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与带预览写入的 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
 
 ## 边界
 
@@ -763,7 +764,7 @@ debug_method/ nichlink-debug-method：可选 CallTrace 适配、MIR 证据、数
 cli/          nichlink-cli：统一入口（nichlink new/check/build/snippets/
               explain/grafts/studio/mcp、cargo-nichlink）
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
-mcp/          面向 AI 的只读 MCP 桥
+mcp/          面向 AI 的 MCP 桥：查询与带预览的写入
 plugin-host/  可选 Wasm/进程插件和原子部署
 examples/     可运行示例：control-button 宿主与其项目外 graft 实现
 conventions/  nichlink-conventions：遍历本检出的门禁（内核纯净性、模块挂载、

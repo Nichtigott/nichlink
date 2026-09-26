@@ -1,5 +1,5 @@
-//! Source index and path safety for the read-only MCP bridge.
-//! 只读 MCP 桥的源码索引与路径安全。
+//! Source index and path safety for the MCP bridge's read side.
+//! MCP 桥读取一侧的源码索引与路径安全。
 
 use serde_json::Value;
 use std::fs;

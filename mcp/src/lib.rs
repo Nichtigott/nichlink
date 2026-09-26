@@ -1,5 +1,6 @@
-//! Read-only MCP stdio bridge for compact NichLink source and registry queries.
-//! 面向紧凑 NichLink 源码与注册树查询的只读 MCP stdio 桥。
+//! MCP stdio bridge for compact NichLink source and registry queries, plus
+//! previewed authoring writes.
+//! 面向紧凑 NichLink 源码与注册树查询、以及先预览后落盘的创作写入的 MCP stdio 桥。
 //!
 //! Five tools index Rust source text; `nichlink.registry` is the sixth and the
 //! first that does not: it reports the registration tree the *build* derives,

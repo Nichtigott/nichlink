@@ -65,7 +65,8 @@ COMMANDS:
               selector, target path, graft, full flag, and whether the host
               entry declares that slot (read-only)
     studio    Launch the Studio TUI for the current project, or for `path`
-    mcp       Run the read-only MCP stdio bridge
+    mcp       Run the MCP stdio bridge: source and registry queries, plus
+              authoring writes that preview unless `apply: true`
 
 OPTIONS:
     --lib             Create a library project instead of a binary

@@ -1,5 +1,5 @@
-//! Tool catalog and the read-only query implementations.
-//! 工具目录与只读查询实现。
+//! Tool catalog, the query implementations, and the write path's dispatch.
+//! 工具目录、查询实现与写入路径的分派。
 //!
 //! Five tools read Rust source text; `nichlink.registry` reads the same tree the
 //! build does (`nichlink_build_method::face_views`) and reports the faces it

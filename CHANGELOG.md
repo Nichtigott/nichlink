@@ -40,6 +40,8 @@ to its designed waiting state.
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-09-26
+
 ### Added
 
 - The MCP bridge's write path, `nichlink.apply`: an agent can create or rewrite a
@@ -241,6 +243,12 @@ to its designed waiting state.
   post-fix audit's items 21/22/26/27/28 and its `build.rs` scope finding are fixed
   and now annotated as such, and the roadmap no longer calls the first publish the
   only remaining 1.0 item.
+- The bridge's own descriptions still called it read-only after the write path
+  landed: the `mcp` crate docs, four module headers, the manifest `description`,
+  `nichlink mcp` in the CLI's usage text, and four places in each of the two
+  READMEs. Each now says what the bridge does — source and registry queries plus
+  previewed authoring writes — so a `--help` line and a docs.rs page no longer
+  contradict `nichlink.apply`.
 
 ## [0.1.1] — 2026-09-26
 
@@ -890,6 +898,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 ### [Unreleased] 未发布
 
+### [0.1.3] 2026-09-26
+
 新增：
 
 - MCP 桥的写入路径 `nichlink.apply`：代理可以经**与 Studio 相同的 authoring 执行器**创建或重写
@@ -1011,6 +1021,10 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - 重新实测并更正了若干文档主张：设计文档说 Studio 示例不记录 locals（它记录一个，由该文件自己的
   测试钉住）；post-fix 审核的第 21/22/26/27/28 条与它的 `build.rs` 作用域发现都已修完，并就地
   标注；路线图不再把首次发布称作 1.0 唯一剩余项。
+- 写入路径落地之后，桥自己的描述仍称自己是"只读"：`mcp` 的 crate 文档、四处模块头、清单
+  `description`、CLI 用法文本里的 `nichlink mcp`，以及两份 README 里各四处。现在每一处
+  都写出桥真正做的事——源码与注册树查询，加上先预览后落盘的创作写入——因此 `--help` 的一行与
+  docs.rs 的一页不再和 `nichlink.apply` 自相矛盾。
 
 ### [0.1.1] 2026-09-26
 

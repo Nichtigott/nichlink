@@ -1,5 +1,5 @@
-//! JSON-RPC framing and method dispatch for the read-only MCP bridge.
-//! 只读 MCP 桥的 JSON-RPC 分帧与方法分派。
+//! JSON-RPC framing and method dispatch for the MCP bridge.
+//! MCP 桥的 JSON-RPC 分帧与方法分派。
 
 use serde_json::{Value, json};
 use std::env;
@@ -59,8 +59,8 @@ fn package_root() -> PathBuf {
     )
 }
 
-/// Run the read-only MCP stdio bridge over the process's own streams.
-/// 在进程自己的流上运行只读 MCP stdio 桥。
+/// Run the MCP stdio bridge over the process's own streams.
+/// 在进程自己的流上运行 MCP stdio 桥。
 ///
 /// A transport failure is reported rather than swallowed. This process exists to
 /// answer on stdout, so an unreadable stdin or an unwritable stdout means it can

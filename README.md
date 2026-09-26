@@ -67,7 +67,7 @@ explicitly.
 - **Debug only when requested.** `off`, `errors-only`, and `full` tracing keep
   the release path free of evidence collection unless an application opts in.
   Studio consumes that registry and call/data-flow model; the MCP bridge
-  currently serves read-only Rust source queries.
+  serves those queries and previews authoring writes before it makes one.
 
 ## Get started
 
@@ -741,7 +741,8 @@ node's identity, build scope, pruning state, and naming cuts (`explain
 --overlay` renders the build's static overlay projection, not a live tree;
 the live effective tree is the host-side `Registry::dump_effective`).
 `nichlink studio` is the interactive authoring/debug surface, and `nichlink
-mcp` is the read-only JSON-RPC/MCP bridge for AI clients. `cargo check`
+mcp` is the JSON-RPC/MCP bridge for AI clients: source and registry queries, plus
+authoring writes that preview unless `apply: true`. `cargo check`
 remains the build validation command:
 
 ```sh
@@ -777,7 +778,7 @@ choice.
 | `inventory` / `linkme` | Distributed collection of static items | Tree semantics, contracts, provenance, atomic grafts |
 | Bevy-style plugins | Explicit composition of an application | Generic source paths and middle-layer contract checks |
 | CodeGraph / CodeQL | Symbol and call evidence | Runtime registration and replacement decisions |
-| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio views, and read-only MCP source queries | Rust's own rules for dynamic dispatch and optimised values |
+| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio views, and MCP source queries with previewed writes | Rust's own rules for dynamic dispatch and optimised values |
 
 ## Boundaries
 
@@ -859,7 +860,7 @@ debug_method/ nichlink-debug-method: optional CallTrace adapters, MIR evidence,
 cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/
               explain/grafts/studio/mcp, cargo-nichlink)
 studio/       Ratatui authoring, search, watch and source navigation
-mcp/          read-only MCP bridge for AI-assisted queries
+mcp/          MCP bridge for AI-assisted queries and previewed writes
 plugin-host/  optional Wasm/process adapters and atomic deployment
 examples/     runnable hosts: control-button plus its out-of-project graft
 conventions/  nichlink-conventions: gates that walk this checkout (kernel
