@@ -1,5 +1,5 @@
-//! What the shipped Studio trace can confirm, observed instead of argued.
-//! 出厂 Studio 追踪实际能确认什么：观察，而不是论证。
+//! What a Studio session's trace can confirm, observed instead of argued.
+//! Studio 会话的追踪实际能确认什么：观察，而不是论证。
 
 use super::*;
 
@@ -70,35 +70,31 @@ fn load_fixture() -> Option<App> {
 /// `U5` in `docs/audit-production-readiness.md` recorded an argument — the
 /// shipped sample's nodes cannot come from the same provenance as a real
 /// project's, so `CallEvidence::Live` was said to be unreachable — and never an
-/// observation. This is the observation, and it is not the trivial "no trace, no
-/// live edge": the sample *is* installed, and it still confirms nothing.
+/// observation. The sample is gone now, and the same question is asked of the
+/// state every session starts in: no artifact, no trace, no confirmation. The
+/// positive half — that `Live` *is* reachable once a trace over the loaded faces
+/// is installed — is the next test, so this one cannot pass by `Live` being
+/// impossible.
 /// `docs/audit-production-readiness.md` 里的 `U5` 记下的是一条论证——出厂样本的节点不可能
-/// 与真实工程的节点同源，因此称 `CallEvidence::Live` 不可达——而从来不是一次观察。这里就是
-/// 那次观察，而且它不是"没有追踪就没有实测边"这种废话：样本**确实**装上了，却仍然什么都没确认。
+/// 与真实工程的节点同源，因此称 `CallEvidence::Live` 不可达——而从来不是一次观察。样本现在
+/// 已删除，同一个问题改为问每个会话启动时的状态：没有 artifact、没有追踪、没有确认。正面的一半
+/// ——一旦装上针对已加载注册面的追踪，`Live` **确实**可达——是下一条测试，因此本条不会因
+/// `Live` 根本不可能而通过。
 #[test]
-fn the_shipped_trace_confirms_nothing_in_a_real_project() {
+fn a_session_without_an_artifact_installs_no_trace_and_confirms_nothing() {
     let Some(app) = load_fixture() else {
         return;
     };
 
-    // The premise, asserted rather than assumed: a trace is installed and it does
-    // carry an edge.
-    // 前提是被断言的而不是被假设的：确实装了一条追踪，而且它确实带一条边。
-    let sample_edges = app.runtime_trace.call_edges();
+    // The premise, asserted rather than assumed: the session holds no trace
+    // because it found no artifact, not because a trace was hidden.
+    // 前提是被断言的而不是被假设的：会话不持有追踪，是因为它没找到 artifact，而不是因为追踪被藏起来。
+    assert_eq!(app.trace_status, TraceStatus::Absent, "{}", app.event);
     assert!(
-        !sample_edges.is_empty(),
-        "the sample must be installed for this observation to mean anything"
+        app.runtime_trace.call_edges().is_empty(),
+        "a session with no artifact must not carry call edges: {:?}",
+        app.runtime_trace.call_edges()
     );
-    // And that trace belongs to no node of the loaded project, which is *why* it
-    // cannot confirm one: identity is the whole test.
-    // 而这条追踪不属于已加载工程的任何节点，这正是它无法确认任何边的原因：身份就是全部判据。
-    for edge in &sample_edges {
-        assert!(
-            app.registry.find(edge.caller.node).is_none(),
-            "the sample's caller {} is a node of this project after all",
-            edge.caller.function
-        );
-    }
 
     let drawn = drawn_edges(&app);
     assert!(
@@ -108,7 +104,7 @@ fn the_shipped_trace_confirms_nothing_in_a_real_project() {
     assert_eq!(
         confirmed_edges(&app),
         Vec::<(String, String)>::new(),
-        "the shipped sample confirmed an edge of a project it knows nothing about"
+        "a session with no trace confirmed an edge anyway"
     );
 }
 

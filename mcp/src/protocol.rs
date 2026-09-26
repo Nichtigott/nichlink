@@ -18,6 +18,19 @@ pub(crate) const DEFAULT_LIMIT: usize = 40;
 /// `nichlink.read` 返回行数的硬上限。
 pub(crate) const MAX_READ_LINES: usize = 240;
 
+/// Largest request line the bridge accepts, in bytes.
+/// 本桥接受的最大请求行字节数。
+///
+/// The bridge is long-lived and reads from a client it does not control, so
+/// `BufRead::lines()` was an allocation a hostile or buggy client could grow
+/// without limit. One MiB is far above any real request — the largest thing a
+/// reader sends is one short tool call — and far below the size that would
+/// trouble the machine.
+/// 本桥长期存活，且读取的是它无法控制的客户端，因此 `BufRead::lines()` 等于把一个可无限增长
+/// 的分配交给敌对或有 bug 的客户端。1 MiB 远高于任何真实请求——读取方发的最大东西是一次简短的
+/// 工具调用——又远低于会让机器难受的量。
+pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+
 /// The project this bridge reads, resolved by `lexicon`'s rule.
 /// 本桥读取的项目，按 `lexicon` 的规则解析。
 ///
@@ -71,8 +84,26 @@ pub fn run() -> Result<(), String> {
 /// ——在测试里无法在真实终端上造出来。
 pub fn run_with(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), String> {
     let root = package_root();
-    for line in input.lines() {
-        let line = line.map_err(|error| format!("cannot read stdin: {error}"))?;
+    loop {
+        let line = match read_frame(input)? {
+            Frame::Eof => break,
+            // An over-long line is refused *and* drained: the client is still
+            // talking, and a refusal that left the rest of its line in the pipe
+            // would corrupt the next frame.
+            // 过长的行既被拒绝也被排空：客户端还在说话，而一次把该行剩余部分留在管道里的
+            // 拒绝会污染下一帧。
+            Frame::TooLong => {
+                let response = error_response(
+                    Value::Null,
+                    -32600,
+                    format!("invalid request: line exceeds {MAX_REQUEST_BYTES} bytes"),
+                );
+                write_response(output, &response)?;
+                continue;
+            }
+            Frame::Line(bytes) => String::from_utf8(bytes)
+                .map_err(|_| "cannot read stdin: request line is not valid UTF-8".to_owned())?,
+        };
         if line.trim().is_empty() {
             continue;
         }
@@ -107,28 +138,129 @@ pub fn run_with(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), S
             )],
         };
         for response in responses {
-            serde_json::to_writer(&mut *output, &response)
-                .map_err(|error| format!("cannot write stdout: {error}"))?;
-            output
-                .write_all(b"\n")
-                .and_then(|()| output.flush())
-                .map_err(|error| format!("cannot write stdout: {error}"))?;
+            write_response(output, &response)?;
         }
     }
     Ok(())
 }
 
+/// One framed request line.
+/// 一帧请求行。
+enum Frame {
+    /// One line, without its terminator.
+    /// 一行，去掉了终止符。
+    Line(Vec<u8>),
+    /// A line longer than [`MAX_REQUEST_BYTES`]; its remainder was drained.
+    /// 长于 [`MAX_REQUEST_BYTES`] 的一行；其余部分已被排空。
+    TooLong,
+    /// End of input.
+    /// 输入结束。
+    Eof,
+}
+
+/// Read one request line without allocating past the cap.
+/// 读取一行请求，且分配不超过上限。
+fn read_frame(input: &mut dyn BufRead) -> Result<Frame, String> {
+    let mut buffer = Vec::new();
+    // The `+ 1` is what distinguishes "exactly at the cap, newline next" from
+    // "over the cap": reaching the cap without a terminator is the refusal.
+    // `+ 1` 用来区分"正好到上限、下一个字节就是换行"与"超过上限"：到上限却没有终止符就是要
+    // 拒绝的那一种。
+    // `Read::take` is called through UFCS because method syntax tries to resolve
+    // it on the trait object itself, which is unsized; the receiver here is the
+    // *reference*, which is sized, and it borrows the reader for one frame only.
+    // 这里用 UFCS 调用 `Read::take`，因为方法语法会试图在 trait 对象自身上解析它，而那是
+    // unsized 的；这里的接收者是**引用**，它是 sized 的，并且只借用读取方一帧的时间。
+    let read = std::io::Read::take(&mut *input, (MAX_REQUEST_BYTES + 1) as u64)
+        .read_until(b'\n', &mut buffer)
+        .map_err(|error| format!("cannot read stdin: {error}"))?;
+    if read == 0 {
+        return Ok(Frame::Eof);
+    }
+    if buffer.last() == Some(&b'\n') {
+        buffer.pop();
+        // `lines()` stripped a `\r\n` terminator too, and a client on Windows may
+        // still send one.
+        // `lines()` 也会剥掉 `\r\n` 终止符，而 Windows 上的客户端仍可能发它。
+        if buffer.last() == Some(&b'\r') {
+            buffer.pop();
+        }
+        return Ok(Frame::Line(buffer));
+    }
+    if read <= MAX_REQUEST_BYTES {
+        // End of input ended a short final line that had no terminator.
+        // 输入结束终结了一条没有终止符的短的最后一行。
+        return Ok(Frame::Line(buffer));
+    }
+    // Drain the rest of the over-long line, stopping *at* its terminator. The
+    // drain is bounded twice over: each pass reads at most one page, and
+    // `read_until` stops at the newline instead of taking the next line with it —
+    // a plain `read` into a scratch buffer did exactly that, because a slice or a
+    // pipe hands over as much as fits, and the next frame vanished.
+    // 排空过长行的剩余部分，并**停在**它的终止符处。排空受两重限制：每次最多读一页，而
+    // `read_until` 停在该换行处、不会把下一行一起带走——直接 `read` 进暂存缓冲正是这么做的，
+    // 因为切片或管道会给到能装下的全部内容，下一帧就此消失。
+    let mut scratch = Vec::new();
+    loop {
+        scratch.clear();
+        let read = std::io::Read::take(&mut *input, 4096)
+            .read_until(b'\n', &mut scratch)
+            .map_err(|error| format!("cannot read stdin: {error}"))?;
+        if read == 0 || scratch.last() == Some(&b'\n') {
+            break;
+        }
+    }
+    Ok(Frame::TooLong)
+}
+
+/// Write one response object and its newline, flushing so a client sees it now.
+/// 写出一个响应对象与它的换行，并 flush，使客户端立刻看到它。
+fn write_response(output: &mut dyn Write, response: &Value) -> Result<(), String> {
+    serde_json::to_writer(&mut *output, response)
+        .map_err(|error| format!("cannot write stdout: {error}"))?;
+    output
+        .write_all(b"\n")
+        .and_then(|()| output.flush())
+        .map_err(|error| format!("cannot write stdout: {error}"))
+}
+
 fn dispatch(root: &Path, request: &Value) -> Value {
+    // A member that is not a JSON object is neither a request nor a notification:
+    // JSON-RPC answers it with `-32600`, and with a null id because there is
+    // nothing to correlate a reply with. Dropping it silently — which `get("id")`
+    // on a string or a number did — left a client waiting forever.
+    // 不是 JSON 对象的成员既不是请求也不是通知：JSON-RPC 以 `-32600` 作答，id 为 null，因为
+    // 没有东西可与回复关联。静默丢弃它——对字符串或数字取 `get("id")` 就是如此——会让客户端
+    // 永远等下去。
+    let Some(object) = request.as_object() else {
+        return error_response(
+            Value::Null,
+            -32600,
+            "invalid request: not a JSON object".to_owned(),
+        );
+    };
     // JSON-RPC 2.0: a request without an `id` member is a notification and MUST
     // NOT be answered. An explicit `null` id is still a request, which is why
     // the check is for the member's absence rather than for a null value.
     // JSON-RPC 2.0：没有 `id` 成员的请求是通知，**不得**作答。显式的 `null` id 仍是
     // 请求，因此这里判断的是成员缺失，而不是值为 null。
-    let Some(id) = request.get("id").cloned() else {
+    let Some(id) = object.get("id").cloned() else {
         return Value::Null;
     };
-    let method = request.get("method").and_then(Value::as_str).unwrap_or("");
-    let params = request.get("params").unwrap_or(&Value::Null);
+    // The version member is part of the envelope, not of any method, so it is
+    // checked once here rather than in every arm below. A notification with the
+    // wrong version is still silent: JSON-RPC forbids replying to it at all.
+    // 版本成员属于信封而不属于任何方法，因此在这里检查一次，而不是在下面每个分支里。版本错误的
+    // 通知仍然保持沉默：JSON-RPC 完全禁止对它作答。
+    if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
+        return error_response(
+            id,
+            -32600,
+            "invalid request: `jsonrpc` must be \"2.0\"".to_owned(),
+        );
+    }
+    let method = object.get("method").and_then(Value::as_str).unwrap_or("");
+    let params = object.get("params").unwrap_or(&Value::Null);
     match method {
         "initialize" => success(
             id,
@@ -158,78 +290,5 @@ pub(crate) fn error_response(id: Value, code: i64, message: String) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A writer that fails on every write, standing in for a closed pipe.
-    /// 每次写入都失败的写端，用来代替已关闭的管道。
-    struct Broken;
-
-    impl Write for Broken {
-        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
-        }
-    }
-
-    /// A request whose answer cannot be delivered is an error, not a quiet
-    /// shutdown: the caller is waiting for a reply.
-    /// 应答送不出去的请求是错误，而不是安静地结束：调用方在等回复。
-    #[test]
-    fn an_unwritable_response_is_reported() {
-        let mut input = &b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n"[..];
-        let error =
-            run_with(&mut input, &mut Broken).expect_err("a write failure must be an error");
-        assert!(error.contains("cannot write stdout"), "{error}");
-    }
-
-    /// A readable end of input ends the session successfully.
-    /// 输入正常结束会让本次会话成功收尾。
-    #[test]
-    fn a_closed_input_ends_the_session_cleanly() {
-        let mut input = &b""[..];
-        let mut output = Vec::new();
-        run_with(&mut input, &mut output).expect("an empty stdin is a clean end");
-        assert!(output.is_empty());
-    }
-
-    /// A notification — a request with no `id` member — is never answered:
-    /// JSON-RPC forbids a response to it, and the client that sent it is not
-    /// waiting for one.
-    /// 通知——没有 `id` 成员的请求——绝不被作答：JSON-RPC 禁止对它作答，发送它的客户端
-    /// 也不在等回复。
-    #[test]
-    fn a_notification_gets_no_reply() {
-        let mut input = &b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n{\"jsonrpc\":\"2.0\",\"method\":\"ping\"}\n"[..];
-        let mut output = Vec::new();
-        run_with(&mut input, &mut output).expect("a notification is not a failure");
-        assert!(
-            output.is_empty(),
-            "no reply may be written for a notification: {}",
-            String::from_utf8_lossy(&output)
-        );
-    }
-
-    /// A batch is answered element by element: each request in the array gets
-    /// its own response object, and the array is never collapsed into one error.
-    /// 批处理逐元素作答：数组里的每个请求得到自己的响应对象，数组绝不会被折叠成一个错误。
-    #[test]
-    fn a_batch_gets_one_reply_per_element() {
-        let mut input = &b"[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}]\n"[..];
-        let mut output = Vec::new();
-        run_with(&mut input, &mut output).expect("a batch is not a failure");
-        let text = String::from_utf8(output).expect("utf-8 replies");
-        let replies = text
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).expect("one reply per line"))
-            .collect::<Vec<_>>();
-        assert_eq!(replies.len(), 2, "one reply per element: {text}");
-        assert_eq!(replies[0]["id"], 1, "{text}");
-        assert!(replies[0]["result"].is_object(), "{text}");
-        assert_eq!(replies[1]["id"], 2, "{text}");
-        assert!(replies[1]["result"]["tools"].is_array(), "{text}");
-    }
-}
+#[path = "protocol_tests.rs"]
+mod protocol_tests;

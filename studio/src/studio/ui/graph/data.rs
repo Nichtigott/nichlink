@@ -1,17 +1,14 @@
 //! Live-value data-flow panel for the call-graph overlay.
 //! 调用图浮层的实时值数据流面板。
 //!
-//! TODO(trace-ingest): this panel reads `App::runtime_trace`, which
-//! `App::new` fills with the built-in `sample_live_trace()`. There is no code
-//! that loads a recorded `CallTrace` from a host run (a trace artifact file or
-//! a `NICH_LINK_TRACE`-style environment variable), so the values shown here
-//! are illustrative, not observed. Wire that ingest path and drop the
-//! "built-in sample" label before claiming live values.
-//! TODO(trace-ingest)：本面板读取 `App::runtime_trace`，而 `App::new` 用内置的
-//! `sample_live_trace()` 填充它。目前没有任何代码从宿主运行记录中载入真实
-//! `CallTrace`（trace artifact 文件或 `NICH_LINK_TRACE` 风格的环境变量），因此
-//! 这里显示的值是示例而非实测。接上该 ingest 路径后才能去掉 "built-in sample"
-//! 标记并宣称实时值。
+//! The rows come from `App::runtime_trace`, and the title states what supplied it:
+//! `App::trace_data_note` is empty only when a trace artifact was loaded, reads
+//! `no trace attached` when none was found, and names a short form of the reason
+//! when one was refused. A refused artifact installs no values, so the panel
+//! draws its empty state under a title that says why instead of staying silent.
+//! 各行来自 `App::runtime_trace`，标题说明它由什么提供：`App::trace_data_note` 只有在装入
+//! 了 trace artifact 时才为空，没找到时读作 `no trace attached`，被拒绝时给出原因的简短形式。
+//! 被拒绝的 artifact 不会装入任何数值，因此面板在说明缘由的标题下绘制空状态，而不是沉默。
 
 use super::*;
 
@@ -107,11 +104,15 @@ pub(super) fn draw_data_flow_panel(
     }
     let selected_index = (!rows.is_empty()).then_some(cursor.min(rows.len().saturating_sub(1)));
     let mut state = ListState::default().with_selected(selected_index);
-    // "built-in sample" is the honest label for the values below: see the
-    // module TODO. It stays until a real trace ingest path exists.
-    // "built-in sample" 是对下方数值的诚实标注：见模块级 TODO。在真实 trace
-    // ingest 路径出现之前保留。
-    let panel_title = format!("{title} · built-in sample · {}", item.function);
+    // The note names the trace's state, so a reader never has to guess whether
+    // the values below came from this project or from nothing at all.
+    // 说明文字点名追踪的状态，因此读者无需猜测下方数值来自本项目还是一无所有。
+    let note = app.trace_data_note();
+    let panel_title = if note.is_empty() {
+        format!("{title} · {}", item.function)
+    } else {
+        format!("{title} · {note} · {}", item.function)
+    };
     frame.render_stateful_widget(
         List::new(rows)
             .highlight_style(

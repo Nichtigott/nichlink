@@ -36,18 +36,16 @@ impl App {
             .map_or(registry.id(), |info| info.id);
         Self {
             registry,
-            // TODO(trace-ingest): `runtime_trace` is the built-in demo sample,
-            // not an observed run. Nothing loads a real `CallTrace` produced by
-            // a host (trace artifact file or `NICH_LINK_TRACE`-style variable)
-            // into Studio, so the LIVE legend and DATA panel are labelled as a
-            // sample. The missing ingest path is: host records a `CallTrace`
-            // and Studio reads it here before drawing data-flow values.
-            // TODO(trace-ingest)：`runtime_trace` 是内置演示样本，不是实测运行。
-            // 目前没有任何代码把宿主产生的真实 `CallTrace`（trace artifact 文件或
-            // `NICH_LINK_TRACE` 风格的环境变量）载入 Studio，因此 LIVE 图例与 DATA
-            // 面板都标注为样例。缺失的 ingest 路径是：宿主记录 `CallTrace`，Studio
-            // 在绘制数据流数值前在此处读入。
-            runtime_trace: sample_live_trace(),
+            // A session starts with no evidence. `load` looks for this project's
+            // trace artifact and replaces this with the rebuilt `CallTrace` only
+            // when the artifact passes every identity check; otherwise the trace
+            // stays disabled and the legend says so instead of claiming a
+            // recording that was never loaded.
+            // 会话以“没有证据”开始。`load` 查找本项目的 trace artifact，只有在它通过全部身份
+            // 检查时才把这里替换为重建出的 `CallTrace`；否则追踪保持关闭，图例如实说明，而不是
+            // 宣称一份从未装入的记录。
+            runtime_trace: CallTrace::disabled(),
+            trace_status: TraceStatus::Absent,
             mir_graph: None,
             selected,
             page: StudioPage::Inspect,
@@ -89,6 +87,7 @@ impl App {
                 format!("Registration startup failed:\n{error}"),
             ),
         };
+        app.install_trace();
         if let Ok(query) = std::env::var("NICH_LINK_INITIAL_QUERY") {
             app.overlay = Some(Overlay::Search(SearchState {
                 query,

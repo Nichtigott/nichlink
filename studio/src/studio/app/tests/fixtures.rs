@@ -1,16 +1,16 @@
 //! Live-trace fixtures for the prototype-fixture tests.
 //! 原型夹具测试使用的实时追踪夹具。
 //!
-//! The standalone Studio ships a demo trace (`sample_live_trace`) that belongs to
-//! no host project, so a test asserting about *live* evidence has to build a
-//! trace over the faces it loaded. Relying on the demo sample instead is what
-//! made two of these tests unreachable: the sample records no locals and exactly
-//! one unrelated call edge, so `graph_locals` always returned nothing and
-//! `call_evidence` could never answer `Live` for the fixture's call.
-//! 独立 Studio 自带一条不属于任何宿主项目的演示追踪（`sample_live_trace`），因此断言
-//! **实测**证据的测试必须为自己加载的注册面构造追踪。依赖演示样本正是其中两条测试不可
-//! 达的原因：样本不记录任何局部值，也只有一条无关的调用边，于是 `graph_locals` 永远返回
-//! 空，`call_evidence` 也永远无法对夹具的那次调用回答 `Live`。
+//! A test asserting about *live* evidence has to build a trace over the faces it
+//! loaded. Studio no longer ships a demo trace — the sample was removed when the
+//! artifact loader landed — so these tests install the trace they mean by hand.
+//! The alternative this replaced pinned a sample that recorded no locals for any
+//! host project: `graph_locals` always returned nothing and `call_evidence` could
+//! never answer `Live`.
+//! 断言**实测**证据的测试必须为自己加载的注册面构造追踪。Studio 不再自带演示追踪——artifact
+//! 加载方落地时示例已被删除——因此这些测试手工装入它们所指的那条追踪。它所取代的做法钉住的是一条
+//! 对任何宿主项目都不记录局部值的样本：`graph_locals` 永远返回空，`call_evidence` 也永远无法
+//! 回答 `Live`。
 
 use super::CallRef;
 use nichlink_debug_method::{CallTrace, LocalKind, SourceLocation};

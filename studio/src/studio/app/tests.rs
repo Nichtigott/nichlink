@@ -20,8 +20,8 @@ pub(super) use super::support::{
     resolve_project_from, select_project, with_authoring_context,
 };
 pub(super) use super::{
-    AddState, App, GraftDeclaration, Overlay, StudioPage, app_function_source_range, body_calls,
-    function_bodies, function_symbols,
+    AddState, App, GraftDeclaration, Overlay, StudioPage, TraceStatus, app_function_source_range,
+    body_calls, function_bodies, function_symbols,
 };
 // `SearchState` is named by the fixture-gated call-tree tests only, so it is
 // imported with them: the default build refuses an unused import.
@@ -81,3 +81,9 @@ mod navigation;
 mod project;
 #[path = "tests/source.rs"]
 mod source;
+// Trace ingest builds its own temp host project, so it carries no fixture gate:
+// the default `cargo test -p nichlink-studio` exercises the loader too.
+// trace ingest 自建临时宿主工程，因此不门控在夹具上：默认的
+// `cargo test -p nichlink-studio` 也会跑这套加载方测试。
+#[path = "tests/trace_ingest.rs"]
+mod trace_ingest;

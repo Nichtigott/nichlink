@@ -371,13 +371,24 @@ fn writing_and_reading_an_artifact_round_trips() {
     let path = trace_artifact_path(&root);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("artifact directory");
     let trace = recorded_trace();
-    write_trace_artifact(&trace, &path).expect("the artifact writes");
+    write_trace_artifact(&trace, &path, "host-crate").expect("the artifact writes");
 
     let (artifact, rebuilt) = read_trace_artifact(&path).expect("the artifact reads");
     assert_eq!(artifact.version, TRACE_ARTIFACT_VERSION);
     assert_eq!(artifact.frames.len(), trace.frames.len());
     assert_eq!(rebuilt.locals(), trace.locals());
     assert_eq!(rebuilt.data_edges(), trace.data_edges());
+    // The anchors come from the caller, not from the process: the namespace is the
+    // compile-time identity the host's faces were stamped with, and the root is
+    // derived from it. Reading either back out of the environment is what the
+    // reader must not do, and what the writer cannot.
+    // 锚点来自调用方而不是进程：命名空间是宿主的注册面被盖下的编译期身份，root 由它推出。
+    // 从环境里把它们读回来，正是读取方不该做、写入方也做不到的事。
+    assert_eq!(artifact.namespace, "host-crate");
+    assert_eq!(
+        artifact.root,
+        NodeId::from_namespaced_path("host-crate", "<root>", "root")
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

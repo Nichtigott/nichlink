@@ -34,6 +34,20 @@ pub struct ProcessLimits {
     /// the child declares, before the host allocates the buffer.
     /// 接受的最大响应负载字节数。以子进程声明的长度为准，在宿主分配缓冲区之前检查。
     pub max_output_bytes: usize,
+    /// Whether the child inherits this host's environment.
+    /// 子进程是否继承本宿主的环境。
+    ///
+    /// The default is `true`, which is what a host that has always run its plugin
+    /// this way expects. Setting it to `false` clears the environment instead, so
+    /// an untrusted plugin cannot read the host's tokens, credentials, or
+    /// configuration out of it; a host that needs to pass something specific adds
+    /// it with [`ProcessProgram::environment`], and the plugin executable itself
+    /// still starts because it is run by absolute path.
+    /// 默认是 `true`，也就是一直这样运行插件的宿主所期望的行为。设为 `false` 时会清空环境，
+    /// 使不受信任的插件无法从中读到宿主的令牌、凭据或配置；需要传特定变量的宿主用
+    /// [`ProcessProgram::environment`] 显式添加，而插件可执行文件本身仍能启动，因为它以绝对
+    /// 路径执行。
+    pub inherit_env: bool,
 }
 
 impl Default for ProcessLimits {
@@ -42,16 +56,19 @@ impl Default for ProcessLimits {
             timeout: Duration::from_secs(2),
             max_input_bytes: 1024 * 1024,
             max_output_bytes: 1024 * 1024,
+            inherit_env: true,
         }
     }
 }
 
-/// Executable and fixed arguments for an isolated plugin.
-/// 隔离插件使用的程序和固定参数。
+/// Executable, fixed arguments, and child environment for an isolated plugin.
+/// 隔离插件使用的程序、固定参数与子进程环境。
 #[derive(Clone, Debug)]
 pub struct ProcessProgram {
     executable: PathBuf,
     arguments: Vec<String>,
+    environment: Vec<(String, String)>,
+    current_dir: Option<PathBuf>,
 }
 
 impl ProcessProgram {
@@ -61,6 +78,8 @@ impl ProcessProgram {
         Self {
             executable: executable.into(),
             arguments: Vec::new(),
+            environment: Vec::new(),
+            current_dir: None,
         }
     }
 
@@ -68,6 +87,27 @@ impl ProcessProgram {
     /// 追加一个固定参数，它排在每个操作名之前。
     pub fn argument(mut self, argument: impl Into<String>) -> Self {
         self.arguments.push(argument.into());
+        self
+    }
+
+    /// Set one environment variable for the child.
+    /// 为子进程设置一个环境变量。
+    ///
+    /// This is the companion of [`ProcessLimits::inherit_env`]: with the
+    /// environment cleared, these are the only variables the child sees, so a
+    /// host passes what the plugin genuinely needs instead of handing over
+    /// everything it has.
+    /// 这是 [`ProcessLimits::inherit_env`] 的配套：清空环境后，子进程只看到这里设置的变量，
+    /// 因此宿主传的是插件真正需要的东西，而不是把自己拥有的一切都交出去。
+    pub fn environment(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.environment.push((key.into(), value.into()));
+        self
+    }
+
+    /// Run the child in `directory` instead of the host's working directory.
+    /// 让子进程在 `directory` 中运行，而不是宿主的工作目录。
+    pub fn current_dir(mut self, directory: impl Into<PathBuf>) -> Self {
+        self.current_dir = Some(directory.into());
         self
     }
 
@@ -167,6 +207,11 @@ fn stage_program(
         ProcessProgram {
             executable: path.to_path_buf(),
             arguments: program.arguments,
+            // Staging moves the executable, not how the child is run: the
+            // environment and working directory the host chose travel with it.
+            // 暂存搬的是可执行文件，而不是子进程的运行方式：宿主选定的环境与工作目录随它一起走。
+            environment: program.environment,
+            current_dir: program.current_dir,
         },
         path,
     ))
@@ -249,7 +294,7 @@ impl PluginInstance for ProcessInstance {
                 self.limits.max_input_bytes
             )));
         }
-        let mut child = spawn_staged(&self.program, operation)?;
+        let mut child = spawn_staged(&self.program, self.limits, operation)?;
 
         // One frame, built once: the 4-byte little-endian length prefix followed
         // by the payload. Moving it into the writer thread is also what lets the

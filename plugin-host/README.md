@@ -7,7 +7,13 @@ untrusted bytes to the registry. The default `wasm` feature provides fuel-metere
 Wasm execution bounded by linear memory, **table elements**, artifact bytes and
 the engine's own strict compile limits — a table is a separate eagerly
 instantiated array, so the memory ceiling alone does not bound it. Enable
-`process-tools` for timeout-controlled process adapters. `HotDeployment` stages a validated graft and publishes it
+`process-tools` for timeout-controlled process adapters, whose child environment
+and working directory the host chooses: `ProcessLimits::inherit_env = false`
+clears the environment, `ProcessProgram::environment` names what the child may
+see, and `ProcessProgram::current_dir` decides where it runs. The defaults still
+inherit, so an existing host is unchanged until it opts in, and filesystem and
+network access still need confinement outside this workspace.
+`HotDeployment` stages a validated graft and publishes it
 atomically, leaving the last healthy snapshot visible after a failure.
 
 ## Admission: from the host's lock to a loadable artifact

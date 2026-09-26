@@ -17,7 +17,7 @@ use std::{
 
 use crate::HostError;
 
-use super::ProcessProgram;
+use super::{ProcessLimits, ProcessProgram};
 
 /// How often the child's exit status is polled while it runs.
 /// 子进程运行期间轮询其退出状态的间隔。
@@ -43,18 +43,40 @@ const SPAWN_ATTEMPTS: usize = 10;
 /// 调用时在这里撞上了它，被 `stderr_larger_than_the_pipe_buffer_does_not_block` 报成
 /// `ExecutableFileBusy`。从多个线程派生插件的宿主会撞上同一种竞争，因此这里做有界重试，
 /// 之后仍作为 I/O 错误上报；其他错误一律不重试。
-pub(super) fn spawn_staged(program: &ProcessProgram, operation: &str) -> Result<Child, HostError> {
+///
+/// The child's environment and working directory are the host's choice, not the
+/// child's: `inherit_env: false` clears what the host would otherwise hand over,
+/// the program's own variables are then the only ones present, and a configured
+/// `current_dir` decides where it runs. None of that confines the filesystem or
+/// the network — that still has to come from outside this workspace.
+/// 子进程的环境与工作目录由宿主选择，而不是由子进程决定：`inherit_env: false` 清掉宿主本来
+/// 会交出去的东西，此后程序自己声明的变量是唯一存在的；配置了 `current_dir` 就由它决定在哪里
+/// 运行。这些都不约束文件系统或网络——那仍然必须来自本工作区之外。
+pub(super) fn spawn_staged(
+    program: &ProcessProgram,
+    limits: ProcessLimits,
+    operation: &str,
+) -> Result<Child, HostError> {
     let mut attempt = 0;
     loop {
         attempt += 1;
-        match Command::new(&program.executable)
+        let mut command = Command::new(&program.executable);
+        command
             .args(&program.arguments)
             .arg(operation)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
+            .stderr(Stdio::piped());
+        if !limits.inherit_env {
+            command.env_clear();
+        }
+        for (key, value) in &program.environment {
+            command.env(key, value);
+        }
+        if let Some(directory) = &program.current_dir {
+            command.current_dir(directory);
+        }
+        match command.spawn() {
             Ok(child) => return Ok(child),
             Err(error)
                 if attempt < SPAWN_ATTEMPTS

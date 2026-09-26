@@ -756,4 +756,83 @@ mod process_faults {
             start.elapsed()
         );
     }
+
+    /// The host chooses the child's environment and working directory, and the
+    /// default still inherits.
+    /// 宿主选择子进程的环境与工作目录，而默认仍然是继承。
+    ///
+    /// The child reports three bits in one three-byte frame: whether the variable
+    /// the host passed deliberately is present, whether `HOME` — the host's, not
+    /// the child's — survived, and whether it ran in the directory the host named.
+    /// `HOME` is the inheritance probe because it is the one that survives the
+    /// shell: a bare `/bin/sh` invents `PATH` (measured here: `/no-such-path`),
+    /// `PWD`, `SHLVL`, `_`, `TERM` and `IFS` from an empty environment, so any of
+    /// those would report "inherited" for a child that inherited nothing. The
+    /// inherited expectation is computed from this process's own environment
+    /// rather than assumed, so the test states what it measured.
+    /// 子进程在一帧三字节载荷里报告三位：宿主有意传入的变量是否存在、`HOME`（宿主的，不是子进程
+    /// 自己的）是否还在、它是否在宿主指定的目录里运行。用 `HOME` 探测继承，是因为它是唯一能活过
+    /// shell 的那个：空的 `/bin/sh` 会凭空造出 `PATH`（本机实测为 `/no-such-path`）、`PWD`、
+    /// `SHLVL`、`_`、`TERM` 与 `IFS`，用其中任何一个都会把一个什么都没继承到的子进程报成"已继承"。
+    /// 继承情形下的期望值由本进程自己的环境算出而不是假设，因此这条测试陈述的是它实测到的东西。
+    #[test]
+    fn the_host_narrows_the_environment_and_the_working_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let probe = script(
+            directory.path(),
+            "probe",
+            concat!(
+                "#!/bin/sh\n",
+                "bits=\"\"\n",
+                "if [ -n \"$NICHLINK_TEST_MARKER\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ -n \"$HOME\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ \"$PWD\" = \"$NICHLINK_TEST_CWD\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "printf '\\003\\000\\000\\000'\n",
+                "printf '%s' \"$bits\"\n"
+            ),
+        );
+        let artifact = |path: &Path| artifact(std::fs::read(path).unwrap(), PluginMode::Extension);
+
+        // Cleared, with exactly what the host chose: the deliberate variable
+        // present, no inherited `HOME`, and the child somewhere the host picked.
+        let narrowed = ProcessBackend::new(ProcessLimits {
+            inherit_env: false,
+            ..ProcessLimits::default()
+        })
+        .load(
+            artifact(&probe),
+            ProcessProgram::new(&probe)
+                .environment("NICHLINK_TEST_MARKER", "set-by-host")
+                .environment("NICHLINK_TEST_CWD", directory.path().display().to_string())
+                .current_dir(directory.path()),
+        )
+        .unwrap();
+        assert_eq!(narrowed.call("run", &[]).unwrap(), b"101");
+
+        // Cleared with nothing added: the child still starts — it is run by
+        // absolute path, so it needs no `PATH` to be executed — and answers with
+        // all three bits clear, which is an empty environment rather than the
+        // host's. Its working directory is the host's here, so the third bit is
+        // clear for the other reason: the cwd probe compares against a variable
+        // this case deliberately does not set.
+        let empty = ProcessBackend::new(ProcessLimits {
+            inherit_env: false,
+            ..ProcessLimits::default()
+        })
+        .load(artifact(&probe), ProcessProgram::new(&probe))
+        .unwrap();
+        assert_eq!(empty.call("run", &[]).unwrap(), b"000");
+
+        // The default still inherits, which is what an existing host expects: the
+        // host's own `HOME` reaches the child, and nothing else changed.
+        let expected: &[u8] = if std::env::var_os("HOME").is_some() {
+            b"010"
+        } else {
+            b"000"
+        };
+        let inherited = ProcessBackend::default()
+            .load(artifact(&probe), ProcessProgram::new(&probe))
+            .unwrap();
+        assert_eq!(inherited.call("run", &[]).unwrap(), expected);
+    }
 }

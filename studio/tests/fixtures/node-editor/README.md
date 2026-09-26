@@ -50,23 +50,22 @@ written against is checked in instead.
 
 ## Live trace evidence
 
-Two of the ten tests assert about *live* evidence, which a source tree cannot
+Two fixture tests assert about *live* evidence, which a source tree cannot
 supply: `graph_tab_reaches_both_tree_and_data_panels` needs at least two locals
 for the selected tree row, and `mir_candidates_are_optional_and_keep_live_evidence_distinct`
-needs a live call edge from the `node_editor` face to the `object` face. Studio's
-built-in sample trace (`studio/src/studio/app/sample.rs`) belongs to no host
-project — it records no locals and one unrelated edge — so those tests install
-their own trace over this fixture instead, from
+needs a live call edge from the `node_editor` face to the `object` face. Studio
+ships no demo trace: the built-in sample was removed when the artifact loader
+(`studio/src/studio/app/trace.rs`) landed, so those tests install their own trace
+over this fixture instead, from
 `studio/src/studio/app/tests/fixtures.rs` (`fixture_live_trace`). Neither
-assertion was weakened, and the demo sample stays what it is: a demo.
+assertion was weakened.
 
 ## 实测证据
 
-十条测试里有两条断言的是**实测**证据，而源码树提供不了它：
+两条夹具测试断言的是**实测**证据，而源码树提供不了它：
 `graph_tab_reaches_both_tree_and_data_panels` 需要选中树行至少有两个局部值，
 `mir_candidates_are_optional_and_keep_live_evidence_distinct` 需要一条从 `node_editor`
-面到 `object` 面的实测调用边。Studio 内置的演示追踪
-（`studio/src/studio/app/sample.rs`）不属于任何宿主项目——它不记录局部值，也只有一条
-无关的边——因此这两条测试改为从 `studio/src/studio/app/tests/fixtures.rs`
-（`fixture_live_trace`）安装一条针对本夹具的追踪。两条断言都没有被削弱，而演示样本
-仍然是演示样本。
+面到 `object` 面的实测调用边。Studio 不自带演示追踪：artifact 加载方
+（`studio/src/studio/app/trace.rs`）落地时内置样本已被删除，因此这两条测试改为从
+`studio/src/studio/app/tests/fixtures.rs`（`fixture_live_trace`）安装一条针对本夹具的
+追踪。两条断言都没有被削弱。

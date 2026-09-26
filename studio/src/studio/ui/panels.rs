@@ -14,16 +14,19 @@ pub(super) fn draw_brand(frame: &mut Frame<'_>, area: Rect, app: &App) {
         .map(Line::from)
         .collect::<Vec<_>>();
     art.push(Line::from(vec![
-        // The legend says "LIVE SAMPLE" on purpose: Studio only ever installs
-        // `sample_live_trace()` today, so calling it plain "LIVE" advertised a
-        // recorded trace that does not exist yet. The real ingest path is
-        // tracked as a TODO in `app::lifecycle`.
-        // 图例写作 "LIVE SAMPLE" 是有意的：Studio 目前只会装入
-        // `sample_live_trace()`。直接写 "LIVE" 会宣称一份尚不存在的真实记录。
-        // 真实 ingest 路径记录在 `app::lifecycle` 的 TODO 中。
+        // The legend states what was actually loaded. `LIVE` means a trace
+        // artifact passed the identity checks in `app::trace`; with no artifact it
+        // reads `TRACE: none`, and with a refused one `TRACE mismatch`. There is
+        // no sample behind it any more, so a bare `LIVE` can never advertise
+        // values this session does not have.
+        // 图例陈述实际装入的东西。`LIVE` 表示某份 trace artifact 通过了 `app::trace` 的身份
+        // 检查；没有 artifact 时读作 `TRACE: none`，被拒绝时读作 `TRACE mismatch`。它背后
+        // 已经没有示例，因此裸的 `LIVE` 绝不会宣称本会话并不持有的数值。
         Span::styled(
-            "  LIVE SAMPLE  ",
-            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            format!("  {}  ", app.trace_legend()),
+            Style::default()
+                .fg(if app.trace_is_live() { GREEN } else { MUTED })
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!(

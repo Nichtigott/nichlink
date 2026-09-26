@@ -10,9 +10,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::registry_core::identity::root_node_id;
-use crate::registry_core::lexicon::{
-    NAMESPACE_ENV, NICHLINK_DIR, TRACE_DIR, TRACE_FILE, TRACE_FILE_ENV, resolve_namespace,
-};
+use crate::registry_core::lexicon::{NICHLINK_DIR, TRACE_DIR, TRACE_FILE, TRACE_FILE_ENV};
 
 use super::{CallTrace, TraceArtifact};
 
@@ -56,14 +54,21 @@ pub(super) fn resolve_artifact_path(package_root: &Path, configured: Option<&OsS
 /// Write a recorded trace as an artifact, replacing `path` atomically.
 /// 把已记录的追踪写成 artifact，并以原子方式替换 `path`。
 ///
-/// The namespace and root anchors are stamped from the process environment
-/// (`NICH_LINK_NAMESPACE`, defaulting to `DEFAULT_NAMESPACE`), because only the
-/// host that owns the package knows its name.
-/// namespace 与 root 锚点由进程环境盖戳（`NICH_LINK_NAMESPACE`，默认为
-/// `DEFAULT_NAMESPACE`），因为只有拥有该包的宿主才知道它的名字。
-pub fn write_trace_artifact(trace: &CallTrace, path: &Path) -> Result<(), String> {
-    let configured = std::env::var(NAMESPACE_ENV).ok();
-    let namespace = resolve_namespace(configured.as_deref());
+/// `namespace` is the identity the host compiled under — the value its
+/// declaration macros stamped, which for a host crate is
+/// `env!("CARGO_PKG_NAME")`. It is a parameter because the process cannot read it
+/// back: Cargo sets `CARGO_PKG_NAME` for the build script and for `env!`, not for
+/// an installed binary, and `NICH_LINK_NAMESPACE` is the *reader's* override — a
+/// writer that stamped from it would publish a namespace its own compiled node ids
+/// do not live in, and every reader would refuse the artifact. The root anchor is
+/// derived from the same name, because a registry root is `root_node_id(namespace)`.
+/// `namespace` 是宿主编译时所用的身份——它的声明宏盖下的那个值，对宿主 crate 就是
+/// `env!("CARGO_PKG_NAME")`。它作为参数传入，因为进程读不回来：Cargo 只为构建脚本与
+/// `env!` 设置 `CARGO_PKG_NAME`，不为已安装的二进制设置；而 `NICH_LINK_NAMESPACE` 是
+/// **读取方**的覆盖——写入方若按它盖戳，就会发布一个自己编译出的节点 id 并不居住的命名空间，
+/// 每个读取方都会拒绝该 artifact。root 锚点由同一个名字推出，因为注册树根就是
+/// `root_node_id(namespace)`。
+pub fn write_trace_artifact(trace: &CallTrace, path: &Path, namespace: &str) -> Result<(), String> {
     let mut artifact = TraceArtifact::from_trace(trace);
     artifact.namespace = namespace.to_owned();
     artifact.root = root_node_id(namespace);

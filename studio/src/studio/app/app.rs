@@ -12,8 +12,8 @@ use source_index::*;
 pub(crate) use source_index::{admission_text, function_line, registration_rule_text};
 mod navigation;
 use navigation::*;
-mod sample;
-use sample::sample_live_trace;
+mod trace;
+pub use trace::TraceStatus;
 mod call_tree_queries;
 mod graft;
 mod graph_queries;
@@ -71,9 +71,12 @@ pub struct App {
     /// Loaded registration tree, replaced wholesale by every successful reload.
     /// 已加载的注册树，每次成功重载时整体替换。
     pub registry: Registry,
-    /// Values captured by the current live diagnostic sample.
-    /// 当前运行诊断样本捕获的值。
+    /// Values from the loaded trace artifact, disabled when none was installed.
+    /// 已装入 trace artifact 提供的值；没有装入任何追踪时处于关闭状态。
     pub runtime_trace: CallTrace,
+    /// What became of the trace artifact this session looked for.
+    /// 本会话查找 trace artifact 的结果。
+    pub trace_status: TraceStatus,
     /// Optional compiler snapshot, loaded only when requested from the graph.
     /// 可选的编译器快照，只在调用图中明确请求时加载。
     pub mir_graph: Option<MirGraph>,

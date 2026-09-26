@@ -12,9 +12,16 @@ deliberate (same choice as that file), not an oversight.
 with `from_trace`/`render`/`parse`/`into_trace`, `trace_artifact_path`,
 `write_trace_artifact`, `read_trace_artifact` — plus `TRACE_DIR`/`TRACE_FILE`/
 `TRACE_FILE_ENV` in the kernel lexicon, re-exported at the `run_method` crate
-root. The Studio loader (§3.4–3.5) is slice 2 and remains unbuilt; §3.6's
-"no `.rs` file is edited" sentence describes the design's own moment, and this
-paragraph is the correction.
+root.
+Slice 2, the Studio loader, is **built too**: `studio/src/studio/app/trace.rs`
+holds `TraceStatus { Absent, Loaded, Mismatch { reason } }` and
+`App::install_trace`, called once from `App::load`; discovery is
+`trace_artifact_path(package_root())` (the precedence is not re-implemented), the
+four identity checks below run in order, a refused artifact installs nothing and
+states its reason, and `sample_live_trace()` is deleted — the legend reads
+`TRACE: none` / `LIVE` / `TRACE mismatch` and the DATA panel drops
+`· built-in sample ·`. §3.6's "no `.rs` file is edited" sentence describes the
+design's own moment, and this paragraph is the correction.
 The citations below were measured at that moment; re-measured against `0.1.1`
 they had drifted, so a reader should take the names as the anchor and the line
 numbers as approximate: `TraceMode::parse` 121→142, `CallSite.function` 11→15,
@@ -25,8 +32,12 @@ label/source 19,20→25,28, `render_tree` 284→296, `matching_locals` 164–200
 `conventions`-checked `lexicon_tests.rs`. `filesystem.rs::atomic_write` 18–27
 held.
 **状态（2026-09-26）。** 第一片**已建成**：纯文档、解析器与驻留表、文件一半，外加内核词典里的
-三个常量，并在 `run_method` 根部重导出。Studio 的加载方（§3.4–3.5）是第二片，尚未建。下面引用
-的行号是设计当时实测的；对着 `0.1.1` 重测已经漂移，因此读者应把名字当锚、把行号当近似值。
+三个常量，并在 `run_method` 根部重导出。第二片（Studio 的加载方）**也已建成**：
+`studio/src/studio/app/trace.rs` 里的 `TraceStatus`、在 `App::load` 里调用一次的
+`install_trace`、按序执行的四条身份检查；被拒绝的 artifact 不装入任何东西并说明原因，示例
+`sample_live_trace()` 已删除——图例读 `TRACE: none`/`LIVE`/`TRACE mismatch`，DATA 面板不再有
+`· built-in sample ·`。下面引用的行号是设计当时实测的；对着 `0.1.1` 重测已经漂移，因此读者应把
+名字当锚、把行号当近似值。
 
 **Verdict / 结论.** Full ingest is a **1.x** feature. 1.0 should keep the demo
 label it already has (`docs/roadmap-1.0.md:61`) and add nothing but a one-line
@@ -217,7 +228,7 @@ impl TraceArtifact {
 }
 
 // I/O half, same module (run_method is an execution surface):
-pub fn write_trace_artifact(trace: &CallTrace, path: &Path) -> Result<(), String>;
+pub fn write_trace_artifact(trace: &CallTrace, path: &Path, namespace: &str) -> Result<(), String>;
 pub fn read_trace_artifact(path: &Path) -> Result<(TraceArtifact, CallTrace), String>;
 ```
 
@@ -245,8 +256,22 @@ once after the traced operation:
 ```rust
 let trace = CallTrace::full();
 // … trace.with_at(...), trace.local(...), trace.transform(...) …
-nichlink_run_method::write_trace_artifact(&trace, &path)?;
+nichlink_run_method::write_trace_artifact(
+    &trace,
+    &trace_artifact_path(package_root()),
+    env!("CARGO_PKG_NAME"), // the identity the faces were stamped with
+)?;
 ```
+The namespace is a **parameter**, and that is a correction to this design's own
+first draft: the writer originally stamped it from `NICH_LINK_NAMESPACE` (falling
+back to the default), which is the *reader's* override. A host's compiled node
+ids live under `env!("CARGO_PKG_NAME")`, and the process cannot read that back —
+Cargo sets it for the build script and for `env!`, not for an installed binary —
+so a writer that stamped from the environment would publish an artifact in a
+namespace its own ids do not inhabit, and every reader would refuse it. The root
+anchor is derived from the same name (`root_node_id(namespace)`), and the reader
+compares both against what *it* resolved (§3.5), so each end now derives the
+identity from its own authoritative source instead of sharing a fallback chain.
 Host writes it **only** when `NICH_LINK_TRACE` selected a collecting mode
 (`call_trace.rs:30-35`); under `off` the trace is empty and the host should skip
 the write rather than publish an empty artifact.
@@ -350,23 +375,41 @@ Unit, in `artifact.rs`:
   resolves; `from_trace` on a recorded trace reproduces the same `render()` on a
   second pass (idempotence).
 
-End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
-`run_method`, `studio/Cargo.toml:25`; `run_method` cannot test Studio):
+End-to-end, in the app's own test layout — `studio/src/studio/app/tests/trace_ingest.rs`
+and **not** `studio/tests/`, which is impossible: `App` is private, so the
+integration crate can only reach `launch`/`launch_with`. The test builds its own
+temp project, so it needs no fixture and is not feature-gated:
 1. Create a temp host project, `select_project(root, manifest, "ingest-test")`
-   (prelude at `app/tests.rs:17`).
+   (prelude at `app/tests.rs`).
 2. Record `CallTrace::full()` with `NodeId::from_namespaced_path("ingest-test",
    <real source>, <real kind>)` for a face in the fixture, plus one `local`
    input and one `return_value` output; `write_trace_artifact` to
    `<root>/.nichlink/traces/nichlink.trace`.
 3. `App::load()`; assert `app.graph_locals(&center)` for that face's node
-   returns the recorded values (the exact call `draw_data_flow_panel` makes,
-   `ui/graph/data.rs:36`).
+   returns the recorded values (the call `draw_data_flow_panel` makes,
+   `ui/graph/data.rs`).
 4. Render the graph overlay with `TestBackend` and assert the buffer contains
-   the recorded value and no `built-in sample`; set
-   `SearchState { graph_mode: true, graph_focus: 3, center, center_function, .. }`
-   (`ui/graph.rs:160-166`).
-5. Identity tests: an artifact with `namespace=nichlink.default` or a foreign
-   `root` yields `Mismatch`, installs nothing, and leaves the registry visible.
+   the recorded value and no `built-in sample`. Two corrections measured while
+   building this: `graph_focus` is only `0` (tree) or `1` (data), so the `3`
+   below was unreachable; and the legend cannot be read from a graph-overlay
+   render at all, because `draw_overlay` clears a centred 98%×92% rect over the
+   brand row — the legend assertion belongs to a base-page render.
+5. Identity tests: an artifact with a foreign `namespace` or `root` yields
+   `Mismatch`, installs nothing, and leaves the registry visible.
+
+Two more claims of this design failed when the loader was built, and the code is
+the correction:
+- §3.5 rule 4 ("every frame/local/edge `NodeId` must resolve") is really a check
+  on **frames**: `LocalValue` and `DataEdge` carry no `NodeId` — a local reaches
+  one through its frame, an edge through the frames of its endpoint locals — so
+  the unresolved set equals the frame-node set. The loader still walks all three
+  record kinds, and the measurement is why the check is not written as "walk the
+  locals' ids".
+- §1.4's claim that `graph_locals` filters locals by the centre function's *node*
+  is false: it filters by function **name** (`studio/src/studio/app/support.rs`).
+  A local recorded under a foreign node but the same function name would be
+  drawn, which is exactly why identity check 4 has to gate installation rather
+  than defer to the panel.
 
 ## Open questions for the owner
 ## 给 owner 的待决问题
@@ -414,6 +457,12 @@ End-to-end, in `studio/tests/trace_ingest.rs` (Studio already depends on
    harness naming each run through the env var
    (`NICH_LINK_TRACE_FILE=/tmp/run-$i.trace`). A host that wants to keep a run
    writes it to a path of its own.
-6. **1.0 label wording:** keep `LIVE SAMPLE`, or strengthen it to
-   `TRACE: none` given §1.4 shows the sample is unreachable rather than empty?
-   Still open; it belongs to the Studio loader slice.
+6. **1.0 label wording — decided (2026-09-26): the honest-label branch, and the
+   sample is gone.** With a loader in place the sample could only ever mislead, so
+   `sample_live_trace()` is deleted and the three states name themselves:
+   `TRACE: none` / `LIVE` / `TRACE mismatch` on the legend, and
+   `no trace attached` / nothing / `trace mismatch: …` in the DATA panel. Pinned
+   by `studio::ui::tests::trace_legend_never_claims_live_data_when_nothing_is_loaded`
+   and `studio::app::tests::trace_ingest::the_three_trace_states_render_their_own_legend_and_panel_title`,
+   both red when the absent state was made to claim `LIVE`. The only remaining
+   open question is this document's §4 boundary: what the trace is *not*.

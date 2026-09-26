@@ -254,31 +254,23 @@ mod tests {
         assert!(output.contains("2 child face(s) are inherited by the overlay"));
     }
 
-    /// 1.0 trace regression, per `docs/design-trace-ingest.md` (§3.6 "The 1.0
-    /// deliverable (label only)" and §5.1): full ingest is a 1.x feature, so the
-    /// only 1.0 guarantee is that the legend is honest. It must read
-    /// `LIVE SAMPLE` and must never render a bare `LIVE`, which would claim a
-    /// recorded trace the sample does not provide (§1.4 shows the sample records
-    /// frames only and renders no values).
-    /// 1.0 的 trace 回归测试，依据 `docs/design-trace-ingest.md`（§3.6
-    /// “The 1.0 deliverable (label only)” 与 §5.1）：完整 ingest 是 1.x 特性，
-    /// 因此 1.0 唯一的保证是图例诚实。它必须读作 `LIVE SAMPLE`，绝不能渲染裸的
-    /// `LIVE`——那会宣称示例并未提供的真实记录（§1.4 已查明示例只记录帧、不显示任何值）。
+    /// The trace legend must never claim recorded data that is not loaded. This
+    /// session has no artifact, so it reads `TRACE: none`; a bare `LIVE` would
+    /// advertise a recording that does not exist. The `LIVE` half of the mapping
+    /// is pinned where an artifact can be written — `studio::app::tests::trace_ingest`.
+    /// 追踪图例绝不能宣称尚未装入的记录数据。本会话没有 artifact，因此读作 `TRACE: none`；
+    /// 裸的 `LIVE` 会宣称一份并不存在的记录。映射中 `LIVE` 的那一半钉在能写出 artifact 的地方
+    /// ——`studio::app::tests::trace_ingest`。
     #[test]
-    fn trace_legend_reads_live_sample_and_never_claims_live_data() {
+    fn trace_legend_never_claims_live_data_when_nothing_is_loaded() {
         let output = rendered_text(140, 48);
         assert!(
-            output.contains("LIVE SAMPLE"),
-            "the trace legend must read LIVE SAMPLE: {output}"
+            output.contains("TRACE: none"),
+            "a session with no artifact must say so: {output}"
         );
-        // Strip each honest `LIVE SAMPLE` and assert nothing named `LIVE`
-        // remains: the only uppercase `LIVE` the frame may contain is the one
-        // immediately followed by `SAMPLE`.
-        // 去掉每个诚实的 `LIVE SAMPLE` 后断言不再残留任何 `LIVE`：画面中唯一允许出现的
-        // 大写 `LIVE` 就是紧接 `SAMPLE` 的那个。
         assert!(
-            !output.replace("LIVE SAMPLE", "").contains("LIVE"),
-            "a bare `LIVE` claims a real trace that 1.0 does not ingest: {output}"
+            !output.contains("LIVE"),
+            "a bare `LIVE` claims a real trace that was never loaded: {output}"
         );
     }
 }

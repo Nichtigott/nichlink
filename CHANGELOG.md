@@ -47,19 +47,41 @@ without a red package audit.
   buys; `install` (Wasm) and `load_process` (process) do admission and loading in
   one step. Before this, **no in-tree code outside `core` called
   `verify_signed`**, so the Official lane was unreachable.
+- Studio's trace **loader**, the consumer half of the artifact above:
+  `TraceStatus { Absent, Loaded, Mismatch { reason } }` and `App::install_trace`,
+  run once at startup. Discovery is `trace_artifact_path`, and four identity
+  checks decide whether the artifact belongs to this session — the parser refuses
+  an unsupported layout version, then the namespace, the registry root, and every
+  recorded node that no longer resolves. A matching artifact puts the recorded
+  values in the DATA panel; a refused one installs nothing, keeps the registry
+  visible, and states the reason on the event line.
+- `nichlink-plugin-host`'s process adapter can narrow the child:
+  `ProcessLimits::inherit_env` (default `true`) clears the environment,
+  `ProcessProgram::environment` names the variables the child may then see, and
+  `ProcessProgram::current_dir` chooses where it runs.
 - The trace artifact's first slice in `nichlink-run-method`: `TraceArtifact`
   (`from_trace`, `render`, `parse`, `into_trace`), `write_trace_artifact`,
   `read_trace_artifact`, and `trace_artifact_path`, plus the
   `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` contracts in the kernel lexicon. A
   host can now write its recorded `CallTrace` as a versioned document that a
   separate reader can rebuild; the Studio loader is the next slice
-  (`docs/design-trace-ingest.md` §3.5). The document is line-oriented text:
+  (`docs/design-trace-ingest.md` §3.5). `write_trace_artifact` takes the host's
+  identity namespace as a parameter — for a host crate that is
+  `env!("CARGO_PKG_NAME")` — because the process cannot read its own compiled
+  namespace back and the reader's `NICH_LINK_NAMESPACE` is not it. The document is
+  line-oriented text:
   values escape `\\`, `\t`, `\n`, `\r`, no raw control character reaches the
   file, and a malformed or unknown-key document is refused by line rather than
   guessed.
 
 ### Changed
 
+- Studio's built-in trace sample is gone. With a loader in place it could only
+  mislead, so the legend reads `TRACE: none` when nothing is loaded, `LIVE` when
+  an artifact passed the identity checks, and `TRACE mismatch` when one was
+  refused; the DATA panel drops `· built-in sample ·` and says `no trace
+  attached` or the mismatch reason. A session can no longer label evidence it
+  does not have.
 - Studio reads the host crate's own package name from the target `Cargo.toml`
   (`[package] name`) and authors under it, instead of defaulting to
   `nichlink.default`. The two ends have to agree — the host's build script stamps
@@ -79,6 +101,14 @@ without a red package audit.
 
 ### Fixed
 
+- The MCP bridge's request framing is bounded: a line past `MAX_REQUEST_BYTES`
+  (1 MiB) is refused with `-32600` and its remainder drained, so a hostile or
+  buggy client can no longer make the long-lived stdio server allocate without
+  limit. The drain stops at the newline — a plain read into a scratch buffer took
+  the next frame with it, because a slice or a pipe hands over as much as fits.
+  Requests must also carry `"jsonrpc":"2.0"`, and a member that is not a JSON
+  object is answered with `-32600` rather than dropped silently; notifications
+  stay silent even when their envelope is wrong, as the specification requires.
 - `PluginCatalog::contains_manifest` compared the three optional provenance
   fields — signature, key fingerprint, revocation-list snapshot — for equality,
   so a seven-field official record (what a host's own plugin UI writes) could
@@ -742,6 +772,14 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- Studio 的 trace **加载方**，即上面那份 artifact 的消费一半：`TraceStatus { Absent, Loaded,
+  Mismatch { reason } }` 与启动时运行一次的 `App::install_trace`。发现路径来自
+  `trace_artifact_path`，四条身份检查决定这份 artifact 是否属于本会话——解析器先拒绝不支持的
+  版式版本，然后是命名空间、注册树根、以及每个已不再解析的已记录节点。匹配的 artifact 把记录的
+  数值放进 DATA 面板；被拒绝的不装入任何东西、保持注册表可见，并把原因写到事件行。
+- `nichlink-plugin-host` 的进程适配器可以收窄子进程：`ProcessLimits::inherit_env`（默认
+  `true`）清空环境，`ProcessProgram::environment` 指明子进程随后能看到哪些变量，
+  `ProcessProgram::current_dir` 决定它在哪里运行。
 - `nichlink-plugin-host` 的 `PluginAdmission`：宿主侧从插件锁到可加载工件的那条路。它读
   `<package_root>/.nichlink/plugins/{official,user}.lock`、按这份目录筛选 manifest、校验它
   （官方来源走 `verify_signed`，用户来源走 `verify_artifact`），并给出换来的保证等级所对应的
@@ -756,6 +794,10 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
+- Studio 的内置 trace 示例已删除。有了加载方之后它只会误导，因此图例在什么都没装入时读
+  `TRACE: none`、在 artifact 通过身份检查时读 `LIVE`、在被拒绝时读 `TRACE mismatch`；DATA
+  面板不再有 `· built-in sample ·`，而是显示 `no trace attached` 或拒绝原因。会话再也不能为
+  自己并不拥有的证据贴标签。
 - Studio 从目标 `Cargo.toml` 的 `[package] name` 读出宿主 crate 自己的包名，并在它之下创作，
   不再默认 `nichlink.default`。两端必须一致——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成
   身份命名空间——而一个在别的名字下重建注册树的会话会让每个已记录的 `NodeId`（trace、graft
@@ -769,6 +811,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- MCP 桥的请求分帧有了上限：超过 `MAX_REQUEST_BYTES`（1 MiB）的行以 `-32600` 被拒并排空其余
+  部分，敌对或有 bug 的客户端再也不能让这个长期存活的 stdio 服务无限分配。排空停在换行处——
+  直接读进暂存缓冲会把下一帧一起带走，因为切片或管道会给到能装下的全部内容。请求还必须携带
+  `"jsonrpc":"2.0"`，而不是 JSON 对象的成员以 `-32600` 作答而不是被静默丢弃；通知即使信封不对
+  也保持沉默，这是规范要求的。
 - `PluginCatalog::contains_manifest` 用相等比较三个可选来源字段——签名、密钥指纹、撤销列表
   快照——于是宿主自己的插件界面写下的七字段官方记录永远匹配不上已签名的官方 manifest，官方插件
   无法经宿主自己写下的锁准入。现在它们是**期望**：记录携带某个值就把它钉住，省略它就交给签名校验。

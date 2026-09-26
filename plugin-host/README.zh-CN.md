@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-`nichlink-plugin-host` 在插件进入 Registry 前校验并部署 artifact。默认的 `wasm` 能力提供带 fuel 计量的执行，并受线性内存、**表元素**、工件字节数以及引擎自身的严格编译限制约束——表是一块独立的、即时实例化的数组，因此单靠内存上限约束不了它。启用 `process-tools` 后可使用带超时的进程适配器。`HotDeployment` 会先验证 graft，再一次性发布；失败时保留最后一个健康快照。
+`nichlink-plugin-host` 在插件进入 Registry 前校验并部署 artifact。默认的 `wasm` 能力提供带 fuel 计量的执行，并受线性内存、**表元素**、工件字节数以及引擎自身的严格编译限制约束——表是一块独立的、即时实例化的数组，因此单靠内存上限约束不了它。启用 `process-tools` 后可使用带超时的进程适配器，其子进程的环境与工作目录由宿主选择：`ProcessLimits::inherit_env = false` 清空环境，`ProcessProgram::environment` 指明子进程能看到哪些变量，`ProcessProgram::current_dir` 决定它在哪里运行。默认仍然继承，因此在宿主显式选择之前行为不变；而文件系统与网络访问仍须在本工作区之外加以约束。`HotDeployment` 会先验证 graft，再一次性发布；失败时保留最后一个健康快照。
 
 ## 准入：从宿主的锁到可加载工件
 
