@@ -21,7 +21,11 @@ requirements had not reached the index. `0.1.3` followed on 2026-09-26 (run
 published, so its changes shipped in `0.1.3`, and the audit is back to `verified:`
 all nine with `skipped: none`. The version line stays on
 **0.1.x** while the design is still being deepened: each later release is a small
-step (`0.1.6`, …), and "1.0" names the milestone in
+step (`0.1.6`, …). `0.1.5` followed on 2026-09-27 (run `36304022408`, `--verify-consumers`
+green in the same run): it changes what a scaffolded manifest *requires* to the release
+that generated it, which is a template fix rather than a cross-crate symbol — the
+version moved because a published `0.1.4` CLI could not be corrected any other way.
+"1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
 `version = "0.1.4"` requirement with it, and that step is what freezes the public
@@ -44,7 +48,10 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 跳过那八个依赖尚未进入 index 的 crate。`0.1.3` 于 2026-09-26 跟进（run `36236583886`，
 `--verify-consumers` 在同一次运行里通过）；`0.1.2` 从未发布，它的改动随 `0.1.3` 一起走，包审计
 也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
-**0.1.x**：其后的每次发布都是小步（`0.1.6`……），而"1.0"是
+**0.1.x**：其后的每次发布都是小步（`0.1.6`……）。`0.1.5` 于 2026-09-27 跟进
+（run `36304022408`，`--verify-consumers` 在同一次运行里通过）：它把脚手架清单**要求**的版本改成
+生成它的那个发布，属于模板修复而不是跨 crate 符号——移动版本线是因为已发布的 `0.1.4` CLI 没有别的
+办法被修正。而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
 `1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.4"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
