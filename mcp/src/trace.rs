@@ -162,6 +162,21 @@ pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
     }
 }
 
+/// One recorded value as a line, in the one spelling both tools use.
+/// 一条记录值渲染成一行，两个工具共用同一种拼法。
+pub(crate) fn local_line(local: &LocalValue) -> String {
+    format!(
+        "  {}: {} = {}  [{}, {}]  @ {}:{}\n",
+        local.name,
+        local.type_name,
+        local.value,
+        local.kind.label(),
+        local.observation.label(),
+        local.source.file,
+        local.source.line
+    )
+}
+
 /// Render the values the run recorded, grouped by the frame they were recorded in,
 /// plus the observed data edges between them.
 /// 渲染这次运行记录下的值——按记录它们时所在的帧分组——以及它们之间被观察到的数据边。
@@ -179,18 +194,7 @@ fn render_values(artifact: &TraceArtifact, query: Option<&str>) -> String {
         Some(query) => name.contains(query) || type_name.contains(query) || value.contains(query),
         None => true,
     };
-    let line = |local: &LocalValue| {
-        format!(
-            "  {}: {} = {}  [{}, {}]  @ {}:{}\n",
-            local.name,
-            local.type_name,
-            local.value,
-            local.kind.label(),
-            local.observation.label(),
-            local.source.file,
-            local.source.line
-        )
-    };
+    let line = local_line;
     let mut lines = 0usize;
     let mut shown = 0usize;
     let mut output = format!(

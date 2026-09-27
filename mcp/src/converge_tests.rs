@@ -6,7 +6,9 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_run_method::{CallTrace, SourceLocation, trace_artifact_path, write_trace_artifact};
+use nichlink_run_method::{
+    CallTrace, LocalKind, SourceLocation, trace_artifact_path, write_trace_artifact,
+};
 use serde_json::json;
 
 use super::converge;
@@ -59,11 +61,21 @@ fn recorded_run(root: &Path, namespace: &str, recorded_as: &str) {
         nichlink::identity::NodeId::from_namespaced_path(namespace, "label/label.rs", "Label");
     let mut trace = CallTrace::full();
     trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
+        // A value captured in a frame whose file declares no face: it belongs to the
+        // run, not to any face, and the report must not attach it to one.
+        // 在文件不声明任何面的帧里捕获的值：它属于这次运行而不属于任何面，报告不得把它挂到某个面上。
+        let seed = trace.local("seen_in_main", "u8", 7, LocalKind::Binding);
+        // A *connected* pair outside every face: an edge must be attributed by its
+        // ends, not shown under whichever face happens to be printed.
+        // 一对在任何面之外、且彼此相连的值：边必须按它的两端归属，而不是被挂在恰好被打印的那个面下。
+        trace.transform(seed, "grown_in_main", "u8", 8);
         trace.with_at(
             label,
             "Label::render",
             at("src/label/label.rs", 12, "Label::render"),
             |trace| {
+                let count = trace.local("count", "usize", 1, LocalKind::Binding);
+                trace.transform(count, "shown", "usize", 2);
                 trace.with_at(
                     label,
                     "Label::paint",
@@ -110,6 +122,32 @@ fn a_recorded_run_collapses_the_tree_to_the_faces_that_ran() {
     assert!(reply.contains("src/main.rs (1)"), "{reply}");
     assert!(reply.contains("read plan (1 files)"), "{reply}");
     assert!(reply.contains("label/label.rs"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The values a run captured are attached to the face whose file the capturing frame
+/// belongs to — and a value captured in a frame that belongs to no face is not.
+/// 一次运行捕获的值会被挂到"捕获它的帧所属的文件"的那个面上——而属于任何面的帧里捕获的值不会被挂。
+#[test]
+fn the_values_a_run_captured_are_attached_to_the_faces_that_ran() {
+    let (root, name) = package("trace-values");
+    recorded_run(&root, &name, &name);
+    let reply = converge(&root, &json!({"trace": true})).expect("the report renders");
+    assert!(reply.contains("values (2)"), "{reply}");
+    assert!(
+        reply.contains("count: usize = 1  [let, observed]"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("shown: usize = 2  [let, observed]"),
+        "{reply}"
+    );
+    assert!(reply.contains("edges (1)"), "{reply}");
+    assert!(reply.contains("count -> shown  (transform)"), "{reply}");
+    assert!(
+        !reply.contains("seen_in_main") && !reply.contains("grown_in_main"),
+        "a value from a frame outside every face must not be attached to one: {reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

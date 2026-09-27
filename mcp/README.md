@@ -78,8 +78,10 @@ The server exposes compact tools. Reads:
   location, which is the moment this answer matters most. With `trace: true` it
   starts from the recorded run instead — the files that both declare a face and
   actually ran, the frames that landed in each, and the frames that fell outside any
-  declared face. Frames are matched to faces by source file and the reply says so,
-  because a face is a declaration while a frame is an active function.
+  declared face — plus the values those frames captured and the observed edges between
+  them, so the answer carries the evidence and not only the locations. Frames are
+  matched to faces by source file and the reply says so, because a face is a
+  declaration while a frame is an active function.
 - `nichlink.verify`: run the kernel's registration validation over this package and
   report the tree delta the run just published. It drives the same entry the CLI's
   `check` drives, so its verdict cannot drift from `nichlink check`, and it refreshes

@@ -85,6 +85,9 @@ mod usages;
 #[path = "converge.rs"]
 mod converge;
 
+#[path = "converge_trace.rs"]
+mod converge_trace;
+
 #[path = "callgraph.rs"]
 mod callgraph;
 

@@ -773,7 +773,8 @@ consumers, and declared graft cuts, each with its hop distance and reasons), and
 scope and pruning verdicts, its neighbourhood, whether each requirement is answered,
 and the files to read — reporting a kernel rejection as its verdict rather than as an
 error; with `trace: true` it starts from the recorded run instead and collapses the
-tree to the files that both declare a face and actually ran), `nichlink.verify` (re-run the kernel's validation and report the tree delta the
+tree to the files that both declare a face and actually ran, carrying the values those
+frames captured and the edges between them), `nichlink.verify` (re-run the kernel's validation and report the tree delta the
 run published, so an edit is confirmed rather than merely written), and
 `nichlink.apply`, which adds, edits, renames, or deletes a face through the
 same authoring executor Studio uses and previews the change on a throwaway copy
