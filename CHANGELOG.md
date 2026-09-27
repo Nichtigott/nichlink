@@ -21,7 +21,7 @@ requirements had not reached the index. `0.1.3` followed on 2026-09-26 (run
 published, so its changes shipped in `0.1.3`, and the audit is back to `verified:`
 all nine with `skipped: none`. The version line stays on
 **0.1.x** while the design is still being deepened: each later release is a small
-step (`0.1.4`, …), and "1.0" names the milestone in
+step (`0.1.5`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
 `version = "0.1.4"` requirement with it, and that step is what freezes the public
@@ -34,14 +34,17 @@ of MCP evidence tools (`nichlink.mir`/`unified`/`impact`, the trace-driven `conv
 recorded values and data edges in `nichlink.trace`, and one cross-process identity
 defect), but only one thing **required** the version move — `lexicon::TRACE_MODE_ENV` is
 the first core symbol added after `0.1.3` shipped, `run_method` consumes it, and the
-packaged `run_method` therefore cannot compile against the published `core 0.1.3`.
+packaged `run_method` therefore cannot compile against the published `core 0.1.3`. `v0.1.4`
+published on 2026-09-27 (run `36297635525`), with `--verify-consumers` green in the same
+run: a throwaway crate outside the checkout resolved and built all nine by version, and
+the package audit is back to `verified:` all nine with `skipped: none`.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
 方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
 跳过那八个依赖尚未进入 index 的 crate。`0.1.3` 于 2026-09-26 跟进（run `36236583886`，
 `--verify-consumers` 在同一次运行里通过）；`0.1.2` 从未发布，它的改动随 `0.1.3` 一起走，包审计
 也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
-**0.1.x**：其后的每次发布都是小步（`0.1.4`……），而"1.0"是
+**0.1.x**：其后的每次发布都是小步（`0.1.5`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
 `1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.4"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
@@ -50,7 +53,9 @@ packaged `run_method` therefore cannot compile against the published `core 0.1.3
 于 2026-09-27 跟进：它的内容是一批 MCP 证据工具（`nichlink.mir`/`unified`/`impact`、由 trace 驱动的
 `converge`、`trace` 的值与数据边、一个跨进程身份缺陷的修复），而**必须**移动版本线的原因只有一个——
 `lexicon::TRACE_MODE_ENV` 是 `0.1.3` 发布之后新增的第一个 core 符号，被 `run_method` 消费，因此
-打包 `run_method` 时对着已发布的 `core 0.1.3` 编译不出来。
+打包 `run_method` 时对着已发布的 `core 0.1.3` 编译不出来。`v0.1.4` 于 2026-09-27 发布
+（run `36297635525`），`--verify-consumers` 在同一次运行里通过：检出之外的一次性 crate 按版本解析并
+构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
 ## [Unreleased]
 
