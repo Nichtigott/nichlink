@@ -33,7 +33,12 @@ The server exposes compact tools. Reads:
   is an identity change, so only this comparison sees it).
 - `nichlink.trace`: read this package's recorded trace artifact and answer with the
   headless call report it implies — what actually ran, which no static read can
-  tell you. The artifact's identity is checked first (namespace, registry root,
+  tell you. With `values: true` the same read answers what that run *saw*: the
+  recorded locals grouped by the frame that captured them (name, type, value, role,
+  observed or inferred, callsite), the locals captured before any traced call, and
+  the observed data edges with their transformation labels. A local or edge naming
+  something the artifact lacks is counted rather than dropped. The artifact's
+  identity is checked first (namespace, registry root,
   every frame's node); a foreign artifact is refused by name rather than drawn.
 - `nichlink.mir`: read a MIR artifact — a `rustc -Zunpretty=mir` text dump or the
   compact JSONL form, chosen by extension — and report the compiler's call

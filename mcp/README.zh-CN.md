@@ -27,7 +27,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.diff`：源码现在与构建清单之间的面级差异——新增、消失，以及文件没动而身份变了
   （`kind` 变化就是身份变化，只有这个比较看得见）。
 - `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
-  什么，这是任何静态读取都说不出的。artifact 的身份会先被核验（命名空间、注册机根、每个帧的节点）；
+  什么，这是任何静态读取都说不出的。给出 `values: true` 时，同一次读取改为回答那次运行**看见了**
+  什么：记录下的局部值按捕获它们的帧分组（名字、类型、值、角色、observed 或 inferred、调用点）、
+  在任何被追踪调用之前捕获的那些，以及被观察到的数据边及其变换标签；点名的东西 artifact 里没有时
+  会被计数而不是丢掉。artifact 的身份会先被核验（命名空间、注册机根、每个帧的节点）；
   异树 artifact 会被按名拒绝，而不是画出来。
 - `nichlink.mir`：读一个 MIR artifact——`rustc -Zunpretty=mir` 文本转储或紧凑 JSONL 形式，
   按扩展名选择——报告编译器给出的调用候选。`jsonl: true` 输出那份 JSONL：Studio 本来就能渲染、

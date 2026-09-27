@@ -47,6 +47,22 @@ waiting state that change opened.
 
 ### Added
 
+- **`nichlink.trace` now answers what a run *saw*, not only what it ran.** The call
+  report says which functions were active; `values: true` reads the same
+  identity-checked artifact and reports the recorded locals grouped by the frame that
+  captured them — name, rendered type and value, role (`input`/`let`/`return`/
+  `consumer`), `observed` or `unobserved`, and the callsite — plus the locals captured
+  before any traced call, and the observed data edges with the transformation each one
+  carries. That is the half a symbol graph structurally cannot have, and it is the
+  half a cross-file bug is usually about. Two honesty rules are built in: a local or
+  edge naming something the artifact does not contain is *counted* rather than
+  dropped, so an incomplete artifact cannot read as a complete one, and `query`
+  narrows this report exactly as it narrows the call report, saying so when nothing
+  matched. Measured end to end on a real host: three captured values grouped under
+  `frame 2 Slider::render` with their callsites inside the face's own file, and
+  `count -> shown (transform)` / `shown -> value (used by paint::value)` as the data
+  edges. Pinned by two tests, both measured red (one by folding every local out of its
+  frame, one by disabling the query filter).
 - **`nichlink.converge` now also starts from a recorded run, not only from a face.**
   A bug report arrives in two shapes: an agent knows which face it is looking at, or
   it has a run that misbehaved and only the trace says what that run touched. With
@@ -1053,6 +1069,16 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- **`nichlink.trace` 现在也回答一次运行**看见**了什么，而不只是跑了什么。** 调用报告说哪些函数处于
+  活动状态；`values: true` 读同一份经身份核验的 artifact，报告记录下的局部值——按捕获它们的帧分组，
+  带上名字、渲染后的类型与值、角色（`input`/`let`/`return`/`consumer`）、`observed`/`unobserved` 与
+  调用点——外加在任何被追踪调用之前捕获的那些，以及被观察到的数据边与每条边承载的变换。这正是符号图
+  结构上不可能有的那一半，也通常是跨文件缺陷真正关于的那一半。两条诚实规则内建其中：点名的东西不在
+  artifact 里的局部值或边会被**计数**而不是丢掉，因此不完整的 artifact 不会读起来像完整的；`query`
+  缩小这份报告的方式与缩小调用报告完全一致，并在没有命中时说出来。真实宿主端到端实测：三个捕获值分组
+  在 `frame 2 Slider::render` 之下、调用点落在面自己的文件里，数据边为
+  `count -> shown (transform)` 与 `shown -> value (used by paint::value)`。两条测试钉住，均实测为红
+  （一条把所有局部值折出它们的帧，一条关掉 query 过滤）。
 - **`nichlink.converge` 现在也能从一次已记录的运行出发，而不只是从一个面出发。** 缺陷报告有两种
   形状：代理知道自己在看哪个面，或者它手上只有一次行为不对的运行、而"那次运行碰了什么"只有 trace
   说得出来。给出 `trace: true` 时，工具读取本包的 trace artifact（走 `nichlink.trace` 那同一套身份

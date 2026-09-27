@@ -672,7 +672,7 @@ MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.explain`（构建发布的
 作用域与发布剪枝，源码文本答不出来）、`nichlink.diff`（源码与构建之间的面级差异，包括文件没动而
 身份变了的那种）与 `nichlink.trace`（已记录 trace 的调用报告——真正跑了什么——artifact 描述的是
-另一棵树时会被拒绝）、`nichlink.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
+另一棵树时会被拒绝；给出 `values: true` 时改为报告记录下的值与被观察到的数据边，按捕获它们的帧分组）、`nichlink.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
 都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过）、
 `nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
 真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的

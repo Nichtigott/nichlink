@@ -45,6 +45,91 @@ fn record(root: &Path, namespace: &str, node: nichlink::identity::NodeId) {
         .expect("the artifact writes");
 }
 
+/// Record a run that captured values inside its frame, connected two of them, and
+/// captured one before any traced call.
+/// 记录一次运行：在帧内捕获了值、把其中两个连了起来，并在任何被追踪调用之前捕获了一个。
+fn record_values(root: &Path, namespace: &str, node: nichlink::identity::NodeId) {
+    let mut recorded = CallTrace::full();
+    recorded.local("seed", "u8", 7, LocalKind::Binding);
+    recorded.with(node, "button", |recorded| {
+        let input = recorded.local("input", "u32", 1, LocalKind::Input);
+        let doubled = recorded.transform(input, "doubled", "u32", 2);
+        recorded.consume(doubled, "render", "count");
+    });
+    write_trace_artifact(&recorded, &trace_artifact_path(root), namespace)
+        .expect("the artifact writes");
+}
+
+/// The call report says what ran; `values: true` says what it saw, and it keeps the
+/// two kinds of local apart — the one inside the frame and the one captured before
+/// any traced call.
+/// 调用报告说跑了什么；`values: true` 说它看见了什么，并把两类局部值分开——帧内的那个、以及在任何
+/// 被追踪调用之前捕获的那个。
+#[test]
+fn recorded_values_are_reported_under_the_frame_that_captured_them() {
+    let (root, name, id) = package("values");
+    record_values(&root, &name, id);
+    let reply = trace(&root, &json!({"values": true})).expect("the report renders");
+    assert!(reply.contains("values 4 locals 2 edges"), "{reply}");
+    assert!(
+        reply.contains("frame 0 button") && reply.contains("3 local(s)"),
+        "the frame's own values are grouped under it: {reply}"
+    );
+    assert!(
+        reply.contains("input: u32 = 1  [input, observed]"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("doubled: u32 = 2  [let, observed]"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("outside any traced frame"),
+        "a value captured before any traced call is not folded into one: {reply}"
+    );
+    assert!(reply.contains("seed: u8 = 7  [let, observed]"), "{reply}");
+    assert!(reply.contains("data edges 2"), "{reply}");
+    assert!(reply.contains("input -> doubled  (transform)"), "{reply}");
+    assert!(
+        reply.contains("trace_tests.rs"),
+        "every value carries the callsite that captured it: {reply}"
+    );
+    assert!(
+        !reply.contains("<not recorded>"),
+        "every edge end here was recorded: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `query` narrows the values report the same way it narrows the call report, and
+/// says so when nothing matched rather than showing an empty list.
+/// `query` 与缩小调用报告时一样缩小值的报告，并且在没有命中时说出来，而不是给一份空清单。
+#[test]
+fn the_values_report_is_narrowed_by_the_query() {
+    let (root, name, id) = package("values-query");
+    record_values(&root, &name, id);
+    let reply = trace(&root, &json!({"values": true, "query": "doubled"})).expect("the render");
+    assert!(reply.contains("doubled: u32 = 2"), "{reply}");
+    assert!(
+        !reply.contains("  input: u32 = 1"),
+        "the un-matched local is not shown: {reply}"
+    );
+    assert!(
+        !reply.contains("  seed: u8 = 7"),
+        "the un-matched value outside the frame is not shown either: {reply}"
+    );
+    let none = trace(
+        &root,
+        &json!({"values": true, "query": "zzz-no-such-value"}),
+    )
+    .expect("the render");
+    assert!(
+        none.contains("no recorded value matches the query"),
+        "{none}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// No artifact is the normal state, and the answer must say how one appears.
 /// 没有 artifact 是常态，答案必须说出它从哪来。
 #[test]

@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use nichlink_build_method::face_views;
+use nichlink_run_method::runtime::trace::locals::LocalValue;
 use nichlink_run_method::{
     CallTrace, TraceArtifact, read_trace_artifact, render_call_report_for_trace,
     trace_artifact_path,
@@ -144,15 +145,175 @@ pub(crate) fn trace(root: &Path, arguments: &Value) -> Result<String, String> {
     match read_verified(root)? {
         RecordedTrace::Absent(answer) | RecordedTrace::Refused(answer) => Ok(answer),
         RecordedTrace::Verified {
-            call_trace, header, ..
+            call_trace,
+            header,
+            artifact,
+            ..
         } => {
+            let query = arguments.get("query").and_then(Value::as_str);
+            if arguments.get("values").and_then(Value::as_bool) == Some(true) {
+                return Ok(bounded(header, &render_values(&artifact, query)));
+            }
             let namespace = namespace(root)?;
             let registry = load_registry(root, &namespace)?;
-            let query = arguments.get("query").and_then(Value::as_str);
             let report = render_call_report_for_trace(&registry, &call_trace, query);
             Ok(bounded(header, &report))
         }
     }
+}
+
+/// Render the values the run recorded, grouped by the frame they were recorded in,
+/// plus the observed data edges between them.
+/// 渲染这次运行记录下的值——按记录它们时所在的帧分组——以及它们之间被观察到的数据边。
+///
+/// The call report says what ran; this says what it saw. A local belongs to a frame
+/// by `frame_id`, and one recorded outside every traced call is reported as such
+/// rather than folded into a frame it never had; a local or edge naming something
+/// this artifact does not contain is *counted* instead of being silently dropped, so
+/// an incomplete artifact cannot read as a complete one.
+/// 调用报告说跑了什么，这里说它看见了什么。局部值靠 `frame_id` 属于某个帧，而在任何被追踪调用之外记录
+/// 的那个会被如实报成如此，而不是被塞进它从未属于的帧；点名的东西不在本 artifact 里的局部值或边会被
+/// **计数**而不是悄悄丢掉，因此一份不完整的 artifact 不会读起来像完整的。
+fn render_values(artifact: &TraceArtifact, query: Option<&str>) -> String {
+    let keeps = |name: &str, type_name: &str, value: &str| match query {
+        Some(query) => name.contains(query) || type_name.contains(query) || value.contains(query),
+        None => true,
+    };
+    let line = |local: &LocalValue| {
+        format!(
+            "  {}: {} = {}  [{}, {}]  @ {}:{}\n",
+            local.name,
+            local.type_name,
+            local.value,
+            local.kind.label(),
+            local.observation.label(),
+            local.source.file,
+            local.source.line
+        )
+    };
+    let mut lines = 0usize;
+    let mut shown = 0usize;
+    let mut output = format!(
+        "values {} locals {} edges\n",
+        artifact.locals.len(),
+        artifact.edges.len()
+    );
+    for frame in &artifact.frames {
+        if lines >= MAX_REPORT_LINES {
+            break;
+        }
+        let inside: Vec<_> = artifact
+            .locals
+            .iter()
+            .filter(|local| local.frame_id == Some(frame.frame_id))
+            .filter(|local| keeps(&local.name, &local.type_name, &local.value))
+            .collect();
+        if inside.is_empty() {
+            continue;
+        }
+        let at = frame
+            .source
+            .as_ref()
+            .map(|source| format!("{}:{}", source.file, source.line))
+            .unwrap_or_else(|| "-".to_owned());
+        output.push_str(&format!(
+            "frame {} {}  ({at})  {} local(s)\n",
+            frame.frame_id,
+            frame.function,
+            inside.len()
+        ));
+        lines += 1;
+        for local in inside {
+            output.push_str(&line(local));
+            lines += 1;
+            shown += 1;
+        }
+    }
+    let outside: Vec<_> = artifact
+        .locals
+        .iter()
+        .filter(|local| local.frame_id.is_none())
+        .filter(|local| keeps(&local.name, &local.type_name, &local.value))
+        .collect();
+    if !outside.is_empty() && lines < MAX_REPORT_LINES {
+        output.push_str("outside any traced frame\n");
+        lines += 1;
+        for local in &outside {
+            output.push_str(&line(local));
+            lines += 1;
+            shown += 1;
+        }
+    }
+    let dangling = artifact
+        .locals
+        .iter()
+        .filter(|local| {
+            local
+                .frame_id
+                .is_some_and(|id| !artifact.frames.iter().any(|frame| frame.frame_id == id))
+        })
+        .count();
+    if dangling > 0 {
+        output.push_str(&format!(
+            "locals naming a frame this artifact does not have {dangling}\n"
+        ));
+    }
+    let name_of = |id: u64| {
+        artifact
+            .locals
+            .iter()
+            .find(|local| local.id == id)
+            .map(|local| local.name.as_str())
+            .unwrap_or("<not recorded>")
+    };
+    let edges: Vec<_> = artifact
+        .edges
+        .iter()
+        .filter(|edge| match query {
+            Some(query) => {
+                name_of(edge.from).contains(query)
+                    || name_of(edge.to).contains(query)
+                    || edge.label.contains(query)
+            }
+            None => true,
+        })
+        .collect();
+    output.push_str(&format!("data edges {}\n", artifact.edges.len()));
+    lines += 1;
+    for edge in &edges {
+        if lines >= MAX_REPORT_LINES {
+            break;
+        }
+        let at = edge
+            .source
+            .as_ref()
+            .map(|source| format!("{}:{}", source.file, source.line))
+            .unwrap_or_else(|| "-".to_owned());
+        output.push_str(&format!(
+            "  {} -> {}  ({})  @ {at}\n",
+            name_of(edge.from),
+            name_of(edge.to),
+            edge.label
+        ));
+        lines += 1;
+    }
+    let unrecorded = artifact
+        .edges
+        .iter()
+        .filter(|edge| {
+            !artifact.locals.iter().any(|local| local.id == edge.from)
+                || !artifact.locals.iter().any(|local| local.id == edge.to)
+        })
+        .count();
+    if unrecorded > 0 {
+        output.push_str(&format!(
+            "edges naming a local this artifact does not have {unrecorded}\n"
+        ));
+    }
+    if shown == 0 && query.is_some() {
+        output.push_str("no recorded value matches the query\n");
+    }
+    output
 }
 
 /// Keep one reply inside a size an agent can read, and say when it did not.

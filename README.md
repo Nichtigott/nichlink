@@ -757,7 +757,9 @@ reconstructing it from macro names — plus `nichlink.explain` (the build's publ
 scope and release pruning, which source text cannot answer), `nichlink.diff` (the
 face-level delta between the sources and the build, including identities that
 changed under an unmoved file), and `nichlink.trace` (the recorded trace's call
-report — what actually ran — refused when the artifact describes another tree),
+report — what actually ran — refused when the artifact describes another tree; with
+`values: true` it reports the recorded values and data edges instead, grouped by the
+frame that captured them),
 `nichlink.mir` (a `-Zunpretty=mir` text dump or the compact JSONL artifact, read
 either way and *written* when `jsonl: true` — the portable channel nothing in the
 workspace produced before), `nichlink.unified` (that graph merged with the recorded

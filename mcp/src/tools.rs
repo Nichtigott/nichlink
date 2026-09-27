@@ -123,13 +123,18 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.trace",
             "Read this package's recorded trace artifact (`NICH_LINK_TRACE_FILE`, else \
              `<root>/.nichlink/traces/nichlink.trace`) and answer with the headless call report it \
-             implies — what actually ran, which no static read can tell you. The artifact's identity \
+             implies — what actually ran, which no static read can tell you. With `values: true` the \
+             same read answers what that run *saw* instead: the recorded locals grouped by the frame \
+             they belong to (name, type, rendered value, role, observed-or-inferred, callsite), the \
+             locals recorded outside every traced call, and the observed data edges between them. A \
+             local or edge naming something the artifact does not contain is counted rather than \
+             dropped, so an incomplete artifact cannot read as a complete one. The artifact's identity \
              is checked first (namespace, registry root, every frame's node), and an artifact that \
              describes a different tree is refused by name rather than rendered, because frames are \
              node identities and foreign ones would draw a plausible, wrong call tree. Absence is \
-             reported together with the way to produce one; `query` filters the report and a long \
-             report is truncated with its total named.",
-            json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"}}}),
+             reported together with the way to produce one; `query` filters either report and a long \
+             one is truncated with its total named.",
+            json!({"type":"object","properties":{"query":{"type":"string"},"values":{"type":"boolean"},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.mir",
