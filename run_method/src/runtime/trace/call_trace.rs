@@ -28,7 +28,7 @@ pub const fn application_default_trace_mode() -> TraceMode {
 /// Reads the optional process-level override once when a trace is created.
 /// 创建追踪器时读取一次可选的进程级覆盖配置。
 pub fn trace_mode_from_env() -> TraceMode {
-    std::env::var("NICH_LINK_TRACE")
+    std::env::var(crate::registry_core::lexicon::TRACE_MODE_ENV)
         .ok()
         .and_then(|value| TraceMode::parse(&value))
         .unwrap_or_else(application_default_trace_mode)

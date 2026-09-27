@@ -24,12 +24,17 @@ all nine with `skipped: none`. The version line stays on
 step (`0.1.4`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
-`version = "0.1.3"` requirement with it, and that step is what freezes the public
+`version = "0.1.4"` requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
 without a red package audit; `0.1.3` moved the same way and for the same reason
 (`mcp` now uses `nichlink_build_method::face_views`), and publishing it closed the
-waiting state that change opened.
+waiting state that change opened. `0.1.4` followed on 2026-09-27: its content is a batch
+of MCP evidence tools (`nichlink.mir`/`unified`/`impact`, the trace-driven `converge`,
+recorded values and data edges in `nichlink.trace`, and one cross-process identity
+defect), but only one thing **required** the version move — `lexicon::TRACE_MODE_ENV` is
+the first core symbol added after `0.1.3` shipped, `run_method` consumes it, and the
+packaged `run_method` therefore cannot compile against the published `core 0.1.3`.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
 方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
@@ -38,12 +43,21 @@ waiting state that change opened.
 也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
 **0.1.x**：其后的每次发布都是小步（`0.1.4`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.3"` 要求一起移动——那一步才是冻结
+`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.4"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
-使用 `nichlink_build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。
+使用 `nichlink_build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
+于 2026-09-27 跟进：它的内容是一批 MCP 证据工具（`nichlink.mir`/`unified`/`impact`、由 trace 驱动的
+`converge`、`trace` 的值与数据边、一个跨进程身份缺陷的修复），而**必须**移动版本线的原因只有一个——
+`lexicon::TRACE_MODE_ENV` 是 `0.1.3` 发布之后新增的第一个 core 符号，被 `run_method` 消费，因此
+打包 `run_method` 时对着已发布的 `core 0.1.3` 编译不出来。
 
 ## [Unreleased]
+
+Nothing yet; the next release's entries land here. There is no per-crate
+changelog, so this section stays empty until something ships.
+
+## [0.1.4] — 2026-09-27
 
 ### Added
 
@@ -113,8 +127,9 @@ waiting state that change opened.
   compiler candidate rather than sitting beside it, while the rest stay `evidence=Mir`.
   An absent trace is a weaker answer and not a broken one: the merge still answers and
   labels every relation a compiler candidate. `mcp` gained a `nichlink-debug-method`
-  dependency for it, and the version line does not move, because `0.1.3` is still
-  unreleased. The producer of the *text* stays outside the bridge, and the tool says
+  dependency for it; the version line moved to `0.1.4` for a different reason (a core
+  symbol `run_method` consumes), which is why this entry rides along rather than
+  demanding the move itself. The producer of the *text* stays outside the bridge, and the tool says
   so rather than hiding it: that is `cargo rustc -Zunpretty=mir` on a nightly
   toolchain.
 - `nichlink.verify` closes the loop the other tools opened: it re-runs the kernel's
@@ -198,6 +213,22 @@ waiting state that change opened.
 
 ### Fixed
 
+- **`NICH_LINK_TRACE` is a lexicon constant now, so renaming it cannot break hosts
+  silently — and it is the reason this release exists.** The collection-mode variable
+  was a bare literal in the recorder while its sibling `NICH_LINK_TRACE_FILE` was
+  published as `lexicon::TRACE_FILE_ENV`, so the shared-contract test guarded one name
+  and not the other; hosts are told to *set these variables* and the scaffold template
+  *writes one into generated code*. `lexicon::TRACE_MODE_ENV` now carries it,
+  `trace_mode_from_env` reads the constant, and the generated `src/main.rs` asks for
+  `lexicon::TRACE_MODE_ENV` the way it already asked for `TRACE_FILE_ENV`. It could not
+  ride `0.1.3`: the symbol is in `core`, `run_method` consumes it, and the package audit
+  builds each tarball against the **published** dependency, so it failed with
+  `error[E0425]: cannot find value TRACE_MODE_ENV in module crate::registry_core::lexicon`
+  against `nichlink-core-0.1.3`. That is the version rule working, not a defect, and
+  this release is the move it asked for. Measured: a freshly scaffolded binary still
+  records and writes its artifact under `NICH_LINK_TRACE=full`; renaming the constant is
+  red in the lexicon pin, and putting the literal back in the template is red in the
+  scaffold pin.
 - **A second package built or verified in one process is no longer stamped with the
   first one's namespace.** `build_method`'s identity namespace was a first-write-wins
   process pin, and `check_for` set it from the package it was given — so in a
@@ -1084,6 +1115,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 ### [Unreleased] 未发布
 
+暂无；下一次发布的内容会落在这里。本工作区不按 crate 分维护 changelog，
+因此这一节在下次发布前保持为空。
+
+### [0.1.4] 2026-09-27
+
 新增：
 
 - **`nichlink.impact`：改动一个面能走多远。** `nichlink.usages` 给直接邻域，`nichlink.converge` 给
@@ -1128,7 +1164,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
   带 `evidence=Live` 并**取代**它的编译器候选、而不是与它并列，其余保持 `evidence=Mir`。缺失 trace
   是更弱的答案、不是坏掉的答案：合并仍然作答，并把每条关系标为编译器候选。`mcp` 为此新增
-  `nichlink-debug-method` 依赖，而版本线不动，因为 `0.1.3` 仍未发布。*文本*的生产者仍在桥之外，工具
+  `nichlink-debug-method` 依赖；版本线移到 `0.1.4` 是另一条原因（一个被 `run_method` 消费的 core
+  符号），因此这一条是随车走，而不是它本身要求移动。*文本*的生产者仍在桥之外，工具
   把这一点说出来而不是藏起来：那是 nightly 工具链上的 `cargo rustc -Zunpretty=mir`。
 - `nichlink.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
   的树差异，因此一次编辑是被**确认过**的，而不只是被写下。它驱动 CLI 的 `check` 所驱动的同一个入口，
@@ -1178,6 +1215,17 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
+- **`NICH_LINK_TRACE` 现在是 lexicon 常量，因此改它的名字不可能悄悄弄坏宿主——而这也是本次发布存在
+  的原因。** 收集模式那个变量过去是记录器里的裸字面量，而它的同类 `NICH_LINK_TRACE_FILE` 是公开的
+  `lexicon::TRACE_FILE_ENV`，因此共享契约测试只守住了其中一个名字；而宿主是**被告知去设置这些变量**
+  的，脚手架模板还会把其中一个**写进生成的代码**。现在由 `lexicon::TRACE_MODE_ENV` 承载它，
+  `trace_mode_from_env` 读该常量，生成的 `src/main.rs` 也像它早已读取 `TRACE_FILE_ENV` 那样读取
+  `lexicon::TRACE_MODE_ENV`。它搭不上 `0.1.3`：该符号在 `core`、被 `run_method` 使用，而包审计用
+  **已发布的**依赖构建每个 tarball，于是对着 `nichlink-core-0.1.3` 报
+  `error[E0425]: cannot find value TRACE_MODE_ENV in module crate::registry_core::lexicon`。
+  那是版本规则在生效、不是缺陷，而本次发布正是它要求的移动。实测：刚脚手架出来的二进制在
+  `NICH_LINK_TRACE=full` 下仍能记录并写出 artifact；把常量改名会让 lexicon 钉子变红，把模板改回
+  字面量会让脚手架钉子变红。
 - **在一个进程里构建或校验第二个包时，它不再被盖上第一个包的命名空间。** `build_method` 的身份
   命名空间过去是"先到先得"的进程固定值，而 `check_for` 用它收到的包去设置它——于是在长生命周期进程
   （MCP 桥、Studio 会话）里，**第二个**包发布的证据带着第一个包的命名空间，`nichlink.diff` 于是把

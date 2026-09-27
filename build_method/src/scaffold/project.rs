@@ -144,7 +144,7 @@ pub fn project_files(
              // `NICH_LINK_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
              // host records and writes nothing at all.\n    \
              let asked = std::env::var_os(nichlink_run_method::lexicon::TRACE_FILE_ENV).is_some()\n        \
-             || std::env::var_os(\"NICH_LINK_TRACE\").is_some();\n    \
+             || std::env::var_os(nichlink_run_method::lexicon::TRACE_MODE_ENV).is_some();\n    \
              let mut trace = nichlink_run_method::CallTrace::runtime();\n    \
              let root = nichlink_run_method::root_node_id(env!(\"CARGO_PKG_NAME\"));\n    \
              let faces = trace.with(root, \"main\", |_| builtin_static_plan().len());\n    \
@@ -296,7 +296,7 @@ mod tests {
             "trace_artifact_path",
             "write_trace_artifact",
             "TRACE_FILE_ENV",
-            "NICH_LINK_TRACE",
+            "TRACE_MODE_ENV",
         ] {
             assert!(
                 entry.contains(needed),

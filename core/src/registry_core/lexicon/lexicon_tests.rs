@@ -27,6 +27,7 @@ fn the_text_contracts_keep_their_published_values() {
     assert_eq!(TRACE_DIR, "traces");
     assert_eq!(TRACE_FILE, "nichlink.trace");
     assert_eq!(TRACE_FILE_ENV, "NICH_LINK_TRACE_FILE");
+    assert_eq!(TRACE_MODE_ENV, "NICH_LINK_TRACE");
 }
 
 /// The package-root rule, at each of its three steps and at the boundary a

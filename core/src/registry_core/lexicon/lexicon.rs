@@ -105,6 +105,21 @@ pub const TRACE_FILE: &str = "nichlink.trace";
 /// 固定读取方加载哪个 trace artifact 的环境变量。
 pub const TRACE_FILE_ENV: &str = "NICH_LINK_TRACE_FILE";
 
+/// The environment variable that selects the trace collection mode.
+/// 选择 trace 收集模式的环境变量。
+///
+/// This lived as a bare literal in the recorder, so a rename here would not have
+/// been caught by the shared-contract tests the way `TRACE_FILE_ENV` is: hosts are
+/// told to set the variable by name, and the scaffold template writes that name
+/// into generated code. `the_text_contracts_keep_their_published_values` now pins
+/// it next to its sibling, and `0.1.4` is the version move that let a core symbol
+/// be consumed by `run_method` again.
+/// 它过去是记录器里的裸字面量，因此这里改名不会被共享契约测试像 `TRACE_FILE_ENV` 那样抓到：宿主是
+/// 按名字被告知去设置这个变量的，而脚手架模板会把这个名字写进生成的代码。
+/// `the_text_contracts_keep_their_published_values` 现在把它钉在它的同类旁边，而 `0.1.4` 正是
+/// 让 `run_method` 又能消费一个 core 符号的那次版本移动。
+pub const TRACE_MODE_ENV: &str = "NICH_LINK_TRACE";
+
 /// Whether `path` names `prefix` itself or a segment strictly below it.
 /// `path` 是 `prefix` 本身，还是位于其下的某个路径段。
 ///
