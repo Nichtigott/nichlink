@@ -54,6 +54,13 @@ The server exposes compact tools. Reads:
   *replaces* its compiler candidate, while the rest stay `evidence=Mir`. With no
   recorded trace the merge still answers, labelling every relation a compiler
   candidate.
+- `nichlink.grafts`: every external graft plan under
+  `.nichlink/external-grafts/<selector>/graft.plan` and whether the host entry's
+  `static_graft_plan!` declares the slot it targets — the CLI's `grafts` answer for an
+  agent, from the same rule. An undeclared plan is `NOT declared by the host entry` and
+  counted under `unkept plans`: the release prunes that slot, so the record can never take
+  effect, which is what `cargo build` refuses. An unreadable plan carries its reason, and
+  an unreadable entry leaves the state `unknown` instead of a false `not declared`.
 - `nichlink.impact`: the transitive blast radius of a change to one face, over the
   three dependencies the tree declares — its descendants, the faces whose `requires`
   names a capability it provides, and the declared graft cuts that hand it over.

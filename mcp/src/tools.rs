@@ -1,7 +1,7 @@
 //! Tool catalog, the query implementations, and the write path's dispatch.
 //! 工具目录、查询实现与写入路径的分派。
 //!
-//! Five tools read Rust source text. Seven more answer from evidence that is not
+//! Five tools read Rust source text. Eight more answer from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
 //! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
 //! build *published* (`target/nichlink/out`) for scope and release pruning,
@@ -15,7 +15,7 @@
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
-//! 五个工具读取 Rust 源码文本，另外七个用非源码文本的证据作答：`nichlink.registry` 推导出构建
+//! 五个工具读取 Rust 源码文本，另外八个用非源码文本的证据作答：`nichlink.registry` 推导出构建
 //! 所推导的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
@@ -32,6 +32,7 @@ use crate::callgraph::callgraph;
 use crate::converge::converge;
 use crate::diff::diff;
 use crate::evidence::explain;
+use crate::grafts::grafts;
 use crate::impact::impact;
 use crate::index::{load_one, load_sources, required_path, resolve_root};
 use crate::mir::{mir, unified};
@@ -163,6 +164,21 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
+            "nichlink.grafts",
+            "Every external graft plan under `.nichlink/external-grafts/<selector>/graft.plan` \
+             joined with the host entry's `static_graft_plan!` declarations: the selector, the \
+             logical path and replacement each plan targets, whether it covers the whole subtree, \
+             and whether the host entry names that slot. A plan the entry does not declare is \
+             reported as `NOT declared by the host entry` and counted under `unkept plans`: the \
+             release prunes that slot, so the record can never take effect — the build warns about \
+             it and a cargo log is where that warning goes to die. An unreadable plan carries its \
+             reason rather than being skipped, and with no readable declaration the state is \
+             `declaration unknown` rather than a false `not declared`. A declaration is about \
+             the *slot* a plan targets, not the implementation it selects, so each row shows the \
+             plan's own target and graft next to the declaration's cut and graft. Read-only.",
+            json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":400},"root":{"type":"string"}}}),
+        ),
+        tool(
             "nichlink.impact",
             "The transitive blast radius of a change to one face, over the three dependency kinds \
              this tree actually declares: a face's descendants (its registry owns them), the faces \
@@ -247,6 +263,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.mir" => mir(&root, arguments),
         "nichlink.unified" => unified(&root, arguments),
         "nichlink.impact" => impact(&root, arguments),
+        "nichlink.grafts" => grafts(&root, arguments),
         "nichlink.usages" => usages(&root, arguments),
         "nichlink.converge" => converge(&root, arguments),
         "nichlink.verify" => verify(&root, arguments),

@@ -18,8 +18,6 @@
 use std::io::Write;
 use std::path::Path;
 
-use nichlink::lexicon;
-use nichlink::plugin::graft_document::GraftPlanDocument;
 use nichlink_build_method::{DeclaredGrafts, FaceView, declared_grafts, face_views};
 use serde_json::{Value, json};
 
@@ -194,118 +192,43 @@ fn report_problems(problems: Vec<String>) -> Result<(), String> {
 /// Build one report row per plan directory, sorted by selector.
 /// 为每个计划目录生成一行报告，按 selector 排序。
 ///
-/// A directory whose plan is missing or unparseable becomes a row carrying the
-/// reason, not a silent skip: an operator running this command is asking exactly
-/// whether the file is usable.
-/// 计划缺失或解析不了的目录会成为携带原因的条目，而不是被静默跳过：运行本命令的
-/// 操作者问的正是"这个文件能不能用"。
+/// The rule — which plans exist, what each targets, and whether the host entry declares
+/// that slot — belongs to `nichlink_build_method::graft_plan_rows`, because the MCP
+/// bridge's `nichlink.grafts` asks the same question and two copies of a rule like this
+/// drift. This only renders the rows into the `nichlink.grafts/1` JSON shape.
+/// 规则——有哪些计划、每条针对什么、以及宿主入口是否声明了那个槽位——属于
+/// `nichlink_build_method::graft_plan_rows`，因为 MCP 桥的 `nichlink.grafts` 问的是同一个
+/// 问题，而这类规则的两份副本会漂移。这里只把那些行渲染成 `nichlink.grafts/1` 的 JSON 形状。
 pub(crate) fn plan_rows(
     manifest: &Path,
     faces: &[FaceView],
     declared: Option<&DeclaredGrafts>,
 ) -> Result<Vec<Value>, String> {
-    let directory = manifest
-        .join(lexicon::NICHLINK_DIR)
-        .join(lexicon::EXTERNAL_GRAFT_DIR);
-    let entries = match std::fs::read_dir(&directory) {
-        Ok(entries) => entries,
-        // No directory is the ordinary "no plans" case; a directory that exists
-        // and cannot be read is not, and saying "no plans" there would answer a
-        // question nobody could answer.
-        // 目录不存在是普通的"没有计划"；目录存在却读不了则不是，在那里回一句"没有计划"等于
-        // 回答了一个谁也答不出的问题。
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(format!("cannot read {}: {error}", directory.display()));
-        }
-    };
-    let mut rows = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let selector = entry.file_name().to_string_lossy().into_owned();
-        let plan = entry.path().join(lexicon::GRAFT_PLAN_FILE);
-        let text = match std::fs::read_to_string(&plan) {
-            Ok(text) => text,
-            Err(error) => {
-                rows.push(json!({
-                    "selector": selector,
-                    "error": format!("cannot read {}: {error}", plan.display()),
-                    "target": Value::Null,
-                    "target_path": Value::Null,
-                    "graft": Value::Null,
-                    "full": Value::Null,
-                    "declared": Value::Null,
-                    "declared_by": Value::Null,
-                }));
-                continue;
-            }
-        };
-        let document = match GraftPlanDocument::parse(&text) {
-            Ok(document) => document,
-            Err(error) => {
-                rows.push(json!({
-                    "selector": selector,
-                    "error": error.to_string(),
-                    "target": Value::Null,
-                    "target_path": Value::Null,
-                    "graft": Value::Null,
-                    "full": Value::Null,
-                    "declared": Value::Null,
-                    "declared_by": Value::Null,
-                }));
-                continue;
-            }
-        };
-        // A typed declaration names the base face by module, so the plan's
-        // stored NodeId is mapped back through the same face rows the build's
-        // tree walk produced. A target the current tree does not have stays
-        // `None`, and only a string cut can then prove the declaration.
-        // 类型化声明用模块命名基面，因此计划里存的 NodeId 会经构建树行走产生的同一批
-        // 面行映射回去。当前树没有的目标保持 `None`，此时只有字符串切口能证明该声明。
-        let module = faces
-            .iter()
-            .find(|face| face.id == document.target)
-            .map(|face| face.module.as_str());
-        let matched = declared.and_then(|declared| {
-            declared
-                .cuts
-                .iter()
-                .find(|cut| cut.names_face(&document.target_path, module))
-        });
-        let declared_state = match (declared, matched) {
-            (None, _) => Value::Null,
-            (Some(_), Some(_)) => Value::Bool(true),
-            (Some(_), None) => Value::Bool(false),
-        };
-        let declared_by = matched.map(|cut| {
+    let rows = nichlink_build_method::graft_plan_rows(manifest, faces, declared)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let declared_by = row.declared_by.map(|cut| {
+                json!({
+                    "cut": match &cut.cut_end {
+                        Some(end) => format!("{} to {end}", cut.cut),
+                        None => cut.cut.clone(),
+                    },
+                    "graft": cut.graft,
+                    "full": cut.full,
+                    "line": cut.line,
+                })
+            });
             json!({
-                "cut": match &cut.cut_end {
-                    Some(end) => format!("{} to {end}", cut.cut),
-                    None => cut.cut.clone(),
-                },
-                "graft": cut.graft,
-                "full": cut.full,
-                "line": cut.line,
+                "selector": row.selector,
+                "error": row.error,
+                "target": row.target.map(|target| target.to_string()),
+                "target_path": row.target_path,
+                "graft": row.graft,
+                "full": row.full,
+                "declared": row.declared,
+                "declared_by": declared_by,
             })
-        });
-        rows.push(json!({
-            "selector": selector,
-            "error": Value::Null,
-            "target": document.target.to_string(),
-            "target_path": document.target_path,
-            "graft": document.graft,
-            "full": document.full,
-            "declared": declared_state,
-            "declared_by": declared_by,
-        }));
-    }
-    rows.sort_by(|left, right| {
-        left["selector"]
-            .as_str()
-            .unwrap_or_default()
-            .cmp(right["selector"].as_str().unwrap_or_default())
-    });
-    Ok(rows)
+        })
+        .collect())
 }

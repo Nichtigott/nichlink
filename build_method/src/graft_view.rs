@@ -17,11 +17,14 @@
 mod declared;
 #[path = "graft_view/matching.rs"]
 mod matching;
+#[path = "graft_view/plan_rows.rs"]
+mod plan_rows;
 #[path = "graft_view/query.rs"]
 mod query;
 
 pub(crate) use declared::graft_cut_label;
 pub use declared::{DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts};
 pub(crate) use matching::{face_declares_plugin, graft_expression_module, string_cut_modules};
+pub use plan_rows::{GraftPlanRow, graft_plan_rows};
 pub use query::declared_grafts;
 pub(crate) use query::{declared_graft_view, host_graft_entries};

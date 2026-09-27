@@ -41,6 +41,11 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——被 trace 确认的调用带
   `evidence=Live` 并**取代**它的编译器候选，其余保持 `evidence=Mir`。没有已记录的 trace 时合并仍会
   作答，并把每条关系标为编译器候选。
+- `nichlink.grafts`：`.nichlink/external-grafts/<selector>/graft.plan` 下的每条外部 graft
+  计划，以及宿主入口的 `static_graft_plan!` 是否声明了它针对的槽位——CLI 的 `grafts` 给代理的同一个
+  答案，规则也是同一条。未声明的计划是 `NOT declared by the host entry`，并计入 `unkept plans`：
+  发布态会剪掉那个槽位，记录永远无法生效，而 `cargo build` 拒绝的正是这件事。读不了的计划带上原因；
+  入口读不了时状态是 `unknown`，而不是错误的 `not declared`。
 - `nichlink.impact`：改动一个面的传递爆炸半径，走这棵树真正声明的三种依赖——它的后代、`requires`
   点名了它所提供能力的面，以及把它交出去的已声明 graft 切口。每个到达的节点带上最短跳数、所有到达它的
   理由与跳的链条。能力环被计数而不是被反复走；没走到的面会被如实报成在 `depth` 内未到达，而那并不等于

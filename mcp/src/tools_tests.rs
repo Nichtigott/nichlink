@@ -44,6 +44,7 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
         ("nichlink.diff", "limit"),
         ("nichlink.trace", "query"),
         ("nichlink.impact", "node"),
+        ("nichlink.grafts", "limit"),
     ] {
         let tool = listed
             .iter()
@@ -84,6 +85,7 @@ fn the_evidence_tools_are_dispatched_to_their_implementations() {
         ("nichlink.explain", "scope unknown"),
         ("nichlink.diff", "no build evidence"),
         ("nichlink.trace", "trace absent"),
+        ("nichlink.grafts", "no external graft plans"),
     ] {
         let reply = super::tool_call(&root, json!(1), &json!({"name": name, "arguments": {}}));
         let text = reply["result"]["content"][0]["text"]

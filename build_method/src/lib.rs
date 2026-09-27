@@ -81,7 +81,10 @@ pub use face_view::{
     BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views, read_build_scope,
     read_pruning_manifest,
 };
-pub use graft_view::{DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, declared_grafts};
+pub use graft_view::{
+    DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, declared_grafts,
+    graft_plan_rows,
+};
 /// The package name Cargo reports for a package root, which is the identity
 /// namespace of every face that package compiles.
 /// Cargo 为某个包根报告的包名，也就是该包编译的每个面的身份命名空间。

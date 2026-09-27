@@ -676,7 +676,8 @@ MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
 都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过）、
 `nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
 真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
-能力记号）、`nichlink.impact`（一次改动的传递爆炸半径：后代、能力消费者与已声明 graft 切口，各带跳数与理由），以及 `nichlink.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
+能力记号）、`nichlink.impact`（一次改动的传递爆炸半径：后代、能力消费者与已声明 graft 切口，各带跳数与理由）、
+`nichlink.grafts`（每条外部 graft 计划，以及宿主入口是否声明了它针对的槽位，使未被保住的记录在发布剪掉它之前就可见），以及 `nichlink.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
 每条需求是否有答案、该读哪些文件——并把内核的拒绝当成判断而不是错误报出来；给出 `trace: true` 时它
 从已记录的运行出发，把整棵树收敛到"既声明了面、又真的跑过"的那些文件，并带上那些帧捕获的值与它们
 之间的边）、

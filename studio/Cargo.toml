@@ -69,9 +69,9 @@ ratatui = { version = "0.30", default-features = false, features = [
 rataflow = { version = "0.1", optional = true, default-features = false, features = [
     "crossterm",
 ] }
-nichlink-run-method = { path = "../run_method", version = "0.1.5", features = ["authoring"] }
-nichlink-debug-method = { path = "../debug_method", version = "0.1.5" }
-nichlink-build-method = { path = "../build_method", version = "0.1.5" }
+nichlink-run-method = { path = "../run_method", version = "0.1.6", features = ["authoring"] }
+nichlink-debug-method = { path = "../debug_method", version = "0.1.6" }
+nichlink-build-method = { path = "../build_method", version = "0.1.6" }
 
 [[bin]]
 name = "nichlink-studio"

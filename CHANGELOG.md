@@ -69,6 +69,40 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 Nothing yet; the next release's entries land here. There is no per-crate
 changelog, so this section stays empty until something ships.
 
+## [0.1.6] — unreleased
+
+### Added
+
+- **`nichlink.grafts`: the external graft plans, and whether the host entry keeps them.**
+  A plan under `.nichlink/external-grafts/<selector>/graft.plan` is an authoring record the
+  build never opens; when the host entry's `static_graft_plan!` does not name the slot a
+  plan targets, the release prunes that slot and the record can never take effect. The
+  build *warns* about that, and a long `cargo` log is where a warning goes to die — the CLI
+  answered it since `nichlink grafts`, and now the bridge does too, from one rule
+  (`nichlink_build_method::graft_plan_rows`, extracted from the CLI in this release, so the
+  two surfaces cannot answer differently). Each row names the selector, the logical path
+  and replacement the plan targets, whether it covers the whole subtree, and either the
+  declaration that keeps it (`cut \`…\` graft \`…\`` at its entry line) or
+  `NOT declared by the host entry` — with a closing `unkept plans N` count, because that is
+  what a reader has to act on. A declaration is about the **slot** a plan targets, not the
+  implementation the plan selects — the build's own question — so the plan's graft and the
+  declaration's are both printed and a difference is visible rather than silently accepted.
+  An unreadable plan carries its reason instead of being skipped, and an unreadable entry
+  leaves the state `unknown` rather than turning a missing answer into a false
+  `not declared`. Measured end to end on a scaffolded host: with a declared plan the reply
+  names entry line 6, and after adding a plan for `root/ghost` it reports
+  `unkept plans 1` — which is exactly what `cargo build` then refuses with
+  (`external graft plan \`ghost_fast\` targets \`root/ghost\`, which no declaration in the host
+  entry names`), before anyone waits for a release to find out. Five tests; three measured
+  red (make every plan declared, skip an unreadable plan, turn `unknown` into
+  `not declared`).
+
+### Changed
+
+- The CLI's `grafts` now renders rows computed by `nichlink_build_method::graft_plan_rows`;
+  its JSON and text output are byte-identical (pinned by its own tests), and the rule that
+  decides "is this plan's slot declared" has one home instead of two.
+
 ## [0.1.5] — 2026-09-27
 
 ### Fixed
@@ -1146,6 +1180,31 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 暂无；下一次发布的内容会落在这里。本工作区不按 crate 分维护 changelog，
 因此这一节在下次发布前保持为空。
+
+### [0.1.6] 未发布
+
+新增：
+
+- **`nichlink.grafts`：外部 graft 计划，以及宿主入口是否保住它们。**
+  `.nichlink/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；宿主入口的
+  `static_graft_plan!` 没有点名计划所针对的槽位时，发布态会剪掉那个槽位，这条记录便永远无法生效。
+  构建对此**只警告**，而冗长的 `cargo` 日志正是警告湮没的地方——CLI 从 `nichlink grafts` 起就在回答
+  它，现在桥也回答，而且用的是同一条规则（本发布把 `nichlink_build_method::graft_plan_rows` 从 CLI
+  提出来，因此两个执行面不可能给出不同答案）。每条记录点名 selector、计划针对的逻辑路径与替换件、
+  是否覆盖整棵子树，以及保住它的那条声明（`cut \`…\` graft \`…\`` 与入口行号）或者
+  `NOT declared by the host entry`——并以 `unkept plans N` 收尾，因为那才是读取方要据以行动的东西。
+  声明针对的是计划所瞄准的**槽位**而不是计划选择的实现（那是构建自己的问题），因此计划与声明各自的
+  graft 都会打印，差异是看得见的，而不是被默默接受。读不了的计划带上原因而不是被跳过；入口读不了时
+  状态是 `unknown`，而不是把一个缺失的答案变成错误的 `not declared`。脚手架宿主上端到端实测：有声明
+  时回复点名入口第 6 行；再加一条针对 `root/ghost` 的计划后报 `unkept plans 1`——而 `cargo build`
+  随后拒绝的正是同一件事（`external graft plan \`ghost_fast\` targets \`root/ghost\`, which no
+  declaration in the host entry names`），在任何人等到发布才发现之前。五条测试，其中三条实测为红
+  （把每条计划都算作已声明、跳过读不了的计划、把 `unknown` 变成 `not declared`）。
+
+变更：
+
+- CLI 的 `grafts` 现在渲染由 `nichlink_build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本
+  输出逐字节相同（由它自己的测试钉住），而"这条计划的槽位是否被声明"这条规则从此只有一个家。
 
 ### [0.1.5] 2026-09-27
 
