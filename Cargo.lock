@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-build-method"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-core",
  "proc-macro2",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-cli"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-build-method",
  "nichlink-core",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-conventions"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-core",
  "syn 2.0.119",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "proc-macro2",
  "sha2",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-debug-method"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "inventory",
  "nichlink-run-method",
@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-macro"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-core",
  "proc-macro2",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-mcp"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-build-method",
  "nichlink-core",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-plugin-host"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "arc-swap",
  "ed25519-dalek",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-run-method"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nichlink-core",
  "nichlink-macro",
@@ -760,7 +760,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-studio"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "crossterm",
  "nichlink-build-method",

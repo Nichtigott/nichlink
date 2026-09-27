@@ -86,6 +86,22 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
     }
 }
 
+/// The NichLink release this tool belongs to, as the requirement a generated
+/// manifest writes for the crates it depends on.
+/// 本工具所属的 NichLink 发布版本，也就是生成清单为它依赖的 crate 写下的要求。
+///
+/// A literal here drifts: every scaffolded manifest used to require `0.1.0` forever,
+/// which caret semantics happened to satisfy until the line reached `0.2.0` — at
+/// which point a freshly generated host would stop resolving. The generating tool's
+/// own version is the one value that cannot go stale, and `a_generated_project_can_
+/// be_published_and_built_in_a_workspace` pins the requirement against it instead of
+/// against a literal, so the next release moves it for free.
+/// 这里的字面量会腐化：生成的清单过去永远要求 `0.1.0`，而 caret 语义恰好一直满足它，直到版本线走到
+/// `0.2.0`——那时刚生成的宿主就会解析失败。生成工具自己的版本是唯一不会陈旧的取值，而
+/// `a_generated_project_can_be_published_and_built_in_a_workspace` 把要求钉在它上面而不是钉在
+/// 字面量上，因此下一次发布自动带上它。
+const RELEASE_REQUIREMENT: &str = env!("CARGO_PKG_VERSION");
+
 /// The `(runtime, build)` dependency requirement strings for a generated
 /// manifest, in the two lines `Cargo.toml` needs.
 /// 生成清单所需的 `(runtime, build)` 两行依赖声明，即 `Cargo.toml` 要的两条。
@@ -96,17 +112,19 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
             let build = toml_path(&workspace.join("build_method"));
             (
                 format!(
-                    "nichlink-run-method = {{ package = \"nichlink-run-method\", path = \"{runtime}\", version = \"0.1.0\" }}"
+                    "nichlink-run-method = {{ package = \"nichlink-run-method\", path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
                 ),
-                format!("nichlink-build-method = {{ path = \"{build}\", version = \"0.1.0\" }}"),
+                format!(
+                    "nichlink-build-method = {{ path = \"{build}\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                ),
             )
         }
         DependencySource::Git { url } => (
             format!(
-                "nichlink-run-method = {{ package = \"nichlink-run-method\", git = \"{url}\", branch = \"main\", version = \"0.1.0\" }}"
+                "nichlink-run-method = {{ package = \"nichlink-run-method\", git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
             ),
             format!(
-                "nichlink-build-method = {{ git = \"{url}\", branch = \"main\", version = \"0.1.0\" }}"
+                "nichlink-build-method = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
             ),
         ),
     }
@@ -382,17 +400,23 @@ mod tests {
         assert_eq!(snippets, editor_snippets(Editor::Vscode));
         fs::remove_dir_all(root.parent().expect("project parent")).expect("cleanup");
     }
-    /// Every internal requirement in a generated manifest carries a version, from both
-    /// dependency sources, and the manifest is its own workspace root.
-    /// 生成的清单里每处内部要求都带版本（两种依赖来源都算），且该清单是自己的根工作区。
+    /// Every internal requirement in a generated manifest names the release this tool
+    /// belongs to, from both dependency sources, and the manifest is its own workspace
+    /// root.
+    /// 生成的清单里每处内部要求都点名本工具所属的发布版本（两种依赖来源都算），且该清单是自己的根工作区。
     ///
     /// `cargo publish --dry-run` refuses a manifest whose path dependency has no
     /// `version`, and a manifest without its own `[workspace]` table cannot be built
     /// inside an existing workspace ("current package believes it's in a workspace when
-    /// it's not"). Both were measured on a scaffolded project.
+    /// it's not"). Both were measured on a scaffolded project. The requirement is pinned
+    /// against `env!("CARGO_PKG_VERSION")` rather than a literal because the old literal
+    /// (`0.1.0`) was stale for four releases: caret semantics hid it, and it would have
+    /// started failing the moment the line reached `0.2.0`.
     /// `cargo publish --dry-run` 会拒绝带无版本路径依赖的清单，而缺少自己的 `[workspace]`
     /// 表的清单无法在已有工作区里构建（"current package believes it's in a workspace when
-    /// it's not"）。两者都在脚手架产物上实测过。
+    /// it's not"）。两者都在脚手架产物上实测过。这里把要求钉在 `env!("CARGO_PKG_VERSION")`
+    /// 上而不是字面量上，因为旧字面量（`0.1.0`）已经陈旧了四个发布：caret 语义把它藏住了，而版本线
+    /// 一到 `0.2.0` 它就会开始失败。
     #[test]
     fn a_generated_project_can_be_published_and_built_in_a_workspace() {
         let local = DependencySource::Local {
@@ -401,12 +425,13 @@ mod tests {
         let git = DependencySource::Git {
             url: "https://github.com/Nichtigall/nichlink".to_owned(),
         };
+        let expected = format!("version = \"{}\"", env!("CARGO_PKG_VERSION"));
         for source in [&local, &git] {
             let (runtime, build) = dependency_specs(source);
             for spec in [&runtime, &build] {
                 assert!(
-                    spec.contains("version = \"0.1.0\""),
-                    "a published package needs a version requirement: {spec}"
+                    spec.contains(&expected),
+                    "a generated manifest must require this release, not a literal: {spec}"
                 );
             }
             let files = project_files("probe", ProjectKind::Binary, source);

@@ -21,7 +21,7 @@ requirements had not reached the index. `0.1.3` followed on 2026-09-26 (run
 published, so its changes shipped in `0.1.3`, and the audit is back to `verified:`
 all nine with `skipped: none`. The version line stays on
 **0.1.x** while the design is still being deepened: each later release is a small
-step (`0.1.5`, …), and "1.0" names the milestone in
+step (`0.1.6`, …), and "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
 `version = "0.1.4"` requirement with it, and that step is what freezes the public
@@ -44,7 +44,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 跳过那八个依赖尚未进入 index 的 crate。`0.1.3` 于 2026-09-26 跟进（run `36236583886`，
 `--verify-consumers` 在同一次运行里通过）；`0.1.2` 从未发布，它的改动随 `0.1.3` 一起走，包审计
 也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
-**0.1.x**：其后的每次发布都是小步（`0.1.5`……），而"1.0"是
+**0.1.x**：其后的每次发布都是小步（`0.1.6`……），而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
 `1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.4"` 要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
@@ -61,6 +61,23 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 
 Nothing yet; the next release's entries land here. There is no per-crate
 changelog, so this section stays empty until something ships.
+
+## [0.1.5] — 2026-09-27
+
+### Fixed
+
+- **A generated manifest now requires the release that generated it, instead of
+  `0.1.0` forever.** Every scaffolded host carried `version = "0.1.0"` on both NichLink
+  dependencies, from both dependency sources. Caret semantics hid it for four releases
+  (`^0.1.0` accepts anything below `0.2.0`), so the literal was not merely stale — it
+  was *load-bearing-wrong*: the moment the line reached `0.2.0`, `nichlink new` would
+  generate a host that cannot resolve, and the failure would read as a Cargo problem
+  rather than a stale template. `dependency_specs` now writes
+  `env!("CARGO_PKG_VERSION")` — the generating tool's own release, which cannot go
+  stale — and the scaffold pin asserts against that value rather than against a
+  literal, so the next release moves it for free. Measured: the published `0.1.4` CLI
+  generated `version = "0.1.0"`; the `0.1.5` one generates `version = "0.1.5"`. Pinned
+  red by putting the old literal back.
 
 ## [0.1.4] — 2026-09-27
 
@@ -1122,6 +1139,18 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 暂无；下一次发布的内容会落在这里。本工作区不按 crate 分维护 changelog，
 因此这一节在下次发布前保持为空。
+
+### [0.1.5] 2026-09-27
+
+修复：
+
+- **生成的清单现在要求"生成它的那个发布版本"，而不是永远要求 `0.1.0`。** 每个脚手架出来的宿主在
+  两条 NichLink 依赖上都写着 `version = "0.1.0"`，两种依赖来源都是。caret 语义把它藏了四个发布
+  （`^0.1.0` 接受 `0.2.0` 以下的一切），因此这个字面量不只是陈旧——它**错得会咬人**：版本线一到
+  `0.2.0`，`nichlink new` 生成的宿主就无法解析，而失败看起来会像 Cargo 的问题而不是模板陈旧。
+  现在 `dependency_specs` 写 `env!("CARGO_PKG_VERSION")`——生成工具自己的发布版本，它不会陈旧——
+  而脚手架钉子改成对着这个值断言、不再对着字面量断言，因此下一次发布自动带上它。实测：已发布的
+  `0.1.4` CLI 生成 `version = "0.1.0"`；`0.1.5` 的生成 `version = "0.1.5"`。把旧字面量放回去即实测为红。
 
 ### [0.1.4] 2026-09-27
 
