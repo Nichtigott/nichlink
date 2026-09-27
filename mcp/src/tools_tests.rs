@@ -35,7 +35,7 @@ fn package(label: &str) -> PathBuf {
 
 /// The three evidence tools must be advertised with the argument that narrows
 /// each one, because an agent can only call what `tools/list` names.
-/// 三个证据工具必须被列出，并且带上各自缩小范围的那个参数，因为代理只能调用 `tools/list` 点名的东西。
+/// 证据工具必须被列出，并且带上各自缩小范围的那个参数，因为代理只能调用 `tools/list` 点名的东西。
 #[test]
 fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
     let listed = super::tools();
@@ -43,6 +43,7 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
         ("nichlink.explain", "node"),
         ("nichlink.diff", "limit"),
         ("nichlink.trace", "query"),
+        ("nichlink.impact", "node"),
     ] {
         let tool = listed
             .iter()
@@ -53,6 +54,25 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
             "{name} does not advertise `{key}`: {tool}"
         );
     }
+}
+
+/// `nichlink.impact` is wired to its implementation too, and asking it for a radius
+/// with no face named is an error response rather than a silent empty one.
+/// `nichlink.impact` 同样接到了实现上，而没点名任何面就要半径会得到错误响应，而不是一份静默的空答案。
+#[test]
+fn the_impact_tool_refuses_a_call_without_a_node() {
+    let root = package("impact-dispatch");
+    let reply = super::tool_call(
+        &root,
+        json!(1),
+        &json!({"name": "nichlink.impact", "arguments": {}}),
+    );
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no text: {reply}"));
+    assert!(text.contains("requires node"), "{text}");
+    assert_eq!(reply["result"]["isError"], true, "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Every new name is wired to its implementation, not only to the catalog.

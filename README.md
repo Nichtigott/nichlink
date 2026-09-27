@@ -766,7 +766,9 @@ workspace produced before), `nichlink.unified` (that graph merged with the recor
 trace through `debug_method`'s own `UnifiedCallGraph`, where a live call confirms its
 compiler candidate instead of sitting beside it), and
 `nichlink.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
-read back, and the capability tokens other faces mention in either direction), and
+read back, and the capability tokens other faces mention in either direction),
+`nichlink.impact` (the transitive blast radius of a change: descendants, capability
+consumers, and declared graft cuts, each with its hop distance and reasons), and
 `nichlink.converge` (one call that returns the converged starting point for a face:
 scope and pruning verdicts, its neighbourhood, whether each requirement is answered,
 and the files to read — reporting a kernel rejection as its verdict rather than as an

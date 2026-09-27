@@ -41,6 +41,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——被 trace 确认的调用带
   `evidence=Live` 并**取代**它的编译器候选，其余保持 `evidence=Mir`。没有已记录的 trace 时合并仍会
   作答，并把每条关系标为编译器候选。
+- `nichlink.impact`：改动一个面的传递爆炸半径，走这棵树真正声明的三种依赖——它的后代、`requires`
+  点名了它所提供能力的面，以及把它交出去的已声明 graft 切口。每个到达的节点带上最短跳数、所有到达它的
+  理由与跳的链条。能力环被计数而不是被反复走；没走到的面会被如实报成在 `depth` 内未到达，而那并不等于
+  独立。
 - `nichlink.usages`：一个面的邻域——它在树里的父级与子面、`nichlink.apply` 作为输入接受的那些字段
   从生成模块里读回的结果（preset、parts、名称、exports、`requires`、`provides`、handle 与 part 的
   traits/contracts、registration rule、admission、flow、runtime checks），以及哪些别的面提到同一批

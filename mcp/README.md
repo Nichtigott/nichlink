@@ -54,6 +54,13 @@ The server exposes compact tools. Reads:
   *replaces* its compiler candidate, while the rest stay `evidence=Mir`. With no
   recorded trace the merge still answers, labelling every relation a compiler
   candidate.
+- `nichlink.impact`: the transitive blast radius of a change to one face, over the
+  three dependencies the tree declares — its descendants, the faces whose `requires`
+  names a capability it provides, and the declared graft cuts that hand it over.
+  Each reached node carries its shortest hop distance, every reason that reached it,
+  and the chain of hops. A capability cycle is counted rather than re-walked, and a
+  face the walk did not reach is reported as unreached within `depth`, which is not
+  proof of independence.
 - `nichlink.usages`: a face's neighbourhood — its parent and children as the tree
   has them, the fields `nichlink.apply` accepts read back from the generated module
   (preset, parts, names, exports, `requires`, `provides`, handle and part traits and

@@ -47,6 +47,23 @@ waiting state that change opened.
 
 ### Added
 
+- **`nichlink.impact`: how far a change to one face travels.** `nichlink.usages` gives
+  the direct neighbourhood and `nichlink.converge` one face's constraints; neither
+  says what else a change touches. This walks the three dependency kinds this tree
+  actually *declares*: a face's descendants (its registry owns them), the faces whose
+  `requires` names a capability it provides, and the declared graft cuts that hand it
+  over. Every reached node carries its shortest hop distance, *all* the reasons that
+  reached it (a node that is both a child and a consumer must say both) and the chain
+  of hops, because "why is this in my blast radius" is the question a repair asks.
+  The walk is bounded by `depth` and by a visited set, so a capability cycle is
+  counted — `cycles back to this face N` — rather than re-walked, and a face it did
+  not reach is reported as unreached within the depth, which is not proof of
+  independence. Measured through the bridge on a real host: a two-face package answers
+  `hop 1 root/slider/gauge` with `because: child of this face's registry (kind Gauge)`
+  and `because: consumer: requires \`cap.paint=>Slider\``; an unknown node is refused by
+  name. Five tests, three measured red (drop the extra reasons, drop the cycle count,
+  ignore the depth bound). Graft *records* and recorded traces naming the same identity
+  are not traversed, and the reply says so.
 - **`nichlink.trace` now answers what a run *saw*, not only what it ran.** The call
   report says which functions were active; `values: true` reads the same
   identity-checked artifact and reports the recorded locals grouped by the frame that
@@ -1069,6 +1086,17 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
+- **`nichlink.impact`：改动一个面能走多远。** `nichlink.usages` 给直接邻域，`nichlink.converge` 给
+  一个面的约束；两者都不说这次改动还碰了什么。这个工具遍历这棵树真正**声明**的三种依赖：一个面的后代
+  （它的注册机拥有它们）、`requires` 点名了该面所提供能力的面，以及把该面交出去的已声明 graft 切口。
+  每个到达的节点都带上最短跳数、**所有**到达它的理由（既是子面又是消费者的节点必须把两者都说出来）与
+  跳的链条，因为"它为什么在我的爆炸半径里"正是修复时要问的问题。遍历受 `depth` 与已访问集合限制，
+  因此能力环被计数——`cycles back to this face N`——而不是被反复走；没走到的面会被如实报成在深度内
+  未到达，而这并不等于独立。经桥在真实宿主上实测：一个两个面的包回答
+  `hop 1 root/slider/gauge`，附 `because: child of this face's registry (kind Gauge)` 与
+  `because: consumer: requires `cap.paint=>Slider``；未知节点按名拒绝。五条测试，其中三条实测为红
+  （去掉多余理由、去掉环计数、忽略深度上限）。点名同一身份的 graft **记录**与已记录 trace 不在遍历
+  范围内，回复里写明了这一点。
 - **`nichlink.trace` 现在也回答一次运行**看见**了什么，而不只是跑了什么。** 调用报告说哪些函数处于
   活动状态；`values: true` 读同一份经身份核验的 artifact，报告记录下的局部值——按捕获它们的帧分组，
   带上名字、渲染后的类型与值、角色（`input`/`let`/`return`/`consumer`）、`observed`/`unobserved` 与

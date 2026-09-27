@@ -93,3 +93,6 @@ mod verify;
 
 #[path = "mir.rs"]
 mod mir;
+
+#[path = "impact.rs"]
+mod impact;

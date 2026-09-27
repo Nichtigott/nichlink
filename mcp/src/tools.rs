@@ -1,7 +1,7 @@
 //! Tool catalog, the query implementations, and the write path's dispatch.
 //! 工具目录、查询实现与写入路径的分派。
 //!
-//! Five tools read Rust source text. Six more answer from evidence that is not
+//! Five tools read Rust source text. Seven more answer from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
 //! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
 //! build *published* (`target/nichlink/out`) for scope and release pruning,
@@ -15,7 +15,7 @@
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
-//! 五个工具读取 Rust 源码文本，另外六个用非源码文本的证据作答：`nichlink.registry` 推导出构建
+//! 五个工具读取 Rust 源码文本，另外七个用非源码文本的证据作答：`nichlink.registry` 推导出构建
 //! 所推导的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
@@ -32,6 +32,7 @@ use crate::callgraph::callgraph;
 use crate::converge::converge;
 use crate::diff::diff;
 use crate::evidence::explain;
+use crate::impact::impact;
 use crate::index::{load_one, load_sources, required_path, resolve_root};
 use crate::mir::{mir, unified};
 use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
@@ -162,6 +163,18 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
+            "nichlink.impact",
+            "The transitive blast radius of a change to one face, over the three dependency kinds \
+             this tree actually declares: a face's descendants (its registry owns them), the faces \
+             whose `requires` names a capability it provides, and the declared graft cuts that hand \
+             it over. Each reached node carries its shortest hop distance and the chain of reasons \
+             that got there, so a capability cycle is a shorter path rather than a hang. A face the \
+             traversal did not reach is reported as unreached within `depth` — which is not proof of \
+             independence — and graft records or recorded traces naming the same identity are not \
+             traversed, which the reply states.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"depth":{"type":"integer","minimum":1,"maximum":16},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
+        ),
+        tool(
             "nichlink.usages",
             "Report the neighbourhood of one face: its parent and children as the tree has them, the \
              fields the write path accepts read back from the generated module (preset, parts, the \
@@ -233,6 +246,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.trace" => trace(&root, arguments),
         "nichlink.mir" => mir(&root, arguments),
         "nichlink.unified" => unified(&root, arguments),
+        "nichlink.impact" => impact(&root, arguments),
         "nichlink.usages" => usages(&root, arguments),
         "nichlink.converge" => converge(&root, arguments),
         "nichlink.verify" => verify(&root, arguments),
