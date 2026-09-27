@@ -97,6 +97,21 @@ changelog, so this section stays empty until something ships.
   red (make every plan declared, skip an unreadable plan, turn `unknown` into
   `not declared`).
 
+- **`nichlink.diff` now also compares the external graft records against the sources
+  (`records: true`).** A record stores the identity it was written for, so a face that
+  changed identity under an unmoved slot breaks it *silently*: the path is still there, the
+  record still parses, and nothing in a text diff or a build log says so. The comparison
+  reuses the tree diff's vocabulary — a record comes back `ok`, `stale` (nothing in the tree
+  has that identity or that path), or `re-identified` (the path is there and the identity
+  moved, reported as `old -> now`), which is the one thing no symbol graph can tell you about
+  a graft. A typed cut stores a Rust expression rather than a logical path, so an absent
+  identity there is reported as `unmatched` instead of being guessed as `stale`; unreadable
+  records are counted rather than dropped. Measured on a scaffolded host with three records:
+  `ok 1  stale 1  re-identified 1`, the last resolving
+  `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`. Two
+  tests; the two load-bearing ones measured red (show the stale identity as "now"; let a
+  typed cut fall through to `stale`).
+
 ### Changed
 
 - The CLI's `grafts` now renders rows computed by `nichlink_build_method::graft_plan_rows`;
@@ -1200,6 +1215,16 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   随后拒绝的正是同一件事（`external graft plan \`ghost_fast\` targets \`root/ghost\`, which no
   declaration in the host entry names`），在任何人等到发布才发现之前。五条测试，其中三条实测为红
   （把每条计划都算作已声明、跳过读不了的计划、把 `unknown` 变成 `not declared`）。
+
+- **`nichlink.diff` 现在也能把外部 graft 记录与源码对照（`records: true`）。** 记录里存着它写下时
+  针对的身份，因此槽位没动而面换了身份会**悄悄**弄坏它：路径还在、记录仍能解析，而文本 diff 与构建
+  日志都不会说这件事。这次比较沿用树 diff 的词汇——一条记录会是 `ok`、`stale`（树里没有那个身份、
+  也没有那条路径）或 `re-identified`（路径在、身份换了，报成 `old -> now`），而这正是符号图对一条
+  graft 说不出的事。类型化切口存的是 Rust 表达式而不是逻辑路径，因此那里的身份缺席会被报成
+  `unmatched`，而不是被猜成 `stale`；读不了的记录会被计数而不是丢掉。脚手架宿主上三条记录实测：
+  `ok 1  stale 1  re-identified 1`，最后一条解析出
+  `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`。两条测试，
+  其中两条承载主张的实测为红（把旧身份当作"现在"；让类型化切口落进 `stale`）。
 
 变更：
 

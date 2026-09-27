@@ -113,13 +113,20 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.diff",
-            "Report the face-level delta between the sources now and the build's own manifest: which \
-             faces were added, which are gone, and which changed identity under a file that did not \
-             move (a `kind` change is an identity change, so only this comparison sees it). The unit \
-             is the face rather than the line, because the face is what the registry ships. Needs a \
-             prior `nichlink check` or `build`; a project with no build evidence is told so instead \
-             of being handed an empty diff.",
-            json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+            "Report the face-level delta between two sides of this package. By default the sources \
+             now against the build's own manifest: which faces were added, which are gone, and which \
+             changed identity under a file that did not move (a `kind` change is an identity change, \
+             so only this comparison sees it). The unit is the face rather than the line, because the \
+             face is what the registry ships. Needs a prior `nichlink check` or `build`; a project \
+             with no build evidence is told so instead of being handed an empty diff. With \
+             `records: true` the other pair: every external graft record against the sources, where a \
+             record stores the identity it was written for, so a face that changed identity under an \
+             unmoved slot breaks it silently. A record comes back `ok`, `stale` (nothing in the tree \
+             has that identity or that path), `re-identified` (the path is there, the identity \
+             moved), or `unmatched` — a typed cut stores a Rust expression, so an absent identity \
+             there cannot be told from a re-identified one, and the reply says which case it is \
+             rather than guessing `stale`.",
+            json!({"type":"object","properties":{"records":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.trace",

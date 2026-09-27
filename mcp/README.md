@@ -30,7 +30,12 @@ The server exposes compact tools. Reads:
   pruning strips its symbols. A missing or stale build is reported as such.
 - `nichlink.diff`: the face-level delta between the sources now and the build's
   manifest — added, gone, and re-identified under an unmoved file (a `kind` change
-  is an identity change, so only this comparison sees it).
+  is an identity change, so only this comparison sees it). With `records: true` it
+  compares the external graft records against the sources instead: a record stores the
+  identity it was written for, so a face that changed identity under an unmoved slot is
+  reported `re-identified` (`old -> now`) rather than breaking the graft silently;
+  `stale`, `unmatched` (a typed cut stores an expression, so an absent identity cannot
+  be told from a re-identified one) and unreadable records are kept apart.
 - `nichlink.trace`: read this package's recorded trace artifact and answer with the
   headless call report it implies — what actually ran, which no static read can
   tell you. With `values: true` the same read answers what that run *saw*: the

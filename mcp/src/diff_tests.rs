@@ -98,3 +98,90 @@ fn a_missing_build_asks_for_one_instead_of_diffing_nothing() {
     assert!(reply.contains("nichlink check"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Write one external graft record under `.nichlink/external-grafts/<selector>/graft.plan`.
+/// 在 `.nichlink/external-grafts/<selector>/graft.plan` 下写一条外部 graft 记录。
+fn record(root: &Path, selector: &str, target: nichlink::identity::NodeId, path: &str) {
+    let directory = root.join(".nichlink/external-grafts").join(selector);
+    std::fs::create_dir_all(&directory).expect("record directory");
+    std::fs::write(
+        directory.join("graft.plan"),
+        format!("version=1\ntarget={target}\ntarget_path={path}\ngraft={selector}\nfull=false\n"),
+    )
+    .expect("record file");
+}
+
+/// The record side: a record whose identity the tree still has is `ok`, one whose slot moved
+/// identity is `re-identified`, one whose slot is gone is `stale`, and a typed cut whose
+/// identity is absent is `unmatched` rather than guessed — because a typed cut stores an
+/// expression, not a logical path, so "stale" there would be a guess.
+/// 记录那一侧：身份仍在树里的记录是 `ok`；槽位换了身份的是 `re-identified`；槽位消失的是 `stale`；
+/// 而身份缺席的类型化切口是 `unmatched` 而不是被猜成别的——因为类型化切口存的是表达式而不是逻辑路径，
+/// 在那里说 "stale" 就是猜。
+#[test]
+fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
+    let (root, name) = package("records");
+    let face = face_views(&root, &name).expect("faces derive")[0].clone();
+    let stale_identity =
+        nichlink::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+    record(&root, "kept_fast", face.id, "root/button");
+    record(&root, "moved_fast", stale_identity, "root/button");
+    record(&root, "ghost_fast", stale_identity, "root/ghost");
+    record(
+        &root,
+        "typed_fast",
+        stale_identity,
+        "crate::control::NODE_ID",
+    );
+    let reply = diff(&root, &json!({"records": true})).expect("the diff renders");
+    assert!(
+        reply.contains("records 4 (external graft plans)"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("ok 1  stale 1  re-identified 1  unmatched 1"),
+        "{reply}"
+    );
+    assert!(reply.contains("kept_fast -> root/button"), "{reply}");
+    assert!(
+        reply.contains(
+            "- ghost_fast -> root/ghost (no face in this tree has that identity or that path)"
+        ),
+        "{reply}"
+    );
+    assert!(
+        reply.contains(&format!("~ moved_fast {stale_identity} -> {}", face.id)),
+        "the record that moved identity names the identity the tree has now: {reply}"
+    );
+    assert!(
+        reply.contains("? typed_fast -> crate::control::NODE_ID"),
+        "{reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An unreadable record is counted rather than dropped, and a package with no records says
+/// `records 0` instead of claiming a clean bill of health on nothing.
+/// 读不了的记录会被计数而不是被丢掉；没有记录的包会说 `records 0`，而不是在没有东西时声称一切正常。
+#[test]
+fn an_unreadable_record_is_counted_and_no_records_is_not_a_verdict() {
+    let (root, _) = package("records-unreadable");
+    let directory = root.join(".nichlink/external-grafts/broken_fast");
+    std::fs::create_dir_all(&directory).expect("record directory");
+    std::fs::write(directory.join("graft.plan"), "version=9\n").expect("record file");
+    let reply = diff(&root, &json!({"records": true})).expect("the diff renders");
+    assert!(reply.contains("unreadable 1"), "{reply}");
+    assert!(
+        reply.contains("ok 0  stale 0  re-identified 0  unmatched 0"),
+        "{reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+
+    let (bare, _) = package("records-none");
+    let empty = diff(&bare, &json!({"records": true})).expect("the diff renders");
+    assert!(
+        empty.contains("records 0 (external graft plans)"),
+        "{empty}"
+    );
+    let _ = std::fs::remove_dir_all(&bare);
+}

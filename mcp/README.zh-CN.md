@@ -25,7 +25,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   `target/nichlink/out` 下的文件，因此回答真正会发布什么：作用域是否选中该面、发布剪枝是否剥掉它的
   符号。缺失或过期的构建会被如实报告。
 - `nichlink.diff`：源码现在与构建清单之间的面级差异——新增、消失，以及文件没动而身份变了
-  （`kind` 变化就是身份变化，只有这个比较看得见）。
+  （`kind` 变化就是身份变化，只有这个比较看得见）。给出 `records: true` 时改为把外部 graft 记录与
+  源码对照：记录里存着它写下时针对的身份，因此槽位没动而面换了身份会被报成 `re-identified`
+  （`old -> now`），而不是悄悄弄坏那条 graft；`stale`、`unmatched`（类型化切口存的是表达式，身份缺席
+  时无法与"身份变了"区分）与读不了的记录各自分开。
 - `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
   什么，这是任何静态读取都说不出的。给出 `values: true` 时，同一次读取改为回答那次运行**看见了**
   什么：记录下的局部值按捕获它们的帧分组（名字、类型、值、角色、observed 或 inferred、调用点）、
