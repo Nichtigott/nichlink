@@ -210,6 +210,42 @@ impl PluginCatalog {
         Ok(Self { records })
     }
 
+    /// The lock text that carries `line` as one more record, or the parser's
+    /// refusal of the text that would result.
+    /// 把 `line` 作为又一条记录承载的锁文本，或解析器对将产生文本的拒绝。
+    ///
+    /// A writer must not decide for itself what a legal lock is: appending a
+    /// record the parser rejects produces an artifact the host refuses to read
+    /// while the writer reports success (audit `LGC-LG-03`: a second record
+    /// reusing the identity five-tuple, and a lock whose last line carried no
+    /// terminator, both went through). The rule is [`PluginCatalog::parse`], and
+    /// the separator is the one that parser reads — a lock not ending in a
+    /// newline is completed rather than glued to the new record, because `a`
+    /// followed by `b` written as `ab` is neither record.
+    /// 写入方不得自行决定什么是合法锁：追加一条解析器会拒绝的记录，会产出一份宿主拒绝读、
+    /// 而写入方却报成功的工件（审计 `LGC-LG-03`：复用身份五元组的第二条记录、以及末行没有
+    /// 终止符的锁，两者都曾写进去）。规则就是 [`PluginCatalog::parse`]，分隔符就是它读的
+    /// 那一个——不以换行结尾的锁先补一个换行，而不是与新记录粘在一起，因为把 `a` 之后接
+    /// `b` 写成 `ab` 后两条都不是。
+    ///
+    /// The returned text is what the caller must write: validating one text and
+    /// writing another is how a lock stops being the one that was checked.
+    /// 交回的文本就是调用方必须写下的文本：校验一份、写另一份，是锁不再是被检查过的那一份的
+    /// 开始。
+    pub fn with_appended_line(lock: &str, line: &str) -> Result<String, PluginLockError> {
+        let mut candidate = String::with_capacity(lock.len() + line.len() + 2);
+        candidate.push_str(lock);
+        if !candidate.is_empty() && !candidate.ends_with('\n') {
+            candidate.push('\n');
+        }
+        candidate.push_str(line);
+        if !candidate.ends_with('\n') {
+            candidate.push('\n');
+        }
+        Self::parse(&candidate)?;
+        Ok(candidate)
+    }
+
     /// The parsed records, in lock order.
     /// 解析出的记录，按锁文件中的顺序排列。
     pub fn records(&self) -> &[PluginRecord] {
@@ -241,28 +277,63 @@ impl PluginCatalog {
     /// 满足：它只能等于一个没有签名的 manifest，而没有签名的官方 manifest 会被任何配置了信任根的
     /// 策略拒绝——于是官方插件根本无法经宿主自己写下的锁端到端准入。
     pub fn contains_manifest(&self, manifest: PluginManifest) -> bool {
-        self.records.iter().any(|record| {
-            record.source == manifest.source
-                && record.framework == manifest.framework.0
-                && record.package == manifest.name
-                && record.version == manifest.version
-                && record.crate_name == manifest.crate_name
-                && record.checksum == manifest.checksum
-                && record.mode == manifest.mode
-                && record
-                    .signature
-                    .as_deref()
-                    .is_none_or(|recorded| Some(recorded) == manifest.signature)
-                && record
-                    .public_key_fingerprint
-                    .as_deref()
-                    .is_none_or(|recorded| Some(recorded) == manifest.public_key_fingerprint)
-                && record
-                    .revocation_list
-                    .as_deref()
-                    .is_none_or(|recorded| Some(recorded) == manifest.revocation_list)
+        self.contains_record(&PluginRecord {
+            source: manifest.source,
+            framework: manifest.framework.0.to_owned(),
+            package: manifest.name.to_owned(),
+            version: manifest.version.to_owned(),
+            crate_name: manifest.crate_name.to_owned(),
+            checksum: manifest.checksum.to_owned(),
+            mode: manifest.mode,
+            signature: manifest.signature.map(str::to_owned),
+            public_key_fingerprint: manifest.public_key_fingerprint.map(str::to_owned),
+            revocation_list: manifest.revocation_list.map(str::to_owned),
         })
     }
+
+    /// Whether an existing record accounts for `candidate`, by the rule above.
+    /// 已有记录是否覆盖了 `candidate`，用的是上面那条规则。
+    ///
+    /// A *record* is asked here, not a manifest, because one writer holds a record and no
+    /// manifest: Studio's plugin UI. It used [`contains`](Self::contains), which asks for an
+    /// identical record — all ten fields equal — and therefore refused a ten-field official
+    /// write whenever the lock already carried the seven-field form, while the runtime
+    /// accepts exactly that artifact. One rule, two spellings of the input, and the writer
+    /// was on the wrong one (audit `PH-7`).
+    /// 这里问的是**记录**而不是 manifest，因为有一个写入方手里只有记录、没有 manifest：Studio
+    /// 的插件界面。它过去用 [`contains`](Self::contains)，那要求记录完全相同——十个字段全等——
+    /// 于是在锁里已有七字段形式时拒绝一条十字段的官方写入，而运行期恰恰接受同一个工件。同一条规则、
+    /// 两种输入拼法，而写入方站错了那一边（审计 `PH-7`）。
+    pub fn contains_record(&self, candidate: &PluginRecord) -> bool {
+        self.records
+            .iter()
+            .any(|record| accounts_for(record, candidate))
+    }
+}
+
+/// Whether `record` accounts for `candidate`: the seven identity fields exactly, the three
+/// provenance fields as the *record's* expectations.
+/// `record` 是否覆盖了 `candidate`：七个身份字段严格相等，三个来源字段作为**记录侧**的期望。
+fn accounts_for(record: &PluginRecord, candidate: &PluginRecord) -> bool {
+    record.source == candidate.source
+        && record.framework == candidate.framework
+        && record.package == candidate.package
+        && record.version == candidate.version
+        && record.crate_name == candidate.crate_name
+        && record.checksum == candidate.checksum
+        && record.mode == candidate.mode
+        && record
+            .signature
+            .as_deref()
+            .is_none_or(|recorded| Some(recorded) == candidate.signature.as_deref())
+        && record
+            .public_key_fingerprint
+            .as_deref()
+            .is_none_or(|recorded| Some(recorded) == candidate.public_key_fingerprint.as_deref())
+        && record
+            .revocation_list
+            .as_deref()
+            .is_none_or(|recorded| Some(recorded) == candidate.revocation_list.as_deref())
 }
 
 #[cfg(test)]
@@ -296,6 +367,53 @@ mod tests {
         assert!(error.contains("duplicates package identity"));
     }
 
+    /// A writer asks the parser before it writes: a second record reusing the
+    /// identity five-tuple is refused with the parser's own reason, and a record
+    /// the parser accepts comes back as the text to write.
+    /// 写入方在写之前先问解析器：复用身份五元组的第二条记录被解析器自己的理由拒绝，而解析器
+    /// 接受的记录作为待写文本交回。
+    #[test]
+    fn appending_a_duplicate_identity_is_refused_by_the_parser() {
+        let seed = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n";
+        let duplicate = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:b|extension";
+        let error = PluginCatalog::with_appended_line(seed, duplicate)
+            .expect_err("a duplicate identity must not be appended");
+        assert!(
+            error.to_string().contains("duplicates package identity"),
+            "{error}"
+        );
+
+        let fresh = "user|com.nichui.editor|panel|1.0.0|panel|sha256:b|extension";
+        let text = PluginCatalog::with_appended_line(seed, fresh).expect("a fresh record appends");
+        assert_eq!(
+            PluginCatalog::parse(&text)
+                .expect("the text handed back parses")
+                .records()
+                .len(),
+            2
+        );
+    }
+
+    /// The separator belongs to the parser, not to the writer: a lock whose last
+    /// line carries no terminator gains one instead of gluing two records into a
+    /// line that is neither.
+    /// 分隔符属于解析器而不属于写入方：末行没有终止符的锁会补上一个换行，而不是把两条记录粘成
+    /// 一条两者都不是的行。
+    #[test]
+    fn appending_completes_a_missing_line_terminator() {
+        let seed = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension";
+        let line = "user|com.nichui.editor|panel|1.0.0|panel|sha256:b|extension";
+        let text = PluginCatalog::with_appended_line(seed, line).expect("the text parses");
+        assert!(text.ends_with('\n'), "{text:?}");
+        assert_eq!(
+            PluginCatalog::parse(&text)
+                .expect("two records")
+                .records()
+                .len(),
+            2
+        );
+    }
+
     /// The seven-field record leaves the three provenance fields to the
     /// signature check, and a record that carries one pins it.
     /// 七字段记录把三个来源字段交给签名校验；携带某个值的记录则把它钉住。
@@ -312,6 +430,44 @@ mod tests {
             public_key_fingerprint: Some("key-v1"),
             revocation_list: Some("official-2026"),
         }
+    }
+
+    #[test]
+    fn a_ten_field_record_accounts_for_a_seven_field_lock() {
+        let bare = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
+        )
+        .expect("a seven-field lock parses");
+        let pinned = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
+        )
+        .expect("a ten-field lock parses");
+        let candidate = pinned.records()[0].clone();
+
+        assert!(
+            !bare.contains(&candidate),
+            "an identical-record rule refuses the write — the old writer's answer"
+        );
+        assert!(
+            bare.contains_record(&candidate),
+            "the runtime's rule, asked about the same candidate record, accepts it"
+        );
+        assert!(
+            bare.contains_manifest(manifest()),
+            "and the manifest spelling of the same plugin agrees"
+        );
+
+        // The expectation still binds in the other direction: a lock that pins a signature does
+        // not account for a record written without it.
+        // 期望在另一个方向上仍然生效：钉住了签名的锁，不覆盖一条没写签名的记录。
+        let other = PluginCatalog::parse(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
+        )
+        .expect("a ten-field lock parses");
+        assert!(
+            !other.contains_record(&bare.records()[0].clone()),
+            "a record the lock pins differently must still be refused"
+        );
     }
 
     #[test]

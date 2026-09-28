@@ -42,16 +42,51 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     Ok(registry)
 }
 
-/// Render one admission policy as a compact single-line summary.
-/// 将一条 admission 策略渲染成紧凑的单行摘要。
+/// Render one admission policy as the compact clause form the Edit form carries.
+/// 将一条 admission 策略渲染成 Edit 表单所携带的紧凑子句形式。
+///
+/// One clause per list, in the kernel's grammar (`allow:a,b`, `deny:c`,
+/// `allow:a,b;deny:c`, `ANY`), and both clauses are rendered when both lists are
+/// present: the deny list is the veto `Admission::accepts` gives priority to, so a
+/// renderer that kept only the allow list widened the gate the Edit form shows and
+/// the inspector row prints — and the widened form is what the next save wrote
+/// back to the source (audit `LGC-LG-02`).
+/// 每张列表一个子句，用内核的语法（`allow:a,b`、`deny:c`、`allow:a,b;deny:c`、`ANY`），
+/// 且两张列表同时存在时两个子句都渲染：deny 是 `Admission::accepts` 优先采用的否决权，只保留
+/// allow 列表的渲染会放宽 Edit 表单与检视器那一行显示的门禁——而下次保存写回源码的正是被放宽的
+/// 那一份（审计 `LGC-LG-02`）。
+///
+/// Why this renders the kernel's grammar instead of calling the kernel's
+/// `render_admission`: that function renders the **source expression**
+/// (`crate::Admission::new(&[…], &[…])`), while this value is parsed with
+/// `parse_admission_owned`, which reads only the compact spelling
+/// (`run_method/src/authoring/manifest/face/face.rs`); the kernel exposes no public
+/// renderer for the compact form. The two directions are therefore pinned against
+/// each other by the tests below, and a `debug_assert` asks the kernel parser about
+/// every value this function emits.
+/// 这里渲染内核语法、而不是调用内核的 `render_admission`，原因是后者渲染的是**源码表达式**
+/// （`crate::Admission::new(&[…], &[…])`），而本值会被 `parse_admission_owned` 解析，它只读紧凑
+/// 拼法（`run_method/src/authoring/manifest/face/face.rs`）；内核没有公开的紧凑形式渲染器。因此
+/// 两个方向由下面的测试互钉，另有 `debug_assert` 把本函数产出的每个值交给内核解析器裁决。
 pub(crate) fn admission_text(admission: &nichlink_run_method::OwnedAdmission) -> String {
-    if admission.allowed_paths.is_empty() && admission.denied_paths.is_empty() {
-        return "ANY".to_owned();
-    }
-    if !admission.allowed_paths.is_empty() {
-        return format!("allow:{}", admission.allowed_paths.join(","));
-    }
-    format!("deny:{}", admission.denied_paths.join(","))
+    let clauses = [
+        ("allow", &admission.allowed_paths),
+        ("deny", &admission.denied_paths),
+    ]
+    .into_iter()
+    .filter(|(_, paths)| !paths.is_empty())
+    .map(|(key, paths)| format!("{key}:{}", paths.join(",")))
+    .collect::<Vec<_>>();
+    let text = if clauses.is_empty() {
+        "ANY".to_owned()
+    } else {
+        clauses.join(";")
+    };
+    debug_assert!(
+        nichlink_run_method::authoring::parse::parse_admission_owned(&text).is_ok(),
+        "the rendered value must be one the kernel's compact parser reads: {text}"
+    );
+    text
 }
 
 /// Render one registry rule as compact `preset:...;parts:...` clauses.
@@ -99,4 +134,84 @@ pub(super) fn function_bodies(source: &str) -> Vec<(String, String)> {
         .into_iter()
         .map(|function| (function.name, function.body))
         .collect()
+}
+
+#[cfg(test)]
+mod admission_text_tests {
+    //! The compact admission rendering, pinned against the kernel's parser (audit `LGC-LG-02`).
+    //! 紧凑 admission 渲染，与内核解析器互相钉住（审计 `LGC-LG-02`）。
+
+    use super::*;
+    use nichlink_run_method::authoring::parse::parse_admission_owned;
+
+    /// A policy that names both lists must render both: the deny list is the veto
+    /// `Admission::accepts` prioritises, so a rendering that keeps only the allow
+    /// list widens the gate the reader sees and the next save writes back.
+    /// 同时点名两张列表的策略必须把两张都渲染出来：deny 是 `Admission::accepts` 优先的否决权，
+    /// 只保留 allow 列表的渲染会放宽读者看到的、以及下次保存写回的那道门禁。
+    #[test]
+    fn both_lists_survive_the_compact_rendering() {
+        let policy = nichlink_run_method::OwnedAdmission {
+            allowed_paths: vec!["ui".to_owned()],
+            denied_paths: vec!["ui/experimental".to_owned()],
+        };
+        let text = admission_text(&policy);
+        assert_eq!(text, "allow:ui;deny:ui/experimental", "{text}");
+        let read = parse_admission_owned(&text).expect("the kernel reads what this renderer emits");
+        assert_eq!(read.allowed_paths, ["ui"], "{read:?}");
+        assert_eq!(read.denied_paths, ["ui/experimental"], "{read:?}");
+    }
+
+    /// The two directions are pinned against each other, byte for byte: the
+    /// canonical compact spellings the kernel parses must be exactly what this
+    /// renderer emits for the policy they parse into, and every value it emits
+    /// must parse. The kernel's refusals are the other half of the same grammar.
+    /// 两个方向逐字节互钉：内核能解析的规范紧凑拼法，必须正是本渲染器对同一策略的输出；而它输出的
+    /// 每个值都必须可解析。同一套语法的另一半是内核的拒绝行为。
+    #[test]
+    fn the_kernel_reads_back_every_value_this_renderer_emits() {
+        for canonical in ["ANY", "allow:a,b", "deny:c", "allow:a,b;deny:c"] {
+            let policy = parse_admission_owned(canonical).expect("canonical spelling");
+            assert_eq!(
+                admission_text(&policy),
+                canonical,
+                "the renderer must reproduce the kernel's canonical spelling"
+            );
+        }
+
+        let matrix = [
+            (Vec::new(), Vec::new()),
+            (vec!["ui".to_owned()], Vec::new()),
+            (Vec::new(), vec!["ui/experimental".to_owned()]),
+            (vec!["ui".to_owned()], vec!["ui/experimental".to_owned()]),
+            (
+                vec!["ui".to_owned(), "control".to_owned()],
+                vec!["ui/experimental".to_owned()],
+            ),
+        ];
+        for (allowed_paths, denied_paths) in matrix {
+            let policy = nichlink_run_method::OwnedAdmission {
+                allowed_paths,
+                denied_paths,
+            };
+            let text = admission_text(&policy);
+            assert!(
+                parse_admission_owned(&text).is_ok(),
+                "the kernel refuses what this renderer emits: {text:?}"
+            );
+        }
+
+        for malformed in [
+            "allow:a;allow:b",
+            "allow:a;veto:b",
+            "allow:a;deny:",
+            "allow:a;b",
+            "allow:",
+        ] {
+            assert!(
+                parse_admission_owned(malformed).is_err(),
+                "the grammar must refuse `{malformed}`"
+            );
+        }
+    }
 }

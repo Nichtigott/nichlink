@@ -175,3 +175,106 @@ pub(super) fn declaration_contract_paths(source: &str) -> (String, String) {
     let paths = |field| face.path_list(field).unwrap_or_default().join(",");
     (paths("handle_contracts"), paths("part_contracts"))
 }
+
+#[cfg(test)]
+mod edit_form_tests {
+    //! The Edit form's admission prefill and its write-back (audit `LGC-LG-02`).
+    //! Edit 表单的 admission 预填与写回（审计 `LGC-LG-02`）。
+
+    use super::super::support::select_project;
+    use super::*;
+    use nichlink_run_method::authoring::parse::parse_admission_owned;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// A generated face whose admission names both an allow and a deny list.
+    /// 一个生成面，其 admission 同时点名 allow 与 deny 两张列表。
+    const FACE_SOURCE: &str = "pub struct ControlRegistry;\n\ncrate::control_object! {\n    kind: ControlRegistry,\n    needs_registry: true,\n    parent: crate::ROOT_NODE_ID,\n    registry_rule_path: \"src/control/registry_rule/registry_rule.rs\",\n    registry_rule: crate::control::registry_rule::REGISTRATION_RULE,\n    admission: crate::Admission::new(&[\"ui\"], &[\"ui/experimental\"]),\n}\n";
+
+    /// The registration rule the fixture face names.
+    /// 夹具注册面所点名的注册规则。
+    const RULE_SOURCE: &str = "use crate::RegistrationRule;\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::ANY;\n";
+
+    /// A temp host project with one such face; returns its root and face file.
+    /// 一个只含该注册面的临时宿主工程；返回其根与注册面文件。
+    fn temp_project(label: &str) -> (PathBuf, PathBuf) {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("nichlink-studio-edit-{label}-{suffix}"));
+        let rule = root.join("src/control/registry_rule/registry_rule.rs");
+        std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("fixture dir");
+        std::fs::write(&rule, RULE_SOURCE).expect("rule source");
+        let face = root.join("src/control/control.rs");
+        std::fs::write(&face, FACE_SOURCE).expect("face source");
+        std::fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"edit-fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .expect("manifest");
+        select_project(root.clone(), root.join("Cargo.toml"), "edit-fixture");
+        (root, face)
+    }
+
+    /// The prefill the Edit form shows must keep both lists: it is the value the
+    /// next save hands back to the kernel, so a prefill that dropped the deny list
+    /// is how an untouched form rewrote the gate wider.
+    /// Edit 表单显示的预填值必须保留两张列表：它是下次保存交回内核的值，因此丢掉 deny 列表的
+    /// 预填正是“没改过任何字段的表单把门禁改写得更宽”的路径。
+    #[test]
+    fn the_edit_form_prefill_keeps_both_admission_lists() {
+        let (root, _face) = temp_project("prefill");
+        let mut app = App::load();
+        let admission = app
+            .registry
+            .depth_first()
+            .into_iter()
+            .next()
+            .map(|info| info.admission.clone())
+            .expect("the fixture face is registered");
+        assert_eq!(
+            admission.denied_paths,
+            ["ui/experimental"],
+            "premise: the fixture declares both lists"
+        );
+
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        let Some(Overlay::Edit(_, form)) = app.overlay.as_ref() else {
+            panic!("e must open the Edit form: {}", app.event);
+        };
+        let prefill = form.values[face_field::ADMISSION].clone();
+        let read = parse_admission_owned(&prefill);
+        assert!(
+            read.as_ref()
+                .is_ok_and(|read| read.denied_paths == ["ui/experimental"]),
+            "the Edit form prefill dropped the deny list: prefill={prefill:?} read={read:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Saving an untouched form must not change the source's gate: the deny list
+    /// the author wrote has to still be there after the round trip.
+    /// 保存一份没改过的表单不得改变源码里的门禁：作者写下的 deny 列表在往返之后必须还在。
+    #[test]
+    fn saving_an_untouched_edit_form_keeps_the_source_deny_list() {
+        let (root, face) = temp_project("write-back");
+        let mut app = App::load();
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        let Some(Overlay::Edit(id, form)) = app.overlay.as_ref() else {
+            panic!("e must open the Edit form: {}", app.event);
+        };
+        let (id, form) = (*id, form.clone());
+
+        app.submit_edit(id, &form);
+
+        let text = std::fs::read_to_string(&face).expect("face readable");
+        assert!(
+            text.contains("ui/experimental"),
+            "saving the untouched form erased the deny list: event={}\n{text}",
+            app.event
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

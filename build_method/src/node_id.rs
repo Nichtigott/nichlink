@@ -22,7 +22,66 @@ use super::validation::parsed_face;
 
 /// Node identities primed from the discovery cache before scope inference.
 /// 作用域推导前由发现缓存预热的 node 身份缓存。
-pub(crate) static CACHED_NODE_IDS: OnceLock<BTreeMap<String, (NodeId, String)>> = OnceLock::new();
+///
+/// The cache is process-wide, so an entry is keyed by **namespace and relative
+/// source path together**, and a lookup rechecks the identity it finds. One
+/// process serves several packages — a bridge or a test binary runs `check_for`
+/// for each of them — and two of those packages can hold the same relative
+/// source path with different identities. Keying on the path alone handed the
+/// second package the first package's `NodeId`: a wrong answer that looked like
+/// a right one, because every identity this build publishes is derived from it.
+/// 该缓存是进程级的，因此条目的键是**命名空间与相对源码路径的组合**，读取时还会复核找到的身份。
+/// 一个进程会服务多个包——桥或测试二进制会为每个包跑 `check_for`——其中两个可能持有相同的相对
+/// 源码路径而身份不同。只用路径作键会把第一个包的身份交给第二个包：一个"看起来正确"的错误答案，
+/// 因为这次构建发布的每个身份都由它派生。
+pub(crate) static CACHED_NODE_IDS: OnceLock<NodeIdCache> = OnceLock::new();
+
+/// Namespace-keyed identities primed from the discovery cache.
+/// 由发现缓存预热的、按命名空间分键的身份缓存。
+///
+/// [`NodeIdCache::get`] is the only read path, and it is where both halves of the
+/// fix live; the map itself is deliberately dumb.
+/// [`NodeIdCache::get`] 是唯一读取路径，修复的两半都在这里；这张表本身刻意保持简单。
+#[derive(Debug, Default)]
+pub(crate) struct NodeIdCache {
+    entries: BTreeMap<(String, String), (NodeId, String)>,
+}
+
+impl NodeIdCache {
+    /// Record `relative`'s identity and declared kind for `namespace`.
+    /// 记录 `relative` 在 `namespace` 下的身份与声明 kind。
+    ///
+    /// The kind is kept beside the identity because the read side rechecks the
+    /// two against each other; the caller still verifies the pair it inserts.
+    /// 同时留下 kind，是因为读取侧要拿它俩互相复核；插入方仍会先验证自己要插入的这对值。
+    pub(crate) fn insert(&mut self, namespace: &str, relative: &str, id: NodeId, kind: &str) {
+        self.entries.insert(
+            (namespace.to_owned(), relative.to_owned()),
+            (id, kind.to_owned()),
+        );
+    }
+
+    /// The identity and declared kind cached for `relative` **in the namespace in
+    /// force on this thread**, or `None`.
+    /// 本线程当前生效的命名空间下 `relative` 的身份与声明 kind；没有则为 `None`。
+    ///
+    /// Two conditions, both necessary, both checked here:
+    /// 1. the key carries the namespace, so another package's entry is out of
+    ///    reach even while it sits in the same process-wide map;
+    /// 2. the stored identity must equal the one recomputed from the stored kind
+    ///    under the namespace in force, so an entry that entered the cache while
+    ///    a different namespace was in force is refused rather than returned.
+    ///
+    /// 两个条件缺一不可，都在这里检查：
+    /// 1. 键带命名空间，因此别的包的条目即使就躺在这张进程级表里也取不到；
+    /// 2. 存下的身份必须等于用存下的 kind 在**当前生效命名空间**下现算的身份，因此在别的命名空间
+    ///    生效时进缓存的条目会被拒绝而不是被返回。
+    pub(crate) fn get(&self, relative: &str) -> Option<&(NodeId, String)> {
+        let namespace = registry_identity::package_namespace();
+        let entry = self.entries.get(&(namespace, relative.to_owned()))?;
+        (entry.0 == registry_identity::package_node_id(relative, &entry.1)).then_some(entry)
+    }
+}
 
 pub(crate) fn node_id(src: &Path, node: &Node) -> Option<NodeId> {
     let file = node.file.as_ref()?;
@@ -33,6 +92,11 @@ pub(crate) fn node_id(src: &Path, node: &Node) -> Option<NodeId> {
     if lexicon::is_registration_path(&relative) {
         return None;
     }
+    // The cache is process-wide: `NodeIdCache::get` keeps to the namespace in
+    // force and rechecks the identity it returns, so a second package cannot read
+    // the first package's identity for the same relative path.
+    // 该缓存是进程级的：`NodeIdCache::get` 只认当前生效的命名空间并复核返回的身份，因此第二个包
+    // 不会拿到第一个包在同一相对路径上的身份。
     if let Some((id, _)) = CACHED_NODE_IDS.get().and_then(|cache| cache.get(&relative)) {
         return Some(*id);
     }

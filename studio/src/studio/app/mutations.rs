@@ -289,7 +289,14 @@ impl App {
             public_key_fingerprint: None,
             revocation_list: None,
         };
-        if source == "official" && !catalog.contains(&candidate) {
+        // The runtime's rule, not an identical-record rule: a ten-field official record must be
+        // writable when the lock carries the seven-field form, because that is the artifact the
+        // runtime accepts. `contains` asked for all ten fields to match and refused this write
+        // (audit `PH-7`).
+        // 用的是运行期那条规则，而不是"记录完全相同"：当锁里是七字段形式时，一条十字段的官方记录
+        // 必须写得进去，因为那正是运行期接受的工件。`contains` 要求十个字段全等，因此拒绝了这次写入
+        // （审计 `PH-7`）。
+        if source == "official" && !catalog.contains_record(&candidate) {
             self.event =
                 "Plugin failed: official package is not present in the trusted lock".to_owned();
             return;
@@ -301,6 +308,23 @@ impl App {
             self.event = "Plugin failed: crate must be a Rust identifier".to_owned();
             return;
         }
+        // The lock is the artifact the host reads, so the parser decides whether
+        // this append is legal, and it decides before anything is written: a
+        // record the kernel refuses must not land on disk, and the refusal has to
+        // reach the reader instead of a success banner. The text that comes back
+        // is the text written below, so what was validated is what is stored.
+        // 锁是宿主读取的工件，因此这次追加是否合法由解析器决定，而且是在写任何东西之前决定：
+        // 内核拒绝的记录不得落盘，拒绝必须到达读者而不是被成功横幅盖掉。交回的文本就是下面写下
+        // 的文本，因此被校验的就是被存下的。
+        let line = format!("{record}\n");
+        let candidate = match PluginCatalog::with_appended_line(&existing, &line) {
+            Ok(text) => text,
+            Err(error) => {
+                self.event =
+                    format!("Plugin failed: {lock_name} would not parse with this record: {error}");
+                return;
+            }
+        };
         let entry_name = if source == "official" {
             "official.rs"
         } else {
@@ -322,8 +346,7 @@ impl App {
         // before the error is reported.
         // 一个决定由两个文件承载，而锁是运行期读取的那一个。写了一半会让入口导入一个锁里没有
         // 记录的 crate，因此在报告错误之前把入口文件恢复成先前的字节。
-        let line = format!("{record}\n");
-        if let Err(error) = append_line(&lock, &line) {
+        if let Err(error) = std::fs::write(&lock, candidate.as_bytes()) {
             let restored = if entry_existed {
                 std::fs::write(&entry, &entry_text)
             } else {
@@ -386,3 +409,12 @@ fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
         .open(path)
         .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()))
 }
+
+// The lock-write regression tests live in their own file under `tests/`, mounted
+// as a test-only module: the same shape every sibling there has, which is what
+// exempts it from the size ceiling (`conventions/src/size.rs::is_mounted_as_test`).
+// 锁写入的回归测试住在 `tests/` 下的独立文件里，以仅测试模块挂载：与那里的每个同级文件同
+// 一形态，这正是它免于尺寸上限的原因（`conventions/src/size.rs::is_mounted_as_test`）。
+#[cfg(test)]
+#[path = "tests/lock_writes.rs"]
+mod lock_writes;
