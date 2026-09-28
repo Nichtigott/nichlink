@@ -19,9 +19,9 @@
 | 3 | 模块 **`plugins`** | **`plugin_host`** | `audit-naming-ambiguity.md:365`（与 `.nichlink/plugins` = `PLUGIN_LOCK_DIRECTORY`（`plugin-host/src/admission.rs:38`）**同词反义**）；`audit-naming-ambiguity-verify.md:103`（**必须换**，MAJOR 维持） | §1.1、§1.2、§2.2、§3.1/§3.6、§4.2、§5.1、§10.1 |
 | 4 | 模块 `call_evidence` / `studio` / `mcp` / `cli` | **保留** | `audit-naming-ambiguity.md:366-369`（四条全判"是"）；`audit-naming-ambiguity-verify.md:104-107`（复核通过） | §1.1 的「处置」列与 §10.1 写明**保留判据**（不默默不动） |
 | 5 | crate `nichlink-kernel` / `kernel/` | **保留** | `audit-naming-ambiguity.md:373-375`（"方案里最值钱的一次改名"）；t35 未否 | §1.1 加一句：README 首段需写"kernel here = 纯协议词汇与纯方法"（t34 `:375`） |
-| 6 | crate `nichlink-toolchain` / `toolchain/` | **保留（待维护者裁定）** | `audit-naming-ambiguity-verify.md:109-118`（"`toolchain` 被 rustup/rustc 占用"**成立但判 MINOR**；建议保留 + README 一行；备选 `nichlink-surfaces`） | §1.1/§1.2/§5.5 各加一句"本仓的 toolchain = 执行面集合，不是 Rust 工具链"，并标注待裁定 |
+| 6 | crate `nichlink-toolchain` / `toolchain/` | **已拍板：保留** | `audit-naming-ambiguity-verify.md:109-118`（"`toolchain` 被 rustup/rustc 占用"**成立但判 MINOR**；建议保留 + README 一行；备选 `nichlink-surfaces`） | §1.1/§1.2/§5.5 各加一句，并落到文书：**README/AGENTS 加一行"本仓的 toolchain = 执行面集合，不是 Rust 工具链"**。备选 `nichlink-surfaces` 不再采用 |
 | 7 | feature `build` / `run` / `evidence` / `plugins` / …（13 个） | **保留原名** | `audit-naming-ambiguity.md:382`（"建议配一张 README 对照表；`default = []` 与 `required-features` 的设计本身是对的"）；`audit-naming-ambiguity-verify.md:124`（"它建议保留 `evidence` 与 feature 名 ✓"） | §1.3 的注释改成新模块名 + 新增一段"feature 名与模块名不同名是**有意**的" + README 对照表要求 |
-| 8 | bin 名（5 个） | **保留** | `audit-naming-ambiguity-verify.md:125`（五个 bin 全部保留 + `required-features` + `autobins = false` ✓） | §1.4 加注：t34 `:140` 建议 `nichlink-dev` → `nichlink-supervisor`（MINOR），本方案**不擅自改**，与 `nichlink-toolchain` 同批交维护者裁定 |
+| 8 | bin 名（5 个） | **保留** | `audit-naming-ambiguity-verify.md:125`（五个 bin 全部保留 + `required-features` + `autobins = false` ✓） | §1.4 加注：`audit-naming-ambiguity.md:160` 的 AMB-08（命名建议在 `:168`）建议 `nichlink-dev` → `nichlink-supervisor`（MINOR），**已拍板：保留 `nichlink-dev`**——bin 名是脚本/CI 的既有契约，改名成本大于收益 |
 | 9 | 文档锚点代价 | **新增一段** | `audit-naming-ambiguity-verify.md:126`（t34 的四个数复算**逐字一致**） | §3.2 新增「文档锚点代价」段，带**范围声明**（是否含本轮审计报告） |
 | 10 | 跨报告冲突（另一份产物） | `audit-boundary-refactor-plan.md` 的 **R-05** | `audit-naming-ambiguity-verify.md:219`（挂账）＋ `audit-naming-review.md:404-412`（NAM-06 的最终裁定） | 该文件的 R-05 已由"把 `writers.rs` 并入 `mutations.rs`"改为"改名 `write_guard.rs`、保留守卫缝"，并注明原修法已被复核否决 |
 
@@ -59,7 +59,7 @@
 | --- | --- | --- | --- | --- |
 | `nichlink-core`（lib `nichlink`） | `core/` | **`nichlink-kernel`**（lib `nichlink_kernel`） | **`kernel/`** | 改名 + 目录改名（**保留**，t34 `:373-375` 判"方案里最值钱的一次改名"）；`LIB_NAME_EXCEPTIONS` 里那条例外随之删除（§6）。**README 首段需加一句**"kernel here = 纯协议词汇与纯方法"，因为 Rust 生态里 `kernel` 强指 OS/no_std（t34 `:375`） |
 | `nichlink-macro` | `macro/` | `nichlink-macro`（lib `nichlink_macro`） | `macro/` | **包与目录不动**（proc-macro 物理约束）；只把它 `[dependencies]` 里的 `nichlink-core` 改成 `nichlink-kernel`（`macro/Cargo.toml:20` 的 `features = ["syntax"]` 不变） |
-| `nichlink-build-method` | `build_method/` | **`nichlink-toolchain`**（lib `nichlink_toolchain`）模块 **`build_time`** | **`toolchain/`** | 并入（模块名见「修订记录（t36）」#1） |
+| `nichlink-build-method` | `build_method/` | **`nichlink-toolchain`**（lib `nichlink_toolchain`）模块 **`build_time`** | **`toolchain/`** | 并入（模块名见「修订记录（t36）」#1；合并后的 crate 名 `nichlink-toolchain` **已拍板：保留**，理由见 #6——本仓的 toolchain = 执行面集合，不是 Rust 工具链） |
 | `nichlink-run-method` | `run_method/` | 同上，模块 **`runtime`** | | 并入（#2；**同名嵌套代价见 §2.2**） |
 | `nichlink-debug-method` | `debug_method/` | 同上，模块 **`call_evidence`**（t30 的 D-9 要求保留词加限定词，见 §10.1） | | 并入 |
 | `nichlink-plugin-host` | `plugin-host/` | 同上，模块 **`plugin_host`** | | 并入（#3：`plugins` 与 `.nichlink/plugins` 同词反义） |
@@ -82,7 +82,7 @@ kernel/                       nichlink-kernel, lib nichlink_kernel
 macro/                        nichlink-macro, lib nichlink_macro（不动）
 
 toolchain/                    nichlink-toolchain, lib nichlink_toolchain, autobins = false
-                              ← 名字保留（t35 `:109-118`）：本仓的 toolchain = 执行面集合，不是 Rust 工具链；待维护者裁定，备选 nichlink-surfaces
+                              ← 名字保留（t35 `:109-118`）：本仓的 toolchain = 执行面集合，不是 Rust 工具链（**已拍板：保留**，备选 nichlink-surfaces 不采用）
   Cargo.toml                  5 个 [[bin]] + 13 个 feature（§1.3 / §1.4）
   src/lib.rs                  7 条 #[path] 挂载 + pub use runtime::*（§2.2 的碰撞分析）
   src/build_time/     ← build_method/src/   （build_time.rs ← lib.rs，其余相对路径全部不变）
@@ -154,7 +154,7 @@ dev-supervisor     = []            # 原 studio/dev-supervisor（保持默认关
 
 **bin 名保留的理由**：bin 名是用户界面（PATH 上的命令、`cargo nichlink` 的插件名、脚本与 README 里的调用），包名才是这次要动的；`required-features` 让"装哪个"继续由 feature 决定。**t35 `:125` 复核确认**：五个 bin 名全部保留 + `required-features` + `autobins = false` 的设计本身是对的。
 
-**一处**不擅自改**的 bin 命名建议**：t34 `:140`（AMB-08，MINOR）指出 `nichlink-dev` 这个 bin 名与它门控的 feature `dev-supervisor` 不同词（生态里 `x-dev` 通常读成"x 的开发构建"），建议改 `nichlink-supervisor`。本方案**保留 `nichlink-dev` 不动**，理由是 bin 名是脚本/README/CI 的既有契约；这条与 §1.1 的 `nichlink-toolchain` 一起交维护者裁定（两者都属于"名字有歧义但成本大于收益"的一类）。
+**一处已拍板的 bin 命名**：`audit-naming-ambiguity.md:160` 的 AMB-08（MINOR；命名建议句在 `:168`）指出 `nichlink-dev` 这个 bin 名与它门控的 feature `dev-supervisor` 不同词（生态里 `x-dev` 通常读成"x 的开发构建"），建议改 `nichlink-supervisor`。**已拍板：保留 `nichlink-dev`**——bin 名是脚本/CI 的既有契约，改名成本大于收益。这条与 §1.1 的 `nichlink-toolchain`（同样**已拍板：保留**）属于同一类"名字有歧义但成本大于收益"的决定。
 
 **`node-graph` 的取舍（两个选项，推荐 A）**：
 - **A（推荐）**：`studio` **不**蕴含 `node-graph`；文档安装行写 `--features studio,node-graph`。好处：`studio` 在没有 `rataflow` 时仍能编译（今天 `studio/README.md` 承诺"没有该特性时调用树面板画边框并说明"这条性质保住了）；代价：安装命令多一个 feature。

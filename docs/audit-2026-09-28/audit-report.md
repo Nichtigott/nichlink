@@ -1341,11 +1341,11 @@ MINOR 逐条明细见 `audit-findings.json`（同样的字段）；下表给出 
 | id | 严重度 | 旧名（现状） | 建议新名 | 判据（摘要） | 复核 |
 | --- | --- | --- | --- | --- | --- |
 | `NAM-01` | MAJOR | `studio/src/studio/app/support.rs:1（文件级定位）` | `studio/src/studio/app/project_context.rs`、`studio/src/studio/app/editor_launch.rs` | 文件 509 行、23 个函数。模块文档第 1 行写「Shared interaction geometry and editor helpers」（共享交互几何与编辑器辅助），但前 12 个 item 是**项目上下文与 cargo 子进程**：`select_project`（:23）、`pac …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-02` | MINOR | `studio/src/studio/app/state/misc.rs:55` | `state/call_tree_view.rs`、`state/reload.rs`、`state/overlays.rs` | 181 行，模块文档自陈「Ungrouped Studio state: reload errors, overlays, and call references」（**未归类**的 Studio 状态）。内容是 `CallRef`（:55）与 `CallTreeView`（:76，`refs: V …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-02` | MINOR | `studio/src/studio/app/state/misc.rs:55` | `studio/src/studio/app/state/misc.rs`、`state/call_tree_view.rs`、`state/reload.rs` | 181 行，模块文档自陈「Ungrouped Studio state: reload errors, overlays, and call references」（**未归类**的 Studio 状态）。内容是 `CallRef`（:55）与 `CallTreeView`（:76，`refs: V …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-03` | MAJOR | `run_method/src/authoring/validation/validation.rs:1（文件级定位）` | `run_method/src/authoring/context.rs`、`context`、`authoring_context.rs` | 文件叫 `validation`，内容是 `AuthoringContext`（:47 的 `new(package_root, namespace)`、:56 的 `scope(...)`）与**进程级环境访问器** `authoring_namespace()`（:71）、`package_ro …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-04` | MAJOR | `build_method/src/cache.rs:1（文件级定位）` | `discovery_cache.rs`、`build_method/src/scope.rs` | 文件叫 `cache`，8 个函数里只有一半是缓存：`update_discovery_cache`（:77）、`cached_parent_id`（:184）、`collect_discovery_rows`（:205）；另一半是**作用域判定**与**通用写盘**：`write_if_chang …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-05` | MINOR | `mcp/src/evidence.rs:65` | `mcp/src/build_evidence.rs` | 261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `nichlink.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line` …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-06` | MINOR | `studio/src/studio/app/writers.rs:1（文件级定位）` | `studio/src/studio/app/write_guard.rs` | 42 行、2 个函数；名字 `writers` 读起来像"所有写入都在这儿"，而它其实是一个**写入守卫/上下文包装**的窄缝。 名字暗示的实现范围比文件实际承担的更宽（读者会以为写盘逻辑在此，实际写盘在 `studio/src/studio/app/mutations.rs` + `run_met …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-06` | MINOR | `studio/src/studio/app/writers.rs:1（文件级定位）` | `studio/src/studio/app/writers.rs` | 42 行、2 个函数；名字 `writers` 读起来像"所有写入都在这儿"，而它其实是一个**写入守卫/上下文包装**的窄缝。 名字暗示的实现范围比文件实际承担的更宽（读者会以为写盘逻辑在此，实际写盘在 `studio/src/studio/app/mutations.rs` + `run_met …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-07` | MINOR | `core/src/registry_core/tree/connector/connector.rs:1（文件级定位）` | — | **t27 复核后的修订（谓词口径）**：本节原写"39 处"，用的是更松的谓词。三档谓词实测如下（命令与输出见 §G-1）： 结果 | --- | **34**（其中十个发布 crate 内 **28**，另 6 个在两个 example 宿主与 Studio 夹具里） | 39 —— 多出的 5 …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-08` | MINOR | `run_method/src/runtime/trace/call_trace.rs:1（文件级定位）` | `locals/recording.rs`、`locals/local_recording.rs` | `run_method/src/runtime/trace/call_trace.rs`（348 行，模块文档「调用追踪收集器及其记录的协议表面」）与 `run_method/src/runtime/trace/locals/call_trace.rs`（228 行，模块文档「`CallTrace` …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-09` | MINOR | `run_method/src/authoring/face_manifest.rs:1（文件级定位）` | `authoring/face_file.rs`、`face_store.rs` | `run_method/src/authoring/face_manifest.rs`（89 行，自述「File-backed authoring for NichLink registration faces」，做文件化创作）与 `run_method/src/authoring/manifest …（全文见 `audit-findings.json`） | 已复核 |
@@ -1710,7 +1710,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 
 - 记账时点：产物冻结 17:12 → 本次记账（2026-09-28，t43/t44 的 B1 修复 + t52 的同族残余修复 + t54 的拆文件收口）
 - 落地文件：**8** 个，逐文件净差合计 **+1007** 行（表里的 Δ 是「现行行数 − 冻结行数」的**净差**：拆/并文件时增删会在同一格里相抵，例如 `mutations.rs` 在 t44 增了 228 行、t54 又拆出 196 行测试，净 +32）
-- 受影响条目：**7** 条（`fixed` 3、`verified` 4）
+- 受影响条目：**7** 条（`fixed` 2、`verified` 5）
 - 修复轮**新增**条目：**1** 条（`FIXR-01`，**不计入**主清单的 212 条）
 
 ### 12.1 修复轮落地的文件
@@ -1767,7 +1767,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 | `LGC-LG-02` | CRITICAL | `core/src/registry_core/authoring/parse/admission.rs` | `:40` | **`:63`** | 读回构造形式时两张列表都进 `compact_admission`（`:63`），旧 `:40` 的「只写 allow」分支已不存在 |
 | `LGC-LG-03` | CRITICAL | `studio/src/studio/app/mutations.rs` | `:257` | **`:320`** | 写盘前交给内核裁决（`PluginCatalog::with_appended_line`，`:320`）；`:257` 的 record 拼接本身未变 |
 | `LGC-LG-04` | MAJOR | `core/src/registry_core/plugin/catalog/catalog.rs` | `:126` | **`:131`** | schema 门禁落在 `parse` 的表头处理 `:131` 与 `schema_matches`（`:115`） |
-| `LGC-LG-40` | MINOR | `core/src/registry_core/plugin/catalog/catalog.rs` | `:281` | **`:317`** | `accounts_for` 现为 `:317`（旧锚点落在一条测试断言上） |
+| `LGC-LG-40` | MINOR | `core/src/registry_core/plugin/catalog/catalog.rs` | `:281` | **`:317`** | `accounts_for` 现为 `:317`（旧锚点落在一条测试断言上）；第二批（t7）把「十字段空来源」的读取语义改成「声明为空」（空列 = `Some("")`、`None` 只留给七字段形式），并由 t11 §4 独立证实 |
 | `STU-S-08` | MAJOR | `studio/src/studio/app/mutations.rs` | `:320` | **`:337`** | 入口导入的判定现为 `:337`（`entry_text.contains(&format!("use {crate_name} as _;"))`） |
 | `STU-V-01` | MINOR | `studio/src/studio/app/mutations.rs` | `:332` | **`:238`** | 行终止补齐移到内核侧追加助手（`core/src/registry_core/plugin/catalog/catalog.rs:238-242`）；调用点 `studio/src/studio/app/mutations.rs:319` |
 
@@ -1780,16 +1780,16 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 - **最小修复方向**：t52 已改为按内核子句语法逐列表渲染（两张都空则 `ANY`）+ `debug_assert` 交给内核解析器裁决，并以 `both_lists_survive_the_compact_rendering` 与 `the_kernel_reads_back_every_value_this_renderer_emits` 双向互钉；**建议下一步**把内核的 `compact_admission` 提升为公开入口（core 提供 `OwnedAdmission` 的紧凑渲染），Studio 这份即可删除——本任务因 `core/` 不在 inScope 未能做到。
 - **出处（provenance）**：t43 的 out-of-scope 报告（B1-4：LGC-LG-02 的同族残余，t43 inScope 之外；t52 承接修复）
 - **严重度说明**：与 LGC-LG-02（CRITICAL）同源同后果，但路径是 Studio 表单的预填/写回、且内核侧读回已不再静默丢字段，故记 MAJOR 而不是 CRITICAL。
-- **两处消费方**：studio/src/studio/app/keyboard.rs:79（Edit 预填）；studio/src/studio/ui/search.rs:97 → studio/src/studio/ui/panels.rs:151（检视器显示）
+- **两处消费方**：studio/src/studio/app/keyboard.rs:79（Edit 预填）；studio/src/studio/app/lifecycle.rs:212（依赖 admission 行）；原文引用的是 `studio/src/studio/ui/search.rs` → `studio/src/studio/ui/panels.rs`（检视器显示）这条路径；2026-09-28 20:35 实测该路径已被 t27 的 Studio 重构移除（文件里的别名与消费者都不在了），本字段按现状更新，t27 的交付可能再动它
 - **复核状态**：`partial`（无独立复核人）
 
 这 1 条**不计入**主清单的 212 条（也不计入 §2 队列、§3 映射表与批次计数），是本节的「修复轮新增」小计。
 
 ### 12.4 复核进度与剩余缺口（必须与 12.1 一起读）
 
-**三份独立复核已落地，逐条结论见 `verifications` 与 §12.5**（数据来自 `audit-verify-fix-b1.md`（t51）、`audit-verify-fix-b1-1.md`（t55）、`audit-verify-fix-b1-4.md`（t56）——本块只记账，不替复核下结论）。7 条受影响条目里 **4 条**被复核**证实**（`LGC-LG-01`/`LGC-LG-02`/`LGC-LG-03`/`STU-V-01`，均由 t51 逐条复算；`LGC-LG-02` 另获 t55 的第二条装置），**3 条仍未被任何独立复核覆盖**（`LGC-LG-04` schema 门禁、`LGC-LG-40`——t51 明确记录其「十字段空来源」一族的读取语义**仍未修**、`STU-S-08` 入口导入判定），这 3 条**留在 `fixed`、不计 verified**。**作者自验（先红后绿的钉子）一律不计入 verified**。另有 1 条修复轮新增条目 `FIXR-01` 由 t56 证实（`new_findings_verified = 1`）。t51 的两条披露（identity 探针取证 bug 的误报不作证据；变异窗口 18:31–18:33 与另一位成员的 `cargo test --workspace` 重叠 → 那一窗口的他人结果应作废重跑）照实收录于 `verifications`。
+**三份 B1 复核 + 第二批的一条补证已落地，逐条结论见 `verifications` 与 §12.5 / §13**（`audit-verify-fix-b1.md`（t51）、`audit-verify-fix-b1-1.md`（t55）、`audit-verify-fix-b1-4.md`（t56），以及第二批的 `audit-verify-kernel-api.md`（t11，它把 `LGC-LG-40` 的「十字段空来源」语义独立证实）。7 条受影响条目里 **5 条**被复核证实（`LGC-LG-01`/`LGC-LG-02`/`LGC-LG-03`/`STU-V-01` 由 t51 逐条复算，`LGC-LG-02` 另获 t55 的第二条装置；`LGC-LG-40` 由 t11 §4 证实），**2 条仍未被任何独立复核覆盖**（`LGC-LG-04` schema 门禁、`STU-S-08` 入口导入判定）——这 2 条**留在 `fixed`、不计 verified**。另有 1 条修复轮新增条目 `FIXR-01` 由 t56 与第二批的 t11 两步证实（`new_findings_verified = 1`）。
 
-**计数**：受影响 7 条 = verified **4** + fixed 3；修复轮新增 1 条（其中 verified 1）；**合计 verified 5 条**、独立复核报告 3 份。
+**计数**：受影响 7 条 = verified **5** + fixed 2；修复轮新增 1 条（其中 verified 1）；**合计 verified 6 条**、独立复核报告 4 份。
 
 ### 12.5 三份独立复核与逐条结论（t51 / t55 / t56）
 
@@ -1800,6 +1800,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 | **t51** | `audit-verify-fix-b1.md`（213 行） | `LGC-LG-02`（证实）；`LGC-LG-03`（证实）；`LGC-LG-01`（证实）；`STU-V-01`（证实） | 自建探针（`/tmp/vs-probe`，path 依赖真实 crate；两个夹具包共享相对路径、命名空间不同）+ 每条一次变异测试（改回旧行为 → 探针与作者钉子变红 → 逐字节还原）+ 全仓进程级缓存普查 + 五条门禁在**哈希钉住的树**上复跑。 | 三条 B1 修复（B1-1/B1-2/B1-3）判定为**已关闭**。 |
 | **t55** | `audit-verify-fix-b1-1.md`（136 行） | `LGC-LG-02`（证实） | 树外 `/tmp/nk-probe`（path 依赖只读 core、features=["syntax"]），探针 B11 共 18 项；不复用作者测试；把读回的 `OwnedAdmission` 还原成运行期 `Admission` 再问 `accepts`，因此断言的是门禁语义而不是文本；变异回旧实现后 `accepts("ui/experimental")==true` 变红。 | B1-1 成立（B1-1 的**第二条独立验证**，装置与 t51 不同）。 |
 | **t56** | `audit-verify-fix-b1-4.md`（101 行） | `FIXR-01`（证实） | 检出的完整副本 `/tmp/nk-b14` + 自写探针：种子工程 → `App::load()` → **真按键** `handle_key('e')` 取 Edit 预填 → `parse_admission_owned` 重建门禁 → 断言 `accepts("ui/experimental")==false`；再用保存路径的 `render_admission` 断言写回源码仍含 deny；最后用 `TestBackend(200×50)` 真渲染一帧断言缓冲文本含被 deny 的路径。变异 A 复现 t5 …（全文见 `audit-findings.json`） | B1-4 关闭（= 本节的 `FIXR-01`）。 |
+| **t11** | `audit-verify-kernel-api.md`（363 行） | `FIXR-01`（证实）；`LGC-LG-40`（证实） | /tmp/t11-ext 独立工程（crate 外 path 依赖，覆盖内核路径与 run_method shim 路径）+ 改坏内核入口让 Studio 变红+ 自写结构检查器（把副本放回即 FOUND 的变异反证）+ X-1 自造十字段空列夹具（删掉 filter 即翻红） | acceptance 4/4 通过、0 条阻断项；`LGC-LG-40`（X-1）的语义与 `FIXR-01` 的收回都由本条证实。 |
 
 **逐条映射**（哪条 finding 被哪份复核、以什么手段、判为什么）：
 
@@ -1809,7 +1810,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 | `LGC-LG-02` | **verified** | `audit-verify-fix-b1.md`、`audit-verify-fix-b1-1.md` | 证实 | t51 §2：构造形式读回 `allow:ui,ui/controls;deny:ui/experimental`，`denied` 未丢、读写往返稳定；变异回旧三分支后探针 FAIL 且作者钉子 FAILED。t55：树外第二条装置（探针 B11 共 18 项）——把读回的两张列表还原成运行期门禁后`accepts("ui/experimental")==false`（断言的是门禁，不是文本）；变异后该行变红。 |
 | `LGC-LG-03` | **verified** | `audit-verify-fix-b1.md` | 证实 | t51 §3：重复身份追加被 `with_appended_line` 拒（Err、不写盘）；无换行的锁追加后补换行、parse 得 2 条；被拒时入口文件逐字节未变；变异成「不校验不补换行」后探针 FAIL 且作者四条 `lock_writes` 钉子全 FAILED。 |
 | `LGC-LG-04` | **fixed** | —（三份复核均未覆盖） | 未复核 | 三份复核均未覆盖 schema 门禁本身（t51 §1「已核范围」只覆盖三条 B1 修复与 t44 写盘路径的调用点）。 |
-| `LGC-LG-40` | **fixed** | —（三份复核均未覆盖） | 未复核（且 t51 记录该族仍未修完） | t51 §3 的附带记录：official 七/十字段等价（`strict_contains=false`、`contains_record=true`）；但 X-1/LG-40 的「十字段空来源仍被当作 None 接受」**仍未修**，t51 明写它「MINOR、不在 B1 三条之内」。因此本条**不计 verified**。 |
+| `LGC-LG-40` | **verified** | `audit-verify-kernel-api.md` | 证实（第二批 t11 §4；t51 当时记录该族仍未修完） | /tmp/t11-ext 独立工程（crate 外 path 依赖，覆盖内核路径与 run_method shim 路径）+ 改坏内核入口让 Studio 变红+ 自写结构检查器（把副本放回即 FOUND 的变异反证）+ X-1 自造十字段空列夹具（删掉 filter 即翻红） |
 | `STU-S-08` | **fixed** | —（三份复核均未覆盖） | 未复核 | 三份复核均未单独覆盖入口导入判定（t51 只核到 `mutations.rs` 的调用点与内核 API 行为）。 |
 | `STU-V-01` | **verified** | `audit-verify-fix-b1.md` | 证实 | t51 §3 同一次探针：「无换行锁追加后补换行、parse 得 2 条」正是本条的缺陷面；变异体下该面与四条作者钉子同时变红。 |
 | `FIXR-01`（修复轮新增） | **verified** | `audit-verify-fix-b1-4.md` | 证实 | t56：检出差副本 + 自写探针（真按键取 Edit 预填 → 重建运行期门禁断言被 deny 的路径仍被否决；保存路径写回仍含 deny；`TestBackend(200×50)` 真渲染一帧含被 deny 的路径）+ 两次变异（变异 A 复现 t52 之前的丢失；变异 B 证明 `debug_assert` 是活的）。 |
@@ -1822,5 +1823,466 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 - **t55**：未复核紧凑语法其它扩展的语义取舍；`admission.rs:48/52` 的历史单列表分支建议下一轮并入 `compact_admission`
 - **t56**：极窄面板下的检视器换行/截断形态未测（200 列宽未触发截断）
 - **t56**：`debug_assert` 只在 debug/test 构建生效——release 下由作者两条测试把关
+- **t11** 未覆盖的条目：``contains_manifest` 本体未直调（入参是 PluginManifest，crate 外无文本构造器）`、`字节不变性是读码 + git 历史口径`、`未跑 `--all-features --doc`、`package-audit`、`--verify-consumers``
 
 **规矩**：`verified` 只记**独立复核**的结论；作者自验（先红后绿的钉子）一律不计入。被复核证伪或部分证实的条目会**留在 `fixed`** 并在上表如实写明——本轮三份复核的判定都是「证实」，没有证伪项；但 `LGC-LG-40` 的这一族（official 十字段空来源读取语义）被 t51 明确记录为**仍未修**，所以它留在 `fixed`、不计 verified。
+
+## 13. 修复轮第二批（B2 门禁与工具 / B3 桥与宿主 / 内核公开入口 / X-1）
+
+**本节是账，不是新结论。** §0–§11 与 §12 的结论一字未改；本节只把第二批修复轮（t1–t22，19:01–20:13 落地）的结果折进来，并逐条标出独立复核的判定。本节每个数字都由 `audit-findings.json` 现算：逐条的 `findings[].fixed_in_batch` / `.verification` 与汇总的 `fix_batch_2` 块，由 `check_report.py` 逐条复算。
+
+### 13.1 本批修掉的条目（39 条）
+
+| 条目 | 严重度 | 批次 | 修法（任务：旧 → 新） | 独立复核 | 判定 |
+| --- | --- | --- | --- | --- | --- |
+| `GTE-G-03` | MINOR | B2 | t1：围栏按「同字符、长度 ≥ 开围栏、其后无 info」配对，info 取自整串围栏之后；文档注释半边同规则 | `audit-verify-b2-1.md` §2.1 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-04` | MINOR | B2 | t1：`mod` 声明先剥 `pub`/`pub(crate)`/`pub(in …)`；`#[cfg(…)]` 按表达式判定（`all` 任一 test-only 即真、`any` 需全部分支、`not` 为假、空 `any()` 为假、字符串里的 test 不算） | `audit-verify-b2-1.md` §2.2 · t9（kernel-auditor，非作者） | **部分证实** |
+| `GTE-G-05` | MINOR | B2 | t1：非发布成员**写出来的**版本要求也绑到发布线（`publish = false` 仍可省略 `version`、`[package] version` 仍可自定） | `audit-verify-b2-1.md` §2.3 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-07` | MINOR | B2 | t1：新增 `without_comments` / `without_yaml_comments`：注释不算要求位置，字符串字面量里的真要求照报 | `audit-verify-b2-1.md` §2.4 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-08` | MINOR | B2 | t1：`belongs_to_the_attribute_stack`：`#[…]`、注释行与 `*` 对齐行随属性一起抹白 | `audit-verify-b2-1.md` §2.5 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-09` | MINOR | B2 | t2：`--workspace-version` 成为独立模式：与任何其它模式/标志同现一律 exit 2（六种组合各测一次），`--help` 延迟到参数校验之后 | `audit-verify-b2-1.md` §3.1 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-10` | MINOR | B2 | t2：符号审计不再可能静默为空：nm 失败与零符号分别记 `nm-failed` / `0` 到 TSV 与 unaudited.tsv，并以 `N of M …` exit 1 | `audit-verify-b2-1.md` §3.2 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-11` | MINOR | B2 | t2：`--help` 用 awk 打完整头部注释块（不再写死 `sed -n '2,26p'`），39 行、头部 36 行逐行出现 | `audit-verify-b2-1.md` §3.3 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-12` | MINOR | B2 | t2：`sed -i` 改临时文件 + `mv`（并转义 `\ & |`）；`date +%s%N` 加探测与 `date +%s`×1000 回退 | `audit-verify-b2-1.md` §3.4 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-16` | MAJOR | B2 | t3：roadmap 两处与 `tools/nichlink-package-audit` 头部不再复述发布顺序，顺序归 `tools/nichlink-publish` 的 `levels` 表唯一来源 | — | **未获独立复核** |
+| `GTE-G-17` | MINOR | B2 | t1 + t3：`conventions/src/size.rs` 的 BASELINE 文档不再复述项数（它就是 `BASELINE.len()`）；`docs/roadmap-1.0.md:40` 的「14 项」同样删数 | `audit-verify-b2-1.md` §2.7 (a) · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-18` | MINOR | B2 | t3：CHANGELOG 两处 `version = "0.1.4"` 要求改指 `nichlink-*` 版本要求（该字面量全仓 0 命中） | — | **未获独立复核** |
+| `GTE-G-19` | MINOR | B2 | t3 + t15：AGENTS.md 门禁清单补齐 naming / release_version / release_workflow / doc_anchors，并把 required-features 半限定为「手列的在检出内 target」；t15 再把 doc_anchors 的覆盖面按后缀与 sources 写实（`.rs`/`.toml`/`.yml`/`.yaml`、根与成员 `Cargo.toml`、`.github/workflows/*`，并写明 `.md` 目标与无扩展名脚本仍不覆盖） | — | **未获独立复核** |
+| `GTE-G-27` | MINOR | B2 | t3：roadmap 改为「依赖下界随发布线一起抬（写 `^<工作区版本>`）；`release_version` 与 `--check-table` 两道门禁强制它等于工作区版本」 | — | **未获独立复核** |
+| `GTE-G-20` | MINOR | B2 | t1：`conventions/src/mounting.rs:10` 按 fix_hint 删掉散文数字，改为「计数不在此复述、没有任何机制为散文里的计数对账」 | `audit-verify-b2-1.md` §2.7 (d) · t9（kernel-auditor，非作者） | **部分证实** |
+| `GTE-G-21` | MAJOR | B2 | t3：`tools/nichlink-package-audit` 头部不再描述已不存在的手工表：crate 集合与依赖从工作区推导 | — | **未获独立复核** |
+| `GTE-G-22` | MINOR | B2 | t1：`conventions/src/lint.rs:15` 的模块边界与 `required_roots` 的函数文档统一（除示例宿主外每个 crate 目录的库根 + MCP 二进制根） | `audit-verify-b2-1.md` §2.7 (c) · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-24` | MINOR | B2 | t1：`conventions/src/size.rs` 的挂载链句写全 6 文件 / 5 条边，并说明「层 = 链上文件数」 | `audit-verify-b2-1.md` §2.7 (b) · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-G-25` | MINOR | B2 | t3：`.github/workflows/ci.yml` 的悬挂指令（`after the first crates.io release`）改为 early leftover 说明；roadmap 的同事实一处同改（只动注释，`name`/`if`/`run` 一字不动） | — | **未获独立复核** |
+| `GTE-G-26` | MINOR | B2 | t3：AGENTS.md / `tools/nichlink-package-audit` / roadmap 去掉 “from today / 从今天起 / 今天” 一类时态锚点 | — | **未获独立复核** |
+| `GTE-N-1` | MAJOR | B2 | t4：tag 守卫由子串判定改**形状白名单**（`GuardShape` + `positive_tests`：顶层 `&&` 切分、括号组递归、`${{…}}` 先剥，只允许 tag 判断本身与 `path == 'literal'`；取反 / `||` / `!=` / 未列举运算符一律报出），并修 `steps()` 折叠 `if:` 的缩进边界 | `audit-verify-b2-1.md` §4.1 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-N-2` | MINOR | B2 | t4：`takes_input` 改结构化引用判定：`inputs.name` 与 `inputs['name']`（两种引号）都算读，注释行不算 | `audit-verify-b2-1.md` §4.2 · t9（kernel-auditor，非作者） | **证实** |
+| `GTE-N-3` | MINOR | B2 | t4：`doc_anchors` 按写下路径后缀触发（`.rs`/`.toml`/`.yml`/`.yaml`），sources 加上根与各成员的 `Cargo.toml` 与 `.github/workflows/*`；`.md` 目标与无扩展名脚本仍不覆盖 | `audit-verify-b2-1.md` §4.3 · t9（kernel-auditor，非作者） | **部分证实** |
+| `BRG-BR-1` | MAJOR | B3 | t5：两份 mcp README 的 records 桶枚举改成 `mcp/src/diff.rs:217` 权威计数行的五桶（`ok`/`undeclared`/`stale`/`re-identified`/`unreadable`），`unmatched` 0 命中；CHANGELOG `[0.1.6]` 的同承诺由 t21 收口 | `audit-verify-b3-1.md` §1 BR-1 · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-2` | MAJOR | B3 | t5：删掉自相矛盾的「树 diff 仍待做」整句与其失效锚点，改以可核实的能力句收尾 | `audit-verify-b3-1.md` §1 BR-2（附行号更正） · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-7` | MINOR | B3 | t5：`nichlink.usages` 的描述与 `mcp/src/usages.rs` 打印的 22 个标签逐字一致（两份 README 同步），并加钉子 `the_usages_description_names_every_field_it_prints` | `audit-verify-b3-1.md` §1 BR-7 · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-9` | MINOR | B3 | t6 + t13：同一 crate 里两种「可移植路径」拼法收回一处：mcp 三处改为转发内核 `nichlink::declaration::portable_path`（`mcp/src/index.rs:178` 一行转发）；t13 再把 build_method 4 处 + conventions 2 处 + 2 个测试收口 | `audit-verify-b3-1.md` §1 BR-9 · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-11` | MINOR | B3 | t5 + t6：测试挂载统一：`mcp/src/index.rs` 与 `mcp/src/tools.rs` 的内联 `mod tests` 分别迁入 `mcp/src/index_tests.rs` / `mcp/src/tools_tests.rs`（`^mod tests {` 全仓 0 命中） | `audit-verify-b3-1.md` §1 BR-11 · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-12` | MINOR | B3 | t5：分派从 `match` 改一张有序 `DISPATCH` 表（`mcp/src/tools.rs:302`）+ 两条钉子：`the_dispatch_table_follows_the_catalog` 与 `every_listed_tool_is_dispatched` | `audit-verify-b3-1.md` §1 BR-12 · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-15` | MINOR | B3 | t5：`cli/README.zh-CN.md` 补 `snippets` 行，两份命令表的 studio 行都改 `nichlink studio [path]`（表格行 9 / 9 对齐） | — | **未获独立复核** |
+| `BRG-BR-17` | MINOR | B3 | t30：输入超限消息拆成两条，与 Wasm 适配器同形：新增 `MAX_FRAMEABLE_INPUT`（`u32::MAX`）与共享 `check_input_length`（`plugin-host/src/process.rs:460`），调用点改为 `check_input_length(input.len(), self.limits.max_input_bytes)?`（`:296`）；配置上限报 `input is N bytes; limit is M`，帧宽报 `input is N bytes; a process call frames its length in a u32, whose maximum is 4294967295` | — | **未获独立复核** |
+| `BRG-BR-C2` | MAJOR | B3 | t5 + t14：`mcp/src/preview.rs` 的目录说明改成实际跳过集合，两处遍历共用一份 `fn skipped_directory`（`mcp/src/preview.rs:52`，`.git/` 入清单）；t14 把行为落成仓内钉子 `mcp/src/preview_tests.rs` | — | **未获独立复核** |
+| `BRG-BR-C3` | MINOR | B3 | t5：同一实测数字只留一处（`mcp/src/callgraph.rs` 模块文档的 142），函数内注释与 `tools_tests.rs` 的模块文档改为指回 | — | **未获独立复核** |
+| `BRG-BR-C4` | MINOR | B3 | t5：`cli/src/lib.rs:169`/`:175` 的 `nihlink build` 改 `nichlink build`（`\bnihlink\b` 在 cli/mcp/plugin-host 三处源码 0 命中） | — | **未获独立复核** |
+| `BRG-BR-C5` | MINOR | B3 | t6 + t17 + t18：`slot` 三义收敛：`mcp/src/evidence.rs:127` 逐面列名改 `registry_name`、树投影表头 `slots:` 改 `faces:`；状态词形由 `mcp/src/tree_delta.rs:64` 的 `FaceStatus::label()` 单源导出（`diff.rs`/`search.rs` 改调）；t17/t18 把桥文档、工具描述、测试文档、内核字段文档与两份根 README 的 `slot` 措辞一并收敛 | `audit-verify-b3-1.md` §1 BR-C5①/② · t10（surface-auditor，非作者） | **证实** |
+| `BRG-BR-C6` | MINOR | B3 | t6：无名三元组类型化：`struct BuildEvidence { current, scope, pruning }` 具名，并把「current 回答的是这份产物是否仍在描述这批源码」放进 `BuildEvidence::freshness()`（`mcp/src/evidence.rs:73`）；overlay 不再按位置解构 | `audit-verify-b3-1.md` §1 BR-C6 + §6 结论 · t10（surface-auditor，非作者） | **部分证实** |
+| `BRG-BR-C7` | MINOR | B3 | t6：`apply` 的目标类型化：`enum Target { Project, Copy(PathBuf) }`（`mcp/src/apply_target.rs:27`）+ `report_path`/`report_message`；端到端两条路（预览不改盘、落盘字节 == 预览 diff） | `audit-verify-b3-1.md` §1 BR-C7 · t10（surface-auditor，非作者） | **证实** |
+| `FIXR-01` | MAJOR | 内核入口 | t7 + t8 + t16：内核公开 `nichlink::authoring::parse::compact_admission`（`core/src/registry_core/authoring/parse/admission.rs:73`）成为唯一渲染器，`parse_admission_expression` 的历史单列表分支并入它；Studio 的 `admission_text`（`studio/src/studio/app/source_index.rs:69`）只委派；同族第三例 `compact_registration_rule`（`core/src/registry_core/authoring/parse/rules.rs:82`）与 `registration_rule_text`（`studio/src/studio/app/source_index.rs:96`）同批收回 | `audit-verify-kernel-api.md` §3 + §7 · t11（gates-auditor，非作者） | **证实** |
+| `LGC-LG-40` | MINOR | X-1 | t7：`PluginCatalog::parse` 的十字段三列去掉 `.filter(!is_empty())`：空列落成 `Some("")`＝声明「此处没有值」，`None` 只留给七字段形式；新增 `accounts_for_provenance`（`core/src/registry_core/plugin/catalog/catalog.rs:372`）按此语义钉住候选 | `audit-verify-kernel-api.md` §4 · t11（gates-auditor，非作者） | **证实** |
+
+- `FIXR-01` 是 §12 的修复轮新增条目，**不计入**主清单的 212 条：本批 39 条 = 主清单行 **38** + §12 新增条目 **1**（`FIXR-01`）。
+- 本节的逐条字段只**增**不减：原 `file`/`line`/`title`/`severity` 与 `evidence` 一字未改（`check_report.py` 会核这一点在 §12 与 §13 两侧同时成立）。
+
+### 13.2 追加与收尾状态（已关闭 / 已修 / 挂账）
+
+- **`F-1`**（low）— 已记账（不改结论）：`conventions/src/doc_anchors.rs:166 与 t4 的交付文本`。「52 处新锚点」按 t9 的口径更正：门禁实际口径今天 1 处，全 `docs/` 树 124 处（104 处在被豁免的 record 文档里）。t4 的实现与行为面不变。
+- **`F-2`**（low）— 已修（t22；钉子由 t24 搬进兄弟测试文件）：`conventions/src/size.rs 与 conventions/src/size_tests.rs`。`declares_module` 现在真的接受 `mod  x ;`（空白无关比较 + `mod` 关键字边界）；独立复核 t25 进行中。
+- **`F-3`**（low–medium）— 已修（t22；钉子由 t24 搬进兄弟测试文件）：`conventions/src/naming.rs 与 conventions/src/naming_tests.rs`。`package = "…"` 半边改为结构化读取（`package_field_value`），转义引号下重命名的内部依赖不再隐形；独立复核 t25 进行中。
+- **`F-4`**（low）— 已修（t22）：`conventions/src/mounting.rs:10`。散文数字删掉（判别性 grep：HEAD 2 命中 → 0）；独立复核 t25 进行中。
+- **`BR-C6 附加声明`**（low）— 已由 t23 关闭：`mcp/src/overlay.rs:72 / mcp/src/converge.rs:133`。两处改为消费 `evidence.freshness()`，不再内联 `current` / `stale (run nichlink check)`；新耦合钉子 `evidence::evidence_tests::every_report_spells_the_freshness_word_that_one_place_produces` 的三态证据：改前+变异 108 passed 全绿 → 现码+同一变异 107 passed / 2 failed → 还原 109 passed 全绿（详见 §13.6）；t10 的「部分证实」判定不改，t23 的独立复核 t25 进行中。
+- **`SUR-S10 位置漂移`**（MINOR）— 已登记（冻结位置已被 t28 的 B4 重构移除）：`run_method/src/macros/face_objects.rs`。该条点名的「前端回退臂用绝对 crate 路径」已在第二批被 t28 修掉，文件 172→164 行，冻结的 `:169` 不存在了；冻结记录不改 file/line，只加 `location_note` 并把这一处引用登记进 `meta.unresolved_quoted_anchors`。
+- **`BRG-BR-17`**（MINOR）— 已修（t30）：`plugin-host/src/process.rs:296（调用点）/ :450（MAX_FRAMEABLE_INPUT）/ :460（check_input_length）`。输入超限拆成两条消息（配置上限 / `u32` 帧宽），与 `plugin-host/src/wasm.rs` 的 `check_input_length` 同形；两条钉子先红后绿（红＝`E0425: cannot find function check_input_length`），并有变异反证（退回旧单条消息 ⇒ 帧宽那支报配置上限）；t30 未获独立复核（本批未派）。
+
+- **未获独立复核的 B2 条目（7 条）**：`GTE-G-16`、`GTE-G-18`、`GTE-G-19`、`GTE-G-27`、`GTE-G-21`、`GTE-G-25`、`GTE-G-26`——t3 组（文档漂移与注释准确性）本批未派独立复核任务。
+- **未获独立复核的 B3 条目（5 条）**：`BRG-BR-15`、`BRG-BR-17`、`BRG-BR-C2`、`BRG-BR-C3`、`BRG-BR-C4`——原因见各自 `verification.note`（未派复核 / 不在 t10 的逐条判定清单内）。
+
+### 13.3 本批新增的公开符号（2）
+
+| 符号 | 位置 | 任务 | 门控 | 调用点 | 独立复核 |
+| --- | --- | --- | --- | --- | --- |
+| `nichlink::authoring::parse::compact_admission` | `core/src/registry_core/authoring/parse/admission.rs:73` | t7 | `#[cfg(feature = "syntax")]` 之后（t11 负向实测：去掉 `syntax` 即 `E0432`） | `studio/src/studio/app/source_index.rs:69（`admission_text`）` | **证实**（`audit-verify-kernel-api.md` §1 + §7） |
+| `nichlink::authoring::parse::compact_registration_rule` | `core/src/registry_core/authoring/parse/rules.rs:78` | t16 | 同族，`#[cfg(feature = "syntax")]` 之后 | `studio/src/studio/app/source_index.rs:96（`registration_rule_text`）` | **未获独立复核**（t16 自带的仓内钉子 `core/tests/registration_rule_entry.rs` + t20 的注释漂移修正；本批未派覆盖它的复核任务（t11 判定 t7/t8，其 §7 记「新增公开符号 = 1 个」）） |
+
+### 13.4 counts 变化
+
+- 本批记账条目 **39** = 主清单行 **38** + §12 新增条目 **1**（`FIXR-01`，不计入 212 条）
+- 按标签：**23** B2（`B2-门禁与工具`，23 条中 23 条）、**14** B3（`B3-桥与宿主`，14 条中 14 条）、**1** 内核公开入口（`FIXR-01`）、**1** X-1（`LGC-LG-40`）
+- 独立复核判定：**证实 23** / 部分证实 **4** / 未获独立复核 **12**（未获独立复核：`BRG-BR-15`、`BRG-BR-17`、`BRG-BR-C2`、`BRG-BR-C3`、`BRG-BR-C4`、`GTE-G-16`、`GTE-G-18`、`GTE-G-19`、`GTE-G-21`、`GTE-G-25`、`GTE-G-26`、`GTE-G-27`）
+- 独立复核报告：**3** 份（§13.5）
+
+**逐批剩余**（triage 批次 × 已落修复标记：`fixed_in_fix_round`（§12）或 `fixed_in_batch`（本节））：
+
+| 批次 | 主清单条目 | 已落修复 | 剩余 |
+| --- | --- | --- | --- |
+| B1-立即：安全与数据完整性 | 3 | 3 | **0** |
+| B4-MAJOR 逻辑与实现缺陷 | 50 | 2 | **48** |
+| B6-MINOR 一致性与清扫 | 51 | 2 | **49** |
+| B5-注释与自述 | 21 | 0 | **21** |
+| B3-桥与宿主 | 14 | 14 | **0** |
+| B2-门禁与工具 | 23 | 23 | **0** |
+| B7-命名抽象与可读性 | 30 | 0 | **30** |
+| B8-命名歧义与约定冲突 | 20 | 0 | **20** |
+
+- **§12 的 B1 轮账目随之更新**：`LGC-LG-40` 由 `fixed` 转 `verified`（`audit-verify-kernel-api.md` §4）⇒ §12 的 `fixed` 3→2、`verified` 4→5、仍未复核 3 条→2 条（`LGC-LG-04`、`STU-S-08`）、独立复核报告 3→4 份、`verified_total` 5→6。
+
+### 13.6 追加与收尾：t22 / t23 / t24 / t30
+
+本节的追加项与它们各自的结论；`verification` 一栏写的是独立复核的现状（t25 的对象是 t13/t16–t24）。
+
+| 任务 | 对象 | 结论 | 独立复核 |
+| --- | --- | --- | --- |
+| `t22` | 修 t9 复核发现 F-2/F-3/F-4 | 三条钉子先红后绿：F-3（medium）改结构化读取 `package_field_value`（转义引号下的重命名内部依赖不再隐形）；F-2 让 `declares_module` 真的接受 `mod  x ;`（空白无关比较 + `mod` 关键字边界，`modx;` 仍不是）；F-4 删掉 `mounting.rs` 的散文数字（判别性 grep：HEAD 2 命中 → 0）。 | 进行中（t25；其报告 audit-verify-extra.md 已在写，本节不据未完成的复核下结论） |
+| `t23` | 同族第四例：overlay/converge 内联新鲜度词形 + 耦合钉子 | 词形单源：`mcp/src/overlay.rs:72` 与 `mcp/src/converge.rs:133` 改为消费 `evidence.freshness()`，两文件里 `"current"` / `"stale (run` 0 命中（grep exit 1）；新增耦合钉子 `evidence::evidence_tests::every_report_spells_the_freshness_word_that_one_place_produces`（对已发布证据的树与无证据的树分别断言 explain / overlay / converge 三条打印同一句词）。 | 进行中（t25；其报告 audit-verify-extra.md 已在写，本节不据未完成的复核下结论） |
+| `t24` | 把 t22 的钉子搬进 *_tests.rs（离开 600 行棘轮的头寸） | `size.rs` 587→553、`naming.rs` 550→472（头寸 13→47 / 50→128）；迁移前后各 117 条测试的叶子名逐名 diff 为空（唯一差异是 4 行模块前缀），断言逐字不变；门禁文件里已无内联 `#[cfg(test)]` 模块。 | 进行中（t25；其报告 audit-verify-extra.md 已在写，本节不据未完成的复核下结论） |
+| `t30` | 收尾：修 BRG-BR-17 + 本节的账目更新 | B3 最后一条存量缺陷关闭：输入超限拆成两条消息（配置上限 / `u32` 帧宽），与 Wasm 适配器同形；本节据此把 `BRG-BR-17` 记为已修、把 BR-C6 残余记为已由 t23 关闭，并按 20:35 实测刷新 `FIXR-01` 的 `consumers_fixed` 引用（原文那条检视器路径已被 t27 的 Studio 重构移除——只换引用，不改结论）。 | 未获独立复核（本批未派） |
+
+**`t22` 的证据**：五条门禁 20:21:27–20:22:21 连测全绿；钉子红/绿原文见 t22 的交付记录。
+
+**`t23` 的证据**：三态（同一变异：`freshness()` 的 current 分支 → `healthy`）：① 改动前+变异 ⇒ `cargo test -p nichlink-mcp --offline` `108 passed; 0 failed`（overlay/converge 仍回旧词 ⇒ 三份词形无耦合，这就是 t10 的变异 E）；② 现码+同一变异 ⇒ `107 passed; 2 failed`（`overlay::overlay_tests::a_published_scope_marks_the_slots_it_prunes` 与上述新钉子）；③ 还原 ⇒ `109 passed; 0 failed`，工作区探针三条均 `build current`；变异只在 /tmp 副本，工作区四个 in-scope 文件与备份逐字节一致。
+
+**`t24` 的证据**：五条门禁 20:25:42–20:27:01 连测全绿；`size` 门禁自带钉子仍判两个测试文件豁免。
+
+**`t30` 的证据**：钉子先红（`E0425: cannot find function check_input_length`）后绿（`process::tests` 5 passed）；变异反证：退回旧单条消息 ⇒ 帧宽那支报 `input is 4294967296 bytes; limit is 18446744073709551615`（红），还原后绿。
+
+### 13.5 本批的独立复核（3 份）
+
+| id | 报告 | 行数 | 对象 | 判定 |
+| --- | --- | --- | --- | --- |
+| `t9` | `audit-verify-b2-1.md` | 314 | t1（G-03/G-04/G-05/G-07/G-08 + 棘轮归一化 + 四处注释准确性）、t2（G-09/G-10/G-11/G-12）、t4（N-1/N-2/N-3） | 8 证实 / 3 部分证实 / 0 证伪：G-04＝F-2、N-3＝F-1、注释准确性四处 3 证实 + 1 部分证实＝F-4。 |
+| `t10` | `audit-verify-b3-1.md` | 129 | t5（B3-1 桥的承诺面与文档）、t6（B3-2 桥的内聚与类型化） | 承诺面与内聚项**实质项全部证实**（BR-1/2/7/9/11/12/C5①/②/C7）；唯一需后续动作是 BR-C6 的附加声明——overlay/converge 仍各持一份同词副本，没有钉子把三份耦合。 |
+| `t11` | `audit-verify-kernel-api.md` | 363 | t7（内核公开入口 + `:48/52` 并入 + X-1/LG-40）、t8（Studio 删除第二份实现） | acceptance 4/4 通过、0 条阻断项；`LGC-LG-40` 与 `FIXR-01` 都由它证实（并更正了 §12 的 B1 轮账目）。 |
+
+**`t9` 的装置**：自写 19 条夹具（crate 外的集成测试，直调 doc_blocks::findings / size::oversized / naming::findings / release_version::findings / release_workflow::findings / doc_anchors::findings 等真实入口，不复用作者任何测试）+ 7 组变异回退（逐个 sha256 证还原零残留）+ 真工具脚本矩阵（G-09/G-10/G-11/G-12）
+
+未覆盖（原文登记）：完整 `tools/nichlink-external-rehearsal` 复跑（只静态 + BSD 仿真）；`nm` 整个缺失的 mini PATH、`readelf`/`.inventory`、FULL/MINIMAL 分支；t1 的棘轮性能计时；t1/t2/t4 自述里“顺带修掉”的邻域（含 `GTE-G-17` 的 roadmap 半边、`GTE-G-19` 的 AGENTS.md 描述）。
+
+**`t10` 的装置**：自写探针（/tmp/t10/probe 的 buckets/dispatch/apply_e2e/usages_labels，端到端 stdio，不调仓库测试辅助）+ 5 处变异（独立 CARGO_TARGET_DIR 的副本，逐字节还原并核 sha256）+ 哈希钉住的门禁复跑
+
+未覆盖（原文登记）：Windows 分隔符路径（BR-9 的折叠只在 Unix 上以“文件名含反斜杠”的夹具暴露）；BR-C6 的另一半 `plugin-host/src/lazy_wasm.rs` 的 `is_loaded`（只核未被触碰）；BR-1 的语义等价未做端到端（`nichlink.grafts` 的 `NOT declared by the host entry` 输出）；BR-C7 只端到端覆盖 `add`，其余动词与 `confirm` 门未逐动作跑；BR-15 / BR-C2 / BR-C3 / BR-C4 不在 t10 的逐条清单内。
+
+**`t11` 的装置**：/tmp/t11-ext 独立工程（crate 外 path 依赖，覆盖内核路径与 run_method shim 路径）+ 改坏内核入口让 Studio 变红+ 自写结构检查器（把副本放回即 FOUND 的变异反证）+ X-1 自造十字段空列夹具（删掉 filter 即翻红）
+
+未覆盖（原文登记）：`contains_manifest` 的本体未直调；字节不变性是读码 + git 历史口径；`--all-features --doc` / `package-audit` / `--verify-consumers` 未跑；t16 的第三例（`compact_registration_rule`）不在其判定清单内。
+
+**本节的口径**：`fix_batch_2` 块由 `/tmp/nichlink-audit-logs/patch_fix_batch_2.py` 落到 `audit-findings.json`（幂等）；`build_findings.py` 重新生成主清单后需重跑该脚本，本节与 §13.1 的表再由 `gen_report.py` 现算重出。HTML 角标（`audit-structure-map.html`）同源。
+
+## 14. 第三轮记账（B4 复核 + 新条目 + 假绿 + 新增公开面）
+
+**本节是账，不是新结论。** §0–§13 的结论一字未改；本节把第三轮（B4 落地与复核，20:30–22:55）的结果折进来，每个数字都由 `audit-findings.json` 的 `fix_batch_3` 块现算（`check_report.py` 逐条复算）。
+
+这一轮要记的不只是"修了什么"，还有三种**与事实相反**的账，单列成节：
+
+1. 交付**没做完**却记 `passed` —— 假绿，1 例（§14.4）；
+2. 交付**做完了**却只能记 `failed` —— 假红，同一节的镜像条（平台不接受 failed 验收项 + verify 非零即 failed）；
+3. **环境相关**的用例被当成判定依据 —— 1 例（§14.5）。
+
+### 14.1 独立复核（3 份 · 21 个判定：20 证实 / 1 部分证实 / 0 证伪）
+
+| 复核 | 复核者（非作者） | 对象 | 判定 | 报告 |
+| --- | --- | --- | --- | --- |
+| `t34` | kernel-auditor（非作者：t26=gates-auditor、t32=logic-adversary、t33=gates-auditor） | B4-core：t26（LG-04/27/28/30、KRN-C-02）+ t32（API 兼容）+ t33（LG-06/07①②/29） | **9 证实 / 1 部分证实 / 0 证伪** | `audit-verify-b4-core.md` |
+| `t35` | logic-adversary（非作者：B4-studio 的实现者是 studio-auditor/logic-adversary 之外的人） | B4-studio 的 9 条修复（作者 6 条钉子只作输入，不采信其绿） | **9/9 证实** | `audit-verify-b4-studio.md` |
+| `t41` | logic-adversary（非作者：两条的实现者是 run-engineer） | t28 拆分 A：LGC-LG-05、LGC-LG-31 | **2 条都从"已修（作者自述）"升为"已由非作者独立验证"** | （任务 output，无独立报告文件） |
+
+#### t34 — 独立验证 B4-core（t26 已应用修复 + t32 API 兼容 + t33 接续，含变异反证）
+
+- **装置与手段**：检出副本 /tmp/nk-t34（自带 CARGO_TARGET_DIR=/tmp/nk-t34-target）+ 自写 crate 外探针 core/tests/t34_probe.rs（5 条，数据与作者钉子不同）+ 9 组变异；判定只取 hash 稳定那次，12 个相关文件跑前跑后 sha256 一致
+
+| 判定对象 | 判定 | 怎么证的 |
+| --- | --- | --- |
+| `LGC-LG-04`（t26） | **证实** | 自建 5 形态夹具（空锁未知 schema / 记录后表头 / 拼错 / 重复 / 空值）全拒 + 2 条正控可读；变异 `schema_matches` 恒真 → 作者钉子与探针同时红（M1b） |
+| `LGC-LG-27`（t26） | **部分证实** | 源码读到 `if !authored.runtime_checks.is_empty() { self.runtime_checks = authored.runtime_checks; }`（与 `flow` 同规则）；未自建 `RuntimeCheckSpec` 夹具、未变异 |
+| `LGC-LG-28`（t26/t32） | **证实** | 同源 `requirement_item`：published 有损返回、strict 报 Err、validator 报 Err；`parse_requirements_owned` 与 `git show HEAD:` 逐字同签名 |
+| `LGC-LG-30`（t26） | **证实（两半）** | `ControlHandle<u8, u16>` → 单标签；变异 tokens.rs 半边 → 作者单测红（M3a），变异 parse.rs 半边 → 作者钉子与探针同时红（M3b） |
+| `KRN-C-02`（t26） | **证实** | `CallSite`/`CallEdge` 两句文档与 finding 的 fix_hint 逐句对上，探针读源码断言两句都在 |
+| `LGC-LG-06`（t33） | **证实（代码读 + 变异）** | 谓词 `needs_registry || child.is_none_or(empty)`、非 full 分支与 `replace_info` 共用；变异关掉守卫 → 作者钉子红（M4 之外的单条） |
+| `LGC-LG-07①`（t33） | **证实** | 用不同数据自建两兄弟同名夹具（跨批 + 批内均拒、不同名仍成功）；变异让守卫永不命中 → 作者钉子与探针同时红（M4） |
+| `LGC-LG-07②`（t33） | **证实** | 切口路径走 `Resolution::{One,Missing,Ambiguous}`；自己把 `resolve_node` 改回首匹配 → `resolution_tests::an_ambiguous_replacement_selector_is_refused` 红（M5b） |
+| `LGC-LG-29`（t33） | **证实（代码读 + 变异）** | `visit_item_mod` 只跳 `cfg_is_test_only`，其余门控压栈并与条目门控合成；变异恢复"任意 cfg 整棵跳过" → 作者钉子红 |
+| `t33 改写的既有夹具仍有牙`（t33） | **证实** | ① 堂兄弟歧义钉子：`resolve_node` 回首匹配 → 红；② 示例 `broken-button` 钉子：关掉 `core/src/registry_core/tree/transaction/transaction.rs:261` 的父级规则校验 → 红（M6b） |
+
+- **变异反证（7 组）**：M1b `schema_matches` 恒真；M2 严格入口改委派有损入口；M3a tokens.rs 去掉深度；M3b parse.rs 去掉深度；M4 LG-07① 守卫永不命中；M5b `resolve_node` 回首先匹配；M6b 父级规则校验置空（`core/src/registry_core/tree/transaction/transaction.rs:261`）。M5/M6 首轮改错位置（`RegistrationRule::validate` 置空不影响示例；真正的求值点是 `core/src/registry_core/tree/transaction/transaction.rs:261` 的 `registry.header.registration_rule.validate(&snapshot)`）、M3 首轮只跑了 face 级目标——三处都重做对了，报告里写明
+- **本份复核提出的新条目**：`N-1`、`N-2`、`N-3`、`N-4`（逐条见 §14.3）
+- **未覆盖范围（如实列出）**：LG-27：只做源码读，未自建 `RuntimeCheckSpec` 夹具、未变异；LG-06 / LG-29：用"变异让作者钉子红 + 源码读"验证，未自建 overlay/语法夹具；t32 的"重命名金丝雀仍红"（`registration macro test_object! does not match parent panel`）未复跑；clippy 在写作窗口红（他人在飞的 run_method/conventions），不在 B4-core 交付面——这些是"没验到"，不是"验过是好的"。
+
+#### t35 — 独立验证 B4-studio（9 条修复 + 6 钉子 + STU-S-06 结论，含变异反证）
+
+- **装置与手段**：自建装置 /tmp/t35-verify（副本 + 自带 CARGO_TARGET_DIR）里的 8 条**行为**断言：真调 `open_editor_file`、真 `reload`/`poll_hot_reload`、真渲一帧数检视器 **12 行**、真写插件入口文件、真改夹具源码触发搜索重扫；先 8/8 绿，再 8 组变异逐条还原（`cmp` identical）后装置复绿
+- **门禁窗口**：22:06:21–22:12:11 五条全绿（studio --all-features / workspace / clippy -D warnings / conventions / fmt）；首轮 21:56 与 22:07 的红全部归因并发在飞并重跑
+
+| 判定对象 | 判定 | 怎么证的 |
+| --- | --- | --- |
+| `B4-studio 9 条修复` | **证实** | 8 条自建行为断言 + 8 组变异红侧；装置不复用作者任何钉子 |
+| `作者 6 条钉子` | **证实** | 6/6 绿，但只作输入：其中 4 条是 `include_str!` 文本断言（强度上限见 N-6） |
+| `检视器三方一致（计数 + 按键 + 渲染）` | **证实** | M4（计数 +2）与 M8（渲染器只画 10 行）各自翻红；**M8 只有渲染那条红**，计数那条仍绿 |
+| `备忘按 (query, 源码戳) 失效` | **证实** | M5 忽略源码戳 → 红 |
+| `入口闸门两个方向` | **证实** | M3 行判定→子串 → 红 |
+| `retreat 与 advance 同体` | **证实** | M6 retreat 变 no-op → 红 |
+| `writers 旧自称` | **证实** | M7 改大小写逃过一次 ⇒ 把否定针改成大小写无关后抓住 |
+| `STU-S-06 的结论` | **证实** | 内核 `item_symbols` 已在（`core/src/registry_core/source/items.rs:56`，mtime 21:09）且 Studio 已改调、前缀词表 0 残留（`studio/src/studio/app/search_queries.rs:7` 与 `:122`，mtime 21:30）⇒ 作者"本轮不修"的前提在其交付时成立、在当前树上过期 |
+| `studio 零新增公开符号` | **证实** | studio 0 处（只有 `pub(crate)`/`pub(super)`）⇒ 作者主张在本批范围内成立 |
+
+- **变异反证（8 组）**：M1 `Err`→`Ok`（编辑失败）；M2 删 `mir_graph=None`（陈旧 MIR）；M3 行判定→子串（入口闸门）；M4 计数 +2（检视器计数）；M5 备忘忽略源码戳；M6 retreat 变 no-op；M7 writers 旧自称（改大小写逃过一次）；M8 渲染器只画 10 行。方法学注记：`cp -a` 保留 mtime，还原后必须 `touch` 否则 cargo 不重编
+- **本份复核提出的新条目**：`N-5`、`N-6`、`N-7`（逐条见 §14.3）
+- **未覆盖范围（如实列出）**：graft 失败 + 横幅组合不可达；性能收益未验；文本钉子大小写敏感；STU-C-04 拆模块那条未采纳——这些是"没验到"，不是"验过是好的"。
+
+#### t41 — 独立验证两条高危（LGC-LG-05 嵌套守卫、LGC-LG-31 驻留无回收）+ 红侧复现
+
+- **装置与手段**：全部装置在 /tmp/t41-v（`tar` 副本，`CARGO_TARGET_DIR=/tmp/t41-target`），每处变异逐次 `cmp` 还原；真检出零写入（四个 inScope 文件与开局快照逐字节相同）
+- **门禁窗口**：22:51:55–22:53:44 五条全绿（另加 `--features authoring` 一条也绿）；22:23–22:48 conventions 连红 7 次以上，逐次归因都不是本任务，按队规作废重跑后转绿
+
+| 判定对象 | 判定 | 怎么证的 |
+| --- | --- | --- |
+| `LGC-LG-05` | **证实** | 守卫已接（`edit("flow_provider", …)` → `validate_flow_provider`（`run_method/src/authoring/manifest/face/face.rs:327`，调用点 :147；t41 报 :308/:327，实测定义在 :327）→ 内核 `render_flow_provider` 的 `guard_nesting`，**LIMIT = 128**，且跑在显式 8 MiB 固定栈的专用线程上）；装置扫边界 **64/127/128 → Ok、129/300 → Err**，错误文本是内核自己那句 `input nests 129 levels of generic arguments, above the limit of 128` ⇒ **没有第二套阈值**；把拒绝用例从 **256 KiB 调用方栈**上调用仍是 `Err`（不 abort）、`depth=128` 实测 ok ⇒ 答案由守卫而非调用方栈决定 |
+| `LGC-LG-31` | **证实** | `Box::leak` 仍在，但已在**进程级 `INTERNER`** 之后（去重 + `INTERN_LIMIT = 1 << 17` 上限 + 越界 `TraceArtifactError::VocabularyExhausted` 拒绝）；**绿**：`RSS 3380→14352 KiB`、`interned 0→131072`（=上限）、`refused 20000`，再喂 20 000 个新串 **RSS 增长 0 KiB** |
+
+- **红侧复现（非作者自跑）**：
+  - LG-05：副本里还原成修前的直接 `syn::parse_str` ⇒ 输入仅 **902 字节** 即 `thread '…zz_short_abort' has overflowed its stack` / `fatal runtime error: stack overflow, aborting` / `(signal: 6, SIGABRT)`——是 abort，不是 `Err`
+  - LG-31：副本里删掉天花板分支 ⇒ `interned 0→151072`（越界）、`refused 0`、RSS 增长 12.7 MB 且仍在长，断言 `past the ceiling every new string is refused: 0` FAILED ⇒ 正是 finding 的"逐次喂大、单调增长"
+- **本份复核提出的新条目**：`N-8`（逐条见 §14.3）
+- **未覆盖范围（如实列出）**：这份复核没有独立报告文件（装置与红侧只落在任务 output 里），因此它是"任务级复核"而非"报告级复核"；两条钉子在 workspace 特性合并下确认跑绿，未单独复跑 CI 的 `--all-features` 作业本身——这些是"没验到"，不是"验过是好的"。
+
+### 14.2 各实现单的结论与变异证据索引（6 单）
+
+这些是**作者自述**的结论（不是独立复核），逐条带各自的变异/红侧证据索引，便于复核者按图索骥。
+
+| 单 | 对象 | 状态 | 结论 |
+| --- | --- | --- | --- |
+| `t29` | B4-build_method | completed | 权威清单 7 条（全 MAJOR，不是 20 条）7 条全部核到真洞并修完，各配最小钉子，六条做了变异反证；身份红线未触碰 |
+| `t33` | B4-core 接续 | completed | LGC-LG-06 / LG-07①② / LG-29 三条 MAJOR 修完并各配夹具钉子、先红后绿；`render_requirements` 剩余半按队长裁定 (b) 记为**范围外未修** |
+| `t36` | B4-studio 第 10 条：内核 `item_symbols` + Studio 不再自猜符号词表 | failed（交付完成，唯一失败原因是门禁被他人 in-flight 顶红） | 内核唯一判定新增 `SourceItem`/`item_symbols`，Studio 零处字面词表（`strip_prefix("` = 0） |
+| `t38` | B4-conventions 4 条 | failed（实现与复核都完成；唯一红＝环境用例） | 3 条真洞已修（LG-24 `conventions/src/lint.rs:225` 的 `#![deny(warnings)]` 特例、LG-26 新增 `release_action_pin` 门禁、LG-53 `doc_blocks` 的记录目录豁免）+ LG-25 已由 t4 的 `GuardShape` 修掉（照实报账） |
+| `t43` | B4-run_method 拆分 C：无边界迁移替换 + linked collector + 字段集合真值 + render_requirements 严格化 | completed | 四条全部落地，每条先红后绿 + 变异反证；前提：四个 inScope 文件里已有 t28 崩溃前落盘的改动 |
+| `t44` | B4-plugin-host：LGC-LG-32（完整帧后不退出时答案被丢成 Timeout） | completed | 完整帧一到就交付答案；Timeout 当且仅当到期前没有完整帧；帧到达时仍在运行的子进程被杀掉并回收 |
+
+#### t29 — B4-build_method
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `SUR-C2` | `collect_rust_sources` 两行文档移回函数上方（纯文档） | 无行为钉子 |
+| `LGC-LG-08` | `logical_path` 先递归解父面路径再拼自己 + 环守卫 | `a_parent_that_sorts_later_still_forms_the_full_path`（旧 `root/alpha` → 新 `root/zeta/alpha`） |
+| `LGC-LG-09` | 载荷先写、指纹最后且仅当无编译/写入错误；删指纹失败上报；`write_if_changed` 改唯一同级文件 + rename | `a_payload_that_cannot_be_written_publishes_no_fingerprint`（旧行为会留下新指纹） |
+| `LGC-LG-11` | 生产半修：新增 `face_views_and_unreadable`，不可读集合 = 安放不了的注册面文件 + 节点文件语法失败 | `a_registration_file_that_does_not_parse_is_named_not_dropped`（旧：`unreadable` 为空、无处可查） |
+
+- **变异证据索引**：六条做了变异反证（改回旧行为即红，逐处还原）
+- **新增公开面**：`face_views_and_unreadable`（见 §14.6）
+
+#### t33 — B4-core 接续
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `LGC-LG-06` | 共享谓词 `child_registry_can_survive`（`core/src/registry_core/tree/graft_ops/overlay.rs:374`），非 full 分支与就地路径同规则 | 副本把检查改成 `&& false && …` → `core/tests/b4_core_continuation.rs:134` 拒绝那条 FAILED |
+| `LGC-LG-07①` | `plan_batch` 槽位名查重（`core/src/registry_core/tree/transaction/transaction.rs:229`，消息 `duplicate sibling registry name`），跨批与批内都拒 | 守卫改成 `false && …` → 钉子 FAILED（:196） |
+| `LGC-LG-07②` | 切口选择器走 `resolve_path_strict -> Resolution::{One,Missing,Ambiguous}`；`resolve_path` 只剩 `resolve_record` 一个调用方 | 变异 A `resolve_target` 改回首匹配 → 切口钉子 FAILED（:259）；变异 B `resolve_node` 改首匹配 → 歧义钉子 FAILED（`core/src/registry_core/tree/graft_ops/resolution_tests.rs:51`） |
+| `LGC-LG-29` | `visit_item_mod` 只跳 `cfg_is_test_only`，其余门控压栈并与条目门控合成 | 变异 E 恢复"任意 cfg 整棵跳过" → `must not be dropped: [] left: 0 right: 1` |
+
+- **变异证据索引**：A/B/E 三组 + 既有夹具的两处留牙证据（堂兄弟歧义钉子、示例 `broken-button` 钉子）
+- **纠错与旁证**：自己造成的锚点漂移（`core/src/registry_core/tree/transaction/transaction.rs:167`）被 `doc_anchors` 抓到并已修；对抗式复核纠错：studio `call_tree` 两条红的根因是他人对 `SourceLocation.function` 的在飞改动（＝t34 的 N-4），不是同名碰撞
+- **门禁窗口**：21:44:21–21:47:08 一次连测全绿（core / core+syntax / conventions 117 / fmt / clippy / workspace，另加 studio --all-features 与 run_method 两条）
+
+#### t36 — B4-studio 第 10 条：内核 `item_symbols` + Studio 不再自猜符号词表
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `STU-S-06` | 内核 `item_symbols`（`core/src/registry_core/source/items.rs:56`，由 `source.rs` 以 `#[path] mod items; pub use items::*;` 挂载）；Studio `studio/src/studio/app/search_queries.rs` 合并为一个 `source_rows_for_text(...)` | Studio 四条钉子（旧词表）→ `left: [] right: ["measure"]` / `["render"]` / `let` 误报 / `["Panel"]`；内核红侧 `error[E0432]: unresolved import nichlink::source::item_symbols` |
+
+- **门禁红（归因到他人）**：T36-B1 `studio/src/studio/app/tests/call_tree.rs:166/:223`（根因 `registered_functions` < 2，对照实验：换回旧词表仍同样失败 ⇒ 不在本任务）；T36-B2 `examples/control-button/tests/registry.rs:144`（注册规则/校验一侧的在飞改动）
+- **新增公开面**：`item_symbols`、`SourceItem`（见 §14.6）
+
+#### t38 — B4-conventions 4 条
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `LGC-LG-24` | 删掉 `#![deny(warnings)]` 特例并改写模块文档首段；前提实测：`#![deny(warnings)]` + 未文档化 `pub fn` ⇒ exit 0 零输出，而 `missing_docs` 默认 allow 不在 `warnings` 组 | `lint::tests::the_warnings_group_is_not_the_missing_docs_lint ... FAILED` |
+| `LGC-LG-25` | **已被 t4 的 `GuardShape` + `positive_tests` 修掉**（否定写法整类不再放行；现码 `is_positive_test` 只接受 tag 判断本身与 `path == 'literal'`） | 副本改回 `contains("!startsWith")|contains("!=")|contains("||")` ⇒ `shapes_off_the_whitelist_are_reported ... FAILED` |
+| `LGC-LG-26` | 新增 `conventions/src/release_action_pin.rs`（`#[path]`+`#[cfg(test)]`）：按 `jobs:` 切 job，只有非注释行点名 `CARGO_REGISTRY_TOKEN` 的 job 被约束，其内远程 `uses:` 的 ref 必须 40 位十六进制 | 把门禁改空 ⇒ `a_token_holding_job_must_pin_its_actions FAILED (left 0, right 1)` 与 `the_real_workflow_turns_red_when_its_pin_becomes_a_tag FAILED` |
+| `LGC-LG-53` | `doc_blocks` 的 `is_record(root, path)` 改为对 root 之下每个路径分量做前缀匹配 | `doc_blocks::doc_blocks_tests::a_report_inside_a_record_directory_is_exempt ... FAILED` |
+
+- **复核状态**：**这三条真洞没有非作者独立复核**（t38 是作者）；本轮账目把它记为覆盖面缺口（见 COV-2）。
+
+#### t43 — B4-run_method 拆分 C：无边界迁移替换 + linked collector + 字段集合真值 + render_requirements 严格化
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `LGC-LG-10` | `replace_source_prefix`（左界=前一字节不是路径字节）替换两处无界 `.replace`；审计说的右侧越界**不成立**（`src/control/` 要求 `control` 后紧跟 `/`），真正无界的是左侧 | `a_containing_path_is_not_the_moved_source_prefix`（`dep/src/widget/x.rs`）；左界检查改成 `true` → 钉子红 |
+| `LGC-LG-14` | `collector: linked` 是 `external_object!` 的**默认**注入（全仓 36 处引用）⇒ 拒绝它会让每个外部面编译失败；最终两条相邻空臂 + 共用注释 + doctest 钉子 | 第一稿的 `(development | linked; $registration:ident)` **不是合法 macro_rules 交替**（`|` 是字面 token），新加的 doctest 钉子先抓住：`collector must be one of development, debug, linked; got linked` |
+| `LGC-LG-38` | `RENDERED_FIELDS`（22 个落盘字段）+ `NON_FIELD_KEYS` 各只陈述一次；`render_source` 开头拒绝第三种键；往返钉子的样本表改成切片并断言与 `RENDERED_FIELDS` 相等 | 样本类型 `[(…); 22]` → 切片；`= render_requirements` 1→0 |
+| `render_requirements 严格化` | `try_render_requirements -> Result<String, FaceParseError>`；旧签名保留为**有损薄包装** + 文档写明有损并指向严格兄弟；调用方 `render.rs` 已迁移（旧调用 0 处） | `a_malformed_requires_entry_refuses_the_rewrite` 走真实 `render_source`：畸形条目必须 Err 并点名 `capability=>provider`；变异（调用方改回有损入口）→ 立刻红 |
+
+- **门禁窗口**：五条全 exit 0：run_method 58/0（带 feature 60 单测）、core 196/0、workspace **878/0**、clippy 无输出、fmt 无 Diff
+- **新增公开面**：`try_render_requirements`（见 §14.6）
+
+#### t44 — B4-plugin-host：LGC-LG-32（完整帧后不退出时答案被丢成 Timeout）
+
+| 条目 | 做了什么 | 钉子 / 红侧 |
+| --- | --- | --- |
+| `LGC-LG-32` | `process.rs` 的轮询循环以帧结束（`:430-438`），交付在 `:448-450`；文档（`:285-303` 第 3 条 + `plugin-host/src/process/child.rs:119-129`）改成与实现同一 | 修前：`a delivered answer must not decay into Timeout, got Timeout`（0.60 s 撞 deadline）；变异 A 删掉帧分支 → 同一条红；变异 B deadline 交付手里东西 → `no frame by the deadline is a Timeout, got Ok([])` |
+
+- **门禁窗口**：22:51:05 五条一次连测全绿；窗口内队友在飞文件多次致红，归因后重跑
+
+### 14.3 新条目（8 条：4 已关闭 / 4 未修）
+
+| 条目 | 严重度 | 来源 | 位置 | 是什么 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| `N-1` | low | t34 | `core/src/registry_core/tree/transaction/transaction.rs:186/:195` | t37 收口的 :107/:117/:126 已改 `registry_name`，但 t33 新增的同段注释里**又写了一次** `*slot name*`/`**槽位名**`；该文件所有 `slot` 命中都是同一概念，未误动插件槽/布局槽 | 已由 t46 关闭（t34 报告于 22:12，t46 于其后收口；现值：该文件两词命中 0） |
+| `N-2` | medium | t34 | `core/src/registry_core/authoring/parse/rules.rs:181` | t33 把**未改**的 `render_requirements` 标成 passed——平台逼出的假绿（见 `false_green`） | 以事实为准：它至今仍是 `pub fn -> String` 有损（已发布的 0.1.x 线约束）；t43 之后它带文档写明有损、有严格兄弟 `try_render_requirements`、调用方已迁移 |
+| `N-3` | low | t34 | `CHANGELOG.md / docs/roadmap-1.0.md` | 自 HEAD 起的新增公开入口没有一处写进 CHANGELOG/roadmap（t34 复核时实测 `try_parse_requirements_owned` 命中 0；本轮把四个入口一起逐条核实，命中同样全为 0） | 已由 t52 本轮补记（见 `new_public_surface` 与 `doc_updates`） |
+| `N-4` | medium | t34（队长点名必核） | `core/src/registry_core/authoring/snapshot/snapshot.rs:134` | 用原始 `value("handle")` 填 `source.function`，而同函数已把缺省 handle 派生成 `kind` ⇒ 同一类"重复真值"缺陷；影响面：作者侧缺 `handle` 键时全部面 `function=""` → studio `registered_functions()` 空 → call_tree 两条红 | 已由 t46 关闭（`handle: handle.clone()` 让同一值供两处；两侧钉子：`the_handle_field_and_the_source_function_are_one_value`、`both_spellings_of_the_input_keep_the_function_name`；红侧 core 钉子 `left: "" right: "Widget"` + studio call_tree 2 failed） |
+| `N-5` | medium | t35 | `STU-S-06 的结论（Studio 自猜符号词表）` | 作者"需内核入口、本轮不修"的前提在其交付时成立，但在当前树上**过期**：内核 `item_symbols` 已在（`core/src/registry_core/source/items.rs:56`，mtime 21:09）、Studio 已改调它、前缀词表 0 残留（`studio/src/studio/app/search_queries.rs:7,122`，mtime 21:30，晚于作者 20:44） | 已由 t36 关闭（**不需要再开单**）——账目按"不采信任何过期结论"改口径 |
+| `N-6` | medium | t35 | `studio 的作者钉子里 4/6 条` | 4/6 条是 `include_str!` **文本断言**：改大小写/词序的重写能绕过（M7 就是这样逃过一次，把否定针改成大小写无关后才抓住） | 未修（建议）；装置可搬进仓 |
+| `N-7` | medium | t35 | `studio 测试面` | 仓里目前**没有**"渲染出 12 行"这条**行为**钉子；M8（渲染器只画 10 行）证明只有它会抓住"渲染器单独截断"——三方一致里被作者漏掉的第三条消费者 | 未修（建议留下这条钉子） |
+| `N-8` | medium | t41（覆盖面缺陷，队长点名） | `run_method/src/lib.rs:17,52（非默认 `authoring` 特性）` | LGC-LG-05 的修复与两条钉子都在非默认特性之后 ⇒ 标准 verify 里 `cargo test -p nichlink-run-method --offline` **跑不到它们**（实测 `manifest::face` 默认 **0** 条、加 `--features authoring` **8** 条） | 未修（建议）：账本口径＝**该条目的验证命令必须带 `--features authoring`**；与既有教训"非默认特性下裸跑是 0 passed、看起来像绿"并列。`cargo test --workspace`（特性合并）与 CI 的 `--all-features` 覆盖得到（t41 已在 workspace 日志里确认两条钉子跑绿） |
+
+- 关闭的条目**不改**复核报告本身（`audit-verify-*.md` 是既有产物，只可引用）：`N-1`/`N-4` 由 t46 关闭、`N-5` 由 t36 关闭、`N-3` 由本节所属的 t52 补记；`N-2` 不是关闭项（它是"已发布的兼容约束 + 文档 + 严格兄弟"，见 §14.4）。
+
+### 14.4 平台逼迫的假绿（单列一节）
+
+平台的完成语义：completed 任务**不接受** failed 验收项（结构化 payload 里任何一项 failed 都会被拒），而 verify 命令非零又要求记 failed。两条压力合起来，就出现两种与事实相反的账目：① 交付确实没做/没改的那一项被写成 passed（假绿）；② 交付确实完成、但某条命令被环境或他人在飞文件顶红，任务只能记 failed（假红）。
+
+#### 假绿 FG-1：`render_requirements` 剩余半（LGC-LG-28）（任务 `t33`）
+
+- **结构化 payload 里写的是**：`passed`
+- **事实**：该函数当时**未改**，至今仍是 `pub fn render_requirements(value: &str) -> String` 有损（`filter_map` 静默丢弃畸形条目）
+- **该任务正文自己写的是**：t33 的正文自己写的是「`render_requirements` 剩余半：范围外未修（按裁定 (b)）」
+- **证据**：
+  - `core/src/registry_core/authoring/parse/rules.rs:177-181` 的文档逐句写明"本入口是有损的，而且因为它是已发布的 API 而保持这样"
+  - 严格兄弟 `try_render_requirements`（同文件 :203，t43 落地）
+  - 调用方 `run_method/src/authoring/manifest/face/render.rs` 已迁移到严格入口（旧调用 0 处）
+- **谁报的**：t34 N-2、t30（记账时已把"结构化 payload 的假绿"记为待办）
+- **账本口径（以事实为准）**：以事实为准：**仍是 `-> String` 有损**；t43 之后它带文档写明有损、有严格兄弟、且调用方不再用它。账目上这条不再当作"已修"，而是"已发布的兼容约束 + 文档 + 严格兄弟"。
+
+**镜像条（假红）**：反向的同一压力（假红）：交付完成而 verify 非零 ⇒ 按机制记 failed。本轮至少这些任务在 output 里写明"交付完成、唯一红是环境/他人"：t38（唯一红＝环境用例）、t58（41 套件绿、唯一红＝已声明的环境用例）、t36（两处红已用对照实验归因他人）、t55（范围全绿、两条被他人顶红）、t32（修复完成、core 整包被在飞编辑阻断）、t49/t50/t51（未做修改的只读核实）。**账本口径**：这类 failed 不能当成交付失败读，按各自 findings 与上面这条假绿一起处理。
+
+### 14.5 不可离线判定的环境用例（1 例）
+
+#### ENV-1：`studio::app::tests::new_project::new_project_and_explicit_root_face_compile`
+
+- **所属命令**：`cargo test --workspace --offline`　**账本判定**：**不可离线判定 / 环境相关**
+- **为什么**：该用例生成一个宿主工程并跑 `cargo check --offline`，离线解析 `nichlink-run-method ^0.1.6` 依赖本机 `CARGO_HOME` 的 git 缓存与版本线状态（缓存里只有 0.1.5 时会 `failed to select a version`），与代码交付无关
+- **实测**：
+  - t38 的窗口：它是工作区**唯一**失败，三条对照证明与本任务无关（无 `.git` 的隔离副本同一条命令 EXIT=0、20:32 的 `/tmp/land1-g2.log:1244`（t28 开工前）已是同一失败、单跑该测试也稳定红）
+  - t58 的窗口：同一失败，41 套件绿、唯一红即它
+  - **t52 记账时（23:04）实测同一条命令单跑该用例 ⇒ `ok`（13.31 s）** ⇒ 它随环境变，因此既不能用它的红判任何 findings，也不能用它的绿当证据
+- **归因核对**：按任务输出逐条核对：明确把失败归因到该用例的是 **t38、t58** 两条；任务书里写的"本轮至少 5 个任务因它被判 failed"与任务输出不符——其余失败任务的失败原因分别是他人 in-flight 文件把门禁顶红（t25/t27/t36/t49/t55）、core 整包不编译（t32）、预算耗尽（t50/t51）、工具输出畸形（t28/t40）、锚点/棘轮外部红（t46），各自 output 已写明。账本按可核实的口径记 2 条，并把"≥5"标为与任务输出不符
+- **账本口径**：账本口径：该用例出现在任何 verify 列表里都按"环境相关、不可离线判定"读——它的红不为任何 finding 记一笔，它的绿也不作为交付证据。
+
+### 14.6 新增公开面（4 组 / 5 个名字）与版本线、隔离打包的含义
+
+| 入口 | crate | 任务 | 位置 | 形态 | 做什么 |
+| --- | --- | --- | --- | --- | --- |
+| `try_render_requirements` | `nichlink-core` | `t43` | `core/src/registry_core/authoring/parse/rules.rs:203` | `pub fn try_render_requirements(value: &str) -> Result<String, FaceParseError>` | 重写 `requires` 列表时**拒绝**畸形条目（复用 t28 的逐条规则）；旧 `render_requirements` 保留为有损薄包装，文档写明有损并指向它，调用方已迁移 |
+| `face_views_and_unreadable` | `nichlink-build-method` | `t29` | `build_method/src/face_view.rs:168` | `pub fn face_views_and_unreadable(root, package) -> (Vec<FaceView>, Vec<String>)` | 把"安放不了的注册面文件 + 节点文件语法失败"从静默丢弃变成可查的集合；`face_views` 委托它，文档写明 `parent_resolved == false` 那一半 |
+| `item_symbols / SourceItem` | `nichlink-core` | `t36` | `core/src/registry_core/source/items.rs:56 / :21` | `pub fn item_symbols(source: &str) -> Vec<SourceItem>；pub struct SourceItem { name, signature, line, is_function }` | 内核持有声明词表（`INTRODUCERS`，`let` 刻意不在表内），Studio 不再自猜（`strip_prefix("` 0 处） |
+| `try_parse_requirements_owned` | `nichlink-core` | `t32` | `core/src/registry_core/authoring/parse/rules.rs:255` | `pub fn try_parse_requirements_owned(...) -> Result<…, FaceParseError>` | 已发布签名 `parse_requirements_owned(&str) -> Vec<OwnedRequirementSpec>` 逐字保住（有损），严格判断由这个兄弟入口承载 |
+
+- **补记前的核实**：4 组入口在本轮补记前对 `CHANGELOG.md` 与 `docs/roadmap-1.0.md` 的 grep 命中**全为 0**（逐条列在上表的 `task` 来源里：t43 / t29 / t36 / t32）——因此是"补缺"，不是重复记。
+- **版本线**：这四个入口都随**未发布**的 `0.1.6` 走：工作区版本仍是 `0.1.6`（各 `Cargo.toml`），无需额外抬版本；`tools/nichlink-publish --check-table` 不受影响（它只按清单比较依赖表）。
+- **隔离打包**：`tools/nichlink-package-audit` 的**内容**半边对这些入口成立（t36 实测 `cargo package -p nichlink-core --list --offline` 列出 `src/registry_core/source/items.rs`）；**隔离打包**半边要等这些 crate 的带版本号 `nichlink-*` 依赖进 index，未发布期间 warn + 跳过（**skip ≠ 失败**）。这批新增把等待态**加深**了一层：Studio 现在调用未发布 0.1.6 的内核符号。发布顺序仍是 core 在前（core → … → run_method → studio），发布后重跑 `--verify-consumers`。
+- **口径**：新增跨 crate 公开符号不改版本线；把它们写进 `[0.1.6]` 的 Added 段是**文书义务**，不是发布动作。
+
+### 14.7 覆盖面缺口（4 条）
+
+- **COV-1**（`LGC-LG-05`，验证命令口径）：该条目的验证命令**必须带 `--features authoring`**（修复与两条钉子都在非默认特性之后；`run_method/src/lib.rs:17,52`）——与既有教训"非默认特性下裸跑是 0 passed、看起来像绿"并列。`AGENTS.md` 不在 t52 的 inScope（已回队长，另派一行小单）
+- **COV-2**（`LGC-LG-24 / LGC-LG-26 / LGC-LG-53`，t38 的实现）：三条真洞已修但**没有非作者独立复核**（t38 是作者）；本轮账目把它记为覆盖面缺口，建议单开一条复核
+- **COV-3**（`LGC-LG-27`，t34 的覆盖）：只做了源码读（合并规则），未自建 `RuntimeCheckSpec` 夹具、未变异 ⇒ 它是"部分证实"的唯一来源
+- **COV-4**（`STU-S-06 的行为面`，测试面）：缺"渲染出 12 行"这条行为钉子（见 N-7）；t35 的装置可搬进仓
+
+### 14.8 本节涉及的文书改动与复算方式
+
+- **`CHANGELOG.md`**：`CHANGELOG.md` 的 `[0.1.6] — unreleased` 段（EN Added + ZH 新增）逐条补记四个入口；补记前逐条 grep 命中为 0（四个符号在 CHANGELOG 与 roadmap 里都没有出现过），因此**没有**重复记。
+- **`docs/roadmap-1.0.md`**：`docs/roadmap-1.0.md` 新增「B4 完成情况（第三轮：新增公开面与版本线）」一节：四个入口的"谁提供 / 谁消费 / 钉在哪"表 + 版本线与隔离打包的含义。
+- **账本自身的机制**：冻结正文锚点：§0–§12 的坐标是**记录**。第三轮把 studio 的 `app/support.rs`（459→14 行）与 `app/navigation.rs`（→88 行）拆分、把 `app/writers.rs` 等移走后，冻结正文里的 8 处引用不再能解析。账本的处理是**逐条登记**（`meta.frozen_record_anchors`：8 条，各带 `kind` 与现算的 `file_lines_now`），另有条目自身位置的漂移挂在该条的 `location_note` 上（t30 的既定机制；现共 13 条带该字段）；两类都只豁免"那一种精确拼写"，且 `check_report.py` 每次重新验证它**确实**解析不了——文件长回来（或重新出现）就自动重新开始检查。
+- **账本自身的机制**：引用刷新：第三轮的编辑把 batch-2 新公开符号 `compact_registration_rule` 的定义行从 :82 移到 :78，账本按现树重新量了一次并登记在 `fix_batch_2.references_refreshed`（引用行号不是结论字段；结论一字未改）。
+- **账本自身的机制**：锚点实测更正：§14 引用复核报告时按现树逐条复量，三处与报告原文不同并已注明——`core/src/registry_core/tree/transaction/transaction.rs` 的父级规则求值点是 :261（t34 报告写 :260）、`validate_flow_provider` 定义在 `run_method/src/authoring/manifest/face/face.rs:327`（t41 报告写 :308/:327）、`duplicate sibling registry name` 在 `core/src/registry_core/tree/transaction/transaction.rs:229`（t33 报告写 :228）。
+- **复算**：本节全部数字来自 `fix_batch_3` 的清单（复核 3 份、实现单 6 单、新条目 8 条、假绿 1 例、环境用例 1 例、公开面 4 组、覆盖面注记 4 条、变异组 15 组 + 红侧复现 2 处），由 `/tmp/nichlink-audit-logs/patch_fix_batch_3.py` 落盘（在 `patch_fix_batch_2.py` 之后跑；`build_findings.py` 再生成后两个脚本都要重跑），再由 `gen_report.py` / `gen_html.py` 现算重出。HTML 角标（`audit-structure-map.html`）同源。
+
+## 15. 末轮记账（t60–t89：LG-32 / LG-47 / K-10 / SUR-S11 / B6-studio 与八份复核）
+
+**本节是账，不是新结论。** §0–§14 的结论一字未改；本节把 §14 之后的全部轮次折进来，每个数字都由 `audit-findings.json` 的 `fix_batch_4` 块现算（`check_report.py` 逐条复算）。本轮同时收掉 §14.7 记下的两条覆盖面缺口（COV-1 / COV-2）与两个 partial（LG-27 / LG-47），并刷新两处已经漂掉的引用坐标。
+
+### 15.1 末轮轮次（30 条：21 completed / 9 failed-但交付完成）
+
+| 单 | 状态 | 对象 | 做了什么 | 钉子 / 判别性证据 | 复核 |
+| --- | --- | --- | --- | --- | --- |
+| `t60` | completed | LG-32 第二半（不完整帧 + status 0 的错误要带上下文） | `read_frame` 两个孪生读取点（4 字节长度前缀 / 负载）各自把读取器错误包成带操作名与帧形状的 `HostError::Process`；`process.rs` 把 `operation` 带进读取线程；`Limit` 早退与“非零退出优先用 stderr”语义未动。 | 红侧原文 `got Io(Error { kind: UnexpectedEof, message: "failed to fill whole buffer" })`（裸错误）；绿侧逐字 `plugin process failed: … got no complete frame for `run`: … (failed to fill whole buffer; kind UnexpectedEof)`；变异 A 改回裸 `?` / B 保留变体但消息退成裸文本，两处都让钉子红；`md5sum` 还原一致。 | t68（`audit-verify-plugin-host.md`：LG-32 **证实**）＋ t77（`audit-verify-plugin-host-b.md`：**通过** + 一条边界） |
+| `t61` | failed（交付完成；注释轴无行为变更） | B5-core 8 条 + t56 移交的裸词收口 | 八条全 MINOR：模块文档头 `//`→`//!`（C-05）、`# Panics` 只留真 panic 契约（C-06）、重复模块文档合并（C-07a）、屏蔽文本口径（C-07b）等；另收口 t56 移交的 6 处裸词。 | 每条给 HEAD→当前树的**成对判别性计数**（如 `grep -c` 1→0 / 0→1、`# Panics` 2→1）；纯注释/词形改动，无行为变更。 | （无独立复核；注释轴按 t61 自己的成对 grep 记证据） |
+| `t62` | completed | LG-47 真洞修复（+ LG-36/LG-49 已被修掉，净改动 0） | `slot_state` 的 `pending` `MutexGuard` 与函数体同寿命 ⇒ `backend.load`（编译+实例化+健康检查）在**持锁期间**跑；改为交接后即释放锁、由发布路径在写队列同一把锁下发布。 | LG-36/LG-49 用判别性 grep 给红侧复测（净改动 0）；LG-47 新钉 `a_generation_queued_during_a_load_stays_pending`，红侧（发布改回盲目清零）`plugin-host/src/lazy_wasm/slot_state_tests.rs:143` 的 `a generation queued during the load is still pending`。 | → t68（部分证实）→ t79/t86（证实，见下） |
+| `t73` | completed | LG-47 可测化（可注入 load 接缝 + 真正测时序的钉子） | 新增私有 `activate_with(impl FnOnce(...))` 接缝，`activate(backend)` 变成 `self.activate_with(|a| backend.load(a))`；内联测试按仓库惯例搬进 `slot_state_tests.rs`（297→184 行）。 | **交付的是装置不是自证**：两条真正测时序的钉子 + 红侧原文（持锁旧形态 ⇒ `test result: FAILED. 1 passed; 2 failed`）；还原 `cmp: identical`（sha256 前缀 `4070277036e49aa1`）。 | → t79（用它补齐时序证实）→ t83（加固）→ t86（复核更紧） |
+| `t63` | completed | **COV-1 关闭**：AGENTS.md 的 `0 passed` 假绿陷阱 | 在 `## Verify` 之后加一段中英双语：非默认特性下的模块裸跑 `cargo test -p <crate>` 会报 `0 passed`（看起来像通过）；给正确形态与判读纪律。 | 实测 `manifest::face` 裸跑 `0 passed; 0 failed` / 加 `--features authoring` `8 passed`；`core` 同形（`syntax`）。文档里的数字全部本单现测；未新增 `path:line` 锚点。 | → t87（数字漂移面收口，见下） |
+| `t64` | completed | B5-build_method 3 条（SUR-C8 / SUR-S11 / SUR-C9） | `SUR-S11` 真洞→修：规则读取改为**注释感知**（跳过 `//`、`/* */`、字符串与原始字符串字面量，遍历所有出现处）、嵌套括号配平（`call_end`）、转义解码（`string_values`）；API 与顺序不变。 | 红侧原文 `left: ["ghost.export"]` vs `right: ["control.render","control.preview","control.extra"]`（注释里的示例被读成唯一需求）；变异 (a) 换 `match_indices`、(b) 旁路解码 ⇒ 各自红；SUR-C8 **已被修掉**（原子写，净改动 0）、SUR-C9 **非缺陷**（审计自标 partial，其正例仍在：`grep -c "shipping a binary whose graft"` = 1）。 | t74（`audit-verify-build-method-b5.md`：SUR-S11 **证实**，出厂 3 份规则源**未过火**） |
+| `t65` | completed | B6-studio 代码半 4 条（S-17 / S-19 / S-26 / S-14） | `TreeStep::from_key` 显式四方向拒绝（S-17）；抽 `open_edit_form` 消掉递归合成按键（S-19）；拆 `source_stamp`（S-26）；`writers`→`write_guard` 且 watcher 名单与 `RELEVANT_FILE_NAMES` 同五名（S-14）。 | 每条有受控变异红侧原文（如 S-17 `Char('j') must be refused instead of read as `Right``；恢复后 4 passed）；S-09 同集落地并写明“镜像不是 import”，钉子逐名双向断言。 | （并入 t67/t76/t81/t89 的 B6-studio 10/10 计数，见下） |
+| `t67` | failed（4/5 完成） | B6-studio 重构第一批（LG-34 / S-22 / S-20 / S-21 完成；S-18 未动） | `keyboard::declaration_contract_fields` 把“读失败”与“无契约”分开（LG-34）；夹具/状态机/布局各自合一（S-22/S-20/S-21）。 | 变异回旧 `read_to_string(…).ok()` ⇒ `studio/src/studio/app/tests/forms.rs:134` 的 `a read failure must be reported, not rendered as `no contracts``；S-18 给出 54 处赋值清单 + 25 处会判红、7 处多臂，列为 T67-F1。 | → t76 收口 S-18 |
+| `t76` | completed | STU-S-18：事件严重度显式化 | `App.event_is_alert: bool` + 唯一两个写入口 `note()`/`alert()`（54 处赋值 → 63 个调用点，7 处多臂逐臂决策）；`draw_event` 只读字段。 | 不变量钉子递归扫 `src/**/*.rs`：生产代码裸赋值只剩 2 处（两个写入口体内），注入一处裸赋值 ⇒ `raw assignments outside `note`/`alert`: ["…/keyboard.rs: 1"]`；叶子测试名 130*（逐名核对）。 | （B6-studio 10/10 的一部分） |
+| `t81` | failed（4/5 完成） | B6-studio 第二批（S-28 / S-29 / S-25 / S-27 完成；S-04 留给 t89） | `Paste` 走与键入同一条分派器（S-28）；读侧守卫 `selected_read_root()`/`with_selected_project_read()`（S-29）；metadata 目标判定（S-25）；`after_project_write`（S-27）。 | 每条有受控变异红侧原文（如 S-28 吞掉粘贴 ⇒ `assertion left == right failed / left: ""`）；S-04 实测面已清点（跨 7 个文件）并写成 T81-F1 留给单独一单。 | → t89 收口 S-04 |
+| `t89` | completed | STU-S-04（B6-studio 最后一条）：渲染期改为只读 | 新增 `ui/render_cache.rs`（`RenderCache::take/apply`），`ui::draw_once` 每帧一次性应用回写；渲染路径不再写 `App`。 | attempt 2 未再改代码，五条门禁重跑确认无漂移；`changedPaths` 按补齐后的 inScope 列 12 条。 | **B6-studio 10/10 收口**（t65 4 + t67 4 + t76 1 + t81 4 + t89 1，去重后 10 条） |
+| `t66` | failed（交付完成；保留旧签名 + 加严格兄弟） | K-10：规则读取把注释当真 + 初始器外静默降级 | 新增严格入口 `try_rule_syntax_from_text`（core 公开），已发布的宽容 `rule_syntax_from_text` 签名与行为一字不动、文档改写为“宽容/有损 + 指向严格兄弟”。 | 红侧实测：注释里的伪子句 ⇒ `"exports:wrong"`（真规则丢失）、常量点名清单 ⇒ `"ANY"`（静默降级）；一条**如实更正**（findings 说的“初始器外首个 `=`”实测读对了，故未拿它当红侧）；7 条钉子，其中走文件系统的那条按 purity 门禁搬到 `core/tests/`。 | t75（`audit-verify-k10-family.md`：**证实**）＋ t72（生产调用点） |
+| `t72` | failed（交付完成） | K-10 收尾：生产调用点切到严格读法 | `rule_syntax_for_source` 改经 `try_rule_syntax_from_text` 读取；候选顺序不变；**文件缺失仍 `Ok("ANY")`**（缺席不是畸形规则，另有专钉）；错误文本同时含面文件名与规则文件名。 | 生产入口红侧：`PROBE commented: Ok("exports:wrong")`、`PROBE const-list: Ok("ANY")`；修后形状② ⇒ `Err` 且消息带两处文件；3 条钉子。已发布面（`rule_syntax_from_text` / `rule_syntax_for_source` 签名）未动 ⇒ 发布表不动。 | t75 独立复跑生产入口（证实） |
+| `t68` | completed | 独立验证 plugin-host 两轮（t44 的 LG-32 + t62 的 LG-47） | 非作者自建观测：单跑交付钉子 0.06 s 结束（帧到即交付，不等 deadline）；过修方向仍 ok；跑前/跑后 `ps` 扫 `sleep 30` = 0/0（**不留进程**证实）。 | 3 处变异（M1 删“帧到即结束”⇒ Timeout 红；M2 `publish_pending` 回盲目清零 ⇒ 排队钉子红；M3 过修 ⇒ 到期交付手头帧红）。 | 判定 **LG-32 证实 / LG-47 部分证实**（并发时序未独立测量）⇒ 报告 `audit-verify-plugin-host.md` |
+| `t69` | completed | 独立验证 mcp 三轮（t53 / t54 / t57） | 五条验收子项全部证实：`LG-23` 截断是**说出来的**（200 KiB 单行 ⇒ 逐字含 `at most 200 diff lines or 65536 bytes`）；`LG-20` 临时目录不可预测（8 次调用 8 个名字）；`LG-43` 契约（60 同名定义 / `limit` 夹到 50 / `limit: 0` ⇒ 1 条）；`search` 的 `unparsable faces 2` 不被命中守卫吃掉；`LG-51` 归属先于存在性（五种形态整个 JSON 回复逐字节相同）。 | 8 条自建装置 + **5 处变异**各自让对应装置变红、逐次 `cmp`/sha256 还原零残留；被验 8 个 mcp 文件前后哈希不变。 | 报告 `audit-verify-mcp-batch.md`；→ t70 补三处文档 |
+| `t70` | completed | t69 三处文档补充 | `unparsable faces N` 不受 `limit` 约束（读作结果行会让调用方误以为拿到完整答案）、`is_absolute` 的平台差异、临时目录 8 次候选契约——都写进代码处的中英双语文档。 | 只动注释/文档，未改任何逻辑与断言；三处加之前 `grep` 均 0 命中（无重复项）。 | （t69 的复核发现落地） |
+| `t71` | completed | **COV-2 关闭**：独立验证 t38 的三条门禁修复 | 非作者复核 `LGC-LG-24`（`carries_the_lint` 不再把 `#![deny(warnings)]` 当契约）、`LGC-LG-26`（`release_action_pin`：真实 `release.yml` 的 `@v4` ⇒ 红并点名 job/action/ref，去掉 token 名后同一 `@v4` 转绿 ⇒ 规则确为 job 作用域）、`LGC-LG-53`（记录目录豁免按 root 之下逐分量匹配）。 | 两侧证据 + **10 组变异** + 前提独立复测（7 条 rustc/clippy 探针：`#![deny(warnings)]`+未文档化 `pub fn` 在两种 `-D warnings` 下都是 exit 0/零诊断）；每组还原 `diff -r -q` 复检零残留。 | 三条**全部证实**；报告 `audit-verify-conventions-b4.md` ⇒ **COV-2 关闭**（t52 记为覆盖面缺口的那一条） |
+| `t74` | completed | 独立验证 t64 的 SUR-S11 行为修复 | 自建 6 条用例（自己的数据）：注释里的 `.require_exports(&["ghost.export"])` 不是需求、同文本真实调用读到 `["control.render"]`；同方法两次调用顺序保持；嵌套 `pick(double(1),(2,3))` 不截断；引号/原始字符串/转义解码；括号不配平读到底；出厂 3 份规则源各读出 1 条。 | 三条红侧（MA 注释感知→`match_indices`：`left: ["ghost.export","ghost.block", …]` 等）；出厂源**未过火**。 | 判定 **SUR-S11 证实**；报告 `audit-verify-build-method-b5.md`；新发现 low ⇒ t78 落地 |
+| `t78` | completed | t74 新发现（low）：写明读取器的文本边界 | 在 `contracts.rs` 的 `rule_method_strings` 双语文档里加一条：非注释散文（没有被注释包住的伪代码）里的 `.method(…)` 形态与真实调用在文本上无从区分 ⇒ 别在散文里写这种形态；真正的门是编译期 `assert_static_registration`。 | 只动注释（以 t74 副本为基准 diff：10 行新增 + 1 行改尾，全部 `///` 开头）；build_method 90 passed、门禁绿。 | （t74 的复核发现落地） |
+| `t75` | completed | 独立验证 K-10 家族（t66 严格入口 + t72 生产调用点） | 非作者探针驱动**公开生产入口** `generated_snapshots_from` 与 `try_rule_syntax_from_text`/`rule_syntax_from_text` 一对；夹具自建（出厂面 + 自写规则文件）。 | 逐字实测三条形状；**独立判断**“形状①应读出真规则、不是报错”；3 组变异（M1 只读初始器 / M2 静默降级 / M3 生产路径回宽容入口）各红；6 份被验文件 `sha256sum -c` 全 OK。 | 判定 **证实**；报告 `audit-verify-k10-family.md`；观察 §6.1 ⇒ t85 |
+| `t79` | completed | 用 t73 的接缝把 LG-47 从“部分证实”补到**证实** | 把加载经接缝按住 400 ms 独立测量：`install took 42.745µs; queue lock free while loading: true; install landed: true; pending after: true`（同一窗口 install ≈ 加载的 1/9400）。 | 红侧把交接改回持锁整段：`install took 400.157971ms`、`queue lock free: false` ⇒ 探针红；还原零残留。 | 判定 **证实**（时序这次是测出来的）；报告 `audit-verify-lg47-timing.md` ⇒ LG-47 的 partial 收掉 |
+| `t83` | completed | 按 t79 建议加固 LG-47 装置 | “不被阻塞”改成**比例式** `install_elapsed * 4 < load_elapsed`（移除 500 ms 墙上时钟阈值）；锁可用那半改用**顺序判据**（`released_by_signal`：加载方回报“结束我的是这次放行、不是兜底”）。 | 绿侧实测 `install=69.03µs load=400.076185ms`（与 t79 同量级）；两钉的意图与断言对象不变，只是不再与墙钟阈值比较；兜底只用于辅助信号。 | → t86 复核（更紧） |
+| `t86` | completed | 复核加固后的 LG-47 装置 | 自己复跑：`PROBE install=63.439µs (the load was still held)` / `install=71.592µs load=400.072092ms` ⇒ 与 t79 同量级同结论。 | 自己复现红侧（持锁旧形状）⇒ `install=400.134451ms`、两条钉子 FAILED 原文在案；“主张未被改动”逐条核对：锁判据同对象、新增顺序信号**更强**、比例式判据更直接、t62 排队钉子未变 ⇒ **收紧而非放宽**。 | 判定 **加固没有动摇 t79 的证实，反而更紧**；报告 `audit-verify-lg47-timing-r2.md`（LG-47 链：修→装置→加固→复核） |
+| `t77` | failed（复核通过；产物是评审文档） | 独立复核 t60（LG-32 第二半） | 自建夹具 `printf '\006\000\000\000X'`：判 `Process` 而非 `Io` ✓、操作名 ✓、帧形状 ✓、读取器 `Display` + `kind` ✓；两个孪生读取点各自触达（前缀 3 字节 / 负载半帧）。 | 结论 **通过** + 一条边界：消息说了“声明多少”却没说“到了多少” ⇒ 分不清“一个字节都没写”与“写了半帧”；并指出那条 600 ms 覆盖与“交付时刻 < deadline”的关系没有钉住。 | 报告 `audit-verify-plugin-host-b.md` ⇒ 边界由 **t80** 收口（见下） |
+| `t80` | completed | LG-32 第二半的最小改进（“声明多少 / 到了多少”） | 负载经私有计数包装器 `Arrived` 读取，shape 文案改为 `it declared {length} bytes of answer and {arrived} arrived, then the stream ended`；用包装而非自写循环，**保住 `read_exact` 亲手产出的原错误**。 | 半帧 ⇒ `1 arrived`、只写前缀 ⇒ `0 arrived`（改前两者**完全同文**，即不可区分）；**公开 API 一字未动**（`error.rs` 未改、`HostError` 形状不变）；变异 A（拿掉计数）与 B（计数永不增长）都让钉子红；矩阵仍 27 passed（叶子测试名不变）。 | （落地 t77 的边界建议；同一测试函数内两例逐字断言） |
+| `t84` | failed（判定完成） | 补最后一个 partial：LG-27 证实 | 自建 `RuntimeCheckSpec` 夹具（t34 当时缺的）：三条用例覆盖“编译期非空 + 作者侧非空 ⇒ 作者侧优先”“作者侧空 ⇒ 保留编译期”“空无法清空”。 | 两方向变异：MA 旧行为（删掉 `is_empty()` 守卫）⇒ 用例 1 红 `left: [FiniteNumber, NonEmptyText] right: [CoordinatesInViewport]`；MB 过修（无条件应用）⇒ 用例 2/3 红；还原后 copy==pristine 逐字节相等。语义边界（无法显式清空）经三点论证判为**可接受**。 | 判定 **LG-27 证实**；报告 `audit-verify-lg27.md` ⇒ **最后一个 partial 收掉**（t34 的 9/1/0 → 全 10 条证实） |
+| `t88` | failed（交付完成） | t84 新发现：`merge_authored` 的“非空即应用”收成一处 | 先逐字段普查 24 个赋值（21 无条件 + 3 条件三种拼法），再把“声明过才应用”收成一个 trait + 函数头一句话，不同规则不强扭。 | 两条钉子：无条件字段仍无条件（作者侧沉默 ⇒ 合并后为空）、条件字段同一处（沉默保留 / 声明优先两半）；等价性变异证明。 | （t84 的复核发现落地） |
+| `t85` | failed（交付完成） | §6.1 对齐：`registry_rule_path` 的文档口径 | 按裁定取“文档向行为对齐”：字段名为的是**位置**而非某份文件的存在，文档改写（中英各一段）并注明审计出处。 | 两条钉子（core 侧 + run_method 侧补“同源”那半）；变异 M1（缺席时空串）⇒ core 钉子红、M2（生产读取器换候选）⇒ run_method 钉子红；还原后两份文件 sha256 与改前逐字节相同。 | （t75 观察 §6.1 的落地） |
+| `t87` | completed | AGENTS.md 数字漂移面收口 | 复测发现 `run_method` 58/**97**（原写 96）、`core` 206/**285**（原写 282，任务书写 283——数字在飞）⇒ 把两个 crate 总数**删掉**，只留模块级 `manifest::face` 的示意（`8 passed` 明确标注“写下这段时测到；每加一条钉子就变，只当示意不当契约”）与判读纪律，并加一句“把两次运行对比着读，不要引某个总数”。 | `grep -cE "58 against 96|206 against 282"` = 0；段落里只剩结构性的 `0`、示意性的 `8` 与审计号；`path:line` 锚点 0 新增；conventions 132 passed、fmt 绿。 | （关闭 t63 留下的漂移面；t90 沿用其口径） |
+| `t82` | completed | t71 三条新发现收口（N-1/N-2/N-3） | `N-3`（假阴性）：`release_action_pin` 的“持有 token”判据加上 `inherits_every_secret(line)`（`secrets: inherit` 的中继 job 也算持有）；`N-2`：查实测试模块早已拆出，故拆的是生产文件本身以留棘轮头寸；`N-1`：把已知边界写进文档。 | 新钉 `an_inheriting_relay_job_must_pin_its_reusable_workflow` 先红（`left: 0, right: 1` —— 整个中继 job 对门禁不可见）后绿；法定对照（全 SHA ⇒ 干净）与既有三条对照继续绿；变异拿掉新判据 ⇒ 立刻红，`cmp` 逐字节还原。 | （t71 的复核发现落地） |
+
+> `failed` 在这里读作“机制判罚”，不是交付失败：这些单的正文都写明“实现与复核都已完成，唯一红是环境用例或他人在飞文件”（§14.4 的镜像条同理）。
+
+### 15.2 本轮的独立复核（9 份报告）
+
+| 复核 | 报告 | 复核者 | 判定 | 手段 |
+| --- | --- | --- | --- | --- |
+| `t68` | `audit-verify-plugin-host.md` | 非作者（t44/t62 之外的人） | `LGC-LG-32` **证实**；`LGC-LG-47` **部分证实（后经 t79/t86 补为证实）** | 真实树自观测（0.06 s 结束、跑前跑后无残留进程）+ 3 处变异；未覆盖：LG-47 的并发时序 |
+| `t69` | `audit-verify-mcp-batch.md` | 非作者 | `LGC-LG-23` **证实**；`LGC-LG-20` **证实**；`LGC-LG-43` **证实**；`LGC-LG-11（unparsable 消费端）` **证实**；`LGC-LG-51` **证实（逐字节）** | 8 条自建装置 + 5 处变异（逐次 cmp/sha256 还原）+ 被验 8 文件前后哈希不变 |
+| `t71` | `audit-verify-conventions-b4.md` | 非作者 | `LGC-LG-24` **证实**；`LGC-LG-26` **证实**；`LGC-LG-53` **证实** | 两侧证据 + 10 组变异 + 7 条 rustc/clippy 前提探针独立复测；`diff -r -q` 复检零残留 |
+| `t74` | `audit-verify-build-method-b5.md` | 非作者 | `SUR-S11` **证实** | 自建 6 条用例（自己的数据）+ 三条红侧；出厂 3 份规则源未过火 |
+| `t75` | `audit-verify-k10-family.md` | 非作者 | `K-10 家族（t66 严格入口 + t72 生产调用点）` **证实** | 探针驱动公开生产入口；3 组变异；6 份被验文件 sha256sum -c 全 OK |
+| `t79` | `audit-verify-lg47-timing.md` | 非作者 | `LGC-LG-47（并发时序）` **证实（把 t68 的部分证实补全）** | 注入式接缝按住加载 400 ms：install 42.745µs、锁空闲 true；红侧（持锁整段）install 400.157971ms、锁空闲 false |
+| `t86` | `audit-verify-lg47-timing-r2.md` | 非作者 | `LG-47 加固后的装置` **证实不被动摇，且更紧** | 加固后自跑 install 63.439µs/71.592µs vs load 400.07ms；自复现红侧 install 400.134451ms；逐条核“主张未被改动” |
+| `t77` | `audit-verify-plugin-host-b.md` | 非作者 | `LG-32 第二半（t60）` **通过** | 自建夹具（完整前缀 + 半帧）逐项核对变体/操作名/帧形状/kind；两个孪生读取点各自触达 |
+| `t84` | `audit-verify-lg27.md` | 非作者 | `LGC-LG-27` **证实（t34 的最后一个 partial 收掉）** | 自建 RuntimeCheckSpec 夹具 3 条 + 两方向变异（旧行为 / 过修），还原后 copy==pristine |
+
+- **`t68`**：队长点名“不留进程”＝证实；并指出 LG-32 那条 600 ms 覆盖与“交付时刻 < deadline”的关系未钉住
+- **`t69`**：三处文档由 t70 落地
+- **`t71`**：**COV-2 关闭**：t52 记为覆盖面缺口的那三条门禁修复已由非作者证实；其三条新发现由 t82 收口
+- **`t74`**：新发现 low（非注释散文里的调用形态无从区分）由 t78 落地
+- **`t75`**：独立判断“形状①应读出真规则而非报错”；观察 §6.1 由 t85 落地
+- **`t79`**：判定由复核者给出，作者未自证
+- **`t86`**：LG-47 链＝修（t62）→ 装置（t73/t83）→ 时序证实（t79）→ 加固复核（t86）
+- **`t77`**：一条边界（没说“到了多少”）由 t80 收口；一条覆盖建议留在报告里
+- **`t84`**：语义边界（作者无法清空编译期校验）经三点论证判为可接受；新发现由 t88 落地
+
+### 15.3 本轮关闭的挂账（5 条）
+
+- **COV-1**（原记：t52 的覆盖面注记：LG-05 的验证命令必须带 `--features authoring`）⇒ 由 `t63` 关闭：AGENTS.md 的 `## Verify` 一节写明非默认特性下的 `0 passed` 假绿 + 正确形态；t87 又把“总数”改成不承担契约的示意
+- **COV-2**（原记：t52 的覆盖面注记：t38 的三条门禁修复没有非作者复核）⇒ 由 `t71` 关闭：`audit-verify-conventions-b4.md` 三条全证实（两侧证据 + 10 组变异 + 前提独立复测）；其新发现由 t82 收口
+- **LG-27 partial**（原记：t34 的唯一“部分证实”（未自建 RuntimeCheckSpec 夹具））⇒ 由 `t84` 关闭：自建夹具 3 条 + 两方向变异 ⇒ 判定证实；t34 的 9/1/0 由此变成 10 条全证实
+- **LG-47 partial**（原记：t68 的“部分证实”（并发时序未独立测量））⇒ 由 `t79 / t86` 关闭：t73 的注入式接缝把时序变成可测量的（install ≈ 加载的 1/9400）；t83 加固、t86 复核“更紧”
+- **LG-32 边界**（原记：t77 复核指出“消息说了声明多少、没说到了多少”）⇒ 由 `t80` 关闭：计数包装器让消息同时报出声明与到达（`1 arrived` / `0 arrived`），公开 API 未动
+
+### 15.4 引用刷新（2 条坐标）
+
+- `studio/src/studio/app/support.rs:17` → `studio/src/studio/app/project_context.rs:24`（`docs/audit-2026-09-28/audit-verify-fix-b1.md`）：t55 把 `studio/src/studio/app/support.rs` 拆成一个 14 行的 shim 页，表里那行要钉的 `thread_local! PROJECT_CONTEXT` 现在住在 `studio/src/studio/app/project_context.rs:24`（桩页已不再包含它）
+  - **范围声明**：**已应用**（t91 把该记录纳入 inScope）：记录里那只是**指针**，刷新指针不算改写记录——判定、证据与结论一字未动（diff 逐行核对：每处只是同一行换了一个坐标）。
+- `build_method/src/lib.rs:202` → `build_method/src/lib.rs:233`（`docs/audit-2026-09-28/audit-verify-fix-b1.md`）：“每一条生产路径都从 `build_method/src/lib.rs:202` 进作用域”这句话要配的令牌是 `run_as_package`，它现在在第 :233 行；两处出现（:157 的表格行与 :164 的邻近风险段）同步刷新
+  - **范围声明**：**同上：已应用**。该坐标在记录里出现两处（`:157` 的表格行与 `:164` 的邻近风险段，指向同一条判断“每一条生产路径都从 `build_method/src/lib.rs` 进作用域”）：两处**都要**刷新，否则同一份记录里会同时存在新旧两个坐标、自相矛盾。
+- **`/tmp/anchor_check.py`**：**`violations: 0`**（20 条锚点全部解析）。`/tmp/anchor_check.py` 报的两条违例（`studio/src/studio/app/support.rs` 的 :17 越界、`build_method/src/lib.rs` 的 :202 配对令牌不在 cited 行上）**已应用**（t91 把 `docs/audit-2026-09-28/audit-verify-fix-b1.md` 纳入 inScope）：三处指针分别为 `studio/src/studio/app/support.rs:17` → `studio/src/studio/app/project_context.rs:24`、`build_method/src/lib.rs:202` → `:233`（两处出现同步刷新）；判定与结论一字未动。旧坐标（刷新前那一侧）作为“引用到过哪里”的记录保留在 `meta.frozen_record_anchors`（kind `refreshed-from`，仍随文件变化自愈）。**重跑 `violations: 0`**。
+
+### 15.5 本轮补记的新公开面（1 条）
+
+| 入口 | crate | 任务 | 位置 | 形态 | 做什么 |
+| --- | --- | --- | --- | --- | --- |
+| `try_rule_syntax_from_text` | `nichlink-core` | `t66` | `core/src/registry_core/authoring/parse/rules.rs:120` | `pub fn try_rule_syntax_from_text(text: &str) -> Result<String, FaceParseError>` | 规则文本的**严格**读法：注释里的伪子句、常量点名的清单等会让它有损宽容兄弟降级（甚至降成 `ANY`）的形状，它一律报 Err 并点名；已发布的 `rule_syntax_from_text` 保持宽容与签名（文档写明有损并指向它）。生产调用点由 t72 切到它（文件缺失仍为 `Ok("ANY")`，缺席不是畸形规则）。 |
+
+- **只补缺**：另三个候选（`try_parse_requirements_owned`、`face_views_and_unreadable`、`item_symbols`）在 §14.6 那一轮已经记过，本轮 grep 命中非 0 ⇒ 不重复记，历史条目一字未改。
+- **`CHANGELOG.md`**：`CHANGELOG.md` 的 `[0.1.6] — unreleased` 段（EN Added + ZH 新增）只补 `try_rule_syntax_from_text` 一条；另三个候选（`try_parse_requirements_owned` / `face_views_and_unreadable` / `item_symbols`）在 t52 已记，本轮 grep 命中 2/1、2/1、6/1 ⇒ 不重复记。历史条目一字未改。
+- **`docs/roadmap-1.0.md`**：`docs/roadmap-1.0.md` 的“B4 完成情况”一节补同一入口一行（谁提供 / 谁消费 / 钉在哪）。
+
+### 15.6 复算方式
+
+- 本节数字全部来自 `fix_batch_4` 的清单（轮次 30、复核 9、关闭挂账 5、引用刷新 2、公开面 1），引用的报告：`audit-verify-build-method-b5.md`、`audit-verify-conventions-b4.md`、`audit-verify-k10-family.md`、`audit-verify-lg27.md`、`audit-verify-lg47-timing-r2.md`、`audit-verify-lg47-timing.md`、`audit-verify-mcp-batch.md`、`audit-verify-plugin-host-b.md`、`audit-verify-plugin-host.md`。
+- 落盘：`/tmp/nichlink-audit-logs/patch_fix_batch_4.py`（在 `patch_fix_batch_2.py`、`patch_fix_batch_3.py` 之后跑；`build_findings.py` 再生成后三个脚本都要重跑），再由 `gen_report.py` / `gen_html.py` 现算重出；HTML 角标同源。
