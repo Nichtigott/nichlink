@@ -2,6 +2,7 @@
 //! 注册面新增/编辑表单渲染。
 
 use super::super::*;
+use super::draw_form_frame;
 
 use super::face_fields::{self, draw_face_field_help, face_field_presentation, face_field_value};
 
@@ -102,29 +103,13 @@ fn draw_face_form(
         &mut state,
     );
     draw_face_field_help(frame, body[1], add);
-    let buttons = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-        ])
-        .split(inner[1]);
-    let button = |label: &'static str, color: Color| {
-        Paragraph::new(label)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(color))
-            .block(panel("", color))
-    };
-    frame.render_widget(button("Save [s]", GREEN), buttons[0]);
-    frame.render_widget(button("Cancel [Esc]", MUTED), buttons[1]);
-    frame.render_widget(button("Exit [q]", Color::LightRed), buttons[2]);
-    frame.render_widget(
-        Paragraph::new("* required  ◇ derived  ↳ read only  · optional  ? when used")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(MUTED).bg(PANEL)),
-        buttons[3],
+    let areas = draw_form_frame(
+        frame,
+        inner[1],
+        body[0],
+        "Save [s]",
+        "Cancel [Esc]",
+        "* required  ◇ derived  ↳ read only  · optional  ? when used",
     );
-    (body[0], buttons[1], buttons[0], buttons[2])
+    (areas.list, areas.cancel, areas.confirm, areas.exit)
 }

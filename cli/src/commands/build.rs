@@ -7,6 +7,8 @@
 //! 从 `lib.rs` 拆出：本命令是 `registration_check` 之上的薄进程包装，唯一拥有的规则
 //! 是 argv 拆分（首个路径与透传的 cargo 选项）。
 
+use std::io::Write;
+
 use super::{build_target, registration_check, split_build_args};
 
 /// Validate the registration tree first; only then invoke `cargo build`
@@ -14,8 +16,22 @@ use super::{build_target, registration_check, split_build_args};
 /// given, must come before any cargo option.
 /// 先校验注册树；通过后再调用 `cargo build`，其余参数原样透传。
 /// 路径如给出，必须位于任何 cargo 选项之前。
-pub(crate) fn build(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
+pub(crate) fn build(
+    args: &mut impl Iterator<Item = String>,
+    out: &mut dyn Write,
+) -> Result<(), String> {
     let all: Vec<String> = args.by_ref().collect();
+    // `build --help` used to reach cargo with the flag mirrored in the registration
+    // check; the flag now answers the same way it does everywhere else (audit
+    // `LGC-LG-44`).
+    // `build --help` 过去会把该旗标透传给 cargo、同时让它出现在注册校验里；现在这个旗标与其它
+    // 子命令回答一致（审计 `LGC-LG-44`）。
+    if all
+        .iter()
+        .any(|argument| argument == "-h" || argument == "--help")
+    {
+        return crate::usage(out);
+    }
     let (directory, cargo_args) = split_build_args(&all);
     // The validated project is the one cargo will build: a `--manifest-path` among the
     // passed-through arguments names it, and the check used to miss that and validate the current

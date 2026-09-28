@@ -35,12 +35,17 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
             manifest.display()
         ));
     }
-    // Cargo names the package, and `check_for` stamps the process-wide build
-    // namespace with it — the same value the CLI passes, so a verdict here and a
-    // verdict there describe the same identity domain.
-    // 包名由 Cargo 给出，而 `check_for` 会用它盖下进程级的构建命名空间——与 CLI 传入的是同一个值，
-    // 因此这里的判断与那里的判断描述同一个身份域。
-    let package = nichlink_build_method::package_name(&manifest)?;
+    // The name this run publishes under is the *readers'* namespace, not Cargo's
+    // package name: `diff` and `search` resolve identities through
+    // `registry::namespace`, which honours `NICH_LINK_NAMESPACE`. Stamping the Cargo
+    // name here made every face in a verified tree come back `re-identified` there —
+    // a freshly checked tree reported as one whose every identity moved
+    // (audit `LGC-LG-13`). One namespace for the writer and the readers.
+    // 本次运行用于发布的那个名是**读取者**的命名空间，而不是 Cargo 的包名：`diff` 与 `search`
+    // 经 `registry::namespace` 解析身份，而它会认可 `NICH_LINK_NAMESPACE`。在这里盖上 Cargo 名，
+    // 会让刚校验过的树在那边把每个面都报成 `re-identified`（审计 `LGC-LG-13`）。写入方与读取方
+    // 用同一个命名空间。
+    let package = crate::registry::namespace(root)?;
     let out = out_dir(root);
     // `check_for` takes the package *directory* while `package_name` takes its manifest
     // *file*: pass the file here and the pipeline looks for `<Cargo.toml>/src` and reports

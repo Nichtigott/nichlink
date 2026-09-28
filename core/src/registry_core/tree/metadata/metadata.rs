@@ -27,13 +27,14 @@ impl Registry {
         self.entries.is_empty()
     }
 
-    // `namespace`, `name`, `registration_rule`, `dependency_admission_accepts`
-    // and `allowed_dependency_paths` were zero-caller readers and were removed
-    // in B3a. The header fields they exposed stay: the tree implementation and
-    // `dump` read them directly, so only the public door was closed.
-    // `namespace`、`name`、`registration_rule`、`dependency_admission_accepts`
-    // 与 `allowed_dependency_paths` 是零调用者读取器，B3a 已删除。它们暴露的 header
-    // 字段保留：树实现与 `dump` 直接读取它们，因此关掉的只是公开入口。
+    // This view exposes what has a caller here: namespace, name, registration rule,
+    // dependency admission and the allowed dependency paths stay readable through the
+    // `RegistryMetadata` fields the tree implementation and `dump` read, and have no
+    // separate accessor, because a reader with no caller is how the surface grows
+    // silently.
+    // 本视图只暴露这里确有调用者的东西：命名空间、名字、注册规则、依赖准入与允许的依赖路径经
+    // `RegistryMetadata` 的字段可读——树实现与 `dump` 读的就是它们——而不另设访问器，因为无人
+    // 调用的读取器正是表面静默膨胀的方式。
 
     /// Number of registries in this subtree, including this one.
     /// 本子树中的注册机数量，含自身。

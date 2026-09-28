@@ -21,7 +21,9 @@
 
 use crate::registry_core::plugin::graft::document::GraftPlanDocument;
 
-// Split decision: the record pipeline changes for three unrelated reasons, so it
+// Split decision (the one home of this rationale; the sibling pages and `reports`
+// carry a one-line pointer instead of repeating it): the record pipeline changes
+// for three unrelated reasons, so it
 // is three sibling pages under three names a reader can look up directly.
 // `reconcile` answers "which live slot does this record address" (identity/path
 // drift and contradiction); `reports` is the advisory vocabulary and its

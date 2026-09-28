@@ -80,3 +80,37 @@ fn a_path_filter_removes_the_ambiguity_note() {
     assert!(reply.contains("defs1/defs1.rs:1 fn new"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The catalog's contract for `limit` is the implementation's behaviour, pinned here rather than
+/// only declared there: absent `limit` shows 5 definitions, a `limit` past the declared maximum of
+/// 50 is *clamped* (the description says "at most 50", not "refused"), and a `limit` below the
+/// declared minimum of 1 behaves as 1. The contract used to be undeclared while the
+/// implementation read the key, which made `raise \`limit\`` advice a caller could not act on
+/// (audit `LGC-LG-43`).
+/// catalog 对 `limit` 的契约就是实现的行为，并且钉在这里、而不只是声明在那里：不传 `limit` 显示
+/// 5 个定义；超过声明上限 50 的 `limit` 被**夹到 50**（描述说的是"至多 50"，不是"拒绝"）；低于声明
+/// 下限 1 的 `limit` 按 1 处理。过去这个键未声明而实现却在读它，于是 `raise \`limit\`` 那条建议是
+/// 调用方无法执行的（审计 `LGC-LG-43`）。
+#[test]
+fn the_limit_contract_is_the_one_the_catalog_declares() {
+    let root = tree("limits", 60, 1);
+    let default = callgraph(&root, &json!({"function": "new"})).expect("the answer renders");
+    assert!(default.contains("matches 60"), "{default}");
+    assert!(
+        default.contains("… +55 more definitions"),
+        "the default shows 5 of 60 definitions: {default}"
+    );
+    let clamped =
+        callgraph(&root, &json!({"function": "new", "limit": 999})).expect("the answer renders");
+    assert!(
+        clamped.contains("… +10 more definitions"),
+        "a limit past the declared maximum is clamped to 50, not refused: {clamped}"
+    );
+    let zero =
+        callgraph(&root, &json!({"function": "new", "limit": 0})).expect("the answer renders");
+    assert!(
+        zero.contains("… +59 more definitions"),
+        "a limit below the declared minimum behaves as 1: {zero}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

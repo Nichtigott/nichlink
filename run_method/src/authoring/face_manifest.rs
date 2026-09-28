@@ -12,6 +12,37 @@ use super::validation::{authoring_namespace, rule_path_for_source};
 /// A source-tree mutation that needs one rebuild before it becomes executable.
 /// 一次源码树变更；它需要经过一次重建才会成为可执行注册面。
 impl FaceManifest {
+    /// The face's fields, in two classes that must not be confused.
+    /// 注册面的字段，分两类，不可混淆。
+    ///
+    /// * **Renderable fields** — everything the template writes back. They are
+    ///   exactly what [`FaceManifest::edit`] accepts, and what the two field-order
+    ///   tables in `operations/face_write.rs` carry.
+    /// * **Derived index keys** — `namespace`, `module`, `parent_node`,
+    ///   `parent_source`, `parent_kind`, `provided_parts`, `required_parts`. The
+    ///   renderer *reads* them to decide what to write; a caller cannot set them,
+    ///   and `edit` refuses their names.
+    ///
+    /// `registry_name`, `handle`, and `params` were a third, dishonest class:
+    /// accepted by `edit` (and seeded here) while no template emitted them, so an
+    /// edit to one returned `Ok` and was dropped at the next save. They are gone
+    /// (audit `LG-38`); a derived `registry_name` is `module`, and a derived
+    /// `handle` is `kind`, both computed by the declaration macro at the
+    /// declaration site rather than stored in a file.
+    /// 字段分两类，不可混淆。
+    ///
+    /// * **可落盘字段**——模板会写回的全部字段。它们恰好是 [`FaceManifest::edit`] 接受的集合，
+    ///   也是 `operations/face_write.rs` 里那两张字段顺序表的成员。
+    /// * **派生索引键**——`namespace`、`module`、`parent_node`、`parent_source`、
+    ///   `parent_kind`、`provided_parts`、`required_parts`。渲染器**读**它们来决定写什么；
+    ///   调用方设不了它们，`edit` 也会拒绝这些名字。
+    ///
+    /// `registry_name`、`handle` 与 `params` 曾是第三类、也是不诚实的一类：`edit` 接受（并在此
+    /// 播种）它们，而没有任何模板发射它们，因此对其中一个的编辑会返回 `Ok`、并在下次保存时被丢掉。
+    /// 它们已被删除（审计 `LG-38`）；派生的 `registry_name` 就是 `module`、派生的 `handle` 就是
+    /// `kind`，两者都在声明点由声明宏算出，而不是存在文件里。文件形式的面不存 `handle`，但
+    /// `to_snapshot` 会把同一个派生值补给内核——内核用原始 `handle` 填 `source.function`。见
+    /// `authoring/snapshot/snapshot.rs`。
     pub(crate) fn new(
         name: &str,
         kind: &str,
@@ -25,11 +56,9 @@ impl FaceManifest {
         for (key, value) in [
             ("namespace", namespace.as_str()),
             ("module", name),
-            ("registry_name", name),
             ("kind", kind),
             ("preset", "NoPreset"),
             ("parts", "NoParts"),
-            ("handle", kind),
             ("registration_rule", "ANY"),
             ("admission", "ANY"),
             ("source", source),
@@ -40,7 +69,6 @@ impl FaceManifest {
             ("name_en", ""),
             ("summary_zh", ""),
             ("summary_en", ""),
-            ("params", ""),
             ("stable_name", ""),
             ("exports", ""),
             ("provides", ""),

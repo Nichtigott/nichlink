@@ -170,3 +170,67 @@ fn an_undeclared_argument_does_not_change_the_delta() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The namespace the run publishes under is the **readers'** one, even when
+/// `NICH_LINK_NAMESPACE` overrides it. `verify` used to hand `check_for` Cargo's package name
+/// while `diff`/`search` resolve identities through `registry::namespace` (which honours the
+/// override), so a tree that had just verified as healthy came back with *every* face
+/// `re-identified` — a wrong answer that looks like a right one (audit `LGC-LG-13`).
+/// 本次运行用于发布的命名空间是**读取者**的那一个，即使 `NICH_LINK_NAMESPACE` 覆盖了它。`verify`
+/// 过去把 Cargo 的包名交给 `check_for`，而 `diff`/`search` 经 `registry::namespace`（认可覆盖值）
+/// 解析身份，于是刚刚校验为健康的树会带着**每个**面 `re-identified` 回来——一个看起来正确的错误答案
+/// （审计 `LGC-LG-13`）。
+///
+/// The override is process-global, so the run happens in a child process of this test binary:
+/// setting it in-process would race every other test that reads a namespace (the same reason
+/// `registry.rs` exposes `namespace_from` for tests).
+/// 覆盖是进程级的，因此这次运行发生在本测试二进制的子进程里：在进程内设置它会与其它每个读命名空间的
+/// 测试抢跑（这也是 `registry.rs` 为测试暴露 `namespace_from` 的原因）。
+#[test]
+fn the_override_is_the_namespace_the_run_publishes_under() {
+    let (root, _) = package("namespace-override");
+    apply(
+        &root,
+        &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
+    )
+    .expect("the face is added");
+    let child = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+        .args([
+            "--ignored",
+            "--exact",
+            "verify::verify_tests::the_override_child",
+            "--nocapture",
+        ])
+        .env("NICH_LINK_NAMESPACE", "t48-override")
+        .env("T48_FIXTURE", &root)
+        .output()
+        .expect("the child runs");
+    let stdout = String::from_utf8_lossy(&child.stdout);
+    assert!(stdout.contains("verdict ok"), "{stdout}");
+    assert!(
+        stdout.contains("re-identified 0"),
+        "a freshly verified tree must not read as one whose every identity moved: {stdout}"
+    );
+    assert!(
+        !stdout.contains("re-identified 1"),
+        "the writer and the readers must use one namespace: {stdout}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The child half of [`the_override_is_the_namespace_the_run_publishes_under`]: it runs under the
+/// override the parent sets, on the fixture the parent built.
+/// 上面那条钉子的子进程半边：它在父进程设置的覆盖值下、在父进程搭好的夹具上运行。
+#[test]
+#[ignore = "run by the_override_is_the_namespace_the_run_publishes_under in a child process"]
+fn the_override_child() {
+    let root = PathBuf::from(std::env::var("T48_FIXTURE").expect("the fixture path"));
+    let verdict = verify(&root, &json!({})).expect("the verdict renders");
+    println!("verdict line: {}", verdict.lines().next().unwrap_or(""));
+    let delta = crate::diff::diff(&root, &json!({})).expect("the delta renders");
+    for line in delta.lines() {
+        if line.starts_with("added ") || line.starts_with("faces ") {
+            println!("{line}");
+        }
+    }
+}

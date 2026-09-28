@@ -22,7 +22,8 @@ use results::{SearchListOptions, draw_search_list};
 pub(super) fn draw_search(
     frame: &mut Frame<'_>,
     area: Rect,
-    app: &mut App,
+    app: &App,
+    cache: &mut RenderCache,
     search: &SearchState,
 ) -> (Rect, usize) {
     let inner = Layout::default()
@@ -38,7 +39,7 @@ pub(super) fn draw_search(
         }));
     draw_query_bar(frame, inner[0], search);
     if search.graph_mode {
-        draw_search_graph(frame, inner[1], app, search);
+        draw_search_graph(frame, inner[1], app, cache, search);
         // Graph-mode footer. Every key below is matched in the `search.graph_mode`
         // branch of `handle_search_overlay_key`: Tab moves focus, ↑↓ move the
         // selection, Enter re-centres or opens, `m` loads the MIR snapshot,
@@ -92,7 +93,3 @@ pub(super) fn draw_search(
     );
     (columns[0], offset)
 }
-
-pub(super) use crate::studio::app::{
-    admission_text as format_admission, registration_rule_text as format_registration_rule,
-};

@@ -1,13 +1,20 @@
-//! Names and paths shared by file-backed authoring.
-//! 文件创作共用的名称与路径校验。
+//! The authoring execution context: `AuthoringContext` and the process-level
+//! paths and namespaces one file-bound authoring operation reads.
+//! 创作执行上下文：`AuthoringContext`，以及一次绑定文件的创作操作所读取的进程级路径与命名空间。
 //!
-//! The pure validators live in the kernel `authoring` module; this shim
-//! keeps the `AuthoringContext` and its environment fallback chain, and
-//! re-exports the kernel helpers so the historical
-//! `nichlink_run_method::authoring::validation` paths keep working.
-//! 纯校验函数位于 kernel 的 `authoring` 模块；本 shim 保留
-//! `AuthoringContext` 及其环境变量回落链，并重导出 kernel 辅助函数，
-//! 保证 `nichlink_run_method::authoring::validation` 历史路径继续可用。
+//! The file is named `validation` because the kernel's validators are re-exported
+//! here — the validators themselves live in the kernel `authoring` module. What
+//! this file *holds* is the context and its environment fallback chain, so the
+//! name leads a reader looking for validation rules to the wrong file; renaming it
+//! (to `context`) is what audit `NAM-03` asks for, but the historical public path
+//! `nichlink_run_method::authoring::validation` is pinned by the shim ratchet
+//! (`conventions/src/shims.rs`), so the rename is a public-surface change to
+//! schedule rather than a local edit.
+//! 本文件名为 `validation`，是因为内核的校验函数在这里重导出——校验函数本体在 kernel 的
+//! `authoring` 模块。本文件**装**的是上下文及其环境变量回落链，因此这个名字会把找校验规则的读者
+//! 引到错的文件；审计 `NAM-03` 要的正是改名（改为 `context`），但历史公开路径
+//! `nichlink_run_method::authoring::validation` 被 shim 棘轮（`conventions/src/shims.rs`）
+//! 钉住，因此改名是需要排期的公开面变更，而不是一次本地编辑。
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

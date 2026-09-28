@@ -144,24 +144,6 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 正是写不成的那个——因此下面按两种调用方分别处理：构建脚本带着原因停下，
     // 结构化调用方（`check --json`）把它与其余诊断一起报出。
     let mut write_errors = Vec::new();
-    // The fingerprint is the token `build_output_is_current` reads, so only a clean
-    // run writes it: a failed run publishes no token at all, and a reader then asks
-    // the build instead of trusting output that run left behind. The other
-    // manifests stay where they are — without the token nothing reads them as
-    // describing the current sources.
-    // 指纹是 `build_output_is_current` 读取的那枚凭据，因此只有干净的一次运行才写下它：失败的
-    // 一次运行不发布任何凭据，读取方于是去问构建，而不是相信那次运行留下的产物。其余清单留在
-    // 原处——没有那枚凭据，没有任何东西会把它们读作"描述了当前源码"。
-    if compile_errors.is_empty() {
-        if let Err(error) = write_if_changed(
-            &out_dir.join("discovery.fingerprint"),
-            &discovery_fingerprint,
-        ) {
-            write_errors.push(error);
-        }
-    } else {
-        let _ = std::fs::remove_file(out_dir.join("discovery.fingerprint"));
-    }
     if input.emit_cargo_directives
         && let Some(status) = cache_status_line(
             &cache_state,
@@ -171,6 +153,21 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     {
         println!("cargo:warning={status}");
     }
+    // The payloads are published first; the fingerprint is written below, once
+    // every one of them has landed. The fingerprint is the token
+    // `build_output_is_current` reads, so only a clean run may write it: a failed
+    // run publishes no token at all, and a reader then asks the build instead of
+    // trusting output that run left behind. Writing the token first — which is what
+    // this did — leaves a new token beside a manifest that is old or missing when a
+    // payload write fails, and the next reader calls that mixed generation
+    // `current` and trusts its rows; the pruning column is what a maintainer reads
+    // before a release prunes. The prose here always required "a clean run", but the
+    // check looked at the diagnostics only, never at the writes.
+    // 载荷先发布；指纹在下面、它们全部落地之后才写。指纹是 `build_output_is_current` 读取的那枚
+    // 凭据，因此只有干净的一次运行才能写它：失败的一次运行不发布任何凭据，读取方于是去问构建，而不是
+    // 相信那次运行留下的产物。先写凭据——也就是这里过去做的事——会在某份载荷写失败时留下"新凭据 +
+    // 旧或缺的清单"，下一个读取方把这种混代产物称作 `current` 并相信它的行；而修剪列正是维护者在发布
+    // 剪枝前读的东西。这段说明一直要求"干净的一次运行"，但检查只看诊断，从不看写入。
     for result in [
         write_pruning_manifest(src, &nodes, out_dir),
         write_function_manifest(src, &nodes, out_dir),
@@ -180,6 +177,28 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     ] {
         if let Err(error) = result {
             write_errors.push(error);
+        }
+    }
+    if compile_errors.is_empty() && write_errors.is_empty() {
+        if let Err(error) = write_if_changed(
+            &out_dir.join("discovery.fingerprint"),
+            &discovery_fingerprint,
+        ) {
+            write_errors.push(error);
+        }
+    } else {
+        // A token that cannot be removed still claims this output describes the
+        // current sources, so the failure is reported rather than discarded: the
+        // previous `let _ =` left exactly that claim standing.
+        // 删不掉的凭据仍然声称这份产物描述的是当前源码，因此这次失败被报出而不是被丢弃：过去的
+        // `let _ =` 恰恰让那句话继续成立。
+        match std::fs::remove_file(out_dir.join("discovery.fingerprint")) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => write_errors.push(format!(
+                "cannot remove {}: {error}",
+                out_dir.join("discovery.fingerprint").display()
+            )),
         }
     }
     if !write_errors.is_empty() {
@@ -208,6 +227,16 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         // 面文件的顶层视角。rustc 一条都不会读，因此声明该 cfg 名以免
         // `unexpected_cfgs` 报警。
         println!("cargo::rustc-check-cfg=cfg(rust_analyzer)");
+        // The demo directory's diagnostics are gated behind this feature, so a host
+        // that declares it would otherwise be told the cfg is unexpected. rustc's
+        // `check-cfg` takes the value-list form for a feature name; the name comes
+        // from the same constant the renderer writes into the generated tree.
+        // 演示目录的诊断挂在这个特性之后，因此声明了它的宿主否则会被通知该 cfg 是意外的。对特性名，
+        // rustc 的 `check-cfg` 采用值列表形式；这个名字取自渲染器写进生成树的同一个常量。
+        println!(
+            "cargo::rustc-check-cfg=cfg(feature, values({:?}))",
+            crate::DEMO_ONLY_FEATURE
+        );
         println!("cargo:rerun-if-env-changed={}", lexicon::SCOPE_ENV);
         println!("cargo:rerun-if-env-changed={}", lexicon::ENTRY_ENV);
         println!("cargo:rerun-if-env-changed={}", lexicon::BUILD_VERBOSE_ENV);

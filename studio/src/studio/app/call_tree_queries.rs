@@ -12,11 +12,13 @@
 
 use std::collections::VecDeque;
 
+use crossterm::event::KeyCode;
+
 use super::*;
 
 /// One arrow press in the tree: the four directions a reader can see.
 /// 树里的方向键：读者能看见的四个方向。
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum TreeStep {
     /// Toward the callers.
     /// 朝调用者。
@@ -33,6 +35,24 @@ pub(super) enum TreeStep {
 }
 
 impl TreeStep {
+    /// The step one arrow asks for, or `None` for every other key: the graph page
+    /// defines four directions, so anything else is refused instead of being read as
+    /// "right" (audit `STU-S-17`).
+    /// 一个方向键请求的步；其余键一律 `None`：调用图页只定义四个方向，因此其他键被拒绝，而不是
+    /// 被读成“右”（审计 `STU-S-17`）。
+    pub(super) fn from_key(key: KeyCode) -> Option<Self> {
+        match key {
+            KeyCode::Up => Some(Self::Up),
+            KeyCode::Down => Some(Self::Down),
+            KeyCode::Left => Some(Self::Left),
+            KeyCode::Right => Some(Self::Right),
+            // `KeyCode` is non-exhaustive, so a catch-all is unavoidable — but it means
+            // "no step", not "right".
+            // `KeyCode` 是非穷尽的，因此兜底不可避免——但它表示“没有这一步”，不是“右”。
+            _ => None,
+        }
+    }
+
     /// The word the status line uses for this step.
     /// 状态行描述这一步时用的词。
     pub(super) const fn label(self) -> &'static str {
@@ -71,13 +91,9 @@ impl App {
     /// The spatial call tree around one focus, memoised per source stamp.
     /// 某个焦点周围的空间调用树，按源码戳备忘。
     ///
-    /// Building one walks the relations of every node it places, and each of
-    /// those walks reads every source file, so one frame would otherwise pay for
-    /// a dozen scans. The memo holds the two sides a frame can ask about and is
-    /// keyed on the source stamp, so an edit invalidates it.
-    /// 构建一棵树要遍历它放置的每个节点的关系，而每次遍历都要读一遍全部源文件，因此一帧
-    /// 否则要付十几次扫描的代价。备忘保存一帧可能问到的两侧，并以源码戳为键，因此源码改动会
-    /// 让它失效。
+    /// Why a memo is needed at all is the module doc's subject; what this one adds is
+    /// that an edit invalidates it, because the key is the source stamp.
+    /// 为什么需要备忘是模块文档的主题；这里只补一点：源码改动会让它失效，因为键就是源码戳。
     pub(crate) fn call_tree_view(&self, focus: &CallRef) -> CallTreeView {
         if let Some(hit) = self.tree_cache.borrow().iter().find(|entry| {
             entry.stamp == self.last_source_stamp
@@ -224,20 +240,20 @@ impl App {
                 .map(|(index, _)| index)
         };
         let Some(target) = target else {
-            self.event = format!(
+            self.note(format!(
                 "{} has no {} node inside the {CALL_TREE_DEPTH}-hop call tree",
                 node.symbol,
                 step.label()
-            );
+            ));
             return;
         };
         search.outline_selected = target;
         search.data_selected = 0;
-        self.event = format!(
+        self.note(format!(
             "Call tree cursor: {} ({})",
             nodes[target].symbol,
             step.label()
-        );
+        ));
     }
 
     /// Make one tree node the focus of its side.
@@ -252,7 +268,7 @@ impl App {
             return false;
         }
         let line = self.source_function_line(target.node, &target.function);
-        self.event = format!("Call tree re-centred on {}", target.function);
+        self.note(format!("Call tree re-centred on {}", target.function));
         search.center = Some(target.node);
         search.center_function = Some(target.function);
         search.center_line = line;

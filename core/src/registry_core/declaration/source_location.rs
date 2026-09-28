@@ -58,6 +58,14 @@ pub fn portable_path(file: &str) -> String {
 /// allocate a second time on every candidate.
 /// `needle` 必须已经是小写：每个调用方把查询小写一次并在它搜索的所有字段间复用，在这里
 /// 折叠大小写会让每个候选再多分配一次。
+/// Match a recorded file path by its lowercase spelling.
+/// 按小写拼法匹配记录的源码文件路径。
+///
+/// `file` is lowercased here; `needle` is **not**. A caller that passes a mixed-case
+/// needle silently matches nothing, which is why every call site passes an
+/// already-lowercase needle (audit `KRN-K-19`).
+/// 这里会把 `file` 小写，**不会**处理 `needle`。传入大小写混合的 `needle` 会静默匹配不到任何东西，
+/// 因此每个调用点传的都是已小写的 `needle`（审计 `KRN-K-19`）。
 pub fn source_file_matches(file: &str, needle: &str) -> bool {
     if file.contains('\\') {
         portable_path(file).to_ascii_lowercase().contains(needle)

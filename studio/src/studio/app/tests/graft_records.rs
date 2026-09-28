@@ -1,14 +1,10 @@
-//! External-graft screen tests.
-//! 外部 graft 界面测试。
-//!
-//! A separate page so the module under test stays inside the size ratchet: a test
-//! module is excluded from it, and this one was the larger half of the file.
-//! 独立一页，使被测模块留在尺寸棘轮之内：测试模块不受棘轮约束，而这一份是文件里更大的
-//! 那一半。
+//! External-graft record and screen tests, moved out of `app/graft.rs` so the module under test stays inside the size ratchet.
+//! 外部 graft 记录与界面测试；从 `app/graft.rs` 移出，使被测模块留在尺寸棘轮之内。
 
-#[cfg(feature = "prototype-fixtures")]
-use super::support::node_editor_fixture;
+use super::super::graft::{declaration_for, graft_selector_error};
 use super::*;
+use nichlink_build_method::{DeclaredGraft, DeclaredGrafts};
+use std::path::PathBuf;
 
 fn declared(cut: DeclaredGraft) -> DeclaredGrafts {
     DeclaredGrafts {
@@ -173,15 +169,9 @@ fn selectors_that_escape_the_plan_directory_are_refused() {
 #[cfg(feature = "prototype-fixtures")]
 fn the_graft_screen_renders_before_any_plan_exists() {
     use crossterm::event::{KeyCode, KeyEvent};
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
-    super::super::support::select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let mut app = App::load();
     assert_ne!(
         app.selected,
         app.registry.id(),
@@ -193,7 +183,6 @@ fn the_graft_screen_renders_before_any_plan_exists() {
         "g must open the graft screen"
     );
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(140, 48)).unwrap();
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
+    crate::studio::ui::draw_once(&mut terminal, &mut app)
         .expect("the graft screen renders with no plans");
 }

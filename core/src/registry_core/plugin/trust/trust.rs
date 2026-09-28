@@ -85,6 +85,29 @@ impl PluginTrustPolicy {
 
     /// Run the checksum, revocation, and official-key checks; does no signature work.
     /// 执行摘要、撤销与官方密钥检查；本身不做签名运算。
+    ///
+    /// `manifest` is the artifact's own metadata: `checksum` decides the digest check,
+    /// `signature`/`revocation_list` presence decides the official-source checks, and
+    /// `public_key_fingerprint` is the fallback identity described below. `bytes` is the
+    /// payload the digest covers. The fingerprint must be derived by the verifying host from
+    /// the key material it trusts; a value the artifact supplied is a claim, not a derivation.
+    /// `manifest` 是工件自己的元数据：`checksum` 决定摘要检查，`signature`/`revocation_list`
+    /// 的有无决定官方来源那几项，`public_key_fingerprint` 是下文所述的回退身份。`bytes` 是摘要覆盖的
+    /// 载荷。指纹必须由验证宿主从它信任的密钥材料得出；工件自己提供的值只是自称，不是推导结果。
+    ///
+    /// `key_fingerprint` is the identity the *caller* established for this artifact, and it
+    /// wins when it is given. When it is `None` and the artifact is official, the check
+    /// falls back to `manifest.public_key_fingerprint` — the artifact's own claim — so a
+    /// caller that wants the trust list to filter on an out-of-band identity must pass the
+    /// fingerprint rather than rely on this policy. `MissingOfficialKey` therefore means
+    /// "neither an external fingerprint nor a self-declared one", not "no external source".
+    /// The actual signature verification is the host's verifier's job ([`Self::verify_signed`]);
+    /// this method only classifies.
+    /// `key_fingerprint` 是**调用方**为这个工件确立的身份，给了就以它为准。为 `None` 且工件是官方
+    /// 来源时，检查回落到 `manifest.public_key_fingerprint`——工件自己的声明——因此想用信任列表按
+    /// 带外身份过滤的调用方必须传入该指纹，而不能依赖本策略。`MissingOfficialKey` 因此意为"既没有
+    /// 外部指纹、也没有自述指纹"，而不是"没有外部来源"。真正的签名校验由宿主的验证器负责
+    /// （[`Self::verify_signed`]）；本方法只做分类。
     pub fn verify(
         self,
         manifest: PluginManifest,
@@ -274,6 +297,23 @@ mod tests {
         };
         let policy = PluginTrustPolicy::official(KEYS, REVOKED);
         assert_eq!(policy.verify(manifest, b"abc", Some(KEY)), Ok(()));
+
+        // The caller's fingerprint wins; with none, the artifact's own claim is used. The
+        // doc on `verify` states the fallback, and this pin keeps the two readings of
+        // `MissingOfficialKey` apart (audit `LGC-LG-41`).
+        // 调用方的指纹优先；没有时用工件自己的声明。`verify` 的文档写明了这条回落，而这条钉子把
+        // `MissingOfficialKey` 的两种读法分开（审计 `LGC-LG-41`）。
+        const OTHER: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+        assert_eq!(
+            policy.verify(manifest, b"abc", None),
+            Ok(()),
+            "with no external fingerprint the artifact's own claim is what gets compared"
+        );
+        assert_eq!(
+            policy.verify(manifest, b"abc", Some(OTHER)),
+            Err(PluginTrustError::UntrustedOfficialKey),
+            "a caller-supplied fingerprint is compared instead of the artifact's claim"
+        );
         assert_eq!(
             policy.verify(
                 PluginManifest {

@@ -166,7 +166,10 @@ pub(crate) fn render_lib(
         writeln!(output, "compile_error!({:?});", errors.render()).unwrap();
     }
     if !demo_errors.is_empty() {
-        output.push_str("\n#[cfg(feature = \"compile_error_demo\")]\n");
+        output.push_str(&format!(
+            "\n#[cfg(feature = {:?})]\n",
+            crate::DEMO_ONLY_FEATURE
+        ));
         writeln!(output, "compile_error!({:?});", demo_errors.render()).unwrap();
     }
     output

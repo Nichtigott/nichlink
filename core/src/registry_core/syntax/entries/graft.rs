@@ -52,8 +52,12 @@ pub struct GraftSyntax {
     /// Where the declaration was written, for diagnostics that point at it.
     /// 声明写在哪，供指向它的诊断使用。
     pub location: SyntaxLocation,
-    /// The `cfg` gate the declaration carries, if any, exactly as written.
-    /// 声明携带的 `cfg` 门控（若有），按原文保留。
+    /// The `cfg` gate the declaration carries, if any, exactly as written — with the
+    /// gates of the modules around it combined in as `all(…)`, because a declaration
+    /// inside a gated module inherits that gate and the build step, not this parser,
+    /// is the one that evaluates it (audit `LGC-LG-29`).
+    /// 声明携带的 `cfg` 门控（若有），按原文保留——并把它周围各模块的门控以 `all(…)` 并入：
+    /// 被门控模块里的声明继承那道门控，而求值的是构建步骤而不是本解析器（审计 `LGC-LG-29`）。
     pub cfg: Option<String>,
     /// Present when `cut(...)` / `graft(...)` supplied Rust expressions. The
     /// renderer emits those expressions verbatim, so the compiler — and any
@@ -88,6 +92,13 @@ pub struct GraftExpressions {
 struct GraftVisitor<'a> {
     entries: &'a mut Vec<GraftSyntax>,
     error: Option<FaceSyntaxError>,
+    /// The `cfg` gates of the modules this visitor is currently inside, outermost
+    /// first. A declaration inside a gated module inherits them, because a gate the
+    /// build can evaluate belongs to the declaration it guards — not to the parser,
+    /// which cannot evaluate any of them (audit `LGC-LG-29`).
+    /// 访问器当前所在各模块的 `cfg` 门控，最外层在前。被门控模块里的声明会继承它们：构建能求值
+    /// 的门控属于它守护的那条声明，而不属于解析器——解析器一个门控也求值不了（审计 `LGC-LG-29`）。
+    module_cfgs: Vec<String>,
 }
 impl<'ast> Visit<'ast> for GraftVisitor<'_> {
     /// Only a declaration written as an item belongs in the build's plan: a
@@ -102,17 +113,109 @@ impl<'ast> Visit<'ast> for GraftVisitor<'_> {
         self.collect(item);
     }
 
+    /// Walk a module unless the compiler can only drop it, and carry its gate onto
+    /// what it contains.
+    /// 只要编译器只可能丢弃它就走进去，并把它的门控下传给其中的内容。
+    ///
+    /// The gate has to be read, not merely noticed: *any* `cfg` attribute used to
+    /// skip the whole module body, so a plan inside `#[cfg(feature = "fast")]` was
+    /// dropped even when the feature was on — the slot silently kept running the
+    /// base implementation while the source said otherwise, and nothing reported
+    /// the missing cut (audit `LGC-LG-29`). Only a test-only expression is a gate
+    /// this parse can settle, because a build plan is not a test build; every other
+    /// gate is *kept* and attached to the declarations inside the module, where the
+    /// build step evaluates it with the same rule it already applies to an
+    /// entry-level gate (`build_method::graft_view::host_graft_entries`).
+    /// 门控要**读**，不能只注意到：过去**任何** `cfg` 属性都会让整个模块体被跳过，于是
+    /// `#[cfg(feature = "fast")]` 里的计划即便特性开着也被丢掉——槽位静默地继续跑基座实现，而
+    /// 源码写着相反的话，没有任何诊断报出少掉的切口（审计 `LGC-LG-29`）。只有"仅测试"的表达式是
+    /// 本次解析能定论的，因为构建计划不是测试构建；其余门控一律**保留**并附到模块内的声明上，
+    /// 由构建步骤用它与条目级门控完全相同的那条规则求值
+    /// （`build_method::graft_view::host_graft_entries`）。
     fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
-        // A module the compiler may drop cannot contribute to the plan.
-        // 编译器可能丢弃的模块不能参与计划。
-        if item
-            .attrs
-            .iter()
-            .any(|attribute| attribute.path().is_ident("cfg"))
-        {
+        let gates = module_cfgs(item);
+        if gates.iter().any(|gate| cfg_is_test_only(gate)) {
             return;
         }
+        let depth = self.module_cfgs.len();
+        self.module_cfgs.extend(gates);
         syn::visit::visit_item_mod(self, item);
+        self.module_cfgs.truncate(depth);
+    }
+}
+
+/// The `cfg` gates written on a module, in source order.
+/// 写在模块上的 `cfg` 门控，按源码顺序。
+fn module_cfgs(item: &syn::ItemMod) -> Vec<String> {
+    item.attrs
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("cfg"))
+        .filter_map(|attribute| {
+            attribute
+                .parse_args::<TokenStream>()
+                .ok()
+                .map(|tokens| compact(&tokens))
+        })
+        .collect()
+}
+
+/// Whether a `cfg` expression is true in a test build and in no other.
+/// 一个 `cfg` 表达式是否只在测试构建里为真。
+///
+/// The same three-state reading `conventions::size` uses for the same question, and
+/// for the same reason: `not(test)` and `feature = "…"` are not test-only, so a
+/// module carrying them must be visited. `test` alone is test-only; a conjunction is
+/// test-only as soon as one conjunct is; a disjunction only when every branch is —
+/// an empty `any()` is true in no build at all, not in a test one. An expression this
+/// parse cannot read is not one it may skip: keeping it hands the gate to the build
+/// step, which refuses what it cannot evaluate.
+/// 与 `conventions::size` 对同一个问题使用的同一套三态读法，理由也相同：`not(test)` 与
+/// `feature = "…"` 不是仅测试，带着它们的模块必须被访问。单独的 `test` 是仅测试；合取里只要
+/// 有一个合取项是仅测试，整体就是；析取要求每个分支都是——空 `any()` 在任何构建里都不成立，
+/// 而不是只在测试构建里成立。读不出来的表达式不是可以跳过的：保留它等于把门控交给构建步骤，
+/// 而构建步骤会拒绝它求不了值的东西。
+fn cfg_is_test_only(expression: &str) -> bool {
+    syn::parse_str::<syn::Meta>(expression).is_ok_and(|meta| cfg_meta_is_test_only(&meta))
+}
+
+/// Whether one parsed `cfg` operand is test-only.
+/// 一个已解析的 `cfg` 操作数是否仅测试。
+fn cfg_meta_is_test_only(meta: &syn::Meta) -> bool {
+    match meta {
+        syn::Meta::Path(path) => path.is_ident("test"),
+        syn::Meta::List(list) => {
+            let Ok(nested) = list.parse_args_with(
+                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+            ) else {
+                return false;
+            };
+            if list.path.is_ident("all") {
+                nested.iter().any(cfg_meta_is_test_only)
+            } else if list.path.is_ident("any") {
+                !nested.is_empty() && nested.iter().all(cfg_meta_is_test_only)
+            } else {
+                false
+            }
+        }
+        syn::Meta::NameValue(_) => false,
+    }
+}
+
+/// `entry`'s own gate combined with the gates of the modules around it.
+/// `entry` 自己的门控与包围它的各模块门控的组合。
+///
+/// `None` means "no gate at all", which is not the same as an empty gate: the
+/// downstream evaluator treats a missing gate as unconditional and refuses one it
+/// cannot read.
+/// `None` 表示"完全没有门控"，这与空门控不同：下游求值器把缺失的门控当作无条件，而读不出来的
+/// 门控会被它拒绝。
+fn combined_cfg(module_cfgs: &[String], own: Option<&str>) -> Option<String> {
+    let mut gates = module_cfgs.to_vec();
+    gates.extend(own.map(str::to_owned));
+    match gates.len() {
+        0 => None,
+        1 => gates.pop(),
+        _ => Some(format!("all({})", gates.join(", "))),
     }
 }
 
@@ -311,7 +414,7 @@ impl<'a> GraftVisitor<'a> {
                 graft,
                 full,
                 location: location(mac.span()),
-                cfg: cfg.clone(),
+                cfg: combined_cfg(&self.module_cfgs, cfg.as_deref()),
                 expressions,
             });
             index += 1;
@@ -328,175 +431,12 @@ pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> 
     let mut visitor = GraftVisitor {
         entries: &mut entries,
         error: None,
+        module_cfgs: Vec::new(),
     };
     visitor.visit_file(&file);
     visitor.error.map_or(Ok(entries), Err)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::graft_entries;
-
-    #[test]
-    fn graft_parser_collects_single_and_full_cuts() {
-        let source = r#"
-nichlink::static_graft_plan!(FRAMEWORK,
-    cut ["root/a1/b2"] graft "canvas_fast",
-    cut ["root/a"] full graft "a_fast",
-);
-"#;
-        let entries = graft_entries(source).unwrap();
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].cut, "root/a1/b2");
-        assert!(!entries[0].full);
-        assert_eq!(entries[1].graft, "a_fast");
-        assert!(entries[1].full);
-    }
-
-    #[test]
-    fn graft_parser_keeps_range_endpoints() {
-        let source = r#"nichlink::graft_plan!(framework, cut ["root/a1" to "root/a3"] graft "replacement");"#;
-        let entries = graft_entries(source).unwrap();
-        // Both endpoints survive as separate data; the start is `cut`, the far
-        // endpoint is `cut_end`.
-        // 两个端点都作为独立数据保留：起点是 `cut`，远端是 `cut_end`。
-        assert_eq!(entries[0].cut, "root/a1");
-        assert_eq!(entries[0].cut_end.as_deref(), Some("root/a3"));
-    }
-
-    /// A single string path that happens to contain `" to "` is not a range: only
-    /// a `to` token between two literals is. The parser must keep it whole, or
-    /// every consumer that used to re-split `cut` cuts it in half.
-    /// 一条字面含有 `" to "` 的字符串路径不是区间：只有两个字面量之间的 `to` token
-    /// 才是。解析器必须完整保留它，否则每个过去重新拆分 `cut` 的消费方都会把它拦腰
-    /// 截断。
-    #[test]
-    fn a_path_containing_the_range_word_is_a_single_cut() {
-        let source = r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#;
-        let entries = graft_entries(source).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].cut, "root/a to b");
-        assert_eq!(entries[0].cut_end, None);
-    }
-
-    #[test]
-    fn graft_parser_accepts_unbracketed_single_cut() {
-        // A declaration belongs at the entry, so the fixture is an item; the
-        // tests below cover plans that sit somewhere else.
-        // 声明应当写在入口处，因此夹具写成条目；位置不当的计划由下面的测试覆盖。
-        let source =
-            r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" full graft "replacement");"#;
-        let entries = graft_entries(source).unwrap();
-        assert_eq!(entries[0].cut, "root/a");
-        assert!(entries[0].full);
-    }
-
-    #[test]
-    fn graft_parser_collects_declaration_only_static_plans() {
-        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
-    cut "root/a" graft "replacement",
-);"#;
-        let entries = graft_entries(source).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].cut, "root/a");
-        assert_eq!(entries[0].graft, "replacement");
-    }
-
-    /// Only an item-position declaration belongs to the build's plan.
-    /// 只有条目位置的声明才属于构建计划。
-    #[test]
-    fn graft_parser_ignores_declarations_that_are_not_items() {
-        let in_function = r#"
-fn plan() {
-    let _ = nichlink::graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
-}
-"#;
-        assert!(graft_entries(in_function).unwrap().is_empty());
-
-        let in_test_module = r#"
-#[cfg(test)]
-mod tests {
-    nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
-}
-"#;
-        assert!(graft_entries(in_test_module).unwrap().is_empty());
-
-        let at_entry = r#"
-#[cfg(feature = "optional-graft")]
-nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
-"#;
-        let entries = graft_entries(at_entry).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(
-            entries[0].cfg.as_deref(),
-            Some("feature = \"optional-graft\"")
-        );
-    }
-
-    #[test]
-    fn graft_parser_ignores_removed_macro_names() {
-        let source =
-            r#"fn plan() { nichlink::graft!(framework, cut "root/a" graft "replacement"); }"#;
-        assert!(graft_entries(source).unwrap().is_empty());
-    }
-
-    /// The typed form keeps both sides as Rust expressions so the compiler and
-    /// any editor that resolves Rust paths can see the real target.
-    /// 类型化形式把两侧都保留为 Rust 表达式，编译器和任何能解析 Rust 路径的编辑器
-    /// 因此都能看到真实目标。
-    #[test]
-    fn graft_parser_keeps_typed_expressions() {
-        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
-            cut(crate::control::object::button::NODE_ID)
-                graft(graft_crate::button_fast::NODE_ID),
-        );"#;
-        let entries = graft_entries(source).unwrap();
-        let expressions = entries[0].expressions.as_ref().expect("typed expressions");
-        assert_eq!(
-            expressions.cut, "crate::control::object::button::NODE_ID",
-            "the host path is preserved verbatim so the compiler resolves it"
-        );
-        assert_eq!(expressions.graft, "graft_crate::button_fast::NODE_ID");
-        assert_eq!(expressions.cut_end, None);
-        assert!(!entries[0].full);
-    }
-
-    #[test]
-    fn graft_parser_keeps_a_typed_sibling_range() {
-        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
-            cut(crate::control::object::button::NODE_ID to crate::control::object::slider::NODE_ID)
-                graft(graft_crate::fast::NODE_ID),
-        );"#;
-        let entries = graft_entries(source).unwrap();
-        let expressions = entries[0].expressions.as_ref().expect("typed expressions");
-        assert_eq!(expressions.cut, "crate::control::object::button::NODE_ID");
-        assert_eq!(
-            expressions.cut_end.as_deref(),
-            Some("crate::control::object::slider::NODE_ID")
-        );
-        // The top-level fields carry the same two endpoints as data; the joined
-        // `"start to end"` text is gone, so nothing downstream has to re-split.
-        // 顶层字段以数据形式携带同样的两个端点；拼接的 `"start to end"` 文本已删除，
-        // 下游无需再拆分。
-        assert_eq!(entries[0].cut, "crate::control::object::button::NODE_ID");
-        assert_eq!(
-            entries[0].cut_end.as_deref(),
-            Some("crate::control::object::slider::NODE_ID")
-        );
-    }
-
-    /// A cut may not mix a resolved identity with an unresolved name.
-    /// 一条切口不允许混合"已解析身份"与"未解析名称"。
-    #[test]
-    fn graft_parser_rejects_mixed_typed_and_string_sides() {
-        let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
-            cut(crate::control::NODE_ID) graft "button_fast",
-        );"#;
-        let error = graft_entries(source).unwrap_err();
-        assert!(
-            error.message.contains("both sides"),
-            "unexpected message: {}",
-            error.message
-        );
-    }
-}
+#[path = "graft_tests.rs"]
+mod graft_tests;

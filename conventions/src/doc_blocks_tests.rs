@@ -59,6 +59,55 @@ fn a_fence_in_a_nested_docs_file_is_covered() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The exemption is about the record *directory*, not only about the file's own name: a
+/// report inside `docs/audit-2026-09-28/` is a record whatever it is called.
+/// 豁免针对记录**目录**，而不只是文件名本身：`docs/audit-2026-09-28/` 里的报告无论叫什么都是记录。
+///
+/// Red before the fix: the rule compared the file name to `RECORD_PREFIXES`, so this file
+/// and every peer report that did not happen to start with `audit-` were scanned as living
+/// documentation — their Rust excerpts had to parse and their `.rs:NNN` anchors had to
+/// resolve *today*, which turns a record into a document somebody must keep following
+/// (audit `LGC-LG-53`). The reports were renamed `audit-*` to get the gate quiet again; the
+/// boundary is what needed fixing.
+/// 修前为红：规则把文件名与 `RECORD_PREFIXES` 比较，因此本文件以及每个名字碰巧不以 `audit-`
+/// 开头的同伴报告都会被当成活文档扫描——它们摘录的 Rust 必须能解析、它们的 `.rs:NNN` 锚点必须
+/// **此刻**仍然成立，于是记录变成了必须有人持续维护的文档（审计 `LGC-LG-53`）。报告当时被改名成
+/// `audit-*` 来让门禁复绿；该修的是那条边界。
+#[test]
+fn a_report_inside_a_record_directory_is_exempt() {
+    let root = synthetic(&[(
+        "docs/audit-2026-09-28/verify-note.md",
+        "```rust\npub struct Broken {\n```\n",
+    )]);
+    let found = findings(&root);
+    assert!(
+        found.is_empty(),
+        "a file under a record directory is a record, whatever it is named: {found:#?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The other half of the boundary: a file whose *name* carries the prefix is a record
+/// wherever it sits, and a living document in an ordinary directory is still covered.
+/// 边界的另一半：名字带前缀的文件无论在哪儿都是记录，而普通目录里的活文档仍在覆盖范围内。
+#[test]
+fn the_exemption_does_not_swallow_living_documents() {
+    let record = synthetic(&[("docs/audit-probe.md", "```rust\npub struct Broken {\n```\n")]);
+    assert!(
+        findings(&record).is_empty(),
+        "a file named like a record is exempt by name"
+    );
+    let _ = std::fs::remove_dir_all(&record);
+
+    let living = synthetic(&[("docs/notes.md", "```rust\npub struct Broken {\n```\n")]);
+    assert_eq!(
+        findings(&living).len(),
+        1,
+        "an ordinary document is still covered"
+    );
+    let _ = std::fs::remove_dir_all(&living);
+}
+
 /// A throwaway checkout with the given files under it.
 /// 一个只含给定文件的一次性检出。
 fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {

@@ -26,15 +26,20 @@ impl App {
             let armed = std::mem::take(&mut plugin.pending_submit);
             match key.code {
                 KeyCode::Up => plugin.field = plugin.field.saturating_sub(1),
-                KeyCode::Down | KeyCode::Tab => plugin.field = (plugin.field + 1).min(6),
-                KeyCode::Enter if plugin.field == 0 || plugin.field == 6 => {
+                KeyCode::Down | KeyCode::Tab => {
+                    plugin.field = (plugin.field + 1).min(plugin_field::COUNT - 1)
+                }
+                KeyCode::Enter
+                    if plugin.field == plugin_field::SOURCE
+                        || plugin.field == plugin_field::MODE =>
+                {
                     plugin.values[plugin.field] = match plugin.field {
                         plugin_field::SOURCE
                             if plugin.values[plugin_field::SOURCE] == "official" =>
                         {
                             "user".to_owned()
                         }
-                        0 => "official".to_owned(),
+                        plugin_field::SOURCE => "official".to_owned(),
                         plugin_field::MODE if plugin.values[plugin_field::MODE] == "extension" => {
                             "replacement".to_owned()
                         }

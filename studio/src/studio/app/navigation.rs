@@ -1,100 +1,15 @@
-//! App source stamps and graph focus navigation.
-//! App 源码变更戳与调用图焦点导航。
+//! Graph focus navigation: which pane holds the focus, and how the cursor moves
+//! through the drawn tree.
+//! 调用图焦点导航：哪块面板持有焦点，以及游标如何穿过画出的树。
+//!
+//! The source stamp that decides *when* the app rebuilds lives next door in
+//! `super::source_stamp`; sharing one file is what made the stamp look like part of
+//! navigation (audit `STU-S-26`).
+//! 决定应用**何时**重建的源码戳住在隔壁的 `super::source_stamp`；两者共用一个文件，正是让戳
+//! 看起来属于导航的原因（审计 `STU-S-26`）。
 
-use super::support::package_root;
 use super::*;
 use crate::studio::app::call_tree_queries::TreeStep;
-
-pub(super) fn source_stamp() -> u128 {
-    let package_root = package_root();
-    let mut files = Vec::new();
-    for root in [
-        package_root.join("src"),
-        package_root.join("studio/src"),
-        package_root.join(".nichlink/plugins"),
-        // A plan is an authoring record: editing or deleting one must refresh
-        // the graft screen, even though the registration tree does not change.
-        // 计划是创作记录：编辑或删除它必须刷新 graft 界面，尽管注册树本身没变。
-        package_root
-            .join(nichlink_run_method::lexicon::NICHLINK_DIR)
-            .join(nichlink_run_method::lexicon::EXTERNAL_GRAFT_DIR),
-    ] {
-        stamp_directory(&root, &mut files);
-    }
-    for file in [
-        package_root.join("Cargo.toml"),
-        package_root.join("build.rs"),
-    ] {
-        stamp_file(&file, &mut files);
-    }
-    files.sort_by(|left, right| left.0.cmp(&right.0));
-    let mut stamp = 0u128;
-    for (path, modified, size) in files {
-        for byte in path.to_string_lossy().bytes() {
-            stamp = stamp.wrapping_mul(1_000_003).wrapping_add(u128::from(byte));
-        }
-        stamp = stamp.wrapping_mul(1_000_003).wrapping_add(modified);
-        stamp = stamp.wrapping_mul(1_000_003).wrapping_add(u128::from(size));
-    }
-    stamp
-}
-
-fn stamp_file(path: &std::path::Path, files: &mut Vec<(std::path::PathBuf, u128, u64)>) {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return;
-    };
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |duration| duration.as_nanos());
-    files.push((path.to_owned(), modified, metadata.len()));
-}
-
-pub(super) fn stamp_directory(
-    path: &std::path::Path,
-    files: &mut Vec<(std::path::PathBuf, u128, u64)>,
-) {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(metadata) = entry.metadata() else {
-            continue;
-        };
-        if metadata.is_dir() {
-            if path
-                .file_name()
-                .is_some_and(|name| name == "target" || name == ".git")
-            {
-                continue;
-            }
-            stamp_directory(&path, files);
-            continue;
-        }
-        if !metadata.is_file() {
-            continue;
-        }
-        let relevant = path.extension().and_then(|extension| extension.to_str()) == Some("rs")
-            || path.file_name().is_some_and(|name| {
-                matches!(
-                    name.to_str(),
-                    Some("Cargo.toml" | "Cargo.lock" | "official.lock")
-                )
-            });
-        if !relevant {
-            continue;
-        }
-        let modified = metadata
-            .modified()
-            .ok()
-            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-            .map_or(0, |duration| duration.as_nanos());
-        files.push((path, modified, metadata.len()));
-    }
-}
-
 /// Widen or narrow the call tree's share of the page, one step at a time and
 /// within the same range the divider drag uses, so the key and the mouse cannot
 /// disagree about how wide the tree may get.
@@ -106,10 +21,10 @@ impl App {
         self.graph_split_percent = (self.graph_split_percent as i16 + step)
             .clamp(35, 65)
             .unsigned_abs();
-        self.event = format!(
+        self.note(format!(
             "tree share {}% — [ narrows it, ] widens it",
             self.graph_split_percent
-        );
+        ));
     }
 }
 
@@ -138,11 +53,12 @@ impl App {
             }
             return;
         }
-        let step = match key {
-            KeyCode::Up => TreeStep::Up,
-            KeyCode::Down => TreeStep::Down,
-            KeyCode::Left => TreeStep::Left,
-            _ => TreeStep::Right,
+        let Some(step) = TreeStep::from_key(key) else {
+            // The four arrows are this page's whole cursor vocabulary; any other key is
+            // refused here rather than silently read as "right" (audit `STU-S-17`).
+            // 四个方向键就是本页游标的全部词汇；其他键在这里被拒绝，而不是被静默读成“右”
+            // （审计 `STU-S-17`）。
+            return;
         };
         self.hop_call_tree(search, step);
         // A tree that does not answer the step reports that and keeps its cursor;

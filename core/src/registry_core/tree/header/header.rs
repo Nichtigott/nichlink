@@ -1,15 +1,11 @@
 //! Immutable Registry metadata.
 //! Registry 不可变元数据。
 //!
-//! Every field here is read somewhere in the tree; the struct used to carry a
-//! `name` that only `reconfigure` ever wrote and an `admission()` accessor that
-//! nobody called, both of which were kept quiet by a module-level
-//! `#[allow(dead_code)]`. They were removed rather than allowed: the workspace
-//! deletes a zero-caller item and lets it return when a caller appears.
-//! 这里每个字段都在树的某处被读取；本结构曾带一个只有 `reconfigure` 会写、从不被读的
-//! `name`，以及一个无人调用的 `admission()` 访问器，两者都被模块级
-//! `#[allow(dead_code)]` 压住了。它们被删除而不是被允许保留：本工作区删除零调用者的项，
-//! 等真实调用者出现时再让它回来。
+//! Every field here is read somewhere in the tree. That is the rule for this struct:
+//! a field with no reader is deleted rather than kept quiet by a module-level
+//! `#[allow(dead_code)]`, and it returns when a reader appears.
+//! 这里每个字段都在树的某处被读取。本结构遵守的规则就是这一条：没有读取者的字段会被删除，
+//! 而不是用模块级 `#[allow(dead_code)]` 压住；等读取者出现时它再回来。
 
 use crate::registry_core::declaration::FrameworkId;
 use crate::registry_core::declaration::{OwnedAdmission, OwnedRegistrationRule};

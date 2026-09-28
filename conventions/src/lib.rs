@@ -46,10 +46,14 @@ pub mod mounting;
 pub mod naming;
 #[path = "purity.rs"]
 pub mod purity;
+#[path = "release_action_pin.rs"]
+pub mod release_action_pin;
 #[path = "release_version.rs"]
 pub mod release_version;
 #[path = "release_workflow.rs"]
 pub mod release_workflow;
+#[path = "retired_names.rs"]
+pub mod retired_names;
 #[path = "shims.rs"]
 pub mod shims;
 #[path = "size.rs"]

@@ -50,6 +50,12 @@ pub(crate) fn explain(
     let mut target: Option<String> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            // Help is not an error, and every subcommand answers it the same way:
+            // the usage banner and success. Four of them used to refuse the flag with
+            // "unexpected argument" (audit `LGC-LG-44`).
+            // 帮助不是错误，而且每个子命令都以同一种方式回答：用法横幅 + 成功。其中四个过去
+            // 用 "unexpected argument" 拒绝这个旗标（审计 `LGC-LG-44`）。
+            "-h" | "--help" => return crate::usage(out),
             "--json" => json_output = true,
             "--overlay" => overlay = true,
             "--path" => {

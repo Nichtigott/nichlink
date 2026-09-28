@@ -265,6 +265,37 @@ pub struct RegistrationSnapshot {
     pub source: OwnedSourceLocation,
 }
 
+/// Whether an author-side value was **declared** by the source file.
+/// 作者侧取值是否被源文件**声明过**。
+///
+/// The merge's one rule lives here so it is spelled once: a new field asks its own type rather
+/// than writing a fourth spelling of "the file spoke" (audit `t84`).
+/// 合并的那条规则只在这里写一次：新增字段问自己的类型，而不是把"文件说过话"再拼一遍
+/// （审计 `t84`）。
+trait Declared {
+    /// Whether this value was declared rather than left silent.
+    /// 该取值是被声明过，还是被留空。
+    fn declared(&self) -> bool;
+}
+
+impl Declared for crate::OwnedFlowContract {
+    fn declared(&self) -> bool {
+        self.is_declared()
+    }
+}
+
+impl<T> Declared for Option<T> {
+    fn declared(&self) -> bool {
+        self.is_some()
+    }
+}
+
+impl<T> Declared for Vec<T> {
+    fn declared(&self) -> bool {
+        !self.is_empty()
+    }
+}
+
 impl RegistrationSnapshot {
     /// Return the same logical identity used by compiled declarations.
     /// 返回与编译期声明一致的逻辑稳定身份。
@@ -280,6 +311,24 @@ impl RegistrationSnapshot {
 
     /// Apply file-authored fields while retaining executable compiled metadata.
     /// 应用文件中可编辑的字段，同时保留编译产物中的可执行元数据。
+    ///
+    /// **The one rule: an author-side value is applied only when the source file declared it;
+    /// a field the file left silent keeps the compiled value.** "Declared" is each type's own
+    /// spelling of "the file spoke" — [`Declared`] holds those spellings in one place: the flow
+    /// contract answers `is_declared`, a named provider answers `Some`, an editable list answers
+    /// non-empty. A field with no such marker (names, identifiers, paths, the rule and admission
+    /// this face carries) is **unconditional**: the author-side value wins even when it is empty.
+    /// Copy this sentence for a new field and ask [`Declared`]; do not write another spelling
+    /// (audit `t84`).
+    ///
+    /// Above the split: `export`, `handle` and the parts lists used to be dropped here because a
+    /// source-only reload cannot rebuild them, so the compiled evidence stayed. That is what the
+    /// two folds below still say where it applies.
+    /// **唯一的规则：作者侧取值仅在该源文件声明过时应用；文件没提的字段保留编译期取值。**
+    /// "声明过"是各类型自己的说法——[`Declared`] 把这些说法收在一处：数据流合同答 `is_declared`、
+    /// 具名 provider 答 `Some`、可编辑列表答非空。没有这类标记的字段（名字、标识、路径，以及本
+    /// 注册面携带的规范与门禁）是**无条件**的：作者侧取值即使为空也生效。新增字段照抄这一句并去问
+    /// [`Declared`]，不要另写一套（审计 `t84`）。
     pub fn merge_authored(mut self, authored: Self) -> Self {
         self.namespace = authored.namespace;
         self.kind = authored.kind;
@@ -305,11 +354,24 @@ impl RegistrationSnapshot {
         // the editable output labels.
         // part 列表来自已编译 trait 的关联常量；只读源码的热刷新无法可靠重建，
         // 因此保留这份可执行证据，只更新可编辑的输出标签。
-        if authored.flow.is_declared() {
+        if authored.flow.declared() {
             self.flow = authored.flow;
         }
-        if authored.flow_provider.is_some() {
+        if authored.flow_provider.declared() {
             self.flow_provider = authored.flow_provider;
+        }
+        // `runtime_checks` is author-editable: the face's own field is parsed into pure
+        // `RuntimeCheckSpec` data, so a non-empty author-side list is an edit and wins, the
+        // way `flow`'s does. Dropping it here made a source edit to `runtime_checks` a no-op
+        // while the file went on showing the new value — the silent-ignore shape this merge
+        // exists to avoid. An empty author-side list means the file said nothing, and the
+        // compiled checks stand. Audit `LGC-LG-27`.
+        // `runtime_checks` 是作者可编辑的：注册面自己的字段会被解析成纯 `RuntimeCheckSpec` 数据，
+        // 因此作者侧非空列表就是一次编辑，理应与 `flow` 一样优先。这里丢掉它，会让源码里对
+        // `runtime_checks` 的改动成为空操作，而文件上依旧显示着新值——正是这次合并存在的意义所要
+        // 避免的"静默忽略"形状。作者侧为空表示文件没提，编译期的校验保留。审计 `LGC-LG-27`。
+        if authored.runtime_checks.declared() {
+            self.runtime_checks = authored.runtime_checks;
         }
         self.handle_traits = authored.handle_traits;
         self.part_traits = authored.part_traits;

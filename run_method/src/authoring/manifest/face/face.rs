@@ -11,7 +11,6 @@ use crate::RuntimeCheckSpec;
 use crate::authoring::parse::*;
 use crate::authoring::validation::{
     legacy_rule_path_for_source, rule_path_for_source, source_root, validate_kind_name,
-    validate_name,
 };
 
 #[path = "render.rs"]
@@ -84,20 +83,30 @@ impl FaceManifest {
         )))
     }
 
+    /// Apply one field a caller can edit.
+    /// 应用调用方可以编辑的一个字段。
+    ///
+    /// The accepted set is exactly the set the renderer writes back: a key the
+    /// template never emits is refused here instead of being stored and silently
+    /// dropped on the next save. `registry_name`, `handle`, and `params` were in
+    /// the accepted set while nothing rendered them — `handle` could not even be
+    /// parsed (the kernel's field word list does not carry it), so an edit to any
+    /// of the three returned `Ok` and changed nothing (audit `LG-38`).
+    /// 接受集恰好就是渲染器会写回的集合：模板从不发射的键在这里被拒，而不是被存下来、在下次保存时
+    /// 被静默丢掉。`registry_name`、`handle` 与 `params` 过去在接受集里，却没有任何东西渲染它们——
+    /// `handle` 甚至无法被解析（内核的字段词表里没有它），因此对这三者中任何一个的编辑都会返回
+    /// `Ok` 而什么都不改变（审计 `LG-38`）。
     pub(crate) fn edit(&mut self, field: &str, value: &str) -> Result<(), String> {
         match field {
             "kind"
             | "preset"
             | "parts"
-            | "handle"
             | "name_zh"
             | "name_en"
             | "summary_zh"
             | "summary_en"
-            | "params"
             | "stable_name"
             | "exports"
-            | "registry_name"
             | "getting_from_other_registry"
             | "registration_rule"
             | "admission"
@@ -112,9 +121,6 @@ impl FaceManifest {
             | "flow_provider" => {
                 if value.contains(['\n', '\r']) {
                     return Err("field value cannot contain a newline".to_owned());
-                }
-                if field == "registry_name" {
-                    validate_name(value)?;
                 }
                 if field == "kind" {
                     validate_kind_name(value)?;
@@ -138,15 +144,15 @@ impl FaceManifest {
                     parse_flow_value(value)?;
                 }
                 if field == "flow_provider" && !value.trim().is_empty() {
-                    syn::parse_str::<syn::Path>(value)
-                        .map_err(|_| "flow_provider must be a Rust type path".to_owned())?;
+                    validate_flow_provider(value)?;
                 }
-                let key = if field == "admission" {
-                    "admission"
-                } else {
-                    field
-                };
-                self.values.insert(key.to_owned(), value.to_owned());
+                // The key is the field name: `admission` is stored under its own
+                // name like every other field in this arm, and the difference that
+                // looks like it belongs here (the compact and expression spellings)
+                // is handled in the validation above.
+                // 键就是字段名：`admission` 与这一支里的其它字段一样存自己的名字，而看起来属于这里
+                // 的那点差异（紧凑与表达式两种拼法）由上面的校验处理。
+                self.values.insert(field.to_owned(), value.to_owned());
                 Ok(())
             }
             "needs_registry" if matches!(value, "true" | "false") => {
@@ -286,6 +292,118 @@ mod rule_source_ownership_tests {
         assert!(
             !manifest("false", "src/widget/registry_rule/registry_rule.rs")
                 .derives_rule_from_the_sibling()
+        );
+    }
+}
+
+/// The stack the `flow_provider` validator parses on.
+/// `flow_provider` 验证器解析时所用的栈。
+///
+/// The kernel's nesting guard admits up to 128 levels, and 128 levels of `syn`
+/// recursion is what an eight-megabyte stack is for — the amount the main thread
+/// gets. Naming the size here is what makes the guard's budget mean the same
+/// thing for every caller.
+/// 内核的嵌套守卫最多放行 128 层，而 `syn` 递归 128 层正是八兆栈（主线程拿到的量）能承受的。
+/// 把大小写在这里，守卫的预算才对每个调用方都意味着同一件事。
+const FLOW_PROVIDER_STACK_BYTES: usize = 8 * 1024 * 1024;
+
+/// Validate one `flow_provider` type path.
+/// 校验一条 `flow_provider` 类型路径。
+///
+/// Two things are needed, and the edit path had neither. The parse goes through
+/// the kernel's guarded implementation (`render_flow_provider`, which measures
+/// nesting before `syn` recurses), and it runs on a *fixed* stack, because a
+/// guard budget is only meaningful against a known amount of stack. Measured by
+/// the audit round that filed this: depth 300 of `A<A<…>>` aborts an
+/// eight-megabyte stack, and depth 100 aborts a two-hundred-fifty-six-kilobyte
+/// one — the same depth that parses here. The edit entry runs before the
+/// renderer, so without this the editor and the MCP bridge died before the
+/// guarded renderer could speak.
+/// 需要两件事，而编辑路径两件都没有。解析走内核那个带守卫的实现（`render_flow_provider`，它
+/// 先量嵌套、再让 `syn` 递归），且跑在**固定**栈上，因为守卫的预算只对着已知的栈量才有意义。
+/// 审计轮实测：`A<A<…>>` 的 300 层会让八兆栈 abort，100 层会让 256 KiB 栈 abort——而同一个
+/// 深度在这里解析得好好的。编辑入口先于渲染器运行，因此没有这两件事时，编辑器与 MCP 桥会在带
+/// 守卫的渲染器开口之前就死掉。
+fn validate_flow_provider(value: &str) -> Result<(), String> {
+    let source = value.to_owned();
+    std::thread::Builder::new()
+        .name("nichlink-flow-provider".to_owned())
+        .stack_size(FLOW_PROVIDER_STACK_BYTES)
+        .spawn(move || {
+            render_flow_provider(&source)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        })
+        .map_err(|error| format!("cannot validate flow_provider: {error}"))?
+        .join()
+        .unwrap_or_else(|_| Err("flow_provider validation panicked".to_owned()))
+}
+
+#[cfg(test)]
+mod flow_provider_nesting_tests {
+    use super::super::FaceManifest;
+    use std::collections::BTreeMap;
+
+    /// A nested generic type path of `depth` levels: `A<A<…<u8>…>>`.
+    /// `depth` 层的嵌套泛型类型路径：`A<A<…<u8>…>>`。
+    fn nested(depth: usize) -> String {
+        let mut value = "A<".repeat(depth);
+        value.push_str("u8");
+        value.push_str(&">".repeat(depth));
+        value
+    }
+
+    fn manifest_editing(field: &str, value: &str) -> Result<(), String> {
+        let mut manifest = FaceManifest {
+            values: BTreeMap::new(),
+        };
+        manifest.edit(field, value)
+    }
+
+    /// A `flow_provider` deep enough to overflow the parser is *refused*, not
+    /// fatal. The edit path called `syn::parse_str` directly while the kernel's
+    /// one guarded implementation only ran at render time, so the editor and the
+    /// MCP bridge aborted the process before the guard could speak: a stack
+    /// overflow is not a catchable panic, so there was no `Err` to report.
+    /// 深到能让解析器溢出的 `flow_provider` 会被**拒绝**，而不是致命。编辑路径直接调
+    /// `syn::parse_str`，而内核唯一的带守卫实现只在渲染时运行，因此编辑器与 MCP 桥会在守卫
+    /// 说话之前就 abort 进程：栈溢出不是可捕获的 panic，没有任何 `Err` 可以报。
+    ///
+    /// Red before the fix: this test's process died with
+    /// `fatal runtime error: stack overflow` at depth 300.
+    /// 修前为红：本测试进程在 300 层时以 `fatal runtime error: stack overflow` 死亡。
+    #[test]
+    fn a_pathologically_nested_flow_provider_is_refused_not_fatal() {
+        let error = manifest_editing("flow_provider", &nested(300))
+            .expect_err("nesting above the kernel's limit is refused");
+        assert!(
+            error.contains("128"),
+            "the refusal must name the nesting limit: {error}"
+        );
+    }
+
+    /// The answer does not depend on how much stack the caller happens to have:
+    /// an admitted depth parses on the validator's own fixed stack even when the
+    /// caller is a 256 KiB thread. Red before the fix — the *same* value that
+    /// parses on a test thread aborted here, because the parse ran on the
+    /// caller's stack.
+    /// 答案不取决于调用方恰好有多少栈：被放行的深度在验证器自己的固定栈上能解析，即使调用方
+    /// 是一条 256 KiB 的线程。修前为红——同一个在测试线程上能解析的值在这里 abort，因为解析跑在
+    /// 调用方的栈上。
+    #[test]
+    fn the_answer_does_not_depend_on_the_callers_stack() {
+        let value = nested(100);
+        assert_eq!(value.len(), 302, "200 opener bytes + `u8` + 100 closers");
+        let verdict = std::thread::Builder::new()
+            .name("nichlink-tiny-stack".to_owned())
+            .stack_size(256 * 1024)
+            .spawn(move || manifest_editing("flow_provider", &value))
+            .expect("spawn the tiny-stack caller")
+            .join()
+            .expect("the validation must not abort the process");
+        assert!(
+            verdict.is_ok(),
+            "an admitted path is valid however small the caller's stack is: {verdict:?}"
         );
     }
 }

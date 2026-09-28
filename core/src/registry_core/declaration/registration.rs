@@ -271,8 +271,13 @@ pub struct RegistrationInfo {
     /// Name of an external registry this face is provisioned from, if any.
     /// 本注册面从其获取内容的外部注册机名（如果有）。
     pub getting_from_other_registry: Option<&'static str>,
-    /// Source path that produced the registry rule, kept for diagnostics.
-    /// 产出注册规范的源码路径，用于诊断。
+    /// The location a rule for this face **would** be read from: beside the face, at
+    /// `registry_rule/registry_rule.rs`, whether or not that file exists. This field names a
+    /// position, not the existence of a file, which is why it is filled for a face whose rule
+    /// file is absent (audit `t75` §6.1).
+    /// 本注册面的规则**会**被读取的位置：与注册面并列的 `registry_rule/registry_rule.rs`，无论
+    /// 那里有没有文件。本字段名的是一个位置，而不是某份文件的存在，因此规则文件缺席的注册面同样会
+    /// 填上它（审计 `t75` §6.1）。
     pub registry_rule_path: &'static str,
     /// Rule for faces entering the Registry owned by this face.
     /// 该注册面拥有的 Registry 所使用的注册规范。

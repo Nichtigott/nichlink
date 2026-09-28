@@ -3,12 +3,16 @@
 
 use super::*;
 
-/// The 28 registration-face fields [`NewModuleFace`] and [`ModuleFacePatch`]
-/// share, in one view either public struct can build. `parent` is the only field
-/// outside it: the applier never reads it, so it stays an add-only argument.
-/// [`NewModuleFace`] 与 [`ModuleFacePatch`] 共用的 28 个注册面字段；任一公开
+/// The registration-face fields [`NewModuleFace`] and [`ModuleFacePatch`] share,
+/// in one view either public struct can build. `parent` is the only field outside
+/// it: the applier never reads it, so it stays an add-only argument. The field
+/// list itself is the count — no number is written here, because the ones that
+/// used to be here and in its two siblings disagreed with the struct (audit
+/// `SUR-C6`).
+/// [`NewModuleFace`] 与 [`ModuleFacePatch`] 共用的注册面字段；任一公开
 /// 结构体都能构建出这同一份视图。`parent` 是唯一不在其中的字段：应用器从不读取
-/// 它，因此它仍是 add 独有的参数。
+/// 它，因此它仍是 add 独有的参数。数量就是字段清单本身——这里不写数字，因为过去这里
+/// 与它的两个兄弟文件里的数字都不等于本结构体的字段数（审计 `SUR-C6`）。
 ///
 /// `registry_rule_path` is deliberately absent: it is derived from the face's own
 /// location (`FaceManifest` writes it on render), so accepting it from a caller

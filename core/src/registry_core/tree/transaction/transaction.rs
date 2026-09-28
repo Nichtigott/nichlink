@@ -175,6 +175,71 @@ impl Registry {
                 )));
             }
         }
+        // The graph's identity keys are checked here, and a node's *path* is one of
+        // them: two siblings may not carry the same `registry_name`. A path is not a
+        // display string in this workspace — connector admission classifies a provider as
+        // inside or outside its owner with `path_is_strictly_under`, and the graft cut
+        // selector resolves a slot *by path* — so two faces sharing one path made "which
+        // face is this slot" unanswerable while three consumers silently picked one: the
+        // by-path index (last insert wins), `path_for` (two identical strings), and the
+        // path arm of the cut selector (first match wins). A duplicate `stable_name` was
+        // already refused; a duplicate `registry_name` was not, and the two are the same
+        // kind of collision. Refusing it is also what keeps that path arm single-valued
+        // rather than an arbitrary pick, because this batch is the only place new nodes are
+        // admitted (audit `LGC-LG-07`).
+        // 批次图的身份键在这里检查，而节点的**路径**就是身份键之一：两个兄弟不得携带相同的
+        // `registry_name`。在本工作区里路径不是显示串——连接器准入用 `path_is_strictly_under`
+        // 判定提供者在所有者之内还是之外，graft 切口选择器**按路径**解析槽位——因此两个面共用一条
+        // 路径会让"这个槽位是哪个面"无法回答，而三个消费方各自静默地选了一个：按路径的索引
+        // （后插入者赢）、`path_for`（两段完全相同的字符串）、以及切口选择器的路径那一支（取第一个
+        // 匹配）。重复的 `stable_name` 本来就被拒绝，重复的 `registry_name` 却没有，而两者是同一种
+        // 碰撞。
+        // 拒绝它也正是让那一支成为单值、而不是随意挑选的原因：本批次是唯一接纳新节点的地方
+        // （审计 `LGC-LG-07`）。
+        //
+        // This block sits after the missing-parent walk on purpose: `run_method`'s two
+        // READMEs anchor `transaction.rs:167` on the `<missing-parent:…>` message, and
+        // adding lines above it drifted that anchor (the documentation-anchor gate caught
+        // it). A check placed below the arm keeps the shipped reference true.
+        // 这段刻意放在缺父遍历之后：`run_method` 的两份 README 把 `transaction.rs:167` 锚定在
+        // `<missing-parent:…>` 那条消息上，在它之前加行会让锚点漂移（文档锚点门禁抓到了这一点）。
+        // 放在该分支之后，出厂的引用就仍然为真。
+        let mut sibling_names = BTreeMap::<NodeId, BTreeMap<String, (NodeId, String)>>::new();
+        let mut seeded = BTreeSet::new();
+        for snapshot in submissions {
+            if seeded.insert(snapshot.parent)
+                && let Some(parent) = self.registry(snapshot.parent)
+            {
+                let names = sibling_names.entry(snapshot.parent).or_default();
+                for entry in parent.entries.values() {
+                    names.insert(
+                        entry.info.registry_name.clone(),
+                        (entry.info.id, entry.info.source.file.clone()),
+                    );
+                }
+            }
+            let names = sibling_names.entry(snapshot.parent).or_default();
+            match names.get(&snapshot.registry_name) {
+                Some((existing, existing_source)) if *existing != snapshot.id => {
+                    return Err(Box::new(RegistryError::new(
+                        snapshot.id,
+                        snapshot.registry_name.clone(),
+                        snapshot.source.clone(),
+                        format!(
+                            "duplicate sibling registry name `{}` (already owned by {} at {})",
+                            snapshot.registry_name, existing, existing_source
+                        ),
+                    )));
+                }
+                Some(_) => {}
+                None => {
+                    names.insert(
+                        snapshot.registry_name.clone(),
+                        (snapshot.id, snapshot.source.file.clone()),
+                    );
+                }
+            }
+        }
         Ok(())
     }
 

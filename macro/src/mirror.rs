@@ -283,8 +283,8 @@ mod tests {
             .to_string()
     }
 
-    /// The 29 type arguments of the mirror's literal.
-    /// 镜像字面量的 29 个类型实参。
+    /// The type arguments of the mirror's literal.
+    /// 镜像字面量的类型实参。
     fn arguments(output: &str) -> Vec<&str> {
         let start = output.find("FaceFields<").expect("a FaceFields literal") + "FaceFields<".len();
         let rest = &output[start..];

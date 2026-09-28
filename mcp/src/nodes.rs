@@ -13,7 +13,7 @@
 use std::path::Path;
 
 use nichlink::NodeId;
-use nichlink_build_method::face_views;
+use nichlink_build_method::FaceView;
 use serde_json::Value;
 
 /// The parent identity a request names, by identity or by logical path.
@@ -60,7 +60,7 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
         return Ok(id);
     }
     let wanted = target.trim_start_matches('/');
-    let mut faces = face_views(root, namespace)?;
+    let mut faces = derived_faces(root, namespace)?.0;
     // The registry root has no face row of its own unless something declares it,
     // so `root` is answered from the namespace directly.
     // 注册树根没有自己的面行（除非有东西声明了它），因此 `root` 直接由命名空间作答。
@@ -73,4 +73,29 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
         1 => Ok(faces[0].id),
         _ => Err(format!("`{target}` is ambiguous")),
     }
+}
+
+/// The faces this package derives, plus the one line naming any registration file the
+/// derivation could not parse.
+/// 本包推导出的面，外加一行：点名推导解析不了的注册面文件。
+///
+/// `face_views` returned only the first half, so a registration file that does not
+/// parse (two macro invocations, a truncated field list) was dropped without a word: a
+/// read-only tree query reported a smaller tree as if it were the whole one
+/// (`LGC-LG-11`). The producer now hands the list over, and every reporting tool that
+/// reads the tree says `unparsable faces N`, so no caller has to guess.
+/// `face_views` 只返回前半，于是解析不了的注册面文件（两次宏调用、被截断的字段表）被一声不响地
+/// 丢掉：只读的树查询把一棵更小的树当成完整的那棵报了出去（`LGC-LG-11`）。生产者现在把清单交出来，
+/// 而每个读这棵树的报告工具都说出 `unparsable faces N`，因此没有调用方需要猜。
+pub(crate) fn derived_faces(
+    root: &Path,
+    namespace: &str,
+) -> Result<(Vec<FaceView>, String), String> {
+    let (faces, unreadable) = nichlink_build_method::face_views_and_unreadable(root, namespace)?;
+    let line = if unreadable.is_empty() {
+        String::new()
+    } else {
+        format!("unparsable faces {}\n", unreadable.len())
+    };
+    Ok((faces, line))
 }

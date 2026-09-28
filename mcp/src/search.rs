@@ -27,7 +27,7 @@
 
 use std::path::Path;
 
-use nichlink_build_method::{FaceView, face_views};
+use nichlink_build_method::FaceView;
 use serde_json::Value;
 
 use crate::index::load_sources;
@@ -57,7 +57,7 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // 树排在前面：面是其它每个工具命名的单位，而点名了某个面的查询不能被提到它的那些文件吃掉。
     match namespace(root) {
         Ok(namespace) => {
-            let faces = face_views(root, &namespace)?;
+            let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
             let built = TreeDelta::read(root);
             let mut tree = Vec::new();
             for face in &faces {
@@ -67,6 +67,28 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
                 if tree.len() >= limit {
                     break;
                 }
+            }
+            // A registration file the derivation could not parse is a fact about the *tree
+            // that was read*, not about what this query matched, so it is reported whether
+            // or not any face matched: a query naming a face that lives in a broken file
+            // used to come back "no matches" with nothing saying the file was broken
+            // (`LGC-LG-11`). The stale-manifest note below stays inside the guard, because
+            // it is about the verdicts of the rows that follow it.
+            // 推导解析不了的注册面文件是**被读到的那棵树**的事实，而不是这次查询匹配到了什么的
+            // 事实，因此无论有没有面命中它都要报出来：一个点名了某个面的查询，若那个面住在坏文件
+            // 里，过去会回一条"no matches"而完全不提那个文件是坏的（`LGC-LG-11`）。下面那条过期
+            // 清单的备注仍留在守卫里，因为它说的是随后的行给出的结论。
+            //
+            // It is also not subject to `limit`: `limit` bounds the *result rows* — the face,
+            // file, and function hits below — while this line is a fact about the tree that was
+            // read, so it keeps appearing even when the limit has already cut the face list
+            // short. Reading it as one more result row is how a caller would conclude that a
+            // complete answer came back when a file was in fact dropped.
+            // 它同样不受 `limit` 约束：`limit` 限的是**结果行**——下面那些面、文件与函数命中——而
+            // 这一行是"读到的这棵树"的事实，因此即使上限已经截短了面的清单，这一行仍会出现。把它当成
+            // 又一条结果行，会让调用方在一个文件其实被丢掉时以为拿到的是一份完整的答案。
+            if !unparsable.is_empty() {
+                results.push(unparsable.trim_end().to_owned());
             }
             if !tree.is_empty() {
                 // A stale manifest still answers, but every verdict below it is

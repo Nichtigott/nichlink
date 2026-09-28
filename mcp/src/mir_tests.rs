@@ -341,3 +341,28 @@ fn a_missing_artifact_and_an_escaping_path_are_refused() {
     let _ = std::fs::remove_dir_all(&outside);
     let _ = std::fs::remove_dir_all(&directory);
 }
+
+/// A text file with no MIR in it is not minted into a snapshot. The header is the only credential
+/// saying which tree an artifact describes, and stamping arbitrary prose produced a
+/// "this package, zero calls" artifact that `delta`/`unified` then trust as fact — the source was
+/// provable and became forgeable (audit `LGC-LG-18`).
+/// 不含 MIR 的文本文件不会被造成一份快照。表头是唯一说明 artifact 描述哪棵树的凭据，而给任意散文
+/// 盖上它，会产生一份"本包、零调用"的 artifact，`delta`/`unified` 随后当成事实采信——来源本可证明，
+/// 于是变成了可伪造（审计 `LGC-LG-18`）。
+#[test]
+fn a_text_file_with_no_mir_in_it_is_not_stamped_into_a_snapshot() {
+    let (directory, _) = root("not-mir");
+    std::fs::write(
+        directory.join("notes.txt"),
+        "This is not a MIR dump.\nJust prose.\n",
+    )
+    .expect("prose");
+    let error = mir(&directory, &json!({"path": "notes.txt", "jsonl": true}))
+        .expect_err("prose carries no tree to name");
+    assert!(error.contains("no MIR function"), "{error}");
+    // The lenient read still answers: a dump that happens to contain no call is not an error.
+    // 宽松的读取仍然作答：恰好不含调用的转储不是错误。
+    let reply = mir(&directory, &json!({"path": "notes.txt"})).expect("the read answers");
+    assert!(reply.contains("functions 0"), "{reply}");
+    let _ = std::fs::remove_dir_all(&directory);
+}

@@ -19,9 +19,19 @@
 //! * `.nichlink/external-grafts/` 下的 `graft.plan` 是本界面写下的**记录**：本界面在
 //!   这里消费它，运行期覆盖路径（`run_method::apply_recorded_grafts` →
 //!   `Registry::overlay_recorded`）也会消费它。
+//!
+//! Three words for three artefacts, and this file keeps them apart: the
+//! **declaration** is the `static_graft_plan!` slot the host entry names, the
+//! **record** is the `graft.plan` file this screen writes, and the **entry line** is
+//! the `use <crate> as _;` import a plugin selection appends to the host entry
+//! (`super::mutations`). Calling all three "the declaration" is how a reader ends up
+//! editing the wrong file.
+//! 三个词对应三种工件，本文件把它们分清楚：**声明**是宿主入口 `static_graft_plan!` 点名的槽位，
+//! **记录**是本界面写下的 `graft.plan` 文件，**入口行**是插件选择追加到宿主入口的那条
+//! `use <crate> as _;` 导入（`super::mutations`）。把三者都叫“声明”，正是读者改错文件的原因。
 
-use super::support::{package_root, with_authoring_context};
-use super::writers::with_selected_project;
+use super::support::package_root;
+use super::write_guard::{selected_read_root, with_selected_project, with_selected_project_read};
 use super::*;
 use nichlink_build_method::{DeclaredGraft, DeclaredGrafts};
 
@@ -60,7 +70,7 @@ impl App {
             flow_declared,
             inherited_children,
         };
-        graft_facts(&self.registry, &mut state);
+        read_graft_state(&self.registry, &mut state);
         self.overlay = Some(Overlay::Graft(state));
     }
 
@@ -70,7 +80,7 @@ impl App {
         let Some(Overlay::Graft(state)) = self.overlay.as_mut() else {
             return;
         };
-        graft_facts(&self.registry, state);
+        read_graft_state(&self.registry, state);
     }
 
     /// Refresh the graft screen only when it is the open overlay.
@@ -85,7 +95,7 @@ impl App {
     /// 写入撰写的计划，或打开已经存在的那一条。
     pub(super) fn submit_graft(&mut self, state: &GraftState) {
         if let Some(error) = graft_selector_error(&state.selector) {
-            self.event = format!("Graft failed: {error}");
+            self.alert(format!("Graft failed: {error}"));
             return;
         }
         let selector = state.selector.trim();
@@ -95,17 +105,17 @@ impl App {
                 && existing.full == state.full
             {
                 self.open_graft_plan(selector);
-                self.event = format!(
+                self.note(format!(
                     "External graft `{selector}` already declares `{}`; opened {}",
                     state.target_path,
                     plan_path_for(selector).display()
-                );
+                ));
                 return;
             }
-            self.event = format!(
+            self.alert(format!(
                 "Graft failed: `{selector}` already exists at {}; open it (o), delete it (d), or choose another selector",
                 plan_path_for(selector).display()
-            );
+            ));
             return;
         }
         let created = with_selected_project(|| {
@@ -125,52 +135,77 @@ impl App {
                 // 可粘贴的那一行由写出的记录所用的同一个内核构造器与渲染器生成。在这里
                 // 手写一份副本，正是横幅与记录开始不一致的原因。
                 let declaration = plan.document.declaration();
-                self.open_editor_file(path.clone(), 1);
-                self.event = match &state.declaration {
-                    // Writing the record first and declaring the slot afterwards is
-                    // a legitimate order, so the plan is still written. What the
-                    // banner must not do is let that order hide the consequence:
-                    // the release prunes a slot no declaration names, and the
-                    // runtime then skips this record as `UnkeptSlot` — no graft is
-                    // applied, and nothing fails loudly. So it is a warning, it
-                    // says which file is missing the declaration, and it carries
-                    // the exact clause to add.
-                    // 先写记录、后声明槽位是合法的顺序，因此计划照旧写入。横幅不能做的
-                    // 是让这个顺序掩盖后果：发布态会剪掉没有声明命名的槽位，运行期随后
-                    // 把这条记录当作 `UnkeptSlot` 跳过——不会应用任何嫁接，也不会有任何
-                    // 响亮的失败。因此它是一条警告，说明缺少声明的是哪个文件，并带上要补
-                    // 的那条子句。
-                    GraftDeclaration::Absent { entry } => format!(
-                        "Warning: External graft plan created at {}; the host entry {} declares no such slot, so the release prunes `{}` and the runtime skips this record (UnkeptSlot) instead of applying it. Add to static_graft_plan!:\n{declaration}",
-                        path.display(),
-                        entry.display(),
-                        state.target_path,
+                // A failed launch must survive the banner below: `event` is this
+                // screen's only feedback channel, so assigning the banner straight
+                // over it hid both the failure and the empty `editor_request`
+                // (audit `LGC-LG-50`).
+                // 启动失败必须活过下面的横幅：`event` 是本界面唯一的反馈通道，直接覆盖它会同时
+                // 藏起失败与那次空的 `editor_request`（审计 `LGC-LG-50`）。
+                let editor_failure = self.open_editor_file(path.clone(), 1).err();
+                // The banner carries its own severity, arm by arm: the two arms whose
+                // text says `Warning:` are alerts, while `Declared` is an ordinary
+                // success — the plan was written and the slot was already declared. The
+                // editor failure, when there is one, is an alert on top of either.
+                // 横幅的严重度逐臂自带：文本写着 `Warning:` 的两臂是 alert，而 `Declared` 是普通的
+                // 成功——计划写好了、槽位本来就已声明。编辑器失败（如果有）叠加在两者之上，是 alert。
+                let (banner, banner_is_alert) = match &state.declaration {
+                    GraftDeclaration::Absent { entry } => (
+                        format!(
+                            "Warning: External graft plan created at {}; the host entry {} declares no such slot, so the release prunes `{}` and the runtime skips this record (UnkeptSlot) instead of applying it. Add to static_graft_plan!:\n{declaration}",
+                            path.display(),
+                            entry.display(),
+                            state.target_path,
+                        ),
+                        true,
                     ),
-                    GraftDeclaration::Unknown { reason } => format!(
-                        "Warning: External graft plan created at {}; the host entry could not be read ({reason}), so the release may prune `{}` and the runtime would skip this record (UnkeptSlot). Add to static_graft_plan!:\n{declaration}",
-                        path.display(),
-                        state.target_path,
+                    GraftDeclaration::Unknown { reason } => (
+                        format!(
+                            "Warning: External graft plan created at {}; the host entry could not be read ({reason}), so the release may prune `{}` and the runtime would skip this record (UnkeptSlot). Add to static_graft_plan!:\n{declaration}",
+                            path.display(),
+                            state.target_path,
+                        ),
+                        true,
                     ),
-                    GraftDeclaration::Declared { line, .. } => format!(
-                        "External graft plan created at {}; the host entry already declares this slot at line {line}:\n{declaration}",
-                        path.display(),
+                    GraftDeclaration::Declared { line, .. } => (
+                        format!(
+                            "External graft plan created at {}; the host entry already declares this slot at line {line}:\n{declaration}",
+                            path.display(),
+                        ),
+                        false,
                     ),
                 };
+                match (editor_failure, banner_is_alert) {
+                    (Some(failure), _) => self.alert(format!("{failure}\n{banner}")),
+                    (None, true) => self.alert(banner),
+                    (None, false) => self.note(banner),
+                };
             }
-            Err(error) => self.event = format!("Graft failed: {error}"),
+            Err(error) => self.alert(format!("Graft failed: {error}")),
         }
     }
 
     /// Open one plan file in the configured editor.
     /// 用配置的编辑器打开一个计划文件。
     pub(super) fn open_graft_plan(&mut self, selector: &str) {
-        match with_authoring_context(|| nichlink_run_method::read_external_graft(selector)) {
+        // A read of the authoring records goes through the selected project like a write
+        // does: a plan the reader never opened must not be described as this screen's
+        // state (audit `STU-S-29`).
+        // 对创作记录的读取与写入一样走选中的项目：读者从未打开的计划不得被描述成本界面的状态
+        // （审计 `STU-S-29`）。
+        match with_selected_project_read(|| nichlink_run_method::read_external_graft(selector)) {
             Ok(plan) => {
                 let path = plan.plan_path();
-                self.open_editor_file(path.clone(), 1);
-                self.event = format!("Opened external graft plan {}", path.display());
+                // Per arm: opening the plan is ordinary, the editor failure is the alert
+                // (it is the text `open_editor_file` produced).
+                // 逐臂：打开计划是普通的，编辑器失败才是 alert（文本由 `open_editor_file` 给出）。
+                match self.open_editor_file(path.clone(), 1) {
+                    Ok(()) => self.note(format!("Opened external graft plan {}", path.display())),
+                    // The failure is already the event; "Opened" would be a lie over it.
+                    // 失败本身已是事件内容；在它之上再写 "Opened" 就是假话。
+                    Err(failure) => self.alert(failure),
+                };
             }
-            Err(error) => self.event = format!("Graft failed: {error}"),
+            Err(error) => self.alert(format!("Graft failed: {error}")),
         }
     }
 
@@ -180,7 +215,7 @@ impl App {
         match with_selected_project(|| nichlink_run_method::rewrite_external_graft(selector, !full))
         {
             Ok(plan) => {
-                self.event = format!(
+                self.note(format!(
                     "External graft `{selector}` now {} `{}`",
                     if plan.full() {
                         "replaces"
@@ -188,9 +223,9 @@ impl App {
                         "keeps the children of"
                     },
                     plan.target_path()
-                );
+                ));
             }
-            Err(error) => self.event = format!("Graft failed: {error}"),
+            Err(error) => self.alert(format!("Graft failed: {error}")),
         }
     }
 
@@ -199,12 +234,12 @@ impl App {
     pub(super) fn delete_graft_plan(&mut self, selector: &str) {
         match with_selected_project(|| nichlink_run_method::remove_external_graft(selector)) {
             Ok(trash) => {
-                self.event = format!(
+                self.note(format!(
                     "External graft `{selector}` moved to {}; press r to reload",
                     trash.display()
-                );
+                ));
             }
-            Err(error) => self.event = format!("Graft failed: {error}"),
+            Err(error) => self.alert(format!("Graft failed: {error}")),
         }
     }
 
@@ -230,10 +265,10 @@ impl App {
     }
 }
 
-/// Refresh the plans and the entry declaration shown by one graft screen.
-/// 刷新一个 graft 界面显示的计划与入口声明。
-fn graft_facts(registry: &Registry, state: &mut GraftState) {
-    state.plans = with_authoring_context(nichlink_run_method::list_external_grafts)
+/// Read the plans and the entry declaration shown by one graft screen.
+/// 读取一个 graft 界面显示的计划与入口声明。
+fn read_graft_state(registry: &Registry, state: &mut GraftState) {
+    state.plans = with_selected_project_read(nichlink_run_method::list_external_grafts)
         .unwrap_or_default()
         .into_iter()
         .map(|entry| match entry.document {
@@ -259,9 +294,17 @@ fn graft_facts(registry: &Registry, state: &mut GraftState) {
     let module = registry
         .find(state.target)
         .map(|info| nichlink_build_method::source_module_path(&info.source.file));
-    state.declaration = match nichlink_build_method::declared_grafts(&package_root()) {
-        Ok(declared) => declaration_for(&state.target_path, module.as_deref(), &declared),
-        Err(reason) => GraftDeclaration::Unknown { reason },
+    // The declaration is read from the selected project for the same reason: the screen
+    // says what the opened project declares, and a refused selection is said out loud in
+    // the banner rather than replaced by a guess (audit `STU-S-29`).
+    // 声明同样从选中的项目读取：本界面说的是打开的项目声明了什么，而被拒绝的选择要在横幅里说
+    // 出来，而不是被一个猜测替换（审计 `STU-S-29`）。
+    state.declaration = match selected_read_root() {
+        Ok(root) => match nichlink_build_method::declared_grafts(&root) {
+            Ok(declared) => declaration_for(&state.target_path, module.as_deref(), &declared),
+            Err(reason) => GraftDeclaration::Unknown { reason },
+        },
+        Err(refusal) => GraftDeclaration::Unknown { reason: refusal },
     };
 }
 
@@ -273,7 +316,7 @@ fn graft_facts(registry: &Registry, state: &mut GraftState) {
 /// `None` when the target cannot be resolved in the current tree.
 /// 唯一的切口/注册面匹配规则位于 `DeclaredGraft::names_face`，与构建使用的是同一条
 /// 规则；其 `module` 是该注册面的源码模块，目标在当前树里解析不出来时为 `None`。
-fn declaration_for(
+pub(super) fn declaration_for(
     path: &str,
     module: Option<&str>,
     declared: &DeclaredGrafts,
@@ -335,7 +378,7 @@ fn describe_graft(cut: &DeclaredGraft) -> String {
 
 /// A selector the filesystem and the plan format both accept.
 /// 文件系统与计划格式都能接受的选择器。
-fn graft_selector_error(selector: &str) -> Option<String> {
+pub(super) fn graft_selector_error(selector: &str) -> Option<String> {
     nichlink_run_method::validate_graft_selector(selector.trim())
         .err()
         .map(|error| error.to_string())
@@ -348,7 +391,3 @@ fn plan_path_for(selector: &str) -> PathBuf {
         .join(selector.trim())
         .join(nichlink_run_method::lexicon::GRAFT_PLAN_FILE)
 }
-
-#[cfg(test)]
-#[path = "graft_tests.rs"]
-mod graft_tests;

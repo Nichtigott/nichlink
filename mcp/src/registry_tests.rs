@@ -100,3 +100,27 @@ fn a_directory_without_a_package_is_refused_with_the_way_out() {
     assert!(error.contains("NICH_LINK_NAMESPACE"), "{error}");
     let _ = std::fs::remove_dir_all(&bare);
 }
+
+/// A registration file the derivation cannot parse is counted in the reply instead of vanishing:
+/// a read-only tree query used to report a smaller tree as if it were the whole one, which is what
+/// `LGC-LG-11` recorded on the producer side and what the consumer half now says out loud.
+/// 推导解析不了的注册面文件被计入回复而不是消失：只读的树查询过去把一棵更小的树当成完整的树报出去
+/// ——这正是 `LGC-LG-11` 在生产端记录的事，而消费端现在把它说出来。
+fn broken_face(root: &std::path::Path, label: &str) {
+    let directory = root.join("src").join(label);
+    std::fs::create_dir_all(&directory).expect("module directory");
+    std::fs::write(
+        directory.join(format!("{label}.rs")),
+        "crate::root_object! {\n    kind: Broken,\n",
+    )
+    .expect("truncated face");
+}
+
+#[test]
+fn an_unparsable_registration_file_is_counted_in_the_reply() {
+    let root = fixture("unparsable");
+    broken_face(&root, "broken");
+    let reply = registry(&root).expect("the tree is derived");
+    assert!(reply.contains("unparsable faces 1"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}

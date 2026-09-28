@@ -119,12 +119,9 @@ pub struct PluginCatalog {
 /// Whether a lock's declared schema is the identity schema this build reads.
 /// 锁声明的 schema 是否就是本次构建所读的身份 schema。
 ///
-/// The canonical spelling is `v{IDENTITY_SCHEMA}` — the same one the scope
-/// environment variable uses. A bare version is the layout that predates the
-/// `v` prefix; it stays readable so locks written by earlier releases keep
-/// working, and it is accepted for no other reason.
-/// 规范写法是 `v{IDENTITY_SCHEMA}`，与范围环境变量一致。裸版本号是加 `v` 前缀之前的
-/// 版式；保留它只为让更早版本写下的锁继续可用，没有别的理由。
+/// `v{IDENTITY_SCHEMA}` is canonical; the bare version predates the prefix and stays readable
+/// only so locks from earlier releases keep working.
+/// `v{IDENTITY_SCHEMA}` 是规范写法；裸版本号早于该前缀，保留它只为让更早版本写下的锁继续可用。
 ///
 /// TODO: drop the bare spelling once no supported lock predates the `v` prefix.
 /// TODO: 等不再有早于 `v` 前缀的受支持锁文件时，删掉裸写法。
@@ -146,26 +143,50 @@ impl PluginCatalog {
     pub fn parse(lock: &str) -> Result<Self, PluginLockError> {
         let mut records = Vec::new();
         let mut identities = BTreeSet::new();
-        let mut schema = None;
+        // The gate belongs to the whole file, not to the line the parser reached: per-record
+        // checking let an empty lock and a header written after the records read as "this
+        // build's schema" (audit `LGC-LG-04`).
+        // 门禁属于整份文件，而不是解析器走到的那一行：逐记录校验会让空锁与写在记录之后的表头都被
+        // 读成"本次构建的 schema"（审计 `LGC-LG-04`）。
+        let mut schema: Option<(usize, &str)> = None;
+        for (line_number, line) in lock.lines().enumerate() {
+            let Some(rest) = line.trim().strip_prefix("# nichlink-schema") else {
+                continue;
+            };
+            // A misspelled header is refused, not read as a comment; `# nichlink-schema-related`
+            // is prose. 拼错的表头被拒绝、不当注释读掉；`# nichlink-schema-related` 是散文。
+            match rest
+                .strip_prefix('=')
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+            {
+                Some(version) if schema.replace((line_number + 1, version)).is_none() => {}
+                Some(_) => {
+                    return Err(PluginLockError::new(
+                        line_number + 1,
+                        "duplicate schema header",
+                    ));
+                }
+                None if rest.starts_with(char::is_whitespace) || rest.starts_with('=') => {
+                    return Err(PluginLockError::new(line_number + 1, "bad schema header"));
+                }
+                None => {}
+            }
+        }
+        if let Some((line_number, version)) = schema.filter(|(_, version)| !schema_matches(version))
+        {
+            return Err(PluginLockError::new(
+                line_number,
+                format!("uses identity schema {version}, expected v{IDENTITY_SCHEMA}"),
+            ));
+        }
         for (line_number, line) in lock.lines().enumerate() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
             }
-            if let Some(value) = line.strip_prefix("# nichlink-schema=") {
-                schema = Some(value.trim());
-                continue;
-            }
             if line.starts_with('#') {
                 continue;
-            }
-            if let Some(version) = schema
-                && !schema_matches(version)
-            {
-                return Err(PluginLockError::new(
-                    line_number + 1,
-                    format!("uses identity schema {version}, expected v{IDENTITY_SCHEMA}"),
-                ));
             }
             let fields = line.split('|').collect::<Vec<_>>();
             if fields.len() != 7 && fields.len() != 10 {
@@ -335,13 +356,24 @@ impl PluginCatalog {
 /// Whether `record` accounts for `candidate`: the seven identity fields exactly, the three
 /// provenance fields as the *record's* expectations.
 /// `record` 是否覆盖了 `candidate`：七个身份字段严格相等，三个来源字段作为**记录侧**的期望。
+///
+/// The checksum is the one identity field compared by meaning rather than by spelling: the
+/// `sha256:` prefix is optional (`PluginManifest::verify_bytes` and `is_sha256` both accept
+/// either) and the hex is case-insensitive, so a lock written as `sha256:abc…` and a manifest
+/// written as `abc…` name the same bytes. A literal comparison rejected that pair with
+/// `LockMismatch` — "the lock does not have this plugin" — while every other reader of the same
+/// digest would have accepted it (audit `LGC-LG-40`).
+/// 校验和是唯一按含义而不是按拼法比较的身份字段：`sha256:` 前缀可选（`PluginManifest::verify_bytes`
+/// 与 `is_sha256` 都接受两种拼法），十六进制也不区分大小写，因此锁里的 `sha256:abc…` 与清单里的
+/// `abc…` 指的是同一段字节。字面比较会用 `LockMismatch`——"锁里没有这个插件"——拒绝这一对，而同一份
+/// 摘要在其它每个读取点都会被接受（审计 `LGC-LG-40`）。
 fn accounts_for(record: &PluginRecord, candidate: &PluginRecord) -> bool {
     record.source == candidate.source
         && record.framework == candidate.framework
         && record.package == candidate.package
         && record.version == candidate.version
         && record.crate_name == candidate.crate_name
-        && record.checksum == candidate.checksum
+        && same_digest(&record.checksum, &candidate.checksum)
         && record.mode == candidate.mode
         && accounts_for_provenance(record.signature.as_deref(), candidate.signature.as_deref())
         && accounts_for_provenance(
@@ -352,6 +384,22 @@ fn accounts_for(record: &PluginRecord, candidate: &PluginRecord) -> bool {
             record.revocation_list.as_deref(),
             candidate.revocation_list.as_deref(),
         )
+}
+
+/// Whether two checksum spellings name the same digest.
+/// 两种校验和拼法是否指同一个摘要。
+///
+/// One rule, read the same way the manifest reader reads it: drop an optional `sha256:`
+/// prefix, then compare case-insensitively.
+/// 一条规则，与清单读取器同解：去掉可选的 `sha256:` 前缀，再按大小写不敏感比较。
+fn same_digest(left: &str, right: &str) -> bool {
+    checksum_body(left).eq_ignore_ascii_case(checksum_body(right))
+}
+
+/// A checksum without its optional algorithm prefix.
+/// 去掉可选算法前缀的校验和。
+fn checksum_body(value: &str) -> &str {
+    value.strip_prefix("sha256:").unwrap_or(value)
 }
 
 /// Whether one provenance field of a lock record covers the candidate's, by the
@@ -378,202 +426,5 @@ fn accounts_for_provenance(recorded: Option<&str>, candidate: Option<&str>) -> b
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn plugin_lock_parser_keeps_official_and_user_records_typed() {
-        let catalog = PluginCatalog::parse(
-            "# source|framework|package|version|crate|checksum|mode|signature|key|revocations\n\
-             official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|replacement|sig-v1|key-v1|official-2026\n\
-             user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
-        )
-        .expect("lock should parse");
-        assert_eq!(catalog.records().len(), 2);
-        assert_eq!(catalog.records()[0].source, PluginSource::Official);
-        assert_eq!(catalog.records()[0].signature.as_deref(), Some("sig-v1"));
-        assert_eq!(
-            catalog.records()[0].revocation_list.as_deref(),
-            Some("official-2026")
-        );
-        assert_eq!(catalog.records()[1].mode, PluginMode::Extension);
-    }
-
-    #[test]
-    fn plugin_lock_parser_rejects_ambiguous_duplicate_identity() {
-        let lock = "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n\
-                    official|com.nichui.editor|canvas|1.0.0|canvas|sha256:b|extension\n";
-        let error = PluginCatalog::parse(lock).unwrap_err().to_string();
-        assert!(error.contains("line 2"));
-        assert!(error.contains("duplicates package identity"));
-    }
-
-    /// A writer asks the parser before it writes: a second record reusing the
-    /// identity five-tuple is refused with the parser's own reason, and a record
-    /// the parser accepts comes back as the text to write.
-    /// 写入方在写之前先问解析器：复用身份五元组的第二条记录被解析器自己的理由拒绝，而解析器
-    /// 接受的记录作为待写文本交回。
-    #[test]
-    fn appending_a_duplicate_identity_is_refused_by_the_parser() {
-        let seed = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n";
-        let duplicate = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:b|extension";
-        let error = PluginCatalog::with_appended_line(seed, duplicate)
-            .expect_err("a duplicate identity must not be appended");
-        assert!(
-            error.to_string().contains("duplicates package identity"),
-            "{error}"
-        );
-
-        let fresh = "user|com.nichui.editor|panel|1.0.0|panel|sha256:b|extension";
-        let text = PluginCatalog::with_appended_line(seed, fresh).expect("a fresh record appends");
-        assert_eq!(
-            PluginCatalog::parse(&text)
-                .expect("the text handed back parses")
-                .records()
-                .len(),
-            2
-        );
-    }
-
-    /// The separator belongs to the parser, not to the writer: a lock whose last
-    /// line carries no terminator gains one instead of gluing two records into a
-    /// line that is neither.
-    /// 分隔符属于解析器而不属于写入方：末行没有终止符的锁会补上一个换行，而不是把两条记录粘成
-    /// 一条两者都不是的行。
-    #[test]
-    fn appending_completes_a_missing_line_terminator() {
-        let seed = "user|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension";
-        let line = "user|com.nichui.editor|panel|1.0.0|panel|sha256:b|extension";
-        let text = PluginCatalog::with_appended_line(seed, line).expect("the text parses");
-        assert!(text.ends_with('\n'), "{text:?}");
-        assert_eq!(
-            PluginCatalog::parse(&text)
-                .expect("two records")
-                .records()
-                .len(),
-            2
-        );
-    }
-
-    /// The seven-field record leaves the three provenance fields to the
-    /// signature check, and a record that carries one pins it.
-    /// 七字段记录把三个来源字段交给签名校验；携带某个值的记录则把它钉住。
-    fn manifest() -> PluginManifest {
-        PluginManifest {
-            name: "canvas",
-            crate_name: "canvas",
-            version: "1.0.0",
-            framework: crate::FrameworkId::new("com.nichui.editor"),
-            source: PluginSource::Official,
-            mode: PluginMode::Extension,
-            checksum: "sha256:a",
-            signature: Some("sig-v1"),
-            public_key_fingerprint: Some("key-v1"),
-            revocation_list: Some("official-2026"),
-        }
-    }
-
-    #[test]
-    fn a_ten_field_record_accounts_for_a_seven_field_lock() {
-        let bare = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
-        )
-        .expect("a seven-field lock parses");
-        let pinned = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
-        )
-        .expect("a ten-field lock parses");
-        let candidate = pinned.records()[0].clone();
-
-        assert!(
-            !bare.contains(&candidate),
-            "an identical-record rule refuses the write — the old writer's answer"
-        );
-        assert!(
-            bare.contains_record(&candidate),
-            "the runtime's rule, asked about the same candidate record, accepts it"
-        );
-        assert!(
-            bare.contains_manifest(manifest()),
-            "and the manifest spelling of the same plugin agrees"
-        );
-
-        // The expectation still binds in the other direction: a lock that pins a signature does
-        // not account for a record written without it.
-        // 期望在另一个方向上仍然生效：钉住了签名的锁，不覆盖一条没写签名的记录。
-        let other = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
-        )
-        .expect("a ten-field lock parses");
-        assert!(
-            !other.contains_record(&bare.records()[0].clone()),
-            "a record the lock pins differently must still be refused"
-        );
-    }
-
-    #[test]
-    fn a_record_without_provenance_fields_does_not_pin_them() {
-        let bare = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
-        )
-        .expect("a seven-field lock parses");
-        assert!(
-            bare.contains_manifest(manifest()),
-            "a record the host's own UI wrote must match a signed official manifest"
-        );
-
-        let pinned = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
-        )
-        .expect("a ten-field lock parses");
-        assert!(pinned.contains_manifest(manifest()));
-
-        let other = PluginCatalog::parse(
-            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
-        )
-        .expect("a ten-field lock parses");
-        assert!(
-            !other.contains_manifest(manifest()),
-            "a record that names a signature must pin it"
-        );
-    }
-
-    #[test]
-    fn plugin_lock_parser_rejects_unknown_identity_schema() {
-        let error = PluginCatalog::parse(
-            "# nichlink-schema=2\n\
-             user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(error.contains("identity schema 2"));
-        assert!(error.contains("expected v3"));
-    }
-
-    /// The canonical spelling is `v3`; the bare `3` written before the `v`
-    /// prefix existed stays readable, and nothing else does.
-    /// 规范写法是 `v3`；加 `v` 前缀之前写下的裸 `3` 仍可读，别的写法都不行。
-    #[test]
-    fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
-        for schema in ["v3", "3"] {
-            let lock = format!(
-                "# nichlink-schema={schema}\n\
-                 user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
-            );
-            assert!(
-                PluginCatalog::parse(&lock).is_ok(),
-                "schema `{schema}` must stay readable"
-            );
-        }
-        for schema in ["v4", "V3", "vv3", ""] {
-            let lock = format!(
-                "# nichlink-schema={schema}\n\
-                 user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
-            );
-            assert!(
-                PluginCatalog::parse(&lock).is_err(),
-                "schema `{schema}` must be refused"
-            );
-        }
-    }
-}
+#[path = "catalog_tests.rs"]
+mod catalog_tests;

@@ -6,29 +6,43 @@
 //! 状态词汇按界面分组；本父模块只挂载各分组文件并重新导出，
 //! 让所有既有路径继续可解析。
 
+#[path = "call_tree_view.rs"]
+mod call_tree_view;
 #[path = "forms.rs"]
 mod forms;
 #[path = "graft.rs"]
 mod graft;
-#[path = "misc.rs"]
-mod misc;
 #[path = "new_project_field.rs"]
 pub(crate) mod new_project_field;
+#[path = "overlays.rs"]
+mod overlays;
 #[path = "pages.rs"]
 mod pages;
 #[path = "plugin_field.rs"]
 pub(crate) mod plugin_field;
+#[path = "reload.rs"]
+mod reload;
 #[path = "search.rs"]
 mod search;
 
+pub use call_tree_view::{CallRef, CallTreeView};
 pub use forms::{AddState, NewProjectState, PluginState};
 pub use graft::{GraftDeclaration, GraftPlanRow, GraftState};
-pub use misc::{CallRef, CallTreeView, Overlay, ReloadError};
+pub use overlays::Overlay;
 pub use pages::{Focus, StudioPage};
+pub use reload::ReloadError;
+pub(crate) use search::SearchMemo;
 pub use search::{SearchRow, SearchState};
 
+pub(crate) use call_tree_view::{CallTreeMemo, push_call_ref};
 pub(crate) use forms::{face_field_indices, move_face_field};
-pub(crate) use misc::{CallTreeMemo, push_call_ref, source_path_for};
+// `source_path_for` names a source file below the package root, so it lives with
+// the rest of the project context (`studio/src/studio/app/project_context.rs`); the
+// re-export keeps every historical `state::source_path_for` path resolving.
+// `source_path_for` 给包根之下的源文件命名，因此它与其余项目上下文同住
+// （`studio/src/studio/app/project_context.rs`）；这条重导出让历史的
+// `state::source_path_for` 路径继续可解析。
+pub(crate) use super::project_context::source_path_for;
 // The kernel owns the one `::`-bounded name match. Studio used to carry a
 // one-directional copy that also allocated a `format!` per comparison, which
 // let the graph it draws disagree with the evidence the kernel merged.

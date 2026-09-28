@@ -151,7 +151,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 
 - **`nichlink.search` searches the tree, and each face hit says what the build thinks of it.** The
   tool answered "which file or function has this name" and nothing about the registry; it now
-  matches logical path, `kind`, module and slot name first — the spellings the other tools use —
+  matches logical path, `kind`, module and `registry_name` first — the spellings the other tools use —
   and annotates each hit `ok`, `added since build`, `re-identified` (with both identities) or
   `build unknown`, before the unchanged file and function hits. The verdict comes from
   `crate::tree_delta`, the one rule `nichlink.diff` states (extracted here), so a face cannot be
@@ -180,6 +180,67 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   `the_call_site_carries_no_second_rule_renderer`) pins that its call site carries no renderer
   of its own.
 
+- **`nichlink::authoring::parse::try_render_requirements`, the entry that refuses a `requires`
+  list it cannot render.** `render_requirements` rewrites an author's list from its parsed
+  entries, so a malformed entry vanished from the result and a caller that wrote it back
+  deleted a field the author had written. The strict sibling returns
+  `Result<String, FaceParseError>` and names the entry it refused (`capability=>provider`),
+  and the manifest renderer calls it. `render_requirements` stays `-> String` and lossy
+  because that is the published `0.1.x` signature; its documentation now says so and points
+  at the strict entry (audit `LGC-LG-28`). Pinned through the real `render_source` by
+  `a_malformed_requires_entry_refuses_the_rewrite`, measured red with the caller put back on
+  the lossy entry.
+
+- **`nichlink_build_method::face_views_and_unreadable`, so an unreadable face is named
+  instead of dropped.** `face_views` answered only with the faces that could be placed, so a
+  registration file that does not parse and a node file whose syntax failed disappeared from
+  the reply with nothing to look at. The new entry returns `(Vec<FaceView>, Vec<String>)` — the
+  faces plus the paths it could not read, reusing `validation::face_syntax_errors` — and
+  `face_views` delegates to it, so the two cannot disagree; its documentation states the
+  `parent_resolved == false` half. Pinned by
+  `a_registration_file_that_does_not_parse_is_named_not_dropped`, red before the fix with an
+  empty unreadable set (audit `LGC-LG-11`).
+
+- **`nichlink::source::item_symbols` and `SourceItem`: the kernel owns the declaration
+  vocabulary.** Studio's search view assembled symbol rows from a 13-entry `strip_prefix` word
+  list of its own, so every keyword the kernel grew was a second place to forget and a
+  bodyless `fn` in a trait was reported missing. `item_symbols` answers in source order with
+  one `INTRODUCERS` table (`name`, `signature`, `line`, `is_function`; `let` deliberately
+  absent, since a binding has no name a call graph can reach), and Studio renders exactly that
+  list — its file carries no vocabulary of its own (`strip_prefix("` occurs 0 times). Pinned
+  from outside the crate by `core/tests/b4_item_symbols.rs` (5 tests) and inside Studio by
+  `source_rows_tests` (4), both measured red against the old word list (audit `STU-S-06`).
+
+- **`nichlink::authoring::parse::try_parse_requirements_owned`, the strict sibling that keeps a
+  published signature published.** `parse_requirements_owned(&str) -> Vec<OwnedRequirementSpec>`
+  is what hosts on the `0.1.x` line call, and it is lossy on purpose: it drops what it cannot
+  parse. Tightening it would break an immutable version, so the strict judgement lives in a new
+  entry and the published one keeps its exact signature and behaviour; both read the same
+  `requirement_item` rule, so published, strict and validator answer from one implementation
+  (audit `LGC-LG-28`). Pinned by `the_strict_requires_entry_refuses_a_malformed_entry` and
+  `a_malformed_requires_entry_is_refused_not_dropped`, red under a mutation that delegates the
+  strict entry to the lossy one.
+
+- **`nichlink::authoring::parse::try_rule_syntax_from_text`, the strict reading of a rule text.**
+  `rule_syntax_from_text` stays tolerant and keeps its published `-> String` signature, because
+  hosts on the `0.1.x` line call it: a `.require_exports(…)` written inside a comment *is* read
+  as the rule (the real declaration disappears), and a list named by a constant — `&EXPORTS`,
+  whose literals the text scan cannot see — degrades silently to `ANY`, which means "no
+  structural requirement", so the author's declaration vanishes without a diagnostic. The
+  strict sibling returns `Result<String, FaceParseError>` and names both the face file and the
+  rule file it could not honour; `rule_syntax_for_source`, the one production call site, reads
+  through it in this release, while a *missing* rule file is still `Ok("ANY")` — an absent rule
+  is not a malformed one (audit `K-10`). Pinned through the production entry point and from
+  outside the crate, measured red for both shapes, and re-measured under three mutations by the
+  independent review (`docs/audit-2026-09-28/audit-verify-k10-family.md`). Additive on the
+  unreleased `0.1.6` line: the published tolerant entry and the dependency table do not move.
+All four are additive on the unreleased `0.1.6` line: no version bump, and
+`tools/nichlink-publish --check-table` is unaffected because it compares the manifests. What
+they do touch is `tools/nichlink-package-audit`'s second half — isolated packaging waits for a
+crate's versioned `nichlink-*` dependencies to reach the index, so while `0.1.6` is unpublished
+those crates are skipped (a skip, not a failure), and this batch deepens that wait because
+Studio now calls kernel entries that are not published yet. The contents half already lists the
+new modules, and the release order stays core first.
 ### Changed
 
 - The CLI's `grafts` now renders rows computed by `nichlink_build_method::graft_plan_rows`;
@@ -1331,7 +1392,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   桥六条测试、内核一条快照测试；三次变异实测为红（交换差异方向；跳过外来快照检查；不再盖戳表头）。
 
 - **`nichlink.search` 现在会搜树，而每个面命中都会说出构建对它的看法。** 本工具过去只回答"哪个文件或
-  函数叫这个名字"、对注册树一无所知；现在它优先匹配逻辑路径、`kind`、模块与槽位名——也就是其它工具
+  函数叫这个名字"、对注册树一无所知；现在它优先匹配逻辑路径、`kind`、模块与 `registry_name`——也就是其它工具
   使用的那些拼法——并给每个命中标注 `ok`、`added since build`、`re-identified`（带上新旧两个身份）或
   `build unknown`，随后才是与此前相同的文件与函数命中。结论来自 `crate::tree_delta`，也就是
   `nichlink.diff` 说出的那一条规则（本轮提取出来），因此一个面不可能在一个工具里是 `ok`、在另一个里是
@@ -1352,6 +1413,51 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `registration_rule_text_tests`（`the_call_site_renders_what_the_kernel_renders`、
   `the_call_site_carries_no_second_rule_renderer`）钉住它的调用点不再自带渲染器。
 
+- **`nichlink::authoring::parse::try_render_requirements`：渲染不了就**拒绝**的入口。**
+  `render_requirements` 用解析出的条目重写作者的列表，因此一条畸形条目会从结果里消失——把它写回
+  文件的调用方就删掉了作者写下的一个字段。严格兄弟返回 `Result<String, FaceParseError>` 并点名它
+  拒绝的那条（`capability=>provider`），manifest 渲染器改调它。`render_requirements` 仍是 `-> String`
+  有损，因为那就是已发布的 `0.1.x` 签名；它的文档现在写明这一点并指向严格入口（审计 `LGC-LG-28`）。
+  由 `a_malformed_requires_entry_refuses_the_rewrite` 走真实 `render_source` 钉住，变异（调用方改回
+  有损入口）实测变红。
+
+- **`nichlink_build_method::face_views_and_unreadable`：读不出来的面要**被点名**，而不是被丢掉。**
+  过去 `face_views` 只回答"安放得了"的面，于是安放不了的注册面文件、语法失败的节点文件从回答里消失、
+  无处可查。新入口返回 `(Vec<FaceView>, Vec<String>)`——面加上读不出来的路径（复用
+  `validation::face_syntax_errors`）——`face_views` 委托它，两者因此不可能不一致；文档写明
+  `parent_resolved == false` 那一半。由
+  `a_registration_file_that_does_not_parse_is_named_not_dropped` 钉住，修前实测红（不可读集合为空，
+  审计 `LGC-LG-11`）。
+
+- **`nichlink::source::item_symbols` 与 `SourceItem`：声明词表由内核持有。**
+  Studio 的搜索视图用自己的 13 条 `strip_prefix` 词表拼符号行，于是内核每长出一个关键字就多一处
+  会忘记的地方，而 trait 里无函数体的 `fn` 反而被报成缺失。`item_symbols` 按源码顺序回答，只用一张
+  `INTRODUCERS` 表（`name`/`signature`/`line`/`is_function`；`let` 刻意不在表内，因为绑定没有调用图
+  能到达的名字），Studio 现在只渲染这份列表——它自己的文件里不再有任何词表（`strip_prefix("` 命中 0）。
+  由 crate 之外的 `core/tests/b4_item_symbols.rs`（5 条）与 Studio 的 `source_rows_tests`（4 条）钉住，
+  两者对着旧词表都实测变红（审计 `STU-S-06`）。
+
+- **`nichlink::authoring::parse::try_parse_requirements_owned`：让"已发布的签名"继续是已发布的签名。**
+  `parse_requirements_owned(&str) -> Vec<OwnedRequirementSpec>` 是 `0.1.x` 线上宿主调用的入口，它
+  有意是有损的：解不出来的就丢。收紧它会破坏一个不可变的版本，因此"拒绝"的判断放在新入口里，已发布
+  的那个保持逐字签名与行为；两者走同一条 `requirement_item` 规则，于是已发布入口、严格入口与校验器由
+  一份实现回答（审计 `LGC-LG-28`）。由 `the_strict_requires_entry_refuses_a_malformed_entry` 与
+  `a_malformed_requires_entry_is_refused_not_dropped` 钉住，把严格入口改成委派有损入口的变异实测变红。
+
+四个入口都是**未发布 `0.1.6` 线上**的加法式新增：不抬版本，`tools/nichlink-publish --check-table`
+也不受影响（它只按清单比较）。它们真正碰到的是 `tools/nichlink-package-audit` 的后半段——隔离打包
+要等一个 crate 的带版本号 `nichlink-*` 依赖进入 index，因此 `0.1.6` 未发布期间那些 crate 会被跳过
+（是跳过，不是失败）；本批把这段等待**加深**了一层，因为 Studio 现在调用尚未发布的内核入口。内容半边
+已经包含这些新模块，发布顺序仍是 core 在前。
+- **`nichlink::authoring::parse::try_rule_syntax_from_text`：规则文本的**严格**读法。**
+  `rule_syntax_from_text` 保持宽容、签名仍是已发布的 `-> String`，因为 `0.1.x` 线上的宿主在调它：
+  写在**注释里**的 `.require_exports(…)` 会被当成真规则（真正声明的那条就此消失），而由常量点名的清单
+  ——`&EXPORTS`，文本扫描看不到它的字面量——会静默降级成 `ANY`，那正是"没有结构要求"，于是作者声明的
+  结构要求无声无息地不见。严格兄弟返回 `Result<String, FaceParseError>`，并同时点名面文件与它无法照办的
+  规则文件；唯一生产调用点 `rule_syntax_for_source` 自本版起经它读取，而规则文件**缺失**仍是 `Ok("ANY")`
+  ——缺席不是畸形规则（审计 `K-10`）。由生产入口与 crate 之外的钉子钉住，两条形状都实测先红，并由独立复核
+  （`docs/audit-2026-09-28/audit-verify-k10-family.md`）在三组变异下重测。加法式新增，随未发布 `0.1.6`
+  走：已发布的宽容入口与依赖表都不动。
 变更：
 
 - CLI 的 `grafts` 现在渲染由 `nichlink_build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本

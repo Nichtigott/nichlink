@@ -25,9 +25,10 @@ pub struct TopologyRecord {
     pub source: String,
 }
 
-/// Sort `records` by identity, then check missing parents, parents that do
-/// not own a registry, and parent cycles. Returns the collected diagnostics.
-/// 将 `records` 按身份排序，然后检查缺失的父节点、父节点不持有注册表、
+/// Sort `records` by identity, then check duplicate identities, missing parents,
+/// parents that do not own a registry, and parent cycles. Returns the collected
+/// diagnostics.
+/// 将 `records` 按身份排序，然后检查重复身份、缺失的父节点、父节点不持有注册表、
 /// 以及父链成环；返回收集到的诊断。
 pub fn validate_face_topology(
     records: &mut [TopologyRecord],
@@ -35,6 +36,28 @@ pub fn validate_face_topology(
 ) -> BuildDiagnostics {
     let mut errors = BuildDiagnostics::default();
     records.sort_by_key(|record| record.id);
+
+    // Two records sharing one identity used to pass every check below: the sets and maps
+    // are keyed by identity, so the later record simply replaced the earlier one. The
+    // runtime's `plan_batch` refuses exactly this ("duplicate registration node identity
+    // in batch"), and the static plan is the same tree one stage earlier — downstream
+    // `StaticPlan::find` looks a node up by identity, so a duplicate makes which
+    // declaration won a matter of insertion order (audit `LGC-LG-39`).
+    // 两条记录共用一个身份过去能通过下面每一项检查：集合与映射都以身份为键，后一条只是替换了前一条。
+    // 运行时的 `plan_batch` 明确拒绝这种情况（"duplicate registration node identity in batch"），
+    // 而静态计划就是同一棵树早一个阶段的样子——下游 `StaticPlan::find` 按身份查节点，因此重复会让
+    // "哪条声明赢了"变成插入顺序的问题（审计 `LGC-LG-39`）。
+    for pair in records.windows(2) {
+        if pair[0].id == pair[1].id {
+            errors.push(
+                BuildDiagnostic::new("static-plan", "duplicate registration node identity")
+                    .at(pair[1].source.clone(), 0)
+                    .field("id")
+                    .expected("one declaration per node identity")
+                    .actual(format!("`{}` is declared more than once", pair[1].id)),
+            );
+        }
+    }
 
     let ids = records
         .iter()
@@ -146,5 +169,35 @@ mod topology_tests {
         ];
         let errors = validate_face_topology(&mut records, root);
         assert!(errors.is_empty());
+    }
+
+    /// Two records sharing one identity are reported, the way the runtime reports them.
+    /// 两条记录共用一个身份会被报出，与运行时报的方式相同。
+    ///
+    /// Red before the fix: `ids`, `owners` and `parents` are keyed by identity, so the second
+    /// record replaced the first and every check passed. The runtime's `plan_batch` refuses
+    /// the same input ("duplicate registration node identity in batch"), and
+    /// `StaticPlan::find` looks a node up by identity, so a duplicate made which declaration
+    /// won a matter of insertion order (audit `LGC-LG-39`).
+    /// 修前为红：`ids`、`owners`、`parents` 都以身份为键，因此第二条记录替换了第一条、每项检查都
+    /// 通过。运行时 `plan_batch` 对同一输入明确拒绝（"duplicate registration node identity in
+    /// batch"），而 `StaticPlan::find` 按身份查节点，因此重复会让"哪条声明赢了"变成插入顺序的问题
+    /// （审计 `LGC-LG-39`）。
+    #[test]
+    fn duplicate_identity_is_reported() {
+        let mut records = vec![record(1, 0, true), record(1, 0, false)];
+        let errors = validate_face_topology(&mut records, ROOT_NODE_ID);
+        let rendered = errors.render();
+        assert_eq!(
+            rendered
+                .matches("duplicate registration node identity")
+                .count(),
+            1,
+            "the duplicate is named once, as the runtime names it: {rendered}"
+        );
+        assert!(
+            rendered.contains(&record(1, 0, true).id.to_string()),
+            "the diagnostic names the identity: {rendered}"
+        );
     }
 }

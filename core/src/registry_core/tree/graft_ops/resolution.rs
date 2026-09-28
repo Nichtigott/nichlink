@@ -19,6 +19,57 @@ use super::Registry;
 use super::overlay::{GraftCutRef, GraftTargetRef, Resolution};
 
 impl Registry {
+    /// The *one* node at `path`, or why there is not exactly one.
+    /// `path` 上**唯一**的那个节点，或者"为何不唯一"。
+    ///
+    /// The graft-cut selector's path arm resolves through this, so a path two nodes
+    /// share is reported as ambiguous instead of the first match winning. It used to
+    /// take the first match while [`Registry::resolve_node`] — the same question asked
+    /// of a name, a kind, or a path — answered `Ambiguous`, and that difference was a
+    /// recorded debt rather than a second rule (`ports.rs`, audit `LGC-LG-07`).
+    /// 移植切口选择器的路径那一支经此解析，因此两个节点共用的路径会被报成多义，而不是让第一个
+    /// 匹配胜出。它过去取第一个匹配，而 [`Registry::resolve_node`]——对名字、kind 或路径问同一个
+    /// 问题——回答 `Ambiguous`；那个差别是记账中的欠账，而不是第二条规则（`ports.rs`，审计
+    /// `LGC-LG-07`）。
+    ///
+    /// A shared path is still reachable after registration refuses same-named siblings
+    /// (`plan_batch`), because an in-place edit may rename a face
+    /// (`validate_snapshot_replacement` checks namespace, identity, parent, rule and
+    /// contract — not the `registry_name`). Refusing here is what keeps that state from
+    /// silently reselecting a different node.
+    /// 在注册拒绝兄弟同名（`plan_batch`）之后，共用路径仍然可达：就地编辑可以给面改名
+    /// （`validate_snapshot_replacement` 检查命名空间、身份、父级、规则与契约——但不检查
+    /// `registry_name`）。在这里拒绝，正是让那种状态不会静默地改选另一个节点的原因。
+    pub(super) fn resolve_path_strict(&self, path: &str) -> Resolution {
+        let mut matches = self.depth_first().into_iter().filter(|info| {
+            self.path_for(info.id)
+                .is_some_and(|candidate| candidate == path)
+        });
+        let Some(first) = matches.next() else {
+            return Resolution::Missing;
+        };
+        match matches.count() {
+            0 => Resolution::One(first.id),
+            extra => Resolution::Ambiguous(extra + 1),
+        }
+    }
+
+    /// The **first** node whose logical path equals `path`, or `None`.
+    /// 逻辑路径等于 `path` 的**第一个**节点；没有则 `None`。
+    ///
+    /// This is the one remaining first-match lookup in the tree, and its boundary is
+    /// what makes it decidable rather than a second rule: its only caller is
+    /// [`Registry::resolve_record`], which reads the path a record stored as a *hint*
+    /// and compares it against that record's durable identity — a hint that disagrees
+    /// is refused, and a hint that stands in for a missing identity is reported as
+    /// drift. No slot is chosen silently there. The graft-cut selector used to be its
+    /// second caller and no longer is: that arm goes through
+    /// [`Registry::resolve_path_strict`] (audit `LGC-LG-07`).
+    /// 这是树里仅存的一处"取第一个匹配"，而它的边界正是让它可判定、而不是第二条规则的东西：它
+    /// 唯一的调用方是 [`Registry::resolve_record`]，那里只把记录存下的路径当作**提示**，并与该
+    /// 记录里耐久的身份对比——答得不一样的提示被拒绝，而顶替缺失身份的提示会被报成漂移。那里不
+    /// 存在静默选槽。移植切口选择器过去是它的第二个调用方，现在不再是：那一支走
+    /// [`Registry::resolve_path_strict`]（审计 `LGC-LG-07`）。
     pub(super) fn resolve_path(&self, path: &str) -> Option<NodeId> {
         self.depth_first().into_iter().find_map(|info| {
             self.path_for(info.id)
@@ -30,10 +81,45 @@ impl Registry {
     /// Resolve a cut selector written either as a logical path or as the
     /// compile-time identity of the target face.
     /// 解析切口选择器：写法可以是逻辑路径，也可以是目标注册面的编译期身份。
-    fn resolve_target(&self, target: GraftTargetRef<'_>) -> Option<NodeId> {
+    fn resolve_target(&self, target: GraftTargetRef<'_>) -> Resolution {
         match target {
-            GraftTargetRef::Path(path) => self.resolve_path(path),
-            GraftTargetRef::Id(id) => self.find(id).map(|_| id),
+            GraftTargetRef::Path(path) => self.resolve_path_strict(path),
+            GraftTargetRef::Id(id) => {
+                if self.find(id).is_some() {
+                    Resolution::One(id)
+                } else {
+                    Resolution::Missing
+                }
+            }
+        }
+    }
+
+    /// One cut selector as a node, refusing a selector that names none or more than
+    /// one face.
+    /// 把一个切口选择器变成节点；点名零个面或不止一个面的选择器一律拒绝。
+    fn resolve_cut_selector(&self, selector: GraftTargetRef<'_>) -> RegistryResult<NodeId> {
+        match self.resolve_target(selector) {
+            Resolution::One(id) => Ok(id),
+            // The cut selector, not the base root id, is the failing identity.
+            // 失败的身份是切口选择器，而不是基树根 id。
+            Resolution::Missing => Err(self.graft_selector_error(
+                self.header.id,
+                GraftError::UnknownTarget(self.header.id),
+                format!("graft target `{}` is not registered", selector.describe()),
+            )),
+            Resolution::Ambiguous(matches) => {
+                let described = selector.describe();
+                Err(self.graft_selector_error(
+                    self.header.id,
+                    GraftError::AmbiguousReplacement {
+                        selector: described.clone(),
+                        matches,
+                    },
+                    format!(
+                        "graft target `{described}` matches {matches} registered faces; use the face's NODE_ID"
+                    ),
+                ))
+            }
         }
     }
 
@@ -60,34 +146,43 @@ impl Registry {
     /// 交换：交换会选中同一个集合，却掩盖了作者的心智模型（树序）并不是决定顺序的那
     /// 一个，于是他们按该模型写的下一个区间会悄悄覆盖错误的面。
     pub(super) fn resolve_cut_targets(&self, cut: GraftCutRef<'_>) -> RegistryResult<Vec<NodeId>> {
-        let start = self.resolve_target(cut.cut).ok_or_else(|| {
-            // The cut selector, not the base root id, is the failing identity.
-            // 失败的身份是切口选择器，而不是基树根 id。
-            self.graft_selector_error(
-                self.header.id,
-                GraftError::UnknownTarget(self.header.id),
-                format!("graft target `{}` is not registered", cut.cut.describe()),
-            )
-        })?;
+        let start = self.resolve_cut_selector(cut.cut)?;
         let Some(end_target) = cut.end else {
             return Ok(vec![start]);
         };
-        let end = self.resolve_target(end_target).ok_or_else(|| {
+        let end = match self.resolve_target(end_target) {
+            Resolution::One(id) => id,
             // `start` is a *resolved* node; putting it in the `UnknownTarget`
             // payload would claim the wrong face is missing. The range end is
             // the selector that failed, so name it (and the cut it closes).
             // `start` 是**已解析**的节点；把它塞进 `UnknownTarget` 载荷会谎报缺失的是另一个
             // 面。真正失败的是区间终点选择器，因此报出它（以及它所闭合的切口）。
-            self.graft_selector_error(
-                start,
-                GraftError::UnknownTarget(start),
-                format!(
-                    "graft range end `{}` in cut `{}` is not registered",
-                    end_target.describe(),
-                    cut.cut.describe()
-                ),
-            )
-        })?;
+            Resolution::Missing => {
+                return Err(self.graft_selector_error(
+                    start,
+                    GraftError::UnknownTarget(start),
+                    format!(
+                        "graft range end `{}` in cut `{}` is not registered",
+                        end_target.describe(),
+                        cut.cut.describe()
+                    ),
+                ));
+            }
+            Resolution::Ambiguous(matches) => {
+                return Err(self.graft_selector_error(
+                    start,
+                    GraftError::AmbiguousReplacement {
+                        selector: end_target.describe(),
+                        matches,
+                    },
+                    format!(
+                        "graft range end `{}` in cut `{}` matches {matches} registered faces; use the face's NODE_ID",
+                        end_target.describe(),
+                        cut.cut.describe()
+                    ),
+                ));
+            }
+        };
         let start_info = self.find(start).expect("resolved cut start");
         let end_info = self.find(end).expect("resolved cut end");
         if start_info.parent != end_info.parent {
@@ -217,205 +312,5 @@ impl Registry {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::registry_core::plugin::graft::{GraftCut, GraftPlan};
-
-    use super::super::fixtures::{FRAMEWORK, face};
-
-    /// Two distinct faces can carry the same `registry_name`. A string selector
-    /// that matches both must be refused instead of silently choosing one, because
-    /// which file happens to come first is not a decision the author made.
-    /// 两个不同的面可以带同一个 `registry_name`。匹配到两者的字符串选择器必须被拒绝，而不是静默
-    /// 选一个——文件谁先出现并不是作者做出的决定。
-    #[test]
-    fn an_ambiguous_replacement_selector_is_refused() {
-        let namespace = "ambiguous";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        let mut base = face(namespace, "a.rs", "A", "a");
-        base.needs_registry = true;
-        base.id = NodeId::from_namespaced_path(namespace, "a.rs", "A");
-        root.register_snapshot_batch([base.clone()]).unwrap();
-
-        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
-        let mut first = face("external", "first.rs", "First", "replacement");
-        first.id = NodeId::from_namespaced_path("external", "first.rs", "First");
-        let mut second = face("external", "second.rs", "Second", "replacement");
-        second.id = NodeId::from_namespaced_path("external", "second.rs", "Second");
-        external
-            .register_snapshot_batch([first.clone(), second.clone()])
-            .unwrap();
-
-        let plan = GraftPlan::new(FRAMEWORK).cut("root/a", "replacement");
-        let error = root
-            .overlay(&plan, &external)
-            .expect_err("an ambiguous selector must be refused");
-        let rendered = format!("{error}");
-        assert!(rendered.contains("matches 2"), "{rendered}");
-        assert!(rendered.contains("replacement"), "{rendered}");
-    }
-
-    /// An unresolvable cut selector must be reported by the text the author
-    /// wrote, not by the base tree's root id: the root id names a face that is
-    /// present, so the old message pointed at the wrong thing entirely.
-    /// 无法解析的切口选择器必须按作者写下的文本报出，而不是基树根 id：根 id 指的是一个
-    /// 确实存在的面，旧消息因此指错了对象。
-    #[test]
-    fn an_unknown_cut_target_names_the_selector() {
-        let namespace = "unknown-cut";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        let target = face(namespace, "a.rs", "A", "a");
-        root.register_snapshot_batch([target]).unwrap();
-        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
-        let replacement = face("external", "replacement.rs", "Replacement", "replacement");
-        external.register_snapshot_batch([replacement]).unwrap();
-
-        let plan = GraftPlan::new(FRAMEWORK).cut("root/absent", "replacement");
-        let error = root
-            .overlay(&plan, &external)
-            .expect_err("an absent cut target must be refused");
-        let rendered = format!("{error}");
-        assert!(rendered.contains("root/absent"), "{rendered}");
-        assert!(rendered.contains("graft target"), "{rendered}");
-    }
-
-    /// The failing selector of a range is the end, not the already-resolved
-    /// start; naming the start would blame a face that is present.
-    /// 区间失败的选择器是终点，而不是已经解析成功的起点；报出起点会怪罪一个存在的面。
-    #[test]
-    fn an_unknown_cut_range_end_names_the_end_selector() {
-        let namespace = "unknown-range-end";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        let first = face(namespace, "a.rs", "A", "a");
-        root.register_snapshot_batch([first]).unwrap();
-        let mut external = Registry::root_for_namespace(FRAMEWORK, "external");
-        let replacement = face("external", "replacement.rs", "Replacement", "replacement");
-        external.register_snapshot_batch([replacement]).unwrap();
-
-        let mut plan = GraftPlan::new(FRAMEWORK);
-        plan.cuts
-            .push(GraftCut::range("root/a", "root/absent", "replacement"));
-        let error = root
-            .overlay(&plan, &external)
-            .expect_err("an absent range end must be refused");
-        let rendered = format!("{error}");
-        assert!(rendered.contains("root/absent"), "{rendered}");
-        assert!(rendered.contains("range end"), "{rendered}");
-        assert!(rendered.contains("in cut"), "{rendered}");
-    }
-
-    /// A range covers the contiguous run of siblings in **registry-name** order,
-    /// which is neither the order the faces were registered in nor the order
-    /// their files sit on disk.
-    /// 区间覆盖的是按 **registry 名** 顺序连续的那一段兄弟，既不是注册顺序，也不是
-    /// 文件在磁盘上的顺序。
-    #[test]
-    fn a_range_covers_the_siblings_between_its_endpoints_in_registry_name_order() {
-        let namespace = "range-order";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        // Registered as beta, alpha, mid: registration order is deliberately not
-        // name order, so a span that followed registration order would cover a
-        // different set.
-        // 注册顺序是 beta、alpha、mid：故意让它与名字顺序不同，因此按注册顺序展开的
-        // 跨度会覆盖另一个集合。
-        let beta = face(namespace, "beta.rs", "Beta", "beta");
-        let alpha = face(namespace, "alpha.rs", "Alpha", "alpha");
-        let mid = face(namespace, "mid.rs", "Mid", "mid");
-        let outside = face(namespace, "zeta.rs", "Zeta", "zeta");
-        root.register_snapshot_batch([beta.clone(), alpha.clone(), mid.clone(), outside.clone()])
-            .unwrap();
-
-        // Name order is `alpha, beta, mid, zeta`, so the span keeps those three
-        // siblings in that order. Registration order was `beta, alpha, mid,
-        // zeta`: a span that followed it would start at `beta`, and the order it
-        // returned would differ too.
-        // 名字顺序是 `alpha, beta, mid, zeta`，因此跨度按该顺序保留这三个兄弟。注册
-        // 顺序曾是 `beta, alpha, mid, zeta`：按它展开的跨度会从 `beta` 开始，返回的
-        // 顺序也不同。
-        let cut = GraftCut::range("root/alpha", "root/mid", "replacement");
-        let targets = root
-            .resolve_cut_targets(GraftCutRef::dynamic(&cut))
-            .expect("both endpoints are registered");
-        assert_eq!(targets, vec![alpha.id, beta.id, mid.id]);
-        assert!(
-            !targets.contains(&outside.id),
-            "a name-ordered span between `alpha` and `mid` excludes `zeta`"
-        );
-    }
-
-    /// A range written from the later sibling to the earlier one is refused, not
-    /// silently swapped: the span is ordered by registry name, and a swap would
-    /// hide that the order the author had in mind is not the one that decides.
-    /// 从靠后的兄弟写到靠前的兄弟会被拒绝，而不是静默交换：跨度按 registry 名排序，
-    /// 交换会掩盖"作者心里的顺序不是决定顺序的那一个"。
-    #[test]
-    fn a_backwards_range_is_refused_with_both_endpoints_and_the_order_rule() {
-        let namespace = "range-backwards";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        let alpha = face(namespace, "alpha.rs", "Alpha", "alpha");
-        let mid = face(namespace, "mid.rs", "Mid", "mid");
-        root.register_snapshot_batch([mid, alpha]).unwrap();
-
-        let cut = GraftCut::range("root/mid", "root/alpha", "replacement");
-        let error = root
-            .resolve_cut_targets(GraftCutRef::dynamic(&cut))
-            .expect_err("a backwards range must be refused");
-        let rendered = format!("{error}");
-        assert!(rendered.contains("root/mid"), "{rendered}");
-        assert!(rendered.contains("root/alpha"), "{rendered}");
-        assert!(rendered.contains("written backwards"), "{rendered}");
-        assert!(rendered.contains("registry name"), "{rendered}");
-        assert!(rendered.contains("write the range as"), "{rendered}");
-    }
-
-    #[test]
-    fn full_cut_inherits_external_subtree_without_moving_source_trees() {
-        let namespace = "overlay-full";
-        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
-        let mut target = face(namespace, "base/a.rs", "BaseA", "a");
-        target.needs_registry = true;
-        target.id = NodeId::from_namespaced_path(namespace, "base/a.rs", "BaseA");
-        let mut base_child = face(namespace, "base/old.rs", "OldChild", "old");
-        base_child.parent = target.id;
-        let sibling = face(namespace, "base/sibling.rs", "Sibling", "sibling");
-        root.register_snapshot_batch([target.clone(), base_child.clone(), sibling.clone()])
-            .unwrap();
-
-        let external_namespace = "overlay-full-external";
-        let mut replacement = face(external_namespace, "graft/fast_a.rs", "FastA", "fast_a");
-        replacement.needs_registry = true;
-        replacement.id =
-            NodeId::from_namespaced_path(external_namespace, "graft/fast_a.rs", "FastA");
-        let mut external_child = face(external_namespace, "graft/new.rs", "NewChild", "new");
-        external_child.parent = replacement.id;
-        let mut external = Registry::root_for_namespace(FRAMEWORK, external_namespace);
-        external
-            .register_snapshot_batch([replacement.clone(), external_child.clone()])
-            .unwrap();
-
-        let plan = GraftPlan::new(FRAMEWORK).cut("root/a", "fast_a");
-        let single = root.overlay(&plan, &external).unwrap();
-        assert!(!single.find_kind("OldChild").is_empty());
-        assert_eq!(single.find_kind("NewChild").len(), 0);
-
-        let full_plan = GraftPlan::new(FRAMEWORK);
-        let full_plan = GraftPlan {
-            framework: full_plan.framework,
-            cuts: vec![GraftCut::subtree("root/a", "fast_a")],
-        };
-        let effective = root.overlay(&full_plan, &external).unwrap();
-        assert_eq!(effective.find_kind("FastA").len(), 1);
-        assert_eq!(effective.find_kind("OldChild").len(), 0);
-        assert_eq!(effective.find_kind("NewChild").len(), 1);
-        assert_eq!(
-            effective.path_for(external_child.id).as_deref(),
-            Some("root/a/new")
-        );
-        assert_eq!(
-            effective.path_for(sibling.id).as_deref(),
-            Some("root/sibling")
-        );
-        assert_eq!(root.find_kind("OldChild").len(), 1);
-        assert_eq!(external.find_kind("NewChild").len(), 1);
-    }
-}
+#[path = "resolution_tests.rs"]
+mod resolution_tests;

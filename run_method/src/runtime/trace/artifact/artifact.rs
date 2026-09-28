@@ -128,6 +128,22 @@ pub enum TraceArtifactError {
         /// 该边进入的局部值 id。
         to: u64,
     },
+    /// This process has interned its budget of distinct trace strings.
+    ///
+    /// The table is process-level and never reclaimed — `function` and `file`
+    /// are `&'static str`, so those strings cannot be freed while an artifact
+    /// holds them — and the budget is what keeps that from being unbounded.
+    /// Restarting the process is what clears it.
+    /// 本进程已驻留满 trace 字符串预算。
+    ///
+    /// 这张表是进程级且永不回收的——`function` 与 `file` 都是 `&'static str`，因此只要有
+    /// artifact 持有它们，那些字符串就释放不了——而这个预算正是让那件事不再无界的办法。
+    /// 清空它的办法是重启进程。
+    VocabularyExhausted {
+        /// The table's ceiling, which is also its size when this is returned.
+        /// 表的天花板；返回它时表的大小也正是这个数。
+        limit: usize,
+    },
 }
 
 impl fmt::Display for TraceArtifactError {
@@ -156,6 +172,11 @@ impl fmt::Display for TraceArtifactError {
                     "trace artifact edge `{from} -> {to}` has no local"
                 )
             }
+            Self::VocabularyExhausted { limit } => write!(
+                formatter,
+                "this process has interned its budget of {limit} distinct trace strings, and the \
+                 table is never reclaimed; restart the process to read a vocabulary this large"
+            ),
         }
     }
 }

@@ -121,7 +121,7 @@ fn a_configured_entry_resolves_against_the_package_root() {
     // 因此变量只能指向一个注册源文件或 `lib.rs`/`main.rs`。
     std::fs::create_dir_all(src.join("preview")).expect("fixture dir");
     std::fs::write(src.join("preview/preview.rs"), "fn preview() {}\n").expect("configured entry");
-    let nodes = crate::discover_root(&src);
+    let nodes = crate::discovery::discover_root(&src);
 
     let absolute = resolve_host_entry(&src, &nodes, Some(src.join("preview/preview.rs")));
     assert!(matches!(absolute, HostEntry::Configured(_)), "{absolute:?}");
@@ -157,7 +157,7 @@ fn a_configured_entry_that_is_not_a_file_is_a_diagnostic() {
     let root = fixture("configured-missing");
     let src = root.join("src");
     std::fs::write(src.join("lib.rs"), "nichlink_run_method::host!();\n").expect("host entry");
-    let nodes = crate::discover_root(&src);
+    let nodes = crate::discovery::discover_root(&src);
 
     let mut errors = BuildDiagnostics::default();
     let resolved = resolve_host_entry_reporting(
@@ -199,7 +199,7 @@ fn a_malformed_application_declaration_is_a_diagnostic() {
     std::fs::create_dir_all(src.join("host")).expect("face folder");
     std::fs::write(src.join("host/host.rs"), "crate::application!(entry = );\n")
         .expect("malformed declaration");
-    let nodes = crate::discover_root(&src);
+    let nodes = crate::discovery::discover_root(&src);
 
     let mut errors = BuildDiagnostics::default();
     let resolved = application_entry_source(&src, &nodes, &mut errors);

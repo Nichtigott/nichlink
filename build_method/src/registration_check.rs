@@ -84,7 +84,7 @@ fn collect(
             continue;
         }
         if !include_demo
-            && path.file_name().and_then(|name| name.to_str()) == Some("compile_error_demo.rs")
+            && path.file_stem().and_then(|name| name.to_str()) == Some(crate::DEMO_ONLY_DIRECTORY)
         {
             continue;
         }

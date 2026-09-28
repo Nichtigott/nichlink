@@ -72,8 +72,14 @@ pub const CEILING: usize = 600;
 /// roadmap's version of this sentence claiming a count ten times the list's own.
 /// 清单有几项刻意不在散文里复述：它就是 [`BASELINE.len()`]，而写在这里的数字终会与清单漂移。
 /// 审计 `G-17` 发现路线图那句自称的项数是清单实际项数的十倍。
-pub const BASELINE: &[(&str, usize)] =
-    &[("core/src/registry_core/plugin/contracts/contracts.rs", 639)];
+/// The list is empty: `contracts.rs` was the last entry, and splitting its test module into
+/// `contracts_tests.rs` (the sanctioned `#[path]` mount, which the ceiling exempts) brought it
+/// back under the ceiling — so the ratchet makes removing the entry mandatory rather than
+/// optional, exactly as its own rule says.
+/// 清单已空：`contracts.rs` 是最后一项，而把它的测试模块拆进 `contracts_tests.rs`（受认可的
+/// `#[path]` 挂载，上限对其豁免）让它缩回上限之内——因此棘轮让删除该项成为必然而不是可选，
+/// 这正是它自己的规则所说的。
+pub const BASELINE: &[(&str, usize)] = &[];
 
 /// Whether a path sits in a `tests/` directory.
 /// 该路径是否位于 `tests/` 目录中。

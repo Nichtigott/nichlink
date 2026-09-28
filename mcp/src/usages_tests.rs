@@ -178,3 +178,28 @@ fn every_field_the_write_path_accepts_is_read_back() {
     }
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A registration file the derivation cannot parse is counted in the reply instead of vanishing:
+/// a read-only tree query used to report a smaller tree as if it were the whole one, which is what
+/// `LGC-LG-11` recorded on the producer side and what the consumer half now says out loud.
+/// 推导解析不了的注册面文件被计入回复而不是消失：只读的树查询过去把一棵更小的树当成完整的树报出去
+/// ——这正是 `LGC-LG-11` 在生产端记录的事，而消费端现在把它说出来。
+fn broken_face(root: &std::path::Path, label: &str) {
+    let directory = root.join("src").join(label);
+    std::fs::create_dir_all(&directory).expect("module directory");
+    std::fs::write(
+        directory.join(format!("{label}.rs")),
+        "crate::root_object! {\n    kind: Broken,\n",
+    )
+    .expect("truncated face");
+}
+
+#[test]
+fn the_neighbourhood_counts_unparsable_registration_files() {
+    let (root, _) = package("unparsable");
+    add(&root, json!({"module": "label", "kind": "Label"}));
+    broken_face(&root, "broken");
+    let reply = usages(&root, &json!({"node": "root/label"})).expect("the report renders");
+    assert!(reply.contains("unparsable faces 1"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}

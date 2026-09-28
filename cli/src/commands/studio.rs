@@ -15,8 +15,6 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use super::USAGE;
-
 /// Launch Studio for the project named on the command line, if any.
 /// 为命令行指定的项目启动 Studio；未指定则走默认解析。
 ///
@@ -31,8 +29,7 @@ pub(crate) fn studio(
     for arg in args.by_ref() {
         match arg.as_str() {
             "-h" | "--help" => {
-                write!(out, "{USAGE}").map_err(|error| format!("cannot write usage: {error}"))?;
-                return Ok(());
+                return crate::usage(out);
             }
             _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
             _ if project.is_none() => project = Some(PathBuf::from(arg)),

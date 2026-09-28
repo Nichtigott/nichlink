@@ -44,6 +44,7 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
     for (name, key) in [
         ("nichlink.explain", "node"),
         ("nichlink.explain", "overlay"),
+        ("nichlink.callgraph", "limit"),
         ("nichlink.diff", "limit"),
         ("nichlink.trace", "query"),
         ("nichlink.impact", "node"),

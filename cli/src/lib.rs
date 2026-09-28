@@ -116,6 +116,12 @@ pub fn argv_strings(
         .collect()
 }
 
+/// Write the CLI's usage banner for a command that was asked for help.
+/// 为被请求帮助的命令写下 CLI 的用法横幅。
+pub(crate) fn usage(out: &mut dyn Write) -> Result<(), String> {
+    write!(out, "{USAGE}").map_err(|error| format!("cannot write usage: {error}"))
+}
+
 /// Dispatch one command from an argv-style iterator (the program name is
 /// consumed and ignored). Shared by the `nichlink` and `cargo-nichlink`
 /// binaries, and writes its reports to process stdout.
@@ -136,14 +142,21 @@ pub fn run(argv: impl IntoIterator<Item = String>) -> Result<(), String> {
 pub fn run_to(argv: impl IntoIterator<Item = String>, out: &mut dyn Write) -> Result<(), String> {
     let mut args = argv.into_iter().skip(1);
     match args.next().as_deref() {
-        None | Some("--help") | Some("-h") | Some("help") => {
-            write!(out, "{USAGE}").map_err(|error| format!("cannot write usage: {error}"))?;
-            Ok(())
+        Some("--help") | Some("-h") | Some("help") => usage(out),
+        // A bare invocation is not a success: the usage still goes out, because a
+        // caller who typed nothing needs to see it, and the exit status says the
+        // command did not run. It used to print the usage and return `Ok`, so a shell
+        // pipeline read bare `nichlink` as having succeeded (audit `LGC-LG-44`).
+        // 裸调不是成功：用法照常输出（什么都没敲的调用方需要看到它），而退出状态说明命令没有运行。
+        // 它过去打印用法并返回 `Ok`，于是 shell 管线把裸 `nichlink` 读成成功（审计 `LGC-LG-44`）。
+        None => {
+            usage(out)?;
+            Err("no command given".to_owned())
         }
-        Some("new") => new_command::new(&mut args),
+        Some("new") => new_command::new(&mut args, out),
         Some("check") => check_command::check(&mut args, out),
-        Some("build") => build_command::build(&mut args),
-        Some("snippets") => snippets_command::snippets(&mut args),
+        Some("build") => build_command::build(&mut args, out),
+        Some("snippets") => snippets_command::snippets(&mut args, out),
         Some("explain") => explain::explain(&mut args, out),
         Some("grafts") => grafts::grafts(&mut args, out),
         Some("studio") => studio_command::studio(&mut args, out),

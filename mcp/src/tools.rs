@@ -65,7 +65,11 @@ pub(crate) fn tools() -> Vec<Value> {
              `re-identified` (a `kind` change under an unmoved file, with both identities), or \
              `build unknown` when nothing has been published. A manifest that no longer describes \
              these sources is announced above the verdicts as `stale (run nichlink check)`, because \
-             they then describe the tree that build saw rather than this one. Below them the file \
+             they then describe the tree that build saw rather than this one. A registration file \
+             the derivation could not parse is counted as `unparsable faces N` above the hits, and \
+             that line is **not** subject to `limit`: it reports the tree that was read rather \
+             than one more result row, so it keeps appearing when the limit has already cut the \
+             face list short. Below them the file \
              and function hits are unchanged. The tree half needs the identity namespace; a root \
              Cargo cannot name still answers the source half and says the tree half is unavailable.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
@@ -77,8 +81,10 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.callgraph",
-            "Show direct static callers and callees for one function.",
-            json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"root":{"type":"string"}},"required":["function"]}),
+            "Show direct static callers and callees for one function. `limit` bounds how many \
+             definitions are listed (default 5, at most 50); a truncation line names how many \
+             were withheld, and `path` selects one definition when several share the name.",
+            json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"root":{"type":"string"}},"required":["function"]}),
         ),
         tool(
             "nichlink.read",
@@ -98,7 +104,10 @@ pub(crate) fn tools() -> Vec<Value> {
              `fields` the request names and keep the rest), `rename` (change `fields.module`), or \
              `delete` (move the face's module into NichLink's recoverable trash). `node` names \
              the face and `parent` the parent, by logical path — the one nichlink.registry \
-             reports — or by identity. **A request is previewed unless `apply` is true**: the \
+             reports — or by identity. `handle_contracts` and `part_contracts` are set by `add` \
+             only: the executor's edit field order does not carry them, so `edit`/`rename` refuse \
+             those two keys by name rather than returning success while the value is dropped. \
+             **A request is previewed unless `apply` is true**: the \
              preview runs the real operation on a throwaway copy and returns the file diff plus \
              the registration tree it produces; `apply: true` writes it and names the files it \
              wrote. Every reply is the tree that results, so the next call can be aimed with it.",
@@ -150,13 +159,18 @@ pub(crate) fn tools() -> Vec<Value> {
              with no build evidence is told so instead of being handed an empty diff. With \
              `records: true` the other pair: every external graft record against the sources, where a \
              record stores the identity it was written for, so a face that changed identity under an \
-             unmoved slot breaks it silently. A record comes back `ok`, `stale` (nothing in the tree \
-             has that identity or that path), or `re-identified` (the path is there, the identity \
-             moved); `unreadable` counts a record file that could not be read. There is no separate \
-             bucket for a typed cut: the plan's path is always a logical path (every writer uses \
-             `registry.path_for`), and with the identity absent nothing resolves a typed \
-             declaration's module, so such a record is `stale` — and the reply prints the path it \
-             looked for rather than guessing.",
+             unmoved slot breaks it silently. A record comes back `ok`; `undeclared` (the identity \
+             is in the tree, but no `static_graft_plan!` cut names its slot — the release prunes \
+             that slot, which is the same verdict `nichlink.grafts` gives and the same one the \
+             build refuses); `stale` (nothing in the tree has that identity or that path); \
+             `re-identified` (the path is there, the identity moved); or `unreadable` (a record \
+             file that could not be read), which is counted rather than dropped. `undeclared` wins \
+             over `stale`/`re-identified`, because whether a record can ever take effect is the \
+             question that changes what a caller does. There is no separate bucket for a typed \
+             cut: the plan's path is always a logical path (every writer uses `registry.path_for`), \
+             and with the identity absent nothing resolves a typed declaration's module, so such a \
+             record is judged by the declaration rule like any other — and the reply prints the \
+             path it looked for rather than guessing.",
             json!({"type":"object","properties":{"records":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(

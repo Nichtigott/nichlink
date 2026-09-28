@@ -30,7 +30,8 @@ use nodes::{TreePanel, draw_call_tree};
 pub(super) fn draw_search_graph(
     frame: &mut Frame<'_>,
     area: Rect,
-    app: &mut App,
+    app: &App,
+    cache: &mut RenderCache,
     search: &SearchState,
 ) {
     let Some(center) = search_center_ref(app, search) else {
@@ -40,7 +41,7 @@ pub(super) fn draw_search_graph(
         );
         return;
     };
-    app.hot.graph_area = area;
+    cache.hot.graph_area = area;
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -48,17 +49,18 @@ pub(super) fn draw_search_graph(
             Constraint::Percentage(100_u16.saturating_sub(app.graph_split_percent)),
         ])
         .split(area);
-    app.hot.graph_tree_area = columns[0];
-    app.hot.graph_data_area = columns[1];
+    cache.hot.graph_tree_area = columns[0];
+    cache.hot.graph_data_area = columns[1];
     // The detail pane is the data pane: what the face inspector and the search
     // lane point at is the values the cursor's function ran with.
     // 详情面板就是数据面板：注册面检视器与搜索栏指向的，是游标所在函数运行时的取值。
-    app.hot.graph_detail_area = columns[1];
-    app.hot.graph_provenance_area = columns[1];
+    cache.hot.graph_detail_area = columns[1];
+    cache.hot.graph_provenance_area = columns[1];
     draw_call_tree(
         frame,
         columns[0],
         app,
+        cache,
         Some(&center),
         TreePanel {
             cursor: search.outline_selected,

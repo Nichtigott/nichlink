@@ -101,8 +101,27 @@ pub fn run_with(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), S
                 write_response(output, &response)?;
                 continue;
             }
-            Frame::Line(bytes) => String::from_utf8(bytes)
-                .map_err(|_| "cannot read stdin: request line is not valid UTF-8".to_owned())?,
+            // A frame whose bytes are not UTF-8 is answered like the other malformed
+            // frames and the session continues. It used to be the one that ended the
+            // bridge: `main` printed to stderr and `exit(1)`, which contradicts both
+            // READMEs' "writes nothing to stderr: a failure is an error response on
+            // stdout" and left the client with a dead pipe instead of an answer
+            // (audit `LGC-LG-22`).
+            // 字节不是 UTF-8 的帧与其他畸形帧一样被作答，会话继续。它过去是唯一会终止桥的那一类：
+            // `main` 往 stderr 打印并 `exit(1)`，这与两份 README 的"不写 stderr：失败是 stdout 上的
+            // 错误响应"相反，也让客户端拿到一根死管道而不是答案（审计 `LGC-LG-22`）。
+            Frame::Line(bytes) => match String::from_utf8(bytes) {
+                Ok(line) => line,
+                Err(_) => {
+                    let response = error_response(
+                        Value::Null,
+                        -32600,
+                        "invalid request: line is not valid UTF-8".to_owned(),
+                    );
+                    write_response(output, &response)?;
+                    continue;
+                }
+            },
         };
         if line.trim().is_empty() {
             continue;

@@ -50,8 +50,8 @@ pub struct Finding {
     pub error: String,
 }
 
-/// File-name prefixes the gate does not cover, because they are records.
-/// 门禁不覆盖的文件名前缀，因为它们是记录。
+/// Path-component prefixes the gate does not cover, because they are records.
+/// 门禁不覆盖的路径分量前缀，因为它们是记录。
 ///
 /// An audit or design document is a record of what was true when it was written,
 /// and its Rust blocks are often deliberate excerpts — a `$crate` macro arm, a
@@ -90,7 +90,7 @@ pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
         files.push(directory.join("README.md"));
         files.push(directory.join("README.zh-CN.md"));
     }
-    files.retain(|path| path.is_file() && !is_record(path));
+    files.retain(|path| path.is_file() && !is_record(root, path));
     files.sort();
     files.dedup();
     files
@@ -190,14 +190,31 @@ struct OpenFence {
 
 /// Whether a markdown path is a record rather than living documentation.
 /// 该 markdown 路径是记录而不是活文档。
-pub fn is_record(path: &Path) -> bool {
-    let name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    RECORD_PREFIXES
-        .iter()
-        .any(|prefix| name.starts_with(prefix))
+///
+/// The prefix is matched against every component of the path *below `root`* — the file's
+/// name and each directory it sits in — not against the file's name alone. A whole report
+/// directory (`docs/audit-2026-09-28/`) is a record: with a name-only rule, a report whose
+/// file name did not happen to start with `audit-` was scanned as living documentation, so
+/// its Rust excerpts had to parse and its `.rs:NNN` anchors had to resolve today. The
+/// reports were renamed to get the gate quiet; the boundary is what needed fixing (audit
+/// `LGC-LG-53`).
+/// 前缀匹配的是 **`root` 之下**路径的每一个分量——文件名与它所在的每个目录——而不只是文件名。
+/// 整个报告目录（`docs/audit-2026-09-28/`）就是记录：在只看文件名的规则下，名字碰巧不以
+/// `audit-` 开头的报告会被当成活文档扫描，于是它摘录的 Rust 必须能解析、它的 `.rs:NNN` 锚点必须
+/// 此刻仍然成立。报告当时被改名来让门禁闭嘴；该修的是这条边界（审计 `LGC-LG-53`）。
+pub fn is_record(root: &Path, path: &Path) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    relative
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .any(|name| {
+            RECORD_PREFIXES
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+        })
 }
 
 /// Every fenced Rust block that does not parse, in markdown or in a doc comment.

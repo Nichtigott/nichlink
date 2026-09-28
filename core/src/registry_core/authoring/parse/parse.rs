@@ -203,8 +203,8 @@ pub fn render_path_list(value: &str) -> String {
 /// 这是宏经 `__face_trait_labels_or!` 施加的同一条规则在创作侧的写法：有路径时由路径决定
 /// 标签，没有路径的标签则独立成立——它本来就是一条未经检查的声明。
 pub fn trait_names_from_paths(value: &str) -> Result<String, FaceParseError> {
-    value
-        .split(',')
+    split_type_paths(value)
+        .into_iter()
         .map(str::trim)
         .filter(|path| !path.is_empty())
         .map(|source| {
@@ -224,6 +224,38 @@ pub fn trait_names_from_paths(value: &str) -> Result<String, FaceParseError> {
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|names| names.join(","))
+}
+
+/// Split a comma-separated list of type paths at its *top-level* commas.
+/// 按**顶层**逗号切分一个逗号分隔的类型路径列表。
+///
+/// A type path may carry generic arguments, and those arguments carry commas of their own:
+/// `ControlHandle<u8, u16>` is one path, not two. Splitting on every comma cut it in half,
+/// the halves failed to parse as paths, and the caller silently fell back to the labels
+/// written beside the list — which is empty for a face that declared only the paths. A
+/// misspelled `handle_contracts` therefore produced a build-time "missing trait" report
+/// against a face that had named its trait correctly. Audit `LGC-LG-30`.
+/// 类型路径可以携带泛型实参，而那些实参自带逗号：`ControlHandle<u8, u16>` 是一条路径而不是两条。
+/// 按每一个逗号切分把它劈成两半，两半都解析不成路径，调用方于是静默退回列表旁边写下的标签——对于
+/// 只声明了路径的注册面，那是空的。于是一个拼写正确的 `handle_contracts` 会在构建期被报成"缺
+/// trait"。审计 `LGC-LG-30`。
+fn split_type_paths(value: &str) -> Vec<&str> {
+    let mut paths = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (offset, character) in value.char_indices() {
+        match character {
+            '<' => depth += 1,
+            '>' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                paths.push(&value[start..offset]);
+                start = offset + 1;
+            }
+            _ => {}
+        }
+    }
+    paths.push(&value[start..]);
+    paths
 }
 
 /// Render a runtime-check list back to the expression text the macro takes,

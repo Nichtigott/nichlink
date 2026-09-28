@@ -1,5 +1,5 @@
-// The one registry type, including atomic recursive registration and queries.
-// 唯一的 Registry 类型，包含原子递归注册和查询。
+//! The one registry type, including atomic recursive registration and queries.
+//! 唯一的 Registry 类型，包含原子递归注册和查询。
 
 use std::sync::Arc;
 

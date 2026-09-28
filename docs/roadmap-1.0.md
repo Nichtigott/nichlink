@@ -180,6 +180,41 @@ what blocks 1.0, not by when they were found.
   （为了让两条路共用一个解析器）。只接受解析器本来就接受的值，有测试覆盖。
 - 未改动任何公开签名；`pub(crate)` 辅助各带双语块注释说明"为什么直写会静默分叉"。
 
+### B4 完成情况（第三轮：新增公开面与版本线）
+
+第三轮的记账（`docs/audit-2026-09-28/audit-report.md` §14）把本批新增的公开面逐条核实：四个入口在补记前
+对 `CHANGELOG.md` 与本文件的 grep 命中**全为 0**，因此这次是补缺，不是重复记。
+
+| 入口 | 谁提供 | 谁消费 | 钉在哪 |
+| --- | --- | --- | --- |
+| `authoring::parse::try_render_requirements` | 内核 `authoring/parse/rules.rs`（严格，`-> Result<String, FaceParseError>`） | `run_method` 的 manifest 渲染器（旧 `render_requirements` 保留为有损薄包装） | `a_malformed_requires_entry_refuses_the_rewrite`（走真实 `render_source`） |
+| `build_method::face_views_and_unreadable` | `build_method/src/face_view.rs` | 面对外回答（`face_views` 委托它），不可读的面从此可查 | `a_registration_file_that_does_not_parse_is_named_not_dropped` |
+| `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `core/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
+| `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_owned` 签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
+
+- **版本线**：四个入口都随未发布的 `0.1.6` 走——工作区版本不变、无需抬版本；`tools/nichlink-publish
+  --check-table` 只按清单比较依赖表，不受影响。
+- **隔离打包**：`tools/nichlink-package-audit` 的**内容**半边已含新模块（实测 `cargo package -p
+  nichlink-core --list --offline` 列出 `src/registry_core/source/items.rs`）；**打包**半边要等带版本号的
+  `nichlink-*` 依赖进入 index，未发布期间 warn + 跳过（**skip ≠ 失败**）——这批把等待态加深了一层
+  （Studio 已调用未发布的内核符号），发布顺序仍是 core 在前，发布后重跑 `--verify-consumers`。
+- **不动的**：本批没有删改任何已发布签名，四个入口都是加法式新增；`render_requirements` 之所以留着，
+  是因为它是已发布线的一部分，而它的文档现在写明有损并指向严格兄弟。
+
+### 末轮追加：`try_rule_syntax_from_text`（K-10 的严格读法）
+
+末轮记账（`docs/audit-2026-09-28/audit-report.md` §15）把第四轮补记的公开面逐条核实：这一个入口在补记前
+对 `CHANGELOG.md` 与本文件的 grep 命中都是 **0**（t52 已记的另三个候选本轮命中非 0，故不重复记）。
+
+| 入口 | 谁提供 | 谁消费 | 钉在哪 |
+| --- | --- | --- | --- |
+| `authoring::parse::try_rule_syntax_from_text` | 内核 `authoring/parse/rules.rs`（严格，`-> Result<String, FaceParseError>`） | `run_method` 的 `rule_syntax_for_source`（唯一生产调用点；规则文件缺失仍 `Ok("ANY")`） | 生产入口探针 + crate 外钉子；独立复核 `audit-verify-k10-family.md` 三组变异 |
+
+- **版本线**：加法式新增，随未发布 `0.1.6` 走，`--check-table` 不受影响；已发布的 `rule_syntax_from_text`
+  签名与宽容行为**一字未动**（文档写明它是有损的并指向严格兄弟）。
+- **含义**：这条修复把"注释里的伪子句"与"常量点名的清单"从**静默降级**变成**报错并点名**——两者过去都会让
+  作者声明的结构要求无声消失，而构建不会说一个字。
+
 ### B3 API 收口（必须在首次发布前完成，原因见第三轮：版本不可变）
 
 #### B3a 完成情况（公开面收窄,已收口）

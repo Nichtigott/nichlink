@@ -282,6 +282,23 @@ impl PluginInstance for ProcessInstance {
         // 自己的线程里写，stdout 与 stderr 各自有线程排空，超时覆盖整个调用。声明的限制
         // 由此成为真实的限制。
         //
+        // 3. The answer is the frame, and the frame ends the call. Polling for the
+        //    child's exit *after* holding a complete frame was a third way to lose an
+        //    answer: a child that wrote its frame and then lingered (waiting on a
+        //    signal, sleeping, slow cleanup — anything but exiting) had that answer
+        //    replaced by `Timeout` at the deadline. A complete frame is now delivered
+        //    as soon as it arrives, and the exit status is consulted only when no frame
+        //    arrives: a non-zero exit becomes `Process` with the child's stderr, and the
+        //    deadline decides only the frame that never came (a child that is still
+        //    running when its frame arrives is killed and reaped, so no call leaves a
+        //    process behind). Audit `LGC-LG-32`.
+        // 3. 答案就是那一帧，而帧会结束这次调用。在已经拿到完整帧之后仍去轮询子进程的退出，
+        //    是丢掉答案的第三条途径：写完帧后挂住的子进程（等信号、睡眠、收尾慢——总之就是不
+        //    退出）会在超时点被换成 `Timeout`。现在完整帧一到就交付，只有在帧从未到来时才去看
+        //    退出状态：非零退出变成带 stderr 的 `Process`，而超时点只决定那个从未到来的帧
+        //    （帧到达时仍在运行的子进程会被杀掉并回收，因此没有调用会留下进程）。审计
+        //    `LGC-LG-32`。
+        //
         // Residual boundary, stated rather than hidden: `Child::kill` kills only
         // the direct child. A plugin that forks a grandchild inheriting the pipes
         // can keep one open; the call still returns at the deadline, but that
@@ -293,13 +310,7 @@ impl PluginInstance for ProcessInstance {
         // 写入或读取线程可能一直阻塞到孙进程退出。要连进程组一起杀就需要 `libc`，而本
         // crate 没有该依赖。
         validate_operation(operation)?;
-        if input.len() > self.limits.max_input_bytes || input.len() > u32::MAX as usize {
-            return Err(HostError::Limit(format!(
-                "input is {} bytes; limit is {}",
-                input.len(),
-                self.limits.max_input_bytes
-            )));
-        }
+        check_input_length(input.len(), self.limits.max_input_bytes)?;
         let mut child = spawn_staged(&self.program, self.limits, operation)?;
 
         // One frame, built once: the 4-byte little-endian length prefix followed
@@ -333,6 +344,14 @@ impl PluginInstance for ProcessInstance {
             .ok_or_else(|| HostError::Process("child stdout was unavailable".to_owned()))?;
         let max_output = self.limits.max_output_bytes;
         let (frames, received) = mpsc::channel();
+        // A frame that never completes is reported *about this operation*: the name travels into
+        // the reader so the caller learns which step lost its answer instead of getting the bare
+        // `failed to fill whole buffer` (audit `LGC-LG-32`, second half). The reader's own error
+        // stays inside the message, which is where that seam keeps it reachable.
+        // 「帧从未完整」会**针对本次操作**上报：名字随读取线程走，于是调用方得知是哪一步丢了答案，
+        // 而不是只拿到裸的 `failed to fill whole buffer`（审计 `LGC-LG-32` 第二半）。读取器自己的
+        // 错误留在消息内部——接口就是靠这一点让它仍然可追。
+        let reader_operation = operation.to_owned();
         // Draining stdout for the child's whole life is what removes the pipe
         // buffer from the contract. `read_frame` rejects an over-limit declared
         // length before it allocates, so the cap also bounds memory.
@@ -344,11 +363,16 @@ impl PluginInstance for ProcessInstance {
             // once; draining is what keeps that child from blocking on a full
             // pipe while the host waits for it to exit. Reading one frame and
             // stopping was the bug: the child blocked, the host killed it at the
-            // deadline, and a delivered answer was reported as a timeout.
+            // deadline, and a delivered answer was reported as a timeout. Waiting
+            // for an exit *after* holding the frame was the other half of that
+            // same bug (audit `LGC-LG-32`); the call now ends on the frame, which
+            // is what the polling loop below implements.
             // 帧在排空 stdout 其余部分之前送出，因此先作答、后继续说话的子进程仍会立刻交付
             // 答案；排空正是让那个子进程不会在宿主等它退出时阻塞在满管道上的东西。只读一帧就
             // 停下曾是缺陷：子进程阻塞、宿主在超时点杀掉它，而一个已经送达的答案被报成超时。
-            let frame = read_frame(&mut stdout, max_output);
+            // 拿到帧之后还去等退出，是同一个缺陷的另一半（审计 `LGC-LG-32`）；现在调用以帧
+            // 结束，下面的轮询循环做的就是这件事。
+            let frame = read_frame(&mut stdout, max_output, &reader_operation);
             let _ = frames.send(frame);
             drain_to_eof(&mut stdout);
         });
@@ -369,6 +393,11 @@ impl PluginInstance for ProcessInstance {
         let deadline = Instant::now() + self.limits.timeout;
         let mut frame: Option<Vec<u8>> = None;
         let mut refusal: Option<HostError> = None;
+        // The loop ends on whichever comes first: a complete frame, or the child's exit.
+        // The exit status is `None` when the frame won, which is how "the exit code is
+        // missing" is represented — see the third hazard paragraph above this method.
+        // 循环以先到的那个结束：完整的一帧，或者子进程的退出。帧赢时退出状态是 `None`，这就是
+        // 「退出码缺失」的表示法——见本方法上方那段第 3 条。
         let status = loop {
             if frame.is_none() && refusal.is_none() {
                 match received.try_recv() {
@@ -386,9 +415,16 @@ impl PluginInstance for ProcessInstance {
                     // Any other reader failure is only remembered, because the
                     // usual cause is a child that wrote no frame at all: it is
                     // about to be reported as `Process` with its stderr, and a
-                    // broken frame would be the wrong diagnosis.
+                    // broken frame would be the wrong diagnosis. The remembered
+                    // value is *not* raw: `read_frame` already turned it into a
+                    // `Process` naming this operation and the cut, so the path
+                    // that returns it below (a child that exited 0 without a
+                    // complete frame) is diagnosable too (audit `LGC-LG-32`).
                     // 其他读取失败只被记下，因为常见原因是子进程根本没写帧：它马上会被以
-                    // `Process` 连同 stderr 上报，而"坏帧"会是错误的诊断。
+                    // `Process` 连同 stderr 上报，而"坏帧"会是错误的诊断。被记下的值**不是**裸
+                    // 错误：`read_frame` 已经把它变成点名本次操作与截断形状的 `Process`，因此
+                    // 下面那条会返回它的路径（以 0 退出却没给出完整帧的子进程）同样可诊断
+                    // （审计 `LGC-LG-32`）。
                     Ok(Err(error)) => refusal = Some(error),
                     Err(TryRecvError::Empty) => {}
                     Err(TryRecvError::Disconnected) => {
@@ -398,8 +434,25 @@ impl PluginInstance for ProcessInstance {
                     }
                 }
             }
+            // A complete frame ends the call. The answer is precisely what the child was
+            // asked for, and its exit status is not part of it: polling for the exit here is
+            // what turned a delivered answer into `Timeout` whenever the child lingered
+            // after writing it, which is the failure the drain thread below cannot prevent
+            // by itself (audit `LGC-LG-32`).
+            // 完整的一帧就结束这次调用。答案正是向子进程要的东西，而它的退出状态不属于答案：
+            // 在这里轮询退出，正是「子进程写完答案后挂住 ⇒ 已经送达的答案被报成 `Timeout`」
+            // 的成因，而这是下面那个排空线程本身防不住的那种失败（审计 `LGC-LG-32`）。
+            if frame.is_some() {
+                // The product exists, so the child has no further part in this call: it is
+                // killed and reaped exactly like the deadline path does. A child that exited
+                // on its own is merely reaped.
+                // 产物已经存在，子进程不再参与这次调用：与超时路径完全相同地杀掉并回收它。
+                // 自己退出的子进程只是被回收。
+                kill_and_reap(&mut child);
+                break None;
+            }
             if let Some(status) = child.try_wait()? {
-                break status;
+                break Some(status);
             }
             if Instant::now() >= deadline {
                 kill_and_reap(&mut child);
@@ -407,6 +460,10 @@ impl PluginInstance for ProcessInstance {
             }
             thread::sleep(POLL_INTERVAL);
         };
+        if let Some(bytes) = frame {
+            return Ok(bytes);
+        }
+        let status = status.expect("the loop breaks on a frame or on an exit status");
         if !status.success() {
             let detail = message_text
                 .recv_timeout(deadline.saturating_duration_since(Instant::now()))
@@ -418,9 +475,13 @@ impl PluginInstance for ProcessInstance {
                 detail.to_owned()
             }));
         }
-        if let Some(bytes) = frame {
-            return Ok(bytes);
-        }
+        // The child exited 0, so stderr cannot explain the missing answer; the reader's verdict
+        // is the diagnosis, and it already names the operation and the shape of the cut
+        // (`read_frame` wraps it). Returning it raw was the second half of `LGC-LG-32`: the
+        // caller got `failed to fill whole buffer` with nothing to act on.
+        // 子进程以 0 退出，因此 stderr 解释不了缺失的答案；读取线程的判定就是诊断，而它已经点名了
+        // 操作与截断的形状（`read_frame` 包装过）。原样返回它正是 `LGC-LG-32` 的第二半：调用方
+        // 只拿到 `failed to fill whole buffer`，无从下手。
         if let Some(error) = refusal {
             return Err(error);
         }
@@ -440,4 +501,81 @@ fn validate_operation(operation: &str) -> Result<(), HostError> {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(())
+}
+
+/// The largest input this adapter can frame.
+/// 本适配器能成帧的最大输入。
+///
+/// The process ABI carries the length in the frame's 4-byte prefix, so `u32::MAX` is the
+/// ceiling the *frame* imposes: above it `input.len() as u32` wraps, and the child reads a
+/// length that does not exist. The Wasm adapter has the same kind of ceiling at `i32::MAX`;
+/// the two disagreed here for a while, because this adapter's refusal named the configured
+/// limit in *both* halves (audit `BRG-BR-17`).
+/// 进程 ABI 把长度放在帧的 4 字节前缀里，因此 `u32::MAX` 是**帧格式**给出的上限：超过它，
+/// `input.len() as u32` 会回绕，子进程读到的长度并不存在。Wasm 适配器有同类的上限 `i32::MAX`；
+/// 两者在这里有过分歧：本适配器的拒绝在**两种**情形下都报配置上限（审计 `BRG-BR-17`）。
+const MAX_FRAMEABLE_INPUT: usize = u32::MAX as usize;
+
+/// Reject an input this adapter cannot frame, naming whether the configured limit or the
+/// frame width is what refused it.
+/// 拒绝本适配器无法成帧的输入，并说明拒绝它的是配置上限还是帧宽。
+///
+/// Kept as one function for the same reason the Wasm adapter keeps its own: the frame-width
+/// half is a value, so it is unit-testable without a four-gigabyte slice.
+/// 收成一个函数的原因与 Wasm 适配器相同：帧宽那一半是一个值，因此无需一个四吉字节的切片就能
+/// 被单测。
+fn check_input_length(length: usize, configured: usize) -> Result<(), HostError> {
+    if length > configured {
+        return Err(HostError::Limit(format!(
+            "input is {length} bytes; limit is {configured}"
+        )));
+    }
+    if length > MAX_FRAMEABLE_INPUT {
+        return Err(HostError::Limit(format!(
+            "input is {length} bytes; a process call frames its length in a u32, whose maximum \
+             is {MAX_FRAMEABLE_INPUT}"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! The input-length refusals, beside the check they pin.
+    //! 输入长度拒绝，紧挨着它们所钉的那个检查。
+
+    use super::*;
+
+    /// The configured limit and the `u32` frame width refuse with different sentences. The
+    /// frame-width half used to report the configured limit, so a caller with a large
+    /// configured limit was told a number that had refused nothing (audit `BRG-BR-17`).
+    /// 配置上限与 `u32` 帧宽用两句不同的话拒绝。帧宽那一半过去报的是配置上限，于是配置上限很大的
+    /// 调用方会被告知一个什么都没拒绝的数字（审计 `BRG-BR-17`）。
+    #[test]
+    fn the_two_input_refusals_name_different_things() {
+        let configured = check_input_length(5, 4)
+            .expect_err("5 bytes over a 4-byte limit is refused")
+            .to_string();
+        let framed = check_input_length(MAX_FRAMEABLE_INPUT + 1, usize::MAX)
+            .expect_err("a length above u32::MAX cannot be framed")
+            .to_string();
+        assert_ne!(configured, framed, "one sentence cannot name both refusals");
+        assert!(configured.contains("limit is 4"), "{configured}");
+        assert!(framed.contains("u32"), "{framed}");
+        assert!(
+            !framed.contains("limit is"),
+            "the frame width is not a configured limit: {framed}"
+        );
+    }
+
+    /// The frame-width half is reachable on the value path, which is the reason the check is
+    /// one function: a length above `u32::MAX` never needs a four-gigabyte slice.
+    /// 帧宽那一半只在值路径上即可构造，这正是该检查收成一个函数的原因：超过 `u32::MAX` 的长度
+    /// 从不需要一个四吉字节的切片。
+    #[test]
+    fn the_frame_width_half_needs_no_allocation() {
+        check_input_length(MAX_FRAMEABLE_INPUT, usize::MAX)
+            .expect("exactly u32::MAX is still frameable");
+        assert!(check_input_length(MAX_FRAMEABLE_INPUT + 1, usize::MAX).is_err());
+    }
 }

@@ -229,6 +229,13 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
     let plan = with_authoring_context(|| nichlink_run_method::read_external_graft("canvas_graft"))
         .expect("the plan is written even though the slot is undeclared");
     assert!(app.event.starts_with("Warning:"), "{}", app.event);
+    // The wording is for the reader; the colour comes from the field the write set
+    // (audit `STU-S-18`).
+    // 措辞是给读者看的；颜色来自写入时设定的字段（审计 `STU-S-18`）。
+    assert!(
+        app.event_is_alert,
+        "an undeclared slot is an alert, not only a sentence starting with `Warning:`"
+    );
     assert!(app.event.contains("root/canvas"), "{}", app.event);
     assert!(app.event.contains("UnkeptSlot"), "{}", app.event);
     // The entry is a host path, so Windows spells it `...\src\lib.rs`; the
@@ -298,4 +305,38 @@ fn graft_reads_the_declared_slot_from_the_host_entry() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A graft read with no selected project is refused, not guessed from the environment or
+/// the working directory (audit `STU-S-29`).
+/// 没有选中项目时的 graft 读取会被拒绝，而不是从环境或工作目录猜（审计 `STU-S-29`）。
+#[test]
+#[cfg(feature = "prototype-fixtures")]
+fn a_graft_read_without_a_selected_project_is_refused_not_guessed() {
+    let Some(mut app) = fixture_app() else {
+        return;
+    };
+    assert_ne!(
+        app.selected,
+        app.registry.id(),
+        "premise: the fixture selects a face, so the graft screen opens"
+    );
+    clear_project_context();
+    app.open_graft();
+    let Some(Overlay::Graft(state)) = app.overlay else {
+        panic!("g opens the graft screen")
+    };
+    assert!(
+        state.plans.is_empty(),
+        "no plan may be listed from a root the reader did not open: {:?}",
+        state.plans
+    );
+    assert!(
+        matches!(
+            state.declaration,
+            GraftDeclaration::Unknown { ref reason } if reason.contains("no project is selected")
+        ),
+        "the screen must say the selection is missing, not describe a guessed tree: {:?}",
+        state.declaration
+    );
 }

@@ -31,6 +31,7 @@
 
 use nichlink::authoring::parse::{
     compact_registration_rule, parse_registration_rule_owned, rule_syntax_from_text,
+    try_rule_syntax_from_text,
 };
 use nichlink::declaration::OwnedRegistrationRule;
 
@@ -142,6 +143,31 @@ fn historical_rule_spellings_render_unchanged_bytes() {
     for (source, expected) in HISTORICAL_SOURCES {
         let rendered = rule_syntax_from_text(source);
         assert_eq!(rendered, *expected, "the bytes of `{source}` moved");
+    }
+}
+
+/// The strict reader reads every historical spelling exactly as the published branch does.
+/// 严格读取器对每一种历史拼法的读取结果与已发布分支完全一致。
+///
+/// The published entry is kept unchanged (documented as tolerant and lossy) and
+/// [`try_rule_syntax_from_text`] is its strict sibling: it reads the `REGISTRATION_RULE`
+/// const's initializer through the AST and refuses what it cannot recognize. This pin is
+/// the outside-of-the-crate check that the tightening does not move any of the bytes the
+/// table above records (audit `KRN-K-10`).
+/// 已发布入口保持不变（文档写明它宽容且有损），而 [`try_rule_syntax_from_text`] 是它的严格兄弟：
+/// 它经 AST 读 `REGISTRATION_RULE` 常量的初始器，认不出即拒绝。本钉子从 crate 之外检查这次收紧
+/// 没有移动上表记录的任何一个字节（审计 `KRN-K-10`）。
+#[test]
+fn the_strict_reader_reads_every_historical_spelling() {
+    for (source, expected) in HISTORICAL_SOURCES {
+        let strict = try_rule_syntax_from_text(source)
+            .unwrap_or_else(|error| panic!("`{source}` was refused: {error}"));
+        assert_eq!(
+            strict,
+            rule_syntax_from_text(source),
+            "`{source}`: the strict reader and the published branch disagree"
+        );
+        let _ = expected;
     }
 }
 
@@ -271,5 +297,69 @@ fn the_source_text_branch_renders_through_the_public_renderer() {
             compact_registration_rule(&parsed),
             "the branch and the public renderer disagree for `{source}`"
         );
+    }
+}
+
+/// Every registration-rule source this repository ships passes the strict reader, and it
+/// reads the same rule the tolerant branch read.
+/// 本仓库出厂的每份注册规则源都能通过严格读取器，且读出的规则与宽容分支一致。
+///
+/// This is the half that keeps the tightening from being a regression: the strict reader
+/// must not refuse what the build already consumes, and the bytes must not move. The
+/// walk is over the checkout (skipping build output), and the count is asserted so an
+/// empty walk cannot pass.
+/// 这一半让收紧不成为回归：严格读取器不得拒绝构建已经在消费的东西，且字节不得移动。遍历的是检出
+/// （跳过构建产物），并断言数量，使空遍历不能通过。
+#[test]
+fn every_shipped_rule_source_passes_the_strict_reader() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the workspace root")
+        .to_path_buf();
+    let mut checked = 0;
+    let mut files = Vec::new();
+    collect_rule_files(&root, &mut files);
+    files.sort();
+    for path in files {
+        let text = std::fs::read_to_string(&path).expect("a shipped rule source");
+        let strict = try_rule_syntax_from_text(&text)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        assert_eq!(
+            strict,
+            rule_syntax_from_text(&text),
+            "{}: the strict reader and the shipped bytes disagree",
+            path.display()
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "the walk found no `registry_rule.rs` in {root:?}"
+    );
+}
+
+/// Every `registry_rule.rs` under `directory`, skipping build output and VCS state.
+/// `directory` 下的每个 `registry_rule.rs`，跳过构建产物与版本库状态。
+fn collect_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if name == "target" || name == ".git" || name == ".dsh-meow" {
+                continue;
+            }
+            collect_rule_files(&path, files);
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == "registry_rule.rs")
+        {
+            files.push(path);
+        }
     }
 }

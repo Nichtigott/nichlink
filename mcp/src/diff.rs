@@ -13,12 +13,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use nichlink_build_method::{
-    GraftPlanRow, build_output_is_current, declared_grafts, face_views, graft_plan_rows,
-};
+use nichlink_build_method::{GraftPlanRow, declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
-use crate::evidence::out_dir;
+use crate::evidence::build_evidence;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
 use crate::tree_delta::{FaceStatus, TreeDelta};
@@ -38,9 +36,9 @@ use crate::tree_delta::{FaceStatus, TreeDelta};
 /// 共用同一套词汇（added/gone/re-identified）。
 pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let faces = face_views(root, &namespace)?;
+    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
-        return diff_records(root, &faces, &namespace, arguments);
+        return diff_records(root, &faces, &namespace, arguments, &unparsable);
     }
     // The built side and its per-face verdicts come from one rule
     // (`crate::tree_delta`), which `nichlink.search` reads too: the same face must
@@ -63,12 +61,18 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     let source_sources: BTreeSet<_> = faces.iter().map(|face| face.source.as_str()).collect();
 
     let mut output = format!(
-        "namespace {namespace}\nbuild {}\nfaces {} (source) vs {} (build)\n",
-        if built.current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
-        },
+        "namespace {namespace}\n{unparsable}build {}\nfaces {} (source) vs {} (build)\n",
+        // The freshness word comes from the one place that spells it. `built.current`
+        // answers the same question through the same rule (`build_output_is_current`)
+        // but spells nothing, so reading the word from here is what keeps this report
+        // and the others from drifting apart (the wording used to be inlined here and
+        // in `overlay`/`converge`; an independent check's mutation `E` found that
+        // nothing coupled the copies).
+        // 新鲜度词来自唯一拼它的地方。`built.current` 经同一条规则（`build_output_is_current`）
+        // 回答同一个问题，但不拼任何词；因此从这里取词，正是让本报告与其余报告不会漂移的原因
+        // （这份词形过去在本文件与 `overlay`/`converge` 各内联一次；独立复核的变异 `E` 发现
+        // 没有任何钉子把副本耦合起来）。
+        build_evidence(root).freshness(),
         faces.len(),
         built.rows.len(),
     );
@@ -96,17 +100,27 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
             FaceStatus::Ok | FaceStatus::AddedSinceBuild => None,
         })
         .collect();
+    // The bucket words come from `FaceStatus::label`'s side of the tree
+    // vocabulary, not from this file: the same face is annotated `ok`, `added
+    // since build`, or `re-identified` by `nichlink.search`, and a count line that
+    // spelled them its own way would make the two tools disagree about the word
+    // even though they share the rule.
+    // 桶名取自这棵树的词汇里 `FaceStatus::label` 那一侧，而不是本文件：同一个面会被
+    // `nichlink.search` 标注成 `ok`、`added since build` 或 `re-identified`，一条自己另拼的
+    // 计数行会让两个工具虽然共用规则、却在词形上说不到一起。
     output.push_str(&format!(
-        "added {}  gone {}  reidentified {}\n",
+        "{} {}  gone {}  {} {}\n",
+        FaceStatus::ADDED_SINCE_BUILD,
         added.len(),
         gone.len(),
+        FaceStatus::REIDENTIFIED,
         reidentified.len()
     ));
     if added.is_empty() && gone.is_empty() && reidentified.is_empty() {
         output.push_str("the build matches the sources face for face\n");
         return Ok(output);
     }
-    output.push_str("added:\n");
+    output.push_str(&format!("{}:\n", FaceStatus::ADDED_SINCE_BUILD));
     for face in added.iter().take(limit) {
         output.push_str(&format!("  + {} {} {}\n", face.path, face.kind, face.id));
     }
@@ -114,7 +128,7 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     for row in gone.iter().take(limit) {
         output.push_str(&format!("  - {} ({})\n", row.source, row.id));
     }
-    output.push_str("reidentified:\n");
+    output.push_str(&format!("{}:\n", FaceStatus::REIDENTIFIED));
     for (face, previous) in reidentified.iter().take(limit) {
         output.push_str(&format!("  ~ {} {} -> {}\n", face.path, previous, face.id));
     }
@@ -128,9 +142,14 @@ fn diff_records(
     faces: &[nichlink_build_method::FaceView],
     namespace: &str,
     arguments: &Value,
+    unparsable: &str,
 ) -> Result<String, String> {
-    let out = out_dir(root);
-    let current = build_output_is_current(root, &out);
+    // The records report used to spell the freshness word itself; it comes from the one
+    // place that spells it now, which is also why this call reads the evidence rather
+    // than only the fingerprint.
+    // 记录报告过去自己拼新鲜度词；现在它来自唯一拼它的地方，这也是这里读整份证据、而不只是读
+    // 指纹的原因。
+    let freshness = build_evidence(root).freshness();
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -140,7 +159,11 @@ fn diff_records(
     let mut ok = Vec::new();
     let mut reidentified = Vec::new();
     let mut stale = Vec::new();
-    let mut undeclared: Vec<(&GraftPlanRow, Option<bool>)> = Vec::new();
+    let mut undeclared: Vec<(
+        &GraftPlanRow,
+        Option<bool>,
+        Option<nichlink::identity::NodeId>,
+    )> = Vec::new();
     let mut unreadable = 0usize;
     for row in &rows {
         let Some(target) = row.target else {
@@ -166,7 +189,7 @@ fn diff_records(
                 // bucket says which one it is per row rather than flattening them.
                 // `Some(false)`：读到了，但没有切口点名这个槽位。`None`：宿主入口读不了，因此这里无从
                 // 判断——两者都属于"不知道它被保住"，而这个桶逐行说明是哪一种，而不是把它们抹平。
-                other => undeclared.push((row, other)),
+                other => undeclared.push((row, other, None)),
             }
             continue;
         }
@@ -174,8 +197,29 @@ fn diff_records(
             stale.push(row);
             continue;
         };
-        match faces.iter().find(|face| face.path == path) {
-            Some(face) => reidentified.push((row, face.id)),
+        let moved_to = faces
+            .iter()
+            .find(|face| face.path == path)
+            .map(|face| face.id);
+        // The declaration question does not depend on the identity being in the tree: a
+        // slot no `static_graft_plan!` cut names is pruned by the release either way.
+        // Asking it only in the branch above made this tool answer `undeclared 0` and
+        // `re-identified 1` for exactly the record `nichlink.grafts` reports as
+        // `[NOT declared by the host entry]` / `unkept plans 1` — two opposite
+        // recommendations for one record, and the wrong one is the optimistic one
+        // (audit `LGC-LG-12`). A record that is both unkept and drifted is reported as
+        // unkept, with where its path points now.
+        // 声明那边的问题与身份在不在树里无关：没有任何 `static_graft_plan!` 切口点名的槽位两种情形下都
+        // 会被发布剪掉。只在上面的分支里问它，会让本工具对**恰恰是** `nichlink.grafts` 报成
+        // `[NOT declared by the host entry]` / `unkept plans 1` 的那条记录回答 `undeclared 0` 与
+        // `re-identified 1`——同一条记录两个相反的建议，而错的那个是乐观的那个（审计 `LGC-LG-12`）。
+        // 既没被保住、又漂移了的记录报成"没被保住"，并附上它的路径现在指向哪里。
+        if row.declared != Some(true) {
+            undeclared.push((row, row.declared, moved_to));
+            continue;
+        }
+        match moved_to {
+            Some(now) => reidentified.push((row, now)),
             // There used to be an `unmatched` bucket here for "the identity is absent but the path
             // looks like a Rust expression (`::`)", because a typed *declaration* names its target
             // with an expression rather than a logical path. No plan writer ever puts an expression
@@ -195,12 +239,7 @@ fn diff_records(
         }
     }
     let mut output = format!(
-        "namespace {namespace}\nbuild {}\nrecords {} (external graft plans)\n",
-        if current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
-        },
+        "namespace {namespace}\n{unparsable}build {freshness}\nrecords {} (external graft plans)\n",
         rows.len()
     );
     output.push_str(&format!(
@@ -225,15 +264,16 @@ fn diff_records(
         output.push_str(
             "undeclared (the release prunes these slots, so the record can never take effect):\n",
         );
-        for (row, declared) in undeclared.iter().take(limit) {
+        for (row, declared, moved_to) in undeclared.iter().take(limit) {
+            let why = match declared {
+                Some(false) => "no cut in the host entry names it",
+                _ => "the host entry could not be read, so nothing can tell",
+            };
+            let movement = moved_to.map_or_else(String::new, |now| format!(" -> {now}"));
             output.push_str(&format!(
-                "  ! {} -> {}  ({})\n",
+                "  ! {} -> {}{movement}  ({why})\n",
                 row.selector,
                 row.target_path.as_deref().unwrap_or("-"),
-                match declared {
-                    Some(false) => "no cut in the host entry names it",
-                    _ => "the host entry could not be read, so nothing can tell",
-                }
             ));
         }
     }

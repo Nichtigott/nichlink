@@ -9,12 +9,8 @@
 //! 私有覆盖路径，因此硬失败保持逐字节相同。它拥有优先级（记录对声明形式）与
 //! “未受影响的声明按类型化切口原样传入”的规则。
 
-// Split decision: application is separated from reconciliation because it is the
-// only page allowed to touch the overlay machinery and the precedence policy;
-// the identity rules it consumes are intentionally opaque here, so a report
-// variant cannot change which cut is produced.
-// 拆分决定：应用与对账分开，因为它是唯一允许触碰覆盖机制与优先级策略的页面；它消费
-// 的身份规则在此刻意不透明，因此一个报告变体无法改变产出的切口。
+// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
 
 use std::collections::{BTreeMap, BTreeSet};
 

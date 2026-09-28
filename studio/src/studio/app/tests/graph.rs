@@ -12,15 +12,9 @@ use super::*;
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_navigation_moves_across_real_call_edges() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let mut app = App::load();
     app.overlay = Some(Overlay::Search(SearchState {
         query: "preview_canvas_width".to_owned(),
         ..SearchState::default()
@@ -60,15 +54,9 @@ fn graph_navigation_moves_across_real_call_edges() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_tab_reaches_both_tree_and_data_panels() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let mut app = App::load();
     // The DATA panel lists the trace's locals for the selected tree row, and tree
     // cursor 0 is the center function itself, so this test installs a trace with
     // locals inside `preview_canvas_width`. The standalone demo sample has no
@@ -126,15 +114,9 @@ fn graph_tab_reaches_both_tree_and_data_panels() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn graph_enter_promotes_callers_and_opens_center_source() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let mut app = App::load();
     app.overlay = Some(Overlay::Search(SearchState {
         query: "preview_canvas_width".to_owned(),
         ..SearchState::default()
@@ -175,15 +157,9 @@ fn graph_enter_promotes_callers_and_opens_center_source() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn call_tree_targets_keep_rows_navigable() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let app = App::load();
     let node_editor = app
         .registry
         .depth_first()

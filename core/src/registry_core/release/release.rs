@@ -79,11 +79,11 @@ impl CutTarget {
     /// The compile-time identity this selector addresses, when it is an `Id`.
     /// 该选择器寻址的编译期身份——当它是 `Id` 时。
     ///
-    /// Kept by B3a: `examples/control-button/tests/registry.rs` asserts the
-    /// generated static plan carries typed cuts through this accessor, so it is
-    /// not zero-caller even though no in-workspace library code uses it.
-    /// B3a 保留：`examples/control-button/tests/registry.rs` 通过该访问器断言生成的
-    /// 静态计划携带类型化切口；因此尽管工作区内没有库代码使用它，它也不是零调用者。
+    /// The caller is `examples/control-button/tests/registry.rs`, which asserts the
+    /// generated static plan carries typed cuts through this accessor: it is not dead
+    /// code even though no in-workspace library code uses it.
+    /// 调用方是 `examples/control-button/tests/registry.rs`：它通过该访问器断言生成的静态计划
+    /// 携带类型化切口，因此尽管工作区内没有库代码使用它，它也不是死代码。
     pub const fn id(self) -> Option<NodeId> {
         match self {
             Self::Id(id) => Some(id),
@@ -258,7 +258,7 @@ impl StaticPlan {
 /// Evaluate mounting and construction rules during crate generation.
 /// 在生成 crate 时求值挂载规则与构造规则。
 ///
-/// # Panics
+/// # Why this is a const twin
 ///
 /// This is the **const twin** of [`RegistrationRule::validate`]: same five
 /// checks, same order, different cost. The runtime side collects one `String` per

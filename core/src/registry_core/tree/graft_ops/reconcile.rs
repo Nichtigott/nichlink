@@ -8,12 +8,8 @@
 //! 本页拥有"这条记录指向哪个槽位"的那一半：它从耐久身份重新推导当前逻辑路径，并判定
 //! 记录是否存活。存活记录是否赢得槽位则是 `apply` 中的应用那一半。
 
-// Split decision: "which slot" and "who wins it" are separated because the
-// identity/path boundary rules (drift, contradiction, missing slot) are pure
-// lookup logic, while precedence and plan construction need the overlay
-// machinery. Keeping them apart lets each be reasoned about without the other.
-// 拆分决定：把“指向哪个槽位”与“谁赢得它”分开，因为身份/路径边界规则（漂移、矛盾、
-// 槽位缺失）是纯查找逻辑，而优先级与计划构建需要覆盖机制。分开后两者都能独立推敲。
+// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
 
 use crate::registry_core::declaration::SourceLocation;
 use crate::registry_core::diagnostic::{RegistryError, RegistryResult};

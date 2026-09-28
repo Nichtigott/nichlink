@@ -79,11 +79,16 @@ const EDIT_FIELD_ORDER: &[&str] = &[
     "flow_provider",
 ];
 
-/// Write all 27 shared fields into `face`. Both public entry points reach the
-/// field-by-field handling below through this one loop, so a new field is wired
-/// once instead of once per struct.
-/// 将全部 27 个共用字段写入 `face`。两个公开入口都经由这一个循环抵达下面的逐字段
-/// 处理，因此新增字段只需接一次线，而不是每个结构体各接一次。
+/// Write every shared field the path's field order names into `face`. Both public
+/// entry points reach the field-by-field handling below through this one loop, so
+/// a new field is wired once instead of once per struct. The two tables below are
+/// the count — this comment deliberately carries no number, because the three
+/// that used to sit in `face_write.rs`, `face_values.rs` and `macro/src/mirror.rs`
+/// disagreed with each other *and* with the tables (audit `SUR-C6`).
+/// 把本路径字段顺序点名的每个共用字段写入 `face`。两个公开入口都经由这一个循环抵达下面的
+/// 逐字段处理，因此新增字段只需接一次线，而不是每个结构体各接一次。数量就是下面那两张表——
+/// 这条注释有意不写数字，因为过去分散在 `face_write.rs`、`face_values.rs` 与 `macro/src/mirror.rs`
+/// 的那三个数字彼此不一致，也都不等于表长（审计 `SUR-C6`）。
 pub(super) fn apply_module_face_values(
     face: &mut FaceManifest,
     values: &ModuleFaceValues<'_>,
@@ -113,13 +118,13 @@ pub(super) fn apply_face_value(
         // trait 标签在有参与编译检查的路径时跟随路径，没有时独立成立——与宏经
         // `__face_trait_labels_or!` 施加的规则相同。两条路径的编辑规则因此一致，辅助函数
         // 就是全部处理。
-        "handle_traits" => apply_trait_contract(
+        "handle_traits" => apply_trait_label(
             face,
             "handle_traits",
             values.handle_traits,
             values.handle_contracts,
         ),
-        "part_traits" => apply_trait_contract(
+        "part_traits" => apply_trait_label(
             face,
             "part_traits",
             values.part_traits,
@@ -184,10 +189,22 @@ pub(super) fn edit_required(
     }
 }
 
-/// Write the label field from the paths when there are paths, and from the
-/// author's labels when there are none.
+/// Write the label field from the contract paths when there are paths, and from
+/// the author's labels when there are none.
 /// 有路径时由路径写标签字段，没有路径时由作者的标签写入。
-pub(super) fn apply_trait_contract(
+///
+/// It writes the *label*, never the contract line: the `handle_contracts:` /
+/// `part_contracts:` rows are emitted by the **create** order
+/// ([`CREATE_FIELD_ORDER`]), and the edit order does not carry them, so renaming
+/// this helper `apply_trait_label` is what keeps its name equal to what it does.
+/// Whether the edit path should also rewrite the contract rows is the MCP
+/// `apply edit` finding (`LG-21`: it returned success while leaving the old
+/// contract in place) and is decided where that path's field set is declared.
+/// 它写的是**标签**，绝不是契约行：`handle_contracts:` / `part_contracts:` 两行由**创建**顺序
+/// （[`CREATE_FIELD_ORDER`]）发射，编辑顺序里没有它们，因此这个辅助函数叫
+/// `apply_trait_label` 才与它的行为相等。编辑路径是否也该改写契约行是 MCP `apply edit` 那条
+/// 发现（`LG-21`：它返回成功却留着旧契约），由那条路径的字段集合的声明处裁定。
+pub(super) fn apply_trait_label(
     face: &mut FaceManifest,
     label_field: &str,
     labels: &str,
@@ -269,9 +286,9 @@ mod tests {
         )
     }
 
-    /// The 28 shared fields are handled once: both public shapes flow through the
+    /// The shared fields are handled once: both public shapes flow through the
     /// same applier, so identical values produce identical faces.
-    /// 28 个共用字段只处理一次：两个公开结构体流经同一个应用器，相同取值产生相同
+    /// 共用字段只处理一次：两个公开结构体流经同一个应用器，相同取值产生相同
     /// 注册面。
     #[test]
     fn identical_values_reach_the_same_face_from_add_and_edit() {
@@ -335,5 +352,57 @@ mod tests {
         )
         .expect("edit applies");
         assert_eq!(edited.values.get("preset").map(String::as_str), Some(""));
+    }
+
+    /// The two field orders are the truth about what each path writes, and the
+    /// edit order is the create order minus the contract rows — the labels are the
+    /// only trait key an edit rewrites (audit `NAM-31`).
+    /// 两张字段顺序表就是两条路径写入内容的真值，而编辑顺序等于创建顺序减去两个契约行——
+    /// 标签是编辑会改写的唯一 trait 键（审计 `NAM-31`）。
+    ///
+    /// Red before the fix: the numbers in the three comments (`27`, `28`, `29`)
+    /// disagreed with each other and with the tables, so nothing named this rule.
+    /// 修前为红：三处注释里的数字（`27`、`28`、`29`）彼此不一致、也不等于表长，因此这条规则
+    /// 无处可查。
+    #[test]
+    fn the_edit_order_is_the_create_order_without_the_contract_rows() {
+        let in_create_but_not_edit: Vec<&str> = CREATE_FIELD_ORDER
+            .iter()
+            .copied()
+            .filter(|field| !EDIT_FIELD_ORDER.contains(field))
+            .collect();
+        assert_eq!(
+            in_create_but_not_edit,
+            ["handle_contracts", "part_contracts"],
+            "the only rows an edit does not rewrite are the contract rows"
+        );
+        for field in EDIT_FIELD_ORDER {
+            assert!(
+                CREATE_FIELD_ORDER.contains(field),
+                "edit's `{field}` is not in the create order"
+            );
+        }
+        // Every row either table names is a key `edit` accepts: a field wired into
+        // a table but not into `edit` would be dropped silently on the next save.
+        // 两张表点名的每一行都是 `edit` 接受的键：接进表却没接进 `edit` 的字段会在下次保存时
+        // 被静默丢掉。
+        let (request, _) = fixture();
+        let values = ModuleFaceValues::from_new(&request);
+        for field in CREATE_FIELD_ORDER.iter().chain(EDIT_FIELD_ORDER.iter()) {
+            // `needs_registry` is the one table member a caller spells as a Rust
+            // bool; the applier is what turns it into the `true`/`false` text
+            // `edit` validates, so the pin supplies that text itself.
+            // `needs_registry` 是表里唯一由调用方写成 Rust bool 的成员；把它变成 `edit` 校验的
+            // `true`/`false` 文本是应用器的活，因此这条钉子自己给出该文本。
+            let value = if *field == "needs_registry" {
+                "false"
+            } else {
+                values.value(field)
+            };
+            let mut face = blank_manifest();
+            face.edit(field, value).unwrap_or_else(|error| {
+                panic!("`{field}` is in a field order but not editable: {error}")
+            });
+        }
     }
 }

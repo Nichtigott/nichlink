@@ -374,7 +374,7 @@ mod tests {
         )
         .expect("host entry");
 
-        let nodes = crate::discover_root(&src);
+        let nodes = crate::discovery::discover_root(&src);
         let entry = crate::entry::resolve_host_entry(&src, &nodes, None);
         let declared = crate::host_graft_entries(&entry, &mut BuildDiagnostics::default())
             .declared

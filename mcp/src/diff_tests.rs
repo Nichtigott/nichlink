@@ -53,7 +53,10 @@ fn a_matching_build_reports_no_delta() {
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
     publish(&root, &[format!("{}\t{}\t-", face.id, face.source)]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
-    assert!(reply.contains("added 0  gone 0  reidentified 0"), "{reply}");
+    assert!(
+        reply.contains("added since build 0  gone 0  re-identified 0"),
+        "{reply}"
+    );
     assert!(reply.contains("face for face"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -67,7 +70,7 @@ fn an_addition_and_a_removal_are_both_named() {
     let old = nichlink::identity::NodeId::from_namespaced_path(&name, "old/old.rs", "Old");
     publish(&root, &[format!("{old}\told/old.rs\t-")]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
-    assert!(reply.contains("added 1  gone 1"), "{reply}");
+    assert!(reply.contains("added since build 1  gone 1"), "{reply}");
     assert!(reply.contains("+ root/button"), "{reply}");
     assert!(reply.contains("- old/old.rs"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
@@ -83,7 +86,7 @@ fn a_changed_identity_under_an_unmoved_file_is_reported() {
     let renamed = nichlink::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
     publish(&root, &[format!("{renamed}\t{}\t-", face.source)]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
-    assert!(reply.contains("reidentified 1"), "{reply}");
+    assert!(reply.contains("re-identified 1"), "{reply}");
     assert!(reply.contains("~ root/button"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -111,23 +114,36 @@ fn record(root: &Path, selector: &str, target: nichlink::identity::NodeId, path:
     .expect("record file");
 }
 
-/// The record side: a record whose identity the tree still has is `ok`, one whose slot moved
-/// identity is `re-identified`, and one whose slot is gone is `stale`. There is no `unmatched`
-/// bucket: it existed for "the identity is absent but the plan's path looks like a Rust expression
-/// (`::`)", and no plan writer produces that — both write `registry.path_for` — while a typed
-/// *declaration* cannot be matched at all when the identity is absent (nothing resolves its module,
-/// so `names_face` admits only string cuts there). The bucket described an input that cannot occur
-/// and its heading claimed a real case; a record naming something this tree has not got is `stale`,
-/// and the reply prints the path it looked for (audit `m1`). The third record below is the old
-/// fixture for that bucket, kept as a `stale` row on purpose: it is what the fabricated input now
-/// honestly is.
-/// 记录那一侧：身份仍在树里的记录是 `ok`；槽位换了身份的是 `re-identified`；槽位消失的是 `stale`。
+/// The record side, both questions asked in both branches: a record whose identity the tree still
+/// has is `ok` when some cut names its slot; one whose slot moved identity is `re-identified` when
+/// a cut still names the slot; and a record whose slot **no** cut names is `undeclared` whether or
+/// not its stored identity is still in the tree.
+/// 记录那一侧，两个分支里都问两个问题：身份仍在树里的记录，有切口点名它的槽位时是 `ok`；槽位换了
+/// 身份而仍有切口点名该槽位时是 `re-identified`；而**没有**任何切口点名其槽位的记录是 `undeclared`
+/// ——无论它存下来的身份还在不在树里。
+///
+/// That last clause is the fix for `LGC-LG-12`: the declaration question used to be asked only in
+/// the "identity is in the tree" branch, so a record whose identity was absent (the typical
+/// "slot unmoved, identity changed" case) came back `re-identified` or `stale` with `undeclared 0`
+/// — while `nichlink.grafts` reported the same row `[NOT declared by the host entry]` and counted
+/// it under `unkept plans N`, and the build refused it. One record, two opposite recommendations,
+/// and the optimistic one was the wrong one.
+/// 最后一句就是 `LGC-LG-12` 的修复：那个"是否被声明"的问题过去只在"身份在树里"那一支被问到，因此
+/// 身份缺席的记录（典型的"槽位没动、身份换了"）会带着 `undeclared 0` 回成 `re-identified` 或
+/// `stale`——而 `nichlink.grafts` 把同一行报成 `[NOT declared by the host entry]` 并计入
+/// `unkept plans N`，构建也拒绝它。一条记录两个相反的建议，而乐观的那个是错的。
+///
+/// There is no `unmatched` bucket: it existed for "the identity is absent but the plan's path looks
+/// like a Rust expression (`::`)", and no plan writer produces that — both write `registry.path_for`
+/// — while a typed *declaration* cannot be matched at all when the identity is absent (nothing
+/// resolves its module, so `names_face` admits only string cuts there). The bucket described an
+/// input that cannot occur and its heading claimed a real case; a record naming something this tree
+/// has not got is judged by the same declaration rule as any other (audit `m1`).
 /// 没有 `unmatched` 桶：它是为"身份缺席、而计划的路径看起来像 Rust 表达式（`::`）"而设的，而没有
 /// 任何计划写入方会产出那种东西——两处都写 `registry.path_for`——而类型化的**声明**在身份缺席时
-/// 根本匹配不上（没有任何东西能解析它的模块，因此 `names_face` 在那种情况下只接受字符串切口）。那个
-/// 桶描述的是一个不可能出现的输入，标题却声称描述真实情形；点名了本树没有的东西的记录就是 `stale`，
-/// 回复会打印它查找过的路径（审计 `m1`）。下面第三条记录就是那个桶的旧夹具，有意保留为 `stale`
-/// 行：那个伪造输入如今诚实地就是这个。
+/// 根本匹配不上（没有任何东西能解析它的模块，因此 `names_face` 只接受字符串切口）。那个桶描述的
+/// 是一个不可能出现的输入，标题却声称描述真实情形；点名了本树没有的东西的记录，与其它记录一样按同
+/// 一条声明规则判定（审计 `m1`）。
 #[test]
 fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
     let (root, name) = package("records");
@@ -157,8 +173,12 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
         reply.contains("records 4 (external graft plans)"),
         "{reply}"
     );
+    // `ghost_fast` and `typed_fast` name slots no cut names: unkept beats drifted, because the
+    // first verdict is the one that decides whether the record can ever take effect.
+    // `ghost_fast` 与 `typed_fast` 点名的槽位没有任何切口点名：**没被保住**压过"漂移了"，因为
+    // 前一个结论才决定这条记录能否生效。
     assert!(
-        reply.contains("ok 1  undeclared 0  stale 2  re-identified 1  unreadable 0"),
+        reply.contains("ok 1  undeclared 2  stale 0  re-identified 1  unreadable 0"),
         "{reply}"
     );
     assert!(
@@ -167,19 +187,18 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
     );
     assert!(reply.contains("kept_fast -> root/button"), "{reply}");
     assert!(
+        reply.contains("! ghost_fast -> root/ghost  (no cut in the host entry names it)"),
+        "an undeclared record whose identity is absent is unkept, not merely stale: {reply}"
+    );
+    assert!(
         reply.contains(
-            "- ghost_fast -> root/ghost (no face in this tree has that identity or that path)"
+            "! typed_fast -> crate::control::NODE_ID  (no cut in the host entry names it)"
         ),
-        "{reply}"
+        "a typed path with no identity resolves to no cut either, and that is the verdict: {reply}"
     );
     assert!(
         reply.contains(&format!("~ moved_fast {stale_identity} -> {}", face.id)),
-        "the record that moved identity names the identity the tree has now: {reply}"
-    );
-    assert!(
-        reply.contains("- typed_fast -> crate::control::NODE_ID"),
-        "a path that names nothing in this tree is stale, and the reply prints the path it looked \
-         for: {reply}"
+        "the record that moved identity into a declared slot names the identity the tree has now: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -245,4 +264,30 @@ fn an_unreadable_record_is_counted_and_no_records_is_not_a_verdict() {
         "{empty}"
     );
     let _ = std::fs::remove_dir_all(&bare);
+}
+
+/// A registration file the derivation cannot parse is counted in the reply instead of vanishing:
+/// a read-only tree query used to report a smaller tree as if it were the whole one, which is what
+/// `LGC-LG-11` recorded on the producer side and what the consumer half now says out loud.
+/// 推导解析不了的注册面文件被计入回复而不是消失：只读的树查询过去把一棵更小的树当成完整的树报出去
+/// ——这正是 `LGC-LG-11` 在生产端记录的事，而消费端现在把它说出来。
+fn broken_face(root: &std::path::Path, label: &str) {
+    let directory = root.join("src").join(label);
+    std::fs::create_dir_all(&directory).expect("module directory");
+    std::fs::write(
+        directory.join(format!("{label}.rs")),
+        "crate::root_object! {\n    kind: Broken,\n",
+    )
+    .expect("truncated face");
+}
+
+#[test]
+fn the_tree_diff_counts_unparsable_registration_files() {
+    let (root, name) = package("unparsable");
+    publish(&root, &[]);
+    let _ = name;
+    broken_face(&root, "broken");
+    let reply = diff(&root, &json!({})).expect("the diff renders");
+    assert!(reply.contains("unparsable faces 1"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
 }

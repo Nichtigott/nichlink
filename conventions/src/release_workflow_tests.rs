@@ -186,6 +186,16 @@ fn both_spellings_of_a_negated_tag_test_are_reported() {
 /// cannot be read as a conjunction of positive tests, so each is reported.
 /// 白名单就是白名单。下列每条都以文本形式带着 tag 判断，却都读不成"肯定式测试的合取"，因此
 /// 都被报出。
+///
+/// The last two are the spellings a substring blacklist could not see (audit `LGC-LG-25`):
+/// `startsWith(github.ref, 'refs/tags/') == false` *contains* the positive tag test and
+/// contains none of `!`, `!=`, `||`, so a `contains` test called it a correct guard while
+/// GitHub read it as "only on a non-tag ref" — a publish on every branch push. t16 measured
+/// four such equivalent negations passing the old check with zero findings.
+/// 最后两条是子串黑名单看不见的拼法（审计 `LGC-LG-25`）：
+/// `startsWith(github.ref, 'refs/tags/') == false` **含有**那个肯定式 tag 判断，且不含 `!`、
+/// `!=`、`||`，因此 `contains` 判定会称它为正确守卫，而 GitHub 把它读成"只在非 tag ref 上"——
+/// 每次分支 push 都发布。t16 实测四种等价否定在旧检查下都是 0 发现。
 #[test]
 fn shapes_off_the_whitelist_are_reported() {
     let fixtures = [
@@ -200,6 +210,14 @@ fn shapes_off_the_whitelist_are_reported() {
         (
             "an operator the gate does not enumerate",
             "github.run_number > 3 && startsWith(github.ref, 'refs/tags/')",
+        ),
+        (
+            "a comparison to false",
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') == false",
+        ),
+        (
+            "a comparison to zero",
+            "startsWith(github.ref, 'refs/tags/') == 0",
         ),
     ];
     let mut missed = Vec::new();

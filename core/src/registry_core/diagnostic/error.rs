@@ -115,21 +115,16 @@ impl RegistryError {
         }
     }
 
-    // The four essential facts plus the aggregated children are readable again.
-    // B3a removed every reader because nothing in the workspace called them, but
-    // `Registry::health_check` is a documented host API now, so a host that
-    // receives one of these errors must be able to map it back to its `node`,
-    // `path`, `source`, and `children` instead of scraping `Display`. The other
-    // three readers (`source_chain`, `call_path`, `registration_chain`) stay
-    // deleted until a caller needs them, and the `*_mut` setters plus
-    // `with_children` remain the construction/refinement path.
-    // Principle: a zero-caller deletion is reversed when a real caller appears.
-    // 四项必要事实与聚合的子错误重新可读。B3a 因工作区内无调用者删掉了所有读取器，但
-    // `Registry::health_check` 现在是有文档的宿主 API，因此拿到这类错误的宿主必须能把
-    // 它映射回 `node`、`path`、`source` 与 `children`，而不是去解析 `Display`。另外三个
-    // 读取器（`source_chain`、`call_path`、`registration_chain`）在有调用者之前保持删除，
-    // `*_mut` setter 与 `with_children` 仍是构造/细化路径。
-    // 原则：零调用者删除在真实调用者出现时予以撤销。
+    // What is readable is what a caller needs: `Registry::health_check` is a documented
+    // host API, so a host that receives one of these errors can map it back to its
+    // `node`, `path`, `source` and `children` instead of scraping `Display`. The
+    // aggregate chains (`source_chain`, `call_path`, `registration_chain`) have no such
+    // caller and therefore no reader, and the `*_mut` setters plus `with_children`
+    // remain the construction and refinement path.
+    // 可读的就是调用方需要的：`Registry::health_check` 是有文档的宿主 API，因此拿到这类错误的
+    // 宿主能把 `node`、`path`、`source` 与 `children` 映射回来，而不必去解析 `Display`。聚合链
+    // （`source_chain`、`call_path`、`registration_chain`）没有这样的调用方，因此也没有读取器；而
+    // `*_mut` setter 与 `with_children` 仍是构造与细化路径。
 
     /// The identity of the registration face this failure is about.
     /// 该失败所针对的注册面身份。
@@ -301,12 +296,10 @@ mod tests {
     /// A host that receives a structured error can recover the facts it was
     /// required to hand to `RegistryError::new` — node, path, source, message —
     /// plus the aggregated children, instead of parsing `Display`.
-    /// `Registry::health_check` is the documented caller that made these readers
-    /// necessary again after B3a removed them.
+    /// `Registry::health_check` is the documented caller these readers exist for.
     /// 收到结构化错误的宿主能取回它必须交给 `RegistryError::new` 的那些事实——node、
     /// path、source、message——以及聚合的子错误，而不必解析 `Display`。
-    /// `Registry::health_check` 正是这些读取器在 B3a 删除之后重新必要的那个有文档的
-    /// 调用者。
+    /// `Registry::health_check` 就是这些读取器为之存在的那个有文档的调用者。
     #[test]
     fn an_error_still_exposes_the_facts_a_host_must_report() {
         let node = NodeId::from_raw([7; 16]);

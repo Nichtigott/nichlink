@@ -246,3 +246,28 @@ fn a_member_that_is_not_an_object_is_refused_rather_than_dropped() {
         assert!(reply["id"].is_null(), "{batch:?}");
     }
 }
+
+/// A frame whose bytes are not UTF-8 is answered and the session continues. It used to be the one
+/// malformed frame that ended the bridge: `main` wrote to stderr and exited 1 — which both READMEs
+/// promise never happens — and the client got a dead pipe instead of an error answer, while the
+/// other three malformed frames were all answered (audit `LGC-LG-22`).
+/// 字节不是 UTF-8 的帧被作答且会话继续。它过去是唯一会终止桥的那种畸形帧：`main` 写 stderr 并
+/// `exit(1)`——两份 README 都承诺绝不发生——而客户端拿到的是一根死管道而不是错误响应，同类畸形帧
+/// 里的另外三类却都被作答（审计 `LGC-LG-22`）。
+#[test]
+fn a_frame_that_is_not_utf8_is_answered_and_the_session_continues() {
+    let mut input: &[u8] = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"x\":\"\xff\xfe\"}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n";
+    let mut output = Vec::new();
+    run_with(&mut input, &mut output).expect("a malformed frame must not end the session");
+    let text = String::from_utf8(output).expect("answers are UTF-8");
+    let replies: Vec<Value> = text
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("a JSON answer"))
+        .collect();
+    assert_eq!(replies.len(), 2, "{replies:#?}");
+    assert_eq!(replies[0]["error"]["code"], -32600, "{replies:#?}");
+    let message = replies[0]["error"]["message"].as_str().expect("a message");
+    assert!(message.contains("not valid UTF-8"), "{message}");
+    assert_eq!(replies[1]["id"], 2, "{replies:#?}");
+    assert!(replies[1]["result"].is_object(), "{replies:#?}");
+}

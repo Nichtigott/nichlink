@@ -13,7 +13,7 @@
 use std::path::Path;
 
 use nichlink::lexicon;
-use nichlink_build_method::{FaceView, face_views, package_name};
+use nichlink_build_method::{FaceView, package_name};
 
 /// Report every registration face declared under the package root `root`.
 /// 报告 `root` 这个包根下声明的每个注册面。
@@ -25,8 +25,8 @@ use nichlink_build_method::{FaceView, face_views, package_name};
 /// 就是这个包自己的名字。
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let faces = face_views(root, &namespace)?;
-    Ok(render(&namespace, &faces))
+    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+    Ok(render(&namespace, &faces, &unparsable))
 }
 
 /// The identity namespace this package's faces were stamped with.
@@ -99,8 +99,8 @@ fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, Strin
 /// which identity domain they are in.
 /// 命名空间写在报告开头，因为下面的每个 id 离开它都没有意义：把这些行与已构建的树对照的读取方
 /// 必须知道它们处在哪个身份域。
-fn render(namespace: &str, faces: &[FaceView]) -> String {
-    let mut output = format!("namespace {namespace}\nfaces {}\n", faces.len());
+fn render(namespace: &str, faces: &[FaceView], unparsable: &str) -> String {
+    let mut output = format!("namespace {namespace}\n{unparsable}faces {}\n", faces.len());
     for face in faces {
         // An unresolved parent is named rather than hidden: the face is real,
         // and the fact that its parent is not is the answer to "why is this node

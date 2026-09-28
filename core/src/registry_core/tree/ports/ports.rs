@@ -28,9 +28,15 @@
 //! 2. 端口在该分支自己的子树内解析，分支自身也算在内；
 //! 3. a handle or a port that matches more than one face is **reported, never
 //!    resolved silently** — an implicit "nearest wins" rule is exactly the kind
-//!    of hidden behaviour this workspace refuses.
+//!    of hidden behaviour this workspace refuses. This rule holds for the whole
+//!    port index and for `resolve_node`, which answers `Resolution::Ambiguous`;
+//!    the graft-cut selector `resolve_path` is the one entry point that still
+//!    takes the first match, and that difference is a recorded debt rather than a
+//!    second rule (audit `LGC-LG-07` / `KRN-C-03`).
 //! 3. 匹配到多个面的句柄或端口**一律报出，绝不静默解析**——隐式的"最近者优先"正是本工作区
-//!    拒绝的那类隐性行为。
+//!    拒绝的那类隐性行为。本条对整个端口索引与 `resolve_node` 成立（后者回答
+//!    `Resolution::Ambiguous`）；移植切口选择器 `resolve_path` 是仍然取第一个匹配的那一个入口，
+//!    这个差别是一笔记账中的欠账，而不是第二条规则（审计 `LGC-LG-07` / `KRN-C-03`）。
 //!
 //! Boundary: same-branch references do **not** need this index. Inside a branch
 //! its own internals are reachable directly (`C4::…`); only the boundary is

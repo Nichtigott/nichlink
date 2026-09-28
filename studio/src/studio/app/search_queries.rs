@@ -4,6 +4,7 @@
 use super::*;
 
 use nichlink_run_method::registry_core::declaration::source_file_matches;
+use nichlink_run_method::source::item_symbols;
 
 impl App {
     /// Flat rows for one search query, with **adjacent** duplicates collapsed.
@@ -78,85 +79,14 @@ impl App {
                     text: info.source.file.to_owned(),
                 });
             }
-            let functions = function_symbols(&text);
-            for function in &functions {
-                if !file_match
-                    && !info.source.function.to_ascii_lowercase().contains(&needle)
-                    && !function.name.to_ascii_lowercase().contains(&needle)
-                    && !function.signature.to_ascii_lowercase().contains(&needle)
-                {
-                    continue;
-                }
-                rows.push(SearchRow {
-                    depth: 1,
-                    node: Some(info.id),
-                    path: info.source.file.to_owned(),
-                    function: function.name.clone(),
-                    line: Some(function.line),
-                    signature: function.signature.clone(),
-                    text: format!("{} -> fn {}", info.source.file, function.name),
-                });
-            }
-            for (line_index, line) in text.lines().enumerate() {
-                if functions
-                    .iter()
-                    .any(|function| function.line == line_index as u32 + 1)
-                {
-                    continue;
-                }
-                let trimmed = line.trim();
-                let symbol = trimmed
-                    .strip_prefix("pub fn ")
-                    .or_else(|| trimmed.strip_prefix("fn "))
-                    .or_else(|| trimmed.strip_prefix("pub async fn "))
-                    .or_else(|| trimmed.strip_prefix("async fn "))
-                    .or_else(|| trimmed.strip_prefix("pub struct "))
-                    .or_else(|| trimmed.strip_prefix("struct "))
-                    .or_else(|| trimmed.strip_prefix("pub enum "))
-                    .or_else(|| trimmed.strip_prefix("enum "))
-                    .or_else(|| trimmed.strip_prefix("pub type "))
-                    .or_else(|| trimmed.strip_prefix("type "))
-                    .or_else(|| trimmed.strip_prefix("pub const "))
-                    .or_else(|| trimmed.strip_prefix("const "))
-                    .or_else(|| trimmed.strip_prefix("let "));
-                let Some(symbol) = symbol else {
-                    continue;
-                };
-                let name = symbol
-                    .split(|character: char| {
-                        character == '('
-                            || character == '{'
-                            || character == ':'
-                            || character == '='
-                            || character.is_whitespace()
-                    })
-                    .next()
-                    .unwrap_or(symbol)
-                    .trim_matches([';', ',']);
-                if !file_match
-                    && !info.source.function.to_ascii_lowercase().contains(&needle)
-                    && !name.to_ascii_lowercase().contains(&needle)
-                    && !trimmed.to_ascii_lowercase().contains(&needle)
-                {
-                    continue;
-                }
-                rows.push(SearchRow {
-                    depth: 1,
-                    node: Some(info.id),
-                    path: info.source.file.to_owned(),
-                    function: name.to_owned(),
-                    line: Some(line_index as u32 + 1),
-                    signature: trimmed.to_owned(),
-                    text: if trimmed.starts_with("fn ")
-                        || trimmed.starts_with("pub fn ")
-                        || trimmed.contains(" fn ")
-                    {
-                        format!("{} -> fn {name}", info.source.file)
-                    } else {
-                        format!("{} -> {name}", info.source.file)
-                    },
-                });
-            }
+            rows.extend(source_rows_for_text(
+                &text,
+                &info.source.file,
+                info.id,
+                &info.source.function,
+                file_match,
+                &needle,
+            ));
         }
         rows
     }
@@ -164,5 +94,131 @@ impl App {
     pub(super) fn source_function_line(&self, node: NodeId, function: &str) -> Option<u32> {
         let info = self.registry.find(node)?;
         function_line(&info.source.file, function)
+    }
+}
+
+/// The rows one source file contributes to a search, rendered from the kernel's item
+/// list.
+/// 一份源文件为搜索贡献的行，渲染自内核的条目清单。
+///
+/// The declaration vocabulary is the kernel's (`item_symbols`), not a prefix table
+/// spelled here: Studio carried such a table, and it missed qualified declarations
+/// (`pub(crate) struct`, a bodyless `pub(crate) fn`) while promoting `let` bindings to
+/// symbols that `call_relations` can never find (audit `STU-S-06`). This function only
+/// renders what the kernel reports and applies the query filter.
+/// 声明词表归内核（`item_symbols`），不是在这里拼的前缀表：Studio 曾有这样一张表，它漏掉带
+/// 可见性的声明（`pub(crate) struct`、没有函数体的 `pub(crate) fn`），又把 `let` 绑定提升成
+/// `call_relations` 永远找不到的符号（审计 `STU-S-06`）。本函数只渲染内核报告的条目并施加查询
+/// 过滤。
+fn source_rows_for_text(
+    text: &str,
+    file: &str,
+    node: NodeId,
+    declared_function: &str,
+    file_match: bool,
+    needle: &str,
+) -> Vec<SearchRow> {
+    let mut rows = Vec::new();
+    for item in item_symbols(text) {
+        if !file_match
+            && !declared_function.to_ascii_lowercase().contains(needle)
+            && !item.name.to_ascii_lowercase().contains(needle)
+            && !item.signature.to_ascii_lowercase().contains(needle)
+        {
+            continue;
+        }
+        rows.push(SearchRow {
+            depth: 1,
+            node: Some(node),
+            path: file.to_owned(),
+            function: item.name.clone(),
+            line: Some(item.line),
+            signature: item.signature.clone(),
+            text: if item.is_function {
+                format!("{file} -> fn {}", item.name)
+            } else {
+                format!("{file} -> {}", item.name)
+            },
+        });
+    }
+    rows
+}
+
+#[cfg(test)]
+mod source_rows_tests {
+    //! The declaration vocabulary this file renders is the kernel's (audit `STU-S-06`).
+    //! 本文件渲染的声明词表归内核所有（审计 `STU-S-06`）。
+
+    use super::*;
+
+    /// The shapes the old word table got wrong: a qualified bodyless `fn` and an
+    /// `unsafe` bodyless `fn` (neither is a function with a body, and neither is a
+    /// prefix the table spelled), plus a `let` binding (which the table did spell).
+    /// 旧词表弄错的那些形状：没有函数体的 `pub(crate) fn` 与 `unsafe fn`（既不是有函数体的函数，
+    /// 也不是词表拼出的前缀），外加 `let` 绑定（词表恰恰拼了它）。
+    const SOURCE: &str = "\
+pub(crate) async fn load(value: usize) {}\n\
+impl Widget {\n\
+    pub(crate) fn measure(&self) -> usize;\n\
+    unsafe fn render(&self) -> u32;\n\
+}\n\
+pub(crate) struct Panel;\n\
+fn outer() {\n\
+    let text = \"load\";\n\
+}\n";
+
+    /// The names the rows report for one query.
+    /// 某次查询下各行报告的名字。
+    fn names(needle: &str) -> Vec<String> {
+        source_rows_for_text(
+            SOURCE,
+            "src/panel.rs",
+            nichlink_run_method::ROOT_NODE_ID,
+            "outer",
+            false,
+            needle,
+        )
+        .into_iter()
+        .map(|row| row.function)
+        .collect()
+    }
+
+    /// A qualified `fn` without a body is a symbol: the kernel lists it.
+    /// 没有函数体的带可见性 `fn` 是符号：内核会列出它。
+    #[test]
+    fn a_bodyless_qualified_fn_is_a_symbol() {
+        assert_eq!(
+            names("pub(crate) fn measure"),
+            ["measure"],
+            "the kernel's item list must report the bodyless qualified function"
+        );
+    }
+
+    /// An `unsafe fn` without a body is a symbol too.
+    /// 没有函数体的 `unsafe fn` 同样是符号。
+    #[test]
+    fn a_bodyless_unsafe_fn_is_a_symbol() {
+        assert_eq!(
+            names("unsafe fn render"),
+            ["render"],
+            "the kernel's item list must report the bodyless unsafe function"
+        );
+    }
+
+    /// A `let` binding is not a symbol, however its text is written.
+    /// `let` 绑定不是符号，无论它的文本怎么写。
+    #[test]
+    fn a_let_binding_is_not_a_symbol() {
+        assert!(
+            names("text").is_empty(),
+            "a `let` binding must not become a symbol row"
+        );
+    }
+
+    /// The `struct` shape the old table could not spell with a qualifier.
+    /// 旧词表拼不出带可见性的 `struct` 形状。
+    #[test]
+    fn a_qualified_struct_is_a_symbol() {
+        assert_eq!(names("pub(crate) struct"), ["Panel"]);
     }
 }

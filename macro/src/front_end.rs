@@ -15,14 +15,6 @@ use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
 
 use crate::mirror::{Field, punct};
 
-/// Split a token stream at its top-level `;`, keeping at most three parts.
-/// 在顶层 `;` 处切分 token 流，最多保留三段。
-///
-/// A `;` inside a group (`{ … }`, `( … )`, `[ … ]`) belongs to that group, so it
-/// is never a separator here; anything after the third separator stays in the
-/// third part.
-/// 组（`{ … }`、`( … )`、`[ … ]`）内的 `;` 属于该组，因此绝不算分隔符；第三个分隔符
-/// 之后的内容留在第三段。
 /// Replace every occurrence of one identifier with the given tokens.
 /// 把某一标识符的每次出现替换为给定的 token。
 ///
@@ -54,6 +46,14 @@ pub(crate) fn splice(tokens: Tokens, placeholder: &str, replacement: &Tokens) ->
         .collect()
 }
 
+/// Split a token stream at its top-level `;`, keeping at most three parts.
+/// 在顶层 `;` 处切分 token 流，最多保留三段。
+///
+/// A `;` inside a group (`{ … }`, `( … )`, `[ … ]`) belongs to that group, so it
+/// is never a separator here; anything after the third separator stays in the
+/// third part.
+/// 组（`{ … }`、`( … )`、`[ … ]`）内的 `;` 属于该组，因此绝不算分隔符；第三个分隔符
+/// 之后的内容留在第三段。
 pub(crate) fn split_semicolons(tokens: Tokens) -> Vec<Tokens> {
     let mut parts = vec![Tokens::new()];
     for token in tokens {
@@ -133,4 +133,51 @@ pub(crate) fn error_at(span: Span, message: String) -> Tokens {
             Tokens::from(TokenTree::Literal(literal)),
         )),
     ])
+}
+
+#[cfg(test)]
+mod front_end_docs {
+    /// The doc block that sits directly above a declaration is the one rustdoc
+    /// publishes for it. `split_semicolons` and `splice` once carried each
+    /// other's block, so every reader — and the generated documentation — was
+    /// told what the other function does (audit `SUR-C1`). This pin reads the
+    /// source and asks each declaration which doc it owns.
+    /// 紧邻声明之上的文档块就是 rustdoc 为它发布的那一份。`split_semicolons` 与 `splice`
+    /// 曾经各自带着对方的文档块，于是每个读者——以及生成的文档——读到的都是另一个函数做的事
+    /// （审计 `SUR-C1`）。本钉子读源码，逐个问每个声明它拥有哪份文档。
+    #[test]
+    fn every_declaration_carries_its_own_doc() {
+        let source = include_str!("front_end.rs");
+        let doc_above = |declaration: &str| -> String {
+            let head = &source[..source.find(declaration).expect("the declaration exists")];
+            let mut lines: Vec<&str> = head
+                .lines()
+                .rev()
+                .skip_while(|line| line.trim().is_empty())
+                .take_while(|line| line.trim_start().starts_with("///"))
+                .collect();
+            lines.reverse();
+            lines.join("\n")
+        };
+
+        let split = doc_above("pub(crate) fn split_semicolons");
+        assert!(
+            split.contains("Split a token stream at its top-level `;`"),
+            "split_semicolons lost its own doc: {split:?}"
+        );
+        assert!(
+            split.contains("在顶层 `;` 处切分"),
+            "split_semicolons lost the Chinese half: {split:?}"
+        );
+
+        let splice = doc_above("pub(crate) fn splice");
+        assert!(
+            splice.contains("Replace every occurrence of one identifier"),
+            "splice lost its own doc: {splice:?}"
+        );
+        assert!(
+            !splice.contains("Split a token stream at its top-level `;`"),
+            "the split doc is still attached to splice: {splice:?}"
+        );
+    }
 }

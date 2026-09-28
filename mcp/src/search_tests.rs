@@ -167,3 +167,47 @@ fn a_root_without_a_package_still_answers_the_source_half() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A registration file the derivation cannot parse is counted in the reply instead of vanishing:
+/// a read-only tree query used to report a smaller tree as if it were the whole one, which is what
+/// `LGC-LG-11` recorded on the producer side and what the consumer half now says out loud.
+/// 推导解析不了的注册面文件被计入回复而不是消失：只读的树查询过去把一棵更小的树当成完整的树报出去
+/// ——这正是 `LGC-LG-11` 在生产端记录的事，而消费端现在把它说出来。
+fn broken_face(root: &std::path::Path, label: &str) {
+    let directory = root.join("src").join(label);
+    std::fs::create_dir_all(&directory).expect("module directory");
+    std::fs::write(
+        directory.join(format!("{label}.rs")),
+        "crate::root_object! {\n    kind: Broken,\n",
+    )
+    .expect("truncated face");
+}
+
+#[test]
+fn the_tree_half_counts_unparsable_registration_files() {
+    let (root, _) = package("unparsable");
+    broken_face(&root, "broken");
+    let reply = search(&root, &json!({"query": "gauge"})).expect("the search answers");
+    assert!(reply.contains("unparsable faces 1"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The count of registration files the derivation could not parse is a fact about the tree that
+/// was read, so it is reported even when the query matches no face: a query naming a face that
+/// lives in a broken file used to come back as nothing special, with the broken file unmentioned
+/// (`LGC-LG-11`). The half fixed here is that the line no longer depends on a face having matched.
+/// 推导解析不了的注册面文件数量是**被读到的那棵树**的事实，因此即使查询没有命中任何面也要报出来：
+/// 一个点名了住在坏文件里的面的查询，过去会回一条看不出异常的结果，而那个坏文件一字未提
+/// （`LGC-LG-11`）。这里修的一半是：这一行不再取决于"有没有面命中"。
+#[test]
+fn an_unparsable_file_is_reported_even_when_no_face_matches() {
+    let (root, _) = package("unparsable-no-match");
+    broken_face(&root, "broken");
+    let reply =
+        search(&root, &json!({"query": "nothing-matches-this"})).expect("the search answers");
+    assert!(
+        reply.contains("unparsable faces 1"),
+        "the tree read must say what it could not parse: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

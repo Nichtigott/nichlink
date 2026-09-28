@@ -89,15 +89,9 @@ fn call_scanner_ignores_use_and_macro_but_accepts_qualified_calls() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn call_relations_report_real_cross_file_function_calls() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let app = App::load();
     let node_editor = app
         .registry
         .depth_first()
@@ -132,15 +126,9 @@ fn call_relations_report_real_cross_file_function_calls() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn mir_candidates_are_optional_and_keep_live_evidence_distinct() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let mut app = App::load();
     app.mir_graph = Some(
             MirGraph::from_jsonl(
                 "{\"kind\":\"call\",\"caller\":\"preview_canvas_width\",\"callee\":\"clamp_canvas_width\",\"mir_line\":7}\n",
@@ -178,14 +166,9 @@ fn mir_candidates_are_optional_and_keep_live_evidence_distinct() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn directory_style_source_paths_resolve_to_attached_files() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(_fixture) = fixture_project() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
     let path = source_path_for("control/object/node_editor/object/");
     assert!(path.is_file());
     assert!(path.ends_with("control/object/node_editor/object/object.rs"));
@@ -194,15 +177,9 @@ fn directory_style_source_paths_resolve_to_attached_files() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_file_adds_compact_source_symbols() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let app = App::load();
     let rows = app.search_rows("control/object/node_editor/node_editor.rs");
     assert!(rows.iter().any(|row| row.function == "NodeEditor"));
     assert!(rows.iter().all(|row| !row.text.contains("declared-at=")));
@@ -211,15 +188,9 @@ fn searching_a_file_adds_compact_source_symbols() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_function_name_finds_the_source_symbol() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let app = App::load();
     let rows = app.search_rows("accept_canvas");
     assert!(rows.iter().any(|row| row.function == "accept_canvas"));
     assert!(
@@ -231,15 +202,9 @@ fn searching_a_function_name_finds_the_source_symbol() {
 #[test]
 #[cfg(feature = "prototype-fixtures")]
 fn searching_a_parameter_name_finds_its_function() {
-    let Some(fixture) = node_editor_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    let app = App::load();
     let rows = app.search_rows("canvas_name");
     assert!(rows.iter().any(|row| row.function == "accept_canvas"));
 }

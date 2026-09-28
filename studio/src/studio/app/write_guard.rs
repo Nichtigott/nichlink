@@ -39,11 +39,36 @@ pub(super) fn selected_package_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "no project is selected; open a project before writing to it".to_owned())
 }
 
+/// The selected project's root for a read, or a named refusal.
+/// 读取用的已选中项目根目录，或一条具名拒绝。
+pub(super) fn selected_read_root() -> Result<PathBuf, String> {
+    selected_root()
+        .ok_or_else(|| "no project is selected; open a project before reading it".to_owned())
+}
+
 /// Run one write inside the selected project's authoring context.
 /// 在已选中项目的创作上下文里执行一次写入。
 pub(super) fn with_selected_project<T>(
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
     let root = selected_package_root()?;
+    nichlink_run_method::AuthoringContext::new(root, package_namespace()).scope(operation)
+}
+
+/// Run one read of the authoring records inside the selected project's context.
+/// 在已选中项目的上下文里读取创作记录。
+///
+/// Since audit `STU-S-29` a read that the screen presents as "the state of the project the
+/// reader opened" goes through the same guard a write does. `package_root` deliberately
+/// falls back (session, then environment, then working directory), so a read through it can
+/// describe a tree the reader never opened — which is what the graft screen used to do when
+/// no project was selected.
+/// 自审计 `STU-S-29` 起，界面作为“读者打开的那个项目的状态”呈现的读取，与写入走同一道守卫。
+/// `package_root` 有意回落（会话、环境、工作目录），因此经它的读取可能描述的是一棵读者从未打开
+/// 的树——这正是没有选中项目时 graft 界面过去的行为。
+pub(super) fn with_selected_project_read<T>(
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let root = selected_read_root()?;
     nichlink_run_method::AuthoringContext::new(root, package_namespace()).scope(operation)
 }

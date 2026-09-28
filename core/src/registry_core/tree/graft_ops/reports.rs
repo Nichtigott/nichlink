@@ -12,11 +12,8 @@
 //! 的 `graft` 不一致。词表单独成页，因此新增一个报告变体只改这一页，而不会碰到仅仅
 //! 携带它的对账或应用循环。
 
-// Split decision: the advisory vocabulary is its own page because it is the one
-// part of the record pipeline that grows on its own — a new observation must not
-// edit the reconciliation match or the overlay loop that merely forwards it.
-// 拆分决定：提示性词表单独成页，因为它是记录管线中唯一会自行增长的部分——新增一个
-// 观察不应改动仅仅转发它的对账分支或覆盖循环。
+// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
 
 use std::fmt;
 

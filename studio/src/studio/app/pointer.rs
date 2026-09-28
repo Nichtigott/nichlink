@@ -291,7 +291,7 @@ impl App {
             }
             Some(Overlay::NewProject(project)) if visible_row < project.values.len() => {
                 project.field = visible_row;
-                if visible_row == 2 {
+                if visible_row == new_project_field::KIND {
                     project.values[new_project_field::KIND] =
                         if project.values[new_project_field::KIND] == "binary" {
                             "library".to_owned()
@@ -332,14 +332,14 @@ impl App {
             }
             Some(Overlay::Plugin(plugin)) if visible_row < plugin.values.len() => {
                 plugin.field = visible_row;
-                if visible_row == 0 || visible_row == 6 {
+                if visible_row == plugin_field::SOURCE || visible_row == plugin_field::MODE {
                     plugin.values[visible_row] = match visible_row {
                         plugin_field::SOURCE
                             if plugin.values[plugin_field::SOURCE] == "official" =>
                         {
                             "user".to_owned()
                         }
-                        0 => "official".to_owned(),
+                        plugin_field::SOURCE => "official".to_owned(),
                         plugin_field::MODE if plugin.values[plugin_field::MODE] == "extension" => {
                             "replacement".to_owned()
                         }

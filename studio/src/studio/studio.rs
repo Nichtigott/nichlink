@@ -97,7 +97,7 @@ fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result
     let mut redraw = true;
     loop {
         if redraw {
-            terminal.draw(|frame| ui::draw(frame, &mut app))?;
+            ui::draw_once(terminal, &mut app)?;
             redraw = false;
         }
         if app.should_quit {

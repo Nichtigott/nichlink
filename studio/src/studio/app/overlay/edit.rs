@@ -1,7 +1,8 @@
-//! Edit overlay keyboard handling.
-//! 编辑注册面浮层键盘处理。
+//! Edit overlay keyboard handling: what a submit rewrites, and for which node.
+//! 编辑浮层键盘处理：提交重写什么、针对哪个节点。
 
 use super::super::*;
+use super::face_form::{FormAction, face_form_key};
 
 impl App {
     pub(super) fn handle_edit_overlay_key(
@@ -10,34 +11,16 @@ impl App {
         id: NodeId,
         mut edit: AddState,
     ) {
-        if !edit.editing && matches!(key.code, KeyCode::Char('q')) {
-            self.overlay = None;
-            return;
-        }
-        if edit.editing {
-            match key.code {
-                KeyCode::Enter => edit.editing = false,
-                KeyCode::Backspace => {
-                    edit.values[edit.field].pop();
-                }
-                KeyCode::Char(character) => edit.values[edit.field].push(character),
-                _ => {}
+        match face_form_key(key, &mut edit) {
+            FormAction::Close => {
+                self.overlay = None;
+                return;
             }
-        } else {
-            match key.code {
-                KeyCode::Up => move_face_field(&mut edit, -1),
-                KeyCode::Down | KeyCode::Tab => move_face_field(&mut edit, 1),
-                KeyCode::Enter | KeyCode::Char(' ') if edit.field == face_field::NEEDS_REGISTRY => {
-                    edit.values[face_field::NEEDS_REGISTRY] =
-                        (edit.values[face_field::NEEDS_REGISTRY] != "true").to_string();
-                }
-                KeyCode::Enter if edit.is_editable(edit.field) => edit.editing = true,
-                KeyCode::Char('s') => {
-                    self.submit_edit(id, &edit);
-                    return;
-                }
-                _ => {}
+            FormAction::Submit => {
+                self.submit_edit(id, &edit);
+                return;
             }
+            FormAction::Stay => {}
         }
         self.overlay = Some(Overlay::Edit(id, edit));
     }

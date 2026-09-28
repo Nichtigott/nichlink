@@ -192,7 +192,7 @@ const EDITABLE_FIELDS: &[&str] = &[
 /// 两个写入动作共用它，因此它们答得一样：拼错的键被点名拒绝而不是被丢弃；值不可能成为字段的键
 /// 也被拒绝，而不是被强转成空串或 `false`。`add` 过去只取它认识的键、静默忽略其余，于是写下
 /// `knd` 的代理会以为自己设了 kind——这道检查正是为了关掉这个方向。
-fn invalid_field(fields: &Value) -> Option<String> {
+fn invalid_field(fields: &Value, action: Action) -> Option<String> {
     let object = fields.as_object()?;
     for (key, value) in object {
         // `fields.parent` is the documented alias of the request's sibling `parent`, and
@@ -211,6 +211,28 @@ fn invalid_field(fields: &Value) -> Option<String> {
                 "`{key}` is not an editable registration-face field"
             ));
         }
+        // The executor's edit field order does not carry the two contract keys: they
+        // are rewritten on `add` and *kept* on `edit`, so accepting them here returned
+        // success while the value never reached the file — an agent that asked for a
+        // checked contract got an unchecked label instead, silently (audit
+        // `LGC-LG-21`). Refusing by name is the loud half of the same choice.
+        // 执行器的 edit 字段顺序不携带这两个 contract 键：它们在 `add` 时被写、在 `edit` 时被**保留**，
+        // 因此在这里接受它们会返回成功而取值从未抵达文件——一个要求"参与编译检查的契约"的代理拿到的
+        // 是未经检查的标签，而且无声（审计 `LGC-LG-21`）。按名拒绝是同一个选择的响亮那一半。
+        if matches!(action, Action::Edit | Action::Rename)
+            && matches!(key.as_str(), "handle_contracts" | "part_contracts")
+        {
+            return Some(format!(
+                "`{key}` cannot be changed by `{}`: the executor's edit field order does not \
+                 carry it, so the write would be dropped. Set it in `add`, or leave it as the \
+                 file has it",
+                if matches!(action, Action::Rename) {
+                    "rename"
+                } else {
+                    "edit"
+                }
+            ));
+        }
         if key == "needs_registry" {
             if !value.is_boolean() {
                 return Some("`needs_registry` must be true or false".to_owned());
@@ -226,7 +248,7 @@ fn invalid_field(fields: &Value) -> Option<String> {
 /// 创建一个注册面。
 fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
-    if let Some(problem) = invalid_field(fields) {
+    if let Some(problem) = invalid_field(fields, Action::Add) {
         return Err(problem);
     }
     let module = text(fields, "module");
@@ -328,7 +350,7 @@ fn run_edit(
     let (change, previous_kind, new_kind) = context.scope(|| -> Result<_, String> {
         let mut authored = nichlink_run_method::authored_face(&registry, id)?;
         let previous = authored.kind.clone();
-        overlay(&mut authored, fields)?;
+        overlay(&mut authored, fields, action)?;
         let kind = authored.kind.clone();
         let change = nichlink_run_method::edit_module_face(&registry, id, &authored.as_patch())?;
         Ok((change, previous, kind))
@@ -417,11 +439,15 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
 /// something it did not.
 /// 每个键按名字匹配：拼错的字段被拒绝而不是被丢弃——正是这个方向让代理不会以为自己改了什么而
 /// 其实没改。
-fn overlay(authored: &mut nichlink_run_method::AuthoredFace, fields: &Value) -> Result<(), String> {
+fn overlay(
+    authored: &mut nichlink_run_method::AuthoredFace,
+    fields: &Value,
+    action: Action,
+) -> Result<(), String> {
     // The same predicate `add` uses, so the two actions cannot drift apart on which key
     // they accept or on how a value's type is answered.
     // 与 `add` 用同一个判定，因此两个动作在"接受哪个键"和"值的类型怎么答"上不会漂移。
-    if let Some(problem) = invalid_field(fields) {
+    if let Some(problem) = invalid_field(fields, action) {
         return Err(problem);
     }
     let Some(object) = fields.as_object() else {

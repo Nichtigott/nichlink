@@ -176,14 +176,17 @@ fn rewrite_migrated_sources(
         let original = fs::read_to_string(&path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         originals.push((path.clone(), original.clone()));
-        let mut updated = original
-            .replace(&rust_old, &rust_new)
-            .replace(&old_prefix, &new_prefix);
+        let mut updated = replace_source_prefix(
+            &replace_module_path(&original, &rust_old, &rust_new),
+            &old_prefix,
+            &new_prefix,
+        );
         if path == new_source {
-            updated = root_face
-                .render_source()?
-                .replace(&old_prefix, &new_prefix)
-                .replace(&rust_old, &rust_new);
+            updated = replace_source_prefix(
+                &replace_module_path(&root_face.render_source()?, &rust_old, &rust_new),
+                &old_prefix,
+                &new_prefix,
+            );
         }
         if updated != original {
             atomic_write(&path, &updated)?;
@@ -191,6 +194,95 @@ fn rewrite_migrated_sources(
     }
     Ok(())
 }
+
+/// Replace a Rust module path only where it is a whole sequence of `::` segments.
+/// 只在整段 `::` 序列处替换 Rust 模块路径。
+///
+/// A plain `str::replace` matched text prefixes, so renaming `control` rewrote a
+/// sibling's `crate::control_extra::NODE_ID` into `crate::widget_extra::NODE_ID` —
+/// a module silently pointing at something that does not exist, with the write
+/// reported as "changed". The boundary is a `::` segment, which is the same rule
+/// `build_method`'s scope view states for subtree selection (`control` keeps
+/// `control::object::button` and never `control_extra`).
+///
+/// One suffix belongs to the renamed module itself rather than to a longer
+/// sibling name: the generated alias `{module}_object!` names the very face whose
+/// module moved. A `::`-only rule left `crate::control_object!` behind inside a
+/// file whose parent had become `widget`, and the parser then refused that file by
+/// name (`registration macro \`control_object!\` does not match parent \`widget\``).
+/// The alias is matched together with its `!`, so a sibling's
+/// `control_extra_object!` is still left alone.
+/// 有一个后缀属于被改名的模块自己，而不属于更长的兄弟名：生成的别名 `{module}_object!` 指的正是
+/// 模块搬走了的那个面。只认 `::` 的规则会把 `crate::control_object!` 留在父级已变成 `widget` 的
+/// 文件里，解析器随后按名拒绝该文件（`registration macro \`control_object!\` does not match
+/// parent \`widget\``）。别名连同它的 `!` 一起匹配，因此兄弟的 `control_extra_object!` 仍然原样保留。
+/// 朴素的 `str::replace` 匹配文本前缀，因此把 `control` 改名会把兄弟模块的
+/// `crate::control_extra::NODE_ID` 改写成 `crate::widget_extra::NODE_ID`——一个悄悄指向不存在
+/// 东西的模块，而写入被报成"已改变"。边界是 `::` 段，这正是 `build_method` 的作用域视图为子树选择
+/// 写下的规则（`control` 保留 `control::object::button`，绝不保留 `control_extra`）。
+fn replace_module_path(text: &str, old: &str, new: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(index) = rest.find(old) {
+        let starts_at_a_boundary = index == 0 || !is_identifier_byte(rest.as_bytes()[index - 1]);
+        let after = index + old.len();
+        let ends_at_a_boundary = after >= rest.len()
+            || !is_identifier_byte(rest.as_bytes()[after])
+            || rest[after..].starts_with("_object!");
+        output.push_str(&rest[..index]);
+        output.push_str(if starts_at_a_boundary && ends_at_a_boundary {
+            new
+        } else {
+            old
+        });
+        rest = &rest[after..];
+    }
+    output.push_str(rest);
+    output
+}
+
+/// Whether a byte can be part of an identifier or a module segment.
+/// 某个字节能否属于一个标识符或模块段。
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Replace a `src/<module>/` source prefix only where it starts a path.
+/// 只在路径起始处替换 `src/<module>/` 源前缀。
+///
+/// The other half of a migration rewrite is bounded by `::` segments; this half is a
+/// path, so its bound is the byte in front of it. A path that merely *contains*
+/// `src/control/` — a sibling pointing at another tree, e.g. `dep/src/control/x.rs` —
+/// keeps its own meaning, and the trailing `/` is the far bound, which is why
+/// `src/control_extra/` was never at risk from this one. A plain `str::replace` had
+/// no bound on the left at all, so the whole migrated subtree (a sibling included)
+/// could be rewritten silently (audit `LGC-LG-10`).
+/// 迁移改写的另一半以 `::` 段为界；这一半是路径，它的界是它前面的那个字节。只是**包含**
+/// `src/control/` 的路径——例如兄弟模块指向另一棵树的 `dep/src/control/x.rs`——保持自己的含义；
+/// 尾部的 `/` 是另一侧的界，因此 `src/control_extra/` 从来不受这一处影响。朴素的 `str::replace`
+/// 左侧完全没有界，于是整棵被迁移的子树（包括兄弟模块）都可能被静默改写（审计 `LGC-LG-10`）。
+fn replace_source_prefix(text: &str, old: &str, new: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(index) = rest.find(old) {
+        let starts_a_path = index == 0 || !is_path_byte(rest.as_bytes()[index - 1]);
+        output.push_str(&rest[..index]);
+        output.push_str(if starts_a_path { new } else { old });
+        rest = &rest[index + old.len()..];
+    }
+    output.push_str(rest);
+    output
+}
+
+/// Whether a byte can be part of a path.
+/// 某个字节能否属于路径。
+fn is_path_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'/' | b'\\' | b'-')
+}
+
+#[cfg(test)]
+#[path = "migration_tests.rs"]
+mod migration_tests;
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
     for entry in fs::read_dir(directory)

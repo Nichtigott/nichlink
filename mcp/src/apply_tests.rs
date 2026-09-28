@@ -515,3 +515,39 @@ fn editing_the_kind_reports_the_identity_change() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `edit` and `rename` refuse the two contract keys by name instead of returning success while the
+/// value never reaches the file. The executor's edit field order does not carry them, so an agent
+/// that asked for a checked contract got an unchecked label — silently (audit `LGC-LG-21`). `add`
+/// still sets them, which is where the contract is actually written.
+/// `edit` 与 `rename` 按名拒绝那两个 contract 键，而不是返回成功而取值从未抵达文件。执行器的 edit
+/// 字段顺序不携带它们，因此一个要求"参与编译检查的契约"的代理拿到的是未经检查的标签——而且无声
+/// （审计 `LGC-LG-21`）。`add` 仍然能设它们，contract 真正被写下的地方就是那里。
+#[test]
+fn edit_refuses_the_two_contract_keys_by_name_and_add_still_sets_them() {
+    let (root, _) = package("contracts");
+    let added = apply(
+        &root,
+        &json!({"action": "add", "apply": true,
+                "fields": {"module": "label", "kind": "Label",
+                           "handle_contracts": "crate::Foo::Bar"}}),
+    )
+    .expect("add sets the contract");
+    assert!(
+        added.contains("handle_contracts") || added.contains("label"),
+        "{added}"
+    );
+    for key in ["handle_contracts", "part_contracts"] {
+        for action in ["edit", "rename"] {
+            let error = apply(
+                &root,
+                &json!({"action": action, "node": "root/label",
+                        "fields": {"module": "label", key: "crate::Foo::Bar"}}),
+            )
+            .expect_err("the key is refused by name");
+            assert!(error.contains(key), "{error}");
+            assert!(error.contains(action), "{error}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

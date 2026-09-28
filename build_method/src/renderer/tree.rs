@@ -65,9 +65,10 @@ fn render_node(
     let include_source = source_is_active(pass.src, node, pass.scope, selected_ancestor);
     let indent = "    ".repeat(depth);
     let mut shadow_cfg = String::new();
-    if depth == 0 && node.name == "compile_error_demo" {
-        writeln!(output, "{indent}#[cfg(feature = \"compile_error_demo\")]").unwrap();
-        writeln!(shadow_cfg, "#[cfg(feature = \"compile_error_demo\")]").unwrap();
+    if depth == 0 && node.name == crate::DEMO_ONLY_DIRECTORY {
+        let cfg = format!("#[cfg(feature = {:?})]", crate::DEMO_ONLY_FEATURE);
+        writeln!(output, "{indent}{cfg}").unwrap();
+        writeln!(shadow_cfg, "{cfg}").unwrap();
     }
     if let Some(feature) = module_feature(pass.src, node) {
         writeln!(output, "{indent}#[cfg(feature = {feature:?})]").unwrap();

@@ -171,9 +171,7 @@ fn center(fixture: &Fixture) -> CallRef {
 fn render(app: &mut App) -> String {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 48)).expect("terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, app))
-        .expect("draw one frame");
+    crate::studio::ui::draw_once(&mut terminal, app).expect("draw one frame");
     terminal
         .backend()
         .buffer()

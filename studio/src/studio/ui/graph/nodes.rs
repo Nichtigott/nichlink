@@ -46,7 +46,8 @@ pub(super) struct TreePanel {
 pub(super) fn draw_call_tree(
     frame: &mut Frame<'_>,
     area: Rect,
-    app: &mut App,
+    app: &App,
+    cache: &mut RenderCache,
     selected: Option<&CallRef>,
     tree_panel: TreePanel,
 ) {
@@ -126,12 +127,12 @@ pub(super) fn draw_call_tree(
         // The widget keeps its own viewport, so it is rebuilt only when the tree
         // it draws changes — a moved cursor is a selection, not a new graph.
         // 控件保留自己的视口，因此只在它绘制的树变化时重建——游标移动是选择，不是新图。
-        let key = flow_key(&view);
-        match app.graph_flow.as_ref() {
+        let key = flow_key(&view, app.source_stamp());
+        match cache.graph_flow.as_ref() {
             // A different tree: build it and fit it into the panel.
             // 另一棵树：构建它并让它铺满面板。
             None => {
-                app.graph_flow =
+                cache.graph_flow =
                     node_graph::build(&view, cursor, &uncertain)
                         .ok()
                         .map(|mut flow| {
@@ -140,7 +141,7 @@ pub(super) fn draw_call_tree(
                         });
             }
             Some((cached, _, _)) if *cached != key => {
-                app.graph_flow =
+                cache.graph_flow =
                     node_graph::build(&view, cursor, &uncertain)
                         .ok()
                         .map(|mut flow| {
@@ -157,12 +158,12 @@ pub(super) fn draw_call_tree(
                 let viewport = flow.viewport;
                 if let Ok(mut rebuilt) = node_graph::build(&view, cursor, &uncertain) {
                     rebuilt.viewport = viewport;
-                    app.graph_flow = Some((key, cursor, rebuilt));
+                    cache.graph_flow = Some((key, cursor, rebuilt));
                 }
             }
             Some(_) => {}
         }
-        if let Some((_, _, flow)) = app.graph_flow.as_mut() {
+        if let Some((_, _, flow)) = cache.graph_flow.as_mut() {
             // The cursor is the widget's selection, and it is written into the
             // node's own title as well, so it is visible without colour.
             // 游标就是控件的选中项，同时也写进节点自己的标题，因此没有颜色也看得见。
@@ -176,11 +177,15 @@ pub(super) fn draw_call_tree(
     }
 }
 
-/// What the cached widget was built from: the focus's symbol and the shape of the
-/// tree around it. A re-centred focus changes it; a moved cursor does not.
-/// 缓存的控件是从什么构建的：焦点的符号与它周围那棵树的形状。重新居中会改变它；游标移动不会。
+/// What the cached widget was built from: the focus's symbol, the shape of the tree
+/// around it, and the source stamp that tree came from. A re-centred focus changes it,
+/// a moved cursor does not, and a rebuild of the same shape with different node text
+/// or lanes no longer reuses the old drawing (audit `STU-S-10`).
+/// 缓存的控件是从什么构建的：焦点的符号、它周围那棵树的形状，以及那棵树来自哪个源码戳。
+/// 重新居中会改变它，游标移动不会；而形状相同、节点文本或车道不同的重建不再复用旧绘制
+/// （审计 `STU-S-10`）。
 #[cfg(feature = "node-graph")]
-fn flow_key(view: &CallTreeView) -> String {
+fn flow_key(view: &CallTreeView, source_stamp: u128) -> String {
     let focus = view
         .tree
         .nodes
@@ -188,7 +193,7 @@ fn flow_key(view: &CallTreeView) -> String {
         .map(|node| node.symbol.as_str())
         .unwrap_or("");
     format!(
-        "{focus}:{}:{}",
+        "{focus}:{}:{}:{source_stamp}",
         view.tree.nodes.len(),
         view.tree.edges.len()
     )

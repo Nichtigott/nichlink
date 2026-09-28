@@ -73,6 +73,14 @@ impl CallTrace {
         };
         self.locals.push(local);
         self.local_index.insert(id.0, self.locals.len() - 1);
+        // The invariant the `expect` rests on, stated where the distance is zero:
+        // this is the value pushed two lines up, nothing can remove it in between
+        // (both statements above only insert), and the three indexes below only
+        // read it. Audited as the one production panic site in this file (S16);
+        // it stays an `expect` because a caller cannot make it fire.
+        // `expect` 所依赖的不变量，写在距离为零的地方：这就是上面两行压入的值，中间没有任何东西
+        // 能移除它（上面两条语句都只插入），而下面三个索引只读取它。审计把它记为本文件唯一的
+        // 生产 panic 点（S16）；它保留为 `expect`，因为调用方无法让它触发。
         let local = self.locals.last().expect("local was just pushed");
         self.local_name_index
             .entry(local.name.clone())

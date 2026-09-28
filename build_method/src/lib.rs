@@ -74,12 +74,45 @@ mod static_plan;
 #[path = "validation.rs"]
 mod validation;
 
+/// The one directory name the build treats as the in-repo compile-failure demo.
+/// 构建视为本仓库编译失败演示目录的、唯一那个目录名。
+///
+/// The demo host in this repository declares it and turns on the feature below to
+/// see the diagnostics; every build rule that skips, gates, or plan-excludes it
+/// keys on this name. It is an explicit list of one, not an implicit rule, because
+/// the name belongs to the *demo* and not to the protocol: a third-party host that
+/// happens to have a top-level directory of this name gets its faces gated behind a
+/// feature it never declared, silently — audit `LGC-LG-16`, marked latent because it
+/// needs the directory name to match by chance. Turning it off outright would change
+/// the shipped demo host's build, so the fix is to make the name one documented
+/// thing rather than a string repeated five times.
+/// 本仓库里的演示宿主声明它并打开下面那个特性，以看到那些诊断；每一条跳过它、门控它或在静态计划里
+/// 排除它的构建规则都以这个名字为键。它是一份显式的、只有一项的清单，而不是一条隐式规则，因为这个名字
+/// 属于**演示**而不是协议：恰好有同名顶层目录的第三方宿主，会让自己的面被静默门控在一个它从未声明的
+/// 特性之后——审计 `LGC-LG-16`，标为潜伏是因为需要目录名恰好命中才会生效。直接取消它则会改变出厂的演示
+/// 宿主的构建，因此修法是把这个名字变成"一处有文档的东西"，而不是重复五次的字符串。
+///
+/// It never enters identity: `file!()` and the `NodeId` hash are computed from the
+/// face file's own path, and nothing here rewrites a path.
+/// 它从不参与身份：`file!()` 与 `NodeId` 散列都由注册面文件自己的路径算出，这里不改写任何路径。
+pub(crate) const DEMO_ONLY_DIRECTORY: &str = "compile_error_demo";
+
+/// The feature that turns the demo directory's diagnostics into build errors.
+/// 把演示目录的诊断变成构建错误的那个特性。
+///
+/// The generated tree carries its `compile_error!` behind this `cfg`, and
+/// `pipeline` declares the cfg name to `rustc`, so the name has to be spelled the
+/// same way in both places — one constant instead of three literals.
+/// 生成树把它的 `compile_error!` 挂在这个 `cfg` 之后，而 `pipeline` 会向 `rustc` 声明该 cfg 名，
+/// 因此两处必须拼写一致——用一处常量代替三个字面量。
+pub(crate) const DEMO_ONLY_FEATURE: &str = "compile_error_demo";
+
 // Public surface, reachable at exactly the paths callers already use.
 // 对外表面，保持在调用方已经在用的路径上。
 pub use entry::host_entry_source;
 pub use face_view::{
-    BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views, read_build_scope,
-    read_pruning_manifest,
+    BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views,
+    face_views_and_unreadable, read_build_scope, read_pruning_manifest,
 };
 pub use graft_view::{
     DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, OVERLAY_NOTE,
@@ -103,9 +136,7 @@ pub(crate) use cache::{
     source_is_active, update_discovery_cache, write_if_changed,
 };
 pub(crate) use contracts::aggregate_contract_errors;
-pub(crate) use discovery::{
-    discover_root, discover_root_reporting, discovery_fingerprint, emit_rerun_paths,
-};
+pub(crate) use discovery::{discover_root_reporting, discovery_fingerprint, emit_rerun_paths};
 pub use source_layout::{SourceLayout, source_layout};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone

@@ -1,38 +1,21 @@
-//! Add overlay keyboard handling.
-//! 添加注册面浮层键盘处理。
+//! Add overlay keyboard handling: what a submit writes.
+//! 添加浮层键盘处理：提交写到哪里。
 
 use super::super::*;
+use super::face_form::{FormAction, face_form_key};
 
 impl App {
     pub(super) fn handle_add_overlay_key(&mut self, key: KeyEvent, mut add: AddState) {
-        if !add.editing && matches!(key.code, KeyCode::Char('q')) {
-            self.overlay = None;
-            return;
-        }
-        if add.editing {
-            match key.code {
-                KeyCode::Enter => add.editing = false,
-                KeyCode::Backspace => {
-                    add.values[add.field].pop();
-                }
-                KeyCode::Char(character) => add.values[add.field].push(character),
-                _ => {}
+        match face_form_key(key, &mut add) {
+            FormAction::Close => {
+                self.overlay = None;
+                return;
             }
-        } else {
-            match key.code {
-                KeyCode::Up => move_face_field(&mut add, -1),
-                KeyCode::Down | KeyCode::Tab => move_face_field(&mut add, 1),
-                KeyCode::Enter | KeyCode::Char(' ') if add.field == face_field::NEEDS_REGISTRY => {
-                    add.values[face_field::NEEDS_REGISTRY] =
-                        (add.values[face_field::NEEDS_REGISTRY] != "true").to_string();
-                }
-                KeyCode::Enter if add.is_editable(add.field) => add.editing = true,
-                KeyCode::Char('s') => {
-                    self.submit_add(&add);
-                    return;
-                }
-                _ => {}
+            FormAction::Submit => {
+                self.submit_add(&add);
+                return;
             }
+            FormAction::Stay => {}
         }
         self.overlay = Some(Overlay::Add(add));
     }

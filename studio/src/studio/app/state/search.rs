@@ -45,6 +45,17 @@ pub struct SearchState {
     pub data_selected: usize,
 }
 
+/// One memoised search result: the query, the source stamp it was computed from,
+/// and the rows themselves.
+/// 一份被备忘的搜索结果：查询、计算它时的源码戳，以及那些行。
+///
+/// Named so the memo's field on `App` stays one readable type instead of a four-deep
+/// generic, and so this shape can be compared with the call tree's `CallTreeMemo` at
+/// a glance — the two memos exist for the same reason.
+/// 具名之后，`App` 上那个备忘字段仍是一个一眼可读的类型，而不是四层深的泛型；也便于把这一形状
+/// 与调用树的 `CallTreeMemo` 一眼对照——两处备忘为同一个理由存在。
+pub(crate) type SearchMemo = (String, u128, std::rc::Rc<Vec<SearchRow>>);
+
 /// One rendered search result row, before it becomes a Ratatui list item.
 /// 一条渲染前的搜索结果行，之后会成为 Ratatui 列表项。
 ///

@@ -146,13 +146,13 @@ pub fn face_rule_or(input: TokenStream) -> TokenStream {
 /// `face_trait_labels_or!([path, …]; [label, …])` answers with the last path
 /// segment of every path when at least one path was given, and with the labels
 /// verbatim when none was. That is the same rule the authoring applier
-/// (`apply_trait_contract`) already implements, so the file form and the compiled
+/// (`apply_trait_label`) already implements, so the file form and the compiled
 /// form cannot answer "which interfaces does this face implement" differently —
 /// and a face that states a compiler-checked path never has to state the label
 /// twice.
 /// `face_trait_labels_or!([路径, …]; [标签, …])`：只要给出至少一个路径，就用每个路径的
 /// 最后一段作答；一个路径都没有时，原样交回标签。这与创作应用器
-/// （`apply_trait_contract`）已经实现的规则相同，因此文件形式与编译形式对"本注册面实现了
+/// （`apply_trait_label`）已经实现的规则相同，因此文件形式与编译形式对"本注册面实现了
 /// 哪些接口"不可能给出不同答案——写了参与编译检查的路径的注册面也不必再写一遍标签。
 #[proc_macro]
 pub fn face_trait_labels_or(input: TokenStream) -> TokenStream {
@@ -280,7 +280,8 @@ pub(crate) fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
         if name == "source" && target == Target::Control {
             return Err(error_at(
                 name.span(),
-                "`source` belongs to `external_object!`; a generated host alias                  records the file itself"
+                "`source` belongs to `external_object!`; a generated host alias records \
+                 the file itself"
                     .to_owned(),
             ));
         }

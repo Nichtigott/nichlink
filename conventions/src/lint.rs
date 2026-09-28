@@ -1,16 +1,21 @@
 //! The missing-documentation lint gate.
 //! 缺失文档 lint 门禁。
 //!
-//! The lint itself is already enforced: `clippy -D warnings` escalates
-//! `missing_docs`, so an undocumented public item fails the build. What nothing
-//! checked is the two ways the protection can be removed without failing
-//! anything: deleting the crate-level `#![warn(missing_docs)]`, or silencing a
-//! single item with `#[allow(missing_docs)]`. Both are invisible to the lint
-//! they disable, which is exactly the shape of decay this crate exists to catch.
-//! lint 本身已被强制：`clippy -D warnings` 会升级 `missing_docs`，因此未文档化的公开项会
-//! 让构建失败。此前无人检查的是移除该保护的两种方式——删掉 crate 级
-//! `#![warn(missing_docs)]`，或用 `#[allow(missing_docs)]` 让单个项闭嘴。两者对被它们关掉的
-//! lint 都是不可见的，而这正是本 crate 存在的意义所在的那种腐化。
+//! The lint itself is enforced by the attribute this gate requires: `clippy -D warnings`
+//! escalates `missing_docs` **because** the crate root switched it from allow to warn, so an
+//! undocumented public item fails the build. What nothing checked is the two ways the
+//! protection can be removed without failing anything: deleting the crate-level
+//! `#![warn(missing_docs)]`, or silencing a single item with `#[allow(missing_docs)]`. Both
+//! are invisible to the lint they disable, which is exactly the shape of decay this crate
+//! exists to catch — and the reason a declaration that merely *claims* strength
+//! (`#![deny(warnings)]`) cannot be accepted as the attribute: it leaves the lint at allow
+//! and takes both lines of defence with it (audit `LGC-LG-24`).
+//! lint 本身由本门禁所要求的属性来强制：`clippy -D warnings` 能升级 `missing_docs`，**正是因为**
+//! crate 根把它从 allow 改成了 warn，因此未文档化的公开项会让构建失败。此前无人检查的是移除该保护
+//! 的两种方式——删掉 crate 级 `#![warn(missing_docs)]`，或用 `#[allow(missing_docs)]` 让单个项
+//! 闭嘴。两者对被它们关掉的 lint 都是不可见的，而这正是本 crate 存在的意义所在的那种腐化——也是
+//! 为什么一个仅仅**声称**强度的声明（`#![deny(warnings)]`）不能被当作该属性：它让 lint 留在
+//! allow，并带走两道防线（审计 `LGC-LG-24`）。
 //!
 //! Boundary: the requirement covers every crate directory's library root except the example
 //! hosts — which includes `conventions` itself, the one `publish = false` crate that carries the
@@ -228,9 +233,29 @@ fn carries_the_lint(path: &Path) -> bool {
         {
             return true;
         }
-        if trimmed == "#![deny(warnings)]" {
-            return true;
-        }
+        // `#![deny(warnings)]` used to be accepted here as "the lint, at deny strength".
+        // It is not: `missing_docs` is allow-by-default, so it is not a member of the
+        // `warnings` group, and this gate and clippy's `-D warnings` both stayed silent
+        // while the crate lost its documentation lint (audit `LGC-LG-24`). A declaration
+        // that does not name the lint does not carry it, whatever strength it claims.
+        // 这里过去把 `#![deny(warnings)]` 接受为"以 deny 强度带着该 lint"。事实不是：`missing_docs`
+        // 默认 allow，不属于 `warnings` 组，因此本门禁与 clippy 的 `-D warnings` 会双双沉默，而那个
+        // crate 已经丢掉了文档 lint（审计 `LGC-LG-24`）。没有点名该 lint 的声明就没有带着它，无论它
+        // 声称多强。
+        //
+        // Known boundary, deliberately not widened: a crate that switches the lint on through
+        // `#![cfg_attr(all(), warn(missing_docs))]` is reported as missing the attribute even
+        // though the lint is on. Reading `cfg_attr` would mean evaluating `cfg`s here, and the
+        // shape that makes that unsafe is one character away — `cfg_attr(any(), …)` *claims* to
+        // enable the lint while leaving it at allow, which is exactly what this gate exists to
+        // catch (`LGC-LG-24`). A false "write the attribute directly" on an exotic spelling is
+        // the cheaper error, and the fix it asks for is one line; measured in the
+        // B4-conventions independent verification (`N-1`).
+        // 已知边界，有意不放宽：用 `#![cfg_attr(all(), warn(missing_docs))]` 打开 lint 的 crate 会被
+        // 报成缺少该属性，尽管 lint 实际是开的。要读 `cfg_attr` 就得在这里求值 `cfg`，而让那件事变得
+        // 不安全的形状只差一个字符——`cfg_attr(any(), …)` **声称**打开 lint，实际让它留在 allow，而那
+        // 正是本门禁存在的意义（`LGC-LG-24`）。对一个冷僻拼法误报"请直接写出属性"是更便宜的错，而它
+        // 要求的那一行改动就是一行；在 B4-conventions 的独立验证里实测（`N-1`）。
     }
     false
 }
@@ -444,6 +469,38 @@ mod tests {
         assert!(
             missing.iter().any(|path| path == "zzprobe/src/lib.rs"),
             "the crate root itself carries no lint here: {missing:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `#![deny(warnings)]` is not `missing_docs`: the lint is allow-by-default, so the
+    /// `warnings` group does not contain it. Measured with this workspace's rustc:
+    /// `#![deny(warnings)]` plus an undocumented `pub fn` compiles to exit 0 with no
+    /// diagnostics, while `#![warn(missing_docs)]` reports `missing documentation for the
+    /// crate`. Accepting the group as the lint let the real protection be deleted while
+    /// both this gate and clippy's `-D warnings` stayed silent (audit `LGC-LG-24`).
+    /// `#![deny(warnings)]` 不是 `missing_docs`：该 lint 默认 allow，因此 `warnings` 组里没有它。
+    /// 用本工作区的 rustc 实测：`#![deny(warnings)]` 加一个未文档化的 `pub fn` 编译 exit 0、零
+    /// 诊断，而 `#![warn(missing_docs)]` 会报 `missing documentation for the crate`。把该组当作
+    /// 这条 lint，会让真正的保护被删掉而本门禁与 clippy 的 `-D warnings` 双双沉默（审计
+    /// `LGC-LG-24`）。
+    #[test]
+    fn the_warnings_group_is_not_the_missing_docs_lint() {
+        let root = synthetic(&[
+            (
+                "zzprobe/Cargo.toml",
+                "[package]\nname = \"nichlink-zzprobe\"\n",
+            ),
+            (
+                "zzprobe/src/lib.rs",
+                "#![deny(warnings)]\n\npub fn undocumented() {}\n",
+            ),
+        ]);
+        let missing = missing_roots(&root);
+        assert!(
+            missing.iter().any(|path| path == "zzprobe/src/lib.rs"),
+            "the warnings group does not switch missing_docs on, so this root is missing \
+             the lint: {missing:?}"
         );
         let _ = std::fs::remove_dir_all(&root);
     }

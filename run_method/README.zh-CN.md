@@ -88,7 +88,7 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 `<owned-snapshot-batch>`
 （`core/src/registry_core/tree/transaction/transaction.rs:84`）、`<migration>`
 （`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`）与 `<graft>`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:297`、
+（`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`、
 `core/src/registry_core/tree/graft_ops/reconcile.rs:148`）。
 
 读取 `health_check` 失败的两条规则：

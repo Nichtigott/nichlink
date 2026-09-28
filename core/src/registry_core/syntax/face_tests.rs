@@ -206,3 +206,39 @@ fn a_declaration_keeps_its_cfg_gate() {
     .expect("face");
     assert_eq!(face.cfg(), Some("feature = \"optional-face\""));
 }
+
+/// A `*_object!` macro that is not a registration declaration is refused for its own
+/// reason, instead of being taken for a face that is missing `parent:`.
+/// 并非注册声明的 `*_object!` 宏按它自己的理由被拒，而不是被当成缺少 `parent:` 的注册面。
+///
+/// Red before the fix: the field reader accepted `name: "x", size: 3` as one value (the
+/// splitter only starts a field at a name the vocabulary knows), so the macro became a face
+/// whose `size` was silently absorbed, and the build then reported a `parent-macro` error
+/// for a macro that is not part of the registration mechanism (audit `KRN-K-23`).
+/// 修前为红：字段读取器把 `name: "x", size: 3` 收成一个取值（切分器只在词表认识的键处开始
+/// 字段），于是该宏成了一个面、`size` 被静默吞掉，随后构建为这个根本不属于注册机制的宏报出
+/// `parent-macro` 错误（审计 `KRN-K-23`）。
+#[test]
+fn a_non_registration_object_macro_is_refused_with_its_own_reason() {
+    let error = parse_face("widget_object! { name: \"x\", size: 3 }")
+        .expect_err("this body is not a registration declaration");
+    let message = error.to_string();
+    assert!(
+        message.contains("size"),
+        "the reason names the text left over: {message}"
+    );
+    assert!(
+        !message.contains("parent"),
+        "it is not a missing parent: {message}"
+    );
+
+    // The registration vocabulary itself still parses, including a value written with a
+    // top-level-looking closure inside brackets.
+    // 注册词表本身仍可解析，包括括号内写出、看起来像顶层的闭包取值。
+    let face = parse_face(
+        "crate::control_object! {\n    kind: Button,\n    needs_registry: true,\n    flow: |a: u32| a,\n}\n",
+    )
+    .expect("a canonical body parses")
+    .expect("one face");
+    assert_eq!(face.macro_name, "control_object");
+}

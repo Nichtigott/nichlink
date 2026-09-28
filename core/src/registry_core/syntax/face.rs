@@ -26,7 +26,7 @@ pub use tokens::{
 
 #[path = "fields.rs"]
 mod fields;
-use fields::parse_fields;
+use fields::parse_face_fields;
 
 /// A position inside a parsed source file, one-based in both axes.
 /// 已解析源文件里的位置，两个轴都从 1 开始。
@@ -164,6 +164,11 @@ pub fn parse_faces(source: &str) -> Result<Vec<FaceSyntax>, FaceSyntaxError> {
 /// A generated-marker line short-circuits the answer: a snapshot this tooling
 /// wrote is a face by construction, and parsing it again is wasted work. For
 /// every other file the parse decides.
+///
+/// **The shortcut is about trust, not about proof**: a file whose marker line is the
+/// only face-shaped thing in it still answers `true`, so a caller that needs "this file
+/// really declares a face" must parse it (`parse_face`) rather than read this answer as
+/// a parse result (audit `KRN-K-19`).
 /// 生成标记行会短路答案：本工具写出的快照按构造就是注册面，再解析一遍是白费。其余
 /// 文件一律由解析裁决。
 pub fn is_face_source(source: &str, marker: &str) -> bool {
@@ -256,7 +261,7 @@ impl<'ast> Visit<'ast> for FaceVisitor {
         if !is_face_macro {
             return;
         }
-        match parse_fields(item.mac.tokens.clone(), item.mac.span()) {
+        match parse_face_fields(item.mac.tokens.clone(), item.mac.span()) {
             Ok(fields) => {
                 let span = item.span();
                 let cfg = item.attrs.iter().find_map(|attribute| {

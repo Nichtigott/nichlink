@@ -5,8 +5,10 @@
 //! 这里的所有函数只做文本变换，文件 I/O 由调用方负责。
 //!
 //! Function discovery lives here; `calls` scans call sites inside an extracted
-//! body and `walk` owns the recursive source traversal.
-//! 函数发现位于本页；`calls` 扫描已提取函数体内的调用点，`walk` 拥有递归源码遍历。
+//! body, `items` owns the declaration vocabulary (`item_symbols`), and `walk` owns
+//! the recursive source traversal.
+//! 函数发现位于本页；`calls` 扫描已提取函数体内的调用点，`items` 拥有声明词表
+//! （`item_symbols`），`walk` 拥有递归源码遍历。
 #[path = "lex.rs"]
 pub(crate) mod lex;
 
@@ -16,6 +18,9 @@ pub use calls::*;
 #[path = "walk.rs"]
 mod walk;
 pub use walk::*;
+#[path = "items.rs"]
+mod items;
+pub use items::*;
 
 /// One Rust function discovered in a source file.
 /// 在源码文件中发现的一个 Rust 函数。
@@ -249,10 +254,9 @@ fn is_ident_continue(character: char) -> bool {
     character.is_alphanumeric() || character == '_'
 }
 
-/// Replace comments and quoted literals with spaces while preserving offsets.
-/// 用空格替换注释和引号字面量，同时保留原始偏移量。
-/// Blank the contents of comments, string literals and character literals.
-/// 把注释、字符串字面量与字符字面量的内容抹成空白。
+/// Replace the contents of comments, string literals and character literals with spaces,
+/// preserving the byte offsets of everything else.
+/// 把注释、字符串字面量与字符字面量的内容替换为空格，其余部分的字节偏移保持不变。
 ///
 /// The workspace's one text rule for "what is code": the source scanners use it so
 /// a `fn` inside a comment or a brace inside a string is not read as Rust, and the
@@ -426,11 +430,51 @@ fn mask(source: &str, blank_comments: bool) -> String {
         }
         index += 1;
     }
-    String::from_utf8(masked).unwrap_or_else(|_| source.to_owned())
+    // Keep the mask. The scan only writes ASCII spaces, and only at character
+    // boundaries, so this text is valid UTF-8 and the `Err` arm is unreachable today —
+    // but returning the *unmasked* source on failure is the worst possible direction:
+    // comments, strings and raw strings would all be read as code and the caller would
+    // get invented functions and calls instead of a visible failure (audit `KRN-K-16`).
+    // 保留掩码。这次扫描只写 ASCII 空格、且只在字符边界上写，因此这段文本是合法 UTF-8、
+    // `Err` 支今天不可达——但失败时回退到**未掩码**源码是最坏的方向：注释、字符串与 raw string
+    // 都会被当成代码，调用方拿到凭空造出的函数与调用，而不是一次可见的失败（审计 `KRN-K-16`）。
+    masked_text(masked)
+}
+
+/// The masked bytes as text, keeping the mask even when the bytes are not valid UTF-8.
+/// 掩码后的字节转成文本；即使字节不是合法 UTF-8 也保留掩码。
+///
+/// The caller above cannot produce invalid UTF-8 (it only writes ASCII spaces at character
+/// boundaries), which is exactly why the failure direction had to be decided rather than
+/// inherited: this function never returns the unmasked source, so the unreachable arm
+/// cannot turn into invented code. It takes only the bytes, so a test can feed it a
+/// sequence the scanner cannot produce and pin that direction (audit `KRN-K-16`).
+/// 上面的调用方不可能产出非法 UTF-8（它只在字符边界写 ASCII 空格），这正是失败方向必须被**决定**
+/// 而不是被继承的原因：本函数绝不返回未掩码的源码，因此不可达的那一支不会变成凭空造出的代码。它只
+/// 接收字节，所以测试可以喂给它扫描器造不出的字节序列，把方向钉住（审计 `KRN-K-16`）。
+fn masked_text(masked: Vec<u8>) -> String {
+    match String::from_utf8(masked) {
+        Ok(text) => text,
+        Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
+    }
 }
 
 /// Collect the deduplicated `kind:` values used in registration declarations.
 /// 收集注册声明中出现过的 `kind:` 取值，去重并排序。
+///
+/// Only a `kind:` inside a registration macro body counts. The rule used to be "this line
+/// contains `kind:`", which read ordinary code as a declaration — `let kind: String = value;`
+/// contributed a kind named `String` — and missed a declaration whose `kind:` and value sat
+/// on different lines. Both directions are invisible in the output the source queries print
+/// (audit `KRN-K-17`), so the macro body is what bounds the scan; the price is stated here:
+/// this stays a text scan with no dependency on the `syntax` feature, so it recognizes the
+/// macro by name (any `…object!` invocation, the same rule the face parser uses) rather than
+/// by parsing the declaration.
+/// 只有注册宏体内的 `kind:` 才算。规则过去是"本行含 `kind:`"，于是普通代码被读成声明——
+/// `let kind: String = value;` 贡献了一个叫 `String` 的 kind——而 `kind:` 与取值分行的声明被漏掉。
+/// 两个方向在源码查询打印的输出里都看不出来（审计 `KRN-K-17`），因此以宏体为界；代价写在这里：
+/// 这仍是纯文本扫描、不依赖 `syntax` 特性，因此它按名字认宏（任何 `…object!` 调用，与注册面解析器
+/// 同一条规则），而不是去解析声明。
 pub fn registration_kinds(source: &str) -> Vec<String> {
     // Mask once for the same reason the function range does: a `kind:` inside a
     // multi-line string or a block comment is prose, and a per-line mask reported the name
@@ -438,31 +482,86 @@ pub fn registration_kinds(source: &str) -> Vec<String> {
     // 与函数范围同理，掩码一次：多行字符串或块注释里的 `kind:` 是散文，而逐行掩码会把其中提到的
     // 那个名字报出来。
     let masked_source = mask_non_code(source);
+    let lines = masked_source.split('\n').collect::<Vec<_>>();
     let mut kinds = Vec::new();
-    for line in masked_source.split('\n') {
+    let mut depth = 0i32;
+    let mut in_declaration = false;
+    let mut body_opened = false;
+    for (index, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
-        if let Some(kind) = trimmed.split_once("kind:").map(|(_, remainder)| remainder) {
-            let kind = kind
-                .trim()
-                .split(|character: char| {
-                    character == ',' || character == '}' || character.is_whitespace()
-                })
-                .next()
-                .unwrap_or_default();
-            // A kind is a Rust type name, so it may be non-ASCII like any identifier.
-            // kind 是 Rust 类型名，因此与任何标识符一样可以是非 ASCII 的。
-            if !kind.is_empty()
-                && kind
-                    .chars()
-                    .all(|character| character.is_alphanumeric() || character == '_')
-            {
-                kinds.push(kind.to_owned());
+        if !in_declaration && trimmed.contains("object!") {
+            in_declaration = true;
+        }
+        if in_declaration {
+            // The value may sit on the next line (`kind:` alone on its own line, which the
+            // per-line rule skipped): take the next non-empty line that does not itself
+            // open a field. A field start is an identifier the vocabulary knows followed by
+            // a colon, which is the same test the token reader uses.
+            // 取值可能在下一行（`kind:` 单独占一行，旧的逐行规则会跳过）：取下一非空、且自身不开启
+            // 字段的行。字段起点是词表认识的标识符后跟冒号，与 token 读取器用的是同一条判据。
+            let remainder = match trimmed.split_once("kind:") {
+                Some((_, remainder)) if !remainder.trim().is_empty() => Some(remainder.trim()),
+                Some(_) => lines[index + 1..]
+                    .iter()
+                    .map(|line| line.trim())
+                    .find(|line| !line.is_empty() && !starts_a_known_field(line)),
+                None => None,
+            };
+            if let Some(kind) = remainder {
+                let kind = kind
+                    .trim()
+                    .split(|character: char| {
+                        character == ',' || character == '}' || character.is_whitespace()
+                    })
+                    .next()
+                    .unwrap_or_default();
+                // A kind is a Rust type name, so it may be non-ASCII like any identifier.
+                // kind 是 Rust 类型名，因此与任何标识符一样可以是非 ASCII 的。
+                if !kind.is_empty()
+                    && kind
+                        .chars()
+                        .all(|character| character.is_alphanumeric() || character == '_')
+                {
+                    kinds.push(kind.to_owned());
+                }
             }
+        }
+        let opens = line.matches('{').count();
+        let closes = line.matches('}').count();
+        depth += opens as i32 - closes as i32;
+        if depth > 0 {
+            body_opened = true;
+        }
+        // A body that never opened (the `{` is on a later line) keeps the declaration
+        // open; a body that opened and closed on this line ends it here.
+        // 尚未打开体的声明（`{` 在后面的行）保持打开；在本行打开又闭合的体在此结束。
+        if depth <= 0 && (body_opened || opens > 0) {
+            in_declaration = false;
+            body_opened = false;
         }
     }
     kinds.sort();
     kinds.dedup();
     kinds
+}
+
+/// Whether `line` opens a `name:` field the face vocabulary knows.
+/// `line` 是否开启一个词表认识的 `name:` 字段。
+///
+/// Used to decide whether the line after a `kind:` that carries no value *is* that value
+/// or the next field: `preset:` opens a field, `Widget,` does not.
+/// 用来判断"不带取值的 `kind:` 之后那一行"是它的取值还是下一个字段：`preset:` 开启字段，
+/// `Widget,` 不是。
+fn starts_a_known_field(line: &str) -> bool {
+    let Some((name, _)) = line.split_once(':') else {
+        return false;
+    };
+    let name = name.trim();
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|character| character.is_alphanumeric() || character == '_')
+        && crate::registry_core::declaration::FACE_FIELD_ORDER.contains(&name)
 }
 #[cfg(test)]
 #[path = "source_tests.rs"]

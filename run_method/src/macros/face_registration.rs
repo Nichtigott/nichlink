@@ -1,15 +1,83 @@
 //! Registration-face declaration and submission macros.
 //! 注册面声明与提交宏。
+//!
+//! The `collector` field is a development control plane, and only one of its
+//! three values submits anything: `debug` (and only in a debug build) hands the
+//! declaration to `nichlink-debug-method`'s inventory section; `development` and
+//! `linked` expand to nothing, which is what every shipped application uses. The
+//! declaration is compiled into the crate under all three; the generated
+//! `StaticPlan` is what a release reads.
+//! `collector` 字段是开发控制面，三个取值里只有一个会提交任何东西：`debug`（且只在 debug
+//! 构建里）把声明交给 `nichlink-debug-method` 的 inventory 段；`development` 与 `linked`
+//! 展开为空，而每个出厂应用用的都是这两个。三个取值下声明都被编译进本 crate；正式应用读的是生成的
+//! `StaticPlan`。
+//!
+//! A value outside those three is refused by name rather than falling through to
+//! a bare macro error inside a macro the author never wrote:
+//! 三个取值之外的写法会按名被拒，而不是掉进一个作者从未写过的宏内部的裸宏错误：
+//!
+//! ```rust,compile_fail
+//! nichlink_run_method::external_object! {
+//!     collector: nonsense,
+//!     kind: ProbeCollector,
+//! }
+//! ```
+//!
+//! This fence is compiled by CI's `cargo test --workspace --all-features --doc`
+//! job, which is the only command that runs doctests.
+//! 这道围栏由 CI 的 `cargo test --workspace --all-features --doc` 任务编译，那是唯一会跑
+//! doctest 的命令。
+//!
+//! An external face that names no collector still declares itself, because
+//! `external_object!` injects `linked` — the one spelling whose whole meaning is
+//! "this declaration comes from a linked crate, so nothing is submitted here":
+//! 没写 collector 的外部面仍然完成声明，因为 `external_object!` 会注入 `linked`——这个拼法的
+//! 全部含义就是"这条声明来自被链接的 crate，因此这里什么都不提交"：
+//!
+//! ```rust
+//! pub struct LinkedProbe;
+//!
+//! nichlink_run_method::external_object! {
+//!     kind: LinkedProbe,
+//! }
+//!
+//! // The declaration is compiled in and reachable through its consts; nothing was
+//! // submitted, which is what `linked` and `development` share one arm for.
+//! // 声明被编译进来、经它的常量可达；没有任何提交发生，这正是 `linked` 与 `development`
+//! // 共用一条臂的原因。
+//! assert_eq!(REGISTRATION.kind, "LinkedProbe");
+//! ```
+//!
+//! This fence is the pin for audit `LGC-LG-14`: refusing `linked` (or moving that
+//! arm to `::nichlink_debug_method::submit!`) turns it — and every
+//! `external_object!` in the tree, 36 references including
+//! `run_method/tests/external_*.rs` — into a compile failure, because `linked` is
+//! the default this macro injects rather than a value nobody writes.
+//! 这道围栏是审计 `LGC-LG-14` 的钉子：拒绝 `linked`（或把那条臂改成
+//! `::nichlink_debug_method::submit!`）会让它——以及树里每一处 `external_object!`，共 36 处引用，
+//! 含 `run_method/tests/external_*.rs`——变成编译失败，因为 `linked` 是这个宏注入的**默认值**，
+//! 而不是没人手写的取值。
 
 /// Expand one fully normalized registration face into consts and submission.
 /// 把一个完整规范化的注册面展开为常量与提交调用。
 ///
 /// Internal: `object!` and `external_object!` normalize their shorthand into
 /// this arm, so host code should call those instead. Every field is assumed
-/// present, and the collector ident selects which linker section receives the
-/// registration.
+/// present.
+///
+/// The collector ident decides whether anything is *submitted*, not which linker
+/// section receives it: only `debug` submits, and only in a debug build;
+/// `development` and `linked` expand to nothing (see `__submit_registration`).
+/// A declaration is compiled into the crate either way — the generated
+/// `StaticPlan` is what a release application reads — so `collector` is a
+/// development control plane, and a misspelled value is refused by name.
 /// 内部宏：`object!` 与 `external_object!` 把简写规范化为这一分支，宿主应改用那些宏。
-/// 它假定每个字段都已给出，收集器标识决定注册信息进入哪个链接器段。
+/// 它假定每个字段都已给出。
+///
+/// 收集器标识决定的是**是否提交**任何东西，而不是注册信息进入哪个链接器段：只有 `debug` 会提交，
+/// 且只在 debug 构建里；`development` 与 `linked` 展开为空（见 `__submit_registration`）。
+/// 无论哪个取值，声明都被编译进本 crate——正式应用读的是生成的 `StaticPlan`——因此 `collector`
+/// 属于开发控制面，而拼错的取值会按名被拒。
 #[macro_export]
 macro_rules! __registration_face {
     {
@@ -64,9 +132,9 @@ macro_rules! __registration_face {
         /// 该注册面的编译期身份，供类型化 graft 切口与父级链接使用。
         ///
         /// It hashes the package namespace, the declaration's relative source path
-        /// and its kind — never the registry slot name, so renaming a slot does not
-        /// move an identity.
-        /// 它哈希包命名空间、声明的相对源码路径与 kind——绝不含注册槽位名，因此槽位改名
+        /// and its kind — never the registry name, so renaming the registry name
+        /// does not move an identity.
+        /// 它哈希包命名空间、声明的相对源码路径与 kind——绝不含注册面名，因此改注册面名
         /// 不会移动身份。
         pub const NODE_ID: $crate::NodeId = $crate::NodeId::from_namespaced_path(
             env!("CARGO_PKG_NAME"),
@@ -160,13 +228,50 @@ macro_rules! __registration_face {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __submit_registration {
+    // `development` and `linked` are one effect written as two arms, because
+    // `macro_rules` has no token alternation: `(development | linked; $x:ident)`
+    // matches the literal tokens `|` and never fires, which is how the first draft
+    // of this change sent the implicit `linked` into the refusal arm below (the
+    // doctest at the top of this file caught it). They say different things about
+    // the face — `development` means the author is developing it in this crate,
+    // `linked` means the declaration comes from a crate that is linked into this
+    // one — and the same thing about submission: nothing here, because neither has
+    // an inventory section to go into. The audit entry this answers (`LGC-LG-14`)
+    // names the shape of two empty arms for one effect, and the honest encoding of
+    // "one effect" in this macro system is one comment for the pair plus a pin that
+    // refuses to let the two spellings drift apart.
+    // `linked` in particular is not a value nobody uses: it is the default
+    // `external_object!` injects when the author writes no collector
+    // (`macros/face_external.rs`).
+    // `development` 与 `linked` 是同一个效果写成的两条臂，因为 `macro_rules` 没有 token 级
+    // 交替：`(development | linked; $x:ident)` 匹配的是字面 token `|`、永不命中——本次改动的第一
+    // 稿正是因此把隐式 `linked` 送进了下面的拒绝臂（本文件顶部的 doctest 抓住了它）。它们对**面的
+    // 来源**说法不同——`development` 指作者正在本 crate 里开发它，`linked` 指声明来自被链接进本
+    // crate 的那个 crate——而对**提交**说的一样：这里什么都不提交，因为两者都没有可用的 inventory 段。
+    // 审计条目 `LGC-LG-14` 点名的正是"一个效果配两条空臂"这个形状，而在这套宏系统里"一个效果"的
+    // 诚实写法是：为这一对写一段注释，再加一条不让两个拼法漂移的钉子。`linked` 尤其不是没人用的取值：
+    // 它就是 `external_object!` 在作者不写 collector 时注入的默认值（见 `macros/face_external.rs`）。
     (development; $registration:ident) => {};
+    (linked; $registration:ident) => {};
+    // `debug`: the only value that submits anything, and only in a debug build.
+    // The switch is deliberately opt-in and undocumented elsewhere: a release
+    // build of the same source compiles the arm away.
+    // `debug`：唯一真正提交的取值，且只在 debug 构建里。这个开关有意是显式选择且别无文档：
+    // 同一份源码的 release 构建会把这个 arm 编译掉。
     (debug; $registration:ident) => {
         #[cfg(debug_assertions)]
         ::nichlink_debug_method::submit! { $registration }
     };
-    (linked; $registration:ident) => {
-        // Collection is owned by nichlink-debug; core keeps declarations pure.
-        // 收集由 nichlink-debug 持有；core 只保留纯声明。
+    // Any other ident is a misspelling, and naming the three valid values here
+    // beats the bare "no rules expected" error a missing arm produces inside a
+    // macro the author never wrote.
+    // 任何其它 ident 都是拼错；在这里点出三个合法取值，好过一个作者从未写过的宏内部缺 arm 带来的
+    // 裸 "no rules expected" 错误。
+    ($other:ident; $registration:ident) => {
+        ::core::compile_error!(::core::concat!(
+            "`collector` must be one of `development`, `debug`, `linked`; got `",
+            ::core::stringify!($other),
+            "` (only `debug` submits a registration, and only in a debug build)"
+        ));
     };
 }

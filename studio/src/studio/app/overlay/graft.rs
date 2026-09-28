@@ -72,7 +72,7 @@ impl App {
                     if let Some(selector) = selector {
                         self.open_graft_plan(&selector);
                     } else {
-                        self.event = "Graft: no plan exists for this selector yet".to_owned();
+                        self.note("Graft: no plan exists for this selector yet".to_owned());
                     }
                     self.overlay = Some(Overlay::Graft(graft));
                     return;
@@ -88,7 +88,7 @@ impl App {
                     if let Some((selector, full)) = plan {
                         self.toggle_graft_plan(&selector, full);
                     } else {
-                        self.event = "Graft: no plan exists for this selector yet".to_owned();
+                        self.note("Graft: no plan exists for this selector yet".to_owned());
                     }
                     self.overlay = Some(Overlay::Graft(graft));
                     self.refresh_graft();
@@ -106,7 +106,7 @@ impl App {
                             graft.pending_delete = Some(selector);
                         }
                         None => {
-                            self.event = "Graft: no plan exists for this selector yet".to_owned();
+                            self.note("Graft: no plan exists for this selector yet".to_owned());
                         }
                     }
                     self.overlay = Some(Overlay::Graft(graft));

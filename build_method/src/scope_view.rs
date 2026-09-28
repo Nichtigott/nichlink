@@ -40,12 +40,29 @@ pub fn build_output_is_current(root: &Path, out_dir: &Path) -> bool {
     let Ok(stored) = fs::read_to_string(out_dir.join("discovery.fingerprint")) else {
         return false;
     };
-    let src = root.join("src");
-    if !src.is_dir() {
+    // The same two roots the pipeline computes the fingerprint from: the walk reads
+    // `scan_root`, and the fingerprint is taken over the *identity* base
+    // (`pipeline.rs` does exactly this). Recomputing both from `root/src` meant a
+    // package whose library target lives elsewhere — the layout `source_layout`
+    // supports and `build_method/tests/outside_src_layout.rs` fixtures — never
+    // matched its own token: every read answered "not current", so `explain` and the
+    // MCP evidence stayed `unknown` for good. The direction was conservative, which
+    // is why nothing failed loudly, but the answer was permanently unavailable
+    // (audit `SUR-S18`).
+    // 与管线计算指纹时相同的两个根：遍历读 `scan_root`，指纹按**身份基准**取（`pipeline.rs` 正是
+    // 这么做的）。这里过去两者都按 `root/src` 复算，因此库目标住在别处的包——`source_layout`
+    // 支持的布局，`build_method/tests/outside_src_layout.rs` 有夹具——永远对不上自己的凭据：每次
+    // 读取都答"不是当前的"，`explain` 与 MCP 的 evidence 长期是 `unknown`。这个方向是保守的，因此
+    // 没有东西响亮失败，但那个答案永远拿不到（审计 `SUR-S18`）。
+    let Ok(layout) = crate::source_layout(root) else {
+        return false;
+    };
+    let scan = &layout.scan_root;
+    if !scan.is_dir() {
         return false;
     }
-    let nodes = crate::discovery::discover_root(&src);
-    stored.trim() == crate::discovery::discovery_fingerprint(&src, &nodes)
+    let nodes = crate::discovery::discover_root(scan);
+    stored.trim() == crate::discovery::discovery_fingerprint(&layout.identity_base, &nodes)
 }
 
 /// One row of `pruning_manifest.tsv`: a symbol release-time pruning tracks for
@@ -283,5 +300,54 @@ mod tests {
             "and the output it left must not read as current"
         );
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A package whose library target lives outside `src/` matches its own
+    /// fingerprint: the reader resolves the same two roots the writer used.
+    /// 库目标住在 `src/` 之外的包能对上自己的指纹：读取方解析出与写入方相同的两个根。
+    ///
+    /// The reader used to recompute both from `root/src`, so such a package never saw
+    /// a matching token: every read answered "not current" and the scope/pruning
+    /// evidence stayed `unknown` for good. The direction was conservative — it never
+    /// called an old artifact current — which is why nothing failed loudly (audit
+    /// `SUR-S18`).
+    /// 读取方过去两者都按 `root/src` 复算，因此这样的包永远看不到匹配的凭据：每次读取都答"不是当前的"，
+    /// 作用域与修剪证据长期是 `unknown`。这个方向是保守的——它从不把旧产物当成当前的——因此没有东西
+    /// 响亮失败（审计 `SUR-S18`）。
+    #[test]
+    fn a_library_target_outside_src_matches_its_own_fingerprint() {
+        let root = host_outside_src("scope-view-outside-src");
+        let out = root.join("target/nichlink/out");
+        crate::check_for(&root, &out, "scope-view-outside-src")
+            .expect("the outside-src layout is supported");
+        assert!(
+            build_output_is_current(&root, &out),
+            "the reader must resolve the same roots the pipeline wrote with"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A host whose library target is `host/lib.rs`, with one face next to it.
+    /// 库目标是 `host/lib.rs` 的宿主，旁边有一个注册面。
+    fn host_outside_src(label: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("nichlink-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("host/control")).expect("face directory");
+        fs::write(
+            root.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+                 [lib]\npath = \"host/lib.rs\"\n"
+            ),
+        )
+        .expect("manifest");
+        fs::write(root.join("host/lib.rs"), "// host entry\n").expect("entry");
+        fs::write(
+            root.join("host/control/control.rs"),
+            "crate::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \
+             parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+        )
+        .expect("face");
+        root
     }
 }

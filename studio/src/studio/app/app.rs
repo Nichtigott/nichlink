@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 mod source_index;
 pub(super) use source_index::function_source_range as app_function_source_range;
@@ -28,11 +28,25 @@ mod mutations;
 #[path = "namespace.rs"]
 mod namespace;
 mod pointer;
+// The three subjects `support` used to carry, now one module each; `support`
+// re-exports them so historical `super::support::…` paths keep resolving.
+// `support` 过去承载的三个主语，现在一个模块一个；`support` 重导出它们，使历史的
+// `super::support::…` 路径继续可解析。
+#[path = "cargo_probe.rs"]
+mod cargo_probe;
+#[path = "geometry.rs"]
+mod geometry;
+#[path = "project_context.rs"]
+pub(crate) mod project_context;
 mod search_queries;
+#[path = "source_stamp.rs"]
+mod source_stamp;
 #[path = "state/state.rs"]
 mod state;
+use source_stamp::*;
 mod support;
-mod writers;
+#[path = "write_guard.rs"]
+mod write_guard;
 pub use state::*;
 use support::host_manifest;
 
@@ -102,6 +116,12 @@ pub struct App {
     /// Latest status line shown in the event log.
     /// 事件日志中显示的最新状态行。
     pub event: String,
+    /// Whether that line is an alert — a failure or a warning — as opposed to an
+    /// ordinary status line. It is set where the line is written (`App::note` /
+    /// `App::alert`), never parsed out of the wording (audit `STU-S-18`).
+    /// 该行是否为 alert（失败或警告）而非普通状态行。它在写入的地方设定（`App::note` /
+    /// `App::alert`），永不从措辞里解析（审计 `STU-S-18`）。
+    pub(crate) event_is_alert: bool,
     /// Failure from the most recent reload, cleared on success.
     /// 最近一次重载的失败信息，成功时清空。
     pub reload_error: Option<ReloadError>,
@@ -112,6 +132,14 @@ pub struct App {
     /// Click hot-zones refreshed by every draw.
     /// 每次绘制刷新的点击热区。
     pub hot: HotZones,
+    /// One memoised search result: the query, the source stamp it was computed
+    /// from, and the rows. Search reads every face's source file and lexes it, so
+    /// the list, the RELATION column, the SELECTED SYMBOL preview and the graph page
+    /// used to pay for the same scan three to five times per frame (audit `STU-S-05`).
+    /// 一份被备忘的搜索结果：查询、计算它时的源码戳，以及那些行。搜索会读每个注册面的源文件并
+    /// 做词法扫描，因此结果列表、RELATION 栏、SELECTED SYMBOL 预览与调用图页过去一帧要为同一次
+    /// 扫描付三到五遍（审计 `STU-S-05`）。
+    search_memo: RefCell<Option<SearchMemo>>,
     /// The `rataflow` widget that draws the call tree, kept between frames
     /// because pan and zoom are *its* state: rebuilding it every frame would
     /// reset the viewport every frame. The key names the tree it was built from,

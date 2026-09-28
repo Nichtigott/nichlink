@@ -33,13 +33,12 @@ pub struct RegistryStorageStats {
 }
 
 impl RegistryIndex {
-    // `is_empty` was removed with the other zero-caller queries in B3a, but
-    // `len` stays because `run_method`'s scale-audit example reports index size.
-    // Clippy's `len_without_is_empty` then fires on a public type whose only
-    // other consumer is an example, so the allowance is deliberate.
-    // B3a 随其余零调用者查询一并删除了 `is_empty`，但 `len` 保留——run_method 的
-    // scale-audit 示例用它报告索引规模。clippy 的 `len_without_is_empty` 因此会在这个
-    // 公开类型上触发（另一个消费方只是示例），该允许是有意为之。
+    // `len` has exactly one caller — `run_method`'s scale-audit example reports index
+    // size — and no `is_empty`, so clippy's `len_without_is_empty` fires on a public
+    // type; the allowance is deliberate. An `is_empty` with no caller would not be.
+    // `len` 只有一个调用者——`run_method` 的 scale-audit 示例用它报告索引规模——而没有
+    // `is_empty`，因此 clippy 的 `len_without_is_empty` 会在这个公开类型上触发；该允许是有意
+    // 为之。无人调用的 `is_empty` 则不会获得允许。
     /// Number of identities in the flattened index, including every descendant.
     /// 扁平索引中的身份总数，包含全部后代。
     #[allow(clippy::len_without_is_empty)]

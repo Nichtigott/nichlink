@@ -12,6 +12,10 @@ mod add;
 mod delete;
 #[path = "overlay/edit.rs"]
 mod edit;
+// The one transition table the add and edit overlays both run.
+// 添加与编辑两个浮层共用的唯一一份转移表。
+#[path = "overlay/face_form.rs"]
+mod face_form;
 #[path = "overlay/graft.rs"]
 mod graft;
 #[path = "overlay/new_project.rs"]

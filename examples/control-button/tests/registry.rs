@@ -152,6 +152,14 @@ fn parent_rule_rejects_a_child_that_misses_a_required_export() {
     broken.exports.clear();
     broken.id =
         NodeId::from_namespaced_path(&broken.namespace, &broken.source.file, "BrokenButton");
+    // A slot name of its own, so the fixture exercises the *parent rule* rather than the
+    // sibling slot-name rule: the broken copy used to keep `button`, which the kernel now
+    // refuses before the rule is ever consulted (audit `LGC-LG-07`). The face is broken in
+    // exactly the way this test is about — its exports — and nowhere else.
+    // 给坏副本一个自己的槽位名，于是这条夹具考的是**父级规则**而不是兄弟槽位名规则：它过去沿用
+    // `button`，而内核现在会在规则被咨询之前就拒绝它（审计 `LGC-LG-07`）。这个面坏掉的正是本
+    // 测试要考的那一处——exports——别处一律不变。
+    broken.registry_name = "broken-button".to_owned();
 
     let error = registry
         .register_snapshot_batch([broken])

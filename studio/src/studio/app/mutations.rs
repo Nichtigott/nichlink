@@ -2,7 +2,7 @@
 //! App 文件变更与编辑器交接。
 
 use super::support::{package_root, select_project};
-use super::writers::{selected_package_root, with_selected_project};
+use super::write_guard::{selected_package_root, with_selected_project};
 use super::*;
 use nichlink_run_method::pascal_case;
 
@@ -12,11 +12,11 @@ impl App {
         let package = project.values[new_project_field::PACKAGE].trim();
         let kind = project.values[new_project_field::KIND].trim();
         if directory.is_empty() || package.is_empty() {
-            self.event = "New project failed: directory and package are required".to_owned();
+            self.alert("New project failed: directory and package are required".to_owned());
             return;
         }
         if !matches!(kind, "binary" | "library") {
-            self.event = "New project failed: kind must be binary or library".to_owned();
+            self.alert("New project failed: kind must be binary or library".to_owned());
             return;
         }
         if !package
@@ -51,18 +51,22 @@ impl App {
         if let Err(error) =
             nichlink_build_method::scaffold::create_project(&root, package, kind, &source)
         {
-            self.event = format!("New project failed: {error}");
+            self.alert(format!("New project failed: {error}"));
             return;
         }
         // Keep the new project visible immediately. The next reload reads its
         // folder-backed faces; no manual environment setup or restart needed.
         // 立即切换到新项目；下一次 reload 会读取它的文件注册面，无需手动设置环境变量。
         select_project(root.clone(), root.join("Cargo.toml"), package);
-        self.reload();
-        self.event = format!(
+        // The scaffold wrote a whole tree: the same entry point as every other write
+        // applies it and records that this session already saw it (audit `STU-S-27`).
+        // 脚手架写了一整棵树：与其余写入同一个入口来应用它，并记下本会话已经看到过它
+        // （审计 `STU-S-27`）。
+        let _ = self.after_project_write(None);
+        self.note(format!(
             "Created {kind} project at {}; Studio switched to it",
             root.display()
-        );
+        ));
         self.overlay = None;
     }
 
@@ -79,7 +83,7 @@ impl App {
         let parent = match self.resolve_parent(&add.values[face_field::PARENT]) {
             Ok(parent) => parent,
             Err(error) => {
-                self.event = format!("Add failed: {error}");
+                self.alert(format!("Add failed: {error}"));
                 return;
             }
         };
@@ -90,13 +94,13 @@ impl App {
             add.values[face_field::KIND].trim()
         };
         if add.values[face_field::MODULE].is_empty() {
-            self.event = "Add failed: module name is required".to_owned();
+            self.alert("Add failed: module name is required".to_owned());
             return;
         }
         let needs_registry = match add.values[face_field::NEEDS_REGISTRY].parse::<bool>() {
             Ok(value) => value,
             Err(_) => {
-                self.event = "Add failed: needs registry must be true or false".to_owned();
+                self.alert("Add failed: needs registry must be true or false".to_owned());
                 return;
             }
         };
@@ -138,14 +142,16 @@ impl App {
             nichlink_run_method::add_module_from_face(&self.registry, &face)
         }) {
             Ok((change, info)) => {
-                if let Err(error) = self.registry.register_snapshot_batch([info]) {
-                    self.event = format!("Add failed:\n{error}");
+                // One place applies a write's outcome (audit `STU-S-27`).
+                // 写入的结果只有一处应用（审计 `STU-S-27`）。
+                if let Err(error) = self.after_project_write(Some(vec![info])) {
+                    self.alert(format!("Add failed:\n{error}"));
                     return;
                 }
-                self.event = format!("{}; press r to reload", change.message);
+                self.note(format!("{}; press r to reload", change.message));
                 self.overlay = None;
             }
-            Err(error) => self.event = format!("Add failed: {error}"),
+            Err(error) => self.alert(format!("Add failed: {error}")),
         }
     }
 
@@ -153,7 +159,7 @@ impl App {
         let needs_registry = match edit.values[face_field::NEEDS_REGISTRY].parse::<bool>() {
             Ok(value) => value,
             Err(_) => {
-                self.event = "Edit failed: needs registry must be true or false".to_owned();
+                self.alert("Edit failed: needs registry must be true or false".to_owned());
                 return;
             }
         };
@@ -188,12 +194,14 @@ impl App {
             Ok(change) => {
                 let message = change.message;
                 let changed_source = change.source;
-                // Keep the visible inspector in sync with the file we just
-                // committed. The reload is deliberately after the atomic
-                // write, so a failed parse keeps the previous healthy state.
-                // 保存成功后立即刷新检视器；刷新失败时仍保留上一份健康快照。
-                self.reload();
-                if self.reload_error.is_none() {
+                // Keep the visible inspector in sync with the file we just committed: the
+                // reload this runs is deliberately after the atomic write, so a failed
+                // parse keeps the previous healthy state. Same entry point as the add
+                // path (audit `STU-S-27`).
+                // 让可见的检视器与我们刚提交的文件同步：它跑的重载刻意在原子写入之后，因此解析失败
+                // 会保留上一份健康状态。与新增路径同一个入口（审计 `STU-S-27`）。
+                let healthy = self.after_project_write(None).is_ok();
+                if healthy {
                     if let Some(info) = self
                         .registry
                         .depth_first()
@@ -202,11 +210,11 @@ impl App {
                     {
                         self.selected = info.id;
                     }
-                    self.event = format!("{message}; registration reloaded");
+                    self.note(format!("{message}; registration reloaded"));
                 }
                 self.overlay = None;
             }
-            Err(error) => self.event = format!("Edit failed: {error}"),
+            Err(error) => self.alert(format!("Edit failed: {error}")),
         }
     }
 
@@ -219,7 +227,7 @@ impl App {
         let checksum = plugin.values[plugin_field::CHECKSUM].trim();
         let mode = plugin.values[plugin_field::MODE].trim();
         if !matches!(source, "official" | "user") {
-            self.event = "Plugin failed: source must be official or user".to_owned();
+            self.alert("Plugin failed: source must be official or user".to_owned());
             return;
         }
         if [framework, package, version, crate_name, checksum]
@@ -232,7 +240,7 @@ impl App {
             return;
         }
         if !matches!(mode, "extension" | "replacement") {
-            self.event = "Plugin failed: mode must be extension or replacement".to_owned();
+            self.alert("Plugin failed: mode must be extension or replacement".to_owned());
             return;
         }
         // One of Studio's writers, so it needs the project the reader opened, not
@@ -243,7 +251,7 @@ impl App {
         let package_root = match selected_package_root() {
             Ok(root) => root,
             Err(error) => {
-                self.event = format!("Plugin failed: {error}");
+                self.alert(format!("Plugin failed: {error}"));
                 return;
             }
         };
@@ -258,14 +266,14 @@ impl App {
             format!("{source}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode}");
         let existing = std::fs::read_to_string(&lock).unwrap_or_default();
         if existing.lines().any(|line| line.trim() == record) {
-            self.event = "Plugin already selected".to_owned();
+            self.note("Plugin already selected".to_owned());
             self.overlay = None;
             return;
         }
         let catalog = match PluginCatalog::parse(&existing) {
             Ok(catalog) => catalog,
             Err(error) => {
-                self.event = format!("Plugin failed: invalid lock: {error}");
+                self.alert(format!("Plugin failed: invalid lock: {error}"));
                 return;
             }
         };
@@ -305,7 +313,7 @@ impl App {
             .chars()
             .all(|character| character == '_' || character.is_ascii_alphanumeric())
         {
-            self.event = "Plugin failed: crate must be a Rust identifier".to_owned();
+            self.alert("Plugin failed: crate must be a Rust identifier".to_owned());
             return;
         }
         // The lock is the artifact the host reads, so the parser decides whether
@@ -334,10 +342,22 @@ impl App {
         let anchor = format!("\n#[allow(unused_imports)]\nuse {crate_name} as _;\n");
         let entry_existed = entry.is_file();
         let entry_text = std::fs::read_to_string(&entry).unwrap_or_default();
-        if !entry_text.contains(&format!("use {crate_name} as _;"))
-            && let Err(error) = append_line(&entry, &anchor)
-        {
-            self.event = format!("Plugin failed: cannot update {entry_name}: {error}");
+        // The gate asks whether the *entry line* is there, not whether its text
+        // appears anywhere in the file: a commented-out or quoted copy is not an
+        // import, and reading it as one skipped the append and then reported
+        // "Plugin selected" over an entry that never imported the crate — a write
+        // that succeeded while the semantic effect it exists for did not happen
+        // (audit `STU-S-08`).
+        // 这道闸门问的是**入口那一行**在不在，而不是那串文本是否出现在文件的任何地方：被注释掉
+        // 或被引号包住的副本不是一次导入；把它读成导入会跳过追加，然后在一条从未导入该 crate 的
+        // 入口上报 "Plugin selected"——一次成功了、而它存在的语义目的却没有发生的写入（审计
+        // `STU-S-08`）。
+        let entry_line = format!("use {crate_name} as _;");
+        let imported = entry_text.lines().any(|line| line.trim() == entry_line);
+        if !imported && let Err(error) = append_line(&entry, &anchor) {
+            self.alert(format!(
+                "Plugin failed: cannot update {entry_name}: {error}"
+            ));
             return;
         }
         // Two files carry one decision, and the lock is the one the runtime reads.
@@ -357,10 +377,18 @@ impl App {
             } else {
                 "the entry file could not be restored"
             };
-            self.event = format!("Plugin failed: cannot update {lock_name}: {error}; {note}");
+            self.alert(format!(
+                "Plugin failed: cannot update {lock_name}: {error}; {note}"
+            ));
             return;
         }
-        self.event = format!("Plugin selected: {package} ({source}, {mode})");
+        // A plugin lock changes what the host admits, but not this snapshot: an empty batch
+        // says so, while the write still counts as seen so the watcher cannot report our own
+        // lock back as someone else's change (audit `STU-S-27`).
+        // 插件锁改变的是宿主准入什么，而不是这份快照：空的批量说明了这一点，而这次写入仍被记为
+        // 已见过，因此监听器不能把我们自己的锁报成别人的变更（审计 `STU-S-27`）。
+        let _ = self.after_project_write(Some(Vec::new()));
+        self.note(format!("Plugin selected: {package} ({source}, {mode})"));
         self.overlay = None;
     }
 

@@ -19,7 +19,7 @@ pub(super) use super::support::{
     cargo_rustc_mir, clear_project_context, host_manifest, package_namespace, package_root,
     resolve_project, resolve_project_from, select_project, with_authoring_context,
 };
-pub(super) use super::writers::{selected_package_root, with_selected_project};
+pub(super) use super::write_guard::{selected_package_root, with_selected_project};
 pub(super) use super::{
     AddState, App, GraftDeclaration, Overlay, StudioPage, TraceStatus, app_function_source_range,
     body_calls, function_bodies, function_symbols,
@@ -32,8 +32,53 @@ pub(super) use super::{
 pub(super) use super::SearchState;
 // The fixture helper exists only with the feature that names the fixture.
 // 该夹具助手只在命名该夹具的特性下存在。
+/// The node-editor fixture host, when this checkout has it.
+/// node-editor 夹具宿主，当本检出有它时。
+///
+/// The fixture is a nested package, and cargo does not put a nested package into a
+/// published `.crate`: a consumer who runs `cargo test --all-features` on the
+/// published `nichlink-studio` has no fixture to index. The contract
+/// `prototype-fixtures` names is a *checkout* contract, so the tests that need it
+/// skip when it is absent instead of panicking. It is always present here.
+/// 该夹具是嵌套包，而 cargo 不会把嵌套包放进发布的 `.crate`：在已发布 `nichlink-studio` 上跑
+/// `cargo test --all-features` 的消费者没有夹具可索引。`prototype-fixtures` 命名的契约是**检出**
+/// 契约，因此需要它的测试在夹具缺席时跳过而不是 panic；本检出里它始终存在。
+/// The node-editor fixture loaded as a session: the one body every test that needs a
+/// real host shares, so the copies cannot drift apart (audit `STU-S-22`).
+/// node-editor 夹具按会话加载：所有需要真实宿主的测试共用这一份，因此各份拷贝不会各自漂移
+/// （审计 `STU-S-22`）。
 #[cfg(feature = "prototype-fixtures")]
-pub(super) use super::support::node_editor_fixture;
+pub(super) fn fixture_project() -> Option<std::path::PathBuf> {
+    let fixture = node_editor_fixture()?;
+    select_project(
+        fixture.clone(),
+        fixture.join("Cargo.toml"),
+        "nichlink.fixture.node-editor",
+    );
+    Some(fixture)
+}
+
+/// That fixture as a loaded session, for tests that need the registration tree.
+/// 同一个夹具作为已加载会话，给需要注册树的测试。
+#[cfg(feature = "prototype-fixtures")]
+pub(super) fn fixture_app() -> Option<App> {
+    fixture_project()?;
+    Some(App::load())
+}
+
+#[cfg(feature = "prototype-fixtures")]
+pub(super) fn node_editor_fixture() -> Option<std::path::PathBuf> {
+    let root =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/node-editor");
+    if root.join("Cargo.toml").is_file() {
+        Some(root)
+    } else {
+        eprintln!(
+            "skipping: the node-editor fixture is a checkout fixture and is not in this package"
+        );
+        None
+    }
+}
 
 // The prototype-fixture tests read call relations and build a compiler snapshot
 // directly, so they name these instead of reaching them through `app`'s private
@@ -70,16 +115,55 @@ mod evidence;
 #[cfg(feature = "prototype-fixtures")]
 #[path = "tests/fixtures.rs"]
 mod fixtures;
+// The B4-studio batch's own pins: module docs against their implementation, the
+// inspector's single row list, the editor failure that survives the graft banner,
+// the plugin entry gate, evidence re-judged after a snapshot swap, and the search
+// memo. One file because they share one subject — that batch's findings.
+// B4-studio 批次自己的钉子：模块文档与实现、检视器唯一一份行清单、活过 graft 横幅的编辑器
+// 失败、插件入口闸门、快照替换后重新裁决的证据、搜索备忘。合成一个文件是因为它们共享一个主语
+// ——该批次的条目。
+#[path = "tests/b4_studio.rs"]
+mod b4_studio;
+// The B5-studio code half's pins: the graph page's arrow vocabulary and its refusal of
+// every other key, the one entry point that opens the editor form, the source stamp
+// living outside navigation, the write guard's name, and the stamp/watcher mirror.
+// B5-studio 代码半的钉子：调用图页的方向键词汇与其对其它键的拒绝、打开编辑表单的唯一入口、
+// 住在导航之外的源码戳、写入守卫的名字，以及戳/watcher 的镜像。
+#[path = "tests/b5_studio.rs"]
+mod b5_studio;
+// The B6-studio batch's pins: the consistency cleanups of that batch — root-only key
+// feedback, the single modal hot-zone reset, named row indices, the graph cache's
+// source stamp, both plugin locks, the removed reserved rectangles, and the graft
+// reader's name.
+// B6-studio 批次自己的钉子：该批次的一致性清扫——根上按键的反馈、模态热区唯一一处复位、具名
+// 行下标、调用图缓存的源码戳、两个插件锁、删除的预留矩形，以及 graft 读取器的名字。
+#[path = "tests/b6_studio.rs"]
+mod b6_studio;
 #[path = "tests/forms.rs"]
 mod forms;
 #[path = "tests/graft.rs"]
 mod graft;
+// The graft screen's own tests used to sit beside `app/graft.rs` as
+// `graft_tests.rs`; they live here now, like every other mounted test file.
+// graft 界面自己的测试过去以 `graft_tests.rs` 待在 `app/graft.rs` 旁边；现在它们和其余测试
+// 文件一样挂在这里（审计 `STU-S-23`）。
+#[path = "tests/graft_records.rs"]
+mod graft_records;
 #[path = "tests/graph.rs"]
 mod graph;
+#[path = "tests/mir_target.rs"]
+mod mir_target;
 #[path = "tests/navigation.rs"]
 mod navigation;
-#[path = "tests/project.rs"]
-mod project;
+// The old `tests/project.rs` held four subjects; it is now three files, each named
+// for what it covers: the project root/manifest/namespace, the new-project wizard,
+// and the MIR target resolver.
+// 旧的 `tests/project.rs` 装四件事；现在是三个文件，各按它测的东西命名：项目根/清单/命名空间、
+// 新项目向导、MIR target 解析器。
+#[path = "tests/new_project.rs"]
+mod new_project;
+#[path = "tests/project_root.rs"]
+mod project_root;
 #[path = "tests/source.rs"]
 mod source;
 // Trace ingest builds its own temp host project, so it carries no fixture gate:

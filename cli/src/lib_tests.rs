@@ -842,10 +842,48 @@ fn grafts_json_reports_a_resolution_failure_as_json() {
     );
 }
 
+/// `--help` is help and succeeds; a bare invocation is not a success.
+/// `--help` 是帮助、应当成功；裸调不是成功。
+///
+/// The bare case used to print the usage and return `Ok`, so a shell pipeline read
+/// `nichlink` with no arguments as having done something. The usage still goes out —
+/// a caller who typed nothing needs to see it — and the status now says the command
+/// did not run (audit `LGC-LG-44`).
+/// 裸调过去打印用法并返回 `Ok`，于是 shell 管线把不带参数的 `nichlink` 读成做了事。用法照常输出
+/// ——什么都没敲的调用方需要看到它——而状态现在说明命令没有运行（审计 `LGC-LG-44`）。
 #[test]
-fn help_and_missing_command_succeed() {
+fn help_succeeds_and_a_missing_command_does_not() {
     assert!(run(["nichlink".to_owned(), "--help".to_owned()]).is_ok());
-    assert!(run(["nichlink".to_owned()]).is_ok());
+    let error = run(["nichlink".to_owned()]).expect_err("a bare invocation is not a success");
+    assert!(error.contains("no command given"), "{error}");
+}
+
+/// Every subcommand answers `-h`/`--help` the same way, and `new --help` no longer
+/// takes the flag as a package name.
+/// 每个子命令都以同一方式回答 `-h`/`--help`，而 `new --help` 不再把旗标当成包名。
+///
+/// Before this, the same flag had four meanings: refused by four subcommands, a full
+/// usage from `studio`, a one-line usage from `new`, and handed to cargo by `build`
+/// (audit `LGC-LG-44`).
+/// 在这之前，同一个旗标有四种含义：被四个子命令拒绝、由 `studio` 给出完整用法、由 `new` 给出一行
+/// 用法、被 `build` 交给 cargo（审计 `LGC-LG-44`）。
+#[test]
+fn every_subcommand_answers_help_with_the_usage() {
+    for command in [
+        "new", "check", "build", "snippets", "explain", "grafts", "studio",
+    ] {
+        for flag in ["-h", "--help"] {
+            let (result, stdout) = run_capture(&["nichlink", command, flag]);
+            assert!(
+                result.is_ok(),
+                "{command} {flag} must be help, not an error: {result:?}"
+            );
+            assert!(
+                stdout.contains("USAGE:") && stdout.contains(&format!("nichlink {command}")),
+                "{command} {flag} must print the usage banner: {stdout}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -871,7 +909,11 @@ fn new_requires_a_package_name() {
 /// 错误会写进 shell 当时所在的目录。
 #[test]
 fn an_option_shaped_name_is_refused() {
-    for option in ["--json", "--help", "-x"] {
+    // `--help` left this list when it became help: the flag is answered with the
+    // usage banner, and only non-help options are option-shaped names (audit `LGC-LG-44`).
+    // `--help` 从这份清单里移除了——它现在是帮助：该旗标以用法横幅作答，只有非帮助的选项才是
+    // "长得像选项的名字"（审计 `LGC-LG-44`）。
+    for option in ["--json", "-x"] {
         let error = run(["nichlink".to_owned(), "new".to_owned(), option.to_owned()])
             .expect_err("an option is not a name");
         assert!(
@@ -1012,4 +1054,33 @@ fn a_non_utf8_argument_is_refused_by_name() {
     let argv = super::argv_strings([OsString::from("nichlink"), OsString::from("check")])
         .expect("valid arguments");
     assert_eq!(argv, ["nichlink", "check"]);
+}
+
+/// Two dependency sources at once is refused, exactly as `build` refuses a target
+/// and a `--manifest-path` that name different projects.
+/// 一次给两个依赖来源会被拒绝，正如 `build` 拒绝点名不同项目的目标与 `--manifest-path`。
+///
+/// `--path` and `--git` used to be resolved by `(Some(workspace), _)`, so naming
+/// both silently ignored the URL and scaffolded against a local workspace the
+/// caller had also pointed away from. `USAGE` already spells them as alternatives,
+/// so refusing is what the command line promised (audit `LGC-LG-45`).
+/// `--path` 与 `--git` 过去由 `(Some(workspace), _)` 决定，因此两者都给会静默忽略 URL，并对调用方
+/// 同时明确排除过的本地工作区搭脚手架。`USAGE` 本就把两者写成互斥，因此拒绝才是命令行承诺的事
+/// （审计 `LGC-LG-45`）。
+#[test]
+fn two_dependency_sources_are_refused() {
+    let error = run([
+        "nichlink".to_owned(),
+        "new".to_owned(),
+        "app".to_owned(),
+        "--path".to_owned(),
+        "/tmp/workspace".to_owned(),
+        "--git".to_owned(),
+        "https://example.invalid/repo".to_owned(),
+    ])
+    .expect_err("two sources must be refused");
+    assert!(
+        error.contains("--path") && error.contains("--git") && error.contains("one of them"),
+        "the refusal names both and says to pass one: {error}"
+    );
 }

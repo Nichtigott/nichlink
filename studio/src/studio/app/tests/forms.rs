@@ -121,6 +121,34 @@ fn edit_recovers_compiler_checked_contract_paths_from_source() {
     );
 }
 
+/// A source file that cannot be read is reported loudly, and an empty result keeps
+/// meaning "no contracts": the two used to be the same value (audit `LGC-LG-34`).
+/// 读不到的源文件要被响亮地报出，而空结果仍旧只表示“没有契约”：两者曾经是同一个值
+/// （审计 `LGC-LG-34`）。
+#[test]
+fn an_unreadable_source_is_loud_where_an_empty_one_is_quiet() {
+    let missing = std::path::Path::new("studio/src/studio/app/definitely-not-here.rs");
+    let (handle, part, failure) = super::super::keyboard::declaration_contract_fields(missing);
+    assert!(
+        failure.is_some(),
+        "a read failure must be reported, not rendered as `no contracts`"
+    );
+    assert!(
+        handle.contains("unreadable") && part.contains("unreadable"),
+        "the columns themselves must say they were never read: {handle:?} / {part:?}"
+    );
+
+    let dir = std::env::temp_dir().join("nichlink-studio-empty-contracts");
+    std::fs::create_dir_all(&dir).expect("a temp dir");
+    let empty = dir.join("no-contracts.rs");
+    std::fs::write(&empty, "// a source file with no face at all\n").expect("write");
+    let (handle, part, failure) = super::super::keyboard::declaration_contract_fields(&empty);
+    assert!(
+        failure.is_none() && handle.is_empty() && part.is_empty(),
+        "a readable file with no contracts stays quiet and empty"
+    );
+}
+
 #[test]
 fn stable_identity_is_editable_from_the_form() {
     let mut app = App::load();
@@ -213,4 +241,34 @@ fn a_plugin_selection_takes_two_presses_and_rolls_back_a_half_write() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A paste is typing into the open form, and nothing at all when no form is open.
+/// 粘贴就是往打开的表单里键入；没有表单打开时什么都不做。
+#[test]
+fn a_paste_types_into_the_open_form_and_is_ignored_without_one() {
+    use crossterm::event::Event;
+    // No overlay: a pasted `ab` must not be replayed as the base key map (`a` opens the
+    // add form, `b` starts a build).
+    // 没有浮层：粘进来的 `ab` 不得被当作基础键位回放（`a` 打开添加表单、`b` 触发构建）。
+    let mut app = App::load();
+    app.handle(Event::Paste("ab".to_owned()));
+    assert!(
+        app.overlay.is_none(),
+        "a paste with no form open must not open one: {:?}",
+        app.event
+    );
+    assert!(!app.should_quit, "and it must not be read as `q`");
+
+    // With the add form open and a field accepting input, the paste lands in that field.
+    // 添加表单打开且某字段正在接受输入时，粘贴落进那个字段。
+    let mut add = AddState::new(app.registry.id());
+    add.field = face_field::NAME_EN;
+    add.editing = true;
+    app.overlay = Some(Overlay::Add(add));
+    app.handle(Event::Paste("Button".to_owned()));
+    let Some(Overlay::Add(add)) = app.overlay else {
+        panic!("the form stays open across a paste")
+    };
+    assert_eq!(add.values[face_field::NAME_EN], "Button");
 }

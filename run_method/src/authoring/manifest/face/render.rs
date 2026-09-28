@@ -8,6 +8,96 @@ use crate::authoring::GENERATED_MARKER;
 use crate::authoring::parse::*;
 use crate::authoring::validation::{normalized_path, rule_path_for_source, rust_string};
 
+/// The fields this renderer writes back into a face file — the whole on-disk
+/// field set, listed once.
+/// 本渲染器会写回注册面文件的字段——全部落盘字段，只列一次。
+///
+/// `FaceManifest::values` carries three classes of key and marks none of them
+/// (audit `LGC-LG-38`), so this list is the one place a maintainer can read what
+/// actually lands on disk:
+/// - the fields below: read here and re-emitted;
+/// - keys derived from the file's own location, which are inputs to that
+///   emission rather than fields — `source`, `parent_source`, `registry_rule_path`
+///   and the `namespace`/`parent_node`/`parent_kind`/`provided_parts`/
+///   `required_parts` metadata;
+/// - keys no template emits — `registry_name`, `handle`, `params`, which `edit`
+///   refuses by name instead of storing an edit nothing would write.
+///
+/// The round-trip pin below takes this list as the set of rows it must cover and
+/// asserts the two are equal, so the renderer and its evidence cannot drift into
+/// two half-lists.
+/// `FaceManifest::values` 混装三类键且都不加标记（审计 `LGC-LG-38`），因此这份清单是维护者能读到
+/// "真正落盘的是什么"的唯一位置：
+/// - 下面这些字段：从这里读出并重新发射；
+/// - 由文件自身位置派生的键，它们是那次发射的**输入**而不是字段——`source`、`parent_source`、
+///   `registry_rule_path`，以及 `namespace`/`parent_node`/`parent_kind`/`provided_parts`/
+///   `required_parts` 这些元数据；
+/// - 任何模板都不发射的键——`registry_name`、`handle`、`params`，`edit` 会按名拒绝它们，而不是
+///   存下一次没有任何东西会写出的编辑。
+///
+/// 下面的往返钉子把这份清单当作它必须覆盖的行集合，并断言两者相等，因此渲染器与它的证据不可能各自
+/// 漂成半份清单。
+const RENDERED_FIELDS: &[&str] = &[
+    "kind",
+    "preset",
+    "parts",
+    "name_zh",
+    "name_en",
+    "summary_zh",
+    "summary_en",
+    "exports",
+    "stable_name",
+    "getting_from_other_registry",
+    "requires",
+    "provides",
+    "runtime_checks",
+    "flow",
+    "flow_provider",
+    "handle_traits",
+    "handle_contracts",
+    "part_traits",
+    "part_contracts",
+    "needs_registry",
+    "registration_rule",
+    "admission",
+];
+
+/// The keys `values` carries that are not on-disk fields: inputs and metadata.
+/// `values` 里并非落盘字段的键：输入与元数据。
+///
+/// They are listed beside [`RENDERED_FIELDS`] so the partition is stated in one
+/// place, and the pin checks that none of them slipped into the rendered set.
+/// 它们与 [`RENDERED_FIELDS`] 并列，好让这份划分只在一处陈述；钉子会核对它们没有混进渲染集合。
+const NON_FIELD_KEYS: &[&str] = &[
+    "source",
+    "parent_source",
+    "registry_rule_path",
+    "namespace",
+    "parent_node",
+    "parent_kind",
+    "provided_parts",
+    "required_parts",
+    "registry_name",
+    "handle",
+    "admission_line",
+    "declaration_line",
+    "handle",
+    "module",
+    "namespace",
+    "parent_kind",
+    "parent_node",
+    "parent_registry_name",
+    "parent_source",
+    "params",
+    "plugin",
+    "provided_parts",
+    "registry_name",
+    "registry_rule_path",
+    "required_parts",
+    "root",
+    "source",
+];
+
 impl FaceManifest {
     pub(crate) fn render_source(&self) -> Result<String, String> {
         // Rebuilding the declaration would drop `plugin:`: the manifest layer
@@ -19,6 +109,23 @@ impl FaceManifest {
         // 回去，快照也不建模插件值。响亮拒绝胜过静默删掉作者写的字段——编辑器只应重写
         // 自己能完整复现的声明。
         let value = |key| self.values.get(key).map(String::as_str).unwrap_or("");
+        // Every key a manifest may carry is one of two lists (the constants at the
+        // top of this file): a field this renderer writes, or an input/metadata key.
+        // A third kind is a field nothing here can reproduce, and the refusal this
+        // file already makes for `plugin:` is the same refusal that keeps such a key
+        // from being ignored — the editor may only rewrite a declaration it can
+        // reproduce in full.
+        // 清单可能携带的每个键都属于两份清单之一（本文件顶部的常量）：本渲染器会写出的字段，或者
+        // 输入/元数据键。第三种键是这里无法复现的字段，而本文件对 `plugin:` 已经做出的那次拒绝，正是
+        // 让这样的键不会被忽略的同一道拒绝——编辑器只应重写自己能完整复现的声明。
+        if let Some(unknown) = self.values.keys().find(|key| {
+            !RENDERED_FIELDS.contains(&key.as_str()) && !NON_FIELD_KEYS.contains(&key.as_str())
+        }) {
+            return Err(format!(
+                "this face carries `{unknown}`, which no template emits and the editor cannot \
+                 rewrite; edit that line in the file by hand"
+            ));
+        }
         if !value(nichlink::lexicon::FACE_FIELD_PLUGIN).is_empty() {
             return Err(
                 "this face declares `plugin:`, which the editor cannot rewrite yet; \
@@ -103,7 +210,13 @@ impl FaceManifest {
         } else {
             format!("    part_contracts: [{part_contracts}],\n")
         };
-        let requirements = render_requirements(value("requires"));
+        // The strict entry, because this result is written back into the author's
+        // file: an entry the lossy published path would drop has to refuse the
+        // rewrite instead of deleting a field the author wrote.
+        // 严格入口：这个结果会被写回作者的文件，因此有损入口会丢掉的条目必须让这次重写失败，而不是
+        // 删掉作者写下的一个字段。
+        let requirements =
+            try_render_requirements(value("requires")).map_err(|error| error.to_string())?;
         let provides = render_literal_list(value("provides"));
         let runtime_checks = render_expression_list(value("runtime_checks"))?;
         let flow = render_flow_expression(value("flow"))?;
@@ -253,35 +366,5 @@ fn is_default_type(value: &str, default: &str) -> bool {
 }
 
 #[cfg(test)]
-mod plugin_preservation_tests {
-    use crate::authoring::manifest::parse;
-
-    /// Rebuilding a declaration must never delete a field it cannot reproduce:
-    /// a face carrying `plugin:` refuses the rewrite instead of losing it.
-    /// 重建声明绝不能删掉自己无法复现的字段：带 `plugin:` 的面拒绝重写，而不是把它
-    /// 弄丢。
-    #[test]
-    fn a_face_with_a_plugin_refuses_a_silent_rewrite() {
-        let root = std::env::temp_dir().join("nichlink-plugin-face-fixture");
-        let face = root.join("widget/widget.rs");
-        std::fs::create_dir_all(face.parent().expect("fixture parent")).expect("fixture dir");
-        std::fs::write(
-            &face,
-            "// generated-by=NichLink\n\
-             crate::root_object! {\n\
-                 kind: Widget,\n\
-                 parent: crate::ROOT_NODE_ID,\n\
-                 plugin: crate::PluginSpec::new(\"widget\"),\n\
-             }\n",
-        )
-        .expect("fixture face");
-
-        let manifest = parse::source(&face).expect("face manifest");
-        let error = manifest
-            .render_source()
-            .expect_err("a plugin field must refuse the rewrite")
-            .to_owned();
-        assert!(error.contains("plugin:"), "{error}");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-}
+#[path = "render_tests.rs"]
+mod render_tests;

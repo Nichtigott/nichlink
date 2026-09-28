@@ -71,7 +71,8 @@ fn collect_static_faces(
     errors: &mut BuildDiagnostics,
 ) {
     for node in nodes {
-        if node.name == "compile_error_demo" || !scope.includes(src, node, selected_ancestor) {
+        if node.name == crate::DEMO_ONLY_DIRECTORY || !scope.includes(src, node, selected_ancestor)
+        {
             continue;
         }
         let selected_here = selected_ancestor

@@ -33,12 +33,43 @@ pub(crate) const CACHE_SCHEMA: &str = "3";
 
 /// Write a generated artifact only when its bytes changed.
 /// 仅在内容变化时写入生成产物。
+///
+/// "The file exists" has to mean "the file is complete": `fs::write` on the target
+/// leaves whatever it managed to write when it fails (a full disk, an interrupt),
+/// and the fingerprint that says "this output describes these sources" is published
+/// the same way, so a truncated read could be called current. Writing a unique
+/// sibling and renaming it over the target is atomic on one filesystem — the same
+/// pattern the authoring executor uses
+/// (`run_method/src/authoring/filesystem/filesystem.rs`).
+/// "文件存在"必须等于"文件完整"：`fs::write` 直接写目标时失败（磁盘写满、被中断）会留下它写到一半的
+/// 内容，而"这份产物描述的就是这批源码"那枚凭据也走同一条路，因此被截断的读取可能被当成 current。
+/// 写一个唯一的同级文件再 rename 覆盖目标，在同一文件系统上是原子的——这正是授权执行器在用的同一模式
+/// （`run_method/src/authoring/filesystem/filesystem.rs`）。
 pub(crate) fn write_if_changed(path: &Path, content: &str) -> Result<(), String> {
-    if fs::read_to_string(path).ok().as_deref() != Some(content) {
-        fs::write(path, content)
-            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    if fs::read_to_string(path).ok().as_deref() == Some(content) {
+        return Ok(());
     }
-    Ok(())
+    let temporary = temporary_sibling(path);
+    fs::write(&temporary, content)
+        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+    fs::rename(&temporary, path).map_err(|error| {
+        // The half-written sibling is this call's own mess; the target is untouched.
+        // 半成品同级文件是本次调用自己的烂摊子；目标文件未被碰过。
+        let _ = fs::remove_file(&temporary);
+        format!("cannot publish {}: {error}", path.display())
+    })
+}
+
+/// A unique name beside `path` that no other writer in this process shares.
+/// 在 `path` 旁的一个本进程内不与他人共用的唯一名字。
+fn temporary_sibling(path: &Path) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = path.file_name().map_or_else(
+        || "artifact".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    path.with_file_name(format!("{name}.tmp-{}-{sequence}", std::process::id()))
 }
 
 pub(crate) fn collect_active_ids(

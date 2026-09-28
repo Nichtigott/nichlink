@@ -2,6 +2,7 @@
 //! graft 撰写表单渲染。
 
 use super::super::*;
+use super::draw_form_frame;
 
 use crate::studio::app::{GraftDeclaration, GraftState};
 
@@ -211,31 +212,13 @@ pub(crate) fn draw_graft(
         &mut state,
     );
 
-    let buttons = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-        ])
-        .split(inner[1]);
-    let button = |label: &'static str, color: Color| {
-        Paragraph::new(label)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(color))
-            .block(panel("", color))
-    };
-    frame.render_widget(button("Write [s]", GREEN), buttons[0]);
-    frame.render_widget(button("Close [Esc]", MUTED), buttons[1]);
-    frame.render_widget(button("Exit [q]", Color::LightRed), buttons[2]);
-    frame.render_widget(
-        Paragraph::new(
-            "↑↓ row  Tab pane  Enter edit/toggle  o open  f full  d delete (press twice)",
-        )
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(MUTED).bg(PANEL)),
-        buttons[3],
+    let areas = draw_form_frame(
+        frame,
+        inner[1],
+        body[1],
+        "Write [s]",
+        "Close [Esc]",
+        "↑↓ row  Tab pane  Enter edit/toggle  o open  f full  d delete (press twice)",
     );
     // The two clickable compose rows: the panel's inner first line is `target`,
     // so `selector` and `scope` start one row lower.
@@ -246,7 +229,7 @@ pub(crate) fn draw_graft(
         body[0].width.saturating_sub(2),
         2,
     );
-    (body[1], buttons[1], buttons[0], buttons[2], compose)
+    (areas.list, areas.cancel, areas.confirm, areas.exit, compose)
 }
 
 /// A selector the entry declaration cannot be rendered for yet.

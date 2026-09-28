@@ -120,7 +120,17 @@ fn parse_object(input: &str) -> Result<HashMap<String, String>, String> {
     loop {
         skip_space(bytes, &mut cursor);
         if bytes.get(cursor) == Some(&b'}') {
-            return Ok(fields);
+            // A record ends where its `}` ends. Without this, two records glued onto one
+            // line (a lost newline while the artifact was written or edited) left the
+            // second one unread — the parse reported success and the call graph silently
+            // lost a record, with no line number to point at (audit `KRN-K-15`).
+            // 记录在它的 `}` 处结束。没有这一条，粘在同一行上的两条记录（写出或编辑 artifact 时
+            // 丢了一个换行）会让第二条不被读取——解析报成功，调用图静静少一条记录，而没有任何行号
+            // 可指（审计 `KRN-K-15`）。
+            // This arm covers an empty object and a trailing comma; the arm below closes a
+            // record after its last field, which is the usual path.
+            // 这一支覆盖空对象与尾随逗号；下面那一支在最后一个字段之后闭合记录，是常见路径。
+            return finished(fields, bytes, cursor + 1);
         }
         let key = quoted(bytes, &mut cursor)?;
         skip_space(bytes, &mut cursor);
@@ -150,10 +160,38 @@ fn parse_object(input: &str) -> Result<HashMap<String, String>, String> {
         skip_space(bytes, &mut cursor);
         match bytes.get(cursor) {
             Some(b',') => cursor += 1,
-            Some(b'}') => return Ok(fields),
+            // The usual close: after the last field's value. The same end-of-record rule
+            // applies here, which is why both closes go through one function.
+            // 常见的闭合：在最后一个字段的取值之后。同一条"记录结束"规则在这里也适用，因此两个闭合
+            // 点走同一个函数。
+            Some(b'}') => return finished(fields, bytes, cursor + 1),
             _ => return Err("expected `,` or `}`".to_owned()),
         }
     }
+}
+
+/// Finish a record whose `}` sits just before `cursor`: only whitespace may follow it.
+/// 在 `cursor` 之前刚好闭合的记录：其后只允许空白。
+///
+/// Two records glued onto one line used to parse as one: the line's first `}` returned
+/// success and the remaining bytes were never looked at, so the second record vanished
+/// with no line number and no diagnostic (audit `KRN-K-15`). Taking the cursor past the
+/// `}` and requiring the end of the line is the whole rule, and it lives in one place
+/// because a record has two closing arms (an empty object/trailing comma, and the value
+/// that closes it).
+/// 粘在同一行上的两条记录过去会被解析成一条：该行第一个 `}` 就返回成功，剩余字节从未被看过，于是
+/// 第二条记录消失，既没有行号也没有诊断（审计 `KRN-K-15`）。把游标移过 `}` 并要求已到行尾就是全部
+/// 规则，它只存在一处，因为记录有两个闭合点（空对象/尾随逗号，以及闭合它的那个取值）。
+fn finished(
+    fields: HashMap<String, String>,
+    bytes: &[u8],
+    mut cursor: usize,
+) -> Result<HashMap<String, String>, String> {
+    skip_space(bytes, &mut cursor);
+    if cursor != bytes.len() {
+        return Err("trailing text after record".to_owned());
+    }
+    Ok(fields)
 }
 
 fn quoted(bytes: &[u8], cursor: &mut usize) -> Result<String, String> {
@@ -343,3 +381,7 @@ mod tests {
         assert!(error.to_string().contains("node id"), "{error}");
     }
 }
+
+#[cfg(test)]
+#[path = "jsonl_tests.rs"]
+mod jsonl_tests;

@@ -54,6 +54,33 @@ impl App {
     /// 不装入任何东西，保持注册表可见，并把原因写到事件行。这是把 `poll_hot_reload`“保留上一份
     /// 好快照”的习惯用在证据上：注册面仍然完好，因此继续显示。
     pub(super) fn install_trace(&mut self) {
+        if let Some(reason) = self.rejudge_evidence() {
+            self.alert(format!("Trace artifact refused: {reason}"));
+        }
+    }
+
+    /// Judge the artifact against the snapshot that is loaded *now*, dropping the
+    /// MIR snapshot that was built from the previous one.
+    /// 针对**此刻**已装入的快照裁决 artifact，并丢弃按上一份快照构建的 MIR 快照。
+    ///
+    /// Any path that replaces `registry` has to call this: the trace's only real
+    /// "different build" detector is "every recorded node still exists in this
+    /// snapshot", so a swap makes the previous judgement stale, and a MIR graph built
+    /// from the old tree would keep marking edges for faces that are gone. `App::load`
+    /// did this through `install_trace`; `poll_hot_reload` and `reload` replaced the
+    /// registry without it, which is how a session could keep saying `LIVE` over
+    /// evidence that no longer held (audit `STU-S-03`).
+    /// 任何替换 `registry` 的路径都必须调用它：追踪唯一真正的"不同构建"检测器是"每个已记录节点
+    /// 仍存在于本快照"，因此一次替换会让上一次裁决过期，而按旧树构建的 MIR 图会继续为已经不存在的
+    /// 注册面标边。`App::load` 经 `install_trace` 做了这件事；`poll_hot_reload` 与 `reload`
+    /// 替换了注册表却没有做，这正是会话能在不再成立的证据上继续宣称 `LIVE` 的原因（审计
+    /// `STU-S-03`）。
+    ///
+    /// The reason is returned rather than written to `event`, so the caller can keep
+    /// its own message and append this one instead of losing either.
+    /// 原因作为返回值交回而不是写进 `event`，调用方因此能保住自己的消息并把这条接上去，而不是
+    /// 丢掉任何一条。
+    pub(super) fn rejudge_evidence(&mut self) -> Option<String> {
         let (status, trace) = self.read_trace();
         let reason = match &status {
             TraceStatus::Mismatch { reason } => Some(reason.clone()),
@@ -61,9 +88,8 @@ impl App {
         };
         self.runtime_trace = trace;
         self.trace_status = status;
-        if let Some(reason) = reason {
-            self.event = format!("Trace artifact refused: {reason}");
-        }
+        self.mir_graph = None;
+        reason
     }
 
     /// The artifact decision, without mutating the session.

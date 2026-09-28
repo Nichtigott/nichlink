@@ -308,3 +308,33 @@ fn parse_parent_call(call: syn::ExprCall) -> Option<ParentSyntax> {
     let kind = literal_string(arguments.next()?)?;
     Some(ParentSyntax::FromPath { source, kind })
 }
+
+/// Parse a whole face body: the shared reader plus the face-field vocabulary check.
+/// 解析整个注册面主体：共享读取器，外加注册面字段词表检查。
+///
+/// [`parse_fields`] is also what reads the embedded groups a face carries — `name: { zh, en }`
+/// — and those keys are not face fields, so the check belongs here rather than in the shared
+/// reader. A `*_object!` macro whose body contains a name outside the vocabulary is not a
+/// registration declaration: `widget_object! { name: "x", size: 3 }` used to be collected as a
+/// face with `size` among its fields, and the build then reported a `parent-macro` error for a
+/// macro that has nothing to do with the registration mechanism (audit `KRN-K-23`).
+/// [`parse_fields`] 也用来读取注册面携带的内嵌分组——`name: { zh, en }`——而那些键不是注册面字段，
+/// 因此这项检查属于这里而不是共享读取器。主体含词表之外名字的 `*_object!` 宏不是注册声明：
+/// `widget_object! { name: "x", size: 3 }` 过去会被收成一个面、`size` 还成了它的字段之一，随后构建
+/// 为一个与注册机制毫无关系的宏报出 `parent-macro` 错误（审计 `KRN-K-23`）。
+pub(super) fn parse_face_fields(
+    tokens: TokenStream,
+    fallback_span: Span,
+) -> Result<BTreeMap<String, FieldSyntax>, FaceSyntaxError> {
+    let fields = parse_fields(tokens, fallback_span)?;
+    if let Some(unknown) = fields
+        .keys()
+        .find(|name| !crate::registry_core::declaration::FACE_FIELD_ORDER.contains(&name.as_str()))
+    {
+        return Err(super::syntax_error(
+            fallback_span,
+            format!("`{unknown}` is not a registration face field"),
+        ));
+    }
+    Ok(fields)
+}

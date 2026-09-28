@@ -784,6 +784,150 @@ mod process_faults {
         assert_eq!(loaded.call("run", &[]).unwrap(), payload);
     }
 
+    /// A frame that stops mid-flight must be named, not reported as a bare reader error.
+    /// 写到一半就断掉的帧必须**被点名**，而不是作为裸的读取错误上报。
+    ///
+    /// The child declares a 6-byte payload, delivers one byte and exits 0: the answer never
+    /// becomes a frame, so the call fails — but the caller has to learn *which* operation lost
+    /// it and how much of the declared frame arrived, not just `failed to fill whole buffer`.
+    /// That bare message is what the caller used to get, with no plugin, operation or shape in it
+    /// (audit `LGC-LG-32`, the second half of the evidence).
+    /// 子进程声明 6 字节负载、只送出 1 字节，然后以 0 退出：答案从未成为一帧，调用因此失败——
+    /// 但调用方必须能得知是**哪一步**丢了它、以及声明的那一帧**到了多少**，而不只是
+    /// `failed to fill whole buffer`。那条裸消息正是过去拿到的全部，里面没有插件、操作或形状
+    /// （审计 `LGC-LG-32` 证据的第二半）。
+    #[test]
+    fn an_incomplete_frame_names_the_operation_and_keeps_the_reader_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let frame = directory.path().join("cut.frame");
+        std::fs::write(&frame, framed(b"answer")).unwrap();
+        // 4-byte length prefix + one payload byte, then a clean exit.
+        // 4 字节长度前缀 + 1 字节负载，然后干净退出。
+        let plugin = script(
+            directory.path(),
+            "truncated",
+            &format!("#!/bin/sh\nhead -c 5 {}\nexit 0\n", frame.display()),
+        );
+        let loaded = load(&plugin, ProcessLimits::default());
+        let error = loaded
+            .call("run", &[])
+            .expect_err("a cut-off frame is not an answer");
+        let text = error.to_string();
+        assert!(
+            matches!(error, nichlink_plugin_host::HostError::Process(_)),
+            "a broken frame is a process-level failure, got {error:?}"
+        );
+        // The whole message is pinned, not just its parts: the operation, how much of the
+        // declared frame arrived, and the reader's own error (`failed to fill whole buffer`,
+        // `UnexpectedEof`) all have to survive, because the last one is the only trace of the
+        // original failure a caller can follow — `HostError::Process` has no source slot.
+        // 整条消息逐字钉住，而不只是它的几个片段：操作、声明的那一帧**到了多少**、以及读取器
+        // 自己的错误（`failed to fill whole buffer`、`UnexpectedEof`）都必须留下来——最后一项
+        // 是调用方能追的唯一原始线索，因为 `HostError::Process` 没有存放源错误的槽位。
+        assert_eq!(
+            text,
+            "plugin process failed: the process adapter got no complete frame for `run`: it \
+             declared 6 bytes of answer and 1 arrived, then the stream ended (failed to fill \
+             whole buffer; kind UnexpectedEof)"
+        );
+
+        // "Nothing started" and "half a frame" must not read the same. Same declaration, but the
+        // child writes the length prefix and then nothing at all: the count is the whole
+        // difference (`0 arrived` against `1 arrived`), and `read_exact` alone could not tell
+        // them apart — it only ever said the buffer could not be filled (audit `LGC-LG-32`, the
+        // minimal improvement the t77 review asked for).
+        // "一个字节都没开始写"与"写了半帧"不能读起来一样。同一个声明，但子进程写完长度前缀后
+        // **一个负载字节都没写**：区别全在到达字节数上（`0 arrived` 对 `1 arrived`），而单靠
+        // `read_exact` 分不出来——它只会说"某个缓冲区没被填满"（审计 `LGC-LG-32`，即 t77 复核
+        // 要求的最小改进）。
+        let never_started = script(
+            directory.path(),
+            "never-started",
+            &format!("#!/bin/sh\nhead -c 4 {}\nexit 0\n", frame.display()),
+        );
+        let loaded = load(&never_started, ProcessLimits::default());
+        let error = loaded
+            .call("run", &[])
+            .expect_err("a declared frame that never started is not an answer");
+        assert!(
+            matches!(error, nichlink_plugin_host::HostError::Process(_)),
+            "a broken frame is a process-level failure, got {error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            "plugin process failed: the process adapter got no complete frame for `run`: it \
+             declared 6 bytes of answer and 0 arrived, then the stream ended (failed to fill \
+             whole buffer; kind UnexpectedEof)"
+        );
+    }
+
+    /// A complete frame is the answer even when the child never exits.
+    /// 完整的一帧就是答案，即使子进程永不退出。
+    ///
+    /// The child writes its frame and then lingers past the deadline (`exec sleep`): the
+    /// answer already exists, so the call has its product and must deliver it. It used to be
+    /// dropped into `Timeout`, which is the same defect the comment above `drain_to_eof`
+    /// claims to have removed — that fix only covered the child that blocks on a full pipe
+    /// (audit `LGC-LG-32`).
+    /// 子进程写完帧后用 `exec sleep` 挂过超时点：答案已经存在，调用已经拿到它的产物，必须交付。
+    /// 过去它会被丢成 `Timeout`——这正是 `drain_to_eof` 上方注释声称已经修掉的那个缺陷，而那次
+    /// 修复只覆盖了阻塞在满管道上的子进程（审计 `LGC-LG-32`）。
+    #[test]
+    fn an_answer_from_a_child_that_never_exits_is_delivered() {
+        let directory = tempfile::tempdir().unwrap();
+        let payload = b"answer";
+        let frame = directory.path().join("answer.frame");
+        std::fs::write(&frame, framed(payload)).unwrap();
+        let plugin = script(
+            directory.path(),
+            "answers-then-lingers",
+            &format!("#!/bin/sh\ncat {}\nexec sleep 30\n", frame.display()),
+        );
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_millis(600),
+                ..ProcessLimits::default()
+            },
+        );
+        let start = std::time::Instant::now();
+        let outcome = loaded.call("run", &[]);
+        let answer = match outcome {
+            Ok(bytes) => bytes,
+            Err(error) => panic!("a delivered answer must not decay into Timeout, got {error:?}"),
+        };
+        assert_eq!(answer, payload);
+        assert!(
+            start.elapsed() < Duration::from_millis(600),
+            "the answer is delivered when it arrives, not at the deadline: {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// A child that never writes a frame still hits the deadline, and that is a `Timeout`.
+    /// 从不写帧的子进程仍然撞到超时点，而那仍是一个 `Timeout`。
+    ///
+    /// The answer semantics must not turn "no answer at all" into an empty success: the
+    /// deadline only decides the frame that never came.
+    /// 答案语义绝不能把"根本没有答案"变成一次空的成功：超时点只决定那个从未到来的帧。
+    #[test]
+    fn a_child_that_never_writes_a_frame_still_times_out() {
+        let directory = tempfile::tempdir().unwrap();
+        let plugin = script(directory.path(), "silent", "#!/bin/sh\nsleep 30\n");
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_millis(250),
+                ..ProcessLimits::default()
+            },
+        );
+        let outcome = loaded.call("run", &[]);
+        assert!(
+            matches!(outcome, Err(nichlink_plugin_host::HostError::Timeout)),
+            "no frame by the deadline is a Timeout, got {outcome:?}"
+        );
+    }
+
     /// The declared output cap is refused as `Limit`, and the refusal survives the
     /// child, instead of degrading into a misleading `Timeout`.
     /// 声明的输出上限以 `Limit` 拒绝，且该拒绝不会被降级成误导性的 `Timeout`。

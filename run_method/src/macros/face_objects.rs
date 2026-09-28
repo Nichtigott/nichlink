@@ -59,28 +59,21 @@ macro_rules! __control_object {
         $(runtime_checks: [$($runtime_check:expr),* $(,)?],)?
         $(,)?
     } => {
-        // Why the direct implementation is wrong: this arm is the only one that
-        // accepts a face with no `handle:` field, so it also has to accept the
-        // `preset:`/`parts:` the author may have written above it. Every earlier
-        // arm requires `handle`, so a custom preset/parts declaration without a
-        // handle lands here. Hardcoding the defaults in this expansion silently
-        // rewrites the author's types and their names in `REGISTRATION`; the
-        // matcher already binds them, which is exactly what makes the mismatch
-        // invisible to the compiler.
-        // Boundary: presence is decided per binding. The matcher makes `preset`
-        // and `parts` independently optional, and both resolve an omitted binding
-        // through the same `__face_ty_or!`/`__face_ty_name_or!` pair, so an
-        // omitted one keeps `NoPreset`/`NoParts` and a written one is forwarded
-        // verbatim.
+        // This is the arm for a face with no `handle:` field, so it has to forward
+        // whatever `preset:`/`parts:` the author wrote instead of substituting
+        // defaults: the matcher already binds them, and a hardcoded
+        // `NoPreset`/`NoParts` here would silently rewrite the author's types and
+        // their names in `REGISTRATION` while the compiler saw nothing wrong.
+        // Presence is decided per binding — the matcher makes `preset` and `parts`
+        // independently optional, and both resolve an omitted binding through the
+        // same `__face_ty_or!`/`__face_ty_name_or!` pair, so an omitted one keeps
+        // `NoPreset`/`NoParts` and a written one is forwarded verbatim.
         // Pinned by `run_method/tests/face_preset_parts.rs` and
         // `run_method/tests/face_arm_defaults.rs`.
-        // 直白写法错在哪：唯一的 arm 必须接受作者写下的任何 `preset:`/`parts:`
-        // 形态（写一个、写另一个、或都不写），因此
-        // `handle`，所以不带 handle 的自定义 preset/parts 声明会落到这里。在展开里写死
-        // 默认值会静默改写作者的类型及其在 `REGISTRATION` 里的名字；而匹配器其实已经绑定了
-        // 它们——这正是编译器看不出这处不一致的原因。
-        // 边界：按每个绑定单独判断有无。本 arm 的匹配器与上面的自定义 handle arm 一样，
-        // 允许 preset 与 parts 各自省略，且两者都经同一对
+        // 这一支面向没有 `handle:` 字段的注册面，因此必须原样转发作者写下的
+        // `preset:`/`parts:`，而不是替换成默认值：匹配器已经绑定了它们，在这里写死
+        // `NoPreset`/`NoParts` 会静默改写作者的类型及其在 `REGISTRATION` 里的名字，而编译器看不出
+        // 任何问题。有无按每个绑定单独判断——匹配器让 `preset` 与 `parts` 各自可省，两者经同一对
         // `__face_ty_or!`/`__face_ty_name_or!` 解析省略绑定，因此省略者保持
         // `NoPreset`/`NoParts`，写下的原样转发。
         // 由 `run_method/tests/face_preset_parts.rs` 与
@@ -114,12 +107,6 @@ macro_rules! __control_object {
             // The author's expression wins; an omitted rule on a
             // registry-owning face resolves to the canonical sibling rule
             // module, and every other face keeps `ANY`. The resolver is a proc
-            // macro because the canonical spelling is a *relative* path.
-            // 作者写下的表达式优先；拥有注册机的面省略规则时解析到同目录的规范
-            // 规则模块，其余面保留 `ANY`。解析器是过程宏，因为规范写法是**相对**路径。
-            // The author's expression wins; an omitted rule on a
-            // registry-owning face resolves to the canonical sibling rule
-            // module, and every other face keeps `ANY`. The resolver is a proc
             // macro because the canonical spelling is a *relative* path — and it
             // is the resolver, not this matcher, that answers the IDE too: the
             // IDE's view of a nested face is a crate-root shadow where that
@@ -147,26 +134,31 @@ macro_rules! __control_object {
         }
     };
 
-    // A kind-only face is not a separate arm: the previous arm makes every
-    // field after `kind` optional, so `{ collector, kind }` already matches
-    // A face that writes only `kind` needs no arm of its own: the arm above makes
-    // every field after `kind` optional, so `{ collector, kind }` already matches
-    // there, and the front end has nothing left to reorder.
-    // 只写 `kind` 的注册面不需要单独的 arm：上面那条 arm 让 `kind` 之后的每个字段都可省，
+    // A kind-only face needs no arm of its own: the arm above makes every field
+    // after `kind` optional, so `{ collector, kind }` already matches there, and
+    // the front end has nothing left to reorder.
+    // 只写 `kind` 的注册面不需要单独的 arm：上面的 arm 让 `kind` 之后的每个字段都可省，
     // 因此 `{ collector, kind }` 已经在那里匹配，前端也没有需要重排的东西。
 
     // Anything the arm above declines — fields in another order, `;` separators,
     // a forgotten separator, a misspelled field — goes to the front end, which
     // reorders tolerantly and reports the exact token it rejects. A well-formed
-    // face never reaches this arm, so its expansion is unchanged.
+    // face never reaches this arm, so its expansion is unchanged. The front end is
+    // named through `$crate` like every other expansion point: an absolute
+    // `::nichlink_run_method` resolves only while the host keeps that dependency
+    // name, so a renamed dependency (`run = { package = "nichlink-run-method" }`)
+    // compiled in field order and failed here with "use of undeclared crate".
     // 上面那条 arm 不接受的声明——字段顺序不同、用 `;` 分隔、漏写分隔符、字段名拼错——
     // 交给前端：它宽容重排，并把被拒绝的那个 token 精确报出来。合法注册面永远不会走到
-    // 这里，展开因此保持不变。
+    // 这里，展开因此保持不变。前端与其它展开点一样经 `$crate` 命名：绝对路径
+    // `::nichlink_run_method` 只在宿主保留了这个依赖名时能解析，因此改了依赖名
+    // （`run = { package = "nichlink-run-method" }`）的声明会按字段顺序编译通过、却在这里报
+    // "use of undeclared crate"。
     {
         collector: $collector:ident,
         $($tokens:tt)*
     } => {
-        ::nichlink_run_method::face_fields! { @control collector: $collector, $($tokens)* }
+        $crate::face_fields! { @control collector: $collector, $($tokens)* }
     };
 
 }

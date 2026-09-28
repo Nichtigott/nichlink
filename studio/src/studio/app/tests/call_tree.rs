@@ -20,18 +20,6 @@ use ratatui::Terminal;
 #[cfg(feature = "node-graph")]
 use ratatui::backend::TestBackend;
 
-/// The node-editor fixture, whose call graph the graph tests already pin.
-/// node-editor 夹具，它的调用图已被调用图测试钉住。
-fn fixture_app() -> Option<App> {
-    let fixture = node_editor_fixture()?;
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    Some(App::load())
-}
-
 /// The registered functions of the loaded project, one per name.
 /// 当前载入项目中已注册的函数，每个名字取一个。
 fn registered_functions(app: &App, limit: usize) -> Vec<CallRef> {
@@ -329,9 +317,7 @@ fn the_panel_chrome_states_the_models_budget() {
     assert!(view.len() > 1, "the fixture's focus has neighbours to draw");
 
     let mut terminal = Terminal::new(TestBackend::new(200, 50)).expect("a test terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     let page = rendered_rows(&terminal);
     let panel = tree_panel(&page).expect("the call tree panel is on screen");
     let panel_text = panel
@@ -407,9 +393,7 @@ fn a_click_lands_on_the_node_under_the_pointer() {
     search.outline_selected = 0;
     app.overlay = Some(Overlay::Search(search));
     let mut terminal = Terminal::new(TestBackend::new(200, 50)).expect("a test terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     // A node besides the focus, and where the widget drew it on screen: the click
     // must land inside the tree pane, because that is where the handler forwards
     // pointer events to the widget.
@@ -467,9 +451,7 @@ fn a_narrow_panel_names_the_keys_that_widen_it() {
     // 页面把宽度分一份给树，因此窄的情况要显式要求。
     app.graph_split_percent = 35;
     let mut terminal = Terminal::new(TestBackend::new(44, 24)).expect("a test terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     let page = rendered_rows(&terminal)
         .iter()
         .map(|row| row.iter().collect::<String>())
@@ -490,9 +472,7 @@ fn a_narrow_panel_names_the_keys_that_widen_it() {
     search.graph_focus = 0;
     wide.overlay = Some(Overlay::Search(search));
     let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("a test terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut wide))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut wide).expect("the graph page draws");
     let footer = rendered_rows(&terminal)
         .iter()
         .map(|row| row.iter().collect::<String>())
@@ -539,9 +519,7 @@ fn the_widget_draws_the_same_tree() {
     search.graph_focus = 0;
     app.overlay = Some(Overlay::Search(search));
     let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("a test terminal");
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     let page = rendered_rows(&terminal);
     let panel = tree_panel(&page).expect("the call tree panel is on screen");
     let text = panel
@@ -588,9 +566,7 @@ fn the_widget_marks_the_cursor_where_it_is() {
             .unwrap_or_default()
     };
 
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     let first = marked(&terminal);
     assert!(
         first.contains("preview_canvas_width"),
@@ -602,9 +578,7 @@ fn the_widget_marks_the_cursor_where_it_is() {
     );
 
     app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
-    terminal
-        .draw(|frame| crate::studio::ui::draw(frame, &mut app))
-        .expect("the graph page draws");
+    crate::studio::ui::draw_once(&mut terminal, &mut app).expect("the graph page draws");
     let second = marked(&terminal);
     assert_ne!(first, second, "the mark must move with the cursor");
     assert!(
@@ -630,9 +604,7 @@ fn the_removed_drawer_keys_change_nothing() {
     app.overlay = Some(Overlay::Search(search));
     let mut terminal = Terminal::new(TestBackend::new(200, 50)).expect("a test terminal");
     let page = |terminal: &mut Terminal<TestBackend>, app: &mut App| {
-        terminal
-            .draw(|frame| crate::studio::ui::draw(frame, app))
-            .expect("the graph page draws");
+        crate::studio::ui::draw_once(terminal, app).expect("the graph page draws");
         rendered_rows(terminal)
             .iter()
             .map(|row| row.iter().collect::<String>())

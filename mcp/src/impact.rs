@@ -18,7 +18,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
-use nichlink_build_method::{declared_grafts, face_views};
+use nichlink_build_method::declared_grafts;
 use serde_json::Value;
 
 use crate::apply::load_registry;
@@ -45,7 +45,7 @@ struct Edge {
 /// 报告一个面的传递爆炸半径。
 pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let faces = face_views(root, &namespace)?;
+    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
@@ -148,7 +148,7 @@ pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
     }
 
     let mut output = format!(
-        "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n",
+        "namespace {namespace}\n{unparsable}node {}\n  path {}\n  kind {}\n",
         face.id, face.path, face.kind
     );
     for note in &notes {

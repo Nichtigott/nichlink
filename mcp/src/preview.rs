@@ -25,19 +25,105 @@ use std::path::{Path, PathBuf};
 /// 都可能很大（真实仓库里仅 `.git/` 就常是 GB 级）。早先的措辞只点名了构建产物，于是每一次预览都
 /// 连带复制了那个库、并把它带进 diff（审计 `BR-C2`）。
 pub(crate) fn copy_package(root: &Path) -> Result<PathBuf, String> {
-    let destination = std::env::temp_dir().join(format!(
-        "nichlink-mcp-preview-{}-{}",
-        std::process::id(),
-        next_sequence()
-    ));
-    let _ = std::fs::remove_dir_all(&destination);
-    copy_directory(root, &destination)?;
-    Ok(destination)
+    copy_package_with(root, &std::env::temp_dir(), |attempt| {
+        // The destination is created *exclusively*, and a failure removes whatever this
+        // call created. The earlier form deleted a same-named directory first and, when
+        // the copy itself failed, left the half-made copy behind: a throwaway copy has to
+        // disappear on the failure path too, and pre-existing data at a predictable path
+        // must never be deleted on the way in (audit `LGC-LG-20`).
+        // 目标目录是**独占**创建的，失败时清掉本次调用建出来的东西。早先的形式先删掉同名目录，而在复制
+        // 自身失败时把半成品留在原地：一次性副本在失败路径上同样该消失，而可预测路径上的既有数据也绝不该
+        // 在入口被删掉（审计 `LGC-LG-20`）。
+        format!(
+            "nichlink-mcp-preview-{}-{:016x}-{attempt}",
+            std::process::id(),
+            entropy()
+        )
+    })
 }
 
-fn next_sequence() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+/// Copy `root` into a freshly created directory under `temp`, whose file name `candidate`
+/// produces for each attempt.
+/// 把 `root` 复制进 `temp` 下一个新建的目录，其文件名由 `candidate` 按每次尝试产出。
+///
+/// One attempt per candidate, and an existing directory is *skipped* rather than reused or
+/// deleted: the destination is created with `create_dir`, which fails on an existing path,
+/// and the next candidate is tried. The candidate is injectable so the pin can pre-place a
+/// directory at exactly the name the first attempt asks for and prove both halves — that
+/// nothing existing is touched, and that the copy lands somewhere else (audit `LGC-LG-20`).
+/// 每个候选一次尝试，而已存在的目录是被**跳过**的，既不复用也不删除：目标用 `create_dir` 创建，
+/// 路径已存在时它会失败，于是试下一个候选。候选名可注入，因此钉子可以在**第一次尝试会用的那个名字**
+/// 上预放一个目录，并证明两件事——既有东西一点没被碰，而副本落在了别处（审计 `LGC-LG-20`）。
+///
+/// **At most eight attempts, and that is an observable contract, not an implementation detail.**
+/// Eight candidates are tried one by one; when every one of them already exists the call is
+/// refused with `cannot create a preview copy under <temp>: <the last collision>` instead of
+/// retrying forever, and none of the eight existing directories is touched on the way. A caller
+/// that sees that refusal knows the temp directory is full of this process's own leftovers, and
+/// a caller that sees a preview knows exactly one of the eight was created and used.
+/// **最多 8 次尝试，而这是可观测的契约，不是实现细节。** 八个候选被逐个尝试；当它们**全部**已存在
+/// 时，调用以 `cannot create a preview copy under <temp>: <最后一次碰撞>` 被拒绝，而不是无限重试，且
+/// 这八个既有目录一路都没被碰过。看到这条拒绝的调用方就知道临时目录里堆满了本进程自己的残留；而看到
+/// 一次成功预览的调用方就知道八个候选里恰好有一个被创建并使用了。
+fn copy_package_with(
+    root: &Path,
+    temp: &Path,
+    mut candidate: impl FnMut(u32) -> String,
+) -> Result<PathBuf, String> {
+    let mut last = None;
+    for attempt in 0..8 {
+        let destination = temp.join(candidate(attempt));
+        match std::fs::create_dir(&destination) {
+            Ok(()) => return copy_into(root, destination),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                last = Some(error);
+            }
+            Err(error) => {
+                return Err(format!("cannot create {}: {error}", destination.display()));
+            }
+        }
+    }
+    Err(format!(
+        "cannot create a preview copy under {}: {}",
+        temp.display(),
+        last.map_or_else(String::new, |error| error.to_string())
+    ))
+}
+
+/// An OS-seeded value, so the destination name cannot be predicted — and therefore pre-placed
+/// — by another process on the same machine. `RandomState` draws its per-process seed from the
+/// OS and every instance differs, which is the portable stand-in for a `tempfile`-style random
+/// name while this crate has no random dependency (audit `LGC-LG-20`).
+/// 一个由操作系统播种的值，因此同一台机器上的另一个进程无法预测——也就无法预先放置——这个目标名。
+/// `RandomState` 的进程级种子取自操作系统，且每个实例都不同；在本 crate 没有随机依赖的前提下，这就是
+/// `tempfile` 式随机名的可移植替身（审计 `LGC-LG-20`）。
+fn entropy() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish()
+}
+
+/// Copy `root` into an already-created `destination`, removing that directory again when
+/// the copy fails.
+/// 把 `root` 复制进已创建好的 `destination`，复制失败时再把这个目录移除。
+///
+/// The failure path is part of the throwaway contract: a preview that leaves a half-made
+/// package behind under the temp directory is not throwaway, and the copy used to do
+/// exactly that (measured: seven files of a package; audit `LGC-LG-20`). The destination
+/// is created by the caller, so this is also the seam the pin drives directly instead of
+/// scanning the temp directory.
+/// 失败路径属于一次性契约的一部分：在临时目录里留下半成品包的预览不是一次性的，而复制过去正是
+/// 这么做的（实测：一个包的七个文件；审计 `LGC-LG-20`）。目标目录由调用方创建，因此这里也是钉子
+/// 直接驱动的接缝，不必去扫临时目录。
+fn copy_into(root: &Path, destination: PathBuf) -> Result<PathBuf, String> {
+    match copy_directory(root, &destination, 0) {
+        Ok(()) => Ok(destination),
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&destination);
+            Err(error)
+        }
+    }
 }
 
 /// Whether a directory name is one the preview copy and its diff both skip.
@@ -53,7 +139,23 @@ fn skipped_directory(name: &std::ffi::OsStr) -> bool {
     name == "target" || name == ".git" || name == nichlink::lexicon::NICHLINK_DIR
 }
 
-fn copy_directory(from: &Path, to: &Path) -> Result<(), String> {
+/// How deep either walk follows directories before refusing to go further.
+/// 两处遍历在拒绝继续之前最多跟进多少层目录。
+///
+/// A depth cap, not a symlink cap: a package with a genuine 70-deep tree is absurd
+/// enough that refusing it with a reason beats walking it. Symlinks are not followed
+/// at all (see `copy_directory`), so this only guards a pathological real tree.
+/// 这是深度上限而不是符号链接上限：真有 70 层深的包荒唐到拒绝并给出理由比遍历它更好。符号链接
+/// 一律不跟进（见 `copy_directory`），因此这里守的只是病态的真实目录树。
+const MAX_DEPTH: usize = 64;
+
+fn copy_directory(from: &Path, to: &Path, depth: usize) -> Result<(), String> {
+    if depth > MAX_DEPTH {
+        return Err(format!(
+            "cannot copy {}: deeper than {MAX_DEPTH} directories",
+            from.display()
+        ));
+    }
     std::fs::create_dir_all(to)
         .map_err(|error| format!("cannot create {}: {error}", to.display()))?;
     let entries = std::fs::read_dir(from)
@@ -66,14 +168,36 @@ fn copy_directory(from: &Path, to: &Path) -> Result<(), String> {
         }
         let source = entry.path();
         let destination = to.join(&name);
+        if is_symlinked_directory(&source) {
+            continue;
+        }
         if source.is_dir() {
-            copy_directory(&source, &destination)?;
+            copy_directory(&source, &destination, depth + 1)?;
         } else if source.is_file() {
             std::fs::copy(&source, &destination)
                 .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
         }
     }
     Ok(())
+}
+
+/// Whether `path` is a symbolic link to a directory.
+/// `path` 是否是一个指向目录的符号链接。
+///
+/// A preview copy must never follow one out of the package: a link to an outside tree
+/// copies that tree into the scratch directory (data exposure), and a self-link
+/// (`ln -s . src/self`) recurses until the path limit and reports the same faces
+/// dozens of times — both measured, both silent (audit `LGC-LG-19`). Skipping the
+/// link keeps the copy inside the package; a link *file* is copied as the link's
+/// target only when it is a plain file, which `std::fs::copy` already resolves.
+/// 预览副本绝不能顺着链接走出包外：指向外部树的链接会把那棵树复制进临时目录（数据外泄），而自指链接
+/// （`ln -s . src/self`）会递归到路径上限、把同一批面报上几十次——两条都实测过，且都无声
+/// （审计 `LGC-LG-19`）。跳过链接使副本留在包内；链接*文件*只有在它是普通文件时才会被
+/// `std::fs::copy` 解析着复制。
+fn is_symlinked_directory(path: &Path) -> bool {
+    std::fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink() && path.is_dir())
+        .unwrap_or(false)
 }
 
 pub(crate) fn remove_copy(root: &Path, work: &Path) {
@@ -120,42 +244,173 @@ pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
 /// 本报告会给出它的准确路径。
 pub(crate) fn diff_package(original: &Path, work: &Path) -> Result<String, String> {
     let mut files = Vec::new();
-    collect_files(work, work, &mut files)?;
+    collect_files(work, work, &mut files, 0)?;
     files.sort();
     let mut output = String::new();
+    let mut printed = 0usize;
+    let mut truncated = false;
     for relative in files {
-        let after = std::fs::read_to_string(work.join(&relative)).unwrap_or_default();
-        match std::fs::read_to_string(original.join(&relative)) {
+        // Bytes decide "unchanged", not text: two byte-identical non-UTF-8 files used
+        // to be reported as added because both `read_to_string` calls failed, so an
+        // edit that never touched them listed them as files that would change
+        // (audit `LGC-LG-23`). Identical bytes are identical however they decode.
+        // 判断"没变"靠字节而不是文本：两个逐字节相同的非 UTF-8 文件过去因为两侧 `read_to_string`
+        // 都失败而被报成新增，于是一次根本没碰过它们的编辑把它们列进"会变的文件"（审计
+        // `LGC-LG-23`）。逐字节相同的文件，无论怎么解码都是相同的。
+        let Ok(after) = std::fs::read(work.join(&relative)) else {
+            continue;
+        };
+        match std::fs::read(original.join(&relative)) {
             Ok(before) if before == after => continue,
             Ok(before) => {
-                output.push_str(&format!("~ {relative}\n"));
-                output.push_str(&line_diff(&before, &after));
-            }
-            Err(_) => {
-                output.push_str(&format!("+ {relative}\n"));
-                for line in after.lines() {
-                    output.push_str(&format!("+{line}\n"));
+                let (before_len, after_len) = (before.len(), after.len());
+                match (String::from_utf8(before), String::from_utf8(after)) {
+                    (Ok(before), Ok(after)) => {
+                        push_diff(
+                            &mut output,
+                            &format!("~ {relative}"),
+                            &mut printed,
+                            &mut truncated,
+                        );
+                        push_diff(
+                            &mut output,
+                            &line_diff(&before, &after),
+                            &mut printed,
+                            &mut truncated,
+                        );
+                    }
+                    // A changed file whose bytes are not text is named, not dumped: its
+                    // bytes are the change, and printing them as lines would invent lines
+                    // that do not exist.
+                    // 内容变了而字节不是文本的文件只被点名、不被倾倒：变化就是那些字节，把它们按行
+                    // 打印会造出并不存在的行。
+                    _ => push_diff(
+                        &mut output,
+                        &format!("~ {relative} (binary, {before_len} bytes -> {after_len} bytes)"),
+                        &mut printed,
+                        &mut truncated,
+                    ),
                 }
             }
+            Err(_) => match String::from_utf8(after) {
+                Ok(after) => {
+                    push_diff(
+                        &mut output,
+                        &format!("+ {relative}"),
+                        &mut printed,
+                        &mut truncated,
+                    );
+                    let added = after
+                        .lines()
+                        .map(|line| format!("+{line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    push_diff(&mut output, &added, &mut printed, &mut truncated);
+                }
+                Err(error) => push_diff(
+                    &mut output,
+                    &format!("+ {relative} (binary, {} bytes)", error.as_bytes().len()),
+                    &mut printed,
+                    &mut truncated,
+                ),
+            },
+        }
+        if truncated {
+            break;
         }
     }
     // A file the edit *removed* is part of the answer too.
     // 被编辑**删除**的文件同样是答案的一部分。
     let mut before = Vec::new();
-    collect_files(original, original, &mut before)?;
+    collect_files(original, original, &mut before, 0)?;
     before.sort();
     for relative in before {
+        if truncated {
+            break;
+        }
         if !original.join(&relative).exists() {
             continue;
         }
         if !work.join(&relative).exists() {
-            output.push_str(&format!("- {relative}\n"));
+            push_diff(
+                &mut output,
+                &format!("- {relative}"),
+                &mut printed,
+                &mut truncated,
+            );
         }
+    }
+    if truncated {
+        // Every other answer this bridge gives is bounded and says so; the preview was
+        // the one that could not, which is how a real checkout produced a reply an agent
+        // could not read (audit `LGC-LG-23`).
+        // 本桥其它每个答案都有上限并说明被截断；预览曾是唯一没有上限的那个，于是一次真实检出能产出
+        // 代理读不下的回复（审计 `LGC-LG-23`）。
+        output.push_str(&format!(
+            "… truncated: a preview reports at most {MAX_DIFF_LINES} diff lines or {MAX_DIFF_BYTES} \
+             bytes; read the written files for the rest\n"
+        ));
     }
     Ok(output)
 }
 
-fn collect_files(root: &Path, directory: &Path, files: &mut Vec<String>) -> Result<(), String> {
+/// The most diff lines one preview prints before it says it truncated.
+/// 一条预览在声明被截断之前最多打印多少行 diff。
+///
+/// A line cap alone is not a size cap: one pathologically long line is still one line, so the
+/// byte cap below is the one that bounds the reply whatever the file looks like (audit
+/// `LGC-LG-23`).
+/// 只按行设上限不等于按大小设上限：一行病态长的行仍然只是一行，因此下面那个字节上限才是无论文件长
+/// 什么样都能给回复设界的那个（审计 `LGC-LG-23`）。
+const MAX_DIFF_LINES: usize = 200;
+
+/// The most diff bytes one preview prints, for the reason above.
+/// 一条预览最多打印多少字节的 diff，理由同上。
+const MAX_DIFF_BYTES: usize = 64 * 1024;
+
+/// Append one chunk of diff lines, stopping at the cap and recording that it stopped.
+/// 追加一段 diff 行，到上限就停，并记下自己停过。
+fn push_diff(output: &mut String, chunk: &str, printed: &mut usize, truncated: &mut bool) {
+    for line in chunk.lines() {
+        if *printed >= MAX_DIFF_LINES || output.len() >= MAX_DIFF_BYTES {
+            *truncated = true;
+            return;
+        }
+        let remaining = MAX_DIFF_BYTES
+            .saturating_sub(output.len())
+            .saturating_sub(1);
+        if line.len() > remaining {
+            // The line alone is past the byte cap: print as much of it as fits on a character
+            // boundary and stop, rather than handing the client a single unbounded line.
+            // 这一行自己就超过了字节上限：在字符边界上打印能装下的部分后停下，而不是把一行无界的
+            // 内容交给客户端。
+            let mut cut = remaining.min(line.len());
+            while cut > 0 && !line.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            output.push_str(&line[..cut]);
+            output.push('\n');
+            *truncated = true;
+            return;
+        }
+        output.push_str(line);
+        output.push('\n');
+        *printed += 1;
+    }
+}
+
+fn collect_files(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_DEPTH {
+        return Err(format!(
+            "cannot walk {}: deeper than {MAX_DEPTH} directories",
+            directory.display()
+        ));
+    }
     let entries = std::fs::read_dir(directory)
         .map_err(|error| format!("cannot read {}: {error}", directory.display()))?;
     for entry in entries {
@@ -165,8 +420,11 @@ fn collect_files(root: &Path, directory: &Path, files: &mut Vec<String>) -> Resu
             continue;
         }
         let path = entry.path();
+        if is_symlinked_directory(&path) {
+            continue;
+        }
         if path.is_dir() {
-            collect_files(root, &path, files)?;
+            collect_files(root, &path, files, depth + 1)?;
         } else if let Ok(relative) = path.strip_prefix(root) {
             files.push(crate::index::portable_path(relative));
         }

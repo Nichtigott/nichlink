@@ -78,6 +78,25 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
         // 可移植通道缺失的写入方：Studio 能渲染它、也能解析它，而从没有任何东西产出过一份。它写出的是
         // 一份快照，因此 artifact 点名了自己的来源树——而它拒绝给另一棵树的 artifact 换标签，而不是把它
         // 错标成本包的。
+        //
+        // A *text* input that contains no MIR function at all is refused instead of
+        // stamped: the header is the only credential saying which tree an artifact
+        // describes, and minting one from arbitrary prose produced a "this package,
+        // zero calls" artifact that `delta`/`unified` then trust as fact — the source
+        // was provable and became forgeable (audit `LGC-LG-18`). An empty MIR dump has
+        // nothing to describe, so refusing costs no legitimate use.
+        // 不含任何 MIR 函数的**文本**输入会被拒绝，而不是被盖上表头：表头是唯一说明一份 artifact
+        // 描述哪棵树的凭据，而从任意散文凭空造出一份"本包、零调用"的 artifact，会被 `delta`/
+        // `unified` 当成事实采信——来源本可证明，于是变成了可伪造（审计 `LGC-LG-18`）。空的 MIR
+        // 转储没有东西可描述，因此拒绝它不损失任何正当用法。
+        let text_input = path.extension().and_then(|extension| extension.to_str()) != Some("jsonl");
+        if text_input && graph.functions.is_empty() {
+            return Err(format!(
+                "{}: no MIR function in this file, so there is nothing to stamp into a snapshot \
+                 (`jsonl` writes one only for a MIR dump, whose header claims a tree)",
+                path.display()
+            ));
+        }
         confirmed_snapshot(&mut graph, &snapshot_for(root)?, &path)?;
         return Ok(bounded(
             &graph.to_jsonl(),
@@ -209,22 +228,59 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
 /// JSONL artifact 严格解析——一行畸形就整体失败——而 `-Zunpretty=mir` 文本转储从不失败：不是调用的
 /// 行就只是不是调用。这个不对称属于格式本身，这里保留它而不是抹平它。
 ///
-/// Existence is answered before containment on purpose: the containment check
-/// canonicalizes, so a missing path is not "outside the root" — it is missing, and
-/// the reply says how to produce one.
-/// 存在性有意先于归属检查：归属检查要规范化路径，因此缺失的路径不是"在根之外"，而是不存在，
-/// 回复会说明如何产出一份。
+/// Containment is answered before existence on purpose: answering existence first
+/// made the two replies — `is not a readable file` against `must stay inside the
+/// configured source root` — an oracle for whether a path exists **outside** the
+/// root, because `is_file()` ran first and the containment check only ever
+/// canonicalized existing paths (audit `LGC-LG-51`). The reply for anything outside
+/// the root is now the same whether it exists or not: it names the boundary, not
+/// the host's filesystem. A path that is *inside* the root but missing still gets
+/// the "produce one" reply, which is the reply authors need.
+/// 归属检查有意先于存在性：先答存在性会让两条回复——`is not a readable file` 与
+/// `must stay inside the configured source root`——成为"根外路径是否存在"的探针，因为 `is_file()`
+/// 先跑、而归属检查只对存在的路径做规范化（审计 `LGC-LG-51`）。现在凡在根外，回复都与是否存在
+/// 无关：它说的是边界，而不是宿主的文件系统。而**在根内**却不存在的路径仍得到"如何产出一份"的
+/// 回复——那才是作者需要的那条。
+///
+/// The check is lexical and takes `Path::is_absolute()` as the *platform* defines it, which is
+/// the one place this reply differs between platforms: on Unix `\server\share\x` is an ordinary
+/// single component — a legal file name — so it is judged a name *inside* the root, while on a
+/// platform that reads a UNC prefix as absolute the same string takes the boundary branch. That
+/// is deliberate: the check refuses what **this** platform would resolve outside the root rather
+/// than guessing another platform's rules. It is written down because the difference is
+/// observable from the reply.
+/// 本检查是词法的，并以**平台**对 `Path::is_absolute()` 的定义为准，这正是这条回复在平台之间唯一的
+/// 差异所在：在 Unix 上 `\server\share\x` 只是一个普通分量——一个合法文件名——因此被判为**根内**的
+/// 名字；而在把 UNC 前缀读成绝对的平台上，同一个字符串会走边界分支。这是有意的：本检查拒绝的是
+/// **本平台**会解析到根外的东西，而不是去猜另一个平台的规则。写在这里，是因为这个差异从回复里就能
+/// 观察到。
 fn load(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> {
     let path = root.join(relative);
+    // Lexical containment first, so a missing path can still be judged: a
+    // canonicalizing check answers `false` for anything that does not exist, which
+    // would send a missing file *inside* the root to the boundary message.
+    // 先做词法归属，缺失路径才判得出来：规范化的归属检查对任何不存在的路径都答 `false`，
+    // 那会把根内缺失的文件也送去边界消息。
+    let candidate = Path::new(relative);
+    let lexically_inside = !candidate.is_absolute()
+        && !candidate
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir));
+    let contained = lexically_inside
+        && (if path.exists() {
+            crate::index::is_safe_child(root, &path)
+        } else {
+            true
+        });
+    if !contained {
+        return Err("path must stay inside the configured source root".to_owned());
+    }
     if !path.is_file() {
         return Err(format!(
             "{} is not a readable file; produce a text dump with `cargo rustc -Zunpretty=mir` on a \
              nightly toolchain, or pass the JSONL this tool emits",
             path.display()
         ));
-    }
-    if !crate::index::is_safe_child(root, &path) {
-        return Err("path must stay inside the configured source root".to_owned());
     }
     let source = std::fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -414,3 +470,32 @@ fn bounded(text: &str, unit: &str, hint: &str) -> String {
 #[cfg(test)]
 #[path = "mir_tests.rs"]
 mod mir_tests;
+
+#[cfg(test)]
+mod boundary_reply_tests {
+    use std::fs;
+
+    /// The reply for a path outside the root may not depend on whether that path
+    /// exists: existence-first made the two messages an oracle for the host's
+    /// filesystem (audit `LGC-LG-51`).
+    /// 根外路径的回复不得取决于该路径是否存在：先答存在性会让两条消息成为宿主文件系统的探针
+    /// （审计 `LGC-LG-51`）。
+    #[test]
+    fn an_outside_path_answers_the_same_whether_it_exists_or_not() {
+        let root = std::env::temp_dir().join(format!("nk-t57-mir-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src")).expect("fixture root");
+        let outside = root.join("outside.txt");
+        fs::write(&outside, "not mir").expect("fixture file");
+
+        let existing = super::load(&root.join("src"), "../outside.txt").expect_err("outside");
+        let missing = super::load(&root.join("src"), "../gone.txt").expect_err("outside");
+        assert_eq!(existing, missing, "the reply must not vary with existence");
+
+        // A path inside the root that is missing still gets the "produce one" reply.
+        let inside = super::load(&root.join("src"), "missing.mir").expect_err("missing");
+        assert!(inside.contains("is not a readable file"), "{inside}");
+        assert!(!inside.contains("must stay inside"), "{inside}");
+        let _ = fs::remove_dir_all(&root);
+    }
+}

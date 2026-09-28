@@ -15,6 +15,19 @@
 //! 第一次源码范围修剪永不剪掉承载注册机制的模块；外部 graft 计划的位置只有一处。
 //! 它们过去在每个使用点各写一遍，于是重命名依赖的宿主、或写出手写读取器跟不上的
 //! manifest 的作者，可能与另一个 crate 产生分歧，而所有编译器都保持沉默。
+//!
+//! Vocabulary, so one concept has one name to search for (audit `KRN-C-11`): a declaration
+//! is a **face**, the thing it becomes in a tree is a **node**, and the last component of a
+//! node's path — what a graft cut or a plugin replacement addresses — is its
+//! **`registry_name`**. The earlier spellings are aliases, kept here only so a search finds
+//! them: *slot*, *slot name*, *branch handle*, *tree slot*, *selector* all meant that path
+//! component or the cut that names it, and *object* / *entry* meant the node. New text says
+//! face, node, or `registry_name`; the fields keep their published names.
+//! 词汇表，使一个概念只有一个可搜索的名字（审计 `KRN-C-11`）：**声明**叫 face，它在树里成为的
+//! 东西叫 node，节点路径的最后一段——graft 切口或插件替换所寻址的东西——叫 **`registry_name`**。
+//! 早先的拼法只是别名，列在这里仅为让搜索找得到：*slot*、*slot name*、*branch handle*、
+//! *tree slot*、*selector* 都指那段路径或命名它的切口，*object* / *entry* 都指节点。新写的文本用
+//! face、node 或 `registry_name`；字段保留已发布的旧名。
 
 use std::path::{Path, PathBuf};
 

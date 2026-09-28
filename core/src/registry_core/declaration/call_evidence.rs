@@ -3,8 +3,10 @@
 
 use super::*;
 
-/// One call edge that was observed while a `CallTrace` frame was active.
-/// `CallTrace` 中实际观察到的一条调用边。
+/// One observed call site: which node and function were active in which trace frame, and
+/// where the call was written. A `CallEdge` is the pair of sites that make up the edge.
+/// 一处被观测到的调用点：哪个节点、哪个函数在哪个追踪帧里处于活动状态，以及这次调用写在哪儿。
+/// 一条 `CallEdge` 由两处这样的调用点组成。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CallSite {
     /// Registry node the active frame belongs to.

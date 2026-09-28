@@ -105,14 +105,14 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| "NoPreset".to_owned()),
     );
-    values.insert(
-        "handle".to_owned(),
-        values
-            .get("handle")
-            .cloned()
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| kind.clone()),
-    );
+    // There used to be a `handle` key here, seeded from `kind` because the
+    // kernel's field word list does not carry `handle`, so the value was always
+    // the kind. Nothing rendered it either (the template emits the kind), which
+    // made it a field a caller could "edit" with no effect (audit `LG-38`). The
+    // declaration macro derives the handle at the declaration site.
+    // 这里过去有一个 `handle` 键，用 `kind` 播种，因为内核的字段词表里没有 `handle`，因此它的值
+    // 永远是 kind。也没有任何东西渲染它（模板发射的是 kind），这让它成了一个调用方"能编辑"却毫无
+    // 效果的字段（审计 `LG-38`）。句柄由声明宏在声明点派生。
     if let Some(plugin) = face.field(nichlink::lexicon::FACE_FIELD_PLUGIN) {
         values.insert(nichlink::lexicon::FACE_FIELD_PLUGIN.to_owned(), plugin);
     }

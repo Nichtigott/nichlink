@@ -25,8 +25,10 @@ impl App {
         } else {
             match key.code {
                 KeyCode::Up => project.field = project.field.saturating_sub(1),
-                KeyCode::Down | KeyCode::Tab => project.field = (project.field + 1).min(2),
-                KeyCode::Enter if project.field == 2 => {
+                KeyCode::Down | KeyCode::Tab => {
+                    project.field = (project.field + 1).min(new_project_field::COUNT - 1)
+                }
+                KeyCode::Enter if project.field == new_project_field::KIND => {
                     project.values[new_project_field::KIND] =
                         if project.values[new_project_field::KIND] == "binary" {
                             "library".to_owned()

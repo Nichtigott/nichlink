@@ -78,6 +78,7 @@ impl<'a> GraftCutRef<'a> {
 
 /// The outcome of resolving a string graft selector.
 /// 字符串 graft 选择器的解析结果。
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Resolution {
     One(NodeId),
     Missing,
@@ -257,7 +258,44 @@ impl Registry {
             child
         } else {
             let mut kept = entry.child.clone();
-            if let Some(registry) = &mut kept {
+            if let Some(registry) = kept.as_ref()
+                && !child_registry_can_survive(candidate.needs_registry, Some(registry))
+            {
+                // One rule, two paths: a face that declares `needs_registry: false` may
+                // not keep a child registry that still holds faces. The in-place
+                // replacement path refuses exactly this state along with its `(None,
+                // true)`/`(Some, false)` arms, so answering it differently here left a
+                // declared leaf owning a live registry that `register_snapshot_batch`
+                // could still register into — the declaration and the tree disagreed,
+                // and only a re-read of the source could show it (audit `LGC-LG-06`).
+                // The variant is the one this function already reuses for its other
+                // "the new declaration and the old tree disagree" refusal, because the
+                // message — not the payload — is what `RegistryError` prints.
+                // 一条规则、两条路径：声明 `needs_registry: false` 的面不得保留一个仍有注册面的
+                // 子注册机。就地替换路径正是在这条上与 `(None, true)`/`(Some, false)` 各分支一起
+                // 拒绝的，因此这里答得不同就会留下"声明为叶子、却实际拥有注册机"的节点，而
+                // `register_snapshot_batch` 仍能往里注册——声明与树不一致，且只有重读源码才看得出
+                // （审计 `LGC-LG-06`）。变体沿用本函数为另一条"新声明与旧树不一致"的拒绝所用的那个：
+                // `RegistryError` 打印的是消息而不是载荷。
+                let mut error = self.graft_error(
+                    target,
+                    GraftError::ContractMismatch {
+                        expected: target_info.flow.clone(),
+                        received: replacement.flow.clone(),
+                    },
+                );
+                let child_path = &registry.header.path;
+                *error.message_mut() = format!(
+                    "graft overlay would leave a non-empty child registry on `{child_path}`, which declares no registry"
+                );
+                return Err(error);
+            }
+            if !candidate.needs_registry {
+                // Absent or empty, it goes: the same `(Some(_), false)` arm of the
+                // in-place path drops an empty child instead of keeping it.
+                // 不存在或为空，就丢掉：就地路径的 `(Some(_), false)` 分支对空子级也是这样处理的。
+                kept = None;
+            } else if let Some(registry) = &mut kept {
                 let registry = Arc::make_mut(registry);
                 // The face now declares the replacement's rule, so the registry
                 // it owns has to enforce that rule too. A base child the new
@@ -311,6 +349,33 @@ impl Registry {
         entry.child = child;
         Ok(())
     }
+}
+
+/// Whether a face may keep the child registry it already owns.
+/// 一个面是否可以保留它已经拥有的子注册机。
+///
+/// The one rule both graft paths ask, and the reason it is a function: a face that
+/// declares `needs_registry: false` may not end up owning a registry that still holds
+/// faces. [`Registry::apply_overlay_face`]'s non-full branch and the in-place
+/// replacement path (`graft_ops::replace_info`) used to answer that question
+/// differently — the overlay kept the child, the in-place path refused it — which left
+/// a declared leaf owning a live registry that `register_snapshot_batch` could still
+/// register into (audit `LGC-LG-06`). An empty child registry is not a reason to
+/// refuse: it is dropped, exactly as the in-place path drops it.
+/// 两条 graft 路径问的同一条规则，也正是它被写成函数的原因：声明 `needs_registry: false` 的面
+/// 最终不得拥有一个仍有注册面的注册机。[`Registry::apply_overlay_face`] 的非 full 分支与就地替换
+/// 路径（`graft_ops::replace_info`）过去对这个问题给出不同答案——overlay 保留子级，就地路径拒绝
+/// 它——于是留下一个"声明为叶子、却实际拥有注册机"的节点，而 `register_snapshot_batch` 仍能往里
+/// 注册（审计 `LGC-LG-06`）。空的子注册机不是拒绝的理由：它会被丢弃，与就地路径丢弃它的方式一致。
+///
+/// `pub(super)` on purpose: `graft_ops::replace_info` lives in the parent module and can
+/// call this instead of repeating the predicate.
+/// 刻意用 `pub(super)`：`graft_ops::replace_info` 在父模块里，可以改调这里而不是再抄一遍谓词。
+pub(super) fn child_registry_can_survive(
+    needs_registry: bool,
+    child: Option<&Arc<Registry>>,
+) -> bool {
+    needs_registry || child.is_none_or(|registry| registry.entries.is_empty())
 }
 
 #[cfg(test)]

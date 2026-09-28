@@ -9,7 +9,7 @@
 //! 程序、宿主承诺的操作分帧——保持在一页内可读，也让下面的管道与派生陷阱有地方把话说明白。
 
 use std::{
-    io::Read,
+    io::{self, Read},
     process::{Child, Command, Stdio},
     thread,
     time::Duration,
@@ -120,11 +120,13 @@ pub(super) fn read_stderr(reader: &mut impl Read) -> String {
 /// 把一个流读到 EOF，不保留任何内容。
 ///
 /// Used after a response frame: a child that keeps writing after its answer must
-/// not block on a full pipe. If it does, the host waits for an exit that cannot
-/// come, kills the child at the deadline and reports a timeout — discarding the
-/// answer it already holds.
-/// 用在响应帧之后：已经给出答案却继续写入的子进程绝不能阻塞在满管道上。一旦阻塞，宿主会去
-/// 等一个不可能到来的退出，在超时点杀掉子进程并报出超时——同时丢掉它其实已经拿到的答案。
+/// not block on a full pipe. The frame ends the call — the adapter delivers it as
+/// soon as it is complete — so this drain only keeps that child from blocking
+/// while it finishes or lingers; a child that never exits is killed and reaped by
+/// the caller, not here.
+/// 用在响应帧之后：已经给出答案却继续写入的子进程绝不能阻塞在满管道上。帧会结束这次调用
+/// ——适配器一收到完整帧就交付——因此这里的排空只是让那个子进程在收尾或挂住期间不阻塞；
+/// 永不退出的子进程由调用方杀掉并回收，而不是在这里。
 pub(super) fn drain_to_eof(reader: &mut impl Read) {
     let mut scratch = [0_u8; 1024];
     while let Ok(read) = reader.read(&mut scratch) {
@@ -153,9 +155,21 @@ pub(super) fn kill_and_reap(child: &mut Child) {
 /// The declared length is checked against the cap *before* the buffer is
 /// allocated, so an over-limit declaration costs nothing.
 /// 声明的长度在分配缓冲区**之前**就与上限比较，因此超限的声明不花任何代价。
-pub(super) fn read_frame(reader: &mut impl Read, max_output: usize) -> Result<Vec<u8>, HostError> {
+///
+/// A stream that ends before the frame does is reported by [`incomplete_frame`], which names the
+/// operation and the shape of the cut; the reader's own `UnexpectedEof` says only that a buffer
+/// could not be filled, and a caller cannot act on that (audit `LGC-LG-32`).
+/// 帧还没读完流就结束的情形由 [`incomplete_frame`] 上报：它点名操作与截断的形状。读取器自己的
+/// `UnexpectedEof` 只说"某个缓冲区没被填满"，调用方无法据此做任何事（审计 `LGC-LG-32`）。
+pub(super) fn read_frame(
+    reader: &mut impl Read,
+    max_output: usize,
+    operation: &str,
+) -> Result<Vec<u8>, HostError> {
     let mut encoded_length = [0; 4];
-    reader.read_exact(&mut encoded_length)?;
+    reader.read_exact(&mut encoded_length).map_err(|error| {
+        incomplete_frame(operation, "its 4-byte length prefix was cut off", &error)
+    })?;
     let length = u32::from_le_bytes(encoded_length) as usize;
     if length > max_output {
         return Err(HostError::Limit(format!(
@@ -163,6 +177,67 @@ pub(super) fn read_frame(reader: &mut impl Read, max_output: usize) -> Result<Ve
         )));
     }
     let mut output = vec![0; length];
-    reader.read_exact(&mut output)?;
+    // The payload is read through a counter so the refusal can report how many bytes of the
+    // declared frame arrived: `0 arrived` is a child that declared a frame it never started,
+    // `1 arrived` is a child that died half way in — and `read_exact` alone reads alike, since it
+    // only says that a buffer could not be filled (audit `LGC-LG-32`, second half; this is the
+    // minimal improvement the t77 review asked for).
+    // 负载经一个计数器读取，因此拒绝消息能报出声明的那一帧**到了多少**字节：`0 arrived` 是声明了
+    // 帧却一个字节都没写的子进程，`1 arrived` 是写到一半就断的子进程——而单看 `read_exact` 两者
+    // 一模一样，因为它只会说"某个缓冲区没被填满"（审计 `LGC-LG-32` 第二半；这正是 t77 复核要求
+    // 的最小改进）。
+    let mut arrived = Arrived {
+        inner: reader,
+        count: 0,
+    };
+    arrived.read_exact(&mut output).map_err(|error| {
+        incomplete_frame(
+            operation,
+            &format!(
+                "it declared {length} bytes of answer and {} arrived, then the stream ended",
+                arrived.count
+            ),
+            &error,
+        )
+    })?;
     Ok(output)
+}
+
+/// Counts the bytes a reader actually delivered, so a refusal can say how much of a declared
+/// frame arrived.
+/// 统计读取器实际交付的字节数，好让拒绝消息说出声明的那一帧到了多少。
+///
+/// `read_exact` reports only that a buffer could not be filled; the count is what separates
+/// "nothing was written" from "half a frame was written". Wrapping rather than looping keeps the
+/// reader's own error (its `Display` and `kind`) exactly as `read_exact` produced it.
+/// `read_exact` 只会报"某个缓冲区没被填满"；把"声明了多少 / 到了多少"分开的正是这个计数。用包装
+/// 而不是自写循环，是为了让读取器自己的错误（它的 `Display` 与 `kind`）原封不动地就是
+/// `read_exact` 产生的那个。
+struct Arrived<'a, R> {
+    inner: &'a mut R,
+    count: usize,
+}
+
+impl<R: Read> Read for Arrived<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buffer)?;
+        self.count += read;
+        Ok(read)
+    }
+}
+
+/// Name the frame that never completed, keeping the reader's own error recoverable.
+/// 点名那个从未完整的帧，并让读取器自己的错误仍可追。
+///
+/// `HostError::Process` is the only variant this seam has for a broken protocol, and it has no
+/// source slot, so the original error travels in the text: its `Display` and then its `kind`,
+/// which is what keeps `UnexpectedEof` (or any other reader failure) traceable from the outside.
+/// `HostError::Process` 是这个接口给"协议破损"的唯一变体，而它没有存放源错误的槽位，因此原始错误
+/// 随文本一起走：先是它的 `Display`，然后是它的 `kind`——正是这一点让 `UnexpectedEof`（或任何
+/// 其它读取失败）从外部仍然可追。
+fn incomplete_frame(operation: &str, shape: &str, error: &io::Error) -> HostError {
+    HostError::Process(format!(
+        "the process adapter got no complete frame for `{operation}`: {shape} ({error}; kind {:?})",
+        error.kind()
+    ))
 }

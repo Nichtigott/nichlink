@@ -10,6 +10,7 @@
 //! 搜索与表单控件保留各自挂载的页面。
 
 use ratatui::Frame;
+use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -19,6 +20,9 @@ use ratatui::widgets::{
 
 mod graph;
 use graph::draw_search_graph;
+#[path = "render_cache.rs"]
+mod render_cache;
+pub use render_cache::RenderCache;
 #[path = "mark.rs"]
 mod mark;
 use mark::NICH_LINK_MARK;
@@ -31,7 +35,7 @@ use panels::{draw_brand, draw_workspace};
 mod forms;
 use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
 mod search;
-use search::{draw_search, format_admission, format_registration_rule};
+use search::draw_search;
 #[path = "status.rs"]
 mod status;
 use status::{draw_event, draw_keys};
@@ -63,7 +67,7 @@ const PANEL: Color = Color::Rgb(16, 23, 28);
 ///
 /// The caller owns redraw cadence; Studio draws only after input or a terminal event.
 /// 重绘节奏由调用方掌握；Studio 只在有输入或终端事件后绘制。
-pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
+pub fn draw(frame: &mut Frame<'_>, app: &App, cache: &mut RenderCache) {
     let area = frame.area();
     frame.render_widget(
         Block::default().style(Style::default().bg(Color::Rgb(8, 12, 15))),
@@ -81,10 +85,27 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         ])
         .split(area);
     draw_brand(frame, rows[0], app);
-    draw_workspace(frame, rows[1], app);
+    draw_workspace(frame, rows[1], app, cache);
     draw_event(frame, rows[2], app);
     draw_keys(frame, rows[3]);
-    draw_overlay(frame, app);
+    draw_overlay(frame, app, cache);
+}
+
+/// Draw one complete frame the way the event loop does: take the render cache out of the
+/// session, draw, and apply it back before the next input event.
+/// 按事件循环的方式绘制完整一帧：把渲染缓存从会话中取出、绘制，并在下一个输入事件之前应用回去。
+///
+/// Both the loop and the render tests go through here, so "one frame" means one thing
+/// (audit `STU-S-04`).
+/// 事件循环与渲染测试都走这里，因此“一帧”只有一种含义（审计 `STU-S-04`）。
+pub fn draw_once<B: Backend>(
+    terminal: &mut ratatui::Terminal<B>,
+    app: &mut App,
+) -> Result<(), B::Error> {
+    let mut cache = RenderCache::take(app);
+    terminal.draw(|frame| draw(frame, app, &mut cache))?;
+    cache.apply(app);
+    Ok(())
 }
 
 fn panel(title: impl Into<String>, color: Color) -> Block<'static> {
@@ -140,7 +161,7 @@ mod tests {
     fn rendered_text(width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         let mut app = App::load();
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        draw_once(&mut terminal, &mut app).unwrap();
         terminal
             .backend()
             .buffer()
@@ -148,6 +169,106 @@ mod tests {
             .iter()
             .map(|cell| cell.symbol())
             .collect()
+    }
+
+    /// The session fields a frame must never touch: the ones a draw could plausibly reach,
+    /// plus the ones that decide what it draws. The cache fields (`hot`, the tree offset, the
+    /// search viewport, the graph widget) are the frame's *output*, applied by `draw_once`;
+    /// everything here has to come out identical (audit `STU-S-04`).
+    /// 一帧绝不得触碰的会话字段：绘制可能触及的那些，加上决定它画什么的那些。缓存字段
+    /// （`hot`、树偏移、搜索视口、调用图控件）是帧的**产出**，由 `draw_once` 应用；这里的一切必须
+    /// 原样返回（审计 `STU-S-04`）。
+    fn session_snapshot(app: &App) -> String {
+        format!(
+            "event={:?} selected={:?} page={:?} focus={:?} details={} split={} graph_split={} stamp={} quit={} registry={:?}",
+            app.event,
+            app.selected,
+            app.page,
+            app.focus,
+            app.details_selected,
+            app.split_percent,
+            app.graph_split_percent,
+            app.source_stamp(),
+            app.should_quit,
+            app.registry.id(),
+        )
+    }
+
+    /// The screen as flat text, for a terminal that already exists.
+    /// 已存在终端上的屏幕平铺文本。
+    fn screen(terminal: &Terminal<TestBackend>) -> String {
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
+
+    /// A frame is an observation: it does not change the session, and the same session draws
+    /// the same picture twice. This is the pin for audit `STU-S-04`.
+    /// 一帧是一次观察：它不改变会话，而同一个会话两次画出同一幅画。这是审计 `STU-S-04` 的钉子。
+    #[test]
+    fn a_frame_observes_the_session_without_changing_it() {
+        let mut terminal = Terminal::new(TestBackend::new(140, 48)).unwrap();
+        let mut app = App::load();
+        app.overlay = Some(Overlay::Search(SearchState {
+            query: "canvas".to_owned(),
+            ..SearchState::default()
+        }));
+        let before = session_snapshot(&app);
+
+        draw_once(&mut terminal, &mut app).unwrap();
+        let first = screen(&terminal);
+        assert_eq!(
+            session_snapshot(&app),
+            before,
+            "drawing a frame changed the session (audit `STU-S-04`)"
+        );
+
+        draw_once(&mut terminal, &mut app).unwrap();
+        assert_eq!(
+            screen(&terminal),
+            first,
+            "the same session must draw the same frame"
+        );
+        assert_eq!(
+            session_snapshot(&app),
+            before,
+            "and drawing it twice must still not change it"
+        );
+    }
+
+    /// The render path itself never writes the session: the only writes under `ui/` are the
+    /// applier's three lines in `render_cache.rs`, which is what `draw_once` is for
+    /// (audit `STU-S-04`).
+    /// 渲染路径本身从不写会话：`ui/` 下唯一的写入是 `render_cache.rs` 里应用器的那三行，而那正是
+    /// `draw_once` 的用途（审计 `STU-S-04`）。
+    #[test]
+    fn the_render_path_never_writes_the_session() {
+        for (name, source) in [
+            ("ui.rs", include_str!("ui.rs")),
+            ("panels.rs", include_str!("panels.rs")),
+            ("graph.rs", include_str!("graph.rs")),
+            ("graph/nodes.rs", include_str!("graph/nodes.rs")),
+            ("overlay.rs", include_str!("overlay.rs")),
+            ("search.rs", include_str!("search.rs")),
+            ("status.rs", include_str!("status.rs")),
+        ] {
+            let body = source.split("\n#[cfg(test)]").next().unwrap_or(source);
+            for needle in [
+                "app.hot.",
+                "app.tree_offset",
+                "app.graph_flow",
+                "app.overlay =",
+            ] {
+                assert!(
+                    !body.contains(needle),
+                    "the render path in {name} still writes `{needle}`"
+                );
+            }
+        }
     }
 
     #[test]
@@ -172,7 +293,7 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(140, 48)).unwrap();
         let mut app = App::load();
         app.overlay = Some(Overlay::Add(AddState::new(app.registry.id())));
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        draw_once(&mut terminal, &mut app).unwrap();
         let output = terminal
             .backend()
             .buffer()
@@ -193,7 +314,7 @@ mod tests {
         if let Some(Overlay::Add(ref mut add)) = app.overlay {
             add.field = face_field::TREE_SLOT;
         }
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        draw_once(&mut terminal, &mut app).unwrap();
         let output = terminal
             .backend()
             .buffer()
@@ -236,7 +357,7 @@ mod tests {
             flow_declared: true,
             inherited_children: 2,
         }));
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        draw_once(&mut terminal, &mut app).unwrap();
         let output = terminal
             .backend()
             .buffer()

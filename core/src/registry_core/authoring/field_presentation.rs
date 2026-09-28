@@ -250,7 +250,15 @@ pub fn face_field_presentation(index: usize) -> FaceFieldPresentation {
             "runtime checks",
             FaceFieldRole::Optional,
             "none",
-            "Value checks retained according to the selected trace mode.",
+            // What the field does, per this file's own rule ("the help text states what the
+            // field does, not what it sounds like it should do"). The old sentence described
+            // the retention policy of `TraceMode`, which is a different knob entirely: these
+            // are the checks a host runs when a value crosses a boundary
+            // (`inspection::health_check`) (audit `KRN-C-09`).
+            // 本字段实际做的事，按本文件自己的判据（"帮助文本说的是字段做什么，不是它听起来该做
+            // 什么"）。旧句子描述的是 `TraceMode` 的保留策略，那是另一个旋钮：这里是宿主在取值跨边界
+            // 时执行的检查（`inspection::health_check`）（审计 `KRN-C-09`）。
+            "Named checks the host runs when a value crosses a boundary.",
         ),
         FLOW => field(
             "DATA FLOW",
@@ -339,15 +347,118 @@ fn auto_value(value: &str) -> String {
 }
 
 fn derived_trait_names(paths: &str) -> String {
-    let names = paths
-        .split(',')
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-        .filter_map(|path| path.rsplit("::").next())
-        .collect::<Vec<_>>();
+    // The one derivation of a trait label, shared with the data side: a label is the last
+    // segment of a *type path*, so generics are not part of it. Splitting on `,` and taking
+    // `rsplit("::")` here was a second implementation, and it disagreed exactly where the
+    // path carried generic arguments — the editor showed `ControlHandle<u8, u16>` while the
+    // file recorded `ControlHandle`, so a writer that diffs its rendered text against the
+    // parsed one saw a change that was not one (audit `KRN-K-21`).
+    // 特性标签只有一份推导，与数据侧共用：标签是**类型路径**的最后一段，因此泛型实参不属于它。这里
+    // 过去按 `,` 切分再 `rsplit("::")`，是第二份实现，而它恰好在路径带泛型实参处分歧——编辑面显示
+    // `ControlHandle<u8, u16>`，文件里记的却是 `ControlHandle`，于是一个把渲染文本与解析结果做差异
+    // 比较的写入方会看到一次并不存在的改动（审计 `KRN-K-21`）。
+    // One derivation, and only where a label is recorded at all. `parse` is behind the `syntax`
+    // feature while this presentation layer is deliberately not (every surface that shows a
+    // face needs it), so the feature-less build — which has no parse layer, and therefore no
+    // recorded label to agree with — shows the "not derived" placeholder instead of a second
+    // implementation of the same rule (audit `KRN-K-21`).
+    // 只有一份推导，而且只在确实记录标签的那个构建里。`parse` 在 `syntax` 特性之后，而本展示层
+    // 有意不在（每个展示注册面的执行面都要用它），因此无该特性的构建——它没有解析层，也就没有可供
+    // 对齐的记录标签——显示"未能推导"的占位符，而不是把同一条规则再实现一遍（审计 `KRN-K-21`）。
+    #[cfg(feature = "syntax")]
+    let names = crate::registry_core::authoring::parse::trait_names_from_paths(paths)
+        .map_err(|error| error.to_string());
+    #[cfg(not(feature = "syntax"))]
+    let names: Result<String, String> =
+        Err("trait labels are derived by the `syntax` feature".to_owned());
+    let Ok(names) = names else {
+        // A value the shared derivation cannot read has no labels to show; echoing the raw
+        // text would be that second derivation again.
+        // 共用推导读不出来的取值没有标签可显示；把原文照搬出来又会变回第二份推导。
+        return "—".to_owned();
+    };
     if names.is_empty() {
         "—".to_owned()
     } else {
-        format!("<derived: {}>", names.join(", "))
+        format!("<derived: {}>", names.replace(',', ", "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The displayed label is the label the file records, generics included in neither.
+    /// 显示出来的标签就是文件里记的标签，两者都不含泛型实参。
+    ///
+    /// Red before the fix: this side split on `,` and kept the text after the last `::`, so
+    /// `crate::ControlHandle<u8, u16>` displayed as `ControlHandle<u8, u16>` (and as two
+    /// halves) while the data side recorded `ControlHandle` (audit `KRN-K-21`).
+    /// 修前为红：这一侧按 `,` 切分并保留最后一个 `::` 之后的原文，因此
+    /// `crate::ControlHandle<u8, u16>` 显示成 `ControlHandle<u8, u16>`（还被切成两半），而数据侧
+    /// 记的是 `ControlHandle`（审计 `KRN-K-21`）。
+    #[test]
+    fn the_displayed_trait_label_is_the_derived_one() {
+        let displayed = derived_trait_names("crate::ControlHandle<u8, u16>");
+        // With `syntax` the data side records the label here; without it the parse layer does
+        // not exist, so the same expectation is spelled out.
+        // 有 `syntax` 时数据侧就在这里记录标签；没有它时解析层不存在，因此把同一个期望写出来。
+        #[cfg(feature = "syntax")]
+        {
+            let expected = crate::registry_core::authoring::parse::trait_names_from_paths(
+                "crate::ControlHandle<u8, u16>",
+            )
+            .expect("the shared derivation reads this path");
+            assert_eq!(
+                displayed,
+                format!("<derived: {expected}>"),
+                "one derivation, so the editor and the file agree"
+            );
+            assert_eq!(
+                displayed.matches('<').count(),
+                1,
+                "the generic arguments are not part of the label: {displayed}"
+            );
+        }
+        // Without `syntax` there is no label derivation at all, and the placeholder says so
+        // rather than a second implementation guessing.
+        // 没有 `syntax` 时根本没有标签推导；占位符如实说明这一点，而不是让第二份实现去猜。
+        #[cfg(not(feature = "syntax"))]
+        assert_eq!(displayed, "—");
+    }
+
+    /// The help text for `runtime_checks` describes the field, not the trace mode.
+    /// `runtime_checks` 的帮助文本描述的是字段本身，而不是 trace 模式。
+    ///
+    /// Red before the fix: the sentence was "Value checks retained according to the selected
+    /// trace mode", which is the retention policy of `TraceMode` — a different mechanism from
+    /// the boundary checks the host runs (`inspection::health_check`) (audit `KRN-C-09`).
+    /// 修前为红：那句话是 "Value checks retained according to the selected trace mode"，说的是
+    /// `TraceMode` 的保留策略——与宿主执行的边界检查（`inspection::health_check`）是两套机制
+    /// （审计 `KRN-C-09`）。
+    #[test]
+    fn the_runtime_checks_help_describes_the_field() {
+        let help = face_field_presentation(RUNTIME_CHECKS).help;
+        assert!(help.contains("host"), "these checks are the host's: {help}");
+        assert!(
+            !help.to_ascii_lowercase().contains("trace mode"),
+            "the trace mode is a different knob: {help}"
+        );
+    }
+
+    /// A plain list and an empty list keep their old spellings.
+    /// 普通列表与空列表保持原来的写法。
+    #[test]
+    fn plain_and_empty_lists_are_unchanged() {
+        #[cfg(feature = "syntax")]
+        assert_eq!(
+            derived_trait_names("crate::a::Fast, crate::b::Slow"),
+            "<derived: Fast, Slow>"
+        );
+        assert_eq!(derived_trait_names(""), "—");
+        #[cfg(feature = "syntax")]
+        assert_eq!(derived_trait_names("not a path"), "—");
+        #[cfg(not(feature = "syntax"))]
+        assert_eq!(derived_trait_names("not a path"), "—");
     }
 }

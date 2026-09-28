@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use nichlink::identity::NodeId;
-use nichlink_build_method::face_views;
+
 use serde_json::Value;
 
 use crate::apply::load_registry;
@@ -32,7 +32,7 @@ use crate::registry::namespace;
 /// 报告一个面的邻域。
 pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let faces = face_views(root, &namespace)?;
+    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
@@ -76,7 +76,7 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
         }
     }
     let mut output = format!(
-        "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n  parent {}{}\n",
+        "namespace {namespace}\n{unparsable}node {}\n  path {}\n  kind {}\n  parent {}{}\n",
         face.id,
         face.path,
         face.kind,

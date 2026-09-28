@@ -48,8 +48,13 @@ pub(super) fn draw_brand(frame: &mut Frame<'_>, area: Rect, app: &App) {
     );
 }
 
-pub(super) fn draw_workspace(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
-    app.hot.workspace_area = area;
+pub(super) fn draw_workspace(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    cache: &mut RenderCache,
+) {
+    cache.hot.workspace_area = area;
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -57,13 +62,13 @@ pub(super) fn draw_workspace(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
             Constraint::Percentage(100 - app.split_percent),
         ])
         .split(area);
-    app.hot.tree_area = columns[0];
-    app.hot.details_area = columns[1];
-    draw_tree(frame, columns[0], app);
+    cache.hot.tree_area = columns[0];
+    cache.hot.details_area = columns[1];
+    draw_tree(frame, columns[0], app, cache);
     draw_details(frame, columns[1], app);
 }
 
-pub(super) fn draw_tree(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
+pub(super) fn draw_tree(frame: &mut Frame<'_>, area: Rect, app: &App, cache: &mut RenderCache) {
     let nodes = app.visible_nodes();
     let selected = nodes
         .iter()
@@ -106,57 +111,22 @@ pub(super) fn draw_tree(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
     };
     let mut state = ListState::default()
         .with_selected(Some(selected))
-        .with_offset(app.tree_offset);
+        .with_offset(cache.tree_offset);
     frame.render_stateful_widget(
         List::new(items).block(panel(" REGISTRATION TREE ", border)),
         area,
         &mut state,
     );
-    app.tree_offset = state.offset();
+    cache.tree_offset = state.offset();
 }
 
 pub(super) fn draw_details(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let values = if let Some(info) = app.selected_info() {
-        vec![
-            ("name", info.registry_name.to_owned()),
-            ("kind", info.kind.to_owned()),
-            ("node", info.id.to_string()),
-            (
-                "path",
-                app.registry
-                    .path_for(info.id)
-                    .unwrap_or_else(|| "<unknown>".to_owned()),
-            ),
-            ("parent", info.parent.to_string()),
-            (
-                "preset / parts",
-                format!("{} / {}", info.preset, info.parts),
-            ),
-            // `params` and `handle` are `kind` by rule (both macros expand them
-            // from `stringify!($kind)`), so only the interfaces they must carry
-            // are worth a row of their own.
-            // `params` 与 `handle` 按规则就是 `kind`（两个宏都用 `stringify!($kind)`
-            // 展开它们），因此只有它们必须携带的接口值得单独占一行。
-            ("handle interfaces", info.handle_traits.join(", ")),
-            ("parts interfaces", info.part_traits.join(", ")),
-            ("declared", info.source.describe()),
-            (
-                "registration rule",
-                format!(
-                    "{} ({})",
-                    format_registration_rule(&info.registry_rule),
-                    info.registry_rule_path
-                ),
-            ),
-            ("dependency admission", format_admission(&info.admission)),
-            ("exports", info.exports.join(", ")),
-        ]
-    } else {
-        vec![
-            ("name", "root".to_owned()),
-            ("node", app.registry.id().to_string()),
-        ]
-    };
+    // One source for the rows: `App::detail_rows` also answers
+    // `App::detail_field_count`, so the drawing and the keys that walk it cannot
+    // disagree (audit `STU-S-02`).
+    // 行只有一份来源：`App::detail_rows` 同时也是 `App::detail_field_count` 的答案，因此绘制与
+    // 走它的按键不会各说一套（审计 `STU-S-02`）。
+    let values = app.detail_rows();
     let inner_width = area.width.saturating_sub(2) as usize;
     let selected = app.details_selected.min(values.len().saturating_sub(1));
     let lines = values

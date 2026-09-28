@@ -3,6 +3,14 @@
 
 use super::*;
 
+/// What the first-screen face keys say when the root — which has no source file —
+/// is selected: the footer advertises `d`/`e`/`g` on the first screen, so silence
+/// would read as a broken key (audit `STU-V-02`).
+/// 选中根（它没有源文件）时首屏那几个面级按键要说的话：页脚在首屏就宣传了 `d`/`e`/`g`，
+/// 静默会被读成坏键（审计 `STU-V-02`）。
+const ROOT_HAS_NO_SOURCE: &str =
+    "Select a registration face first; the root node has no source file.";
+
 impl App {
     pub(super) fn handle_key(&mut self, key: KeyEvent) {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
@@ -36,96 +44,13 @@ impl App {
             }
             KeyCode::Char('p') => self.overlay = Some(Overlay::Plugin(PluginState::new())),
             KeyCode::Char('d') => {
-                if self.selected != self.registry.id() {
+                if self.selected == self.registry.id() {
+                    self.note(ROOT_HAS_NO_SOURCE.to_owned());
+                } else {
                     self.overlay = Some(Overlay::Delete(self.selected));
                 }
             }
-            KeyCode::Char('e') if self.selected != self.registry.id() => {
-                if let Some(info) = self.selected_info() {
-                    // The form shows the paths, not the labels: the labels follow
-                    // them, in the file and in the compiled registration alike.
-                    // `params` and `handle` are not shown at all — both are the
-                    // kind by rule, so a row for either would only repeat it.
-                    // 表单展示路径而不是标签：标签跟随路径——文件里与编译后的注册信息里
-                    // 都是如此。`params` 与 `handle` 完全不展示：按规则两者都等于 kind，
-                    // 任何一行的存在都只是重复它。
-                    let (handle_contracts, part_contracts) =
-                        std::fs::read_to_string(source_path_for(&info.source.file))
-                            .ok()
-                            .map(|source| declaration_contract_paths(&source))
-                            .unwrap_or_default();
-                    let mut edit = AddState::new(info.parent);
-                    edit.locked_fields.insert(face_field::PARENT);
-                    edit.values[face_field::PARENT] = self
-                        .registry
-                        .path_for(info.parent)
-                        .unwrap_or_else(|| "root".to_owned());
-                    // `module` describes the source directory/file, while
-                    // `registry_name` is the name in the registration tree.
-                    // They often start equal, but a module rename must not
-                    // make the editor appear to revert after reload.
-                    // `module` 表示源码目录/文件名，`registry_name` 表示注册树
-                    // 中的槽位名。两者初始值可能相同，但重命名后必须分别读取。
-                    edit.values[face_field::MODULE] = std::path::Path::new(&info.source.file)
-                        .file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .filter(|stem| !stem.is_empty())
-                        .unwrap_or(info.registry_name.as_str())
-                        .to_owned();
-                    edit.values[face_field::NEEDS_REGISTRY] = info.needs_registry.to_string();
-                    edit.values[face_field::TREE_SLOT] = info.registry_name.to_owned();
-                    edit.values[face_field::REGISTRY_RULE] =
-                        registration_rule_text(&info.registry_rule);
-                    edit.values[face_field::ADMISSION] = admission_text(&info.admission);
-                    edit.values[face_field::PARTS] = info.parts.to_owned();
-                    edit.values[face_field::EXPORTS] = info.exports.join(",");
-                    edit.values[face_field::KIND] = info.kind.to_owned();
-                    edit.values[face_field::NAME_ZH] = info.name.zh.to_owned();
-                    edit.values[face_field::NAME_EN] = info.name.en.to_owned();
-                    edit.values[face_field::SUMMARY_ZH] = info.summary.zh.to_owned();
-                    edit.values[face_field::SUMMARY_EN] = info.summary.en.to_owned();
-                    edit.values[face_field::PRESET] = info.preset.to_owned();
-                    edit.values[face_field::STABLE_NAME] =
-                        info.stable_name.clone().unwrap_or_default();
-                    edit.values[face_field::GETTING_FROM_OTHER_REGISTRY] =
-                        info.getting_from_other_registry.clone().unwrap_or_default();
-                    edit.values[face_field::REGISTRY_RULE_PATH] =
-                        info.registry_rule_path.to_owned();
-                    edit.values[face_field::HANDLE_TRAITS] = info.handle_traits.join(",");
-                    edit.values[face_field::HANDLE_CONTRACTS] = handle_contracts;
-                    edit.values[face_field::PART_TRAITS] = info.part_traits.join(",");
-                    edit.values[face_field::REQUIRES] = info
-                        .requires
-                        .iter()
-                        .map(|requirement| {
-                            format!("{}=>{}", requirement.capability, requirement.provider)
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    edit.values[face_field::PROVIDES] = info.provides.join(",");
-                    edit.values[face_field::RUNTIME_CHECKS] = info
-                        .runtime_checks
-                        .iter()
-                        .map(|check| check.name())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    edit.values[face_field::FLOW] = if info.flow.is_declared() {
-                        format!(
-                            "{}|{}|{}|{}",
-                            info.flow.id, info.flow.version, info.flow.input, info.flow.output
-                        )
-                    } else {
-                        String::new()
-                    };
-                    edit.values[face_field::FLOW_PROVIDER] =
-                        info.flow_provider.as_deref().unwrap_or_default().to_owned();
-                    edit.values[face_field::PART_CONTRACTS] = part_contracts;
-                    if let Some(parent_face) = self.registry.find(info.parent) {
-                        edit.apply_parent_rule(&parent_face.registry_rule);
-                    }
-                    self.overlay = Some(Overlay::Edit(info.id, edit));
-                }
-            }
+            KeyCode::Char('e') if self.selected != self.registry.id() => self.open_edit_form(),
             KeyCode::Char('g') if self.selected != self.registry.id() => self.open_graft(),
             KeyCode::Char('r') | KeyCode::F(5) => self.reload(),
             KeyCode::Char('b') | KeyCode::F(9) => self.build_all(),
@@ -160,10 +85,111 @@ impl App {
             KeyCode::Enter
                 if self.focus == Focus::Details && self.selected != self.registry.id() =>
             {
-                self.handle_key(KeyEvent::from(KeyCode::Char('e')));
+                self.open_edit_form();
+            }
+            // `e` and `g` carry a "a face is selected" guard; say that instead of
+            // doing nothing silently (audit `STU-V-02`).
+            // `e` 与 `g` 带“已选中一个面”的守卫；要把这一点说出来，而不是静默空操作（审计
+            // `STU-V-02`）。
+            KeyCode::Char('e' | 'g') if self.selected == self.registry.id() => {
+                self.note(ROOT_HAS_NO_SOURCE.to_owned());
             }
             KeyCode::Enter | KeyCode::Char(' ') => self.toggle_selected(),
             _ => {}
+        }
+    }
+    /// The one entry point that opens the editor form for the selected face: the `e`
+    /// key and Enter in the details pane both call it, so the two paths cannot drift
+    /// apart (audit `STU-S-19`).
+    /// 为选中的面打开编辑表单的唯一入口：`e` 键与详情面板的 Enter 都调它，因此两条路径不会
+    /// 各自漂移（审计 `STU-S-19`）。
+    fn open_edit_form(&mut self) {
+        let Some(info) = self.selected_info() else {
+            return;
+        };
+        // The form shows the paths, not the labels: the labels follow
+        // them, in the file and in the compiled registration alike.
+        // `params` and `handle` are not shown at all — both are the
+        // kind by rule, so a row for either would only repeat it.
+        // 表单展示路径而不是标签：标签跟随路径——文件里与编译后的注册信息里
+        // 都是如此。`params` 与 `handle` 完全不展示：按规则两者都等于 kind，
+        // 任何一行的存在都只是重复它。
+        let (handle_contracts, part_contracts, contract_failure) =
+            declaration_contract_fields(&source_path_for(&info.source.file));
+        let mut edit = AddState::new(info.parent);
+        edit.locked_fields.insert(face_field::PARENT);
+        edit.values[face_field::PARENT] = self
+            .registry
+            .path_for(info.parent)
+            .unwrap_or_else(|| "root".to_owned());
+        // `module` describes the source directory/file, while
+        // `registry_name` is the name in the registration tree.
+        // They often start equal, but a module rename must not
+        // make the editor appear to revert after reload.
+        // `module` 表示源码目录/文件名，`registry_name` 表示注册树
+        // 中的槽位名。两者初始值可能相同，但重命名后必须分别读取。
+        edit.values[face_field::MODULE] = std::path::Path::new(&info.source.file)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .filter(|stem| !stem.is_empty())
+            .unwrap_or(info.registry_name.as_str())
+            .to_owned();
+        edit.values[face_field::NEEDS_REGISTRY] = info.needs_registry.to_string();
+        edit.values[face_field::TREE_SLOT] = info.registry_name.to_owned();
+        edit.values[face_field::REGISTRY_RULE] = registration_rule_text(&info.registry_rule);
+        edit.values[face_field::ADMISSION] = admission_text(&info.admission);
+        edit.values[face_field::PARTS] = info.parts.to_owned();
+        edit.values[face_field::EXPORTS] = info.exports.join(",");
+        edit.values[face_field::KIND] = info.kind.to_owned();
+        edit.values[face_field::NAME_ZH] = info.name.zh.to_owned();
+        edit.values[face_field::NAME_EN] = info.name.en.to_owned();
+        edit.values[face_field::SUMMARY_ZH] = info.summary.zh.to_owned();
+        edit.values[face_field::SUMMARY_EN] = info.summary.en.to_owned();
+        edit.values[face_field::PRESET] = info.preset.to_owned();
+        edit.values[face_field::STABLE_NAME] = info.stable_name.clone().unwrap_or_default();
+        edit.values[face_field::GETTING_FROM_OTHER_REGISTRY] =
+            info.getting_from_other_registry.clone().unwrap_or_default();
+        edit.values[face_field::REGISTRY_RULE_PATH] = info.registry_rule_path.to_owned();
+        edit.values[face_field::HANDLE_TRAITS] = info.handle_traits.join(",");
+        edit.values[face_field::HANDLE_CONTRACTS] = handle_contracts;
+        edit.values[face_field::PART_TRAITS] = info.part_traits.join(",");
+        edit.values[face_field::REQUIRES] = info
+            .requires
+            .iter()
+            .map(|requirement| format!("{}=>{}", requirement.capability, requirement.provider))
+            .collect::<Vec<_>>()
+            .join(",");
+        edit.values[face_field::PROVIDES] = info.provides.join(",");
+        edit.values[face_field::RUNTIME_CHECKS] = info
+            .runtime_checks
+            .iter()
+            .map(|check| check.name())
+            .collect::<Vec<_>>()
+            .join(",");
+        edit.values[face_field::FLOW] = if info.flow.is_declared() {
+            format!(
+                "{}|{}|{}|{}",
+                info.flow.id, info.flow.version, info.flow.input, info.flow.output
+            )
+        } else {
+            String::new()
+        };
+        edit.values[face_field::FLOW_PROVIDER] =
+            info.flow_provider.as_deref().unwrap_or_default().to_owned();
+        edit.values[face_field::PART_CONTRACTS] = part_contracts;
+        if let Some(parent_face) = self.registry.find(info.parent) {
+            edit.apply_parent_rule(&parent_face.registry_rule);
+        }
+        self.overlay = Some(Overlay::Edit(info.id, edit));
+        if let Some(failure) = contract_failure {
+            // The form still opens — a reader may be editing precisely to fix that file —
+            // but the event line says the contracts could not be read instead of letting
+            // two empty columns read as "no contracts" (audit `LGC-LG-34`). Written after
+            // the overlay because `info` borrows the session until its last use.
+            // 表单照旧打开——读者可能正是为修这个文件而来——但事件行要说明契约读不到，而不是让两列
+            // 空白被读成“没有契约”（审计 `LGC-LG-34`）。写在浮层之后，因为 `info` 借用会话直到它
+            // 最后一次被使用。
+            self.alert(failure);
         }
     }
 }
@@ -174,6 +200,39 @@ pub(super) fn declaration_contract_paths(source: &str) -> (String, String) {
     };
     let paths = |field| face.path_list(field).unwrap_or_default().join(",");
     (paths("handle_contracts"), paths("part_contracts"))
+}
+
+/// The two contract columns for one source file, and the sentence to show when it could
+/// not be read.
+/// 一个源文件的两列契约，以及读不到时要显示的那句话。
+///
+/// An unreadable file used to look exactly like a file with no contracts: both came back
+/// empty, so the editor showed blank contract columns for a file it had never read
+/// (audit `LGC-LG-34`). A failure now says so in the columns themselves *and* hands the
+/// caller the line to show; an empty result still means what it says.
+/// 读不到的文件过去与“没有契约”的文件一模一样：两者都回空，于是编辑器会为一个它从未读过的文件
+/// 显示空白契约列（审计 `LGC-LG-34`）。现在失败既在列里自己说出来，也把要展示的那句话交给调用
+/// 方；空结果仍然只表示它字面的意思。
+pub(super) fn declaration_contract_fields(
+    path: &std::path::Path,
+) -> (String, String, Option<String>) {
+    match std::fs::read_to_string(path) {
+        Ok(source) => {
+            let (handle, part) = declaration_contract_paths(&source);
+            (handle, part, None)
+        }
+        Err(error) => {
+            let unreadable = format!("<unreadable: {error}>");
+            (
+                unreadable.clone(),
+                unreadable,
+                Some(format!(
+                    "Could not read {} for its contract columns: {error}",
+                    path.display()
+                )),
+            )
+        }
+    }
 }
 
 #[cfg(test)]

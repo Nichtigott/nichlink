@@ -76,7 +76,10 @@ impl App {
                     if let Some(item) = tree_item.as_ref() {
                         let locals = self.graph_locals(item);
                         if let Some(local) = locals.get(search.data_selected) {
-                            self.open_editor_file(
+                            // The refusal is already on the event line; there is
+                            // nothing else for this arm to report.
+                            // 拒绝本身已在事件行；这一支没有别的要报告。
+                            let _ = self.open_editor_file(
                                 source_path_for(local.source.file),
                                 local.source.line,
                             );
@@ -90,7 +93,10 @@ impl App {
                     if let Some(item) = tree_item.as_ref()
                         && let Some(local) = self.graph_locals(item).get(search.data_selected)
                     {
-                        self.open_editor_file(
+                        // The refusal is already on the event line; there is nothing
+                        // else for this arm to report.
+                        // 拒绝本身已在事件行；这一支没有别的要报告。
+                        let _ = self.open_editor_file(
                             source_path_for(local.source.file),
                             local.source.line,
                         );
@@ -175,7 +181,7 @@ impl App {
                     search.data_selected = 0;
                     self.overlay = Some(Overlay::Search(search));
                 } else {
-                    self.event = format!("Selected {}", row.text);
+                    self.note(format!("Selected {}", row.text));
                     self.overlay = Some(Overlay::Search(search));
                 }
                 return;

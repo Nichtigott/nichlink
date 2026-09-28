@@ -7,6 +7,8 @@
 //! 从 `lib.rs` 拆出：这是最大的按编辑器划分的执行面，其规则（VS Code 项目文件、
 //! Neovim/Blink 用户配置、`auto` 扫描）与 argv 分发及其他命令无关。
 
+use std::io::Write;
+
 use nichlink_build_method::scaffold;
 
 /// Inject the face-field editor snippets into a project or an editor config.
@@ -22,7 +24,10 @@ use nichlink_build_method::scaffold;
 /// 触发，因此字段名后的 `: ` 只能由编辑器自己的 snippet 层提供——而每个编辑器的格式不同。
 /// VS Code 读源码旁的项目级文件；Neovim 的 LuaSnip 加载器会扫描配置目录里的
 /// `luasnippets/<filetype>/`，因此那边同样无需额外接线。
-pub(crate) fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
+pub(crate) fn snippets(
+    args: &mut impl Iterator<Item = String>,
+    out: &mut dyn Write,
+) -> Result<(), String> {
     let mut directory: Option<String> = None;
     let mut editor = scaffold::Editor::Vscode;
     let mut auto = false;
@@ -31,6 +36,7 @@ pub(crate) fn snippets(args: &mut impl Iterator<Item = String>) -> Result<(), St
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "-h" | "--help" => return crate::usage(out),
             "--stdout" => stdout = true,
             "--editor" => {
                 let name = args.next().ok_or("--editor requires a name")?;

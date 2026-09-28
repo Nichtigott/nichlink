@@ -205,7 +205,7 @@ fn registration_kinds_come_from_code_only() {
 /// 逐行掩码看不见多行构造从哪里开始，因此多行字符串、raw 字符串或块注释里的声明会被读成代码
 /// ——K4/K6 家族在跨行拼写上的翻版。
 #[test]
-fn multiline_literals_and_block_comments_leak_code() {
+fn multiline_literals_and_block_comments_do_not_leak_code() {
     let multiline = "fn real() {\n    let s = \"\nfn ghost() {\n\";\n    let _ = 1;\n}\n";
     let lines = multiline.lines().collect::<Vec<_>>();
     assert_eq!(
@@ -256,5 +256,67 @@ fn a_non_ascii_identifier_is_indexed_whole() {
         calls,
         ["héllo", "plain"],
         "the call scanner agrees about the name"
+    );
+}
+
+/// The masking fallback keeps the mask, never the unmasked source.
+/// 掩码兜底保留掩码，绝不返回未掩码的源码。
+///
+/// The arm is unreachable today: the scan only writes ASCII spaces, and only at character
+/// boundaries, so `mask` cannot turn valid UTF-8 into invalid bytes (audit `KRN-K-16` says
+/// so itself). That is why this is a white-box pin on the *direction* rather than on a
+/// reproducible input: the conversion takes only the bytes, so it has no access to the
+/// source it would have to return — the worst direction ("comments and strings read as
+/// code, so invented functions and calls") is unspellable.
+/// 这一支今天不可达：扫描只写 ASCII 空格、且只在字符边界上写，因此 `mask` 不可能把合法 UTF-8
+/// 变成非法字节（审计 `KRN-K-16` 自己就这么说）。这正是本条钉子钉的是**方向**而不是某个可复现
+/// 输入的原因：转换只接收字节，因此拿不到"它本该返回的源码"——最坏的那个方向（"注释与字符串被当成
+/// 代码，于是凭空造出函数与调用"）根本写不出来。
+#[test]
+fn the_mask_fallback_keeps_the_mask() {
+    // A byte sequence the scanner cannot produce from a `&str`: 0xFF is not UTF-8.
+    // 扫描器不可能从 `&str` 产出的字节序列：0xFF 不是 UTF-8。
+    let text = masked_text(vec![b'l', b'e', b't', 0xff, b'x']);
+    assert_eq!(
+        text, "let\u{fffd}x",
+        "the bytes that were masked stay masked, and the invalid byte is replaced rather \
+         than dropped"
+    );
+}
+
+/// Only a `kind:` inside a registration macro body is a declaration kind.
+/// 只有注册宏体内的 `kind:` 才是声明 kind。
+///
+/// Red before the fix: the rule was "this line contains `kind:`", so an ordinary binding
+/// contributed a kind named after its type, and a declaration whose value sat on the next
+/// line contributed nothing. Both directions are invisible in the source query's output
+/// (audit `KRN-K-17`).
+/// 修前为红：规则是"本行含 `kind:`"，于是普通绑定按它的类型名贡献了一个 kind，而取值在下一行的
+/// 声明什么都没贡献。两个方向在源码查询的输出里都看不出来（审计 `KRN-K-17`）。
+#[test]
+fn registration_kinds_are_bounded_by_the_declaration_body() {
+    assert!(
+        registration_kinds("let kind: String = value;").is_empty(),
+        "an ordinary binding is not a registration declaration"
+    );
+    assert!(
+        registration_kinds("fn f() {\n    let kind: String = value;\n}\n").is_empty(),
+        "a binding inside a function body is not a declaration either"
+    );
+    assert_eq!(
+        registration_kinds("crate::object! {\n    kind:\n        Widget,\n}\n"),
+        ["Widget"],
+        "a value on the next line is still that declaration's kind"
+    );
+    assert_eq!(
+        registration_kinds("crate::control_object! { kind: Button, }"),
+        ["Button"],
+        "a one-line declaration still works"
+    );
+    assert!(
+        registration_kinds(
+            "fn f() {\n    let kind: String = value;\n}\ncrate::object! {\n    kind: Tool,\n}\n"
+        ) == ["Tool"],
+        "only the declaration's kind is collected"
     );
 }

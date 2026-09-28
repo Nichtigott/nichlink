@@ -242,11 +242,9 @@ mod tests {
         view
     }
 
-    /// Lanes are as wide as their widest box and bands as tall as their tallest, so
-    /// no two boxes share a cell. Fixed pitches failed this: the widths come from
-    /// the names, and a 27-character symbol sat on top of its neighbour.
-    /// 车道取最宽盒子的宽度、带取最高盒子的高度，因此没有两个盒子共用一格。固定间距做不到：
-    /// 宽度来自名字，而一个 27 字符的符号会压在邻列上。
+    /// Why the pitch is measured rather than fixed is `build`'s comment above; the
+    /// assertion below is what holds it.
+    /// 为什么间距要实测而不是写死见上方 `build` 的注释；下面那条断言是它的守卫。
     #[test]
     fn every_box_gets_its_own_room() {
         let view = tree();

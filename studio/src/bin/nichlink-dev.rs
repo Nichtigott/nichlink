@@ -270,6 +270,12 @@ fn relevant_event(event: &notify::Event) -> bool {
             .components()
             .any(|part| matches!(part.as_os_str().to_str(), Some("target" | ".git")))
             && (path.extension().and_then(|extension| extension.to_str()) == Some("rs")
+                // The same five names the studio library's stamp accepts
+                // (`studio::app::source_stamp::RELEVANT_FILE_NAMES`). This is a mirror,
+                // not an import: a `pub(crate)` predicate is invisible to this binary.
+                // 与 studio 库的戳接受的同一份五个名字
+                // （`studio::app::source_stamp::RELEVANT_FILE_NAMES`）。这是镜像而不是 import：
+                // 本二进制看不到 `pub(crate)` 谓词。
                 || matches!(
                     path.file_name().and_then(|name| name.to_str()),
                     Some("Cargo.toml" | "Cargo.lock" | "build.rs" | "official.lock" | "user.lock")

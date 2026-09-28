@@ -55,18 +55,6 @@ fn confirmed_edges(app: &App) -> Vec<(String, String)> {
     confirmed.into_iter().collect()
 }
 
-/// The fixture project, loaded the way the graph tests load it.
-/// 夹具工程，按调用图测试的方式加载。
-fn load_fixture() -> Option<App> {
-    let fixture = node_editor_fixture()?;
-    select_project(
-        fixture.clone(),
-        fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
-    );
-    Some(App::load())
-}
-
 /// `U5` in `docs/audit-production-readiness.md` recorded an argument — the
 /// shipped sample's nodes cannot come from the same provenance as a real
 /// project's, so `CallEvidence::Live` was said to be unreachable — and never an
@@ -82,7 +70,7 @@ fn load_fixture() -> Option<App> {
 /// `Live` 根本不可能而通过。
 #[test]
 fn a_session_without_an_artifact_installs_no_trace_and_confirms_nothing() {
-    let Some(app) = load_fixture() else {
+    let Some(app) = fixture_app() else {
         return;
     };
 
@@ -116,7 +104,7 @@ fn a_session_without_an_artifact_installs_no_trace_and_confirms_nothing() {
 /// 上面那条测试在 `call_evidence` 根本答不出 `Live` 时也会通过——而 `U5` 问的正是这个区别。
 #[test]
 fn a_trace_over_the_loaded_faces_confirms_the_edge_it_observed() {
-    let Some(mut app) = load_fixture() else {
+    let Some(mut app) = fixture_app() else {
         return;
     };
     let node_editor = app

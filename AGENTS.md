@@ -148,6 +148,36 @@ this checkout.
 该标志:冷启动的 runner 注册表缓存为空,在那里加 `--offline` 只会让每个任务失败,而不是让它
 更严格。表检查不需要这类标志:它只读本检出。
 
+A single crate can also be verified into a false green. When a crate's tests sit behind a
+non-default feature, `cargo test -p <crate>` compiles it without that feature and runs none of
+them, reporting `0 passed` — which reads like a pass. Measured here: `run_method`'s
+`manifest::face` module (which carries the two nesting-guard pins from audit `LGC-LG-05`) is
+gated behind `authoring` in `run_method/src/lib.rs`, so
+`cargo test -p nichlink-run-method --offline -- manifest::face` prints `0 passed; 0 failed`
+while the same command with `--features authoring` prints that module's pins (`8 passed` when
+this was measured; the count grows with every pin, so treat it as an illustration rather than a
+contract). `core` has the same shape, with its parser behind `syntax` (`core/src/lib.rs` gates
+it), and every other non-default feature holds modules back the same way — so read the two runs
+against each other, never a quoted total: `0 passed` is the half that stays true, and it means
+nothing ran. The workspace command above and CI's `--all-features` job merge features and do
+reach all of them, which is why the workspace run stays the default gate; verifying one crate
+on its own means naming the feature:
+`cargo test -p nichlink-run-method --offline --features authoring`. Read `0 passed` as
+"nothing ran", not as "nothing failed".
+单个 crate 也可能被"验证"出一个假绿。当一个 crate 的测试门控在非默认特性之后时,
+`cargo test -p <crate>` 会在不带那个特性的情况下编译它,于是一个都不跑,报出 `0 passed`
+——看起来就像通过了。本检出实测:`run_method` 的 `manifest::face` 模块(审计 `LGC-LG-05`
+那两条嵌套守卫钉子就在其中)门控在 `run_method/src/lib.rs` 的 `authoring` 之后,因此
+`cargo test -p nichlink-run-method --offline -- manifest::face` 打印 `0 passed; 0 failed`,
+而同一条命令加 `--features authoring` 会打印出那个模块的钉子(写下这段时是 `8 passed`;
+这个数每加一条钉子就变,所以只当示意,不当契约)。`core` 是同一种形状:解析器门控在 `syntax`
+之后(`core/src/lib.rs` 就是那道门),其它非默认特性也以同样的方式把模块挡住——所以请把两次
+运行**对比着读**,不要去引某个总数:`0 passed` 才是恒真的那一半,它只意味着什么都没跑。
+上面的工作区命令与 CI 的 `--all-features` 作业会合并特性,因此覆盖得到它们——这也是工作区
+那条仍是默认门禁的原因;单独验证一个 crate 时请点名特性:
+`cargo test -p nichlink-run-method --offline --features authoring`。把 `0 passed` 读作
+"什么都没跑",而不是"什么都没失败"。
+
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
 default gate already fails on: I/O in `core/src`, a `mod.rs`, a second `include!`,
 a kernel module file no `mod` declaration names, a deleted execution-surface shim

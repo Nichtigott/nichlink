@@ -3,6 +3,22 @@
 
 use super::cache_status_line;
 
+/// The demo directory and its feature are two constants, and the `cfg` line the
+/// renderer writes is built from the feature name. Renaming either would change the
+/// generated tree — the identity of every host face rides on strings like this one
+/// staying put — so the pin makes a rename visible instead of silent.
+/// 演示目录与它的特性是两个常量，而渲染器写出的 `cfg` 行由特性名拼出。改名任何一个都会改变生成树——
+/// 每个宿主面的身份都系在这类字符串原地不动上——因此这条钉子让改名可见，而不是静默生效。
+#[test]
+fn the_demo_constants_spell_the_generated_tree_the_same_way() {
+    assert_eq!(crate::DEMO_ONLY_DIRECTORY, "compile_error_demo");
+    assert_eq!(crate::DEMO_ONLY_FEATURE, "compile_error_demo");
+    assert_eq!(
+        format!("#[cfg(feature = {:?})]", crate::DEMO_ONLY_FEATURE),
+        "#[cfg(feature = \"compile_error_demo\")]"
+    );
+}
+
 /// Keeps two tests in the same process apart even when the clock resolution
 /// collapses their timestamps into one nanosecond; the workspace suite runs
 /// them in parallel and a collision silently mixes two fixtures.
@@ -189,9 +205,43 @@ fn an_unwritable_generated_tree_is_reported_not_fatal() {
         error.contains("out-dir"),
         "the failure is a diagnostic: {error}"
     );
-    assert!(error.contains("cannot write"), "{error}");
+    // The artifact is written to a unique sibling and then renamed over the target,
+    // so a target that cannot be replaced fails at the rename: "cannot publish"
+    // names that step, and the path still names the file the reader was expecting.
+    // 产物先写到一个唯一的同级文件，再 rename 覆盖目标，因此无法被替换的目标会在 rename 处失败：
+    // "cannot publish" 点名的就是这一步，而路径仍然点名读取方期待的那个文件。
+    assert!(error.contains("cannot publish"), "{error}");
     assert!(error.contains("discovery.fingerprint"), "{error}");
 
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A payload that cannot be written publishes no fingerprint. The fingerprint is
+/// the token `build_output_is_current` reads, so a run that could not publish its
+/// manifests must not leave one behind: writing the token first produced exactly the
+/// mixed generation it is supposed to rule out — a new token beside an old or
+/// missing manifest — and the next reader called that `current`.
+/// 写不成的载荷不发布指纹。指纹是 `build_output_is_current` 读取的那枚凭据，因此发布不了清单的一次
+/// 运行绝不能把它留下：先写凭据恰好产生了这枚凭据本该排除的混代状态——新凭据配旧或缺的清单——而下一个
+/// 读取方会把它称作 `current`。
+#[test]
+fn a_payload_that_cannot_be_written_publishes_no_fingerprint() {
+    let (root, manifest) = host_root("payload-failure");
+    let out = root.join("out");
+    std::fs::create_dir_all(&out).expect("out directory");
+    // A directory where the pruning manifest belongs: the path exists, so this is a
+    // write failure rather than a missing parent.
+    // 修剪清单的位置放一个目录：路径存在，因此这是写失败而不是父目录缺失。
+    std::fs::create_dir_all(out.join("pruning_manifest.tsv")).expect("blocking directory");
+
+    let error = crate::run_for(&manifest, &out, "test-host")
+        .expect_err("an unwritable payload must fail the run");
+    assert!(error.contains("out-dir"), "{error}");
+    assert!(
+        !out.join("discovery.fingerprint").exists(),
+        "a run that could not publish its payloads must not publish the token \
+         that calls them current"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

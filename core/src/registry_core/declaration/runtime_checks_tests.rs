@@ -20,19 +20,6 @@
 //! 实现也能通过布尔断言。因此这些测试断言宿主真正消费的 [`RuntimeCheckFailure`] 证据：
 //! `check`、`message` 与 `provenance`。
 //! 边界：`RuntimeCheckFailure` 刻意不实现 `PartialEq`，所以断言按字段进行而非整结构比较。
-
-//! Boundary tests for the five runtime checks.
-//! 五条运行期检查的边界测试。
-//!
-//! Why a direct "call `run` and look at `is_err`" implementation would be
-//! wrong: each check owns several distinct failure arms (wrong kind,
-//! non-finite geometry, coordinate-space mismatch, inverted bounds, range
-//! overflow), and a boolean-only assertion cannot tell them apart — a check
-//! that rejected *every* value would pass it. These tests therefore assert
-//! the exact [`RuntimeCheckFailure`] evidence a host consumes: `check`,
-//! `message`, and `provenance`.
-//! Boundary: `RuntimeCheckFailure` deliberately does not implement
-//! `PartialEq`, so the assertions are field-level rather than whole-struct.
 //! Pinned by these five tests; `Registry::health_check` aggregates the same
 //! failures in `examples/control-button/tests/health_check.rs`.
 //! 直白写法错在哪：只调用 `run` 再看 `is_err` 会掩盖每条检查各自的多个失败分支

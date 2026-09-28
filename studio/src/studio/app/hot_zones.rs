@@ -37,12 +37,6 @@ pub struct HotZones {
     /// Click target of the focused form's Cancel button.
     /// 当前表单 Cancel 按钮的点击目标。
     pub action_cancel_area: Rect,
-    /// Click target reserved for a Validate button; no screen sets it yet.
-    /// 预留给 Validate 按钮的点击目标；目前没有界面设置它。
-    pub action_validate_area: Rect,
-    /// Click target reserved for an Edit button; no screen sets it yet.
-    /// 预留给 Edit 按钮的点击目标；目前没有界面设置它。
-    pub action_edit_area: Rect,
     /// Click target of the focused form's Confirm button.
     /// 当前表单 Confirm 按钮的点击目标。
     pub action_confirm_area: Rect,

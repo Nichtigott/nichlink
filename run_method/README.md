@@ -98,7 +98,7 @@ are `<runtime>` (`inspection.rs:76`), `<registry-connector>`
 `<owned-snapshot-batch>`
 (`core/src/registry_core/tree/transaction/transaction.rs:84`), `<migration>`
 (`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`), and `<graft>`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:297`,
+(`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`,
 `core/src/registry_core/tree/graft_ops/reconcile.rs:148`).
 
 Two rules for reading a `health_check` failure:

@@ -15,13 +15,25 @@ pub fn render_frame(registry: &Registry, tick: u64, event: &str) -> String {
     )
 }
 
-/// Render a complete logical call tree, optionally filtered by a search term.
-/// 渲染完整逻辑调用树，可按搜索词筛选。
+/// Render the registration-face report used when no call event has been recorded.
+/// 渲染尚无调用事件时使用的注册面报告。
+///
+/// With no trace to read, this entry can only list the faces a query matches
+/// (`… no call event recorded yet`); a call tree needs a trace the caller
+/// recorded, which is [`render_call_report_for_trace`]. The first line used to
+/// promise a complete logical call tree, which this function cannot produce: it
+/// builds a disabled trace on purpose rather than turning the registration tree
+/// into a fake call graph, and it reads no process policy either — a report has
+/// no reason to depend on `NICH_LINK_TRACE`.
+/// 没有 trace 可读时，这一入口只能列出与查询匹配的注册面（`… no call event recorded yet`）；
+/// 调用树需要调用方自己记录的 trace，即 [`render_call_report_for_trace`]。首句过去承诺渲染完整
+/// 逻辑调用树，而本函数做不到：它有意构造一条关闭的 trace，而不是把注册树伪装成调用图；它也不读
+/// 进程策略——报告没有理由依赖 `NICH_LINK_TRACE`。
 pub fn render_call_report(registry: &Registry, query: Option<&str>) -> String {
     // A headless report has no execution event by definition. Do not turn the
     // registration tree into a fake call graph; callers must provide a trace.
     // 无终端报告默认没有执行事件，不能把注册树伪装成调用图；调用方必须提供 trace。
-    let trace = CallTrace::new();
+    let trace = CallTrace::disabled();
     render_call_report_for_trace(registry, &trace, query)
 }
 

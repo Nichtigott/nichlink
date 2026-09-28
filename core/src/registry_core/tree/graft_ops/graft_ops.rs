@@ -195,12 +195,13 @@ impl Registry {
         }
         let mut staged = self.clone();
         let source = info.source.clone();
-        if !staged.replace_info(current, info) {
+        let registry_name = info.registry_name.clone();
+        if let Err(refusal) = staged.replace_info(current, info) {
             return Err(Box::new(RegistryError::new(
                 current,
                 self.header.path.clone(),
                 source,
-                "edited face is no longer present in the registry",
+                refusal.message(&registry_name),
             )));
         }
         if let Some(error) = staged.connector_error() {
@@ -219,24 +220,35 @@ impl Registry {
     ) -> RegistryResult<()> {
         self.validate_snapshot_replacement(current, info.clone())?;
         let mut staged = self.clone();
-        if !staged.replace_info(current, info) {
-            return Err(self.graft_error(current, GraftError::UnknownTarget(current)));
+        let registry_name = info.registry_name.clone();
+        let source = info.source.clone();
+        if let Err(refusal) = staged.replace_info(current, info) {
+            return Err(Box::new(RegistryError::new(
+                current,
+                self.header.path.clone(),
+                source,
+                refusal.message(&registry_name),
+            )));
         }
         *self = staged;
         Ok(())
     }
 
-    fn replace_info(&mut self, wanted: NodeId, info: RegistrationSnapshot) -> bool {
+    fn replace_info(
+        &mut self,
+        wanted: NodeId,
+        info: RegistrationSnapshot,
+    ) -> Result<(), ReplaceRefusal> {
         let Some(parent) = self.find(wanted).map(|entry| entry.parent) else {
-            return false;
+            return Err(ReplaceRefusal::TargetGone);
         };
         let Some(registry) = self.registry_mut(parent) else {
-            return false;
+            return Err(ReplaceRefusal::TargetGone);
         };
         let parent_path = registry.header.path.clone();
         let framework = registry.header.framework;
         let Some(entry) = Arc::make_mut(&mut registry.entries).get_mut(&wanted) else {
-            return false;
+            return Err(ReplaceRefusal::TargetGone);
         };
         let mut child = entry.child.take();
         match (&mut child, info.needs_registry) {
@@ -260,7 +272,7 @@ impl Registry {
             }
             (Some(child_registry), false) if !child_registry.entries.is_empty() => {
                 entry.child = Some(child_registry.clone());
-                return false;
+                return Err(ReplaceRefusal::NonEmptyChildRegistry);
             }
             (Some(_), false) => child = None,
             (None, false) => {}
@@ -269,7 +281,7 @@ impl Registry {
             info: Arc::new(info),
             child,
         };
-        true
+        Ok(())
     }
 
     /// The first direct child of `parent` that `rule` would reject.
@@ -336,6 +348,39 @@ impl Registry {
     }
 }
 
+/// Why a replacement could not be committed into the staged tree.
+/// 替换为何无法提交进暂存树。
+///
+/// `replace_info` used to answer with a bare `false`, and both callers mapped that to "the
+/// target is gone" — so the one refusal that is *not* about a missing target (turning a face
+/// that owns a non-empty child registry into a leaf) sent the author looking at identities
+/// and parents instead of at the child registry (audit `LGC-LG-33`).
+/// `replace_info` 过去只回一个裸 `false`，而两个调用方都把它映射成"目标不存在"——于是那个**不是**
+/// 关于目标缺失的拒绝（把拥有非空子注册机的面改成叶子）会让作者去查身份与父级，而不是去看子注册机
+/// （审计 `LGC-LG-33`）。
+enum ReplaceRefusal {
+    /// The target is no longer in the staged tree.
+    /// 目标已不在暂存树里。
+    TargetGone,
+    /// The face owns a non-empty child registry, so it cannot become a leaf.
+    /// 该面拥有非空的子注册机，因此不能变成叶子。
+    NonEmptyChildRegistry,
+}
+
+impl ReplaceRefusal {
+    /// The message a caller reports for this refusal.
+    /// 调用方为该拒绝报告的消息。
+    fn message(&self, registry_name: &str) -> String {
+        match self {
+            Self::TargetGone => "edited face is no longer present in the registry".to_owned(),
+            Self::NonEmptyChildRegistry => format!(
+                "cannot turn `{registry_name}` into a leaf: it owns a non-empty child registry; \
+                 move or empty that registry first"
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +419,62 @@ mod tests {
         let rendered = format!("{error}");
         assert!(rendered.contains("rejected existing child"), "{rendered}");
         assert!(rendered.contains("Child"), "{rendered}");
+    }
+
+    /// Both entry points name the real reason a demotion is refused.
+    /// 两个入口都说出一致的、真正的拒绝理由。
+    ///
+    /// Red before the fix: `validate_snapshot_replacement` mapped the refusal to "edited face
+    /// is no longer present in the registry" and `apply_snapshot_replacement` to
+    /// `GraftError::UnknownTarget` ("graft target … is not registered") — both about a
+    /// *missing* node, while the node exists and the reason is its non-empty child registry
+    /// (audit `LGC-LG-33`).
+    /// 修前为红：`validate_snapshot_replacement` 把拒绝映射成"edited face is no longer present
+    /// in the registry"，`apply_snapshot_replacement` 映射成 `GraftError::UnknownTarget`
+    /// （"graft target … is not registered"）——两者都在说节点**不存在**，而节点存在，真正的原因是
+    /// 它的子注册机非空（审计 `LGC-LG-33`）。
+    #[test]
+    fn demoting_a_non_empty_child_registry_names_the_real_reason() {
+        let namespace = "demotion";
+        let mut root = Registry::root_for_namespace(FRAMEWORK, namespace);
+        let mut owner = face(namespace, "owner.rs", "Owner", "owner");
+        owner.needs_registry = true;
+        owner.id = NodeId::from_namespaced_path(namespace, "owner.rs", "Owner");
+        let mut child = face(namespace, "child.rs", "Child", "child");
+        child.parent = owner.id;
+        root.register_snapshot_batch([owner.clone(), child.clone()])
+            .unwrap();
+
+        // The same identity, demoted to a leaf: a refusal, not a rename.
+        // 同一个身份，降级为叶子：这是一次拒绝，不是改名。
+        let mut leaf = owner.clone();
+        leaf.needs_registry = false;
+
+        let validation = root
+            .validate_snapshot_replacement(owner.id, leaf.clone())
+            .expect_err("a non-empty child registry cannot be demoted");
+        let rendered = format!("{validation}");
+        assert!(
+            rendered.contains("non-empty child registry"),
+            "the validator names the child registry: {rendered}"
+        );
+        assert!(
+            !rendered.contains("no longer present"),
+            "the face is present; that is not the reason: {rendered}"
+        );
+
+        let applied = root
+            .apply_snapshot_replacement(owner.id, leaf)
+            .expect_err("the commit path refuses the same demotion");
+        let rendered = format!("{applied}");
+        assert!(
+            rendered.contains("non-empty child registry"),
+            "the commit path names the same reason, not a missing target: {rendered}"
+        );
+        assert!(
+            !rendered.contains("is not registered"),
+            "the node exists, so `UnknownTarget` is the wrong reason: {rendered}"
+        );
     }
 
     #[test]
