@@ -198,3 +198,63 @@ fn registration_kinds_come_from_code_only() {
     let kinds = registration_kinds("crate::object! {\n    kind: Widget,\n}\n");
     assert_eq!(kinds, ["Widget"], "a real declaration is still collected");
 }
+
+/// Masking one line at a time cannot see where a multi-line construct starts, so a
+/// declaration inside a multi-line string, a raw string or a block comment was read as
+/// code — the K4/K6 family, for the spellings that cross a line.
+/// 逐行掩码看不见多行构造从哪里开始，因此多行字符串、raw 字符串或块注释里的声明会被读成代码
+/// ——K4/K6 家族在跨行拼写上的翻版。
+#[test]
+fn multiline_literals_and_block_comments_leak_code() {
+    let multiline = "fn real() {\n    let s = \"\nfn ghost() {\n\";\n    let _ = 1;\n}\n";
+    let lines = multiline.lines().collect::<Vec<_>>();
+    assert_eq!(
+        function_source_range(&lines, "ghost"),
+        None,
+        "a `fn` inside a multi-line string is prose"
+    );
+
+    let string_kind = "fn real() {\n    let s = \"\nkind: Ghost\n\";\n}\n";
+    assert!(
+        registration_kinds(string_kind).is_empty(),
+        "a `kind:` inside a multi-line string is prose"
+    );
+
+    let block_comment = "/*\nkind: Ghost\n*/\nfn real() {}\n";
+    assert!(
+        registration_kinds(block_comment).is_empty(),
+        "a `kind:` inside a block comment is prose"
+    );
+
+    let raw = "fn real() {\n    let s = r#\"\nfn raw_ghost() {\n\"#;\n}\n";
+    let lines = raw.lines().collect::<Vec<_>>();
+    assert_eq!(
+        function_source_range(&lines, "raw_ghost"),
+        None,
+        "a `fn` inside a raw string is prose"
+    );
+}
+
+/// An identifier is Unicode. Scanning one byte at a time indexed `héllo` as `h`, so the
+/// wrong symbol reached the MCP index, Studio and the build's function manifest.
+/// 标识符是 Unicode 的。一次扫描一个字节会把 `héllo` 索引成 `h`，于是错误的符号进入 MCP 索引、
+/// Studio 与构建产出的函数清单。
+#[test]
+fn a_non_ascii_identifier_is_indexed_whole() {
+    let names = function_symbols("pub fn héllo() {}\npub fn plain() {}\n")
+        .into_iter()
+        .map(|function| function.name)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        ["héllo", "plain"],
+        "a non-ASCII name is one identifier, not its first ASCII letter"
+    );
+
+    let calls = direct_calls("pub fn caller() { héllo(); plain(); }", "caller");
+    assert_eq!(
+        calls,
+        ["héllo", "plain"],
+        "the call scanner agrees about the name"
+    );
+}

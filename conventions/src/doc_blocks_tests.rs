@@ -108,6 +108,41 @@ fn a_broken_block_is_reported() {
     assert_eq!(found[0].line, 3);
 }
 
+/// The tag set is one set, and the half that lagged was the **doc-comment** one: a `///`
+/// fence tagged `rs` was skipped, so a broken example in a crate's own documentation passed
+/// while the identical README fence was already checked (the markdown half lowercased the
+/// tag and accepted `rs`). Both halves read `names_rust` now.
+/// tag 集合是一套，而落后的是**文档注释**那一半：`///` 围栏标成 `rs` 时被跳过，于是 crate 自己
+/// 文档里的坏例子能过，而一模一样的 README 围栏却早已被查（markdown 那半边先小写并接受 `rs`）。
+/// 现在两半边都读 `names_rust`。
+#[test]
+fn an_rs_tagged_doc_comment_fence_is_covered_too() {
+    for tag in ["rs", "Rust"] {
+        let markdown = synthetic(&[(
+            "README.md",
+            format!("# A host\n\n```{tag}\npub struct Broken {{\n```\n").as_str(),
+        )]);
+        assert_eq!(
+            findings(&markdown).len(),
+            1,
+            "the markdown half already read `{tag}`"
+        );
+        let _ = std::fs::remove_dir_all(&markdown);
+
+        let source = format!("//! ```{tag}\n//! pub struct Broken {{\n//! ```\n");
+        let documented = synthetic(&[
+            ("thing/Cargo.toml", "[package]\nname = \"thing\"\n"),
+            ("thing/src/lib.rs", source.as_str()),
+        ]);
+        assert_eq!(
+            findings(&documented).len(),
+            1,
+            "a `///` fence tagged `{tag}` is a Rust fence too"
+        );
+        let _ = std::fs::remove_dir_all(&documented);
+    }
+}
+
 /// A statement excerpt and a whole file are both accepted.
 /// 语句摘录与整份文件都被接受。
 #[test]
@@ -131,6 +166,56 @@ fn a_sanctioned_tag_and_every_fence_spelling_are_read() {
         found.len(),
         2,
         "the sanctioned tag is green; the tilde and `rs` fences are reported: {found:#?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The field-list reading is for `name: Type` excerpts, and it needs a colon. Without one
+/// there is nothing that makes the excerpt Rust rather than a word — `let _ = Excerpt {
+/// TODO };` is a valid struct literal, so a fence whose whole body was `TODO` passed while
+/// `fix this later` was reported.
+/// 字段列表读法是为 `name: Type` 这种摘录准备的，它需要一个冒号。没有冒号时，没有任何东西让这段
+/// 摘录成为 Rust 而不是一个单词——`let _ = Excerpt { TODO };` 是合法的结构体字面量，因此整段只有
+/// `TODO` 的围栏能过，而 `fix this later` 会被报出。
+#[test]
+fn a_bare_identifier_is_not_a_rust_excerpt() {
+    assert!(
+        parses("TODO").is_err(),
+        "a word is not Rust, however the reading wraps it"
+    );
+    assert!(
+        parses("name: u8,\ncount: usize").is_ok(),
+        "a field list still is, and that is what the reading exists for"
+    );
+}
+
+/// A module the tree mounts behind `#[cfg(test)]` is not documentation a reader is shown, whatever
+/// its name says. Location and name are hints, and a hint misses a real case: the tree ships
+/// `core/src/registry_core/tree/graft_ops/fixtures.rs`, mounted behind `#[cfg(test)]`, whose name
+/// is not test-shaped — so this gate checked its comments as reader-facing documentation while the
+/// size gate (which asks the same identity question, audit `G-05`) had already stopped doing so.
+/// 树以 `#[cfg(test)]` 挂载的模块不是给读者看的文档，无论它叫什么。位置与名字都是提示，而提示会漏
+/// 掉真实情形：树里出厂了 `core/src/registry_core/tree/graft_ops/fixtures.rs`，它挂在 `#[cfg(test)]`
+/// 之后、名字又不是测试形状——于是这道门禁把它的注释当读者文档检查，而尺寸门禁（问的是同一个身份
+/// 问题，审计 `G-05`）早就不这么做了。
+#[test]
+fn a_cfg_test_mounted_module_is_skipped_whatever_its_name() {
+    let root = synthetic(&[
+        ("src/lib.rs", "pub mod inner;\n"),
+        (
+            "src/inner.rs",
+            "#[cfg(test)]\n#[path = \"inner/fixtures.rs\"]\npub mod fixtures;\n",
+        ),
+        // A fence that does not parse: checking this file as reader-facing documentation reports it.
+        // 一份解析不了的围栏：把这个文件当读者文档检查就会报出它。
+        (
+            "src/inner/fixtures.rs",
+            "//! ```rust\n//! pub struct Unclosed {\n//! ```\n",
+        ),
+    ]);
+    assert!(
+        doc_comment_findings(&root).is_empty(),
+        "a `#[cfg(test)]`-mounted module is not reader-facing documentation"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

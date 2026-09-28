@@ -129,6 +129,60 @@ mod wasm_faults {
         assert_eq!(table.generation("test").unwrap(), Some(1));
     }
 
+    /// A pending generation can be activated on its own. Activation used to happen only inside
+    /// `call`, so a host that installed an artifact and then polled `is_loaded` could not learn
+    /// whether the slot was loadable without performing an operation — and when activation fails,
+    /// no operation exists that would ever make `is_loaded` true (audit `PH-4`).
+    /// 待定代际可以单独激活。激活过去只发生在 `call` 里，因此"装好工件再轮询 `is_loaded`"的宿主
+    /// 不执行一次操作就无法知道该槽能否加载——而当激活失败时，没有任何操作能让 `is_loaded` 变成
+    /// true（审计 `PH-4`）。
+    #[test]
+    fn a_pending_generation_activates_without_an_operation() {
+        let table = table(ECHO, WasmLimits::default());
+        assert!(
+            table.activate_pending("test").unwrap(),
+            "the install queued a generation"
+        );
+        assert!(table.is_loaded("test").unwrap());
+        assert_eq!(table.generation("test").unwrap(), Some(1));
+        assert!(
+            !table.activate_pending("test").unwrap(),
+            "nothing is pending any more, and that is not an error"
+        );
+
+        // A slot with no install at all reports "nothing to do" rather than activating.
+        // 完全没有装过东西的槽报告"无事可做"，而不是去激活。
+        let bare =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+        assert!(!bare.activate_pending("test").unwrap());
+        assert!(!bare.is_loaded("test").unwrap());
+    }
+
+    /// The failed case is the one that used to be a dead end: the attempt itself reports why, and
+    /// the slot stays unloaded — exactly what a poller could never get past.
+    /// 失败那一种正是过去的死路：这次尝试本身说明原因，而槽保持未加载——正是轮询方永远越不过的状态。
+    #[test]
+    fn activate_pending_reports_a_failed_activation() {
+        let bad = r#"(module
+          (memory (export "memory") 1)
+          (func (export "nichlink_abi_version") (result i32) (i32.const 99))
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
+        let table = table(bad, WasmLimits::default());
+        let error = table
+            .activate_pending("test")
+            .expect_err("an incompatible ABI must not activate");
+        assert!(!error.to_string().is_empty(), "{error}");
+        assert!(
+            !table.is_loaded("test").unwrap(),
+            "the slot never became loaded, which is why the report matters"
+        );
+        assert!(
+            table.activation_error("test").unwrap().is_some(),
+            "the reason is kept for the caller that asks afterwards"
+        );
+    }
+
     /// A failed activation changes nothing a poller can already see — the
     /// previous generation keeps answering and `is_loaded` stays `true` — so the
     /// failure has to be reported somewhere other than the load flag.
@@ -370,6 +424,82 @@ mod wasm_faults {
             .expect_err("a hundred million table entries must not be allocated");
         assert!(
             error.to_string().contains("table") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// The memory ceiling is the only thing between a tiny artifact and four gigabytes of
+    /// *declared initial* memory. Growth never happens here, so neither the growth trap nor the
+    /// growth half of the limiter can be what refuses it: without this pin, commenting out
+    /// `.memory_size(self.limits.memory_bytes)` left the module instantiating, and the shipped
+    /// suite only went red incidentally, through a growth assertion (audit `PH-2`).
+    /// 一个微小产物与四吉字节**声明的初始**内存之间，唯一的屏障就是内存上限。这里不会发生增长，
+    /// 因此既不是增长陷阱、也不是限制器的增长那一半在拒绝它：没有这条钉子时，注释掉
+    /// `.memory_size(self.limits.memory_bytes)` 会让该模块照样实例化，而出厂套件只是经由一条
+    /// **增长**断言顺带变红（审计 `PH-2`）。
+    #[test]
+    fn a_huge_declared_memory_is_refused() {
+        // 65536 pages × 64 KiB = 4 GiB, declared as the initial size rather than grown into.
+        // 65536 页 × 64 KiB = 4 GiB，作为初始大小声明，而不是增长出来的。
+        let wat = r#"(module
+          (memory (export "memory") 65536)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        assert!(
+            bytes.len() < 1024,
+            "the artifact is tiny ({} bytes); the cost lives in the declaration",
+            bytes.len()
+        );
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("four gigabytes of declared memory must not be allocated");
+        assert!(
+            error.to_string().contains("memory") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// And the ceiling is wired to the store rather than only declared: with it at zero even a
+    /// one-page memory cannot activate.
+    /// 而且上限是真接到存储上的，而不只是声明：把它设为零时，连一页内存也无法激活。
+    #[test]
+    fn the_memory_ceiling_is_enforced() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                memory_bytes: 0,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a memory past the ceiling must not activate");
+        assert!(
+            error.to_string().contains("memory") || error.to_string().contains("limit"),
             "{error}"
         );
     }

@@ -41,6 +41,7 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
     let listed = super::tools();
     for (name, key) in [
         ("nichlink.explain", "node"),
+        ("nichlink.explain", "overlay"),
         ("nichlink.diff", "limit"),
         ("nichlink.trace", "query"),
         ("nichlink.impact", "node"),

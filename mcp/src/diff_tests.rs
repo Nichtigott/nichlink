@@ -112,18 +112,37 @@ fn record(root: &Path, selector: &str, target: nichlink::identity::NodeId, path:
 }
 
 /// The record side: a record whose identity the tree still has is `ok`, one whose slot moved
-/// identity is `re-identified`, one whose slot is gone is `stale`, and a typed cut whose
-/// identity is absent is `unmatched` rather than guessed — because a typed cut stores an
-/// expression, not a logical path, so "stale" there would be a guess.
-/// 记录那一侧：身份仍在树里的记录是 `ok`；槽位换了身份的是 `re-identified`；槽位消失的是 `stale`；
-/// 而身份缺席的类型化切口是 `unmatched` 而不是被猜成别的——因为类型化切口存的是表达式而不是逻辑路径，
-/// 在那里说 "stale" 就是猜。
+/// identity is `re-identified`, and one whose slot is gone is `stale`. There is no `unmatched`
+/// bucket: it existed for "the identity is absent but the plan's path looks like a Rust expression
+/// (`::`)", and no plan writer produces that — both write `registry.path_for` — while a typed
+/// *declaration* cannot be matched at all when the identity is absent (nothing resolves its module,
+/// so `names_face` admits only string cuts there). The bucket described an input that cannot occur
+/// and its heading claimed a real case; a record naming something this tree has not got is `stale`,
+/// and the reply prints the path it looked for (audit `m1`). The third record below is the old
+/// fixture for that bucket, kept as a `stale` row on purpose: it is what the fabricated input now
+/// honestly is.
+/// 记录那一侧：身份仍在树里的记录是 `ok`；槽位换了身份的是 `re-identified`；槽位消失的是 `stale`。
+/// 没有 `unmatched` 桶：它是为"身份缺席、而计划的路径看起来像 Rust 表达式（`::`）"而设的，而没有
+/// 任何计划写入方会产出那种东西——两处都写 `registry.path_for`——而类型化的**声明**在身份缺席时
+/// 根本匹配不上（没有任何东西能解析它的模块，因此 `names_face` 在那种情况下只接受字符串切口）。那个
+/// 桶描述的是一个不可能出现的输入，标题却声称描述真实情形；点名了本树没有的东西的记录就是 `stale`，
+/// 回复会打印它查找过的路径（审计 `m1`）。下面第三条记录就是那个桶的旧夹具，有意保留为 `stale`
+/// 行：那个伪造输入如今诚实地就是这个。
 #[test]
 fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
     let (root, name) = package("records");
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
     let stale_identity =
         nichlink::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+    // `kept_fast`'s slot is named by the host entry, which is what makes it `ok` rather than
+    // `undeclared`: a record no cut names is pruned by the release.
+    // `kept_fast` 的槽位由宿主入口点名，这正是它成为 `ok` 而不是 `undeclared` 的原因：没有任何切口
+    // 点名的记录会被发布剪掉。
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "// host entry\nnichlink_run_method::static_graft_plan!(FRAMEWORK, cut \"root/button\" graft \"kept_fast\");\n",
+    )
+    .expect("host entry");
     record(&root, "kept_fast", face.id, "root/button");
     record(&root, "moved_fast", stale_identity, "root/button");
     record(&root, "ghost_fast", stale_identity, "root/ghost");
@@ -139,8 +158,12 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
         "{reply}"
     );
     assert!(
-        reply.contains("ok 1  stale 1  re-identified 1  unmatched 1"),
+        reply.contains("ok 1  undeclared 0  stale 2  re-identified 1  unreadable 0"),
         "{reply}"
+    );
+    assert!(
+        !reply.contains("unmatched"),
+        "the bucket that described an impossible input is gone: {reply}"
     );
     assert!(reply.contains("kept_fast -> root/button"), "{reply}");
     assert!(
@@ -154,8 +177,46 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
         "the record that moved identity names the identity the tree has now: {reply}"
     );
     assert!(
-        reply.contains("? typed_fast -> crate::control::NODE_ID"),
-        "{reply}"
+        reply.contains("- typed_fast -> crate::control::NODE_ID"),
+        "a path that names nothing in this tree is stale, and the reply prints the path it looked \
+         for: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A record whose identity the tree has is not `ok` unless a `static_graft_plan!` cut names its
+/// slot. `diff {"records":true}` used to read only the identity and report `ok`, while
+/// `nichlink.grafts` reported the same row as `[NOT declared by the host entry]`, counted it under
+/// `unkept plans N`, and the build refused it outright: one record, two health conclusions, and the
+/// agent that read the first one would ship it (audit `M1`). The row already carried
+/// `declared`, so the split costs nothing.
+/// 身份在树里的记录，只有在某条 `static_graft_plan!` 切口点名它的槽位时才是 `ok`。
+/// `diff {"records":true}` 过去只读身份就报 `ok`，而 `nichlink.grafts` 把同一行报成
+/// `[NOT declared by the host entry]`、计入 `unkept plans N`，构建还直接拒绝它：同一条记录、两个健康
+/// 结论，而读到前者的代理会把它发出去（审计 `M1`）。该行本就携带 `declared`，分流不需额外代价。
+#[test]
+fn an_undeclared_record_is_not_reported_as_ok() {
+    let (root, name) = package("undeclared");
+    let face = face_views(&root, &name).expect("faces derive")[0].clone();
+    // The identity is present in the tree; no host entry names this slot.
+    // 身份在树里；没有任何宿主入口点名这个槽位。
+    record(&root, "orphan_fast", face.id, "root/button");
+    let reply = diff(&root, &json!({"records": true})).expect("the diff renders");
+    assert!(
+        reply.contains("ok 0  undeclared 1  stale 0  re-identified 0  unreadable 0"),
+        "an undeclared record is not ok: {reply}"
+    );
+    assert!(
+        !reply.contains("  orphan_fast -> root/button"),
+        "it must not be listed under `ok:` either: {reply}"
+    );
+    assert!(
+        reply.contains("! orphan_fast -> root/button  (no cut in the host entry names it)"),
+        "and the reply says which case it is: {reply}"
+    );
+    assert!(
+        reply.contains("the release prunes these slots"),
+        "with the consequence, the same one `nichlink.grafts` reports: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -172,7 +233,7 @@ fn an_unreadable_record_is_counted_and_no_records_is_not_a_verdict() {
     let reply = diff(&root, &json!({"records": true})).expect("the diff renders");
     assert!(reply.contains("unreadable 1"), "{reply}");
     assert!(
-        reply.contains("ok 0  stale 0  re-identified 0  unmatched 0"),
+        reply.contains("ok 0  undeclared 0  stale 0  re-identified 0  unreadable 1"),
         "{reply}"
     );
     let _ = std::fs::remove_dir_all(&root);

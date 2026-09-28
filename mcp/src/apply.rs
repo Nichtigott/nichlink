@@ -167,10 +167,82 @@ struct Outcome {
     moved: bool,
 }
 
+/// The face fields a request may carry, which is the set `overlay` matches by name.
+/// 请求可以携带的注册面字段，也就是 `overlay` 按名字匹配的那一组。
+const EDITABLE_FIELDS: &[&str] = &[
+    "module",
+    "kind",
+    "preset",
+    "parts",
+    "name_zh",
+    "name_en",
+    "summary_zh",
+    "summary_en",
+    "exports",
+    "stable_name",
+    "needs_registry",
+    "getting_from_other_registry",
+    "registration_rule",
+    "admission",
+    "handle_traits",
+    "handle_contracts",
+    "part_traits",
+    "part_contracts",
+    "requires",
+    "provides",
+    "runtime_checks",
+    "flow",
+    "flow_provider",
+];
+
+/// The first thing wrong with a request's `fields`, if anything is.
+/// 请求的 `fields` 里第一处不对的地方（若有）。
+///
+/// Both write actions share this so they answer alike: a misspelled key is refused by
+/// name rather than dropped, and a key whose value cannot be a field is refused instead of
+/// being coerced to the empty string or to `false`. `add` used to take only the keys it
+/// knew and silently ignore the rest, so an agent that wrote `knd` believed it had set the
+/// kind — the exact direction this check exists to close.
+/// 两个写入动作共用它，因此它们答得一样：拼错的键被点名拒绝而不是被丢弃；值不可能成为字段的键
+/// 也被拒绝，而不是被强转成空串或 `false`。`add` 过去只取它认识的键、静默忽略其余，于是写下
+/// `knd` 的代理会以为自己设了 kind——这道检查正是为了关掉这个方向。
+fn invalid_field(fields: &Value) -> Option<String> {
+    let object = fields.as_object()?;
+    for (key, value) in object {
+        // `fields.parent` is the documented alias of the request's sibling `parent`, and
+        // it names a place in the tree rather than a field of the face.
+        // `fields.parent` 是与请求平级的 `parent` 的文档化别名，它命名的是树里的位置而不是面的字段。
+        if key == "parent" {
+            if !value.is_string() {
+                return Some(
+                    "`parent` must be a string (a logical path or an identity)".to_owned(),
+                );
+            }
+            continue;
+        }
+        if !EDITABLE_FIELDS.contains(&key.as_str()) {
+            return Some(format!(
+                "`{key}` is not an editable registration-face field"
+            ));
+        }
+        if key == "needs_registry" {
+            if !value.is_boolean() {
+                return Some("`needs_registry` must be true or false".to_owned());
+            }
+        } else if !value.is_string() {
+            return Some(format!("`{key}` must be a string"));
+        }
+    }
+    None
+}
+
 /// Create a face.
 /// 创建一个注册面。
 fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
+    if let Some(problem) = invalid_field(fields) {
+        return Err(problem);
+    }
     let module = text(fields, "module");
     if module.is_empty() {
         return Err("add requires `fields.module`, the new module's name".to_owned());
@@ -267,13 +339,43 @@ fn run_edit(
     // 在上下文之外读会去进程碰巧所在的目录里找那个面——正是这个缺陷被钉子抓住：手工的 CLI 式运行设了
     // `NICH_LINK_PACKAGE_ROOT`，而单元测试没设。
     let context = AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
-    let change = context.scope(|| -> Result<_, String> {
+    let (change, previous_kind, new_kind) = context.scope(|| -> Result<_, String> {
         let mut authored = nichlink_run_method::authored_face(&registry, id)?;
+        let previous = authored.kind.clone();
         overlay(&mut authored, fields)?;
-        nichlink_run_method::edit_module_face(&registry, id, &authored.as_patch())
+        let kind = authored.kind.clone();
+        let change = nichlink_run_method::edit_module_face(&registry, id, &authored.as_patch())?;
+        Ok((change, previous, kind))
     })?;
+    // `kind` is an identity input — `NodeId = hash(namespace, source, name)`, and a face's name is its
+    // kind — so an edit that changes it rewrites the marker type and the `kind:` field, and the face
+    // comes back under a *new* identity while every graft record keyed by the old one stops
+    // resolving. The reply used to report the resulting tree without ever saying so (audit `L6`);
+    // one sentence closes it, and it points at the tool that lists the fallout.
+    // `kind` 是身份输入——`NodeId = hash(namespace, source, name)`，而面的名字就是它的 kind——因此改它的
+    // 编辑会重写标记类型与 `kind:` 字段，这个面以**新身份**回来，而以旧身份为键的每条 graft 记录都不再
+    // 解析。回复过去只报告结果树、从不说明（审计 `L6`）；一句话即可闭合，并指向列出后果的工具。
+    let mut message = change.message;
+    if previous_kind != new_kind {
+        // The *new* identity is deliberately not printed: computing it here would mean reproducing
+        // the kernel's `(namespace, relative path, declared name)` triple from a `PathBuf` that is
+        // not spelled the way `face_views` spells it, and the pin below caught exactly that (the
+        // number it printed was not the one the tree reported). A wrong number in a diagnostic is
+        // worse than no number, so the reply names the old identity — the one graft records are
+        // keyed by — and points at the tool that lists the fallout.
+        // **新**身份有意不打印：在这里算它意味着用 `face_views` 不采用的那种拼法，从一个 `PathBuf`
+        // 复现内核的 `(命名空间, 相对路径, 声明名)` 三元组——而下面的钉子恰好抓到了这一点（它打印的数字
+        // 并不是树报告的那个）。诊断里的错数字比没有数字更糟，因此回复只点名**旧**身份——graft 记录正是
+        // 以它为键——并指向列出后果的工具。
+        message.push_str(&format!(
+            "\nidentity changed: `kind` `{previous_kind}` → `{new_kind}` is an identity input \
+             (`NodeId = hash(namespace, source, name)`, and a face's name is its kind), so this face \
+             is no longer `{id}`; graft records keyed by the old identity no longer resolve — \
+             `nichlink.diff {{\"records\": true}}` lists them\n"
+        ));
+    }
     Ok(Outcome {
-        message: change.message,
+        message,
         source: change.source,
         declaration: None,
         moved: false,
@@ -296,6 +398,19 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .ok_or_else(|| {
             "delete requires `node`: a logical path or a 32-digit identity".to_owned()
         })?;
+    // The request says `confirm` itself. This used to be appended right here, which made the
+    // sentence above — and the declared schema, which had no such key at all — describe something
+    // the bridge did not do: a caller could leave it out and the delete still went through
+    // (audit `m5`).
+    // 请求自己说出 `confirm`。过去是在这里就地拼上去的，于是上面那句话——以及根本没有这个键的声明
+    // schema——描述的是桥并不做的事：调用方可以省掉它，删除照样执行（审计 `m5`）。
+    if arguments.get("confirm").and_then(Value::as_bool) != Some(true) {
+        return Err(
+            "delete requires `confirm: true`: a delete is the one operation whose preview a caller \
+             can step past by accident"
+                .to_owned(),
+        );
+    }
     let registry = load_registry(root, namespace)?;
     let id = resolve_node(root, namespace, target)?;
     let change = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
@@ -317,6 +432,12 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
 /// 每个键按名字匹配：拼错的字段被拒绝而不是被丢弃——正是这个方向让代理不会以为自己改了什么而
 /// 其实没改。
 fn overlay(authored: &mut nichlink_run_method::AuthoredFace, fields: &Value) -> Result<(), String> {
+    // The same predicate `add` uses, so the two actions cannot drift apart on which key
+    // they accept or on how a value's type is answered.
+    // 与 `add` 用同一个判定，因此两个动作在"接受哪个键"和"值的类型怎么答"上不会漂移。
+    if let Some(problem) = invalid_field(fields) {
+        return Err(problem);
+    }
     let Some(object) = fields.as_object() else {
         return Ok(());
     };

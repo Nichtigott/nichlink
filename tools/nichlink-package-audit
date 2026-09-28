@@ -57,11 +57,13 @@ cd "$root"
 
 index_url="https://index.crates.io"
 
-# The version every internal dependency requires (caret `0.1.0`), read from
+# The version every internal dependency requires — the caret requirement on the current
+# version line — read from
 # `[workspace.package]` and nowhere else: a `version = "…"` line elsewhere in the root
 # manifest (a centralized dependency requirement, say) is not the release version, and
 # reading the first matching line made a stale one look like the release.
-# 所有内部依赖要求的版本（caret `0.1.0`），只从 `[workspace.package]` 读取：根清单其他位置的
+# 所有内部依赖要求的版本——对**当前版本线**的 caret 要求——只从 `[workspace.package]` 读取：
+# 根清单其他位置的
 # `version = "…"`（比如集中写的依赖要求）不是发布版本，而读第一处匹配会让一行陈旧的版本看起来像
 # 发布版本。
 workspace_version=$(awk '

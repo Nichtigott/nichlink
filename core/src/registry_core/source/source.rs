@@ -46,12 +46,23 @@ pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize
     // closed on the next real function, and `fn renew(` matched the name `new`.
     // 起点判断跑在屏蔽后的文本上，并要求名字是完整标识符。按原始行时，`// fn ghost() {`
     // 会为 `ghost` 开出一个到下一个真实函数才闭合的范围，而 `fn renew(` 会匹配名字 `new`。
-    let start = lines.iter().position(|line| {
-        let masked = mask_non_code(line);
+    // Mask the whole source once rather than one line at a time: a `fn` or a brace inside
+    // a multi-line string, a raw string or a block comment is prose, and a per-line mask
+    // cannot see where such a construct starts — it reported `fn ghost()` inside a string
+    // and `kind: Ghost` inside a `/* … */` fence. `mask_non_code` keeps every line break,
+    // so the masked text splits into exactly the lines the caller handed over.
+    // 对整份源码掩码一次，而不是逐行：多行字符串、raw 字符串或块注释里的 `fn` 或花括号是散文，
+    // 而逐行掩码看不见这类构造从哪里开始——它把字符串里的 `fn ghost()` 和 `/* … */` 里的
+    // `kind: Ghost` 都报了出来。`mask_non_code` 保留每一个换行，因此掩码后的文本切出来的正是
+    // 调用方交进来的那些行。
+    let source = lines.join("\n");
+    let masked = mask_non_code(&source);
+    let masked_lines: Vec<&str> = masked.split('\n').collect();
+    let start = masked_lines.iter().position(|line| {
         let mut from = 0usize;
-        while let Some(offset) = masked[from..].find("fn ") {
+        while let Some(offset) = line[from..].find("fn ") {
             let at = from + offset;
-            let after = masked[at + "fn ".len()..].trim_start();
+            let after = line[at + "fn ".len()..].trim_start();
             if let Some(rest) = after.strip_prefix(name)
                 && rest.trim_start().starts_with('(')
             {
@@ -63,7 +74,7 @@ pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize
     })?;
     let mut depth = 0usize;
     let mut opened = false;
-    for (index, line) in lines.iter().enumerate().skip(start) {
+    for (index, line) in masked_lines.iter().enumerate().skip(start) {
         // Braces inside a string or a comment are not code. Counting them on the
         // raw line let `let s = "{";` open a range that closed on a later `}` —
         // and with no closing brace at all the old fallback claimed a one-line
@@ -71,7 +82,7 @@ pub fn function_source_range(lines: &[&str], name: &str) -> Option<(usize, usize
         // 字符串或注释里的花括号不是代码。按原始行计数会让 `let s = "{";` 打开一个在更后面的
         // `}` 处闭合的范围——而完全没有闭合花括号时，旧的兜底会声称这是个单行函数。下面的
         // 屏蔽与函数索引用的是同一条规则。
-        for character in mask_non_code(line).chars() {
+        for character in line.chars() {
             match character {
                 '{' => {
                     depth += 1;
@@ -143,28 +154,47 @@ pub fn function_symbols(source: &str) -> Vec<SourceFunction> {
     };
     let mut index = 0usize;
     while index < bytes.len() {
-        if !is_ident_start(bytes[index]) {
-            index += 1;
+        // Identifiers are Unicode. Testing one byte at a time indexed `héllo` as `h`, and
+        // that truncation reached the MCP index, Studio and the build's function manifest.
+        // 标识符是 Unicode 的。一次只看一个字节会把 `héllo` 索引成 `h`，而这个截断会一路传到
+        // MCP 索引、Studio 与构建产出的函数清单。
+        let Some(character) = masked[index..].chars().next() else {
+            break;
+        };
+        if !is_ident_start(character) {
+            index += character.len_utf8();
             continue;
         }
         let token_start = index;
-        index += 1;
-        while index < bytes.len() && is_ident_continue(bytes[index]) {
-            index += 1;
+        index += character.len_utf8();
+        while let Some(next) = masked[index..].chars().next() {
+            if !is_ident_continue(next) {
+                break;
+            }
+            index += next.len_utf8();
         }
         if &masked[token_start..index] != "fn" {
             continue;
         }
         let mut name_start = index;
-        while name_start < bytes.len() && bytes[name_start].is_ascii_whitespace() {
-            name_start += 1;
+        while let Some(next) = masked[name_start..].chars().next() {
+            if !next.is_whitespace() {
+                break;
+            }
+            name_start += next.len_utf8();
         }
-        if name_start >= bytes.len() || !is_ident_start(bytes[name_start]) {
+        let Some(first) = masked[name_start..].chars().next() else {
+            continue;
+        };
+        if !is_ident_start(first) {
             continue;
         }
-        let mut name_end = name_start + 1;
-        while name_end < bytes.len() && is_ident_continue(bytes[name_end]) {
-            name_end += 1;
+        let mut name_end = name_start + first.len_utf8();
+        while let Some(next) = masked[name_end..].chars().next() {
+            if !is_ident_continue(next) {
+                break;
+            }
+            name_end += next.len_utf8();
         }
         let name = masked[name_start..name_end].to_owned();
         let mut open = name_end;
@@ -211,12 +241,12 @@ pub fn function_symbols(source: &str) -> Vec<SourceFunction> {
     result
 }
 
-fn is_ident_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
+fn is_ident_start(character: char) -> bool {
+    character.is_alphabetic() || character == '_'
 }
 
-fn is_ident_continue(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
+fn is_ident_continue(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
 }
 
 /// Replace comments and quoted literals with spaces while preserving offsets.
@@ -402,14 +432,15 @@ fn mask(source: &str, blank_comments: bool) -> String {
 /// Collect the deduplicated `kind:` values used in registration declarations.
 /// 收集注册声明中出现过的 `kind:` 取值，去重并排序。
 pub fn registration_kinds(source: &str) -> Vec<String> {
+    // Mask once for the same reason the function range does: a `kind:` inside a
+    // multi-line string or a block comment is prose, and a per-line mask reported the name
+    // it mentioned.
+    // 与函数范围同理，掩码一次：多行字符串或块注释里的 `kind:` 是散文，而逐行掩码会把其中提到的
+    // 那个名字报出来。
+    let masked_source = mask_non_code(source);
     let mut kinds = Vec::new();
-    for line in source.lines() {
-        // A `kind:` in a comment or a string is prose, not a declaration: the raw line
-        // scan reported a kind named `Ghost` for `// kind: Ghost`.
-        // 注释或字符串里的 `kind:` 是散文而不是声明：按原始行扫描会为 `// kind: Ghost`
-        // 报出一个名叫 `Ghost` 的 kind。
-        let masked = mask_non_code(line);
-        let trimmed = masked.trim();
+    for line in masked_source.split('\n') {
+        let trimmed = line.trim();
         if let Some(kind) = trimmed.split_once("kind:").map(|(_, remainder)| remainder) {
             let kind = kind
                 .trim()
@@ -418,10 +449,12 @@ pub fn registration_kinds(source: &str) -> Vec<String> {
                 })
                 .next()
                 .unwrap_or_default();
+            // A kind is a Rust type name, so it may be non-ASCII like any identifier.
+            // kind 是 Rust 类型名，因此与任何标识符一样可以是非 ASCII 的。
             if !kind.is_empty()
                 && kind
                     .chars()
-                    .all(|character| character.is_ascii_alphanumeric() || character == '_')
+                    .all(|character| character.is_alphanumeric() || character == '_')
             {
                 kinds.push(kind.to_owned());
             }

@@ -1,7 +1,17 @@
 //! Tool catalog, the query implementations, and the write path's dispatch.
 //! 工具目录、查询实现与写入路径的分派。
 //!
-//! Five tools read Rust source text. Eight more answer from evidence that is not
+//! The catalog below is the authority on how many tools there are and what each one reads. This
+//! paragraph describes the *families* instead of counting them, because a count here goes stale the
+//! moment a tool is added — it said "five + eight, plus `apply`" while the catalog held seventeen
+//! (audit `L4`).
+//! 下面的目录才是"有几个工具、每个读什么"的权威。这一段描述的是**几类**而不是数个数，因为这里
+//! 的数字会在新加一个工具的那一刻过期——它曾说"五个 + 八个，外加 `apply`"，而目录里其实有十七个
+//! （审计 `L4`）。
+//!
+//! One family reads Rust source text — `nichlink.search` also matches registry faces
+//! (logical path, kind, module, slot) and annotates each with the build's verdict.
+//! Another answers from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
 //! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
 //! build *published* (`target/nichlink/out`) for scope and release pruning,
@@ -15,8 +25,9 @@
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
-//! 五个工具读取 Rust 源码文本，另外八个用非源码文本的证据作答：`nichlink.registry` 推导出构建
-//! 所推导的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
+//! 一类工具读取 Rust 源码文本——`nichlink.search` 还会匹配注册面（逻辑路径、kind、module、slot），
+//! 并把构建的判断标在每一条上。另一类用非源码文本的证据作答：`nichlink.registry` 推导出构建所推导
+//! 的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
 //! `-Zunpretty=mir` 转储或 JSONL artifact，并能输出那份无人写过的 JSONL；`nichlink.unified` 把两者
@@ -36,8 +47,10 @@ use crate::grafts::grafts;
 use crate::impact::impact;
 use crate::index::{load_one, load_sources, required_path, resolve_root};
 use crate::mir::{mir, unified};
-use crate::protocol::{DEFAULT_LIMIT, MAX_READ_LINES, error_response, success};
+use crate::overlay::overlay;
+use crate::protocol::{MAX_READ_LINES, error_response, success};
 use crate::registry::registry;
+use crate::search::search;
 use crate::trace::trace;
 use crate::usages::usages;
 use crate::verify::verify;
@@ -46,7 +59,13 @@ pub(crate) fn tools() -> Vec<Value> {
     vec![
         tool(
             "nichlink.search",
-            "Find source files and Rust function declarations by name.",
+            "Find registration faces, source files, and Rust function declarations by name. Faces \
+             come first and match on logical path, kind, module, or slot name — the spellings the \
+             other tools use — and each carries the build's verdict: `ok`, `added since build`, \
+             `re-identified` (a `kind` change under an unmoved file, with both identities), or \
+             `build unknown` when nothing has been published. Below them the file and function hits \
+             are unchanged. The tree half needs the identity namespace; a root Cargo cannot name \
+             still answers the source half and says the tree half is unavailable.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
         ),
         tool(
@@ -87,6 +106,7 @@ pub(crate) fn tools() -> Vec<Value> {
                 "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
                 "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults"},
                 "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},
+                "confirm":{"type":"boolean","description":"delete: must be true. A delete is the one operation whose preview a caller can step past by accident, so the request says it rather than the bridge adding it"},
                 "root":{"type":"string"}
             },"required":["action"]}),
         ),
@@ -107,9 +127,14 @@ pub(crate) fn tools() -> Vec<Value> {
              selected the face and whether release pruning strips its symbols. A missing or stale \
              build is reported as such, and an unbuilt project is told which command publishes the \
              evidence. `node` names one face by logical path or identity; omit it for the projection, \
-             bounded by `limit`. Declared graft state stays in `nichlink grafts`; contract and \
-             admission fields need a loaded registry and are not reported here.",
-            json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+             bounded by `limit`. With `overlay: true` it renders the *overlay* projection instead — \
+             which slot each declared cut replaces, and which faces the scope prunes — the published \
+             state after replacement, from the same traversal the CLI's `explain --overlay` uses. \
+             That is a static projection and not `Registry::dump`: an overlay needs two live \
+             registries, and the reply carries the note saying where the live tree comes from. \
+             `overlay` and `node` are mutually exclusive. Declared graft state stays in `nichlink \
+             grafts`; contract and admission fields need a loaded registry and are not reported here.",
+            json!({"type":"object","properties":{"node":{"type":"string"},"overlay":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.diff",
@@ -122,10 +147,12 @@ pub(crate) fn tools() -> Vec<Value> {
              `records: true` the other pair: every external graft record against the sources, where a \
              record stores the identity it was written for, so a face that changed identity under an \
              unmoved slot breaks it silently. A record comes back `ok`, `stale` (nothing in the tree \
-             has that identity or that path), `re-identified` (the path is there, the identity \
-             moved), or `unmatched` — a typed cut stores a Rust expression, so an absent identity \
-             there cannot be told from a re-identified one, and the reply says which case it is \
-             rather than guessing `stale`.",
+             has that identity or that path), or `re-identified` (the path is there, the identity \
+             moved); `unreadable` counts a record file that could not be read. There is no separate \
+             bucket for a typed cut: the plan's path is always a logical path (every writer uses \
+             `registry.path_for`), and with the identity absent nothing resolves a typed \
+             declaration's module, so such a record is `stale` — and the reply prints the path it \
+             looked for rather than guessing.",
             json!({"type":"object","properties":{"records":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
@@ -147,16 +174,22 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.mir",
-            "Read a MIR artifact and report the compiler's call candidates, or emit it as canonical \
-             JSONL. A `rustc -Zunpretty=mir` text dump and the compact JSONL artifact are both \
-             accepted, chosen by extension: JSONL parses strictly, so a malformed line fails the \
-             whole read, while a text dump never fails because a line that is not a call is simply \
-             not a call. The JSONL form is the portable channel Studio could already render and \
-             parse and nothing in this workspace ever wrote — `jsonl: true` makes this tool that \
-             writer, and what it prints reads back here. The text producer stays \
-             `cargo rustc -Zunpretty=mir` on a nightly toolchain; a missing artifact says exactly \
-             that instead of reporting an empty graph.",
-            json!({"type":"object","properties":{"path":{"type":"string"},"jsonl":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
+            "Read a MIR artifact and report the compiler's call candidates, emit it as canonical \
+             JSONL, or report the call-graph delta against another artifact. A `rustc \
+             -Zunpretty=mir` text dump and the compact JSONL artifact are both accepted, chosen by \
+             extension: JSONL parses strictly, so a malformed line fails the whole read, while a \
+             text dump never fails because a line that is not a call is simply not a call. The JSONL \
+             form is the portable channel Studio could already render and parse and nothing in this \
+             workspace ever wrote — `jsonl: true` makes this tool that writer, and what it prints \
+             reads back here. What it writes is a *snapshot*: a header naming the identity namespace \
+             and registry root of the tree the artifact came from, which is what makes two artifacts \
+             comparable — a snapshot of another tree is refused by name, and an unidentified one (a \
+             text dump can't name its tree) makes the delta say what it cannot rule out. With \
+             `against`, that other artifact is the baseline and the reply is the call-graph delta \
+             from it forward: added and gone relations, plus function symbols. The text producer \
+             stays `cargo rustc -Zunpretty=mir` on a nightly toolchain; a missing artifact says \
+             exactly that instead of reporting an empty graph.",
+            json!({"type":"object","properties":{"path":{"type":"string"},"against":{"type":"string"},"jsonl":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
             "nichlink.unified",
@@ -264,7 +297,13 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
         "nichlink.read" => read_source(&root, arguments),
         "nichlink.status" => status(&root),
         "nichlink.registry" => registry(&root),
-        "nichlink.explain" => explain(&root, arguments),
+        "nichlink.explain" => {
+            if arguments.get("overlay").and_then(Value::as_bool) == Some(true) {
+                overlay(&root, arguments)
+            } else {
+                explain(&root, arguments)
+            }
+        }
         "nichlink.diff" => diff(&root, arguments),
         "nichlink.trace" => trace(&root, arguments),
         "nichlink.mir" => mir(&root, arguments),
@@ -287,45 +326,6 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
             json!({ "content": [{"type":"text","text":error}], "isError": true }),
         ),
     }
-}
-
-fn search(root: &Path, arguments: &Value) -> Result<String, String> {
-    let query = arguments
-        .get("query")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.search requires query".to_owned())?
-        .trim()
-        .to_ascii_lowercase();
-    if query.is_empty() {
-        return Err("query must not be empty".to_owned());
-    }
-    let limit = arguments
-        .get("limit")
-        .and_then(Value::as_u64)
-        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
-    let files = load_sources(root)?;
-    let mut results = Vec::new();
-    for file in &files {
-        if file.relative.to_ascii_lowercase().contains(&query) {
-            results.push(format!("file  {}", file.relative));
-        }
-        for function in &file.functions {
-            if function.name.to_ascii_lowercase().contains(&query) {
-                results.push(format!(
-                    "fn    {} -> {}:{}",
-                    function.name, file.relative, function.line
-                ));
-            }
-        }
-        if results.len() >= limit {
-            break;
-        }
-    }
-    if results.is_empty() {
-        return Ok("no matches".to_owned());
-    }
-    results.truncate(limit);
-    Ok(results.join("\n"))
 }
 
 fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {

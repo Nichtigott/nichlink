@@ -10,17 +10,18 @@
 //! 它把源码推导出的树与构建自己的清单对照，因此两侧都是这个桥其它部分报告的同一批推导；没有构建过的
 //! 项目会被要求先构建，而不是拿到一份空 diff。
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use nichlink_build_method::{
-    build_output_is_current, declared_grafts, face_views, graft_plan_rows, read_pruning_manifest,
+    GraftPlanRow, build_output_is_current, declared_grafts, face_views, graft_plan_rows,
 };
 use serde_json::Value;
 
 use crate::evidence::out_dir;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::tree_delta::{FaceStatus, TreeDelta};
 
 /// Report the face-level delta between two sides of this package.
 /// 报告本包两侧之间的面级差异。
@@ -41,47 +42,45 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
         return diff_records(root, &faces, &namespace, arguments);
     }
-    let out = out_dir(root);
-    let current = build_output_is_current(root, &out);
-    let Ok(built) = read_pruning_manifest(&out) else {
+    // The built side and its per-face verdicts come from one rule
+    // (`crate::tree_delta`), which `nichlink.search` reads too: the same face must
+    // not be `added` here and something else there.
+    // 构建那一侧与逐面的结论来自一条规则（`crate::tree_delta`），`nichlink.search` 也读它：
+    // 同一个面不能在这里是 `added`、在那里是别的。
+    let built = TreeDelta::read(root);
+    if !built.known {
         return Ok(
             "no build evidence: run `nichlink check` (or `nichlink build`) first — a tree diff needs \
              the built side, and this project has never published one.\n"
                 .to_owned(),
         );
-    };
+    }
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
         .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
     let source_ids: BTreeSet<_> = faces.iter().map(|face| face.id).collect();
     let source_sources: BTreeSet<_> = faces.iter().map(|face| face.source.as_str()).collect();
-    let built_ids: BTreeSet<_> = built.iter().map(|row| row.id).collect();
-    let built_by_source: HashMap<_, _> = built
-        .iter()
-        .map(|row| (row.source.as_str(), row.id))
-        .collect();
 
     let mut output = format!(
         "namespace {namespace}\nbuild {}\nfaces {} (source) vs {} (build)\n",
-        if current {
+        if built.current {
             "current"
         } else {
             "stale (run `nichlink check`)"
         },
         faces.len(),
-        built.len(),
+        built.rows.len(),
     );
     // A face whose source is new is added; one the build has but the sources no
     // longer declare is gone.
     // 源码新出现的面是 added；构建有而源码不再声明的是 gone。
     let added: Vec<_> = faces
         .iter()
-        .filter(|face| {
-            !built_ids.contains(&face.id) && !built_by_source.contains_key(face.source.as_str())
-        })
+        .filter(|face| built.status(face) == FaceStatus::AddedSinceBuild)
         .collect();
     let gone: Vec<_> = built
+        .rows
         .iter()
         .filter(|row| {
             !source_ids.contains(&row.id) && !source_sources.contains(row.source.as_str())
@@ -92,11 +91,9 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     // 源码相同、身份不同：文件没动，而面的 `kind`（身份输入之一）变了。
     let reidentified: Vec<_> = faces
         .iter()
-        .filter_map(|face| {
-            built_by_source
-                .get(face.source.as_str())
-                .filter(|previous| **previous != face.id)
-                .map(|previous| (face, *previous))
+        .filter_map(|face| match built.status(face) {
+            FaceStatus::Reidentified(previous) => Some((face, previous)),
+            FaceStatus::Ok | FaceStatus::AddedSinceBuild => None,
         })
         .collect();
     output.push_str(&format!(
@@ -143,7 +140,7 @@ fn diff_records(
     let mut ok = Vec::new();
     let mut reidentified = Vec::new();
     let mut stale = Vec::new();
-    let mut unmatched = Vec::new();
+    let mut undeclared: Vec<(&GraftPlanRow, Option<bool>)> = Vec::new();
     let mut unreadable = 0usize;
     for row in &rows {
         let Some(target) = row.target else {
@@ -151,7 +148,26 @@ fn diff_records(
             continue;
         };
         if faces.iter().any(|face| face.id == target) {
-            ok.push(row);
+            // The identity being in the tree is only half the answer. A record no
+            // `static_graft_plan!` cut names is pruned by the release and skipped at runtime, which
+            // is what `nichlink.grafts` reports as "[NOT declared by the host entry]" and counts
+            // under `unkept plans N` — and what the build refuses outright. Calling it `ok` here
+            // gave one record two health conclusions, and the agent that read the first one would
+            // ship it (audit `M1`). The row already carries whether a declaration named it, so the
+            // split costs nothing.
+            // 身份在树里只是答案的一半。没有任何 `static_graft_plan!` 切口点名的记录会被发布剪掉、运行期
+            // 跳过——这正是 `nichlink.grafts` 报成 "[NOT declared by the host entry]" 并计入
+            // `unkept plans N`、构建直接拒绝的那种。在这里称它 `ok` 会让同一条记录有两个健康结论，而读到
+            // 前一个的代理会把它发出去（审计 `M1`）。该行本就携带"是否有声明点名它"，分流不需额外代价。
+            match row.declared {
+                Some(true) => ok.push(row),
+                // `Some(false)`: read, and no cut names this slot. `None`: the host entry could not
+                // be read, so nothing here can tell — both are "not known to be kept", and the
+                // bucket says which one it is per row rather than flattening them.
+                // `Some(false)`：读到了，但没有切口点名这个槽位。`None`：宿主入口读不了，因此这里无从
+                // 判断——两者都属于"不知道它被保住"，而这个桶逐行说明是哪一种，而不是把它们抹平。
+                other => undeclared.push((row, other)),
+            }
             continue;
         }
         let Some(path) = row.target_path.as_deref() else {
@@ -160,12 +176,21 @@ fn diff_records(
         };
         match faces.iter().find(|face| face.path == path) {
             Some(face) => reidentified.push((row, face.id)),
-            // A typed cut stores a Rust expression instead of a logical path, so an absent
-            // identity cannot be told apart from a re-identified one: saying "stale" there
-            // would be a guess, and the reply says which case it is.
-            // 类型化切口存的是 Rust 表达式而不是逻辑路径，因此身份缺席时无法与"身份变了"区分：
-            // 在那里说"stale"就是猜，而回复会写明这是哪一种。
-            None if path.contains("::") => unmatched.push(row),
+            // There used to be an `unmatched` bucket here for "the identity is absent but the path
+            // looks like a Rust expression (`::`)", because a typed *declaration* names its target
+            // with an expression rather than a logical path. No plan writer ever puts an expression
+            // in the plan's `target_path` — both write `registry.path_for` — and when the identity
+            // is absent nothing can resolve a typed declaration's module, so `names_face` matches
+            // only string cuts there. The bucket therefore described an input that cannot occur,
+            // while its heading claimed to describe a real case (audit `m1`). A record naming
+            // something this tree has not got is `stale`, and saying so is not a guess: the reply
+            // also prints the path it looked for.
+            // 这里曾有一个 `unmatched` 桶，用于"身份缺席、而路径看起来像 Rust 表达式（`::`）"的情形，
+            // 因为类型化的**声明**是用表达式而不是逻辑路径命名目标的。但没有任何计划写入方会把表达式
+            // 写进计划的 `target_path`——两处都写 `registry.path_for`——而身份缺席时没有任何东西能解析
+            // 类型化声明的模块，因此 `names_face` 在那种情况下只可能匹配字符串切口。于是这个桶描述的
+            // 是一个不可能出现的输入，标题却声称描述真实情形（审计 `m1`）。点名了本树没有的东西的记录
+            // 就是 `stale`，这么说也不是猜：回复同时打印出它查找的那个路径。
             None => stale.push(row),
         }
     }
@@ -179,11 +204,11 @@ fn diff_records(
         rows.len()
     );
     output.push_str(&format!(
-        "ok {}  stale {}  re-identified {}  unmatched {}  unreadable {unreadable}\n",
+        "ok {}  undeclared {}  stale {}  re-identified {}  unreadable {unreadable}\n",
         ok.len(),
+        undeclared.len(),
         stale.len(),
-        reidentified.len(),
-        unmatched.len()
+        reidentified.len()
     ));
     output.push_str("ok:\n");
     for row in ok.iter().take(limit) {
@@ -195,6 +220,22 @@ fn diff_records(
                 .map(|target| target.to_string())
                 .unwrap_or_default()
         ));
+    }
+    if !undeclared.is_empty() {
+        output.push_str(
+            "undeclared (the release prunes these slots, so the record can never take effect):\n",
+        );
+        for (row, declared) in undeclared.iter().take(limit) {
+            output.push_str(&format!(
+                "  ! {} -> {}  ({})\n",
+                row.selector,
+                row.target_path.as_deref().unwrap_or("-"),
+                match declared {
+                    Some(false) => "no cut in the host entry names it",
+                    _ => "the host entry could not be read, so nothing can tell",
+                }
+            ));
+        }
     }
     output.push_str("stale:\n");
     for row in stale.iter().take(limit) {
@@ -214,16 +255,6 @@ fn diff_records(
                 .unwrap_or_default(),
             row.target_path.as_deref().unwrap_or("-")
         ));
-    }
-    if !unmatched.is_empty() {
-        output.push_str("unmatched (a typed cut stores an expression, so an absent identity cannot be told from a re-identified one):\n");
-        for row in unmatched.iter().take(limit) {
-            output.push_str(&format!(
-                "  ? {} -> {}\n",
-                row.selector,
-                row.target_path.as_deref().unwrap_or("-")
-            ));
-        }
     }
     output.push_str(
         "detail: nichlink.grafts (which slots the host entry declares) · nichlink.explain (this \

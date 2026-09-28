@@ -124,7 +124,18 @@ pub fn missing_shims(root: &Path) -> Vec<String> {
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
         let masked = nichlink::source::mask_non_code(&text);
-        if !nichlink_reexports(&masked)
+        // A pinned re-export behind `#[cfg(any())]` (never compiled) or `#[cfg(test)]` (not
+        // part of the public surface) exists in the file but not in the crate a host
+        // compiles against, so the ratchet reads the text that is actually built. The
+        // attribute and the statement it governs sit at the same indentation, which is what
+        // the shared helper handles.
+        // 藏在 `#[cfg(any())]`（永不编译）或 `#[cfg(test)]`（不属于公开面）后面的钉住重导出，
+        // 存在于文件里却不在宿主编译所对的那个 crate 里，因此棘轮读的是真正会被构建的文本。属性与
+        // 它管辖的语句同缩进，这正是那个共享助手处理的情形。
+        let live = crate::drop_governed_lines(&masked, |trimmed| {
+            trimmed == "#[cfg(any())]" || trimmed == "#[cfg(test)]"
+        });
+        if !nichlink_reexports(&live)
             .iter()
             .any(|found| found == statement)
         {

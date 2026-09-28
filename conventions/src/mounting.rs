@@ -267,12 +267,17 @@ pub fn mounts(root: &Path) -> Mounts {
                 .push(relative(root, path));
         }
     }
+    let crate_root = kernel.join("lib.rs");
     for path in &files {
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("");
-        if name == "lib.rs" || name == "build.rs" {
+        // Only the kernel's own crate root is an entry point. Skipping every file *named*
+        // `lib.rs` (or `build.rs`) hid a nested module nobody declares:
+        // `core/src/registry_core/zz/lib.rs` was invisible to this gate, and a `build.rs`
+        // under `src/` is an ordinary module file — cargo's build script lives at the
+        // package root, not there.
+        // 只有内核自己的 crate 根是入口点。按**名字**跳过每个 `lib.rs`（或 `build.rs`）会让一个
+        // 无人声明的嵌套模块不可见：`core/src/registry_core/zz/lib.rs` 对本门禁是隐形的；而
+        // `src/` 下的 `build.rs` 就是普通模块文件——cargo 的构建脚本在包根，不在那里。
+        if path == &crate_root {
             continue;
         }
         if !mounted.contains_key(path) {
@@ -307,16 +312,18 @@ pub fn findings(root: &Path) -> Findings {
                 found.mod_rs.push(relative(root, &path));
             }
             // The splice search runs on the whole masked file, not line by line, and
-            // accepts any run of spaces between the macro name and its `!`. Three
-            // spellings were measured green against the line-based literal search:
-            // `include ! ("x")`, a `!` whose delimiter sits on the next line, and a
-            // comment between the name and the `!` (masking blanks the comment, which
-            // used to destroy the literal `include!`). A splice renumbers faces either
-            // way, so the gate has to see the macro, not one spelling of it.
-            // 拼接搜索跑在整个屏蔽文本上而不是逐行，并接受宏名与 `!` 之间的任意空格。对逐行字面
-            // 搜索实测有三种写法为绿：`include ! ("x")`、定界符位于下一行的 `!`、以及宏名与 `!`
-            // 之间的注释（屏蔽会把注释抹白，过去会破坏字面量 `include!`）。三种写法都会重编面孔
-            // 编号，因此门禁必须看见这个宏，而不是它的某一种拼法。
+            // accepts any whitespace between the macro name and its `!`, line breaks
+            // included. Four spellings were measured green against narrower searches:
+            // `include ! ("x")`, a `!` whose delimiter sits on the next line, a `!` carried
+            // onto the next line itself (only spaces and tabs were trimmed), and a comment
+            // between the name and the `!` (masking blanks the comment, which used to
+            // destroy the literal `include!`). A splice renumbers faces either way, so the
+            // gate has to see the macro, not one spelling of it.
+            // 拼接搜索跑在整个屏蔽文本上而不是逐行，并接受宏名与 `!` 之间的任意空白，含换行。对更窄
+            // 的搜索实测有四种写法为绿：`include ! ("x")`、定界符位于下一行的 `!`、`!` 自己折到下一
+            // 行（过去只裁空格与制表符）、以及宏名与 `!` 之间的注释（屏蔽会把注释抹白，过去会破坏
+            // 字面量 `include!`）。几种写法都会重编面孔编号，因此门禁必须看见这个宏，而不是它的某一种
+            // 拼法。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
             let masked = nichlink::source::mask_non_code(&text);
@@ -328,7 +335,7 @@ pub fn findings(root: &Path) -> Findings {
                         .chars()
                         .next_back()
                         .is_some_and(|previous| previous.is_alphanumeric() || previous == '_');
-                let after = masked[at + "include".len()..].trim_start_matches([' ', '\t']);
+                let after = masked[at + "include".len()..].trim_start();
                 if boundary && after.starts_with('!') {
                     let line = masked[..at].matches('\n').count() + 1;
                     let source_line = text.lines().nth(line - 1).unwrap_or("").trim();

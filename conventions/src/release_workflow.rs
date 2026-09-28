@@ -35,6 +35,20 @@ const UPLOAD_COMMANDS: &[&str] = &["--publish", "cargo publish"];
 /// 上传步骤必须带着的肯定式 tag 判断。
 const TAG_GUARD: &str = "startsWith(github.ref, 'refs/tags/')";
 
+/// The one publisher this gate already understands by name.
+/// 这个门禁唯一按名字认识的发布器。
+///
+/// Its upload mode is the `--publish` flag the command test reads, so the file itself is
+/// not followed: following it would read its `--publish` branch and call every rehearsal
+/// step (`run: tools/nichlink-publish`, `--check-table`, `--verify-consumers`) an upload.
+/// A local file the gate does *not* know by name is a different matter — nothing about its
+/// name says which mode it runs in, so it is read.
+/// 它的上传模式正是命令判定读取的 `--publish` 标志，因此不跟进这个文件本身：跟进它会读到它的
+/// `--publish` 分支，从而把每个演练步骤（`run: tools/nichlink-publish`、`--check-table`、
+/// `--verify-consumers`）都当成上传。而门禁**不**按名字认识的本地文件是另一回事——它的名字
+/// 说明不了它以哪种模式运行，因此会被读。
+const KNOWN_PUBLISHER: &str = "tools/nichlink-publish";
+
 /// Report every way the workflow lets an upload happen without a tag ref.
 /// 报告该工作流容许在没有 tag ref 的情况下上传的每一种方式。
 ///
@@ -44,6 +58,12 @@ const TAG_GUARD: &str = "startsWith(github.ref, 'refs/tags/')";
 /// 返回空表示这些性质都成立：没有任何输入能让手动运行与演练不同、每个上传步骤自己带着肯定式 tag
 /// 要求、而能够上传的工作流仍保留手动演练路径。
 pub fn findings(text: &str) -> Vec<String> {
+    findings_in(None, text)
+}
+
+/// The same findings, with a checkout to follow a delegated script or action into.
+/// 同一组发现，另外给一个检出根，用来跟进被委托的本地脚本与 action。
+fn findings_in(root: Option<&Path>, text: &str) -> Vec<String> {
     let mut findings = Vec::new();
     if takes_input(text) {
         findings.push(
@@ -52,7 +72,7 @@ pub fn findings(text: &str) -> Vec<String> {
                 .to_owned(),
         );
     }
-    if uploads(text) && !text.contains("workflow_dispatch:") {
+    if uploads(root, text) && !text.contains("workflow_dispatch:") {
         // The rehearsal path is what lets the first release be checked before its tag
         // exists, so a workflow that can upload has to keep offering it.
         // 演练路径让首个发布在其 tag 存在之前就能被检查，因此能够上传的工作流必须保留它。
@@ -63,7 +83,7 @@ pub fn findings(text: &str) -> Vec<String> {
         );
     }
     for (index, (body, condition)) in steps(text).iter().enumerate() {
-        if !step_uploads(body) {
+        if !step_uploads(root, body) {
             continue;
         }
         let Some(condition) = condition else {
@@ -123,7 +143,7 @@ pub fn workflow_findings(root: &Path) -> Vec<String> {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        for finding in findings(&text) {
+        for finding in findings_in(Some(root), &text) {
             found.push(format!("{name}: {finding}"));
         }
     }
@@ -132,22 +152,129 @@ pub fn workflow_findings(root: &Path) -> Vec<String> {
 
 /// Whether the workflow can upload anything.
 /// 该工作流是否可能上传任何东西。
-fn uploads(text: &str) -> bool {
-    steps(text).iter().any(|(body, _)| step_uploads(body))
+fn uploads(root: Option<&Path>, text: &str) -> bool {
+    steps(text).iter().any(|(body, _)| step_uploads(root, body))
 }
 
-/// Whether one step's lines run an upload.
-/// 某个步骤的各行是否运行一次上传。
+/// Whether one step's lines run an upload, directly or through a local file.
+/// 某个步骤的各行是否执行一次上传——直接执行，或经由一个本地文件。
 ///
 /// Comments are skipped: `ci.yml` mentions the release workflow's `--publish` in prose,
 /// and a whole-file substring search read that as an upload step.
 /// 注释被跳过：`ci.yml` 在散文里提到发布工作流的 `--publish`，而对整个文件做子串搜索会把它读成
 /// 一个上传步骤。
-fn step_uploads(body: &str) -> bool {
-    body.lines()
-        .map(|line| line.trim_start_matches("- ").trim())
+///
+/// The step's own lines are matched with whitespace runs collapsed and line continuations
+/// joined, because `cargo  publish` (two spaces) and a `\`-continued `cargo \` + `publish`
+/// are the same command as the spelling the gate knew.
+/// 步骤自己的行在匹配前会折叠空白串、拼接续行，因为 `cargo  publish`（两个空格）与
+/// `cargo \` + `publish` 这种续行，与门禁认识的那种拼写是同一条命令。
+fn step_uploads(root: Option<&Path>, body: &str) -> bool {
+    let joined = join_continuations(body);
+    let own_lines = joined
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.starts_with('#'));
+    if own_lines.clone().any(names_upload) {
+        return true;
+    }
+    // A step may hand the upload to a local script or a local action instead of spelling
+    // the command itself. The gate used to read only the step's own lines, so
+    // `run: tools/release-all` and `uses: ./.github/actions/publish` each produced no
+    // finding at all — the upload moved into a file, and the file was never opened.
+    // 步骤可以把上传交给本地脚本或本地 action，而不是自己写出命令。门禁过去只读步骤自己的行，
+    // 因此 `run: tools/release-all` 与 `uses: ./.github/actions/publish` 都不产生任何发现——
+    // 上传搬进了一个文件，而那个文件从未被打开。
+    root.is_some_and(|root| {
+        own_lines
+            .filter_map(|line| delegated_path(root, line))
+            .any(|path| file_uploads(&path))
+    })
+}
+
+/// Whether one line names an upload command, after collapsing whitespace runs.
+/// 折叠空白串之后，某一行是否点明一条上传命令。
+fn names_upload(line: &str) -> bool {
+    let mut collapsed = String::with_capacity(line.len());
+    let mut previous_space = false;
+    for character in line.chars() {
+        if character.is_whitespace() {
+            if !previous_space {
+                collapsed.push(' ');
+            }
+            previous_space = true;
+            continue;
+        }
+        previous_space = false;
+        collapsed.push(character);
+    }
+    UPLOAD_COMMANDS
+        .iter()
+        .any(|needle| collapsed.contains(needle))
+}
+
+/// Join a `\`-continued command onto one line, so the continuation cannot hide it.
+/// 把以 `\` 续行的命令接成一行，使续行藏不住它。
+fn join_continuations(body: &str) -> String {
+    let mut joined = String::with_capacity(body.len());
+    for line in body.lines() {
+        let trimmed = line.trim_end();
+        match trimmed.strip_suffix('\\') {
+            Some(head) => {
+                joined.push_str(head);
+                joined.push(' ');
+            }
+            None => {
+                joined.push_str(line);
+                joined.push('\n');
+            }
+        }
+    }
+    joined
+}
+
+/// The local file a `run:` or `uses:` line hands the work to, if it names one.
+/// 某条 `run:` 或 `uses:` 行把工作交给的本地文件——如果它点名了一个。
+fn delegated_path(root: &Path, line: &str) -> Option<std::path::PathBuf> {
+    // `uses:` names an action; only a local one (`./…`) is a file in this checkout, and a
+    // `…@ref` suffix is a version, not part of the path. `run:` names a command line,
+    // whose first word is the program.
+    // `uses:` 命名的是一条 action；只有本地的（`./…`）才是本检出里的文件，而 `…@ref` 后缀是
+    // 版本，不属于路径。`run:` 命名的是一条命令行，其第一个词就是程序。
+    let local = if let Some(uses) = line.strip_prefix("uses:") {
+        let value = uses.trim().split('@').next().unwrap_or("").trim();
+        value.starts_with("./").then_some(value)
+    } else if let Some(run) = line.strip_prefix("run:") {
+        let command = run.split_whitespace().next().unwrap_or("");
+        (command.starts_with("./") || command.starts_with("tools/")).then_some(command)
+    } else {
+        None
+    }?;
+    if local == KNOWN_PUBLISHER {
+        return None;
+    }
+    let path = root.join(local);
+    // A local action is a directory; the entry file is what a runner reads.
+    // 本地 action 是一个目录；runner 读的是其中的入口文件。
+    [
+        path.clone(),
+        path.join("action.yml"),
+        path.join("action.yaml"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_file())
+}
+
+/// Whether a delegated file uploads, by the same command test.
+/// 被委托的文件是否上传，用的是同一条命令判定。
+fn file_uploads(path: &Path) -> bool {
+    let Ok(text) = fs::read_to_string(path) else {
+        return false;
+    };
+    text.lines()
+        .map(|line| line.trim())
         .filter(|line| !line.starts_with('#'))
-        .any(|line| UPLOAD_COMMANDS.iter().any(|needle| line.contains(needle)))
+        .any(names_upload)
 }
 
 /// Whether the workflow reads an input, declared or referenced.
@@ -165,7 +292,12 @@ fn steps(text: &str) -> Vec<(String, Option<String>)> {
     for line in text.lines() {
         let trimmed = line.trim_start();
         let indent = line.len() - trimmed.len();
-        if trimmed.starts_with("- ") {
+        // A YAML sequence entry may be a bare `-` with its keys on the lines below, which
+        // `steps()` used to miss entirely: the step was invisible, so neither its upload
+        // nor the missing `workflow_dispatch` was ever reported.
+        // YAML 序列条目可以是一个裸 `-`，键写在下面几行；`steps()` 过去完全看不见它：那个步骤
+        // 不可见，于是它的上传与"没有 workflow_dispatch"都不会被报出来。
+        if trimmed == "-" || trimmed.starts_with("- ") {
             if let Some((_, body, condition)) = current.take() {
                 parsed.push((body, condition));
             }
@@ -175,7 +307,10 @@ fn steps(text: &str) -> Vec<(String, Option<String>)> {
         let Some((step_indent, body, condition)) = current.as_mut() else {
             continue;
         };
-        if !trimmed.is_empty() && indent <= *step_indent && !trimmed.starts_with("- ") {
+        if !trimmed.is_empty()
+            && indent <= *step_indent
+            && !(trimmed == "-" || trimmed.starts_with("- "))
+        {
             // A sibling key at the step's own indentation ends the step.
             // 与步骤同缩进的兄弟键结束该步骤。
             continue;
@@ -218,168 +353,5 @@ fn steps(text: &str) -> Vec<(String, Option<String>)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The workflows in this checkout satisfy every property.
-    /// 本检出里的工作流满足全部性质。
-    #[test]
-    fn the_shipped_workflows_only_publish_a_tag() {
-        let found = workflow_findings(&crate::workspace_root());
-        assert!(found.is_empty(), "a shipped workflow regressed: {found:#?}");
-    }
-
-    /// The condition this gate exists for: an upload step that trusts the trigger list,
-    /// with the tag check left to a different step.
-    /// 本门禁为之存在的那个条件：一个信任触发列表的上传步骤，而 tag 检查被留给另一个步骤。
-    #[test]
-    fn an_upload_without_a_positive_guard_is_reported() {
-        let text = "\
-on:
-  workflow_dispatch:
-jobs:
-  release:
-    steps:
-      - name: Whatever
-        if: github.event_name == 'push'
-        run: tools/nichlink-publish --publish --yes
-";
-        let found = findings(text);
-        assert!(
-            found
-                .iter()
-                .any(|finding| finding.contains("positive tag guard")),
-            "an upload reachable from a branch must be reported: {found:#?}"
-        );
-    }
-
-    /// The bypass a `contains` test accepted: the negated tag test.
-    /// 一个 `contains` 检查接受的绕过：取反的 tag 判断。
-    #[test]
-    fn a_negated_tag_test_is_reported() {
-        let text = "\
-on:
-  workflow_dispatch:
-jobs:
-  release:
-    steps:
-      - name: Publish
-        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-        run: tools/nichlink-publish --publish --yes
-";
-        let found = findings(text);
-        assert!(
-            found
-                .iter()
-                .any(|finding| finding.contains("true without a tag ref")),
-            "a negated guard publishes on branches: {found:#?}"
-        );
-    }
-
-    /// A step named anything at all, and one with no name, are both seen: the gate keys
-    /// on the command, not on the step's name.
-    /// 名字任意的步骤、以及没有名字的步骤都能被看到：门禁以命令为准，而不是步骤名。
-    #[test]
-    fn the_upload_command_matters_not_the_step_name() {
-        let text = "\
-on:
-  workflow_dispatch:
-jobs:
-  release:
-    steps:
-      - name: Rename me
-        if: github.event_name == 'push'
-        run: tools/nichlink-publish --publish --yes
-      - if: github.event_name == 'push'
-        run: cargo publish --workspace
-";
-        let found = findings(text);
-        assert_eq!(
-            found
-                .iter()
-                .filter(|finding| finding.contains("positive tag guard"))
-                .count(),
-            2,
-            "both uploads are unguarded whatever they are called: {found:#?}"
-        );
-    }
-
-    /// A folded condition is read as one condition, so a correctly guarded step is not
-    /// reported.
-    /// 折叠条件作为一个条件读取，因此守卫正确的步骤不会被报出。
-    #[test]
-    fn a_folded_positive_guard_is_accepted() {
-        let text = "\
-on:
-  workflow_dispatch:
-jobs:
-  release:
-    steps:
-      - name: Publish in dependency order
-        if: >-
-          github.event_name == 'push' &&
-          startsWith(github.ref, 'refs/tags/')
-        run: tools/nichlink-publish --publish --yes
-";
-        let found = findings(text);
-        assert!(found.is_empty(), "{found:#?}");
-    }
-
-    /// A second workflow file is read like the first.
-    /// 第二个工作流文件与第一个一样被读取。
-    #[test]
-    fn a_second_workflow_is_checked_too() {
-        let root = std::env::temp_dir().join(format!("nichlink-workflows-{}", std::process::id()));
-        let workflows = root.join(".github/workflows");
-        fs::create_dir_all(&workflows).expect("fixture directory");
-        fs::write(
-            workflows.join("release.yml"),
-            "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
-             if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')\n        \
-             run: tools/nichlink-publish --publish --yes\n",
-        )
-        .expect("fixture workflow");
-        fs::write(
-            workflows.join("extra.yml"),
-            "on:\n  push:\n    branches: [\"main\"]\njobs:\n  extra:\n    steps:\n      - \
-             run: tools/nichlink-publish --publish --yes\n",
-        )
-        .expect("fixture workflow");
-        let found = workflow_findings(&root);
-        assert!(
-            found
-                .iter()
-                .any(|finding| finding.starts_with("extra.yml:")),
-            "a second workflow that publishes is reported: {found:#?}"
-        );
-        assert!(
-            !found
-                .iter()
-                .any(|finding| finding.starts_with("release.yml:")),
-            "the guarded workflow stays clean: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// A manual input is still reported on its own.
-    /// 手动输入依然单独被报出。
-    #[test]
-    fn a_manual_input_is_reported() {
-        let text = "\
-on:
-  workflow_dispatch:
-    inputs:
-      publish:
-        type: boolean
-jobs:
-  release:
-    steps:
-      - name: Publish
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: tools/nichlink-publish --publish --yes
-";
-        let found = findings(text);
-        assert_eq!(found.len(), 1, "{found:#?}");
-        assert!(found[0].contains("reads an input"), "{found:#?}");
-    }
-}
+#[path = "release_workflow_tests.rs"]
+mod release_workflow_tests;

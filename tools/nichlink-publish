@@ -5,13 +5,14 @@ set -eu
 # 按依赖顺序、一层一层地发布九个 crate。
 #
 # Why a script and not nine hand-typed commands: every dependent writes its
-# internal requirement as caret `0.1.0` (`docs/roadmap-1.0.md` decision 1), so
-# publishing `run_method` before the index serves `nichlink-core 0.1.0` fails
-# resolution. The order below is that dependency chain, and the script waits for
+# internal requirement as a caret requirement on the current version line
+# (`docs/roadmap-1.0.md` decision 1), so publishing `run_method` before the index
+# serves `nichlink-core` at that version fails resolution. The order below is that
+# dependency chain, and the script waits for
 # each level to appear in the index before starting the next one — the wait is
 # the part a human forgets.
-# 为什么要脚本而不是手敲九条命令：每个依赖方都把内部依赖写成 caret `0.1.0`
-# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供 `nichlink-core 0.1.0` 之前发布
+# 为什么要脚本而不是手敲九条命令：每个依赖方都把内部依赖写成对**当前版本线**的 caret 要求
+# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供那一版的 `nichlink-core` 之前发布
 # `run_method` 会解析失败。下面的顺序就是那条依赖链，脚本会在开始下一层之前等待上一层出现
 # 在 index 里——这个等待正是人容易忘掉的部分。
 #
@@ -44,6 +45,16 @@ set -eu
 # `--publish` (that combination is refused rather than quietly doing nothing).
 # 上面两个模式都是检查：不上传任何东西，也不与 `--publish` 组合（该组合会被直接拒绝，
 # 而不是静默地什么都不做）。
+#
+# Print the release version this checkout names, read the same way the release reads it:
+#   tools/nichlink-publish --workspace-version
+# The release workflow calls this instead of carrying its own copy of the reader, because
+# two readers of one number diverge and the tag check is where a wrong answer is
+# irreversible (audit RC4).
+# 打印本检出点名的发布版本，读法与发布本身一致：
+#   tools/nichlink-publish --workspace-version
+# 发布工作流调用它，而不是自带一份读取器副本——同一个数字的两个读取器会分歧，而 tag 检查正是
+# "答错就不可逆"的地方（审计 RC4）。
 #
 # After it finishes, prove that a stranger can consume the release:
 #   tools/nichlink-publish --verify-consumers
@@ -87,6 +98,7 @@ yes=false
 allow_dirty=false
 verify_consumers=false
 check_table=false
+workspace_version_only=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -95,6 +107,7 @@ for arg in "$@"; do
     --allow-dirty) allow_dirty=true ;;
     --verify-consumers) verify_consumers=true ;;
     --check-table) check_table=true ;;
+    --workspace-version) workspace_version_only=true ;;
     -h|--help)
       # Print the leading comment block: every `#` line, skipping the blank
       # line after `set -eu`, and stopping at the first line of code.
@@ -244,7 +257,18 @@ workspace_version=$(awk '
   section == "[workspace.package]" && /^version *=/ {
     value = $0
     sub(/^version *= *"/, "", value)
-    sub(/"$/, "", value)
+    # The value ends at the closing quote, whatever follows it: a comment, a trailing space,
+    # a CR. Stripping only a quote *at the end of the line* (the spelling this tool used to
+    # carry) left `0.1.6" # pinned` as the version, while the release workflow carried its own
+    # copy that stripped from the first quote and read it correctly — two readers of one
+    # number disagreed, and the tag check is where a wrong answer cannot be undone (audit
+    # RC4, measured on `version = "0.1.6" # pinned`).
+    # 取值在闭引号处结束，无论其后是什么：注释、尾随空格、CR。只删**行尾**那个引号（本工具过去的
+    # 拼法）会把 `0.1.6" # pinned` 当成版本，而发布工作流自带的那份从第一个引号起删、读得是对的——
+    # 同一个数字的两个读取器分歧，而 tag 检查正是答错就无法挽回的地方（审计 RC4，实测于
+    # `version = "0.1.6" # pinned`）。
+    sub(/".*$/, "", value)
+    gsub(/[[:space:]]+$/, "", value)
     print value
     exit
   }
@@ -253,10 +277,45 @@ if [ -z "$workspace_version" ]; then
   echo "error: [workspace.package] names no version in Cargo.toml" >&2
   exit 1
 fi
+
+# The release workflow asks this reader rather than carrying its own copy. Two readers of
+# one number diverge: the workflow's copy stripped everything from the first quote
+# (`sub(/".*$/, "", value)`) while this one strips only a trailing quote, so a line with
+# anything after the closing quote produced two different versions — and the tag check is
+# exactly where a wrong answer is irreversible (audit RC4).
+# 发布工作流问这个读取器，而不是自带一份副本。同一个数字的两个读取器会分歧：工作流那份从第一个
+# 引号起全删（`sub(/".*$/, "", value)`），而这里只删结尾的引号，因此闭引号之后还有内容的行会得出
+# 两个不同版本——而 tag 检查恰恰是"答错就不可逆"的地方（审计 RC4）。
+if [ "$workspace_version_only" = true ]; then
+  printf '%s\n' "$workspace_version"
+  exit 0
+fi
 if [ -z "$workspace_version" ]; then
   echo "error: could not read [workspace.package] version from Cargo.toml" >&2
   exit 1
 fi
+
+# The version `cargo publish` will actually package for one crate, asked of cargo rather
+# than read from the manifest text. `version_problems` reads text and misses valid
+# spellings, and `cargo pkgid` is the wrong source: it answers from the *lockfile*, which
+# any earlier build in the release workflow has already refreshed to the new number.
+# Measured on a mutant whose `macro/Cargo.toml` spells `version = '0.1.7'`:
+# `cargo metadata --no-deps` says 0.1.7, `cargo pkgid` says 0.1.6, and `--check-table`
+# stays green. The compact JSON is split with the same awk/sed idiom
+# `tools/nichlink-package-audit` already uses, so no JSON parser is added here.
+# 某个 crate 会被 `cargo publish` 真正打包的版本，向 cargo 问，而不是读清单文本。
+# `version_problems` 读文本，会漏掉合法拼写；而 `cargo pkgid` 是错的来源：它按 **lockfile**
+# 作答，而发布工作流里更早的构建已经把它刷成了新数字。在一个把 `macro/Cargo.toml` 写成
+# `version = '0.1.7'` 的变异体上实测：`cargo metadata --no-deps` 说 0.1.7，`cargo pkgid`
+# 说 0.1.6，而 `--check-table` 仍是绿的。紧凑 JSON 用 `tools/nichlink-package-audit` 已在用的
+# 同一套 awk/sed 惯例切分，因此这里没有引入 JSON 解析器。
+metadata_snapshot=$(cargo metadata --no-deps --format-version 1 2>/dev/null || true)
+resolved_version() {
+  printf '%s' "$metadata_snapshot" |
+    tr '{' '\n' |
+    grep -m1 "\"name\":\"$1\",\"version\":" |
+    sed 's/.*"version":"\([^"]*\)".*/\1/'
+}
 
 # "<crate>:<space-separated versioned nichlink-* dependencies>"
 # "<crate>:<以空格分隔的带版本号 nichlink-* 依赖>"
@@ -375,16 +434,7 @@ version_problems() {
   crate=$2
   want=$3
   awk -v crate="$crate" -v want="$want" '
-    /^\[/ {
-      section = $0
-      dotted = ""
-      if (section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\.nichlink-[a-z-]+\]$/) {
-        dotted = section
-        sub(/^\[.*dependencies\./, "", dotted)
-        sub(/\]$/, "", dotted)
-      }
-      next
-    }
+    /^\[/ { section = $0; next }
     section == "[package]" && /^version\.workspace *= *true/ { next }
     section == "[package]" && /^version *= *"/ {
       value = $0
@@ -393,34 +443,72 @@ version_problems() {
       if (value != want) {
         printf "%s declares version %s, but the workspace version is %s; a tag for %s would publish %s\n", crate, value, want, want, value
       }
-      next
-    }
-    dotted != "" && /^version *= *"/ {
-      value = $0
-      sub(/^version *= *"/, "", value)
-      sub(/"$/, "", value)
-      if (value != want) {
-        printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, dotted, value, want
-      }
-      next
-    }
-    # `nichlink-x.workspace = true` inherits its requirement from the root table
-    # `[workspace.dependencies]`, which `workspace_requirement_problems` checks once
-    # instead of once per member.
-    # `nichlink-x.workspace = true` 的需求继承自根的 `[workspace.dependencies]`，由
-    # `workspace_requirement_problems` 检查一次，而不是每个成员各查一次。
-    section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ { next }
-    section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+ *=/ {
-      if (match($0, /version *= *"[^"]*"/)) {
-        value = substr($0, RSTART, RLENGTH)
-        sub(/^version *= *"/, "", value)
-        sub(/"$/, "", value)
-        if (value != want) {
-          printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, $1, value, want
-        }
-      }
     }
   ' "$manifest"
+}
+
+# Every internal requirement must be the caret requirement on the current version line.
+# Read from `cargo metadata --no-deps` rather than from manifest text: the text readers
+# tested a dependency key and its `version` on the *same line*, so a multi-line inline
+# table — `nichlink-core = {`, then `path = …`, then `version = "0.9.9",`, then `}` —
+# hid a wrong requirement while `--check-table` stayed green (audit RC1a, recorded
+# earlier as R2). Cargo answers the question for every spelling at once: the plain line,
+# the dotted table, the target-specific table, and the multi-line inline table.
+# 每条内部要求都必须是对当前版本线的 caret 要求。它从 `cargo metadata --no-deps` 读，而不是
+# 读清单文本：文本读取器把依赖键与它的 `version` 放在**同一行**上测，于是多行内联表——
+# `nichlink-core = {`、`path = …`、`version = "0.9.9",`、`}`——能藏住一条错误要求而
+# `--check-table` 保持绿色（审计 RC1a，更早记为 R2）。cargo 一次就回答了所有拼写：普通行、
+# 点表、按目标限定的表，以及多行内联表。
+metadata_requirement_problems() {
+  want="^$1"
+  # `listed` arrives newline-separated (it is built by `sort`), so it is normalized to a
+  # space-delimited set before the membership test below; matching it as-is found no crate
+  # at all and the check silently passed everything.
+  # `listed` 是换行分隔的（由 `sort` 产出），因此先归一化成空格分隔的集合再做下面的成员判定；
+  # 原样匹配会一个 crate 也找不到，检查便对所有输入静默放过。
+  shipping=$(printf '%s\n' "$2" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ')
+  printf '%s' "$metadata_snapshot" |
+    tr '{' '\n' |
+    awk -v want="$want" -v shipping=" $shipping " '
+      {
+        # A package header carries both a name and a version; a dependency row carries a
+        # name and a `req`, so the two cannot be confused. Fields are taken by position
+        # (`RSTART`/`RLENGTH`) rather than by stripping a `^[^"]*` prefix: that idiom
+        # matches the empty string when the line *starts* with a quote, which silently
+        # kept the whole line as the value.
+        # 包头部同时带名字与版本；依赖行带名字与 `req`，因此两者不会混淆。字段按位置取
+        # （`RSTART`/`RLENGTH`），而不是剥掉 `^[^"]*` 前缀：那种写法在该行**以引号开头**时
+        # 只匹配空串，于是把整行当成了取值。
+        if (match($0, /"name":"[^"]+","version":/)) {
+          header = substr($0, RSTART, RLENGTH)
+          candidate = header
+          sub(/^"name":"/, "", candidate)
+          sub(/","version":$/, "", candidate)
+          # Only the crates the release table ships carry the caret requirement: a
+          # `publish = false` member (the examples, `conventions`) legitimately depends on
+          # a path with no version at all, and its `req` is `*`.
+          # 只有发布表里出厂的 crate 才带 caret 要求：`publish = false` 的成员（示例、`conventions`）
+          # 合法地依赖一条不带版本的 path，其 `req` 是 `*`。
+          crate = index(shipping, " " candidate " ") ? candidate : ""
+          next
+        }
+        if (crate != "" && match($0, /"name":"nichlink-[a-z-]+"/)) {
+          named = substr($0, RSTART, RLENGTH)
+          if (match($0, /"req":"[^"]*"/)) {
+            pinned = substr($0, RSTART, RLENGTH)
+            dep = named
+            sub(/^"name":"/, "", dep)
+            sub(/"$/, "", dep)
+            req = pinned
+            sub(/^"req":"/, "", req)
+            sub(/"$/, "", req)
+            if (req != want) {
+              printf "%s asks for %s %s, but every internal requirement must be %s\n", crate, dep, req, want
+            }
+          }
+        }
+      }
+    '
 }
 
 # Version problems in the root's `[workspace.dependencies]`, one per line. A
@@ -573,6 +661,11 @@ the level table and the dependency table disagree about which crates ship:
   levels:       $(printf '%s\n' $seen | sort | tr '\n' ' ')
   dependencies: $(printf '%s\n' "$listed" | tr '\n' ' ')"
   fi
+  metadata_issues=$(metadata_requirement_problems "$workspace_version" "$listed")
+  if [ -n "$metadata_issues" ]; then
+    problems="$problems
+$metadata_issues"
+  fi
   workspace_issues=$(workspace_requirement_problems "$workspace_version")
   if [ -n "$workspace_issues" ]; then
     problems="$problems
@@ -639,6 +732,21 @@ while IFS= read -r level; do
         level_published="$level_published $crate"
         continue
       fi
+      # Refuse before the irreversible call when cargo would upload a different number
+      # than the tag this run names. Without this, a member whose own `version` is spelled
+      # in a way `version_problems` cannot see passes every precondition, prints
+      # `publishing <crate> <workspace version>`, and uploads the other number — failing
+      # only afterwards, at the index wait.
+      # 当 cargo 会传上去的版本与本次运行点名的 tag 不一致时，在不可回退的调用之前拒绝。没有这道
+      # 检查时，成员自己的 `version` 只要用 `version_problems` 看不见的拼写写出，就能通过全部
+      # 前置条件、打印 `publishing <crate> <工作区版本>`，然后上传另一个数字——直到等 index 才失败。
+      resolved=$(resolved_version "$crate")
+      if [ -n "$resolved" ] && [ "$resolved" != "$workspace_version" ]; then
+        printf 'error: cargo resolves %s to %s, but this run publishes %s; refusing before the upload\n' \
+          "$crate" "$resolved" "$workspace_version" >&2
+        failed="$failed $crate"
+        continue
+      fi
       printf 'publishing %s %s\n' "$crate" "$workspace_version"
       # shellcheck disable=SC2086
       if cargo publish -p "$crate" $cargo_flags; then
@@ -648,6 +756,13 @@ while IFS= read -r level; do
         failed="$failed $crate"
       fi
     else
+      resolved=$(resolved_version "$crate")
+      if [ -n "$resolved" ] && [ "$resolved" != "$workspace_version" ]; then
+        printf 'error: cargo resolves %s to %s, but this run verifies %s\n' \
+          "$crate" "$resolved" "$workspace_version" >&2
+        failed="$failed $crate"
+        continue
+      fi
       printf 'verifying %s %s\n' "$crate" "$workspace_version"
       # shellcheck disable=SC2086
       if cargo publish -p "$crate" --dry-run $cargo_flags; then

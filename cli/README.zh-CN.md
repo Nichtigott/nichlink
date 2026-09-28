@@ -19,7 +19,7 @@ cd my-app && nichlink studio
 | `nichlink explain --overlay [--path <dir>] [--json]` | 渲染每个槽位与计划的静态覆盖投影（不是活的树） |
 | `nichlink grafts [path] [--json]` | 列出 `.nichlink/external-grafts/*/graft.plan` 及其目标，以及宿主入口是否声明该槽位 |
 | `nichlink studio` | 为当前项目启动 Studio TUI |
-| `nichlink mcp` | 运行只读 MCP stdio 桥 |
+| `nichlink mcp` | 运行 MCP stdio 桥：源码与注册树查询，外加 authoring 写入——除非带 `apply: true`，否则只预览 |
 
 依赖来源自动检测：从 NichLink checkout 运行的 CLI 写入 path 依赖；
 全局安装的 CLI 写入 Git 依赖（带版本下限，发布后 Cargo 可解析到

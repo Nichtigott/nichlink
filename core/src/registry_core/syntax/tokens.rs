@@ -172,6 +172,24 @@ pub fn path_to_string(path: &syn::Path) -> String {
     output
 }
 
+/// Whether `path` names exactly `needle`, or a `needle` inside it (`…::needle`).
+/// `path` 是否正好就是 `needle`，或 `needle` 位于其中（`…::needle`）。
+///
+/// A suffix match is not enough: `crate::NOT_ROOT_NODE_ID` ends with `ROOT_NODE_ID`,
+/// `my_root_node_id` ends with `root_node_id`, and `OwnNodeId::from_path` ends with
+/// `NodeId::from_path`, so a plain `ends_with` classified each look-alike as the parent the face
+/// declared (audit `KN6`).
+/// 只匹配后缀不够：`crate::NOT_ROOT_NODE_ID` 以 `ROOT_NODE_ID` 结尾、`my_root_node_id` 以
+/// `root_node_id` 结尾、`OwnNodeId::from_path` 以 `NodeId::from_path` 结尾，因此纯 `ends_with`
+/// 会把每个相似物都判成该面声明的那个父级（审计 `KN6`）。
+#[doc(hidden)]
+pub fn is_path_to(path: &str, needle: &str) -> bool {
+    path == needle
+        || path
+            .strip_suffix(needle)
+            .is_some_and(|prefix| prefix.ends_with("::"))
+}
+
 /// The 1-based source location of a span's start.
 /// span 起点的 1 起始源码位置。
 #[doc(hidden)]

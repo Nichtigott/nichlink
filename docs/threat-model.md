@@ -51,7 +51,11 @@ data.
 
 A **process** plugin is the weakest boundary here: the host frames its I/O,
 bounds input, output, and wall time, terminates a child that overruns, and can
-clear the child's environment and choose its working directory. What it cannot
+clear the child's environment and choose its working directory. The deadline
+bounds the *call*, not the process tree: the host kills the direct child, and a
+process that child started is outside that group — killing a group needs `libc`
+— so a descendant can keep running with the host's uid, environment, filesystem
+and network after the call has been reported dead. What it cannot
 narrow is access: the child still reaches the filesystem and the network as the
 host's user, so the environment and the working directory are the two knobs that
 exist rather than a sandbox. The README's plugin section says so and disclaims a

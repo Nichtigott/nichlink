@@ -82,8 +82,8 @@ pub use face_view::{
     read_pruning_manifest,
 };
 pub use graft_view::{
-    DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, declared_grafts,
-    graft_plan_rows,
+    DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, OVERLAY_NOTE,
+    OverlayProjection, OverlaySlot, declared_grafts, graft_plan_rows, overlay_projection,
 };
 /// The package name Cargo reports for a package root, which is the identity
 /// namespace of every face that package compiles.

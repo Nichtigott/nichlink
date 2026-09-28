@@ -50,6 +50,20 @@ impl MirGraph {
     /// 解析器都非法。钉住它的是 `a_control_character_in_a_name_stays_escaped`。
     pub fn to_jsonl(&self) -> String {
         let mut output = String::new();
+        // The snapshot header comes first, before any candidate: a reader that
+        // stops at the first line learns which tree the rest describes instead of
+        // having to scan to the end for it.
+        // 快照表头排在最前、先于任何候选：只读第一行的读取方就能知道余下内容描述的是哪棵树，
+        // 而不必扫到结尾。
+        if let Some(snapshot) = &self.snapshot {
+            writeln!(
+                output,
+                "{{\"kind\":\"snapshot\",\"namespace\":{},\"root\":{}}}",
+                json_string(&snapshot.namespace),
+                json_string(&snapshot.root.to_string())
+            )
+            .unwrap();
+        }
         for function in &self.functions {
             writeln!(
                 output,
@@ -95,6 +109,28 @@ mod tests {
         .unwrap();
         let parsed = MirGraph::from_jsonl(&graph.to_jsonl()).unwrap();
         assert_eq!(parsed, graph);
+    }
+
+    /// The writer emits the snapshot header first, and the reader gets the graph
+    /// back whole — so an artifact this workspace writes names the tree it came
+    /// from rather than arriving unidentified.
+    /// 写入方把快照表头放在最前，读取方拿回完整的图——因此本工作区写出的 artifact 点名了它的
+    /// 来源树，而不是以"未标识"抵达。
+    #[test]
+    fn the_snapshot_header_leads_the_artifact_and_round_trips() {
+        let graph = MirGraph::from_jsonl(
+            "{\"kind\":\"snapshot\",\"namespace\":\"demo\",\"root\":\"00000000000000000000000000000000\"}\n{\"kind\":\"call\",\"caller\":\"a\",\"callee\":\"b\",\"mir_line\":1}\n",
+        )
+        .expect("the header parses");
+        let jsonl = graph.to_jsonl();
+        assert!(
+            jsonl.starts_with("{\"kind\":\"snapshot\",\"namespace\":\"demo\",\"root\":\""),
+            "the identification must be the first thing a reader sees: {jsonl:?}"
+        );
+        assert_eq!(
+            MirGraph::from_jsonl(&jsonl).expect("the writer's own output"),
+            graph
+        );
     }
 
     /// The artifact must stay valid for a strict reader, which is the whole point

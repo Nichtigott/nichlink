@@ -271,7 +271,14 @@ fn dispatch(root: &Path, request: &Value) -> Value {
                 "instructions": "Use nichlink.search before reading source; callgraph is static-heuristic."
             }),
         ),
-        "notifications/initialized" | "notifications/cancelled" => Value::Null,
+        // An id-carrying `notifications/…` member is a *request* by the envelope rule
+        // stated above, so it is answered; a genuine notification never reaches this arm
+        // (it returns at the `id` check). Returning `Value::Null` here left such a client
+        // waiting forever, and a one-member batch produced no output at all.
+        // 带 id 的 `notifications/…` 成员按上面写明的信封规则是**请求**，因此要作答；真正的通知
+        // 根本到不了这个分支（它在 `id` 检查处就返回了）。在这里返回 `Value::Null` 会让那种客户端
+        // 永远等下去，而单成员 batch 则完全没有输出。
+        "notifications/initialized" | "notifications/cancelled" => success(id, json!({})),
         "ping" => success(id, json!({})),
         "tools/list" => success(id, json!({ "tools": tools() })),
         "tools/call" => tool_call(root, id, params),

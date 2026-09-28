@@ -39,8 +39,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # This job holds `CARGO_REGISTRY_TOKEN` (the step env at the publish step below), so its
+      # actions are pinned by commit rather than by a moving tag: a retagged upstream action would
+      # otherwise run before the publish step and could rewrite what that step executes. The comment
+      # names the tag or branch each SHA came from, because a bare SHA tells the next reader nothing
+      # about whether it is current. `ci.yml`'s actions stay tag-pinned on purpose: that workflow
+      # carries no registry secret, so pinning there is tidiness rather than safety (audit `RC7`,
+      # option A chosen by the maintainer 2026-09-28).
+      # 本 job 持有 `CARGO_REGISTRY_TOKEN`（见下方发布步骤的步骤级 env），因此它的 action 按提交
+      # pin，而不是按会移动的 tag：否则一个被重新打 tag 的上游 action 会先于发布步骤运行，并可能
+      # 改写那一步真正执行的东西。注释写明每个 SHA 来自哪个 tag 或分支——光有 SHA，下一个读者无从
+      # 判断它是否还新。`ci.yml` 的 action 有意保持 tag 形式：那个工作流不携带 registry 秘密，在
+      # 那里 pin 属于整洁而非安全（审计 `RC7`，维护者 2026-09-28 选定选项 A）。
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable, 2026-09-28
         with:
           components: rustfmt, clippy
 
@@ -53,24 +65,20 @@ jobs:
         # 到本应描述它的 tag 上，而一旦不匹配就再也无法挽回。
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          # The release version lives in `[workspace.package]` and nowhere else. Reading
-          # the first `version = "…"` line of the root manifest used to be enough for a
-          # tag to pass while `cargo publish` uploaded a different version: members
-          # inherit `[workspace.package]`, so a stale centralized requirement above that
-          # section named the tag check's version instead of the release's.
-          # 发布版本只存在于 `[workspace.package]`。读根清单里第一行 `version = "…"` 曾足以让一个
-          # tag 通过、而 `cargo publish` 上传另一个版本：成员继承 `[workspace.package]`，因此位于
-          # 该节之上的一行陈旧的集中依赖要求会冒充 tag 检查所用的版本。
-          version=$(awk '
-            /^\[/ { section = $0; next }
-            section == "[workspace.package]" && /^version *=/ {
-              value = $0
-              sub(/^version *= *"/, "", value)
-              sub(/".*$/, "", value)
-              print value
-              exit
-            }
-          ' Cargo.toml)
+          # The release version lives in `[workspace.package]` and nowhere else, and the
+          # reader is the release's own: this step asks `tools/nichlink-publish`, which is
+          # what the publish path uses. Reading the first `version = "…"` line here used to
+          # be enough for a tag to pass while `cargo publish` uploaded a different version
+          # — members inherit `[workspace.package]`, so a stale centralized requirement
+          # above that section named the tag check's version instead of the release's — and
+          # a second copy of the reader drifted from the first on the spellings where they
+          # disagree (audit RC4).
+          # 发布版本只存在于 `[workspace.package]`，而读取器就是发布自己用的那个：这一步问
+          # `tools/nichlink-publish`，也就是发布路径所用的那个。过去在这里读根清单第一行
+          # `version = "…"` 曾足以让 tag 通过、而 `cargo publish` 上传另一个版本——成员继承
+          # `[workspace.package]`，因此该节之上的一行陈旧集中依赖要求会冒充 tag 检查所用的版本——
+          # 而读取器的第二份副本又会在两者分歧的拼写上与第一份漂移（审计 RC4）。
+          version=$(tools/nichlink-publish --workspace-version)
           if [ -z "$version" ]; then
             echo "Cargo.toml names no version in [workspace.package]" >&2
             exit 1

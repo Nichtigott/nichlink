@@ -134,3 +134,32 @@ fn the_shipped_manifests_name_one_version() {
         "the release line has to have one source and one value everywhere: {found:#?}"
     );
 }
+
+/// A renamed dependency is still a requirement on the package it names. Reading only keys
+/// that start with `nichlink-` let `kernel = { package = "nichlink-core", version = … }`
+/// name an internal dependency with a version nothing checked.
+/// 重命名的依赖仍然是对它点名的那个包的要求。只读以 `nichlink-` 开头的键，会让
+/// `kernel = { package = "nichlink-core", version = … }` 以没人检查过的版本点名一个内部依赖。
+#[test]
+fn a_renamed_internal_requirement_is_reported() {
+    let root = synthetic(
+        "[workspace]\nmembers = [\"cli\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
+        &[(
+            "cli",
+            "[package]\nname = \"nichlink-cli\"\nversion.workspace = true\n\n\
+             [dependencies]\nkernel = { package = \"nichlink-core\", path = \"../core\", \
+             version = \"0.0.9\" }\n",
+        )],
+    );
+    let found = findings(&root);
+    assert_eq!(
+        found.len(),
+        1,
+        "the alias does not hide the requirement: {found:#?}"
+    );
+    assert!(
+        found[0].reason.contains("nichlink-core"),
+        "the finding names the package, not the alias: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}

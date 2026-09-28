@@ -101,7 +101,7 @@ pub fn allow_workarounds(root: &Path) -> Vec<String> {
     // scans itself, and a literal needle would report this constant.
     // 运行时拼出来，使本文件自己的源码不含被搜索的字面量：`conventions` 与其他 crate 目录一样，
     // 门禁会扫描自己，而写死的针会把这个常量报出来。
-    let needle = ["allow", "("].concat();
+    let head = ["al", "low"].concat();
     for directory in crate_directories(root) {
         for path in rust_sources(&directory) {
             // The scan runs on the kernel's masked text — comments and literals blanked
@@ -119,28 +119,42 @@ pub fn allow_workarounds(root: &Path) -> Vec<String> {
             // 最后一个属性生效而整 crate 关掉 lint）、同一行上的第二个属性
             // （`#[allow(dead_code)] #[allow(missing_docs)]`，扫描在第一个 `)` 停下然后跳过该行
             // 剩余部分）、以及 `#[cfg_attr(all(), allow(missing_docs))]`。
+            //
+            // The name and its paren are matched *separately*, with whitespace allowed
+            // between them, because a fourth spelling was green against the literal search:
+            // `#[allow (missing_docs)]` (a space before the paren) and a `(` carried onto
+            // the next line are the same attribute to rustc. Searching the bare name is why
+            // the left boundary below matters: `disallow(…)` is a different function.
+            // 名字与它的括号**分开**匹配，两者之间允许空白，因为对字面搜索还有第四种写法为绿：
+            // `#[allow (missing_docs)]`（括号前一个空格）以及把 `(` 折到下一行，对 rustc 是同一个
+            // 属性。搜索裸名字正是下面那道左边界重要的原因：`disallow(…)` 是另一个函数。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
             let masked = nichlink::source::mask_non_code(&text);
             let mut from = 0usize;
-            while let Some(offset) = masked[from..].find(&needle) {
+            while let Some(offset) = masked[from..].find(&head) {
                 let at = from + offset;
-                // An identifier character immediately before the needle means it is part
+                // An identifier character immediately before the name means it is part
                 // of a longer name (`disallow(`), not the attribute.
-                // 针之前紧邻标识符字符意味着它是更长名字的一部分（`disallow(`），而不是属性。
+                // 名字之前紧邻标识符字符意味着它是更长名字的一部分（`disallow(`），而不是属性。
                 let boundary = at == 0
                     || !masked[..at]
                         .chars()
                         .next_back()
                         .is_some_and(|previous| previous.is_alphanumeric() || previous == '_');
-                if boundary && names_the_lint(&masked, at + needle.len() - 1) {
+                let after = &masked[at + head.len()..];
+                let spaced = after.len() - after.trim_start().len();
+                if boundary
+                    && after[spaced..].starts_with('(')
+                    && names_the_lint(&masked, at + head.len() + spaced)
+                {
                     found.push(format!(
                         "{}:{}",
                         relative(root, &path),
                         masked[..at].matches('\n').count() + 1
                     ));
                 }
-                from = at + needle.len();
+                from = at + head.len();
             }
         }
     }
@@ -188,12 +202,31 @@ fn names_the_lint(masked: &str, open: usize) -> bool {
 /// `#![deny(missing_docs)]` 与 `#![warn(missing_docs, other)]` 都让 lint 保持开启，却被报成
 /// 缺少它。
 fn carries_the_lint(path: &Path) -> bool {
-    lines(path).iter().any(|line| {
+    for line in lines(path) {
         let trimmed = line.trim();
-        ((trimmed.starts_with("#![warn(") || trimmed.starts_with("#![deny("))
-            && trimmed.contains(LINT_NAME))
-            || trimmed == "#![deny(warnings)]"
-    })
+        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
+        }
+        if !trimmed.starts_with("#![") {
+            // The file's own inner attributes end at the first item. An attribute after
+            // that belongs to *that* item — or to the `mod` it sits in — so the lint is
+            // not on for the crate, which is what a `#![warn(missing_docs)]` moved inside
+            // a module used to look like.
+            // 文件自己的内部属性在第一个条目处结束。那之后的属性属于**那个**条目——或者它所在的
+            // 那个 `mod`——因此 lint 并没有对整个 crate 开启；而一个被搬进某个模块里的
+            // `#![warn(missing_docs)]` 过去看起来正是"已开启"。
+            return false;
+        }
+        if (trimmed.starts_with("#![warn(") || trimmed.starts_with("#![deny("))
+            && trimmed.contains(LINT_NAME)
+        {
+            return true;
+        }
+        if trimmed == "#![deny(warnings)]" {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -245,6 +278,28 @@ mod tests {
             "the attribute is forbidden however it is formatted: {found:?}"
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The name and its paren are two tokens to rustc, and whitespace between them — a
+    /// space, or a line break — is the same attribute. The literal `allow(` search saw
+    /// neither, so both spellings switched the lint off invisibly.
+    /// 名字与它的括号对 rustc 是两个 token，两者之间的空白——一个空格或一次换行——是同一个属性。
+    /// 按字面搜索 `allow(` 两者都看不见，于是这两种拼法都能无声地关掉 lint。
+    #[test]
+    fn whitespace_before_the_paren_is_still_a_violation() {
+        for source in [
+            "#![warn(missing_docs)]\n\n#[allow (missing_docs)]\npub struct Undocumented;\n",
+            "#![warn(missing_docs)]\n\n#[allow\n(missing_docs)]\npub struct Undocumented;\n",
+        ] {
+            let root = synthetic(&[("zz/src/lib.rs", source)]);
+            let found = allow_workarounds(&root);
+            assert_eq!(
+                found.len(),
+                1,
+                "`{source}` is the same attribute: {found:?}"
+            );
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 
     /// A throwaway checkout with the given files under it.
@@ -358,5 +413,32 @@ mod tests {
             );
             let _ = std::fs::remove_dir_all(&root);
         }
+    }
+
+    /// The lint has to be on the crate root, not merely somewhere in the file: an inner
+    /// attribute after the first item belongs to *that* item, or to the `mod` it sits in,
+    /// so deleting the root's `#![warn(missing_docs)]` and putting one inside a module
+    /// left `missing_roots` empty.
+    /// lint 必须开在 crate 根上，而不只是"文件里某处"：第一个条目之后的内部属性属于**那个**条目、
+    /// 或它所在的那个 `mod`，因此删掉根上的 `#![warn(missing_docs)]` 再往某个模块里放一个，
+    /// `missing_roots` 仍是空的。
+    #[test]
+    fn an_attribute_inside_a_module_does_not_count() {
+        let root = synthetic(&[
+            (
+                "zzprobe/Cargo.toml",
+                "[package]\nname = \"nichlink-zzprobe\"\n",
+            ),
+            (
+                "zzprobe/src/lib.rs",
+                "pub struct Item;\n\nmod inner {\n    #![warn(missing_docs)]\n}\n",
+            ),
+        ]);
+        let missing = missing_roots(&root);
+        assert!(
+            missing.iter().any(|path| path == "zzprobe/src/lib.rs"),
+            "the crate root itself carries no lint here: {missing:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

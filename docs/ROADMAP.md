@@ -11,7 +11,7 @@ This roadmap covers NichLink itself. NichUI product work, funding, and community
 - [x] Folder-backed discovery, identity cache, coarse scope, and `StaticPlan`.
 - [x] Runtime tracing modes: `off`, `errors-only`, and `full`.
 - [x] Studio search/inspect/data views and source navigation.
-- [x] Read-only MCP bridge and verified Wasm/process plugin adapters.
+- [x] MCP bridge — queries plus a previewed authoring write path — and verified Wasm/process plugin adapters.
 - [x] Cross-platform CI, scale audits, symbol audits, and package checks.
 - [x] Kernel/execution-surface split: one pure kernel (`nichlink-core`) holding
   protocol vocabulary and pure methods, with thin surfaces

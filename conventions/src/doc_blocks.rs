@@ -2,15 +2,17 @@
 //! 文档代码块门禁：markdown 里围栏标记的 Rust 必须仍然能解析。
 //!
 //! Why this exists: the root `README.md`, every crate `README.md`, and
-//! `docs/*.md` together hold 50 Rust-tagged fences, and the READMEs *are* the
+//! `docs/*.md` together hold every Rust-tagged fence a reader is expected to
+//! follow, and the READMEs *are* the
 //! crates.io landing pages for all nine published crates (`readme =
 //! "README.md"` in every manifest). Nothing extracted, compiled, or even
 //! parsed one of them, so a stale signature could ship and be read by every
 //! user without a single gate noticing.
-//! 为什么需要它：根 `README.md`、每个 crate 的 `README.md` 与 `docs/*.md` 合计有 50 个
-//! 标记为 Rust 的围栏，而这些 README **就是**九个已发布 crate 在 crates.io 上的落地页
-//! （每个清单都写了 `readme = "README.md"`）。此前没有任何程序抽取、编译、甚至解析过
+//! 为什么需要它：根 `README.md`、每个 crate 的 `README.md` 与 `docs/*.md` 合计持有读者
+//! 预期遵循的每一个标记为 Rust 的围栏，而这些 README **就是**九个已发布 crate 在 crates.io
+//! 上的落地页（每个清单都写了 `readme = "README.md"`）。此前没有任何程序抽取、编译、甚至解析过
 //! 其中任何一个，因此一份过期的签名可以发布出去被每个用户读到，而没有任何门禁察觉。
+//! （这里有意不写数量：散文里的数字会漂，而门禁覆盖的是全部，不是某一个数。）
 //!
 //! Boundary, and why it is not the stronger check: a fence is accepted when it
 //! parses either as a whole file or as a statement block, because most of these
@@ -18,19 +20,19 @@
 //! a statement using `?`. Making them *compile* would require wrapping every
 //! one in a harness with imports and a crate root, and `#![doc =
 //! include_str!("../README.md")]`, the usual way to doctest a README, would turn
-//! all 50 into doctests and fail the build on the excerpts that cannot compile
+//! every one of them into a doctest and fail the build on the excerpts that cannot compile
 //! standalone. Parsing catches syntax rot today; compiling the excerpts is a
 //! separate, larger piece of work and is recorded as such in the roadmap.
 //! 边界，以及为什么不做更强的检查：围栏只要能作为整份文件或作为语句块解析就通过，因为这些块
 //! 大多是有意的摘录——某文件的内容、一次宏调用、或一条使用 `?` 的语句。要让它们**编译**，
 //! 就得给每一个套上带导入与 crate 根的脚手架；而 `#![doc = include_str!("../README.md")]`
-//! 这个给 README 做 doctest 的常规做法，会把 50 个块全变成 doctest，并在那些无法独立编译的
+//! 这个给 README 做 doctest 的常规做法，会把每一个块都变成 doctest，并在那些无法独立编译的
 //! 摘录上让构建失败。解析能抓住今天的语法腐化；让摘录真正编译是另一件更大的工作，已在路线图
 //! 中如实登记。
 
 use std::path::{Path, PathBuf};
 
-use crate::size::looks_test_only;
+use crate::size::{is_mounted_as_test, looks_test_only};
 use crate::{crate_directories, lines, relative, rust_sources};
 
 /// One Rust-tagged fence that neither parses as a file nor as a statement block.
@@ -112,6 +114,20 @@ fn collect_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+/// Whether a fence's info string names Rust.
+/// 围栏的信息串是否命名 Rust。
+///
+/// Both halves of the gate read the same set through this one predicate. They used to
+/// differ: the doc-comment half lowercased the tag and accepted `rs` as well, while the
+/// markdown half compared the raw string against `rust`, so `rs` and `Rust` were covered in
+/// one place and invisible in the other.
+/// 门禁的两半边都通过这一个判定读同一组。它们过去并不一致：注释那半边先把 tag 小写并接受
+/// `rs`，而 markdown 那半边拿原串与 `rust` 比较，于是 `rs` 与 `Rust` 在一处被覆盖、在另一处
+/// 不可见。
+fn names_rust(info: &str) -> bool {
+    matches!(info.trim().to_ascii_lowercase().as_str(), "rust" | "rs")
+}
+
 /// Whether a markdown path is a record rather than living documentation.
 /// 该 markdown 路径是记录而不是活文档。
 pub fn is_record(path: &Path) -> bool {
@@ -188,18 +204,15 @@ fn markdown_findings(root: &Path) -> Vec<Finding> {
                     // `rust,ignore` 之类命名的是同一种语言；只有第一个逗号之前的文本用于选择。
                     let info = trimmed.trim_start_matches(fence).trim();
                     let mut tags = info.split(',');
-                    let language = tags.next().unwrap_or("").trim().to_ascii_lowercase();
+                    let language = tags.next().unwrap_or("");
                     // `macro-input` is this repository's documented escape hatch for a
                     // field-list excerpt that is Rust-shaped but not a file: the
                     // doc-comment half honours it, and the markdown half did not, so a
-                    // sanctioned tag was reported as a broken block. `rs` and `Rust`
-                    // name the same language.
+                    // sanctioned tag was reported as a broken block.
                     // `macro-input` 是本仓库为"形状像 Rust 但不是文件的字段列表摘录"写下的
                     // 逃逸口：注释那一半认它，markdown 这一半不认，于是一个被认可过的标记被报成
-                    // 坏块。`rs` 与 `Rust` 命名的是同一种语言。
-                    if matches!(language.as_str(), "rust" | "rs")
-                        && !tags.any(|tag| tag.trim() == "macro-input")
-                    {
+                    // 坏块。
+                    if names_rust(language) && !tags.any(|tag| tag.trim() == "macro-input") {
                         open = Some((index + 1, String::new()));
                     }
                 }
@@ -235,7 +248,14 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     for directory in crate_directories(root) {
         for path in rust_sources(&directory.join("src")) {
-            if looks_test_only(&path) {
+            // The same identity question the size gate asks, answered by the same rule: location and
+            // name are hints, and the mount behind `#[cfg(test)]` is proof. A hint misses
+            // `tree/graft_ops/fixtures.rs` — mounted as a test, named as if it were not — and this
+            // gate then checked its comments as documentation a reader is shown (audit `G-05`).
+            // 与尺寸门禁同一个身份问题，用同一条规则回答：位置与名字是提示，而挂在 `#[cfg(test)]`
+            // 之后是证明。提示会漏掉 `tree/graft_ops/fixtures.rs`——它作为测试挂载、名字却不像——于是
+            // 这道门禁把它的注释当读者文档检查（审计 `G-05`）。
+            if looks_test_only(&path) || is_mounted_as_test(&directory, &path) {
                 continue;
             }
             let file = relative(root, &path);
@@ -280,7 +300,7 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
                     None => {
                         let info = text.trim_start().trim_start_matches('`').trim();
                         let mut tags = info.split(',').map(str::trim);
-                        if tags.next().unwrap_or("") != "rust" {
+                        if !names_rust(tags.next().unwrap_or("")) {
                             continue;
                         }
                         // `macro-input` marks an excerpt whose shape is decided by a
@@ -321,6 +341,19 @@ fn parses(code: &str) -> Result<(), String> {
     // 度量的围栏会带走整套门禁而不是让它失败。度量来自内核的 `guard_nesting`，内核自己的解析
     // 入口用的也是它；只留一份正是防止两者漂移的办法。
     nichlink::registry_core::syntax::guard_nesting(code).map_err(|error| error.to_string())?;
+    // A fence whose whole body is one identifier is a word, not an excerpt, and *every*
+    // reading below accepts it: a path expression is a valid statement tail, so
+    // `{ TODO }` parses. The audit measured `TODO` passing while `fix this later` did not;
+    // the cause is the statement reading rather than the field list. Tag such a block
+    // `text`.
+    // 整段只有一个标识符的围栏是一个单词而不是摘录，而下面**每一种**读法都接受它：路径表达式是
+    // 合法的语句尾，因此 `{ TODO }` 能解析。审计实测 `TODO` 能过而 `fix this later` 不能，成因是
+    // 语句读法而不是字段列表。这样的块请标成 `text`。
+    if is_one_identifier(code) {
+        return Err(
+            "a single identifier is not a Rust excerpt; tag the block as `text`".to_owned(),
+        );
+    }
     if syn::parse_file(code).is_ok() {
         return Ok(());
     }
@@ -346,6 +379,20 @@ fn parses(code: &str) -> Result<(), String> {
         return Ok(());
     }
     Err(block_error)
+}
+
+/// Whether the excerpt is one bare identifier and nothing else.
+/// 该摘录是否只有一个裸标识符。
+fn is_one_identifier(code: &str) -> bool {
+    let trimmed = code.trim();
+    !trimmed.is_empty()
+        && trimmed
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_alphabetic() || first == '_')
+        && trimmed
+            .chars()
+            .all(|character| character.is_alphanumeric() || character == '_')
 }
 
 #[cfg(test)]

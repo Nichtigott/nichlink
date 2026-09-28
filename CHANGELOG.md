@@ -64,11 +64,6 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 （run `36297635525`），`--verify-consumers` 在同一次运行里通过：检出之外的一次性 crate 按版本解析并
 构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
-## [Unreleased]
-
-Nothing yet; the next release's entries land here. There is no per-crate
-changelog, so this section stays empty until something ships.
-
 ## [0.1.6] — unreleased
 
 ### Added
@@ -112,11 +107,65 @@ changelog, so this section stays empty until something ships.
   tests; the two load-bearing ones measured red (show the stale identity as "now"; let a
   typed cut fall through to `stale`).
 
+- **`nichlink.explain` renders the *overlay* projection (`overlay: true`), and the traversal
+  behind it moved into `nichlink_build_method::overlay_projection`.** `explain` answered one face,
+  or projected the tree the build scoped; neither said which slot a declared graft cut replaces,
+  which the CLI's `explain --overlay` had answered since it existed. The bridge now answers it
+  from the same traversal, so the two surfaces cannot disagree about which slot is replaced —
+  the `graft_plan_rows` move of this release, one item later; `DeclaredGraft::form` moved with it
+  so a cut's spelling is one rule too, and the CLI's JSON document is field-for-field unchanged.
+  Each row names the logical path, kind and source plus either the replacement
+  (`graft … full … form … (entry line N)`) or nothing, and slots the scope does not keep are
+  listed as pruned. An unknown scope leaves `selected`/`kept` unknown rather than calling a
+  surviving face pruned, and the reply carries the note saying this is a static projection — the
+  live effective tree is `Registry::dump_effective` inside a host that links both registries.
+  `node` and `overlay` are mutually exclusive. Measured through the bridge on a checked host with
+  one declared plan: `slots 1 (replaced 1)` with
+  `<- graft=button_fast full=false form=string (entry line 2)`, `pruned 1` (the auto scope selected
+  only the declared slot), and `plan records 1 [kept by cut `root/button` … at entry line 2]`. Six
+  bridge tests and three for the shared traversal; two mutations measured red across both surfaces
+  (let a selected child's parent fall into `pruned`; read a missing scope as `pruned`).
+
+- **A MIR artifact is now a *snapshot*, and `nichlink.mir` diffs two of them
+  (`against: "<path>"`).** A MIR dump is a snapshot of *some* tree and rustc's text format cannot
+  say which, so the JSONL this tool writes carries a header naming the identity namespace and
+  registry root it came from — the convention the trace artifact already uses. Two snapshots of one
+  tree diff into the call-graph delta: added and gone `caller -> callee` relations (matched as
+  pairs and deduplicated, so a moved MIR line is not a delta) plus function symbols, counted from
+  the baseline forward. A snapshot of *another* tree is refused by name; an artifact that cannot
+  name its tree (the ordinary `-Zunpretty=mir` dump) still diffs, and the reply says a comparison
+  across two trees cannot be ruled out. Re-emitting another tree's artifact is refused rather than
+  relabelled, and `nichlink.unified` refuses to merge a foreign snapshot with this package's
+  trace. Measured through the bridge: `jsonl: true` on a dump writes
+  `{"kind":"snapshot","namespace":"e2e-016","root":"7da1…"}` as the first line, and the delta
+  reports `relations added 1 gone 1  functions added 1 gone 1` with `crate::outer -> crate::new`
+  added and `crate::outer -> crate::other` gone; a hand-written `somewhere-else` snapshot comes
+  back `REFUSED: the two artifacts describe different trees`, and the text-dump pair answers with
+  the unidentified caveat. Six bridge tests and one core snapshot test; three mutations measured
+  red (swap the delta direction; skip the foreign-snapshot check; stop stamping the header).
+
+- **`nichlink.search` searches the tree, and each face hit says what the build thinks of it.** The
+  tool answered "which file or function has this name" and nothing about the registry; it now
+  matches logical path, `kind`, module and slot name first — the spellings the other tools use —
+  and annotates each hit `ok`, `added since build`, `re-identified` (with both identities) or
+  `build unknown`, before the unchanged file and function hits. The verdict comes from
+  `crate::tree_delta`, the one rule `nichlink.diff` states (extracted here), so a face cannot be
+  `ok` in one tool and `added` in the other. A root whose identity namespace cannot be learned
+  still answers the source half and says the tree half is unavailable. Measured through the bridge
+  on the same host: `face  root/slider … [ok]`; after adding a face,
+  `face  root/gauge … [added since build]` under the stale-build line; and after changing a `kind`
+  under an unmoved file, `[re-identified (daca0f7b… -> bc2df33a…)]`. Five tests; the shared rule
+  was mutation-checked (every published face read as `ok`) and four tests went red across diff and
+  search together.
+
 ### Changed
 
 - The CLI's `grafts` now renders rows computed by `nichlink_build_method::graft_plan_rows`;
   its JSON and text output are byte-identical (pinned by its own tests), and the rule that
   decides "is this plan's slot declared" has one home instead of two.
+- `explain --overlay`'s projection now comes from
+  `nichlink_build_method::overlay_projection`, so the CLI and the bridge cannot disagree about
+  which slot a cut replaces; its JSON and text output are unchanged.
 
 ## [0.1.5] — 2026-09-27
 
@@ -1226,10 +1275,52 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`。两条测试，
   其中两条承载主张的实测为红（把旧身份当作"现在"；让类型化切口落进 `stale`）。
 
+- **`nichlink.explain` 渲染覆盖投影（`overlay: true`），而它背后的遍历搬进了
+  `nichlink_build_method::overlay_projection`。** `explain` 一次回答一个面，或投影构建划定作用域的
+  那棵树；两者都不说哪个槽位被已声明 graft 切口替换——而 CLI 的 `explain --overlay` 从存在起就在回答
+  它。桥现在用同一次遍历回答，因此两个执行面不可能就"哪个槽位被替换"产生分歧——这就是本发布里
+  `graft_plan_rows` 那次搬家的下一项；`DeclaredGraft::form` 随之搬走，所以切口的拼法也只有一条规则，
+  而 CLI 的 JSON 文档逐字段不变。每行点名逻辑路径、kind 与源码，以及替换件
+  （`graft … full … form … (entry line N)`）或什么都没有；作用域不保住的槽位列在 pruned 里。作用域
+  未知时 `selected`/`kept` 保持未知，而不是把一个仍然存活的面说成被剪掉；回复携带那条说明，写明这是
+  静态投影——活的生效树是宿主导航里同时链接两棵注册树后的 `Registry::dump_effective`。`node` 与
+  `overlay` 互斥。经桥在一个已 check 的宿主上实测（一份已声明计划）：`slots 1 (replaced 1)`，附
+  `<- graft=button_fast full=false form=string (entry line 2)`；`pruned 1`（自动作用域只选中了那条
+  已声明槽位）；以及 `plan records 1 [kept by cut `root/button` … at entry line 2]`。桥六条测试、
+  共享遍历三条测试；两次变异在两个执行面上实测为红（让被选中子级的父面落进 `pruned`；把缺失的
+  作用域读成 `pruned`）。
+
+- **MIR artifact 现在是一份快照，而 `nichlink.mir` 能对两份作差（`against: "<path>"`）。** MIR
+  转储是**某棵**树的快照，而 rustc 的文本格式说不出是哪一棵，因此本工具写出的 JSONL 携带一个表头，
+  点名它来源的身份命名空间与注册树根——也就是 trace artifact 已经在用的那种约定。同一棵树的两份快照
+  作差得到调用图差异：`caller -> callee` 关系的新增与消失（按对匹配并去重，因此 MIR 行号移动不算差异）
+  以及函数符号，计数从基线指向后一份。属于**另一棵**树的快照会被按名拒绝；说不出自己那棵树的 artifact
+  （普通的 `-Zunpretty=mir` 转储）仍能作差，而回复会说明"跨两棵树的比较无法排除"。给另一棵树的 artifact
+  重新盖戳会被拒绝而不是换标签，`nichlink.unified` 也拒绝把外来快照与本包的 trace 合并。经桥实测：
+  对转储执行 `jsonl: true` 会把
+  `{"kind":"snapshot","namespace":"e2e-016","root":"7da1…"}` 写成第一行，而差异报出
+  `relations added 1 gone 1  functions added 1 gone 1`，新增 `crate::outer -> crate::new`、消失
+  `crate::outer -> crate::other`；手写的 `somewhere-else` 快照回以
+  `REFUSED: the two artifacts describe different trees`；两份文本转储则带着"未标识"的限定作答。
+  桥六条测试、内核一条快照测试；三次变异实测为红（交换差异方向；跳过外来快照检查；不再盖戳表头）。
+
+- **`nichlink.search` 现在会搜树，而每个面命中都会说出构建对它的看法。** 本工具过去只回答"哪个文件或
+  函数叫这个名字"、对注册树一无所知；现在它优先匹配逻辑路径、`kind`、模块与槽位名——也就是其它工具
+  使用的那些拼法——并给每个命中标注 `ok`、`added since build`、`re-identified`（带上新旧两个身份）或
+  `build unknown`，随后才是与此前相同的文件与函数命中。结论来自 `crate::tree_delta`，也就是
+  `nichlink.diff` 说出的那一条规则（本轮提取出来），因此一个面不可能在一个工具里是 `ok`、在另一个里是
+  `added`。身份命名空间无从得知的根仍然回答源码那一半，并说明树那一半不可用。经桥在同一个宿主上实测：
+  `face  root/slider … [ok]`；新增一个面之后是
+  `face  root/gauge … [added since build]`（其上还有构建过期那一行）；而在文件没动的情况下改了 `kind`
+  之后是 `[re-identified (daca0f7b… -> bc2df33a…)]`。五条测试；那条共享规则做了变异实测（把每个已发布
+  的面都读成 `ok`），diff 与 search 合计四条测试同时变红。
+
 变更：
 
 - CLI 的 `grafts` 现在渲染由 `nichlink_build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本
   输出逐字节相同（由它自己的测试钉住），而"这条计划的槽位是否被声明"这条规则从此只有一个家。
+- `explain --overlay` 的投影现在来自 `nichlink_build_method::overlay_projection`，因此 CLI 与桥不可能
+  就"哪个槽位被切口替换"产生分歧；它的 JSON 与文本输出不变。
 
 ### [0.1.5] 2026-09-27
 

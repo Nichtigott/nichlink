@@ -165,6 +165,9 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
     };
     let mut stack: Vec<(proc_macro2::TokenTree, usize)> =
         stream.into_iter().map(|tree| (tree, 0)).collect();
+    // Popping from the end is what reads source order, so the stream is stored reversed.
+    // 从末尾 pop 才是按源码顺序读，因此这份流是逆序存放的。
+    stack.reverse();
     // Consecutive `Ident`/`<`/`>` tokens are the only run that can grow a generic
     // argument chain; every other token kind ends the run. That keeps a file full
     // of `a < b` comparisons from ever reaching the limit, while `Vec<Vec<…>>`
@@ -191,9 +194,32 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
     // 几百层并撑爆栈。这个计数器直接度量那种形状。遍历从栈里 pop，因此它按从右到左访问一个组的
     // token；对配平的嵌套而言，每个闭合都在其打开之前出现，于是达到的最大值就是真实深度。能词法
     // 通过却不配平的输入，要么触发这个计数器，要么在 `syn` 那里按它自己的规则失败。
-    let mut angle = 0usize;
+    // The weighted depth of the generic levels currently open. Each level costs one for
+    // its bracket, plus one for every `fn` / `dyn` / `impl` in its argument list, because
+    // `syn` descends through the signature as well as through the brackets: the audit
+    // measured a shape aborting at 95 / 90 / 60 / 50 levels for 1 / 2 / 3 / 4 fn pointers
+    // per level, so a flat count of brackets cannot bound it.
+    // 当前打开的泛型层的**加权**深度。每一层为它的尖括号付 1，再为它实参表里的每个
+    // `fn` / `dyn` / `impl` 付 1，因为 `syn` 会穿过签名下潜，而不只是穿过尖括号：审计实测
+    // 每层 1/2/3/4 个 fn 指针时该形状分别在 95/90/60/50 层 abort，因此平铺地数尖括号无法给它设界。
+    //
+    // The walk reads tokens in source order (the stream is pushed reversed), so this is a
+    // running total: `>` pops the level it closes, and a `;` clears the stack, because a
+    // comparison never nests across a statement.
+    // 本遍历按**源码顺序**读 token（流是逆序压入的），因此这是一个累计值：`>` 弹出它闭合的
+    // 那一层，而 `;` 清空栈，因为比较绝不会跨语句嵌套。
+    let mut angle = 0i64;
+    let mut levels: Vec<usize> = Vec::new();
+    // The token visited immediately before this one in source order, which is what decides
+    // whether a `>` belongs to `->` or `=>`.
+    // 按源码顺序紧邻在当前 token 之前的那个，用来判定一个 `>` 是否属于 `->` 或 `=>`。
+    let mut visited: Option<(char, proc_macro2::Spacing)> = None;
     while let Some((tree, depth)) = stack.pop() {
         let mut grows = true;
+        let here = match &tree {
+            proc_macro2::TokenTree::Punct(punct) => Some((punct.as_char(), punct.spacing())),
+            _ => None,
+        };
         match tree {
             proc_macro2::TokenTree::Group(group) => {
                 let depth = depth + 1;
@@ -212,32 +238,77 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
                 if group.delimiter() == proc_macro2::Delimiter::Brace {
                     grows = false;
                 }
-                stack.extend(group.stream().into_iter().map(|tree| (tree, depth)));
+                let mut children: Vec<(proc_macro2::TokenTree, usize)> = group
+                    .stream()
+                    .into_iter()
+                    .map(|tree| (tree, depth))
+                    .collect();
+                children.reverse();
+                stack.extend(children);
             }
             proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '<' => {
-                angle += 1;
-                if angle > LIMIT {
-                    return Err(TooDeep {
-                        shape: Shape::Arguments,
-                        depth: angle,
-                        limit: LIMIT,
-                    });
+                // The `<` of `<<` / `<=` is an operator, not a generic opener.
+                // `<<` / `<=` 里的 `<` 是运算符，不是泛型打开。
+                if punct.spacing() != proc_macro2::Spacing::Joint {
+                    levels.push(1);
+                    angle += 1;
                 }
             }
             proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '>' => {
-                // `->` and `=>` also carry a `>`; saturating at zero keeps a close
-                // without an open from borrowing depth from the next chain.
-                // `->` 与 `=>` 也带一个 `>`；在零处饱和，使没有对应打开的闭合不会从下一条串借
-                // 深度。
-                angle = angle.saturating_sub(1);
+                // `->`, `=>` and `>=` also carry a `>`; only a real closer may close a
+                // level. The arrows are the joint `-` / `=` visited just before this
+                // punct; `>=` is a joint `>` whose next token is `=`.
+                // `->`、`=>` 与 `>=` 也带一个 `>`；只有真正的闭合才允许关掉一层。两个箭头是紧邻
+                // 本次之前访问到的 joint `-` / `=`；`>=` 则是下一个 token 为 `=` 的 joint `>`。
+                let arrow = matches!(
+                    visited,
+                    Some(('-', proc_macro2::Spacing::Joint))
+                        | Some(('=', proc_macro2::Spacing::Joint))
+                );
+                let comparison = punct.spacing() == proc_macro2::Spacing::Joint
+                    && matches!(
+                        stack.last(),
+                        Some((proc_macro2::TokenTree::Punct(next), _))
+                            if next.as_char() == '='
+                    );
+                if !arrow
+                    && !comparison
+                    && let Some(weight) = levels.pop()
+                {
+                    angle -= weight as i64;
+                }
+            }
+            proc_macro2::TokenTree::Ident(ident)
+                if !levels.is_empty()
+                    && matches!(ident.to_string().as_str(), "fn" | "dyn" | "impl") =>
+            {
+                if let Some(weight) = levels.last_mut() {
+                    *weight += 1;
+                    angle += 1;
+                }
             }
             proc_macro2::TokenTree::Punct(punct)
                 if punct.as_char() == ',' || punct.as_char() == ';' =>
             {
                 grows = false;
+                // A statement ends any comparison run; generics never span a `;`.
+                // 一条语句终结任何比较串；泛型绝不会跨过 `;`。
+                if punct.as_char() == ';' {
+                    levels.clear();
+                    angle = 0;
+                }
             }
             _ => {}
         }
+        let reached = angle.max(0) as usize;
+        if reached > LIMIT {
+            return Err(TooDeep {
+                shape: Shape::Arguments,
+                depth: reached,
+                limit: LIMIT,
+            });
+        }
+        visited = here;
         if grows {
             chain += 1;
             if chain > CHAIN_LIMIT {

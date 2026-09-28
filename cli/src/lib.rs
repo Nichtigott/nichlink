@@ -163,16 +163,99 @@ fn split_build_args(args: &[String]) -> (Option<String>, Vec<String>) {
     }
 }
 
+/// The directory `--manifest-path` names in a passed-through cargo argument list.
+/// 透传给 cargo 的参数列表里，`--manifest-path` 点名的那个目录。
+///
+/// Cargo accepts both `--manifest-path <p>` and `--manifest-path=<p>`, and `nihlink build` hands the
+/// rest of its arguments to cargo verbatim. Reading only a leading *positional* path meant the two
+/// halves of the command could describe different projects: the registration check ran on the
+/// current directory while cargo built the named one, and the command printed
+/// `registration ok (<cwd package>)` with cargo's exit code — so the named project's red verdict
+/// was never seen and the current project's green one was reported as its conclusion (audit `S11`).
+/// cargo 同时接受 `--manifest-path <p>` 与 `--manifest-path=<p>`，而 `nihlink build` 把其余参数原样
+/// 交给 cargo。只读开头的**位臵**参数意味着本命令的两半可以描述不同的项目：注册校验跑在当前目录上，
+/// 而 cargo 构建被点名的那个，命令还打印 `registration ok (<cwd package>)` 并只取 cargo 的退出码——
+/// 被点名项目的红色判断从未被看到，当前项目的绿色判断却被当成它的结论（审计 `S11`）。
+pub(crate) fn manifest_path_directory(args: &[String]) -> Option<String> {
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        if let Some(value) = arg.strip_prefix("--manifest-path=") {
+            return Some(value.to_owned());
+        }
+        if arg == "--manifest-path"
+            && let Some(value) = args.get(index + 1)
+        {
+            return Some(value.clone());
+        }
+        index += 1;
+    }
+    None
+}
+
+/// The project `build` must validate: the named manifest's directory, the positional path, or the
+/// current directory — refusing when the two ways of naming one disagree.
+/// `build` 必须校验的项目：被点名清单所在目录、位臵参数、或当前目录——两种点名方式互相矛盾时拒绝。
+///
+/// Both halves of the command have to describe the same project; two names for two projects is a
+/// usage error rather than a silent choice between them.
+/// 本命令的两半必须描述同一个项目；两个名字指向两个项目时，这是用法错误，而不是在它们之间静默选一个。
+pub(crate) fn build_target(
+    positional: Option<String>,
+    cargo_args: &[String],
+) -> Result<String, String> {
+    let named = manifest_path_directory(cargo_args).map(|manifest| {
+        Path::new(&manifest)
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .display()
+            .to_string()
+    });
+    match (positional, named) {
+        (None, None) => Ok(".".to_owned()),
+        (Some(only), None) | (None, Some(only)) => Ok(only),
+        (Some(positional), Some(named)) => {
+            let same = std::fs::canonicalize(&positional)
+                .ok()
+                .zip(std::fs::canonicalize(&named).ok())
+                .is_some_and(|(left, right)| left == right);
+            if same {
+                Ok(named)
+            } else {
+                Err(format!(
+                    "`build {positional}` and `--manifest-path {named}` name different projects; \
+                     pass one of them"
+                ))
+            }
+        }
+    }
+}
+
 /// Resolve one host project directory into its canonical root and the package
 /// name Cargo answers for it.
 /// 把一个宿主项目目录解析成规范根目录与 Cargo 为该包给出的包名。
 ///
-/// The package name is the NodeId namespace, so every operator command has to
-/// read it from the same authority before it can name a face. That authority is
-/// `nichlink_build_method::package_name`, shared with the MCP bridge, which
-/// reports the same identities.
-/// 包名即 NodeId 命名空间，因此每条操作命令都必须先向同一权威读取它，才能命名一个面。该权威
-/// 是 `nichlink_build_method::package_name`，与报告同一批身份的 MCP 桥共用。
+/// The package name is the NodeId namespace for every operator command here, read from
+/// `nichlink_build_method::package_name` — one authority, so these commands cannot disagree with
+/// each other.
+/// 包名即 NodeId 命名空间，在此由 `nichlink_build_method::package_name` 读取——同一权威，因此这些
+/// 命令彼此不会分歧。
+///
+/// It is **not** one story across all surfaces, and the difference is stated rather than implied:
+/// `NICH_LINK_NAMESPACE` is honored by the MCP bridge and by Studio, and read by no build-side code
+/// (the declaration macros bake in `env!("CARGO_PKG_NAME")` at compile time), while nothing in
+/// `cli/` reads it. With that variable set, those two report a different namespace — and therefore
+/// different `NodeId`s — than this command does. Making the surfaces agree is the maintainer's
+/// decision; the variable's documented purpose is a *reader's* override for trace artifacts
+/// (`run_method/src/runtime/trace/artifact/io.rs`), and until that decision is taken a reader who
+/// sets it must know which side they are on (audit `S12`).
+/// 但在所有执行面上**并非**同一个说法，这里把差异说出来而不是暗示：`NICH_LINK_NAMESPACE` 被 MCP 桥与
+/// Studio 尊重、而没有任何构建侧代码读它（声明宏在编译期把 `env!("CARGO_PKG_NAME")` 烤进去），同时
+/// `cli/` 里没有任何地方读它。一旦设置该变量，那两个执行面报告的命名空间——以及由此而来的
+/// `NodeId`——就与本命令不同。让各执行面一致是维护者的决定；该变量文档化的用途是 trace artifact 的
+/// **读取者覆盖**（`run_method/src/runtime/trace/artifact/io.rs`），在这个决定做出之前，设置它的读者
+/// 必须知道自己站在哪一边（审计 `S12`）。
 pub(crate) fn resolve_package(directory: &str) -> Result<(PathBuf, String), String> {
     let manifest = std::fs::canonicalize(directory)
         .map_err(|error| format!("cannot resolve {directory}: {error}"))?;

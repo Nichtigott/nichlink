@@ -87,6 +87,29 @@ fn replies(input: &str) -> Vec<Value> {
         .collect()
 }
 
+/// An `id`-carrying `notifications/…` member is a *request* by the envelope rule the
+/// dispatcher states, so it is answered; only a member without an `id` is silent. The
+/// audit measured such a client hanging forever, and a one-member batch printing nothing.
+/// 带 `id` 的 `notifications/…` 成员按分派器写明的信封规则是**请求**，因此要作答；只有没有
+/// `id` 的成员才沉默。审计实测这样的客户端会永久挂住，单成员 batch 则什么都不打印。
+#[test]
+fn an_id_carrying_notification_is_answered() {
+    let answered = replies(
+        "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"notifications/initialized\"}\n\
+         {\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"ping\"}\n",
+    );
+    assert_eq!(
+        answered.len(),
+        2,
+        "both requests are answered: {answered:#?}"
+    );
+    assert_eq!(answered[0]["id"], 7, "{answered:#?}");
+    assert!(
+        answered[0].get("result").is_some(),
+        "a request gets a result, not silence: {answered:#?}"
+    );
+}
+
 /// A line past the cap is refused instead of allocated, its remainder is
 /// drained, and the next frame is still answered — which is what proves the
 /// drain happened: a leftover tail would have been parsed as the next frame.

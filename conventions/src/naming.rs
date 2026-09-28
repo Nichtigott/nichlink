@@ -174,7 +174,14 @@ fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().is_none_or(|extension| extension != "yml") {
+            // Both extensions are workflow files to GitHub, and reading only `.yml` made
+            // every `.yaml` workflow invisible to this gate.
+            // 两个扩展名对 GitHub 都是工作流文件，而只读 `.yml` 让每个 `.yaml` 工作流对本门禁
+            // 不可见。
+            if !path
+                .extension()
+                .is_some_and(|extension| extension == "yml" || extension == "yaml")
+            {
                 continue;
             }
             let text = fs::read_to_string(&path)
@@ -230,7 +237,14 @@ fn requirement_names(text: &str) -> Vec<String> {
 /// 工作流中作为 `-p`/`--package` 传给命令的 `nichlink-…` 名。
 fn package_arguments(text: &str) -> Vec<String> {
     let mut found = Vec::new();
-    for needle in ["-p ", "--package "] {
+    // The flag is matched without requiring the space that used to be part of the needle:
+    // `--package=nichlink-typo` is the same argument as `--package nichlink-typo`, and
+    // `-p a,nichlink-typo` names two packages in one argument. Only the argument itself is
+    // read for names, so a list elsewhere on the line is not mistaken for one.
+    // 匹配标志时不再把那个空格当作针的一部分：`--package=nichlink-typo` 与
+    // `--package nichlink-typo` 是同一个实参，而 `-p a,nichlink-typo` 在一个实参里点了两个包。
+    // 只在实参本身里读取名字，因此同一行别处的列表不会被误当成本次实参。
+    for needle in ["-p", "--package"] {
         let mut from = 0usize;
         while let Some(offset) = text[from..].find(needle) {
             let at = from + offset;
@@ -240,14 +254,21 @@ fn package_arguments(text: &str) -> Vec<String> {
                     .chars()
                     .next_back()
                     .is_some_and(|previous| previous.is_whitespace() || previous == ':');
-            let name: String = text[from..]
-                .chars()
-                .take_while(|character| {
-                    character.is_ascii_alphanumeric() || *character == '-' || *character == '_'
-                })
-                .collect();
-            if boundary && name.starts_with("nichlink-") {
-                found.push(name);
+            if !boundary {
+                continue;
+            }
+            let rest = text[from..].trim_start_matches(['=', ' ']);
+            let argument: String = rest.chars().take_while(|c| !c.is_whitespace()).collect();
+            for name in argument.split(',') {
+                let name: String = name
+                    .chars()
+                    .take_while(|character| {
+                        character.is_ascii_alphanumeric() || *character == '-' || *character == '_'
+                    })
+                    .collect();
+                if name.starts_with("nichlink-") {
+                    found.push(name);
+                }
             }
         }
     }

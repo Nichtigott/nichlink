@@ -70,7 +70,19 @@ fn recorded_values_are_reported_under_the_frame_that_captured_them() {
     let (root, name, id) = package("values");
     record_values(&root, &name, id);
     let reply = trace(&root, &json!({"values": true})).expect("the report renders");
-    assert!(reply.contains("values 4 locals 2 edges"), "{reply}");
+    // Two counts, two labels, and the *values section's own* header — an exact line, because
+    // the artifact header above it (`frames 1 locals 4 edges 2`) contains the same words and
+    // would make a substring check pass on the unfixed build.
+    // 两个计数、两个标签，而且必须是**值这一节自己的**表头——用整行精确匹配，因为它上面的
+    // artifact 表头（`frames 1 locals 4 edges 2`）含同样的词，子串检查在未修复时会假通过。
+    assert!(
+        reply.lines().any(|line| line == "locals 4 edges 2"),
+        "the values header is one label per number: {reply}"
+    );
+    assert!(
+        !reply.contains("values 4 locals"),
+        "two counts under three labels is gone: {reply}"
+    );
     assert!(
         reply.contains("frame 0 button") && reply.contains("3 local(s)"),
         "the frame's own values are grouped under it: {reply}"

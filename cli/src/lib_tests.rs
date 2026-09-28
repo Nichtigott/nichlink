@@ -272,6 +272,166 @@ fn explain_reports_why_a_node_cannot_be_resolved() {
     fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// `explain --json` promises exactly one document on stdout, with the failure inside it. A package
+/// that resolves while its *source tree* does not used to return before writing anything, so a
+/// machine reader got a bare parse error and could not tell "no document" from "the tool crashed"
+/// (audit `S10`; `grafts --json` already collects the same failure this way, and the resolution
+/// failures above were already covered).
+/// `explain --json` 承诺 stdout 恰好一份文档、失败写在里面。包解析成功而**源码树**失败时，过去会在写出
+/// 任何东西之前返回，于是机器读者只拿到一个裸解析错误，分不清"没有文档"与"工具崩了"（审计 `S10`；
+/// `grafts --json` 早已用这种方式收下同样的失败，而上面那两条"解析失败"路径本来就已经覆盖）。
+#[test]
+fn explain_json_reports_an_unreadable_source_tree_as_json() {
+    let root = temporary_root("cli-explain-nosrc");
+    // A manifest whose declared library target does not exist: `cargo metadata` answers a package
+    // name (so `resolve_package` succeeds) while the source tree cannot be read, which is the
+    // failure this path is about. Measured on the unfixed tree: this exact fixture printed **0
+    // bytes** of stdout, while a merely missing `src/` or a `src` that is a plain file failed
+    // earlier, in `resolve_package`, which already wrote a document — the first two versions of
+    // this pin measured that other path and passed on the unfixed tree.
+    // 一份"声明的库 target 并不存在"的清单：`cargo metadata` 能给出包名（因此 `resolve_package` 成功），
+    // 而源码树读不了——这才是本条路径针对的失败。实测于未修的树：正是这个夹具的 stdout 是 **0 字节**；
+    // 而单纯缺少 `src/`、或 `src` 是普通文件，都会更早地在 `resolve_package` 失败，那条路径早就写文档
+    // 了——这条钉子的前两版量的就是那条路径，于是在未修的树上通过。
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"no-sources\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/nope.rs\"\n",
+    )
+    .expect("manifest");
+    let path = root.display().to_string();
+    let (result, stdout) = run_capture(&[
+        "nichlink",
+        "explain",
+        "--json",
+        "--path",
+        &path,
+        "root/anything",
+    ]);
+    assert!(result.is_err(), "the command still fails: {result:?}");
+    assert!(
+        !stdout.trim().is_empty(),
+        "the failure is a document, not silence: {result:?}"
+    );
+    let document: Value = serde_json::from_str(stdout.trim()).expect("stdout is one JSON document");
+    assert!(
+        document.get("reason").is_some() || document.get("error").is_some(),
+        "the document names the failure: {stdout}"
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// The overlay keeps the same contract: a plans path that is a plain file must arrive as a document
+/// carrying the failure rather than as an empty stdout (audit `S10`).
+/// 覆盖报告守同一条契约：计划路径是个普通文件时，到达读者的必须是一份携带失败的文档，而不是空 stdout
+/// （审计 `S10`）。
+#[test]
+fn explain_overlay_json_reports_an_unreadable_plans_directory_as_json() {
+    let root = fixture_host("cli-overlay-badplans", "// host\n", &control_tree());
+    fs::create_dir_all(root.join(".nichlink")).expect(".nichlink directory");
+    // `graft_plan_rows` refuses a plans path that is not a directory.
+    // `graft_plan_rows` 会拒绝一个不是目录的计划路径。
+    fs::write(root.join(".nichlink/external-grafts"), "not a directory\n").expect("plain file");
+    let path = root.display().to_string();
+    let (result, stdout) = run_capture(&[
+        "nichlink",
+        "explain",
+        "--json",
+        "--overlay",
+        "--path",
+        &path,
+    ]);
+    assert!(result.is_err(), "the command still fails: {result:?}");
+    assert!(
+        !stdout.trim().is_empty(),
+        "the failure is a document: {result:?}"
+    );
+    let document: Value = serde_json::from_str(stdout.trim()).expect("stdout is one JSON document");
+    assert!(
+        document.get("error").is_some(),
+        "the overlay document carries the failure in `error`: {stdout}"
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// `build --manifest-path <p>` validates the project it is about to build, not the current
+/// directory. It used to run the registration check on `.` and hand `--manifest-path` to cargo, so
+/// the named project's red verdict was never seen while the *current* project's verdict was printed
+/// as its conclusion — with cargo's exit code (audit `S11`). The pin therefore asserts that the
+/// failure names the **named** project: "the command failed" alone is also true of the old
+/// behaviour, because the current directory is not a host either.
+/// `build --manifest-path <p>` 校验的是它将要构建的那个项目，而不是当前目录。它过去对 `.` 跑注册
+/// 校验、把 `--manifest-path` 交给 cargo，于是被点名项目的红色判断从未被看到，而**当前**项目的判断
+/// 被当成它的结论打印出来——还带着 cargo 的退出码（审计 `S11`）。因此这条钉子断言失败信息点名的是
+/// **被点名的**那个项目：只说"命令失败了"在旧行为下也成立，因为当前目录同样不是宿主。
+#[test]
+fn build_with_a_manifest_path_validates_that_project() {
+    // A host whose registrations are broken: a registry child declared as `root_object!` is a
+    // mismatch the build refuses (the `control_tree` note above says why).
+    // 一个注册树坏掉的宿主：注册机的子面用 `root_object!` 声明，是构建会拒绝的不匹配（上面
+    // `control_tree` 的注记说明了原因）。
+    let broken = fixture_host(
+        "cli-build-broken",
+        "// host\n",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n    needs_registry: true,\n}\n",
+            ),
+            (
+                "control/child/child.rs",
+                "crate::root_object! {\n    kind: Child,\n    parent: crate::control::NODE_ID,\n}\n",
+            ),
+        ],
+    );
+    let manifest = broken.join("Cargo.toml").display().to_string();
+    let (result, stdout) = run_capture(&["nichlink", "build", "--manifest-path", &manifest]);
+    assert!(
+        result.is_err(),
+        "a broken named project must fail the command: {result:?} {stdout}"
+    );
+    assert!(
+        !stdout.contains("registration ok"),
+        "the banner must not describe a project that was not the one checked: {stdout}"
+    );
+    let error = result.expect_err("checked above");
+    assert!(
+        error.contains("control/child/child.rs"),
+        "the failure names a file in the project the manifest pointed at, not in the current \
+         directory: {error}"
+    );
+    fs::remove_dir_all(&broken).expect("cleanup");
+}
+
+/// Two ways of naming one project must agree; two names for two projects is a usage error rather
+/// than a silent choice between them (audit `S11`).
+/// 同一个项目的两种点名方式必须一致；两个名字指向两个项目时，这是用法错误，而不是在它们之间静默选一个
+/// （审计 `S11`）。
+#[test]
+fn build_refuses_two_names_for_two_projects() {
+    let first = fixture_host("cli-build-one", "// host\n", &control_tree());
+    let second = fixture_host("cli-build-two", "// host\n", &control_tree());
+    let named = second.join("Cargo.toml").display().to_string();
+    let error = super::build_target(
+        Some(first.display().to_string()),
+        &["--manifest-path".to_owned(), named.clone()],
+    )
+    .expect_err("two projects cannot both be the target");
+    assert!(error.contains("different projects"), "{error}");
+    // The same project named both ways is fine, and both spellings of the option are read.
+    // 同一个项目用两种方式点名是可以的，而该选项的两种拼写都能被读到。
+    let same = first.join("Cargo.toml").display().to_string();
+    assert_eq!(
+        super::build_target(
+            Some(first.display().to_string()),
+            &[format!("--manifest-path={same}")]
+        )
+        .expect("one project, two spellings"),
+        first.display().to_string()
+    );
+    fs::remove_dir_all(&first).expect("cleanup");
+    fs::remove_dir_all(&second).expect("cleanup");
+}
+
 /// `explain --json` emits one JSON document even when the package cannot be
 /// resolved, so a machine reader is never handed an empty stdout; the human
 /// path still writes nothing.
@@ -700,6 +860,25 @@ fn new_requires_a_package_name() {
     let result = run(["nichlink".to_owned(), "new".to_owned()]);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("package name"));
+}
+
+/// An option-shaped token is not a package name. This subcommand has no `--help` branch, so
+/// `nichlink new --help` used to take `--help` as the name and scaffold `./--help` — it was
+/// the only subcommand that did not refuse the input, and the mistake wrote into whatever
+/// directory the shell was in.
+/// 以选项形状出现的 token 不是包名。本子命令没有 `--help` 分支，因此 `nichlink new --help`
+/// 过去把 `--help` 当名字并在 `./--help` 里搭起脚手架——它是唯一不拒绝这种输入的子命令，而这个
+/// 错误会写进 shell 当时所在的目录。
+#[test]
+fn an_option_shaped_name_is_refused() {
+    for option in ["--json", "--help", "-x"] {
+        let error = run(["nichlink".to_owned(), "new".to_owned(), option.to_owned()])
+            .expect_err("an option is not a name");
+        assert!(
+            error.contains(option) && error.contains("usage"),
+            "the refusal names the option and the usage: {error}"
+        );
+    }
 }
 
 #[test]

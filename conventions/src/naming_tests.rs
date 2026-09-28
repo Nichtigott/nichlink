@@ -137,6 +137,46 @@ fn a_reference_to_a_package_that_does_not_exist_is_reported() {
     let _ = fs::remove_dir_all(&root);
 }
 
+/// Two more spellings of the same argument, and one more workflow extension.
+/// `--package=nichlink-typo` and `-p a,nichlink-typo` name packages exactly as
+/// `-p nichlink-typo` does, and a `.yaml` workflow is a workflow to GitHub.
+/// 同一个实参的另外两种拼写，外加一个工作流扩展名。`--package=nichlink-typo` 与
+/// `-p a,nichlink-typo` 命名包的方式与 `-p nichlink-typo` 完全相同，而 `.yaml` 工作流对 GitHub
+/// 也是工作流。
+#[test]
+fn the_other_package_spellings_and_yaml_workflows_are_read() {
+    let root = synthetic(&[(
+        "thing",
+        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+    )]);
+    fs::create_dir_all(root.join(".github/workflows")).expect("workflow dir");
+    fs::write(
+        root.join(".github/workflows/release.yaml"),
+        "run: cargo publish --package=nichlink-typo\n",
+    )
+    .expect("yaml workflow");
+    fs::write(
+        root.join(".github/workflows/ci.yml"),
+        "run: cargo test -p nichlink-thing,nichlink-second\n",
+    )
+    .expect("yml workflow");
+
+    let found = findings(&root);
+    assert!(
+        found
+            .iter()
+            .any(|finding| finding.reason.contains("nichlink-typo")),
+        "`--package=` names a package too: {found:#?}"
+    );
+    assert!(
+        found
+            .iter()
+            .any(|finding| finding.reason.contains("nichlink-second")),
+        "a comma-separated list names several: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
 /// A dependency key is recognised however it is spaced, and a name that is
 /// not a requirement is left alone.
 /// 依赖键无论怎么加空格都能被认出，而不是要求位置的名称不受过问。

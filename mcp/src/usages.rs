@@ -103,11 +103,21 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
     match read_back(id) {
         Ok(authored) => {
             output.push_str("fields (read back from the generated module)\n");
+            // Every field the write path accepts is listed here: `module`, the two summaries
+            // and `flow_provider` were missing while the header claimed the fields were read
+            // back, so an agent asking "what can I set" got a shorter answer than the tool's
+            // own contract.
+            // 写入路径接受的每个字段都在这里列出：`module`、两条摘要与 `flow_provider` 过去缺失，
+            // 而表头声称字段已被读回——于是一个问"我能设什么"的代理拿到的答案比这个工具自己的契约
+            // 更短。
             for (label, value) in [
+                ("module", &authored.module),
                 ("preset", &authored.preset),
                 ("parts", &authored.parts),
                 ("name_zh", &authored.name_zh),
                 ("name_en", &authored.name_en),
+                ("summary_zh", &authored.summary_zh),
+                ("summary_en", &authored.summary_en),
                 ("stable_name", &authored.stable_name),
                 ("exports", &authored.exports),
                 ("requires", &authored.requires),
@@ -119,6 +129,7 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
                 ("registration_rule", &authored.registration_rule),
                 ("admission", &authored.admission),
                 ("flow", &authored.flow),
+                ("flow_provider", &authored.flow_provider),
                 ("runtime_checks", &authored.runtime_checks),
                 (
                     "getting_from_other_registry",

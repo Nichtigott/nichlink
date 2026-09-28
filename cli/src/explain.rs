@@ -70,7 +70,23 @@ pub(crate) fn explain(
             return Err(error);
         }
     };
-    let faces = face_views(&manifest, &package)?;
+    let faces = match face_views(&manifest, &package) {
+        Ok(faces) => faces,
+        Err(error) => {
+            // The `--json` contract this command shares with `grafts` is "exactly one document on
+            // stdout, with the failure inside it". This path returned before writing anything, so a
+            // machine reader got a bare parse error and could not tell "no document" from "the tool
+            // crashed" (audit `S10`). The package resolved and the source tree did not: that is an
+            // answer, and it goes into the document.
+            // 本命令与 `grafts` 共享的 `--json` 契约是"stdout 恰好一份文档、失败写在里面"。这条路径
+            // 过去在写出任何东西之前就返回，于是机器读者只拿到一个裸解析错误，分不清"没有文档"与
+            // "工具崩了"（审计 `S10`）。包解析成功而源码树没有：那也是一个答案，写进文档里。
+            if json_output {
+                write_unresolved(&target, overlay, &error, out)?;
+            }
+            return Err(error);
+        }
+    };
     if overlay {
         if target.is_some() {
             return Err(
@@ -192,7 +208,7 @@ pub(crate) fn explain(
 /// `check` 与 `grafts` 在这条路径上已经会输出文档；`explain` 此前在写出任何东西之前就
 /// 返回，因此要 JSON 的消费者拿到空 stdout。逐节点文档沿用本命令对无法解析查询所用的
 /// `resolved: false` 形状；覆盖文档保持投影的 schema，并把失败放在 `error` 里。
-fn write_unresolved(
+pub(super) fn write_unresolved(
     target: &Option<String>,
     overlay: bool,
     error: &str,

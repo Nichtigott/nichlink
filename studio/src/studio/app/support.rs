@@ -267,11 +267,13 @@ pub(super) fn host_manifest() -> PathBuf {
 /// MIR inspection passed `--lib` unconditionally, so a binary-only host —
 /// including the default output of `nichlink new` — could not be inspected at
 /// all. A library target is preferred; when cargo reports that the package has
-/// none, the binary targets are tried instead. Cargo decides, so a custom
-/// `[lib]`/`[[bin]]` path cannot make the answer wrong.
+/// none, its binary targets are tried **one at a time**, named from cargo's own
+/// metadata. Cargo decides which targets exist, so a custom `[lib]`/`[[bin]]` path
+/// cannot make the answer wrong.
 /// MIR 检视此前无条件传 `--lib`，因此仅含二进制的宿主——包括 `nichlink new` 的默认
-/// 产物——完全无法被检视。优先选择库 target；当 cargo 报告该包没有库 target 时，改试
-/// 二进制 target。由 cargo 决定，因此自定义 `[lib]`/`[[bin]]` 路径不会让答案出错。
+/// 产物——完全无法被检视。优先选择库 target；当 cargo 报告该包没有库 target 时，改**逐个**
+/// 尝试它的二进制 target，名字取自 cargo 自己的 metadata。哪些 target 存在由 cargo 决定，因此
+/// 自定义 `[lib]`/`[[bin]]` 路径不会让答案出错。
 pub(super) fn cargo_rustc_mir(
     manifest: &Path,
     rustc_args: &[&str],
@@ -295,7 +297,80 @@ pub(super) fn cargo_rustc_mir(
     if output.status.success() || !no_library {
         return Ok(output);
     }
-    invoke(&["--bins"]).map_err(missing_target)
+    // `--bins` is not enough for a host with more than one binary target: cargo refuses to hand the
+    // extra `rustc` arguments to several targets at once ("extra arguments to `rustc` can only be
+    // passed to one target"), so a two-bin host could not be inspected at all (audit `S14`). The
+    // names come from `cargo metadata`, and each target is tried in cargo's order; the first that
+    // compiles is the answer. The metadata call is a fallback of a fallback: if it fails, the old
+    // `--bins` path still runs rather than turning a case that used to work into an error.
+    // 对"多于一个二进制 target"的宿主，`--bins` 不够：cargo 拒绝把额外的 `rustc` 参数同时交给多个
+    // target（"extra arguments to `rustc` can only be passed to one target"），因此"两个 bin"的宿主
+    // 完全无法被检视（审计 `S14`）。名字来自 `cargo metadata`，按 cargo 的顺序逐个尝试，第一个编译
+    // 通过的就是答案。这次 metadata 调用是"回退的回退"：它失败时仍走原来的 `--bins` 路径，而不是把
+    // 本来能用的情形变成错误。
+    let Ok(names) = bin_target_names(&cargo, manifest) else {
+        return invoke(&["--bins"]).map_err(missing_target);
+    };
+    let mut last = None;
+    for name in names {
+        let output = invoke(&["--bin", name.as_str()]).map_err(missing_target)?;
+        if output.status.success() {
+            return Ok(output);
+        }
+        last = Some(output);
+    }
+    Ok(last.unwrap_or(output))
+}
+
+/// The binary target names cargo reports for the package at `manifest`.
+/// cargo 为 `manifest` 处的包报告的二进制 target 名字。
+///
+/// The list comes from `cargo metadata`, not from reading the manifest: a custom `[[bin]]` path
+/// stays cargo's business, which is the property [`cargo_rustc_mir`] documents.
+/// 这份清单来自 `cargo metadata`，而不是自己读清单：自定义的 `[[bin]]` 路径仍归 cargo 管，这正是
+/// [`cargo_rustc_mir`] 所记录的那条性质。
+fn bin_target_names(cargo: &std::ffi::OsStr, manifest: &Path) -> Result<Vec<String>, String> {
+    let output = std::process::Command::new(cargo)
+        .args([
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
+        .arg(manifest)
+        .output()
+        .map_err(|error| {
+            format!(
+                "cannot run cargo metadata for {}: {error}",
+                manifest.display()
+            )
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo metadata failed for {}: {}",
+            manifest.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|error| {
+        format!(
+            "cargo metadata for {} is not JSON: {error}",
+            manifest.display()
+        )
+    })?;
+    Ok(metadata["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|package| package["targets"].as_array().into_iter().flatten())
+        .filter(|target| {
+            target["kind"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"))
+        })
+        .filter_map(|target| target["name"].as_str().map(str::to_owned))
+        .collect())
 }
 
 use super::*;

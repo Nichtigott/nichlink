@@ -307,19 +307,48 @@ pub struct WasmInstance {
     limits: WasmLimits,
 }
 
+/// The largest input this adapter can frame.
+/// 本适配器能成帧的最大输入。
+///
+/// The Wasm ABI passes the length as an `i32`, so `i32::MAX` is the ceiling the *frame* imposes:
+/// above it `input.len() as i32` wraps to a negative length instead of failing. The process adapter
+/// has the same kind of ceiling, at `u32::MAX`, because its frames carry a u32 length — the two
+/// adapters disagreed, and only the process side enforced its own (audit `PH-5`).
+/// Wasm ABI 把长度作为 `i32` 传递，因此 `i32::MAX` 是**帧格式**给出的上限：超过它，
+/// `input.len() as i32` 会回绕成负数而不是失败。进程适配器有同类的上限 `u32::MAX`，因为它的帧携带
+/// u32 长度——两个适配器口径不一致，而只有进程那一边真的执行了自己的上限（审计 `PH-5`）。
+const MAX_FRAMEABLE_INPUT: usize = i32::MAX as usize;
+
+/// Reject an input this adapter cannot frame, naming whether the configured limit or the frame
+/// width is what refused it.
+/// 拒绝本适配器无法成帧的输入，并说明拒绝它的是配置上限还是帧宽。
+///
+/// Kept as one function so the frame-width half can be unit-tested without a two-gigabyte slice:
+/// the branch is a value, not a filesystem or an allocation.
+/// 收成一个函数，正是为了让帧宽那一半无需一个两吉字节的切片就能被单测：这个分支是一个值，而不是
+/// 文件系统或一次分配。
+fn check_input_length(length: usize, configured: usize) -> Result<(), HostError> {
+    if length > configured {
+        return Err(HostError::Limit(format!(
+            "input is {length} bytes; limit is {configured}"
+        )));
+    }
+    if length > MAX_FRAMEABLE_INPUT {
+        return Err(HostError::Limit(format!(
+            "input is {length} bytes; a Wasm call frames its length in an i32, whose maximum is \
+             {MAX_FRAMEABLE_INPUT}"
+        )));
+    }
+    Ok(())
+}
+
 impl PluginInstance for WasmInstance {
     fn adapter(&self) -> PluginAdapter {
         PluginAdapter::Wasm
     }
 
     fn call(&self, operation: &str, input: &[u8]) -> Result<Vec<u8>, HostError> {
-        if input.len() > self.limits.max_input_bytes {
-            return Err(HostError::Limit(format!(
-                "input is {} bytes; limit is {}",
-                input.len(),
-                self.limits.max_input_bytes
-            )));
-        }
+        check_input_length(input.len(), self.limits.max_input_bytes)?;
         let export = operation_export(operation)?;
         let mut state = self
             .state
@@ -370,3 +399,7 @@ fn operation_export(operation: &str) -> Result<String, HostError> {
     }
     Ok(format!("nichlink_{operation}"))
 }
+
+#[cfg(test)]
+#[path = "wasm_tests.rs"]
+mod wasm_tests;

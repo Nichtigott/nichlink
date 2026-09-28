@@ -769,6 +769,7 @@ dependencies = [
  "notify",
  "rataflow",
  "ratatui",
+ "serde_json",
 ]
 
 [[package]]

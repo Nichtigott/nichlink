@@ -24,8 +24,14 @@ use child::{POLL_INTERVAL, drain_to_eof, kill_and_reap, read_frame, read_stderr,
 /// 单次隔离进程调用的限制。
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessLimits {
-    /// Wall-clock deadline for one call; on expiry the host kills the child.
-    /// 单次调用的挂钟超时；到期即由宿主终止子进程。
+    /// Wall-clock deadline for one call; on expiry the host kills the **direct**
+    /// child. A process the plugin started itself is not in that group — killing a
+    /// group needs `libc` — so it can outlive the deadline with the host's uid,
+    /// environment, filesystem and network. The threat model's residual risks say
+    /// the same thing; confine the child yourself if that matters.
+    /// 单次调用的挂钟超时；到期即由宿主终止**直接**子进程。插件自己启动的进程不在这一组里——按组杀
+    /// 需要 `libc`——因此它可以带着宿主的 uid、环境、文件系统与网络活过截止时间。威胁模型的残余风险段
+    /// 写的是同一件事；在意的话请在宿主之外限制子进程。
     pub timeout: Duration,
     /// Largest request payload accepted, in bytes.
     /// 接受的最大请求负载字节数。

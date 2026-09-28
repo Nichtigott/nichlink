@@ -27,6 +27,26 @@ fn an_include_with_another_delimiter_is_still_a_splice() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The `!` may sit on the next line: `include` and `!` are two tokens to rustc, and only
+/// spaces and tabs were trimmed between them, so a line break hid the splice entirely.
+/// `!` 可以在下一行：`include` 与 `!` 对 rustc 是两个 token，而两者之间过去只裁空格与制表符，
+/// 于是换行把这次拼接完全藏了起来。
+#[test]
+fn an_include_whose_bang_is_on_the_next_line_is_still_a_splice() {
+    let root = synthetic(&[(
+        "cli/src/zz_audit_probe.rs",
+        "pub mod spliced {\n    include\n        !(\"zz_body.rs\");\n}\n",
+    )]);
+    let found = findings(&root);
+    assert_eq!(
+        found.includes.len(),
+        1,
+        "a `!` on the next line is the same macro: {:#?}",
+        found.includes
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A throwaway checkout with the given files under it.
 /// 一个只含给定文件的一次性检出。
 fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
@@ -204,6 +224,54 @@ fn a_path_attribute_is_found_among_other_attributes() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A file named `lib.rs` is an entry point only where cargo looks for one: a nested
+/// `…/zz/lib.rs` is a module file like any other, and skipping every file by that *name*
+/// left it invisible to this gate.
+/// 名叫 `lib.rs` 的文件只在 cargo 会去找它的那个位置才是入口：嵌套的 `…/zz/lib.rs` 与别的模块
+/// 文件没有区别，而按**名字**跳过每个这样的文件让它对本门禁隐形。
+#[test]
+fn a_nested_lib_rs_is_a_module_like_any_other() {
+    let root = synthetic(&[
+        ("core/src/lib.rs", "pub mod registry_core;\n"),
+        ("core/src/registry_core.rs", "pub mod zz;\n"),
+        ("core/src/registry_core/zz/lib.rs", "fn hidden() {}\n"),
+    ]);
+    let found = mounts(&root);
+    assert!(
+        found
+            .unmounted
+            .iter()
+            .any(|path| path.contains("registry_core/zz/lib.rs")),
+        "an undeclared nested `lib.rs` is unmounted: {found:#?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A pinned re-export behind `#[cfg(any())]` (never compiled) or `#[cfg(test)]` (not part
+/// of the public surface) is in the file but not in the crate a host compiles against, so
+/// both spellings count as missing.
+/// 藏在 `#[cfg(any())]`（永不编译）或 `#[cfg(test)]`（不属于公开面）后面的钉住重导出，存在于文件
+/// 里却不在宿主编译所对的那个 crate 里，因此两种拼法都算缺失。
+#[test]
+fn a_pinned_reexport_behind_a_cfg_is_missing() {
+    let (file, statement) = SHIMS[0];
+    for attribute in ["#[cfg(any())]", "#[cfg(test)]"] {
+        let (root, _) = fixture_with_every_pin();
+        let text = std::fs::read_to_string(root.join(file)).expect("fixture file");
+        let hidden = text.replacen(statement, &format!("{attribute}\n{statement}"), 1);
+        assert_ne!(text, hidden, "the statement is in the fixture file");
+        std::fs::write(root.join(file), hidden).expect("rewrite the fixture file");
+        let missing = missing_shims(&root);
+        assert!(
+            missing
+                .iter()
+                .any(|entry| entry == &format!("{file}: {statement}")),
+            "`{attribute}` hides the re-export from the built crate: {missing:#?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
 /// The execution surfaces still carry every pinned shim: deleting one compiles
 /// and silently removes a path downstream hosts write.
 /// 执行面仍然带着每一条钉住的 shim：删掉一条能编译，却会静默移除下游宿主书写的路径。
@@ -216,10 +284,9 @@ fn the_shipped_shims_are_still_there() {
     );
 }
 
-/// Removing one pinned statement from its file is reported.
-/// 从文件里删掉一条钉住的语句会被报出。
-#[test]
-fn a_deleted_shim_is_reported() {
+/// A fixture checkout carrying every pinned statement, so a test can then damage one.
+/// 一个带着全部钉住语句的夹具检出，供测试随后破坏其中一条。
+fn fixture_with_every_pin() -> (std::path::PathBuf, Vec<(String, String)>) {
     let mut files: Vec<(String, String)> = Vec::new();
     for (file, statement) in SHIMS {
         match files.iter_mut().find(|(name, _)| name == file) {
@@ -235,7 +302,14 @@ fn a_deleted_shim_is_reported() {
         .iter()
         .map(|(name, contents)| (name.as_str(), contents.as_str()))
         .collect();
-    let root = synthetic(&borrowed);
+    (synthetic(&borrowed), files)
+}
+
+/// Removing one pinned statement from its file is reported.
+/// 从文件里删掉一条钉住的语句会被报出。
+#[test]
+fn a_deleted_shim_is_reported() {
+    let (root, files) = fixture_with_every_pin();
     assert!(
         missing_shims(&root).is_empty(),
         "the fixture carries every pinned statement"

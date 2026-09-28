@@ -8,7 +8,10 @@
 //! can ask what the registry is instead of reconstructing it from macro names.
 //! `nichlink.explain` reads the build's *published* files (`target/nichlink/out`)
 //! and answers what actually ships — scope and release pruning — which the source
-//! cannot; `nichlink.diff` states the face-level delta between those two sides,
+//! cannot, or the static overlay projection (`overlay: true`) that says which slot
+//! each declared cut replaces; `nichlink.search` matches registry faces and
+//! annotates each with that build's verdict; `nichlink.diff` states the face-level
+//! delta between those two sides,
 //! and `nichlink.trace` reads a recorded trace artifact and answers what actually
 //! ran, refusing an artifact that describes a different tree. Contract, admission,
 //! and registration-rule fields are still absent: those need a loaded registry,
@@ -16,7 +19,9 @@
 //! 五个工具索引 Rust 源码文本；其余工具用非源码文本的证据作答。`nichlink.registry` 报告**构建**
 //! 推导出的注册树，走的是 CLI 的 `explain` 所用的同一个 `face_views`，因此代理可以直接问注册树是
 //! 什么，而不是从宏名重建。`nichlink.explain` 读构建**发布**的文件（`target/nichlink/out`），回答
-//! 真正会发布什么——作用域与发布剪枝——这是源码答不出来的；`nichlink.diff` 说出两侧的面级差异；
+//! 真正会发布什么——作用域与发布剪枝——这是源码答不出来的；给出 `overlay: true` 时则是静态覆盖投影，
+//! 说出每条已声明切口替换哪个槽位。`nichlink.search` 匹配注册面并给每个命中标注那次构建的结论；
+//! `nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，回答真正跑了什么，并拒绝描述另一棵树的 artifact。
 //! contract、admission 与 registration rule 字段仍然没有：那些需要一个已加载的注册机，而不是
 //! 源码扫描。
@@ -102,3 +107,12 @@ mod impact;
 
 #[path = "grafts.rs"]
 mod grafts;
+
+#[path = "overlay.rs"]
+mod overlay;
+
+#[path = "search.rs"]
+mod search;
+
+#[path = "tree_delta.rs"]
+mod tree_delta;

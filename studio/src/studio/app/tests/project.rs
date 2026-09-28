@@ -489,7 +489,7 @@ fn a_relative_candidate_resolves_against_the_working_directory() {
 /// resolver against it, returning whether the selected target compiled.
 /// 构建一个带有所请求 target 的一次性包，对其运行 MIR target 解析器，返回所选 target
 /// 是否编译通过。
-fn mir_target_resolves(label: &str, library: bool, binary: bool) -> bool {
+fn mir_target_resolves(label: &str, library: bool, binary: bool, second_binary: bool) -> bool {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -509,6 +509,10 @@ fn mir_target_resolves(label: &str, library: bool, binary: bool) -> bool {
     }
     if binary {
         std::fs::write(root.join("src/main.rs"), "fn main() {}\n").expect("binary entry");
+    }
+    if second_binary {
+        std::fs::create_dir_all(root.join("src/bin")).expect("bin directory");
+        std::fs::write(root.join("src/bin/tool.rs"), "fn main() {}\n").expect("second binary");
     }
     // `--emit=metadata` is stable, so the pin is the target *selection*; the
     // production call site adds the nightly-only `-Zunpretty=mir`.
@@ -531,15 +535,28 @@ fn mir_target_resolves(label: &str, library: bool, binary: bool) -> bool {
 #[test]
 fn mir_inspection_resolves_the_target_a_package_actually_has() {
     assert!(
-        mir_target_resolves("bin", false, true),
+        mir_target_resolves("bin", false, true, false),
         "a binary-only package must resolve its binary target"
     );
     assert!(
-        mir_target_resolves("lib", true, false),
+        mir_target_resolves("lib", true, false, false),
         "a library-only package must still resolve its library target"
     );
     assert!(
-        mir_target_resolves("both", true, true),
+        mir_target_resolves("both", true, true, false),
         "a package with both targets must resolve one of them"
+    );
+}
+
+/// A host with two binary targets is inspected too. `cargo rustc --bins` refuses to hand the extra
+/// `rustc` arguments to several targets at once, so the resolver could not serve such a host at all
+/// (audit `S14`).
+/// 含两个二进制 target 的宿主也能被检视。`cargo rustc --bins` 拒绝把额外的 `rustc` 参数同时交给多个
+/// target，因此解析器过去完全服务不了这种宿主（审计 `S14`）。
+#[test]
+fn mir_inspection_resolves_a_host_with_two_binary_targets() {
+    assert!(
+        mir_target_resolves("two-bins", false, true, true),
+        "a two-bin package must resolve one of its binary targets"
     );
 }

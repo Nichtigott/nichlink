@@ -1,22 +1,31 @@
 //! The file-size gate, as a ratchet rather than a wish.
 //! 文件尺寸门禁，以棘轮而不是愿望的形式。
 //!
-//! `docs/roadmap-1.0.md` recorded the size pass as done and stated that non-test
-//! source files stay at or under 450 lines. The fourth audit round measured the
-//! tree and found fifteen files over it, the largest at 751 lines. A ceiling
-//! nothing measures is not a ceiling, so this module measures it and pins the
-//! current exceptions explicitly.
-//! `docs/roadmap-1.0.md` 把尺寸收口记为完成，并声明非测试源码文件不超过 450 行。第四轮
-//! 审计实测源码树，发现 15 个文件超过它，最大 751 行。没有东西去量的上限不是上限，因此本
-//! 模块去量它，并把当前的例外显式钉住。
+//! `docs/roadmap-1.0.md` recorded the size pass as done and stated that
+//! non-test source files stay at or under a fixed line count. The fourth audit
+//! round measured the tree and found fifteen files over the count then documented,
+//! the largest at 751 lines. A ceiling nothing measures is not a ceiling, so this
+//! module measures it and pins the current exceptions explicitly.
+//! `docs/roadmap-1.0.md` 把尺寸收口记为完成，并声明非测试源码文件不超过一个固定行数。第四轮
+//! 审计实测源码树，发现 15 个文件超过当时声明的那个数字，最大 751 行。没有东西去量的上限不是
+//! 上限，因此本模块去量它，并把当前的例外显式钉住。
+//!
+//! The maintainer raised the ceiling from 450 to 600 on 2026-09-28. Which file a
+//! piece of code belongs in is a judgement about cohesion, and a line count tight
+//! enough to pre-empt that judgement pushes code out of the file it belongs in.
+//! The ratchet still bounds growth; it no longer decides placement.
+//! 维护者于 2026-09-28 把上限从 450 提到 600。一段代码该待在哪个文件是有关内聚性的判断，而一个
+//! 紧到能抢在那个判断之前生效的行数，会把代码挤出它本该在的文件。棘轮仍然约束增长，但不再替归属
+//! 做决定。
 //!
 //! The list is short and only shrinks: moving the shared JSON encoder out of
 //! `diagnostic/build.rs` brought that file back under the ceiling, and the ratchet made
 //! removing its entry mandatory rather than optional. The count is deliberately not
 //! restated here — it is `BASELINE.len()`, and prose that repeats a number drifts from
 //! it (this sentence claimed twelve while the list held nine).
-//! 这份清单今天有 12 项：把共用的 JSON 编码器移出 `diagnostic/build.rs` 让该文件缩回上限
-//! 之内，而棘轮让删除对应项成为必然而不是可选。
+//! 这份清单很短，而且只会变短：把共用的 JSON 编码器移出 `diagnostic/build.rs` 让该文件缩回
+//! 上限之内，而棘轮让删除对应项成为必然而不是可选。条目数刻意不在这里复述——它就是
+//! `BASELINE.len()`，而复述数字的散文终会与它漂移（这句话曾声称十二项，而清单只有九项）。
 //!
 //! The ratchet has two teeth, and both matter. A newly oversized file fails the
 //! gate, and a baseline entry that has shrunk back under the ceiling also fails
@@ -44,7 +53,7 @@ use crate::{crate_directories, lines, relative, rust_sources};
 
 /// The documented ceiling, in lines, for a non-test source file.
 /// 文档声明的非测试源码文件行数上限。
-pub const CEILING: usize = 450;
+pub const CEILING: usize = 600;
 
 /// Files that were already over [`CEILING`] when the gate was added.
 /// 门禁加入时就已经超过 [`CEILING`] 的文件。
@@ -54,16 +63,8 @@ pub const CEILING: usize = 450;
 /// entry precisely so that removal cannot be forgotten.
 /// 每一项都是带实测大小的欠账，不是许可。文件缩回上限之内的那一刻就删掉对应项；门禁会在
 /// 过期项上失败，正是为了让"忘记删除"不可能发生。
-pub const BASELINE: &[(&str, usize)] = &[
-    ("core/src/registry_core/declaration/runtime_checks.rs", 551),
-    ("core/src/registry_core/plugin/contracts/contracts.rs", 639),
-    ("core/src/registry_core/tree/connector/connector.rs", 504),
-    ("core/src/registry_core/syntax/entries/graft.rs", 502),
-    ("core/src/registry_core/declaration/registration.rs", 461),
-    ("build_method/src/graft_plan_check.rs", 465),
-    ("core/src/registry_core/tree/graft_ops/overlay.rs", 463),
-    ("run_method/src/runtime/trace/frames/frames.rs", 452),
-];
+pub const BASELINE: &[(&str, usize)] =
+    &[("core/src/registry_core/plugin/contracts/contracts.rs", 639)];
 
 /// Whether a path sits in a `tests/` directory.
 /// 该路径是否位于 `tests/` 目录中。
@@ -103,8 +104,8 @@ pub fn looks_test_only(path: &Path) -> bool {
     is_test_by_location(path) || is_test_shaped(path)
 }
 
-/// Whether a crate mounts `path` behind `#[cfg(test)]`, under either spelling.
-/// crate 是否以两种拼法之一把 `path` 挂在 `#[cfg(test)]` 之后。
+/// Whether a crate mounts `path` behind `#[cfg(test)]`, directly or through an ancestor.
+/// crate 是否把 `path` 挂在 `#[cfg(test)]` 之后——直接挂，或经由某个祖先。
 ///
 /// The two spellings in this tree are `#[path = "x_tests.rs"] mod x_tests;` — what
 /// the mounting convention writes — and the bare `mod tests;` that resolves to a
@@ -113,13 +114,39 @@ pub fn looks_test_only(path: &Path) -> bool {
 /// 本树里的两种拼法是 `#[path = "x_tests.rs"] mod x_tests;`（挂载约定所写）与解析到同级
 /// `tests.rs` 的裸 `mod tests;`。`#[cfg(test)]` 可能位于其他属性之上，而 rustfmt 让这一组保持
 /// 相邻，因此回溯会跨过属性与注释。
-fn is_mounted_as_test(crate_root: &Path, path: &Path) -> bool {
-    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+///
+/// The attribute is inherited down the chain: `app.rs` mounts `tests` behind `#[cfg(test)]`,
+/// and `tests.rs` then mounts `call_tree.rs` without repeating it. A file is therefore
+/// test-only when the *chain* reaches one, which is why this recurses. The bound is there
+/// because a cycle in a hand-written declaration list is not worth hanging a gate for.
+/// 该属性沿链继承：`app.rs` 把 `tests` 挂在 `#[cfg(test)]` 之后，`tests.rs` 再挂
+/// `call_tree.rs` 时不必重复它。因此只要**链**上有一处，文件就是仅测试的——这正是递归的原因。
+/// 有界，是因为手工写的声明列表若成环，不值得让门禁挂住。上限是**带余量的防环，不是对树深度的
+/// 描述**：2026-09-28 实测本树出厂的最深挂载链是 6 层（`authoring.rs` → `parse/parse.rs` →
+/// `parse/flow.rs` → `parse/flow_tests.rs`），而当时取的是 8——只剩两层的余量，再嵌两层就会让
+/// 某个测试文件不再豁免（门禁会报出那个文件：响亮，但不是我们想要的失败）。因此取 16，并由
+/// `a_deep_mount_chain_is_still_test_only` 用一条十层链钉住这份余量。**`doc_blocks` 也用它**：
+/// 同一个"这个文件是不是仅测试"的身份问题，两道门禁必须给同一条规则（`tree/graft_ops/fixtures.rs`
+/// 就是名字不像测试、却挂在 `#[cfg(test)]` 之后的真实例子）。
+pub(crate) fn is_mounted_as_test(crate_root: &Path, path: &Path) -> bool {
+    is_mounted_as_test_within(crate_root, path, 16)
+}
+
+fn is_mounted_as_test_within(crate_root: &Path, path: &Path, depth: usize) -> bool {
+    if depth == 0 {
+        return false;
+    }
+    let Some((declarer, cfg_test)) = declaration_of(crate_root, path) else {
         return false;
     };
-    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
-        return false;
-    };
+    cfg_test || is_mounted_as_test_within(crate_root, &declarer, depth - 1)
+}
+
+/// The file that declares `path`, with whether that declaration carries `#[cfg(test)]`.
+/// 声明 `path` 的那个文件，以及该声明是否带着 `#[cfg(test)]`。
+fn declaration_of(crate_root: &Path, path: &Path) -> Option<(std::path::PathBuf, bool)> {
+    let file_name = path.file_name().and_then(|name| name.to_str())?;
+    let stem = path.file_stem().and_then(|stem| stem.to_str())?;
     let attribute = format!("\"{file_name}\"");
     let bare = format!("mod {stem};");
     let bare_public = format!("pub mod {stem};");
@@ -141,16 +168,17 @@ fn is_mounted_as_test(crate_root: &Path, path: &Path) -> bool {
                 cursor -= 1;
                 let previous = source[cursor].trim();
                 if previous.starts_with("#[cfg(test)") {
-                    return true;
+                    return Some((candidate.clone(), true));
                 }
                 if previous.starts_with("//") || previous.starts_with("#[") || previous.is_empty() {
                     continue;
                 }
                 break;
             }
+            return Some((candidate.clone(), false));
         }
     }
-    false
+    None
 }
 
 /// Every non-test source file over [`CEILING`], as `(relative path, lines)`.
@@ -168,9 +196,17 @@ pub fn oversized(root: &Path) -> Vec<(String, usize)> {
             measured.push(build);
         }
         for path in measured {
-            if is_test_by_location(&path)
-                || (is_test_shaped(&path) && is_mounted_as_test(&directory, &path))
-            {
+            // A file is test-only when the tree *says* so: the declaration that mounts it
+            // carries `#[cfg(test)]`. Location alone is not proof, and treating it as proof
+            // exempted a real module that merely sat under a `tests/` directory inside
+            // `src/` — the same file elsewhere was measured (audit G-05). The weak
+            // location-or-name predicate still serves the documentation gate, which only has
+            // to decide "is this shown to a reader".
+            // 文件是否仅测试，由树自己说了算：挂载它的那条声明带着 `#[cfg(test)]`。位置本身不是
+            // 证明，把它当证明会让"只是位于 `src/` 下某个 `tests/` 目录里"的真实模块免于度量——同一
+            // 个文件换个位置就会被量到（审计 G-05）。那个"位置或名字"的弱判定仍服务于文档门禁，
+            // 它只需判断"这是不是给读者看的东西"。
+            if is_mounted_as_test(&directory, &path) {
                 continue;
             }
             let count = lines(&path).len();
@@ -254,6 +290,103 @@ mod tests {
         "// filler\n".repeat(CEILING + 10)
     }
 
+    /// Location is not proof of testhood: a real module that merely sits under a `tests/`
+    /// directory inside `src/` was exempt from the ceiling while the same file elsewhere was
+    /// measured. The declaration that mounts it has to carry `#[cfg(test)]` — or inherit one
+    /// from an ancestor, which is how this tree's nested test modules are written.
+    /// 位置本身不是"仅测试"的证明：只是位于 `src/` 下某个 `tests/` 目录里的真实模块过去免于度量，
+    /// 而同一个文件换个位置就会被量。挂载它的声明必须带 `#[cfg(test)]`——或者从祖先继承一个，本树
+    /// 的嵌套测试模块正是这么写的。
+    #[test]
+    fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
+        let root = synthetic(&[
+            ("src/lib.rs", "pub mod tests;\n"),
+            (
+                "src/tests.rs",
+                "#[path = \"tests/zz_big.rs\"]\npub mod zz_big;\n",
+            ),
+            ("src/tests/zz_big.rs", &over_ceiling()),
+        ]);
+        assert!(
+            oversized(&root)
+                .iter()
+                .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
+            "nothing says this file is a test, so the ceiling measures it"
+        );
+        let _ = fs::remove_dir_all(&root);
+
+        let root = synthetic(&[
+            ("src/lib.rs", "pub mod tests;\n"),
+            (
+                "src/tests.rs",
+                "#[cfg(test)]\n#[path = \"tests/zz_big.rs\"]\npub mod zz_big;\n",
+            ),
+            ("src/tests/zz_big.rs", &over_ceiling()),
+        ]);
+        assert!(
+            !oversized(&root)
+                .iter()
+                .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
+            "a `#[cfg(test)]` declaration makes it a test file"
+        );
+        let _ = fs::remove_dir_all(&root);
+
+        let root = synthetic(&[
+            ("src/lib.rs", "#[cfg(test)]\npub mod tests;\n"),
+            (
+                "src/tests.rs",
+                "#[path = \"tests/zz_big.rs\"]\npub mod zz_big;\n",
+            ),
+            ("src/tests/zz_big.rs", &over_ceiling()),
+        ]);
+        assert!(
+            !oversized(&root)
+                .iter()
+                .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
+            "the attribute is inherited down the mount chain"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The recursion bound is a cycle stop with headroom, not a description of this tree's depth.
+    /// The deepest chain the tree ships is six levels (measured: `authoring.rs` → `parse/parse.rs`
+    /// → `parse/flow.rs` → `parse/flow_tests.rs`); a ten-level chain below one `#[cfg(test)]` mount
+    /// must still be exempt, because a bound that merely fits today's tree reclassifies a test file
+    /// as measured source the next time someone nests two more modules.
+    /// 递归上限是带余量的防环，而不是对本树深度的描述。本树出厂的最深链是 6 层（实测：
+    /// `authoring.rs` → `parse/parse.rs` → `parse/flow.rs` → `parse/flow_tests.rs`）；一条挂在
+    /// 单个 `#[cfg(test)]` 之下的十层链必须仍然豁免，因为"刚好装下今天的树"的上限会在下次有人再嵌
+    /// 两层模块时，把一个测试文件重新归类成被测源码。
+    #[test]
+    fn a_deep_mount_chain_is_still_test_only() {
+        let mut files: Vec<(String, String)> = vec![(
+            "src/lib.rs".to_owned(),
+            "#[cfg(test)]\npub mod a;\n".to_owned(),
+        )];
+        for letter in b'a'..=b'j' {
+            let name = (letter as char).to_string();
+            let body = if letter == b'j' {
+                over_ceiling()
+            } else {
+                let next = (letter + 1) as char;
+                format!("#[path = \"{next}.rs\"]\npub mod {next};\n")
+            };
+            files.push((format!("src/{name}.rs"), body));
+        }
+        let borrowed: Vec<(&str, &str)> = files
+            .iter()
+            .map(|(path, body)| (path.as_str(), body.as_str()))
+            .collect();
+        let root = synthetic(&borrowed);
+        assert!(
+            !oversized(&root)
+                .iter()
+                .any(|(path, _)| path.ends_with("j.rs")),
+            "a ten-level chain below a `#[cfg(test)]` mount is still a test file"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
     /// Test-only files are recognised by where they sit, or by their name together
     /// with a `#[cfg(test)]` mount.
     /// 仅测试文件按所在位置识别，或按名字加 `#[cfg(test)]` 挂载识别。
@@ -333,6 +466,35 @@ mod tests {
             "an oversized build script is debt like any other: {found:#?}"
         );
         assert!(found[0].0.ends_with("build.rs"), "{found:#?}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The ceiling is the maintainer's decision, not a drift target: a file at 500
+    /// lines is accepted and one past 600 is still debt. Pinned so the 2026-09-28
+    /// relaxation from 450 to 600 cannot be undone or exceeded silently.
+    /// 上限是维护者的决定，不是可以漂移的目标：500 行的文件被接受，超过 600 的仍是欠账。钉住它，
+    /// 使 2026-09-28 从 450 到 600 的放宽不会被静默撤销或被静默越界。
+    #[test]
+    fn the_ceiling_is_the_number_the_maintainer_set() {
+        assert_eq!(
+            CEILING, 600,
+            "the ratchet's ceiling is the maintainer's decision of 2026-09-28"
+        );
+        let accepted = "// filler\n".repeat(500);
+        let root = synthetic(&[("src/probe.rs", &accepted)]);
+        assert_eq!(
+            oversized(&root),
+            Vec::new(),
+            "500 lines sits under a 600-line ceiling"
+        );
+        let _ = fs::remove_dir_all(&root);
+
+        let root = synthetic(&[("src/probe.rs", &over_ceiling())]);
+        assert_eq!(
+            oversized(&root).len(),
+            1,
+            "past the ceiling is still measured debt"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }

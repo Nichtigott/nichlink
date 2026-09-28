@@ -85,7 +85,7 @@ nichlink new my-app
 cd my-app && nichlink studio
 ```
 
-`0.1.0` is published. The Git source still works if you want the checkout's tip
+The released versions are on crates.io (`CHANGELOG.md` names the newest). The Git source still works if you want the checkout's tip
 rather than the released version: `cargo install --git
 https://github.com/Nichtigott/nichlink nichlink-cli`.
 The plugin binary also answers to `cargo nichlink <command>`. To inspect an
@@ -750,11 +750,16 @@ cargo check
 NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
-MCP tools include `nichlink.search`, `nichlink.inspect`, `nichlink.callgraph`,
+MCP tools include `nichlink.search` (faces first, matched on logical path, kind, module,
+or slot name and annotated with the build's verdict — `ok`, `added since build`,
+`re-identified`, or `build unknown` — then the file and function hits),
+`nichlink.inspect`, `nichlink.callgraph`,
 `nichlink.read`, `nichlink.status`, and `nichlink.registry` — the last reports the
 registration tree the build derives, so an agent can read the registry instead of
 reconstructing it from macro names — plus `nichlink.explain` (the build's published
-scope and release pruning, which source text cannot answer), `nichlink.diff` (the
+scope and release pruning, which source text cannot answer; with `overlay: true` the
+overlay projection instead — which slot each declared cut replaces and which faces the
+scope prunes, the published state after replacement), `nichlink.diff` (the
 face-level delta between the sources and the build, including identities that
 changed under an unmoved file — and, with `records: true`, between the external graft
 records and the sources, where a record whose slot moved identity is `re-identified`
@@ -764,7 +769,9 @@ report — what actually ran — refused when the artifact describes another tre
 frame that captured them),
 `nichlink.mir` (a `-Zunpretty=mir` text dump or the compact JSONL artifact, read
 either way and *written* when `jsonl: true` — the portable channel nothing in the
-workspace produced before), `nichlink.unified` (that graph merged with the recorded
+workspace produced before; what it writes is a snapshot naming its tree, and with
+`against` two snapshots diff into the call-graph delta, a foreign one refused by name),
+`nichlink.unified` (that graph merged with the recorded
 trace through `debug_method`'s own `UnifiedCallGraph`, where a live call confirms its
 compiler candidate instead of sitting beside it), and
 `nichlink.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
@@ -904,7 +911,7 @@ notes live beside each crate.
 ```sh
 cargo fmt --all
 cargo test --workspace --offline
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --offline -- -D warnings
 ```
 
 NichLink is released under the [MIT License](LICENSE). Contributions, design

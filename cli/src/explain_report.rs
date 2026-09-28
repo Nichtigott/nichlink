@@ -262,11 +262,12 @@ pub(super) fn cut_endpoint(cut: &DeclaredGraft) -> String {
 
 /// Whether a declaration is the string form, a range, or the typed Rust form.
 /// 该声明是字符串形式、区间形式，还是类型化 Rust 形式。
+///
+/// Delegates to `DeclaredGraft::form`, which owns the rule: the MCP bridge's
+/// overlay projection labels the same cuts, so a second copy here would let the
+/// two surfaces spell one declaration differently.
+/// 委托给拥有该规则的 `DeclaredGraft::form`：MCP 桥的覆盖投影给同一批切口贴标签，因此这里有
+/// 第二份副本就会让两个执行面对同一条声明给出不同拼法。
 pub(super) fn cut_form(cut: &DeclaredGraft) -> &'static str {
-    match (&cut.expressions, &cut.cut_end) {
-        (Some(_), Some(_)) => "typed-range",
-        (Some(_), None) => "typed",
-        (None, Some(_)) => "range",
-        (None, None) => "string",
-    }
+    cut.form()
 }

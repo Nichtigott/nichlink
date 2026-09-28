@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 
-use super::tokens::{literal_string, location, only_group, path_to_string, split_top_level};
+use super::tokens::{
+    is_path_to, literal_string, location, only_group, path_to_string, split_top_level,
+};
 use super::{
     FaceSyntax, FaceSyntaxError, FieldSyntax, ParentSyntax, SyntaxLocation, compact,
     split_face_fields,
@@ -206,7 +208,7 @@ impl FaceSyntax {
         match expression {
             syn::Expr::Path(path) => {
                 let path = path_to_string(&path.path);
-                if path.ends_with("ROOT_NODE_ID") {
+                if is_path_to(&path, "ROOT_NODE_ID") {
                     Some(ParentSyntax::Root)
                 } else {
                     path.strip_suffix("::NODE_ID")
@@ -295,10 +297,10 @@ fn parse_parent_call(call: syn::ExprCall) -> Option<ParentSyntax> {
         return None;
     };
     let function = path_to_string(&function.path);
-    if function.ends_with("root_node_id") && call.args.len() == 1 {
+    if is_path_to(&function, "root_node_id") && call.args.len() == 1 {
         return Some(ParentSyntax::Root);
     }
-    if !function.ends_with("NodeId::from_path") || call.args.len() != 2 {
+    if !is_path_to(&function, "NodeId::from_path") || call.args.len() != 2 {
         return None;
     }
     let mut arguments = call.args.iter();

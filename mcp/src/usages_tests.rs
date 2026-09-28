@@ -145,3 +145,36 @@ fn a_hand_written_face_is_reported_as_unreadable() {
     assert!(reply.contains("unreadable faces 1"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Every field the write path accepts is read back, not most of them. `module`, the two
+/// summaries and `flow_provider` were missing while the header claimed the fields were read
+/// back, so an agent asking "what can I set" got a shorter answer than the tool's contract.
+/// 写入路径接受的每个字段都会被读回，而不是大部分。`module`、两条摘要与 `flow_provider` 过去缺失，
+/// 而表头声称字段已被读回——一个问"我能设什么"的代理因此拿到比工具契约更短的答案。
+#[test]
+fn every_field_the_write_path_accepts_is_read_back() {
+    let (root, _) = package("all-fields");
+    add(
+        &root,
+        json!({
+            "module": "label",
+            "kind": "Label",
+            "summary_zh": "标签",
+            "summary_en": "A label",
+            "flow_provider": "crate::ControlHandle",
+        }),
+    );
+    let reply = usages(&root, &json!({"node": "root/label"})).expect("the report renders");
+    for expected in [
+        "module label",
+        "summary_zh 标签",
+        "summary_en A label",
+        "flow_provider crate::ControlHandle",
+    ] {
+        assert!(
+            reply.contains(expected),
+            "`{expected}` is one of the fields the write path accepts: {reply}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

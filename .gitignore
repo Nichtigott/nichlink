@@ -2,3 +2,7 @@ target/
 # Local code graph index (codegraph): machine-local, regenerable, megabytes.
 # 本地代码图索引（codegraph）：机器本地、可重建、体积大，不入库。
 .codegraph/
+# AgentTeams runtime state and the workspace memory database: tool state, not source.
+# AgentTeams 运行期状态与工作区记忆库：属于工具状态，不是源码，不入库。
+.agent-teams/
+.dsh-meow/

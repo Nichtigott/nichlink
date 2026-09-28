@@ -72,7 +72,21 @@ pub fn blocks(text: &str) -> Vec<Vec<(usize, String)>> {
         });
         if shape && real_comment {
             current.push((index + 1, trimmed.to_owned()));
-        } else if !current.is_empty() {
+            continue;
+        }
+        // `#[doc = "…"]` is the attribute spelling of a doc comment, and it is the same
+        // promise: an item documented that way is read on docs.rs like any other. Reading
+        // only the `///` form left an English-only attribute-documented item invisible —
+        // and because the attribute's text is a *string*, the masking above blanks it, so
+        // it cannot be found on the masked line either.
+        // `#[doc = "…"]` 是文档注释的属性写法，承诺相同：那样文档化的条目在 docs.rs 上与别的条目
+        // 一样被读到。只读 `///` 那种形式会让一个纯英文的属性文档项完全不可见——而且因为属性的文本是
+        // **字符串**，上面的屏蔽会把它抹掉，所以在屏蔽后的行上也找不到它。
+        if let Some(text) = doc_attribute(trimmed) {
+            current.push((index + 1, text));
+            continue;
+        }
+        if !current.is_empty() {
             found.push(std::mem::take(&mut current));
         }
     }
@@ -80,6 +94,23 @@ pub fn blocks(text: &str) -> Vec<Vec<(usize, String)>> {
         found.push(current);
     }
     found
+}
+
+/// The text of a `#[doc = "…"]` line, when the line is one.
+/// 该行若是 `#[doc = "…"]`，返回它的文本。
+///
+/// Only the plain string form is read. `r"…"`, `concat!(…)` and a `#[doc]`-shaped line
+/// inside a literal are not, and they are rare enough that a gate which pretended to
+/// understand them would be guessing rather than checking.
+/// 只读普通字符串形式。`r"…"`、`concat!(…)` 以及字面量里形状像 `#[doc]` 的行都不读——它们足够
+/// 罕见，假装理解它们只会是猜而不是检查。
+fn doc_attribute(trimmed: &str) -> Option<String> {
+    let rest = trimmed.strip_prefix("#[doc")?;
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    Some(rest[..end].to_owned())
 }
 
 /// Every doc block with no Chinese text, with its file and first line.
@@ -158,6 +189,30 @@ mod tests {
         assert!(
             found.is_empty(),
             "every doc block needs an English line and a Chinese line: {found:#?}"
+        );
+    }
+
+    /// `#[doc = "…"]` is the attribute spelling of a doc comment, and reading only `///`
+    /// left an English-only attribute-documented item invisible. The attribute's text is a
+    /// *string*, so the masking that keeps `///`-inside-a-string out also hides it.
+    /// `#[doc = "…"]` 是文档注释的属性写法，而只读 `///` 会让一个纯英文的属性文档项完全不可见。
+    /// 属性的文本是**字符串**，因此那道"字符串里的 `///` 不算注释"的屏蔽同样会把它藏起来。
+    #[test]
+    fn an_attribute_doc_comment_is_a_block_too() {
+        let text = "#[doc = \"English only\"]\npub fn documented() {}\n";
+        let found = blocks(text);
+        assert_eq!(found.len(), 1, "the attribute is a block: {found:#?}");
+        assert!(
+            !found[0].iter().any(|(_, line)| has_cjk(line)),
+            "and it carries no Chinese: {found:#?}"
+        );
+
+        let bilingual = "#[doc = \"English\"]\n#[doc = \"中文\"]\npub fn documented() {}\n";
+        let found = blocks(bilingual);
+        assert_eq!(found.len(), 1);
+        assert!(
+            found[0].iter().any(|(_, line)| has_cjk(line)),
+            "a Chinese attribute line joins the same block: {found:#?}"
         );
     }
 }

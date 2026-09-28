@@ -204,31 +204,42 @@ pub(crate) fn plan_rows(
     faces: &[FaceView],
     declared: Option<&DeclaredGrafts>,
 ) -> Result<Vec<Value>, String> {
-    let rows = nichlink_build_method::graft_plan_rows(manifest, faces, declared)?;
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            let declared_by = row.declared_by.map(|cut| {
-                json!({
-                    "cut": match &cut.cut_end {
-                        Some(end) => format!("{} to {end}", cut.cut),
-                        None => cut.cut.clone(),
-                    },
-                    "graft": cut.graft,
-                    "full": cut.full,
-                    "line": cut.line,
-                })
-            });
-            json!({
-                "selector": row.selector,
-                "error": row.error,
-                "target": row.target.map(|target| target.to_string()),
-                "target_path": row.target_path,
-                "graft": row.graft,
-                "full": row.full,
-                "declared": row.declared,
-                "declared_by": declared_by,
-            })
+    Ok(
+        nichlink_build_method::graft_plan_rows(manifest, faces, declared)?
+            .iter()
+            .map(row_json)
+            .collect(),
+    )
+}
+
+/// Render one plan row as the `nichlink.grafts/1` JSON shape.
+/// 把一条计划行渲染成 `nichlink.grafts/1` 的 JSON 形状。
+///
+/// Shared with the overlay projection, which carries the same rows: two renderers
+/// for one row would let the `grafts` verb and `explain --overlay` describe the
+/// same plan differently.
+/// 与携带同一批行的覆盖投影共用：一条行有两个渲染器，会让 `grafts` 与 `explain --overlay`
+/// 对同一条计划给出不同描述。
+pub(crate) fn row_json(row: &nichlink_build_method::GraftPlanRow) -> Value {
+    let declared_by = row.declared_by.as_ref().map(|cut| {
+        json!({
+            "cut": match &cut.cut_end {
+                Some(end) => format!("{} to {end}", cut.cut),
+                None => cut.cut.clone(),
+            },
+            "graft": cut.graft,
+            "full": cut.full,
+            "line": cut.line,
         })
-        .collect())
+    });
+    json!({
+        "selector": row.selector,
+        "error": row.error,
+        "target": row.target.map(|target| target.to_string()),
+        "target_path": row.target_path,
+        "graft": row.graft,
+        "full": row.full,
+        "declared": row.declared,
+        "declared_by": declared_by,
+    })
 }

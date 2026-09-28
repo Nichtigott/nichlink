@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use crate::registry_core::declaration::{EvidenceKind, SourceLocation};
+use crate::registry_core::identity::NodeId;
 
 /// One direct call sighting extracted from a MIR artifact.
 /// 从 MIR artifact 中提取到的一条直接调用观测。
@@ -116,6 +117,35 @@ pub struct MirGraph {
     /// Local binding sightings, in artifact order.
     /// 局部绑定观测，按 artifact 顺序。
     pub locals: Vec<MirLocal>,
+    /// The tree this artifact is a snapshot of, when its producer named one.
+    /// 本 artifact 作为快照所描述的那棵树；生产者点名了它时才有值。
+    pub snapshot: Option<MirSnapshot>,
+}
+
+/// The tree one MIR artifact describes, when its producer named it.
+/// 一份 MIR artifact 描述的那棵树；生产者点名了它时。
+///
+/// A MIR dump is only a snapshot of *some* tree, and rustc's own text format
+/// cannot say which: two dumps of two different packages are byte-comparable and
+/// a delta between them would be a plausible, wrong answer. This is the header
+/// that makes the identification possible — the same convention the trace
+/// artifact carries — and it is optional because a `-Zunpretty=mir` text dump
+/// arrives without one and is still readable. An artifact that names its tree
+/// can be refused by name; one that does not is reported as unidentified rather
+/// than silently trusted.
+/// MIR 转储只是**某棵**树的快照，而 rustc 自己的文本格式说不出是哪一棵：两个不同包的两份转储
+/// 可以逐字节比较，而它们之间的 delta 会是一个看似合理、实则错误的答案。这个表头让识别成为可能
+/// ——与 trace artifact 携带的是同一种约定——它可选，因为 `-Zunpretty=mir` 文本转储到来时没有它，
+/// 却仍然可读。点名了自己那棵树的 artifact 可以被按名字拒绝；没有点名的会被报成"未标识"，而不是
+/// 被默默信任。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MirSnapshot {
+    /// The identity namespace the artifact was produced under.
+    /// 产出该 artifact 时所在的身份命名空间。
+    pub namespace: String,
+    /// The registration-tree root that namespace implies.
+    /// 该命名空间蕴含的注册树根。
+    pub root: NodeId,
 }
 
 /// Why one line of a MIR artifact could not be read.

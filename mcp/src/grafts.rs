@@ -66,7 +66,15 @@ pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
         output.push_str("no external graft plans under .nichlink/external-grafts/\n");
         return Ok(output);
     }
-    let mut unkept = 0usize;
+    // The headline count is over *every* row, not over the rows the bound happened to
+    // print: this number is what a maintainer reads before a release prunes the slot, and
+    // counting inside the truncating loop silently rewrote it to whatever `limit` allowed.
+    // 头条计数是**全部**行，而不是上限恰好打印出来的那些：这个数字是维护者在发布剪掉槽位之前读的
+    // 东西，而在截断循环里计数会把它静默改写成 `limit` 允许的那部分。
+    let unkept = rows
+        .iter()
+        .filter(|row| row.error.is_none() && row.declared == Some(false))
+        .count();
     for (index, row) in rows.iter().enumerate() {
         if index >= limit {
             output.push_str(&format!("  … +{} more\n", rows.len() - limit));
@@ -87,10 +95,7 @@ pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
                         ),
                         None => "declared".to_owned(),
                     },
-                    Some(false) => {
-                        unkept += 1;
-                        "NOT declared by the host entry".to_owned()
-                    }
+                    Some(false) => "NOT declared by the host entry".to_owned(),
                     None => "declaration unknown".to_owned(),
                 };
                 output.push_str(&format!(

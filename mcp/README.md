@@ -15,7 +15,12 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 The server exposes compact tools. Reads:
 
-- `nichlink.search`: find files and function declarations.
+- `nichlink.search`: find registration faces, files, and function declarations. Faces
+  come first, matched on logical path, kind, module, or slot name, and each carries the
+  build's verdict — `ok`, `added since build`, `re-identified` (a `kind` change under an
+  unmoved file, with both identities), or `build unknown` when nothing was published;
+  the file and function hits below are unchanged. The tree half needs the identity
+  namespace, so a root Cargo cannot name still answers the source half and says so.
 - `nichlink.inspect`: list the functions and registration declarations in one file.
 - `nichlink.callgraph`: find direct static callers and callees for a function.
 - `nichlink.read`: read a bounded source window.
@@ -27,7 +32,12 @@ The server exposes compact tools. Reads:
   registry answer above is derived from source text and is therefore always fresh;
   this one reads the files the build *published* under `target/nichlink/out`, so it
   answers what ships: whether the scope selected the face and whether release
-  pruning strips its symbols. A missing or stale build is reported as such.
+  pruning strips its symbols. A missing or stale build is reported as such. With
+  `overlay: true` it renders the *overlay* projection instead — which slot each declared
+  cut replaces and which faces the scope prunes, the published state after replacement,
+  from the same traversal the CLI's `explain --overlay` uses. That is a static projection
+  and not `Registry::dump`, the reply's note says where the live tree comes from, and
+  `overlay` and `node` are mutually exclusive.
 - `nichlink.diff`: the face-level delta between the sources now and the build's
   manifest — added, gone, and re-identified under an unmoved file (a `kind` change
   is an identity change, so only this comparison sees it). With `records: true` it
@@ -50,9 +60,14 @@ The server exposes compact tools. Reads:
   candidates. `jsonl: true` emits that JSONL, the portable channel Studio could
   already render and parse while nothing in the workspace ever wrote one. A
   malformed JSONL line fails the whole read; a text dump never fails and only ever
-  yields the calls it contains. The text producer is `cargo rustc -Zunpretty=mir`
-  on a nightly toolchain, and a missing artifact says so instead of reporting an
-  empty graph.
+  yields the calls it contains. What `jsonl: true` writes is a *snapshot*: a header
+  naming the identity namespace and registry root of the tree the artifact came from,
+  which is what makes two artifacts comparable — a snapshot of another tree is refused
+  by name, and an unidentified one (a text dump cannot name its tree) makes the delta
+  say what it cannot rule out. With `against`, that other artifact is the baseline and
+  the reply is the call-graph delta from it forward: added and gone relations, plus
+  function symbols. The text producer is `cargo rustc -Zunpretty=mir` on a nightly
+  toolchain, and a missing artifact says so instead of reporting an empty graph.
 - `nichlink.unified`: merge a MIR artifact with this package's recorded trace
   through `nichlink_debug_method::UnifiedCallGraph`, the one place the two evidence
   sources are joined — a call the trace confirms carries `evidence=Live` and
@@ -121,7 +136,8 @@ And one that writes:
   `<path>:<line>` — the same shape a refusal uses for its `file:line:column`. Every
   reply ends with the tree as it now stands, so the next call can be aimed with it.
 
-The first five index Rust source text; `nichlink.registry` reports the tree the
+The source tools index Rust source text — `nichlink.search` also matches registry faces,
+from the same derivation the registry tool uses; `nichlink.registry` reports the tree the
 **build** derives (`nichlink_build_method::face_views`, the same derivation the CLI's
 `explain` uses), so an agent can ask what the registry is instead of
 reconstructing it from macro names. Both ask Cargo one thing: a package name *is*

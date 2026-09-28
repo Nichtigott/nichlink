@@ -94,6 +94,30 @@ impl DeclaredGraft {
         graft_cut_label(&self.cut, self.cut_end.as_deref())
     }
 
+    /// Which spelling the declaration used: the string form, a range, or the
+    /// typed Rust form.
+    /// 该声明用的是哪种写法：字符串形式、区间，还是类型化 Rust 形式。
+    ///
+    /// The rule is a property of the declaration, so it lives on the declaration.
+    /// It used to be a private helper in the CLI's `explain`, which meant the MCP
+    /// bridge's overlay projection could only label a cut by re-deriving the same
+    /// match — the drift this module exists to prevent. A typed cut is
+    /// recognised by carrying expressions, and a range by carrying a far
+    /// endpoint; neither is inferred from the text of `cut`, because a logical
+    /// path may literally contain `" to "`.
+    /// 这条规则是声明自身的属性，因此住在声明上。它过去是 CLI `explain` 的私有辅助
+    /// 函数，意味着 MCP 桥的覆盖投影只能用同一份匹配再推导一次才能给切口贴标签——
+    /// 而本模块存在的意义正是消除这种漂移。类型化切口靠携带表达式识别，区间靠携带
+    /// 远端端点识别；两者都不从 `cut` 的文本推断，因为逻辑路径可能字面含有 `" to "`。
+    pub fn form(&self) -> &'static str {
+        match (&self.expressions, &self.cut_end) {
+            (Some(_), Some(_)) => "typed-range",
+            (Some(_), None) => "typed",
+            (None, Some(_)) => "range",
+            (None, None) => "string",
+        }
+    }
+
     /// Whether this declaration hands over exactly the face at the logical
     /// `path` whose source module is `module`.
     /// 这条声明是否正好交出逻辑路径为 `path`、源码模块为 `module` 的那个注册面。

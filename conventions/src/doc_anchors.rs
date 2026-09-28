@@ -47,7 +47,6 @@ pub struct Finding {
 /// 活文档里每一处失效锚点，按文档与锚点排序。
 pub fn findings(root: &Path) -> Vec<Finding> {
     let sources = workspace_sources(root);
-    let roots = root_directories(root);
     let mut found = Vec::new();
     for document in markdown_files(root) {
         let text = fs::read_to_string(&document)
@@ -57,14 +56,18 @@ pub fn findings(root: &Path) -> Vec<Finding> {
             let target = match matches.as_slice() {
                 [only] => (*only).clone(),
                 [] => {
-                    // Written from the workspace root and naming nothing: this is the
-                    // rename-and-forget shape the gate exists for.
-                    // 从工作区根写起却什么都没命名到：这正是门禁为之存在的"改名后忘记更新"
-                    // 的形状。
-                    if roots
-                        .iter()
-                        .any(|name| anchor.path.starts_with(&format!("{name}/")))
-                    {
+                    // Written as a path and naming nothing: this is the rename-and-forget
+                    // shape the gate exists for. A bare filename that matches nothing is
+                    // still left alone, because it is prose shorthand before it is a
+                    // reference; the slash is what says the author meant a path — and it
+                    // is exactly the shape `src/definitely-gone.rs:99` used to hide in,
+                    // because that check asked whether the *first* segment was a workspace
+                    // root rather than whether the reference was written as a path.
+                    // 写成路径却什么都没命名到：这正是门禁为之存在的"改名后忘记更新"的形状。
+                    // 什么都没匹配到的裸文件名仍被放过，因为在成为引用之前它先是散文简写；是斜杠说明
+                    // 作者指的是路径——而 `src/definitely-gone.rs:99` 正是过去藏身的形状，因为那道
+                    // 检查问的是**第一段**是不是工作区根目录，而不是这处引用是否写成了路径。
+                    if normalize(&anchor.path).contains('/') {
                         found.push(Finding {
                             document: relative(root, &document),
                             anchor: anchor.text(),
@@ -80,9 +83,20 @@ pub fn findings(root: &Path) -> Vec<Finding> {
                 // 引用：门禁保持沉默，而不是猜作者指的是哪一个。
                 _ => continue,
             };
-            let lines = fs::read_to_string(&target)
-                .map(|text| text.lines().count())
-                .unwrap_or(0);
+            let body = fs::read_to_string(&target).unwrap_or_default();
+            let lines = body.lines().count();
+            // Line numbers are 1-based, and `path.rs:0` used to pass every check: the
+            // comparison asked whether the number was past the end, and zero never is.
+            // 行号从 1 起，而 `path.rs:0` 过去能通过所有检查：那次比较问的是数字是否越过末尾，而 0
+            // 永远不会越过。
+            if anchor.first == 0 || anchor.last == 0 {
+                found.push(Finding {
+                    document: relative(root, &document),
+                    anchor: anchor.text(),
+                    reason: "line 0 is not a 1-based line number".to_owned(),
+                });
+                continue;
+            }
             let wanted = anchor.last.max(anchor.first);
             if wanted > lines {
                 found.push(Finding {
@@ -93,6 +107,36 @@ pub fn findings(root: &Path) -> Vec<Finding> {
                         relative(root, &target)
                     ),
                 });
+                continue;
+            }
+            // A line number is not a reference by itself: the number can stay inside the
+            // file while the code moves under it. When the document pairs the reference
+            // with a token, the token is what makes the line number checkable.
+            // 行号本身不是一处引用：代码在下面移动时，数字仍可能留在文件内。当文档把引用与一个
+            // token 成对写出时，那个 token 才是让行号可被检查的东西。
+            if let Some(token) = &anchor.token
+                && let Some(fragment) = token_fragment(token)
+            {
+                // A range names a region, so the token may sit on any line of it; a single
+                // line number names that line.
+                // 区间命名的是一个区域，因此 token 可以落在其中任意一行；单个行号命名的就是那一行。
+                let cited = body
+                    .lines()
+                    .skip(anchor.first.saturating_sub(1))
+                    .take(wanted.saturating_sub(anchor.first) + 1)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !cited.contains(fragment) {
+                    found.push(Finding {
+                        document: relative(root, &document),
+                        anchor: anchor.text(),
+                        reason: format!(
+                            "{} does not contain `{token}`; the reference has drifted — point at \
+                             the symbol, or move the number",
+                            anchor.text()
+                        ),
+                    });
+                }
             }
         }
     }
@@ -117,31 +161,6 @@ fn workspace_sources(root: &Path) -> Vec<(String, PathBuf)> {
     files
 }
 
-/// The names of the workspace root's own directories.
-/// 工作区根自己那些目录的名字。
-///
-/// A written path that starts with one of these is claiming to be written from the
-/// workspace root, so naming nothing is a broken reference rather than shorthand.
-/// 以其中之一开头的写下的路径，是在声称自己从工作区根写起，因此什么都没命名到就是坏引用，
-/// 而不是简写。
-fn root_directories(root: &Path) -> Vec<String> {
-    let Ok(entries) = fs::read_dir(root) else {
-        return Vec::new();
-    };
-    let mut names = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| crate::is_real_directory(path))
-        .filter_map(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(str::to_owned)
-        })
-        .collect::<Vec<_>>();
-    names.sort();
-    names
-}
-
 /// The workspace files a written path could name.
 /// 一个写下的路径可能命名到的那些工作区文件。
 ///
@@ -151,20 +170,44 @@ fn root_directories(root: &Path) -> Vec<String> {
 /// 正好等于根相对路径者优先；否则由唯一一个以它结尾的路径命中——这正是让 crate 小节里的文档
 /// 用 `app/lifecycle.rs` 指 `studio/src/studio/app/lifecycle.rs` 的原因。
 fn resolve<'a>(written: &str, sources: &'a [(String, PathBuf)]) -> Vec<&'a PathBuf> {
+    // A written path may climb with `..` — `declaration/../../tree/transaction/…` is how one
+    // roadmap row names a file two levels up — and the suffix test below compares strings, so
+    // the segments are collapsed first. Without this the gate called a file that exists
+    // "no such file", which is the false positive that gets a gate switched off.
+    // 写下的路径可以用 `..` 向上爬——roadmap 有一行正是用 `declaration/../../tree/transaction/…`
+    // 命名向上两级的文件——而下面的后缀测试比较的是字符串，因此先把这些段折叠掉。没有这一步，门禁会
+    // 把一个确实存在的文件说成 "no such file"，而那种假阳性正是让人把门禁关掉的东西。
+    let normalized = normalize(written);
     let exact = sources
         .iter()
-        .filter(|(path, _)| path == written)
+        .filter(|(path, _)| path == &normalized)
         .map(|(_, file)| file)
         .collect::<Vec<_>>();
     if !exact.is_empty() {
         return exact;
     }
-    let suffix = format!("/{written}");
+    let suffix = format!("/{normalized}");
     sources
         .iter()
         .filter(|(path, _)| path.ends_with(&suffix))
         .map(|(_, file)| file)
         .collect()
+}
+
+/// `written` with its `.` and `..` segments resolved lexically.
+/// 把 `written` 里的 `.` 与 `..` 段按词法解掉。
+fn normalize(written: &str) -> String {
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in written.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            other => segments.push(other),
+        }
+    }
+    segments.join("/")
 }
 
 /// One `path.rs:first[-last]` reference found in a document.
@@ -180,6 +223,10 @@ struct Anchor {
     /// The last line named, equal to `first` when no range was written.
     /// 命名的最后一行；没有写区间时等于 `first`。
     last: usize,
+    /// The literal the reference is paired with, when the document writes
+    /// `` `<literal>` (`path.rs:line`) ``.
+    /// 与引用成对的那个字面量，当文档写作 `` `<字面量>`（`path.rs:<line>`）`` 时。
+    token: Option<String>,
 }
 
 impl Anchor {
@@ -232,6 +279,7 @@ fn anchors(text: &str) -> Vec<Anchor> {
         }
         if let Some(first) = first {
             found.push(Anchor {
+                token: paired_token(text, start),
                 path,
                 first,
                 last: last.unwrap_or(first),
@@ -246,6 +294,57 @@ fn anchors(text: &str) -> Vec<Anchor> {
 /// 可以作为路径一部分的字节。
 fn is_path_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'/' | b'-')
+}
+
+/// The literal a reference is paired with, when written `` `<literal>` (`path.rs:line`) ``.
+/// 引用成对的那个字面量，当写作 `` `<字面量>`（`path.rs:<line>`）`` 时。
+///
+/// Only the direct pairing is read. A group that cites several files in one parenthesis
+/// (`` (`a.rs:1`, `b.rs:2`) ``) holds one literal for two references, and guessing which of
+/// them it belongs to would report a drift the document does not have.
+/// 只读直接的成对写法。一个括号里引用多个文件（``（`a.rs:1`、`b.rs:2`）``）时，一个字面量对应
+/// 两处引用，猜它属于哪一处会报出文档里并不存在的漂移。
+fn paired_token(text: &str, start: usize) -> Option<String> {
+    let before = &text[..start];
+    let rest = before.trim_end().strip_suffix('`')?;
+    let rest = rest.trim_end();
+    let rest = rest
+        .strip_suffix('(')
+        .or_else(|| rest.strip_suffix('（'))?
+        .trim_end()
+        .strip_suffix('`')?;
+    let open = rest.rfind('`')?;
+    let literal = rest[open + 1..].to_owned();
+    if token_fragment(&literal).is_some() {
+        Some(literal)
+    } else {
+        None
+    }
+}
+
+/// The part of a paired literal that must appear on the line it names, if it is a token.
+/// 成对字面量里必须出现在它所命名那一行上的部分——前提是它确实是个 token。
+///
+/// A literal with whitespace in it is a sentence about the code, not a token of it
+/// (`runtime health check failed`), and a sentence is reworded rather than moved; only
+/// code-shaped literals are compared. The fragment stops at the first placeholder marker,
+/// because `<unknown:{node}>` is a format string in the source rather than literal text,
+/// and loses a trailing `/` for the same reason `<edited>/…` is an elision.
+/// 含空白的字面量是关于代码的一句话而不是代码里的一个 token（`runtime health check
+/// failed`），而句子会被改写而不是被搬走，因此只比对代码形状的字面量。片段在第一个占位符标记处
+/// 结束，因为 `<unknown:{node}>` 在源码里是格式串而不是字面文本；同样理由，尾部的 `/` 会被去掉，
+/// 因为 `<edited>/…` 是一种省略写法。
+fn token_fragment(literal: &str) -> Option<&str> {
+    if literal.contains(char::is_whitespace) {
+        return None;
+    }
+    let end = literal
+        .char_indices()
+        .find(|(_, character)| matches!(character, '{' | ':' | '…'))
+        .map(|(index, _)| index)
+        .unwrap_or(literal.len());
+    let fragment = literal[..end].trim_end_matches('/');
+    (!fragment.is_empty()).then_some(fragment)
 }
 
 #[cfg(test)]
@@ -268,6 +367,96 @@ mod tests {
         }
         crate::fixture_manifest(&root);
         root
+    }
+
+    /// A line number can stay inside the file while the code moves under it: the paired
+    /// token is what makes the number checkable. Both halves are pinned — a drifted
+    /// reference is reported, and a reference whose token is on the named line is not.
+    /// 代码在下面移动时行号仍可能留在文件内：成对写出的 token 才是让行号可被检查的东西。两侧都
+    /// 钉住——漂移的引用被报出，token 正好在它点名那一行的引用不被报。
+    #[test]
+    fn a_paired_token_that_is_not_on_the_named_line_is_reported() {
+        let sources = [("core/src/probe.rs", "fn first() {}\nfn second() {}\n")];
+        let drifted = synthetic(
+            &[("docs/note.md", "`second` (`core/src/probe.rs:1`)\n")],
+            &sources,
+        );
+        let found = findings(&drifted);
+        assert!(
+            found
+                .iter()
+                .any(|finding| finding.reason.contains("drifted")),
+            "a token that is not on the named line is reported: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&drifted);
+
+        let honest = synthetic(
+            &[("docs/note.md", "`second` (`core/src/probe.rs:2`)\n")],
+            &sources,
+        );
+        let found = findings(&honest);
+        assert!(
+            found.is_empty(),
+            "the same reference with the right number stays clean: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&honest);
+    }
+
+    /// A path written from a crate root, and a line number that is not a line number. Both
+    /// spellings were silent: the missing-file check asked whether the *first* segment was a
+    /// workspace root directory (so `src/definitely-gone.rs` was never asked), and `:0`
+    /// passed the past-the-end comparison because zero never is.
+    /// 一处从 crate 根写起的路径，以及一个不是行号的行号。两种拼法过去都是沉默的：缺失文件检查问的
+    /// 是**第一段**是否为工作区根目录（因此 `src/definitely-gone.rs` 从未被问），而 `:0` 能通过
+    /// "越过末尾"那次比较，因为 0 永远不会越过。
+    #[test]
+    fn a_crate_relative_path_and_a_zero_line_are_reported() {
+        let crate_relative = synthetic(
+            &[("docs/note.md", "see `src/definitely-gone.rs:99`\n")],
+            &[("core/src/probe.rs", "fn probe() {}\n")],
+        );
+        let found = findings(&crate_relative);
+        assert!(
+            found.iter().any(|finding| finding.reason == "no such file"),
+            "a path written as a path is checked wherever it starts: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&crate_relative);
+
+        let zero = synthetic(
+            &[("docs/note.md", "see `core/src/probe.rs:0`\n")],
+            &[("core/src/probe.rs", "fn probe() {}\n")],
+        );
+        let found = findings(&zero);
+        assert!(
+            found
+                .iter()
+                .any(|finding| finding.reason.contains("1-based")),
+            "line 0 is not a line: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&zero);
+    }
+
+    /// A path that climbs with `..` is the path it resolves to, not a string that matches
+    /// nothing: `declaration/../../tree/probe.rs` names `core/src/probe.rs`, and calling that
+    /// "no such file" is the false positive that gets a gate switched off.
+    /// 用 `..` 向上爬的路径就是它解析到的那个路径，而不是一个什么都匹配不到的字符串：
+    /// `declaration/../../tree/probe.rs` 命名的就是 `core/src/probe.rs`，说它 "no such file"
+    /// 正是那种让人把门禁关掉的假阳性。
+    #[test]
+    fn a_climbing_path_resolves_to_the_file_it_names() {
+        let root = synthetic(
+            &[
+                ("docs/note.md", "see `declaration/../../src/probe.rs:1`\n"),
+                ("core/src/registry_core/declaration/marker.rs", "// x\n"),
+            ],
+            &[("core/src/probe.rs", "fn probe() {}\n")],
+        );
+        let found = findings(&root);
+        assert!(
+            found.is_empty(),
+            "a climbing path that names a real file is not a broken reference: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// The reference this gate exists for: a line number past the end of the file.

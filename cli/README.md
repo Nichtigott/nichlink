@@ -20,11 +20,13 @@ cd my-app && nichlink studio
 | `nichlink grafts [path] [--json]` | List `.nichlink/external-grafts/*/graft.plan`, their targets, and whether the host entry declares the slot |
 | `nichlink snippets [path] [--editor vscode \| nvim \| blink \| auto] [--stdout]` | Inject the face-field editor snippets into a project or an editor config |
 | `nichlink studio` | Launch the Studio TUI for the current project |
-| `nichlink mcp` | Run the read-only MCP stdio bridge |
+| `nichlink mcp` | Run the MCP stdio bridge: source and registry queries, plus authoring writes that preview unless `apply: true` |
 
 Dependency source is detected automatically: a CLI running from a NichLink
 checkout writes path dependencies; an installed CLI writes Git dependencies
-(with a version floor, so Cargo resolves crates.io once published). Override
+(with a version floor: the floor is what `cargo publish` verifies — cargo resolving
+from git records it and then uses the git source's own version, measured with a
+`file://` fixture whose floor disagreed with the package). Override
 with `--path` or `--git`.
 
 The `cargo-nichlink` binary in the same package registers the plugin form:

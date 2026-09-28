@@ -1,13 +1,13 @@
 //! The trace-driven entry point: converge from the run that happened.
 //! trace 驱动的入口：从真正发生过的那次运行收敛。
 //!
-//! Split out of `converge.rs` when that file crossed the repository's 450-line
+//! Split out of `converge.rs` when that file crossed the repository's line
 //! ceiling, the same way `callgraph.rs` was split out of `tools.rs`. It answers the
 //! other shape a bug report arrives in: an agent that does not yet know which face it
 //! is looking at, only that a run misbehaved. Frames are matched to faces **by source
 //! file** — a face is a declaration, a frame is an active function — and the values
 //! those frames captured are attached to the face whose file they were captured in.
-//! 当 `converge.rs` 越过本仓库 450 行的上限时拆出来，与 `callgraph.rs` 从 `tools.rs` 拆出的方式
+//! 当 `converge.rs` 越过本仓库的行数上限时拆出来，与 `callgraph.rs` 从 `tools.rs` 拆出的方式
 //! 相同。它回答缺陷报告的另一种形状：代理还不知道自己要看哪个面，只知道某次运行行为不对。帧是**按源
 //! 文件**匹配到面的——面是声明、帧是正在活动的函数——而那些帧捕获的值会被挂到"捕获它们时所在文件"的
 //! 那个面上。

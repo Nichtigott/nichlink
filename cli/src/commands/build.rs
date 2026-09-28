@@ -7,7 +7,7 @@
 //! 从 `lib.rs` 拆出：本命令是 `registration_check` 之上的薄进程包装，唯一拥有的规则
 //! 是 argv 拆分（首个路径与透传的 cargo 选项）。
 
-use super::{registration_check, split_build_args};
+use super::{build_target, registration_check, split_build_args};
 
 /// Validate the registration tree first; only then invoke `cargo build`
 /// with the remaining arguments passed through verbatim. The path, when
@@ -17,7 +17,13 @@ use super::{registration_check, split_build_args};
 pub(crate) fn build(args: &mut impl Iterator<Item = String>) -> Result<(), String> {
     let all: Vec<String> = args.by_ref().collect();
     let (directory, cargo_args) = split_build_args(&all);
-    let directory = directory.unwrap_or_else(|| ".".to_owned());
+    // The validated project is the one cargo will build: a `--manifest-path` among the
+    // passed-through arguments names it, and the check used to miss that and validate the current
+    // directory instead — so the banner described a project that was not the one being built (audit
+    // `S11`).
+    // 被校验的项目就是 cargo 会构建的那个：透传参数里的 `--manifest-path` 点名了它，而校验过去漏掉
+    // 这一点、改为校验当前目录——于是那句横幅描述的是一个并不是正在被构建的项目（审计 `S11`）。
+    let directory = build_target(directory, &cargo_args)?;
     let package = registration_check(&directory)?;
     println!("nichlink build: registration ok ({package})");
     let manifest = std::fs::canonicalize(&directory)

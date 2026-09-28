@@ -90,8 +90,15 @@ BIN="$ROOT/target/debug/nichlink"
 if [ -x "$BIN" ]; then
   echo "checking $WORK/$SUBJECT with the built CLI" >&2
   "$BIN" check "$WORK/$SUBJECT"
+  cli_half="ran"
 else
   echo "note: $BIN is not built; skipping the CLI half (cargo build -p nichlink-cli)" >&2
+  cli_half="skipped: $BIN is not built"
 fi
 
-echo "external rehearsal passed: $SUBJECT built and tested outside the checkout"
+# The last line says which halves ran. It used to claim an unqualified pass while the CLI half was
+# skipped, so a green rehearsal meant two different things depending on whether someone had built
+# the binary first (audit `RC5`).
+# 最后一行说明跑了哪几半。它过去在跳过 CLI 那一半时仍宣称无条件通过，于是"演练是绿的"会因为
+# 之前有没有人构建过这个二进制而意味着两件不同的事（审计 `RC5`）。
+echo "external rehearsal passed: $SUBJECT built and tested outside the checkout (CLI half: $cli_half)"

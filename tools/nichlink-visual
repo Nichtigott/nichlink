@@ -10,6 +10,11 @@
 #   NICHLINK_VISUAL_X=240 NICHLINK_VISUAL_Y=60 tools/nichlink-visual graph
 #   NICHLINK_VISUAL_STDOUT=1 tools/nichlink-visual tree
 #
+# A name `--list` does not print is an error: it exits 2 and writes nothing, rather than
+# waiting for a screen that only a registered name describes.
+# `--list` 没有打印的名字是错误：它以 2 退出且什么都不写，而不是去等待一个只有已登记名字才描述得
+# 出的屏幕。
+#
 # Each scene writes two files into `target/visual` (override with
 # `NICHLINK_VISUAL_DIR`): `<scene>.txt` is the pane as plain text — the layout,
 # which is what a diff should watch — and `<scene>.ansi.txt` keeps whatever SGR
@@ -55,7 +60,12 @@ scene_marker() {
         tree) echo "CALL TREE" ;;
         data) echo "DATA FLOW" ;;
         add-form) echo "ADD REGISTRATION FACE" ;;
-        *) echo "NICH LINK" ;;
+        # Unreachable: `run_scene` refuses a name `scenes()` does not list. If it ever were
+        # reached, this marker cannot appear on screen, so the wait fails loudly after its
+        # timeout instead of accepting the banner.
+        # 不可达：`run_scene` 会拒绝不在 `scenes()` 里的名字。万一真被走到，这个标记不可能出现在
+        # 屏幕上，因此那次等待会在超时后明确失败，而不是接受启动横幅。
+        *) echo "__UNREGISTERED_SCENE__" ;;
     esac
 }
 
@@ -81,6 +91,25 @@ scene_keys() {
 
 scenes() {
     echo "home search add-form graph tree-demo tree-steps tree data"
+}
+
+# Whether a scene name is one of the registered ones.
+# 场景名是否在已登记的那几个里。
+#
+# The marker lookup falls back for an unknown name, and that fallback used to be the startup
+# banner `NICH LINK` — which every scene shows. A typo therefore satisfied its own "expected
+# screen" wait without a single keypress and wrote a non-empty file that CI's `test -s`
+# accepted, so an unregistered scene name reported success (audit `RC6`). The name is checked
+# here instead, and the fallback below can no longer match anything.
+# 标记查询对未知名字有回退，而那个回退过去是启动横幅 `NICH LINK`——每个场景都会显示它。于是打错
+# 的名字不用按任何键就满足了自己那次"期望屏幕"的等待，还写出一个 CI 的 `test -s` 会接受的非空
+# 文件：未登记的场景名因此报成功（审计 `RC6`）。现在改为在这里检查名字，下面的回退也就不再可能
+# 匹配到任何东西。
+known_scene() {
+    for known in $(scenes); do
+        [ "$known" = "$1" ] && return 0
+    done
+    return 1
 }
 
 usage() {
@@ -126,6 +155,10 @@ wait_for() {
 
 run_scene() {
     name="$1"
+    if ! known_scene "$name"; then
+        printf "error: unknown scene '%s'; available scenes: %s\n" "$name" "$(scenes)" >&2
+        exit 2
+    fi
     query=$(scene_query "$name")
     marker=$(scene_marker "$name")
     mkdir -p "$OUT_DIR"

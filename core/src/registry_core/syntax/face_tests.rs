@@ -55,6 +55,47 @@ crate::control_object! {
     assert_eq!(face.parent(), Some(ParentSyntax::Root));
 }
 
+/// A parent path is matched at a path-segment boundary, not by suffix: `crate::NOT_ROOT_NODE_ID`
+/// is a different constant, `my_root_node_id` a different function, and `OwnNodeId::from_path` a
+/// different type's constructor. Suffix matching classified all three as the parent the face
+/// declared (audit `KN6`).
+/// 父路径在**路径段边界**上匹配，而不是按后缀：`crate::NOT_ROOT_NODE_ID` 是另一个常量、
+/// `my_root_node_id` 是另一个函数、`OwnNodeId::from_path` 是另一个类型的构造函数。按后缀匹配会
+/// 把三者都判成该面声明的那个父级（审计 `KN6`）。
+#[test]
+fn a_parent_look_alike_is_not_the_parent() {
+    let cases = [
+        (
+            "crate::NOT_ROOT_NODE_ID",
+            "a different constant is not the root",
+        ),
+        ("my_root_node_id(1)", "a different function is not the root"),
+        (
+            "OwnNodeId::from_path(\"control/control.rs\", \"ControlRegistry\")",
+            "another type's constructor is not this one",
+        ),
+    ];
+    for (parent, why) in cases {
+        let source = format!("crate::control_object! {{ kind: Workspace, parent: {parent} }}");
+        let face = parse_face(&source).unwrap().unwrap();
+        assert_eq!(face.parent(), None, "{why}: {parent}");
+    }
+
+    // The spellings the tree does use still classify, so the boundary rule narrows the match
+    // rather than breaking it.
+    // 树里真正使用的拼法仍然分类成功——边界规则是收紧匹配，而不是弄坏它。
+    let real_root = "crate::control_object! { kind: Workspace, parent: crate::ROOT_NODE_ID }";
+    assert_eq!(
+        parse_face(real_root).unwrap().unwrap().parent(),
+        Some(ParentSyntax::Root)
+    );
+    let own_node = "crate::control_object! { kind: Widget, parent: crate::NODE_ID }";
+    assert_eq!(
+        parse_face(own_node).unwrap().unwrap().parent(),
+        Some(ParentSyntax::NodePath("crate".to_owned()))
+    );
+}
+
 #[test]
 fn rejects_duplicate_fields() {
     let source = "crate::control_object! { kind: First, kind: Second }";

@@ -144,6 +144,30 @@ impl WasmPluginTable {
         active.instance.call(operation, input)
     }
 
+    /// Activate a pending generation on demand, without calling an operation.
+    /// 按需激活待发布代，且不调用任何操作。
+    ///
+    /// Activation is lazy — it happens inside [`call`](Self::call) — so a host that installs an
+    /// artifact and then polls [`is_loaded`](Self::is_loaded) learns nothing until it performs an
+    /// operation. When the pending generation *cannot* activate, that gap is a dead end: no
+    /// operation exists that would ever make `is_loaded` true, and the slot stays unloaded with no
+    /// way to ask for the attempt (audit `PH-4`). This is that missing step, reachable on its own;
+    /// `Ok(false)` means nothing was pending, so a caller may poll it without arming an unnecessary
+    /// activation.
+    /// 激活是惰性的——它发生在 [`call`](Self::call) 里——因此"装好工件再轮询
+    /// [`is_loaded`](Self::is_loaded) 的宿主"在执行一次操作之前什么也学不到。当待定代际**无法**
+    /// 激活时，这个缺口是死路：没有任何操作能让 `is_loaded` 变成 true，槽会一直未加载，且无从请求
+    /// 那次尝试（审计 `PH-4`）。这就是缺的那一步，可以单独调用；`Ok(false)` 表示本来就没有待定项，
+    /// 于是调用方可以放心轮询而不必触发一次不必要的激活。
+    pub fn activate_pending(&self, slot: &str) -> Result<bool, HostError> {
+        let state = self.slot(slot)?;
+        if !state.has_pending.load(Ordering::Acquire) {
+            return Ok(false);
+        }
+        state.activate(self.backend)?;
+        Ok(true)
+    }
+
     /// Report whether the slot has an active generation and nothing pending.
     /// 报告该槽是否已有激活代际且没有待处理代际。
     pub fn is_loaded(&self, slot: &str) -> Result<bool, HostError> {

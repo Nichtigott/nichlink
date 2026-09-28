@@ -148,16 +148,20 @@ impl<V: PluginSignatureVerifier> PluginAdmission<V> {
     /// 准入一个原始工件：先筛选，后校验。
     ///
     /// The order matters and is the kernel's: revocation and the lock are
-    /// consulted before the signature, so a revoked or unlisted version is
-    /// refused whatever the signature says. An official manifest must pass
+    /// consulted before the signature, so a revoked version — and an unlisted
+    /// **official** one — is refused whatever the signature says. An official
+    /// manifest must pass
     /// `verify_signed`, which requires a trust root — a host that configures none
     /// gets `MissingOfficialKey` instead of a silent downgrade to checksums; a
     /// user manifest takes the digest path, because no verifier is consulted for
-    /// that source.
-    /// 顺序很重要，而且由内核决定：撤销与锁在签名之前被检查，因此已吊销或未登记的版本无论签名说什么
-    /// 都被拒绝。官方 manifest 必须过 `verify_signed`，而它要求信任根——没有配置信任根的宿主会拿到
-    /// `MissingOfficialKey`，而不是被静默降级为纯摘要；用户 manifest 走纯摘要路径，因为该来源不会
-    /// 咨询验证器。
+    /// that source, and no lock constrains it: a user-source artifact no lock lists
+    /// is admitted on its digest (see [`plugin_catalog`] for why that absence is
+    /// safe).
+    /// 顺序很重要，而且由内核决定：撤销与锁在签名之前被检查，因此已吊销的版本——以及未登记的**官方**
+    /// 版本——无论签名说什么都被拒绝。官方 manifest 必须过 `verify_signed`，而它要求信任根——没有
+    /// 配置信任根的宿主会拿到 `MissingOfficialKey`，而不是被静默降级为纯摘要；用户 manifest 走纯摘要
+    /// 路径，因为该来源不会咨询验证器，锁对它也没有约束：任何锁都没登记的用户来源工件凭摘要即可准入
+    /// （这种"缺失"为何安全，见 [`plugin_catalog`]）。
     pub fn admit(&self, artifact: PluginArtifact) -> Result<VerifiedPluginArtifact, HostError> {
         let manifest = artifact
             .registration

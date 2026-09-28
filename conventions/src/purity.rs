@@ -55,51 +55,67 @@ pub const FORBIDDEN: &[&str] = &[
     "option_env!",
 ];
 
+/// The paths a `use std::*;` makes reachable without the `std::` prefix.
+/// 一条 `use std::*;` 让不带 `std::` 前缀的这些路径变得可达。
+///
+/// Only consulted when the file carries a glob import of `std`, so a local module that
+/// happens to be called `fs` is not reported by a file that never imported `std` wholesale.
+/// 只有在文件确实带了 `std` 的 glob 导入时才查这份表，因此一个凑巧叫 `fs` 的本地模块不会在
+/// 从未整包导入 `std` 的文件里被报出来。
+const GLOB_FORBIDDEN: &[&str] = &[
+    "fs::",
+    "env::",
+    "process::",
+    "net::",
+    "time::",
+    "io::",
+    "thread::",
+    "os::",
+];
+
 /// Blank the lines an `#[cfg(any())]` attribute governs.
 /// 把 `#[cfg(any())]` 属性所管辖的那些行抹白。
 ///
-/// The attribute governs the item on the following lines (and its indented body), so the
-/// scan skips lines from the attribute until the indentation returns to the attribute's
-/// own level.
-/// 该属性管辖其后若干行的条目（以及它缩进的主体），因此扫描从该属性起跳过，直到缩进回到属性
-/// 自身的层级。
+/// Only `#[cfg(any())]`, not `#[cfg(test)]`: an inline test module *is* compiled in a test
+/// build, and the kernel's promise covers everything under `core/src`.
+/// 只认 `#[cfg(any())]`，不认 `#[cfg(test)]`：内联测试模块在测试构建里**确实**会被编译，而内核的
+/// 承诺覆盖 `core/src` 下的全部内容。
 fn drop_never_compiled(masked: &str) -> String {
-    let mut kept = String::with_capacity(masked.len());
-    let mut skipped_indent: Option<usize> = None;
-    for line in masked.lines() {
-        let trimmed = line.trim_start();
-        let indent = line.len() - trimmed.len();
-        if let Some(level) = skipped_indent {
-            if trimmed.is_empty() || indent > level {
-                kept.push('\n');
-                continue;
-            }
-            skipped_indent = None;
-        }
-        if trimmed == "#[cfg(any())]" {
-            skipped_indent = Some(indent);
-            kept.push('\n');
-            continue;
-        }
-        kept.push_str(line);
-        kept.push('\n');
-    }
-    kept
+    crate::drop_governed_lines(masked, |trimmed| trimmed == "#[cfg(any())]")
 }
 
-/// The masked text with every whitespace character removed, and the source line each
+/// The masked text with one separator per whitespace run, and the source line each
 /// remaining character came from.
-/// 屏蔽后的文本去掉每一个空白字符，外加剩下每个字符来自的源码行。
+/// 屏蔽后的文本，每段空白保留一个分隔符，外加剩下每个字符来自的源码行。
+///
+/// The earlier version deleted every whitespace character, which glued `use std::fs;`
+/// into `usestd::fs;`; the left-boundary test then read the `e` of `use` as part of a
+/// longer name and the *idiomatic* import was invisible. A separator next to `:` is
+/// dropped so `std :: fs` still folds to `std::fs`.
+/// 早先的版本删掉每一个空白字符，把 `use std::fs;` 粘成 `usestd::fs;`；左边界测试于是把
+/// `use` 的 `e` 读成更长名字的一部分，**最惯用的**那种 import 就此不可见。紧邻 `:` 的分隔符会
+/// 被丢弃，因此 `std :: fs` 仍折叠成 `std::fs`。
 fn folded_for_search(masked: &str) -> (String, Vec<usize>) {
+    const SEP: char = '\u{1}';
     let mut folded = String::with_capacity(masked.len());
     let mut lines = Vec::with_capacity(masked.len());
+    let mut pending: Option<usize> = None;
     for (index, line) in masked.lines().enumerate() {
+        let number = index + 1;
         for character in line.chars() {
             if character.is_whitespace() {
+                pending.get_or_insert(number);
                 continue;
             }
+            if let Some(at) = pending.take() {
+                let previous_is_colon = folded.ends_with(':');
+                if !previous_is_colon && character != ':' {
+                    folded.push(SEP);
+                    lines.push(at);
+                }
+            }
             folded.push(character);
-            lines.push(index + 1);
+            lines.push(number);
         }
     }
     (folded, lines)
@@ -113,36 +129,104 @@ fn folded_for_search(masked: &str) -> (String, Vec<usize>) {
 /// sees every one of them.
 /// 折叠去掉了多行树形导入曾用来藏身的换行，因此这里能看到每一个。
 fn expand_folded_imports(folded: String, lines: Vec<usize>) -> (String, Vec<usize>) {
+    const SEP: char = '\u{1}';
     let mut expanded = String::with_capacity(folded.len());
     let mut expanded_lines = Vec::with_capacity(lines.len());
     let characters = folded.chars().collect::<Vec<_>>();
     let mut index = 0usize;
     while index < characters.len() {
         let head = characters[index..].iter().take(6).collect::<String>();
-        if head == "std::{"
-            && let Some(end) = characters[index..].iter().position(|c| *c == '}')
-        {
-            let end = index + end;
-            for (offset, character) in characters[index..=end].iter().enumerate() {
-                expanded.push(*character);
-                expanded_lines.push(lines.get(index + offset).copied().unwrap_or(1));
-            }
-            let line = lines.get(index).copied().unwrap_or(1);
-            let inner = characters[index + 6..end].iter().collect::<String>();
-            for item in inner.split(',') {
-                let item = item.trim();
-                if item.is_empty() || item == "self" {
-                    continue;
+        if head == "std::{" {
+            // Match the closing brace by depth: `std::{{fs}, env}` names two paths, and
+            // cutting at the first `}` would read it as one malformed item.
+            // 按深度匹配闭合花括号：`std::{{fs}, env}` 命名两条路径，而在第一个 `}` 处截断会把
+            // 它读成一个畸形条目。
+            let mut depth = 0usize;
+            let mut end = None;
+            for (offset, character) in characters[index + 5..].iter().enumerate() {
+                match character {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth = depth.saturating_sub(1);
+                        if depth == 0 {
+                            end = Some(index + 5 + offset);
+                            break;
+                        }
+                    }
+                    _ => {}
                 }
-                expanded.push(' ');
-                expanded_lines.push(line);
-                for character in format!("std::{item}").chars() {
-                    expanded.push(character);
+            }
+            if let Some(end) = end {
+                for (offset, character) in characters[index..=end].iter().enumerate() {
+                    expanded.push(*character);
+                    expanded_lines.push(lines.get(index + offset).copied().unwrap_or(1));
+                }
+                let line = lines.get(index).copied().unwrap_or(1);
+                // Split the group at its *top-level* commas, so a nested group stays whole
+                // until it is unwrapped below.
+                // 在该组的**顶层**逗号处切分，因此嵌套组会整体保留，直到下面被拆开。
+                let mut items: Vec<String> = Vec::new();
+                let mut current = String::new();
+                let mut depth = 0usize;
+                for character in characters[index + 6..end].iter() {
+                    match character {
+                        '{' => {
+                            depth += 1;
+                            current.push(*character);
+                        }
+                        '}' => {
+                            depth = depth.saturating_sub(1);
+                            current.push(*character);
+                        }
+                        ',' if depth == 0 => items.push(std::mem::take(&mut current)),
+                        _ => current.push(*character),
+                    }
+                }
+                items.push(current);
+                for item in items {
+                    let item = item.trim_matches(|character: char| {
+                        character == SEP
+                            || character == '{'
+                            || character == '}'
+                            || character.is_whitespace()
+                    });
+                    if item.is_empty() || item == "self" {
+                        continue;
+                    }
+                    // `use std::{self as s};` names an alias rather than a path, so it is
+                    // rewritten into the plain form the alias table already reads.
+                    // `use std::{self as s};` 命名的是一个别名而不是路径，因此把它改写成别名表
+                    // 已经会读的普通形式。
+                    if let Some(rest) = item.strip_prefix("self") {
+                        let rest = rest.trim_start_matches(|character: char| {
+                            character == SEP || character.is_whitespace()
+                        });
+                        if let Some(alias) = rest.strip_prefix("as") {
+                            let alias = alias.trim_matches(|character: char| {
+                                character == SEP || character.is_whitespace()
+                            });
+                            if !alias.is_empty() {
+                                expanded.push(' ');
+                                expanded_lines.push(line);
+                                for character in format!("use{SEP}std{SEP}as{SEP}{alias};").chars()
+                                {
+                                    expanded.push(character);
+                                    expanded_lines.push(line);
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    expanded.push(' ');
                     expanded_lines.push(line);
+                    for character in format!("std::{item}").chars() {
+                        expanded.push(character);
+                        expanded_lines.push(line);
+                    }
                 }
+                index = end + 1;
+                continue;
             }
-            index = end + 1;
-            continue;
         }
         expanded.push(characters[index]);
         expanded_lines.push(lines.get(index).copied().unwrap_or(1));
@@ -155,19 +239,32 @@ fn expand_folded_imports(folded: String, lines: Vec<usize>) -> (String, Vec<usiz
 /// search text is folded.
 /// 每个 `std` 的局部别名，来自 `use std as <alias>;`——搜索文本已折叠，因此没有空白。
 fn std_aliases(searchable: &str) -> Vec<String> {
-    const NEEDLE: &str = "usestdas";
+    // The search text keeps one separator per whitespace run, so the needles carry it
+    // too. Three spellings beside the plain one are read here: `use ::std as s;`,
+    // `extern crate std as s;`, and the brace form the expander rewrites into the plain
+    // one above.
+    // 搜索文本为每段空白保留一个分隔符，因此 needle 也带上它。除了普通拼写，这里还认三种：
+    // `use ::std as s;`、`extern crate std as s;`，以及展开器会改写成普通形式的大括号写法。
+    const SEP: &str = "\u{1}";
+    let needles = [
+        format!("use{SEP}std{SEP}as{SEP}"),
+        format!("use::std{SEP}as{SEP}"),
+        format!("crate{SEP}std{SEP}as{SEP}"),
+    ];
     let mut aliases = Vec::new();
-    let mut rest = searchable;
-    while let Some(offset) = rest.find(NEEDLE) {
-        let after = &rest[offset + NEEDLE.len()..];
-        let alias = after
-            .chars()
-            .take_while(|character| character.is_alphanumeric() || *character == '_')
-            .collect::<String>();
-        if !alias.is_empty() {
-            aliases.push(alias);
+    for needle in &needles {
+        let mut rest = searchable;
+        while let Some(offset) = rest.find(needle.as_str()) {
+            let after = &rest[offset + needle.len()..];
+            let alias = after
+                .chars()
+                .take_while(|character| character.is_alphanumeric() || *character == '_')
+                .collect::<String>();
+            if !alias.is_empty() && !aliases.contains(&alias) {
+                aliases.push(alias);
+            }
+            rest = after;
         }
-        rest = after;
     }
     aliases
 }
@@ -264,6 +361,35 @@ pub fn findings(root: &Path) -> Vec<Finding> {
                 }
             }
         }
+        // A glob import of `std` makes every module name reachable unqualified, so the
+        // bare spelling is the same capability. The boundary test also rejects a `:`
+        // before the token, so `reth::fs::…` stays green.
+        // 一条 `std` 的 glob 导入让每个模块名不带前缀就可达，因此裸拼写是同一种能力。边界测试
+        // 还会拒绝 token 之前的 `:`，所以 `reth::fs::…` 保持绿色。
+        if searchable.contains("std::*") {
+            for token in GLOB_FORBIDDEN {
+                let mut from = 0usize;
+                while let Some(offset) = searchable[from..].find(token) {
+                    let at = from + offset;
+                    let boundary = at == 0
+                        || !searchable[..at]
+                            .chars()
+                            .next_back()
+                            .is_some_and(|previous| {
+                                previous.is_alphanumeric() || previous == '_' || previous == ':'
+                            });
+                    if boundary {
+                        let named = FORBIDDEN
+                            .iter()
+                            .find(|candidate| candidate.ends_with(token))
+                            .copied()
+                            .unwrap_or("std::*");
+                        reported.insert((search_lines.get(at).copied().unwrap_or(1), named));
+                    }
+                    from = at + token.len();
+                }
+            }
+        }
         for (line, token) in reported {
             found.push(Finding {
                 file: relative(root, &path),
@@ -276,160 +402,5 @@ pub fn findings(root: &Path) -> Vec<Finding> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::workspace_root;
-    use std::collections::BTreeSet;
-    use std::fs;
-    use std::path::PathBuf;
-
-    /// A throwaway checkout with the given files under it.
-    /// 一个只含给定文件的一次性检出。
-    fn synthetic(files: &[(&str, &str)]) -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-purity-{}-{}-{sequence}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        for (relative, contents) in files {
-            let path = root.join(relative);
-            fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
-            fs::write(&path, contents).expect("fixture file");
-        }
-        crate::fixture_manifest(&root);
-        root
-    }
-
-    /// A brace import names a forbidden module without ever spelling `std::fs`,
-    /// and `std::io` is I/O like everything else in the list.
-    /// 树形导入从未拼出 `std::fs` 却命名了被禁的模块，而 `std::io` 与表里其余各项一样是 I/O。
-    #[test]
-    fn a_brace_import_and_std_io_are_violations() {
-        let root = synthetic(&[(
-            "core/src/probe.rs",
-            "use std::{env, fs};\n\npub fn probe() -> String {\n    \
-             let _ = fs::read_to_string(\"/etc/hostname\");\n    \
-             let _ = env::var(\"HOME\");\n    \
-             let _ = std::io::stdout();\n    String::new()\n}\n",
-        )]);
-        let found = findings(&root);
-        let tokens = found
-            .iter()
-            .map(|finding| finding.token)
-            .collect::<BTreeSet<_>>();
-        assert!(
-            tokens.contains("std::io"),
-            "std::io is I/O and belongs in the list: {found:#?}"
-        );
-        assert!(
-            tokens.contains("std::env") && tokens.contains("std::fs"),
-            "a brace import names both modules: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// Prose that names a forbidden module is not a violation, and the code
-    /// beside it still is.
-    /// 点名被禁模块的散文不是违规，而它旁边的代码依然是。
-    #[test]
-    fn comments_and_strings_are_not_the_code_that_is_scanned() {
-        let root = synthetic(&[(
-            "core/src/probe.rs",
-            "/* std::fs is banned here, and this block comment says so */\n\
-             /// `let probe = \"std::env\";` is prose too.\n\
-             pub fn probe() -> usize {\n    \
-             let _note = \"std::thread::spawn\";\n    \
-             let _ = std::fs::metadata(\"/tmp\");\n    1\n}\n",
-        )]);
-        let found = findings(&root);
-        let lines = found.iter().map(|finding| finding.line).collect::<Vec<_>>();
-        assert_eq!(
-            lines,
-            vec![5],
-            "only the real call is a violation: a block comment, a doc comment and a \
-             string literal are prose, and line 5 is the code beside them: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// The four spellings a line-based scan was measured to miss: a brace import split
-    /// across lines, spaces around the separators, a path split across a newline, and a
-    /// compile-time environment read.
-    /// 逐行扫描实测漏掉的四种写法：跨行的树形导入、分隔符两旁的空格、被换行切开的路径，以及
-    /// 编译期读环境。
-    #[test]
-    fn the_ways_a_path_can_hide_from_a_line_scan_are_violations() {
-        let root = synthetic(&[(
-            "core/src/probe.rs",
-            "use std::{\n    env,\n    fs,\n};\n\n\
-             pub fn probe() {\n    \
-             let _ = std :: fs :: metadata(\"/tmp\");\n    \
-             let _ = std::\n        env::var(\"HOME\");\n    \
-             let _ = option_env!(\"HOME\");\n}\n",
-        )]);
-        let found = findings(&root);
-        let tokens = found
-            .iter()
-            .map(|finding| finding.token)
-            .collect::<BTreeSet<_>>();
-        assert!(
-            tokens.contains("std::fs"),
-            "spaces around the separators: {found:#?}"
-        );
-        assert!(
-            tokens.contains("std::env"),
-            "a split path and a brace import: {found:#?}"
-        );
-        assert!(
-            tokens.contains("option_env!"),
-            "a compile-time env read: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// An aliased `std` is the same capability, and the alias is found wherever it is
-    /// declared in the file.
-    /// 别名化的 `std` 是同一种能力，而别名在文件里任何位置声明都能被找到。
-    #[test]
-    fn an_aliased_std_is_still_std() {
-        let root = synthetic(&[(
-            "core/src/probe.rs",
-            "use std as s;\n\npub fn probe() {\n    let _ = s::fs::metadata(\"/tmp\");\n}\n",
-        )]);
-        let found = findings(&root);
-        assert!(
-            found.iter().any(|finding| finding.token == "std::fs"),
-            "`s::fs` is `std::fs` under an alias: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// The walk has a floor, so a renamed kernel directory cannot read as "clean".
-    /// 遍历有一个下限，因此内核目录一旦改名就不会读作"干净"。
-    #[test]
-    fn the_walk_covers_the_kernel_tree() {
-        let sources = rust_sources(&workspace_root().join("core").join("src"));
-        assert!(
-            sources.len() > 40,
-            "the purity walk found only {} files; it is supposed to cover core/src",
-            sources.len()
-        );
-    }
-
-    /// The kernel stays pure: the audit verdict is now a gate.
-    /// 内核保持纯净：审计结论现在是一道门禁。
-    #[test]
-    fn the_kernel_does_no_io_and_reads_no_environment() {
-        let root = workspace_root();
-        let found = findings(&root);
-        assert!(
-            found.is_empty(),
-            "kernel purity is a documented promise; move the value in as a parameter instead: {found:#?}"
-        );
-    }
-}
+#[path = "purity_tests.rs"]
+mod purity_tests;

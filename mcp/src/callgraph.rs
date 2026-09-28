@@ -1,10 +1,10 @@
 //! The static call-graph answer, and the bounds it needs.
 //! 静态调用图答案，以及它需要的上限。
 //!
-//! Lifted out of `tools.rs` when a new tool pushed that page into the 450-line
+//! Lifted out of `tools.rs` when a new tool pushed that page into the line
 //! ratchet: the catalog and the query implementations belong there, the one answer
 //! that grows without limit belongs here, next to its two bounds and their tests.
-//! 当一个新工具把 `tools.rs` 推到 450 行棘轮边上时把它挪出来：目录与查询实现留在那里，而这唯一会
+//! 当一个新工具把 `tools.rs` 推到行数棘轮边上时把它挪出来：目录与查询实现留在那里，而这唯一会
 //! 无界增长的答案连同它的两道上限与测试放在这里。
 //!
 //! The measured failure these bounds exist against: a common name (`new`) had 142

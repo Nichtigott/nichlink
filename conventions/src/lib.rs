@@ -36,6 +36,8 @@ pub mod bilingual;
 pub mod doc_anchors;
 #[path = "doc_blocks.rs"]
 pub mod doc_blocks;
+#[path = "features.rs"]
+pub mod features;
 #[path = "lint.rs"]
 pub mod lint;
 #[path = "mounting.rs"]
@@ -221,6 +223,62 @@ pub(crate) fn is_skipped_directory(path: &Path) -> bool {
 /// `symlink_metadata` 描述的是链接本身，因此被链接的目录在这里不算目录。
 pub(crate) fn is_real_directory(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+/// Blank the lines an attribute governs, for the attributes `governs` accepts.
+/// 把 `governs` 认可的属性所管辖的那些行抹白。
+///
+/// An attribute governs the item that follows it, and the ordinary spelling puts the two at
+/// the *same* indentation — only the item's body is deeper. A scan that blanked the deeper
+/// lines alone left the item's own declaration in the text, which is backwards: the most
+/// orthodox spelling was the one it reported. Stacked attributes are blanked together with
+/// the declaration they decorate.
+/// 属性管辖紧随其后的条目，而最普通的拼法把两者放在**同一缩进**上——只有条目的主体更深。只抹更深的
+/// 行会让条目自己的声明留在文本里，而这正好反了：它报出来的恰恰是最正统的那种拼法。叠放的属性会连同
+/// 它们装饰的声明一起被抹掉。
+///
+/// The predicate is the caller's because "never compiled" is not one attribute: the purity
+/// gate exempts `#[cfg(any())]` alone (an inline `#[cfg(test)]` module *is* compiled in a
+/// test build, and the kernel's promise covers it), while the shim ratchet drops both — a
+/// re-export behind either is absent from the crate a host compiles against.
+/// 判定由调用方给，因为"永不编译"不是一个属性：纯净性门禁只豁免 `#[cfg(any())]`（内联的
+/// `#[cfg(test)]` 模块在测试构建里**确实**会被编译，而内核的承诺覆盖它），而 shim 棘轮两者都要
+/// 丢掉——藏在任一种后面的重导出，都不在宿主编译所对的那个 crate 里。
+pub(crate) fn drop_governed_lines(masked: &str, governs: impl Fn(&str) -> bool) -> String {
+    let mut kept = String::with_capacity(masked.len());
+    // The attribute's own indentation, and whether the item it governs has been reached.
+    // 属性自身的缩进，以及它管辖的条目是否已经读到。
+    let mut skipped: Option<(usize, bool)> = None;
+    for line in masked.lines() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if let Some((level, started)) = skipped {
+            if trimmed.is_empty() {
+                kept.push('\n');
+                continue;
+            }
+            if !started {
+                // Attributes stack, and the declaration is what ends the stack.
+                // 属性可以叠放，而结束这一叠的是声明本身。
+                skipped = Some((level, !trimmed.starts_with('#')));
+                kept.push('\n');
+                continue;
+            }
+            if indent > level {
+                kept.push('\n');
+                continue;
+            }
+            skipped = None;
+        }
+        if governs(trimmed) {
+            skipped = Some((indent, false));
+            kept.push('\n');
+            continue;
+        }
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
 }
 
 /// Every `.rs` file under `directory`, sorted, without following symlinks.

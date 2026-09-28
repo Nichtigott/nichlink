@@ -91,15 +91,15 @@ Placeholder paths are `<unknown:{node}>`
 (`core/src/registry_core/tree/inspection/inspection.rs:74`),
 `<missing-parent:…>/…`
 (`core/src/registry_core/tree/transaction/transaction.rs:167`,
-`core/src/registry_core/tree/graft_ops/graft_ops.rs:146`), and `<edited>/…`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:186`); synthesized sources
-are `<runtime>` (`inspection.rs:75`), `<registry-connector>`
-(`core/src/registry_core/tree/connector/connector.rs:205`),
+`core/src/registry_core/tree/graft_ops/graft_ops.rs:149`), and `<edited>/…`
+(`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`); synthesized sources
+are `<runtime>` (`inspection.rs:76`), `<registry-connector>`
+(`core/src/registry_core/tree/connector/connector.rs:206`),
 `<owned-snapshot-batch>`
-(`core/src/registry_core/tree/transaction/transaction.rs:83`), `<migration>`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:54`), and `<graft>`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:294`,
-`core/src/registry_core/tree/graft_ops/reconcile.rs:166`).
+(`core/src/registry_core/tree/transaction/transaction.rs:84`), `<migration>`
+(`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`), and `<graft>`
+(`core/src/registry_core/tree/graft_ops/graft_ops.rs:297`,
+`core/src/registry_core/tree/graft_ops/reconcile.rs:148`).
 
 Two rules for reading a `health_check` failure:
 
@@ -108,7 +108,7 @@ Two rules for reading a `health_check` failure:
    (`core/src/registry_core/tree/inspection/inspection.rs:110`); it does not
    name the failing check. Other aggregating phases keep the same shape:
    `registration connector rejected (N face(s))`
-   (`core/src/registry_core/tree/connector/connector.rs:211`) and `snapshot
+   (`core/src/registry_core/tree/connector/connector.rs:212`) and `snapshot
    batch rejected (N error(s))`
    (`core/src/registry_core/tree/transaction/transaction.rs:89`).
 2. The failing check's own name and text are in `children()[0].message()`, built

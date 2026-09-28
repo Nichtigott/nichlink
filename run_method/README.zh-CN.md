@@ -81,22 +81,22 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 （`core/src/registry_core/tree/inspection/inspection.rs:74`）、
 `<missing-parent:…>/…`
 （`core/src/registry_core/tree/transaction/transaction.rs:167`、
-`core/src/registry_core/tree/graft_ops/graft_ops.rs:146`）与 `<edited>/…`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:186`）；合成的来源位置有
-`<runtime>`（`inspection.rs:75`）、`<registry-connector>`
-（`core/src/registry_core/tree/connector/connector.rs:205`）、
+`core/src/registry_core/tree/graft_ops/graft_ops.rs:149`）与 `<edited>/…`
+（`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`）；合成的来源位置有
+`<runtime>`（`inspection.rs:76`）、`<registry-connector>`
+（`core/src/registry_core/tree/connector/connector.rs:206`）、
 `<owned-snapshot-batch>`
-（`core/src/registry_core/tree/transaction/transaction.rs:83`）、`<migration>`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:54`）与 `<graft>`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:294`、
-`core/src/registry_core/tree/graft_ops/reconcile.rs:166`）。
+（`core/src/registry_core/tree/transaction/transaction.rs:84`）、`<migration>`
+（`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`）与 `<graft>`
+（`core/src/registry_core/tree/graft_ops/graft_ops.rs:297`、
+`core/src/registry_core/tree/graft_ops/reconcile.rs:148`）。
 
 读取 `health_check` 失败的两条规则：
 
 1. 顶层 `message()` 是固定的聚合句 `runtime health check failed`
    （`core/src/registry_core/tree/inspection/inspection.rs:110`），不包含失败检查的名字。
    其他聚合 phase 形状相同：`registration connector rejected (N face(s))`
-   （`core/src/registry_core/tree/connector/connector.rs:211`）与 `snapshot batch
+   （`core/src/registry_core/tree/connector/connector.rs:212`）与 `snapshot batch
    rejected (N error(s))`
    （`core/src/registry_core/tree/transaction/transaction.rs:89`）。
 2. 失败检查自己的名字与文本在 `children()[0].message()` 中，按

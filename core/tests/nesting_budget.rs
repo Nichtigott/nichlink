@@ -13,6 +13,19 @@
 //! 本测试做的正是这件事，也正是第三种形状能被加进来的原因：线性串上限是一千个 token，听起来
 //! 很紧，直到本仓库里最长的串被发现只占它的一小部分。
 //!
+//! **余量是实测的，不是推断的**（2026-09-28）：在全部源文件上量一个**保守上界**——剥掉注释与
+//! 字面量后，只数 `(`/`[`/`{` 的配对嵌套（再加一份把 `<`/`>` 也算进去的更粗版本）——最深的
+//! 括号嵌套是 **28**（`mcp/src/mir_tests.rs`），含尖括号也只有 **27**，而 [`LIMIT`] 是 **128**。
+//! 真实的加权限深度只会 ≤ 这个上界（`fn`/`dyn`/`impl` 是**加倍**，不会凭空造出括号），因此守卫
+//! 对今天的树有 4 倍以上余量；这条记录的意义是：`LIMIT` 不是"刚好装下今天的树"，它离树的实际
+//! 形状还很远。
+//! **The headroom is measured, not inferred** (2026-09-28): a *conservative upper bound* over every
+//! source file — comments and literals stripped, only paired `(`/`[`/`{` nesting counted, plus a
+//! cruder variant that also counts `<`/`>` — tops out at **28** (`mcp/src/mir_tests.rs`), and **27**
+//! with angle brackets, against a `LIMIT` of **128**. The real weighted depth can only be ≤ that
+//! bound (`fn`/`dyn`/`impl` double a level, they do not invent brackets), so the guard has more than
+//! four times the room it needs: `LIMIT` is not "just big enough for today's tree".
+//!
 //! It lives in `core/tests/` rather than beside the unit tests because it walks the
 //! filesystem, and the kernel-purity gate covers all of `core/src` — the gate's
 //! own documentation names this directory as the place for a test that genuinely

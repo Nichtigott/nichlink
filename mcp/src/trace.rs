@@ -197,8 +197,13 @@ fn render_values(artifact: &TraceArtifact, query: Option<&str>) -> String {
     let line = local_line;
     let mut lines = 0usize;
     let mut shown = 0usize;
+    // One label per number, in the order this function writes them everywhere else (label,
+    // then count). The header used to read `values {locals} locals {edges} edges` — two
+    // counts under three labels, so a reader could not tell which number belonged to what.
+    // 每个数字一个标签，顺序与本函数别处一致（标签在前、计数在后）。表头过去是
+    // `values {locals} locals {edges} edges`——两个计数配三个标签，读者分不清哪个数字属于谁。
     let mut output = format!(
-        "values {} locals {} edges\n",
+        "locals {} edges {}\n",
         artifact.locals.len(),
         artifact.edges.len()
     );

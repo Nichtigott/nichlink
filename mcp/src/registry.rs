@@ -38,13 +38,24 @@ pub(crate) fn registry(root: &Path) -> Result<String, String> {
 /// 与写入路径共用：编辑必须在查询所报告的同一个命名空间之下创作，否则它写下的面会落在宿主从未
 /// 编译过的身份域里。
 ///
-/// `NICH_LINK_NAMESPACE` wins verbatim — the override every surface reads, so
-/// setting it moves the build and every reader together — and otherwise the
-/// package name Cargo reports is the namespace, because that is exactly what the
-/// declaration macros bake in as `env!("CARGO_PKG_NAME")`.
-/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出——每个执行面都读这个覆盖，设置它会把构建与所有
-/// 读取方一起挪动——否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
+/// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
+/// is the namespace, because that is exactly what the declaration macros bake in as
+/// `env!("CARGO_PKG_NAME")`.
+/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
 /// `env!("CARGO_PKG_NAME")` 正是它。
+///
+/// What this is **not**: a rule every surface reads. Studio reads the same override, the CLI reads
+/// none of it (it always asks Cargo for the package name), and no build-side code reads it either —
+/// the namespace is baked in at compile time. So with the variable set this query reports a
+/// namespace, and `NodeId`s, that `nichlink explain --json` and the built host do not use. The
+/// variable's documented purpose is a *reader's* override for trace artifacts; whether it should
+/// keep applying to host identity is the maintainer's decision, and this note exists so the
+/// divergence is a known one rather than a claim of agreement (audit `S12`).
+/// 这**不是**什么：不是每个执行面都读的规则。Studio 读同一个覆盖，CLI 完全不读（它始终问 Cargo 要
+/// 包名），构建侧也不读——命名空间在编译期就烤好了。因此设置该变量后，这条查询报告的命名空间与
+/// `NodeId`，正是 `nichlink explain --json` 与已构建宿主**不用的**那一套。该变量文档化的用途是 trace
+/// artifact 的**读取者覆盖**；它是否应继续作用于宿主身份由维护者决定，而这段注记的存在是为了让这处分歧
+/// 成为已知事项，而不是一句"彼此一致"的声称（审计 `S12`）。
 pub(crate) fn namespace(root: &Path) -> Result<String, String> {
     namespace_from(std::env::var(lexicon::NAMESPACE_ENV).ok().as_deref(), root)
 }

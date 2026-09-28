@@ -72,6 +72,16 @@ rataflow = { version = "0.1", optional = true, default-features = false, feature
 nichlink-run-method = { path = "../run_method", version = "0.1.6", features = ["authoring"] }
 nichlink-debug-method = { path = "../debug_method", version = "0.1.6" }
 nichlink-build-method = { path = "../build_method", version = "0.1.6" }
+# The MIR target resolver reads `cargo metadata` to learn which binary targets a host has: the
+# extra `rustc` arguments cannot be handed to several targets at once, so a two-bin host needs one
+# target named rather than `--bins`. Asking cargo — rather than reading the manifest — is what keeps
+# a custom `[[bin]]` path from making the answer wrong, the same reason `build_method` reads it for
+# the package name.
+# MIR target 解析器读 `cargo metadata` 来得知宿主有哪些二进制 target：额外的 `rustc` 参数不能同时
+# 交给多个 target，因此"两个 bin"的宿主需要一个被点名的 target，而不是 `--bins`。问 cargo——而不是
+# 自己读清单——正是让自定义 `[[bin]]` 路径无法让答案出错的原因，与 `build_method` 为取包名而读它
+# 同理。
+serde_json = "1"
 
 [[bin]]
 name = "nichlink-studio"

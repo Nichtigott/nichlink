@@ -12,7 +12,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use nichlink_build_method::{FaceView, declared_grafts, read_build_scope};
+use nichlink_build_method::{FaceView, OverlaySlot, declared_grafts, read_build_scope};
 use serde_json::{Value, json};
 
 use super::super::build_out_dir;
@@ -21,7 +21,12 @@ use super::report::{cut_endpoint, cut_form};
 
 /// The note every overlay projection carries, success or failure.
 /// 每一次覆盖投影（无论成功或失败）都携带的说明。
-pub(super) const OVERLAY_NOTE: &str = "static projection of the build's scope and declared cuts; the live effective tree is `Registry::dump_effective` (overlay_static + dump) inside a host that links both registries";
+/// The text belongs to `nichlink_build_method::OVERLAY_NOTE`, because the MCP
+/// bridge renders the same projection; a local copy would let the CLI's JSON
+/// document and the bridge's answer describe one projection two ways.
+/// 该文本属于 `nichlink_build_method::OVERLAY_NOTE`，因为 MCP 桥渲染的是同一份投影；本地副本会
+/// 让 CLI 的 JSON 文档与桥的回答对同一份投影给出两种说法。
+pub(super) const OVERLAY_NOTE: &str = nichlink_build_method::OVERLAY_NOTE;
 
 /// Render the static overlay projection: which of the build's slots a declared
 /// cut replaces, and which faces the scope prunes.
@@ -62,32 +67,42 @@ pub(super) fn overlay_report(
         .then(|| read_build_scope(&out_dir).ok())
         .flatten();
     let declared = declared_grafts(manifest);
-    let plans = super::super::grafts::plan_rows(manifest, faces, declared.as_ref().ok())?;
-
-    let mut slots = Vec::new();
-    let mut pruned = Vec::new();
-    for face in faces {
-        let selected = scope.as_ref().map(|scope| {
-            scope.all
-                || scope.selected_sources.contains(&face.source)
-                || scope.selected_ids.contains(&face.id)
-        });
-        let kept = selected.map(|selected| {
-            selected
-                || scope
-                    .as_ref()
-                    .is_some_and(|scope| scope.keeps(&face.module))
-        });
-        let replacement = declared
-            .as_ref()
-            .ok()
-            .and_then(|declared| {
-                declared
-                    .cuts
-                    .iter()
-                    .find(|cut| cut.names_face(&face.path, Some(&face.module)))
-            })
-            .map(|cut| {
+    // The traversal itself belongs to `nichlink_build_method::overlay_projection`,
+    // because the MCP bridge's `nichlink.explain {"overlay": true}` asks the same
+    // question; this page only renders the rows it returns.
+    // 遍历本身属于 `nichlink_build_method::overlay_projection`，因为 MCP 桥的
+    // `nichlink.explain {"overlay": true}` 问的是同一个问题；本页只渲染它返回的行。
+    let projection = match nichlink_build_method::overlay_projection(
+        manifest,
+        faces,
+        scope.as_ref(),
+        declared.as_ref().ok(),
+    ) {
+        Ok(projection) => projection,
+        Err(error) => {
+            // Same contract as the per-node report: `--json` means exactly one document on stdout,
+            // and this path used to return before writing one — so a plans directory that is a plain
+            // file (or any other refusal) reached a machine reader as a parse error rather than as an
+            // answer (audit `S10`). `grafts --json` already collects the same failures this way.
+            // 与逐节点报告同一条契约：`--json` 意味着 stdout 恰好一份文档，而这条路径过去在写出它之前
+            // 就返回——于是"计划目录其实是个普通文件"（或任何别的拒绝）到达机器读者时是解析错误而不是
+            // 答案（审计 `S10`）。`grafts --json` 早已用这种方式收下同样的失败。
+            if json_output {
+                let target: Option<String> = None;
+                super::write_unresolved(&target, true, &error, out)?;
+            }
+            return Err(error);
+        }
+    };
+    let slot_json = |slot: &OverlaySlot| {
+        json!({
+            "path": slot.path,
+            "node": slot.id.to_string(),
+            "kind": slot.kind,
+            "source": slot.source,
+            "selected": slot.selected,
+            "kept": slot.kept,
+            "replacement": slot.replacement.as_ref().map(|cut| {
                 json!({
                     "cut": cut_endpoint(cut),
                     "graft": cut.graft,
@@ -95,22 +110,16 @@ pub(super) fn overlay_report(
                     "line": cut.line,
                     "form": cut_form(cut),
                 })
-            });
-        let row = json!({
-            "path": face.path,
-            "node": face.id.to_string(),
-            "kind": face.kind,
-            "source": face.source,
-            "selected": selected,
-            "kept": kept,
-            "replacement": replacement,
-        });
-        if kept == Some(false) {
-            pruned.push(row.clone());
-        } else {
-            slots.push(row);
-        }
-    }
+            }),
+        })
+    };
+    let slots: Vec<Value> = projection.slots.iter().map(slot_json).collect();
+    let pruned: Vec<Value> = projection.pruned.iter().map(slot_json).collect();
+    let plans: Vec<Value> = projection
+        .plans
+        .iter()
+        .map(super::super::grafts::row_json)
+        .collect();
 
     let entry = declared
         .as_ref()

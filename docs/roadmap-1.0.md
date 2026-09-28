@@ -19,12 +19,14 @@ what blocks 1.0, not by when they were found.
 已完成:B1、B2、B3a、B3b(外部面 20→1 必填)、B3c-1(范围端点改为字段)、B3c-2(计划记录接进 overlay)、B3d(对抗性审计五条)、B4 第 1–8 项与发布卫生、"下一批"第 1–11 条,以及第四轮的 C1–C6(离线部分,见下方第四轮节)。各批次的三件套 + doc 由我在树静止后统一复跑,绿。
 
 **1.0 剩余**:首次发布**已完成**——`0.1.0`(2026-09-25)与 `0.1.1`(2026-09-26)九个 crate
-都已上 crates.io,发布工作流的最后一步两次都在检出之外构建一次性消费者并按版本解析到全部九个,
-包审计现在构建全部九个包的 tarball。版本线继续走 `0.1.x`(设计仍在深化),因此 1.0 剩下的不是
+都已上 crates.io,发布工作流的最后一步两次都在检出之外构建一次性消费者并按版本解析到全部九个。
+包审计的**内容**半边对九个 crate 始终生效；**打包**半边只在每个带版本号的内部依赖都已进入 index
+时才构建，因此工作区版本尚未发布时它报 `skipped: 8`——这个状态每次推进版本线都会重现，不是
+"首次发布前"的一次性状态。版本线继续走 `0.1.x`(设计仍在深化),因此 1.0 剩下的不是
 一次发布,而是路线图登记的工程里程碑(MIR 适配器、单态化/间接调用、公开面冻结)与下面这批欠账。
 第四轮另登记两件未做之事:`wasmi` 升级(需要联网一次抓取,第四轮节说明为何没有擅自做),
-以及新门禁所钉住的欠账(9 个超 450 行文件、29 个未编译的文档片段、7 处死代码与 8 处必须
-保持一致的重复)。
+以及新门禁所钉住的欠账(超出尺寸上限的文件、29 个未编译的文档片段、7 处死代码与 8 处必须
+保持一致的重复;尺寸上限已于 2026-09-28 由 450 放宽到 600)。
 
 - **B3d 修正了一处归因**:F1 的垃圾默认名不是审计指认的"完整 arm"产生,而是由*两个都显式写了的紧凑 arm* 消费 `$crate::NoPreset` 后经 `stringify!` 产生;修法是删掉那条重发 arm,让带 `handle` 的紧凑 arm 自己成为默认化 arm。三个示例面现在实测 `preset == "NoPreset"`、`parts == "NoParts"`。
 - **F2 的责任在计划本身**:B2 要求"四处路径判断合成一个 `path_is_under`",但那四处对"相等"的语义并不一致(准入包含相等,连接器严格在其下),合并把连接器的准入静默放宽了。已加 `path_is_strictly_under` 并把两种含义写在一处。教训:合并重复前逐处比对边界语义,不能只看"看起来一样"。
@@ -112,7 +114,7 @@ what blocks 1.0, not by when they were found.
 | 4 | `UnknownReplacement`/`UnknownTarget` 用原树根 id 报错，丢掉选择器 | `tree/graft_ops/overlay.rs:151-156`、`resolution.rs:43-51` | 错误携带选择器字符串；新增测试断错文案含 selector |
 | 5 | `same_symbol` 每次比较两次堆分配且在双重循环内 | `mir/merge.rs:53-55` | 改 `strip_suffix` 零分配；既有 merge 测试绿 |
 | 6 | Studio 帮助文字三处错 + 折叠是死代码 | `ui/status.rs:27`、`ui/search.rs:47,137`、`overlay/search.rs:65,282,380`、`app/search_queries.rs:10-16` | 帮助文字与实际键位一致；死折叠的键位与标记删除（不新增行为） |
-| 7 | Studio "live trace" 是硬编码样例，README 却声称权威 | `app/lifecycle.rs:46`、`app/sample.rs:7`、`README.md:714` | 面板与图例标注为示例，README 同步；真实 ingest 留到 B4 |
+| 7 | Studio "live trace" 是硬编码样例，README 却声称权威 | `app/lifecycle.rs:46`、`app/sample.rs`（硬编码样例所在文件，已在本项收口时删除，职责移到 `app/trace.rs`）、`README.md:714` | 面板与图例标注为示例，README 同步；真实 ingest 留到 B4 |
 | 8 | `tools/nichlink-package-audit` 引用不存在的包且不在 CI | `tools/nichlink-package-audit:8` | 改 `nichlink-build-method`，接入 CI；脚本能跑通（core 已发前仍会因版本依赖失败，脚本里注明） |
 | 9 | `README.zh-CN.md` 把 `StaticPlan::find` 写成 O(log n)，实际线性 | `README.zh-CN.md:569` vs `release/release.rs:203-217` | 更正为 O(n)，与英文 README 一致 |
 | 10 | MCP 宣称能查合同，5 个工具只读源码 | `mcp/Cargo.toml:7`、`mcp/README.md:5-6`、`mcp/src/tools.rs:10-38` | 已按"补工具"收口（2026-09-26）：`nichlink.registry` 报告构建推导出的注册树（`face_views`）。contract/admission 数据仍缺——它们在已构建的 `RegistrationSnapshot` 里，不在源码里；宣称已按此收紧 |
@@ -137,8 +139,9 @@ what blocks 1.0, not by when they were found.
 
 ### B2 单一事实来源（去重复，改一份就够）
 
-1. `RegistrationRule::validate` 与 `OwnedRegistrationRule::validate`（`declaration/registration.rs:135-172`
-   vs `owned.rs:89-139`）→ 一份基于切片的核，两边适配。
+1. `RegistrationRule::validate` 与 `OwnedRegistrationRule::validate`（`declaration/registration.rs`
+   的 `impl RegistrationRule` vs `declaration/owned.rs` 的 `impl OwnedRegistrationRule`）→ 一份基于
+   切片的核，两边适配。
 2. `ObjectContract::validate` 与 owned 版（`contract.rs:85-105` vs `owned.rs:145-165`）→ 同上。
 3. `FlowContract` 与 `OwnedFlowContract` 的字段比较与语义判定（`plugin/contracts/contracts.rs:84-101`
    vs `:159-186`）→ 一份；删零调用的 `OwnedFlowContract::matches`。

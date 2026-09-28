@@ -8,17 +8,24 @@
 
 use std::collections::HashMap;
 
-use super::model::{MirCall, MirGraph, MirLocal, MirParseError};
+use crate::registry_core::identity::NodeId;
+
+use super::model::{MirCall, MirGraph, MirLocal, MirParseError, MirSnapshot};
 
 impl MirGraph {
     /// Parse the compact JSONL artifact, one record per non-blank line.
     /// 解析紧凑 JSONL artifact，每个非空行一条记录。
     ///
     /// A malformed line fails the whole parse with its 1-based line number;
-    /// blank lines are skipped. Each record needs a `kind` of `function`,
-    /// `call`, or `local`, and any other kind is rejected.
+    /// blank lines are skipped. Each record needs a `kind` of `snapshot`,
+    /// `function`, `call`, or `local`, and any other kind is rejected. A
+    /// `snapshot` record is the optional header naming the tree the artifact came
+    /// from; a second one is an error rather than a later one silently winning,
+    /// because a file that names two trees names neither.
     /// 任一行格式错误都会以使整个解析失败，并带上其以 1 起始的行号；空行跳过。
-    /// 每条记录需要 `kind` 为 `function`、`call` 或 `local`，其他类型一律拒绝。
+    /// 每条记录需要 `kind` 为 `snapshot`、`function`、`call` 或 `local`，其他类型一律
+    /// 拒绝。`snapshot` 记录是可选的表头，点名 artifact 来自哪棵树；出现第二条是错误而不是
+    /// 后者静静胜出，因为一份点名两棵树的文件哪一棵都没点名。
     pub fn from_jsonl(input: &str) -> Result<Self, MirParseError> {
         let mut graph = Self::default();
         for (index, raw) in input.lines().enumerate() {
@@ -29,6 +36,23 @@ impl MirGraph {
             let fields = parse_object(raw).map_err(|message| MirParseError { line, message })?;
             let kind = required(&fields, "kind", line)?;
             match kind {
+                "snapshot" => {
+                    if graph.snapshot.is_some() {
+                        return Err(MirParseError {
+                            line,
+                            message: "a second `snapshot` record names a second tree".to_owned(),
+                        });
+                    }
+                    let namespace = required(&fields, "namespace", line)?.to_owned();
+                    let root =
+                        required(&fields, "root", line)?
+                            .parse::<NodeId>()
+                            .map_err(|_| MirParseError {
+                                line,
+                                message: "`root` is not a node id".to_owned(),
+                            })?;
+                    graph.snapshot = Some(MirSnapshot { namespace, root });
+                }
                 "function" => {
                     graph
                         .functions
@@ -291,5 +315,31 @@ mod tests {
             "escapes decode: {:?}",
             escaped.functions
         );
+    }
+
+    /// A snapshot header names the tree the rest of the artifact describes, and a
+    /// second one is refused: a file that names two trees names neither.
+    /// 快照表头点名其余内容描述的那棵树，而第二条会被拒绝：点名两棵树的文件哪一棵都没点名。
+    #[test]
+    fn a_snapshot_header_names_the_tree_and_a_second_one_is_refused() {
+        let graph = MirGraph::from_jsonl(
+            "{\"kind\":\"snapshot\",\"namespace\":\"demo\",\"root\":\"00000000000000000000000000000000\"}\n{\"kind\":\"call\",\"caller\":\"a\",\"callee\":\"b\",\"mir_line\":1}\n",
+        )
+        .expect("a snapshot header is a record this format carries");
+        let snapshot = graph.snapshot.expect("the header is kept as data");
+        assert_eq!(snapshot.namespace, "demo");
+        assert_eq!(snapshot.root.to_string(), "0".repeat(32));
+
+        let error = MirGraph::from_jsonl(
+            "{\"kind\":\"snapshot\",\"namespace\":\"one\",\"root\":\"00000000000000000000000000000000\"}\n{\"kind\":\"snapshot\",\"namespace\":\"two\",\"root\":\"00000000000000000000000000000000\"}\n",
+        )
+        .expect_err("two trees is not a snapshot");
+        assert_eq!(error.line, 2, "{error}");
+
+        let error = MirGraph::from_jsonl(
+            "{\"kind\":\"snapshot\",\"namespace\":\"demo\",\"root\":\"not-a-node\"}\n",
+        )
+        .expect_err("a root that is not a node id is not a snapshot");
+        assert!(error.to_string().contains("node id"), "{error}");
     }
 }

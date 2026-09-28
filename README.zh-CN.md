@@ -72,7 +72,7 @@ nichlink new my-app
 cd my-app && nichlink studio
 ```
 
-`0.1.0` 已发布。想要检出里的最新提交而不是已发布版本时，Git 源依然可用：
+已发布的版本都在 crates.io（最新的看 `CHANGELOG.md`）。想要检出里的最新提交而不是已发布版本时，Git 源依然可用：
 `cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli`。
 插件二进制同时支持 `cargo nichlink <命令>` 形式。如果要检查已有项目：
 
@@ -667,14 +667,18 @@ cargo check
 NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
-MCP 提供 `nichlink.search`、`nichlink.inspect`、`nichlink.callgraph`、
+MCP 提供 `nichlink.search`（面排在最前，按逻辑路径、kind、模块或槽位名匹配，并标注构建的结论
+——`ok`、`added since build`、`re-identified` 或 `build unknown`——随后才是文件与函数命中）、
+`nichlink.inspect`、`nichlink.callgraph`、
 `nichlink.read`、`nichlink.status` 和 `nichlink.registry`——最后一个报告构建推导出的
 注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.explain`（构建发布的
-作用域与发布剪枝，源码文本答不出来）、`nichlink.diff`（源码与构建之间的面级差异，包括文件没动而
+作用域与发布剪枝，源码文本答不出来；给出 `overlay: true` 时改为覆盖投影——每条已声明切口替换哪个
+槽位、作用域剪掉哪些面，也就是替换之后的发布态）、`nichlink.diff`（源码与构建之间的面级差异，包括文件没动而
 身份变了的那种；给出 `records: true` 时改为外部 graft 记录与源码的对照——槽位没动而身份变了的记录是
 `re-identified`，而不是被悄悄弄坏）与 `nichlink.trace`（已记录 trace 的调用报告——真正跑了什么——artifact 描述的是
 另一棵树时会被拒绝；给出 `values: true` 时改为报告记录下的值与被观察到的数据边，按捕获它们的帧分组）、`nichlink.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
-都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过）、
+都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过；它写出的是
+点名自己那棵树的快照，而给出 `against` 时两份快照作差得到调用图差异，外来快照按名拒绝）、
 `nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
 真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
 能力记号）、`nichlink.impact`（一次改动的传递爆炸半径：后代、能力消费者与已声明 graft 切口，各带跳数与理由）、
@@ -794,7 +798,7 @@ conventions/  nichlink-conventions：遍历本检出的门禁（内核纯净性�
 ```sh
 cargo fmt --all
 cargo test --workspace --offline
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --offline -- -D warnings
 ```
 
 NichLink 使用 [MIT License](LICENSE)。欢迎提交真实项目中的失败案例、设计

@@ -147,3 +147,26 @@ fn a_directory_without_a_manifest_is_refused() {
     assert!(error.contains("needs a Cargo package"), "{error}");
     let _ = std::fs::remove_dir_all(&bare);
 }
+
+/// `verify` declares `limit` and `root`, and only those reach `diff`: forwarding the whole
+/// request let an undeclared `records: true` replace the promised tree delta with the records
+/// report, so the same call silently answered a different question than its description
+/// promises.
+/// `verify` 只声明 `limit` 与 `root`，只有它们会传进 `diff`：把整个请求透传，会让一个未声明的
+/// `records: true` 把承诺的树差异换成记录报告——同一次调用因此静默回答了与它描述所承诺的另一个问题。
+#[test]
+fn an_undeclared_argument_does_not_change_the_delta() {
+    let (root, _) = package("undeclared");
+    provider_and_consumer(&root);
+    let plain = verify(&root, &json!({})).expect("the report renders");
+    let noisy = verify(&root, &json!({"records": true})).expect("the report renders");
+    assert_eq!(
+        plain, noisy,
+        "an argument this tool does not declare is not forwarded"
+    );
+    assert!(
+        !noisy.contains("records"),
+        "the answer is the tree delta, not the records report: {noisy}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

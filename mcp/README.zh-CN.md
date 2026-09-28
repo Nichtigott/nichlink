@@ -13,7 +13,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 读取类工具：
 
-- `nichlink.search`：搜索文件和函数声明；
+- `nichlink.search`：查找注册面、文件与函数声明。面排在最前，按逻辑路径、kind、模块或槽位名匹配，
+  每个都带上构建的结论——`ok`、`added since build`、`re-identified`（文件没动而 `kind` 变了，两个身份
+  都给出），或者尚未发布任何构建时的 `build unknown`；下面的文件与函数命中与此前相同。树那一半需要身份
+  命名空间，因此 Cargo 叫不出名字的根仍然回答源码那一半，并说明这一点；
 - `nichlink.inspect`：查看单文件中的函数和注册声明；
 - `nichlink.callgraph`：查找函数的直接调用者和被调用者；
 - `nichlink.read`：读取有大小上限的源码窗口；
@@ -23,7 +26,9 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 - `nichlink.explain`：报告构建对某个面给出的证据（身份、路径、kind、源码、模块、父级、槽位），或
   它划定作用域的整棵树投影。上面那个注册树答案由源码文本推导，因此永远新鲜；这一个读构建**发布**在
   `target/nichlink/out` 下的文件，因此回答真正会发布什么：作用域是否选中该面、发布剪枝是否剥掉它的
-  符号。缺失或过期的构建会被如实报告。
+  符号。缺失或过期的构建会被如实报告。给出 `overlay: true` 时改为渲染**覆盖**投影——每条已声明切口
+  替换哪个槽位、作用域剪掉哪些面，也就是替换之后的发布态，用的是 CLI `explain --overlay` 同一次遍历。
+  那是静态投影而不是 `Registry::dump`，回复里的说明写明了活的树从哪来；`overlay` 与 `node` 互斥。
 - `nichlink.diff`：源码现在与构建清单之间的面级差异——新增、消失，以及文件没动而身份变了
   （`kind` 变化就是身份变化，只有这个比较看得见）。给出 `records: true` 时改为把外部 graft 记录与
   源码对照：记录里存着它写下时针对的身份，因此槽位没动而面换了身份会被报成 `re-identified`
@@ -37,8 +42,11 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   异树 artifact 会被按名拒绝，而不是画出来。
 - `nichlink.mir`：读一个 MIR artifact——`rustc -Zunpretty=mir` 文本转储或紧凑 JSONL 形式，
   按扩展名选择——报告编译器给出的调用候选。`jsonl: true` 输出那份 JSONL：Studio 本来就能渲染、
-  也能解析这条可移植通道，而工作区里从没有任何东西写出过一份。JSONL 有一行畸形就整体失败；文本转储
-  从不失败，只给出它确实包含的调用。文本的生产者是 nightly 工具链上的
+  也能解析这条可移植通道，而工作区里从没有任何东西写出过一份。`jsonl: true` 写出的是**快照**：表头
+  点名 artifact 来源树的身份命名空间与注册树根，而正是它让两份 artifact 可比——属于另一棵树的快照会被
+  按名拒绝，说不出自己那棵树的那份（文本转储说不出）则让差异说明它无法排除什么。给出 `against` 时，
+  那份 artifact 就是基线，回答是从它向前的调用图差异：新增与消失的关系，以及函数符号。JSONL 有一行
+  畸形就整体失败；文本转储从不失败，只给出它确实包含的调用。文本的生产者是 nightly 工具链上的
   `cargo rustc -Zunpretty=mir`；artifact 缺失时工具会这么说，而不是报一棵空图。
 - `nichlink.unified`：把 MIR artifact 与本包已记录的 trace 经
   `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——被 trace 确认的调用带
@@ -84,7 +92,8 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   声明锚成 `<path>:<line>`——与拒绝时 `file:line:column` 同一种形状。每条回复都以当前这棵树收尾，
   因此下一次调用可以用它来瞄准。
 
-前五个工具索引 Rust 源码文本；`nichlink.registry` 报告的注册树来自**构建自己的推导**
+源码类工具索引 Rust 源码文本——`nichlink.search` 也会匹配注册面，用的是与注册树工具同一份推导；
+`nichlink.registry` 报告的注册树来自**构建自己的推导**
 （`nichlink_build_method::face_views`，也就是 CLI 的 `explain` 所用的那一份），因此代理可以直接问
 注册树是什么，而不是靠 grep 宏名重建它。两者都需要 Cargo 回答一件事：包名就是 `NodeId` 命名空间，
 所以它们调用 `nichlink_build_method::package_name`（`cargo metadata`）。`NICH_LINK_NAMESPACE`

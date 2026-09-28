@@ -218,6 +218,10 @@ Updated as the fixes landed; this is the state after the tenth batch.
   ——它们是**给宿主的**审计/查询 API（Studio 走的是同一把锁上的 `PluginCatalog::contains`），
   因此"来源与版本在发布/激活前未被校验"这一半，现在由 `verify_signed` 的策略链承担；这两个函数
   本身不是"未接线的控制"，而是宿主的选择入口。
+  （2026-09-28 复核：`[实测]` 这两处在仓内**确有**调用者——`plugin-host/src/admission.rs:166` 调
+  `PluginPolicy::decision`（内核之外），`core/src/registry_core/plugin/plugin_policy/plugin_policy.rs:125`
+  的 `accepts` 与 `:157` 的锁检查分别调 `decision` 与 `contains_manifest`（内核之内）。因此"仓内仍无
+  调用者"作为断言已不成立；原文保留，因为它是当时那一轮的记录，订正见 09-27 索引 `PH-6`。）
 - **M3 ✅ FIXED MAJOR wasm 表元素无上限，编译期限制与工件字节也未限** `[报告]`+`[实测]` —
   `plugin-host/src/wasm.rs` 设了 `memory_size`/`instances`/`memories`/`tables`/
   `trap_on_grow_failure`，但**从未调用 `.table_elements(..)`**；wasmi 默认不限表元素且表是

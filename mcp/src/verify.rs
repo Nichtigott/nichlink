@@ -61,7 +61,20 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
     // precisely because the call above just refreshed the build's side of it.
     // 这份差异就是 `nichlink.diff` 给出的同一份报告，而它在这里有意义，正是因为上面那次调用刚刚刷新
     // 了它在构建一侧的数据。
-    let delta = crate::diff::diff(root, arguments)?;
+    //
+    // Only the arguments this tool declares reach it. Forwarding the whole request let an
+    // undeclared `records: true` replace the promised tree delta with the records report, so
+    // the same call silently answered a different question than the one its description
+    // promises.
+    // 只有本工具声明的参数会传进去。把整个请求透传，会让一个未声明的 `records: true` 把承诺的树差异
+    // 换成记录报告——同一次调用因此静默回答了与它描述所承诺的另一个问题。
+    let mut declared = serde_json::Map::new();
+    for key in ["limit", "root"] {
+        if let Some(value) = arguments.get(key) {
+            declared.insert(key.to_owned(), value.clone());
+        }
+    }
+    let delta = crate::diff::diff(root, &Value::Object(declared))?;
     Ok(format!("{verdict}\n{delta}"))
 }
 

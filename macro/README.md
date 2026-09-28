@@ -102,5 +102,5 @@ token 树的生成别名；与完整前端不同，它容忍作者尚未写完�
 
 ## License / 许可证
 
-MIT. See [LICENSE](LICENSE).
-MIT，见 [LICENSE](LICENSE)。
+MIT. See [LICENSE](https://github.com/Nichtigott/nichlink/blob/main/macro/LICENSE).
+MIT，见 [LICENSE](https://github.com/Nichtigott/nichlink/blob/main/macro/LICENSE)。

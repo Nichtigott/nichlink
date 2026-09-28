@@ -188,3 +188,27 @@ fn the_report_is_bounded_by_limit() {
     assert!(reply.contains("… +2 more"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The count is over every row, not over the rows the bound printed. Counting inside the
+/// truncating loop turned `unkept plans 2` into `unkept plans 1` whenever `limit` was
+/// smaller than the number of unkept plans.
+/// 计数覆盖每一行，而不是上限打印出来的那些。在截断循环里计数，会让 `limit` 小于 unkept 计划数时
+/// 把 `unkept plans 2` 变成 `unkept plans 1`。
+#[test]
+fn unkept_plans_are_counted_past_the_limit() {
+    let (root, _, id) = package("unkept-count", false);
+    for selector in ["button_fast", "button_slow"] {
+        plan(
+            &root,
+            selector,
+            &GraftPlanDocument::new(id, "root/button", selector, false).render(),
+        );
+    }
+    let reply = grafts(&root, &json!({"limit": 1})).expect("the report renders");
+    assert!(reply.contains("plans 2"), "{reply}");
+    assert!(
+        reply.contains("unkept plans 2"),
+        "the count is over all rows, not over the printed ones: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

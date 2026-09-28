@@ -62,13 +62,22 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// The identity namespace one host manifest stands for.
 /// 一份宿主清单所代表的身份命名空间。
 ///
-/// `NICH_LINK_NAMESPACE` wins verbatim when it is set — the same rule the build
-/// side reads, so an override moves both ends together — and otherwise the package
-/// name Cargo reports is the namespace, because that is exactly what the build
-/// script's `env!("CARGO_PKG_NAME")` stamps.
-/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出——与构建侧读的同一条规则，因此覆盖会把两端一起
-/// 挪动——否则 Cargo 报告的包名就是命名空间，因为构建脚本的 `env!("CARGO_PKG_NAME")` 盖的
-/// 正是它。
+/// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
+/// is the namespace, because that is exactly what the build script's `env!("CARGO_PKG_NAME")`
+/// stamps.
+/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为构建脚本的
+/// `env!("CARGO_PKG_NAME")` 盖的正是它。
+///
+/// What it is **not**: a rule the build side reads. The namespace is baked into the host at compile
+/// time, this surface and the MCP bridge read the override, and the CLI reads none of it — so with
+/// the variable set Studio reports identities that `nichlink explain --json` and the built host do
+/// not use. The variable's documented purpose is a *reader's* override for trace artifacts; whether
+/// it should keep applying to host identity is the maintainer's decision, and saying so is not
+/// optional (audit `S12`).
+/// 它**不是**什么：不是构建侧会读的规则。命名空间在编译期就烤进宿主，本执行面与 MCP 桥读这个覆盖，
+/// 而 CLI 完全不读——因此设置该变量后，Studio 报告的身份正是 `nichlink explain --json` 与已构建宿主
+/// **不用的**那一套。该变量文档化的用途是 trace artifact 的**读取者覆盖**；它是否应继续作用于宿主身份
+/// 由维护者决定，而把这件事说清楚不是可选项（审计 `S12`）。
 ///
 /// The documented default is the last resort here, and that is the deliberate
 /// asymmetry with the MCP bridge's registry query: **authoring creates** a tree, so

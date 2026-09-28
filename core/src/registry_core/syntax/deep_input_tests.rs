@@ -200,3 +200,49 @@ fn the_refusal_names_the_limit_that_applies() {
         "a comma-separated generic chain is measured on its brackets: {error}"
     );
 }
+
+/// The arrow-cancelled chain the 2026-09-27 audit measured: 95 levels of `X<fn() -> …>`
+/// returned `Ok` from the guard and then aborted `syn` with a stack overflow. The guard is
+/// asked alone so the red half is an assertion failure rather than an abort.
+/// 2026-09-27 审计实测的那条被箭头抵消的链：95 层 `X<fn() -> …>` 从守卫拿到 `Ok`，随后
+/// `syn` 爆栈 abort。这里只问守卫，使红色半边是断言失败而不是 abort。
+#[test]
+fn an_arrow_cancelled_chain_is_refused() {
+    let source = format!("type T = {}T{};", "X<fn() -> ".repeat(95), ">".repeat(95));
+    let error = guard_nesting(&source)
+        .expect_err("an arrow's `>` must not cancel the depth it sits inside")
+        .to_string();
+    assert!(error.contains("generic arguments"), "{error}");
+}
+
+/// An arrow-dense chain: every level carries four `fn` pointers, which costs `syn` far
+/// more stack per level than a plain path does. A flat bracket count admitted 45 of these
+/// and the process still aborted, which is why a level is weighted by the keywords it
+/// carries.
+/// 一条箭头密集的链：每一层带四个 `fn` 指针，`syn` 为此每层付出的栈远比一条普通路径多。平铺地
+/// 数尖括号会放行 45 层这种形状，进程照样 abort——这就是每一层要按它携带的关键字计权的原因。
+#[test]
+fn an_arrow_dense_chain_is_refused() {
+    let source = format!(
+        "type T = {}T{};",
+        "X<fn() -> fn() -> fn() -> fn() -> ".repeat(45),
+        ">".repeat(45)
+    );
+    let error = guard_nesting(&source)
+        .expect_err("a `fn`-heavy level weighs more than one")
+        .to_string();
+    assert!(error.contains("generic arguments"), "{error}");
+}
+
+/// A comparison is not generic nesting, however many statements carry one. The counter
+/// only ever grew on `<`, so 129 separate `let _ = 1 < 2;` statements were refused as a
+/// 129-level generic chain although the file contains no `>` at all.
+/// 比较不是泛型嵌套，无论多少条语句带它。计数器过去只在 `<` 处增长，于是 129 条互不相干的
+/// `let _ = 1 < 2;` 被当成 129 层泛型链拒绝，而整个文件里根本没有 `>`。
+#[test]
+fn comparisons_are_not_generic_nesting() {
+    let source: String = (0..129)
+        .map(|index| format!("fn f{index}() {{ let _ = 1 < 2; }}\n"))
+        .collect();
+    guard_nesting(&source).expect("a `<` comparison opens no generic level");
+}

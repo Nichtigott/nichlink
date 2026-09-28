@@ -241,12 +241,39 @@ fn requirement_findings(
             continue;
         };
         let name = name.trim();
-        if !name.starts_with("nichlink-") || name.contains('.') {
+        if name.contains('.') {
             continue;
         }
-        record(&mut found, root, manifest, name, value.trim(), release);
+        // The package the requirement is really on: the key itself, or the name in a
+        // `package = "…"` field when the dependency is renamed. Reading only keys that
+        // start with `nichlink-` let `kernel = { package = "nichlink-core", version =
+        // "0.0.9" }` name an internal dependency with a version nobody checked.
+        // 这条要求真正指向的包：键本身，或依赖被重命名时 `package = "…"` 里的名字。只读以
+        // `nichlink-` 开头的键，会让 `kernel = { package = "nichlink-core", version = "0.0.9" }`
+        // 以没人检查过的版本点名一个内部依赖。
+        let target = if name.starts_with("nichlink-") {
+            name.to_owned()
+        } else {
+            match package_field(value.trim()) {
+                Some(package) => package,
+                None => continue,
+            }
+        };
+        record(&mut found, root, manifest, &target, value.trim(), release);
     }
     found
+}
+
+/// The `package = "…"` field's value in a dependency's value, when it names an internal one.
+/// 依赖取值里 `package = "…"` 字段的值（若点名了一个内部依赖）。
+fn package_field(value: &str) -> Option<String> {
+    let at = value.find("package")?;
+    let rest = value[at + "package".len()..].trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    let package = &rest[..end];
+    package.starts_with("nichlink-").then(|| package.to_owned())
 }
 
 /// Add a finding when a requirement's version is missing or wrong.

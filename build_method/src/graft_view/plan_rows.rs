@@ -23,6 +23,15 @@ use nichlink::plugin::graft_document::GraftPlanDocument;
 use crate::face_view::FaceView;
 use crate::graft_view::{DeclaredGraft, DeclaredGrafts};
 
+/// Selector for a plan-directory entry that could not be read at all.
+/// 计划目录项完全读不了时所用的 selector。
+///
+/// The entry has no name to quote — it is the `Err` arm of `read_dir`'s `io::Result` — so the row
+/// says that in the one field the caller reads it by, and stays countable.
+/// 那个目录项没有名字可引用——它就是 `read_dir` 的 `io::Result` 里的 `Err` 那一半——因此这条记录
+/// 在调用方据以读取的字段里直说这件事，并且仍然可被计数。
+const UNREADABLE_ENTRY: &str = "<unreadable entry>";
+
 /// One plan directory's answer.
 /// 一个计划目录给出的答案。
 ///
@@ -89,57 +98,82 @@ pub fn graft_plan_rows(
         }
     };
     let mut rows = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let selector = entry.file_name().to_string_lossy().into_owned();
-        let plan = entry.path().join(lexicon::GRAFT_PLAN_FILE);
-        let text = match std::fs::read_to_string(&plan) {
-            Ok(text) => text,
-            Err(error) => {
-                rows.push(GraftPlanRow::unreadable(
-                    selector,
-                    format!("cannot read {}: {error}", plan.display()),
-                ));
-                continue;
-            }
-        };
-        let document = match GraftPlanDocument::parse(&text) {
-            Ok(document) => document,
-            Err(error) => {
-                rows.push(GraftPlanRow::unreadable(selector, error.to_string()));
-                continue;
-            }
-        };
-        let module = faces
-            .iter()
-            .find(|face| face.id == document.target)
-            .map(|face| face.module.as_str());
-        let matched = declared.and_then(|declared| {
-            declared
-                .cuts
-                .iter()
-                .find(|cut| cut.names_face(&document.target_path, module))
-        });
-        let declared_state = match (declared, matched) {
-            (None, _) => None,
-            (Some(_), Some(_)) => Some(true),
-            (Some(_), None) => Some(false),
-        };
-        rows.push(GraftPlanRow {
-            selector,
-            error: None,
-            target: Some(document.target),
-            target_path: Some(document.target_path.clone()),
-            graft: Some(document.graft.clone()),
-            full: Some(document.full),
-            declared: declared_state,
-            declared_by: matched.cloned(),
-        });
+    for entry in entries {
+        rows.extend(entry_rows(entry, faces, declared));
     }
     rows.sort_by(|left, right| left.selector.cmp(&right.selector));
     Ok(rows)
+}
+
+/// The row one directory entry contributes, including the row for an entry that could not be read.
+/// 单个目录项贡献的那条记录，也包括"该项读不了"时的记录。
+///
+/// `read_dir` hands back `io::Result<DirEntry>`, and the loop used `flatten()`, which drops the
+/// `Err` arm: a *plan file* that cannot be read becomes a counted `unreadable` row while an
+/// unreadable *entry* vanished, so `records N` could under-count without saying anything — and
+/// that number is what a maintainer reads before pruning a release (audit `L1`). Taking the
+/// `Result` as a parameter is also what makes the arm testable without a filesystem seam.
+/// `read_dir` 返回的是 `io::Result<DirEntry>`，而循环用了 `flatten()`，它会丢掉 `Err` 那一半：
+/// 读不了的**计划文件**会变成一条被计数的 `unreadable` 行，而读不了的**目录项**就此消失——于是
+/// `records N` 可以在一个字都不说的情况下少数，而这个数字正是维护者在发布剪枝前读的东西（审计
+/// `L1`）。把 `Result` 作为参数收进来，也正是让这一半无需文件系统 seam 就能被测的原因。
+fn entry_rows(
+    entry: std::io::Result<std::fs::DirEntry>,
+    faces: &[FaceView],
+    declared: Option<&DeclaredGrafts>,
+) -> Vec<GraftPlanRow> {
+    let entry = match entry {
+        Ok(entry) => entry,
+        Err(error) => {
+            return vec![GraftPlanRow::unreadable(
+                UNREADABLE_ENTRY.to_owned(),
+                format!("cannot read a directory entry: {error}"),
+            )];
+        }
+    };
+    if !entry.path().is_dir() {
+        return Vec::new();
+    }
+    let selector = entry.file_name().to_string_lossy().into_owned();
+    let plan = entry.path().join(lexicon::GRAFT_PLAN_FILE);
+    let text = match std::fs::read_to_string(&plan) {
+        Ok(text) => text,
+        Err(error) => {
+            return vec![GraftPlanRow::unreadable(
+                selector,
+                format!("cannot read {}: {error}", plan.display()),
+            )];
+        }
+    };
+    let document = match GraftPlanDocument::parse(&text) {
+        Ok(document) => document,
+        Err(error) => return vec![GraftPlanRow::unreadable(selector, error.to_string())],
+    };
+    let module = faces
+        .iter()
+        .find(|face| face.id == document.target)
+        .map(|face| face.module.as_str());
+    let matched = declared.and_then(|declared| {
+        declared
+            .cuts
+            .iter()
+            .find(|cut| cut.names_face(&document.target_path, module))
+    });
+    let declared_state = match (declared, matched) {
+        (None, _) => None,
+        (Some(_), Some(_)) => Some(true),
+        (Some(_), None) => Some(false),
+    };
+    vec![GraftPlanRow {
+        selector,
+        error: None,
+        target: Some(document.target),
+        target_path: Some(document.target_path.clone()),
+        graft: Some(document.graft.clone()),
+        full: Some(document.full),
+        declared: declared_state,
+        declared_by: matched.cloned(),
+    }]
 }
 
 impl GraftPlanRow {
@@ -158,3 +192,7 @@ impl GraftPlanRow {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "plan_rows_tests.rs"]
+mod plan_rows_tests;

@@ -45,6 +45,54 @@ fn written(reply: &str) -> PathBuf {
         .unwrap_or_else(|| panic!("no written path in: {reply}"))
 }
 
+/// A misspelled key and a mistyped flag are refused by name, by both write actions.
+/// `add` used to take only the keys it knew and silently drop the rest, so an agent that
+/// wrote `knd` believed it had set the kind, and `needs_registry: "yes"` became `false`.
+/// 拼错的键与类型不对的标志都被**点名**拒绝，两个写入动作都一样。`add` 过去只取它认识的键、
+/// 静默丢弃其余，于是写下 `knd` 的代理会以为自己设了 kind，而 `needs_registry: "yes"` 会变成
+/// `false`。
+#[test]
+fn a_misspelled_field_is_refused_by_add_and_edit() {
+    let (root, _) = package("fields");
+
+    let misspelled = apply(
+        &root,
+        &json!({"action": "add", "fields": {"module": "probe", "knd": "Button"}}),
+    )
+    .expect_err("a misspelled key is refused rather than dropped");
+    assert!(
+        misspelled.contains("`knd` is not an editable registration-face field"),
+        "{misspelled}"
+    );
+
+    let mistyped = apply(
+        &root,
+        &json!({"action": "add", "fields": {"module": "probe", "needs_registry": "yes"}}),
+    )
+    .expect_err("a non-boolean flag is refused rather than coerced");
+    assert!(
+        mistyped.contains("`needs_registry` must be true or false"),
+        "{mistyped}"
+    );
+
+    let applied = apply(
+        &root,
+        &json!({"action": "add", "fields": {"module": "probe"}, "apply": true}),
+    )
+    .expect("a valid add applies");
+    assert!(applied.contains("applied"), "{applied}");
+
+    let edited = apply(
+        &root,
+        &json!({"action": "edit", "node": "root/probe", "fields": {"knd": "Button"}}),
+    )
+    .expect_err("edit refuses the same key");
+    assert!(
+        edited.contains("`knd` is not an editable registration-face field"),
+        "{edited}"
+    );
+}
+
 /// A preview is the real operation on a copy: it reports the face it would create
 /// and the tree that would result, and it writes nothing into the project. The
 /// second half is the load-bearing one — a preview that leaked into the project
@@ -303,8 +351,11 @@ fn a_delete_removes_nothing_until_it_is_applied() {
     )
     .expect("the face is created");
 
-    let preview = apply(&root, &json!({"action": "delete", "node": "root/button"}))
-        .expect("the delete previews");
+    let preview = apply(
+        &root,
+        &json!({"action": "delete", "node": "root/button", "confirm": true}),
+    )
+    .expect("the delete previews");
     assert!(preview.contains("faces 0"), "{preview}");
     assert!(preview.contains("- src/button/button.rs"), "{preview}");
     assert!(preview.contains("would move"), "{preview}");
@@ -323,7 +374,7 @@ fn a_delete_removes_nothing_until_it_is_applied() {
 
     let applied = apply(
         &root,
-        &json!({"action": "delete", "node": "root/button", "apply": true}),
+        &json!({"action": "delete", "node": "root/button", "apply": true, "confirm": true}),
     )
     .expect("the delete is applied");
     assert!(applied.contains("faces 0"), "{applied}");
@@ -334,6 +385,48 @@ fn a_delete_removes_nothing_until_it_is_applied() {
             .is_empty(),
         "the face is gone from the tree"
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A delete says `confirm` itself; the bridge does not add it. Appending it here is what made the
+/// sentence in `run_delete` and the declared schema — which had no such key — describe something
+/// the bridge did not do, so a caller could step past the one operation that is worth confirming
+/// (audit `m5`).
+/// 删除要自己说出 `confirm`，桥不会替它加上。就地拼上它，正是让 `run_delete` 里那句话与声明 schema
+/// （根本没有这个键）描述桥并不做的事的原因——于是调用方可以跳过唯一值得确认的那次操作（审计 `m5`）。
+#[test]
+fn a_delete_without_confirm_is_refused() {
+    let (root, _) = package("delete-confirm");
+    apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {"module": "button", "kind": "Button", "name_en": "Button"},
+        }),
+    )
+    .expect("the face is created");
+
+    let error = apply(
+        &root,
+        &json!({"action": "delete", "node": "root/button", "apply": true}),
+    )
+    .expect_err("a delete without `confirm` must be refused");
+    assert!(error.contains("confirm"), "{error}");
+    assert!(
+        root.join("src/button/button.rs").is_file(),
+        "the refusal must happen before anything moves: {error}"
+    );
+
+    // And the refusal is about `confirm`, not about the target: the same request with it succeeds.
+    // 而且拒绝的是 `confirm`，不是目标：同一请求带上它就成功。
+    apply(
+        &root,
+        &json!({"action": "delete", "node": "root/button", "apply": true, "confirm": true}),
+    )
+    .expect("the confirmed delete is applied");
+    assert!(!root.join("src/button/button.rs").exists());
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -366,5 +459,59 @@ fn an_action_that_is_not_implemented_is_refused_by_name() {
     let error = apply(&root, &json!({"action": "graft", "node": "root/button"}))
         .expect_err("graft is not implemented yet");
     assert!(error.contains("not implemented"), "{error}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Changing a face's `kind` changes its identity, and the reply says so. `kind` is an identity input
+/// (`NodeId = hash(namespace, source, name)`, and a face's name is its kind), so an edit that changes
+/// it rewrites the marker type and the `kind:` field and the face comes back under a new identity —
+/// while every graft record keyed by the old one stops resolving. The reply used to report the
+/// resulting tree without ever saying so (audit `L6`). The pin also checks the *new* id it prints
+/// against the one the tree reports afterwards, so a wrong computation cannot hide in prose.
+/// 改一个面的 `kind` 会改变它的身份，而回复会说明这一点。`kind` 是身份输入
+/// （`NodeId = hash(namespace, source, name)`，而面的名字就是它的 kind），因此改它的编辑会重写标记类型与
+/// `kind:` 字段，这个面以新身份回来——而以旧身份为键的每条 graft 记录都不再解析。回复过去只报告结果树、
+/// 从不说明（审计 `L6`）。这条钉子还把它打印的**新** id 与树此后报告的 id 对照，因此算错的身份无法藏在
+/// 散文里。
+#[test]
+fn editing_the_kind_reports_the_identity_change() {
+    let (root, name) = package("kind-identity");
+    apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {"module": "button", "kind": "Button", "name_en": "Button"},
+        }),
+    )
+    .expect("the face is created");
+    let before = face_views(&root, &name).expect("faces derive")[0].clone();
+
+    let reply = apply(
+        &root,
+        &json!({"action": "edit", "node": "root/button", "apply": true, "fields": {"kind": "Bogus"}}),
+    )
+    .expect("the edit is applied");
+    assert!(
+        reply.contains("identity changed"),
+        "the reply names the identity change it caused: {reply}"
+    );
+    assert!(
+        reply.contains(&format!("no longer `{}`", before.id)),
+        "it names the identity the records were keyed by: {reply}"
+    );
+
+    let after = face_views(&root, &name).expect("faces derive")[0].clone();
+    assert_ne!(after.id, before.id, "the identity really did change");
+    // The reply names the *old* identity on purpose and does not print the new one: the first version
+    // computed it from `change.source` and printed a number the tree did not agree with, and this pin
+    // caught that. A wrong number in a diagnostic is worse than no number.
+    // 回复有意只点名**旧**身份、不打印新的：第一版从 `change.source` 算它，打印出的数字与树不一致，
+    // 正是这条钉子抓到的。诊断里的错数字比没有数字更糟。
+    assert!(
+        !reply.contains(&after.id.to_string()),
+        "it deliberately does not print an identity it cannot verify: {reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

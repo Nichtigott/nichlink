@@ -1,9 +1,9 @@
 //! The lexical helpers `mask_non_code` needs, kept beside it rather than inside it.
 //! `mask_non_code` 需要的词法辅助函数，放在它旁边而不是它内部。
 //!
-//! `source.rs` is at the 450-line ceiling, and a raw string is a lexer rule rather than
+//! `source.rs` had reached the line ceiling, and a raw string is a lexer rule rather than
 //! a scanner caller: it belongs in its own file.
-//! `source.rs` 已在 450 行上限上，而原始字符串是词法规则而不是扫描器调用方：它该有自己的文件。
+//! `source.rs` 当时已顶到行数上限，而原始字符串是词法规则而不是扫描器调用方：它该有自己的文件。
 
 /// The byte just past the raw string that starts at `index`, if one starts there.
 /// 从 `index` 开始的原始字符串结束后的那个字节（若此处确实是一个原始字符串）。

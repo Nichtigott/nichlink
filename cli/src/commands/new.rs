@@ -42,6 +42,19 @@ pub(crate) fn new(args: &mut impl Iterator<Item = String>) -> Result<(), String>
                 path = Some(directory);
             }
             "--git" => git = Some(args.next().ok_or("--git requires a URL")?),
+            // An option-shaped token is not a package name. This subcommand has no
+            // `--help` branch, so `nichlink new --help` used to take `--help` as the name
+            // and scaffold `./--help` — it was the only subcommand that did not refuse the
+            // input, and the mistake wrote into whatever directory the shell was in.
+            // 以选项形状出现的 token 不是包名。本子命令没有 `--help` 分支，因此
+            // `nichlink new --help` 过去把 `--help` 当名字并在 `./--help` 里搭起脚手架——它是唯一
+            // 不拒绝这种输入的子命令，而这个错误会写进 shell 当时所在的目录。
+            _ if arg.starts_with('-') => {
+                return Err(format!(
+                    "unexpected option '{arg}'; usage: nichlink new <name> [--lib] \
+                     [--path <workspace> | --git <url>]"
+                ));
+            }
             _ if name.is_none() => name = Some(arg),
             _ => return Err(format!("unexpected argument '{arg}'")),
         }

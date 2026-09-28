@@ -10,64 +10,64 @@ use std::collections::BTreeSet;
 
 use super::{is_ident_continue, is_ident_start, mask_non_code};
 
-/// Match a real function call in a body, ignoring comments, strings and macros.
-/// 只匹配函数体里的真实调用，跳过注释、字符串和宏调用。
+/// Match a real function call in a body, ignoring comments, strings, char literals and
+/// macro invocations.
+/// 只匹配函数体里的真实调用，跳过注释、字符串、字符字面量与宏调用。
+///
+/// The scan runs on the kernel's one masking rule (`mask_non_code`) instead of a
+/// hand-rolled one. The local scanner lost the call after a `'"'` char literal and after a
+/// raw string carrying an interior quote, and it invented one inside a nested comment,
+/// while `direct_calls` on the same body saw the truth — the disagreement reached Studio's
+/// call graph. What stays local is only the macro policy below, which is why these two
+/// functions are not one.
+/// 扫描跑在内核唯一的掩码规则（`mask_non_code`）上，而不是自己手写一套。本地扫描器在 `'"'`
+/// 字符字面量之后、在带内部引号的 raw 字符串之后各丢了一个调用，又在嵌套注释里凭空造了一个，
+/// 而 `direct_calls` 对同一函数体看到的是真相——这份分歧一路进了 Studio 的调用图。留在本地的
+/// 只有下面那条宏策略，这也是这两个函数为什么没有合成一个。
 pub fn body_calls(body: &str, target: &str) -> bool {
     if target.is_empty() {
         return false;
     }
-    let bytes = body.as_bytes();
-    let mut index = 0;
+    let masked = mask_non_code(body);
+    let bytes = masked.as_bytes();
+    let mut index = 0usize;
     while index < bytes.len() {
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'/') {
-            index += 2;
-            while index < bytes.len() && bytes[index] != b'\n' {
-                index += 1;
-            }
-            continue;
-        }
-        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
-            index += 2;
-            while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/') {
-                index += 1;
-            }
-            index = (index + 2).min(bytes.len());
-            continue;
-        }
-        if bytes[index] == b'"' {
-            index += 1;
-            while index < bytes.len() {
-                if bytes[index] == b'\\' {
-                    index = (index + 2).min(bytes.len());
-                    continue;
-                }
-                let end = bytes[index] == b'"';
-                index += 1;
-                if end {
-                    break;
-                }
-            }
-            continue;
-        }
-        let is_start = bytes[index].is_ascii_alphabetic() || bytes[index] == b'_';
-        if !is_start {
-            index += 1;
+        // Identifiers are Unicode here too, and the boundary decode keeps the slice safe.
+        // 这里的标识符同样是 Unicode 的，在边界解码也让切片保持安全。
+        let Some(character) = masked[index..].chars().next() else {
+            break;
+        };
+        if !is_ident_start(character) {
+            index += character.len_utf8();
             continue;
         }
         let start = index;
-        index += 1;
-        while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
-        {
-            index += 1;
+        index += character.len_utf8();
+        while let Some(next) = masked[index..].chars().next() {
+            if !is_ident_continue(next) {
+                break;
+            }
+            index += next.len_utf8();
         }
+        // Whitespace after a name is ASCII in masked text, so byte stepping cannot land
+        // inside a character.
+        // 掩码文本里名字之后的空白是 ASCII，因此按字节前进不会落在字符中间。
         let mut lookahead = index;
         while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
             lookahead += 1;
         }
         if bytes.get(lookahead) == Some(&b'!') {
-            let macro_name = &body[start..index];
+            let macro_name = &masked[start..index];
             if matches!(macro_name, "control_object" | "external_object") {
                 index = lookahead + 1;
+                // Whitespace between the `!` and its delimiter is legal Rust, and reading
+                // the delimiter without skipping it made the whole macro body look like
+                // ordinary code: `control_object! { g(); }` reported `g` as a call.
+                // `!` 与它的定界符之间的空白是合法 Rust；不跳过它直接读定界符，会让整个宏体看起来
+                // 像普通代码：`control_object! { g(); }` 会把 `g` 报成调用。
+                while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+                    index += 1;
+                }
                 if let Some(open) = bytes.get(index).copied() {
                     let close = match open {
                         b'(' => Some(b')'),
@@ -100,11 +100,8 @@ pub fn body_calls(body: &str, target: &str) -> bool {
             index = lookahead + 1;
             continue;
         }
-        if &body[start..index] != target {
+        if &masked[start..index] != target {
             continue;
-        }
-        while lookahead < bytes.len() && bytes[lookahead].is_ascii_whitespace() {
-            lookahead += 1;
         }
         if bytes.get(lookahead) == Some(&b':') && bytes.get(lookahead + 1) == Some(&b':') {
             lookahead += 2;
@@ -151,14 +148,24 @@ pub fn direct_calls(body: &str, current: &str) -> Vec<String> {
     let mut calls = BTreeSet::new();
     let mut index = 0usize;
     while index < bytes.len() {
-        if !is_ident_start(bytes[index]) {
-            index += 1;
+        // Identifiers are Unicode, so the scan decodes the character at the boundary
+        // instead of testing one byte: a non-ASCII name was cut short here too.
+        // 标识符是 Unicode 的，因此这里在边界处解码字符而不是测一个字节：非 ASCII 的名字在这里
+        // 同样会被截断。
+        let Some(character) = masked[index..].chars().next() else {
+            break;
+        };
+        if !is_ident_start(character) {
+            index += character.len_utf8();
             continue;
         }
         let start = index;
-        index += 1;
-        while index < bytes.len() && is_ident_continue(bytes[index]) {
-            index += 1;
+        index += character.len_utf8();
+        while let Some(next) = masked[index..].chars().next() {
+            if !is_ident_continue(next) {
+                break;
+            }
+            index += next.len_utf8();
         }
         let candidate = &masked[start..index];
         if candidate == current || matches!(candidate, "if" | "for" | "while" | "match" | "loop") {
@@ -205,5 +212,45 @@ mod tests {
             Vec::<String>::new()
         );
         assert_eq!(direct_calls("// helper()", "source"), Vec::<String>::new());
+    }
+
+    /// The two scanners agree on one body. The hand-rolled scanner in `body_calls` lost the
+    /// call after a `'"'` char literal and after a raw string carrying an interior quote,
+    /// and invented one inside a nested comment, while `direct_calls` saw the truth — a
+    /// disagreement that reached Studio's call graph, where one graph was wrong about calls
+    /// the other reported.
+    /// 两个扫描器在同一函数体上答案一致。`body_calls` 里手写的那套在 `'"'` 字符字面量之后、
+    /// 在带内部引号的 raw 字符串之后各丢了一个调用，又在嵌套注释里凭空造了一个，而
+    /// `direct_calls` 看到的是真相——这份分歧一路进了 Studio 的调用图，两张图对彼此报出的调用
+    /// 各错一处。
+    #[test]
+    fn the_two_call_scanners_agree_on_one_body() {
+        let bodies = [
+            "fn f() { let quote = '\"'; g(); }",
+            "fn f() { let raw = r##\"a \"# b\"##; g(); }",
+            "fn f() { /* outer /* inner */ g(); */ h(); }",
+        ];
+        for body in bodies {
+            let listed = direct_calls(body, "f");
+            for target in ["g", "h"] {
+                assert_eq!(
+                    body_calls(body, target),
+                    listed.iter().any(|call| call == target),
+                    "`{target}` in `{body}`: the two scanners disagree"
+                );
+            }
+        }
+    }
+
+    /// The one policy that stays local: a call inside a declaration macro's body is a
+    /// declaration, not a call, so `body_calls` is silent where `direct_calls` reports it.
+    /// This is why the two are not one function.
+    /// 唯一留在本地的那条策略：声明宏体内的调用是声明而不是调用，因此 `direct_calls` 报出来的
+    /// 东西，`body_calls` 在这里是沉默的。这正是它们没有合成一个函数的原因。
+    #[test]
+    fn a_declaration_macro_body_is_not_a_call_site() {
+        let body = "fn f() { control_object! { g(); } }";
+        assert!(!body_calls(body, "g"));
+        assert_eq!(direct_calls(body, "f"), ["g"]);
     }
 }

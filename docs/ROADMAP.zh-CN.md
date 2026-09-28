@@ -11,7 +11,7 @@
 - [x] 按目录发现注册面、身份缓存、粗修和 `StaticPlan`；
 - [x] `off`、`errors-only`、`full` 三档运行时追踪；
 - [x] Studio 的搜索、检查、数据和源码跳转；
-- [x] 只读 MCP 桥、经过校验的 Wasm/进程插件适配器；
+- [x] MCP 桥——查询，外加一条先预览的 authoring 写入路径——以及经过校验的 Wasm/进程插件适配器；
 - [x] 跨平台 CI、规模审计、符号审计和打包检查。
 - [x] kernel / 执行面分界：一个纯 kernel（`nichlink-core`）承载协议名词与纯方法，
   薄执行面（`nichlink-build-method`、`nichlink-run-method`、
