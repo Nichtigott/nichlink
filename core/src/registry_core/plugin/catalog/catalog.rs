@@ -32,14 +32,30 @@ pub struct PluginRecord {
     /// Whether the plugin extends or replaces.
     /// 插件是扩展还是替换。
     pub mode: PluginMode,
-    /// Recorded signature, absent when the lock line carried none.
-    /// 记录的签名；锁记录未携带时为 None。
+    /// Recorded signature: `None` when the line carried no provenance column (the
+    /// seven-field form) and `Some("")` when the ten-field form carried the column
+    /// empty.
+    /// 记录的签名：锁记录没带来源列（七字段形式）时为 `None`，十字段形式带了空列时为 `Some("")`。
+    ///
+    /// The two absences are deliberately different values. The ten-field spelling
+    /// declares the provenance extension, so an empty column asserts "there is no
+    /// such value" and the trust rule honours that; collapsing it back into `None`
+    /// made a spelled-out declaration indistinguishable from a line that never
+    /// mentioned the field, while every other empty column in this grammar is
+    /// refused (`unknown plugin source`, `contains an empty field`) — audit `X-1` /
+    /// `LGC-LG-40`.
+    /// 两种"无"刻意是不同的值。十字段拼法声明了来源扩展，因此空列声明的是"此处没有值"，信任规则
+    /// 会遵守它；把它塌缩回 `None`，会让一个写明了的声明与一条从未提到该字段的记录无从区分，而
+    /// 这套语法里其它空列一律被拒（`unknown plugin source`、`contains an empty field`）——审计
+    /// `X-1` / `LGC-LG-40`。
     pub signature: Option<String>,
-    /// Recorded signing-key fingerprint, when present.
-    /// 记录的签名密钥指纹；存在时才有值。
+    /// Recorded signing-key fingerprint; see [`PluginRecord::signature`] for how an
+    /// empty ten-field column differs from the seven-field form.
+    /// 记录的签名密钥指纹；空十字段列与七字段形式的区别见 [`PluginRecord::signature`]。
     pub public_key_fingerprint: Option<String>,
-    /// Recorded revocation-list snapshot, when present.
-    /// 记录的撤销列表快照；存在时才有值。
+    /// Recorded revocation-list snapshot; see [`PluginRecord::signature`] for how an
+    /// empty ten-field column differs from the seven-field form.
+    /// 记录的撤销列表快照；空十字段列与七字段形式的区别见 [`PluginRecord::signature`]。
     pub revocation_list: Option<String>,
 }
 
@@ -119,6 +135,14 @@ fn schema_matches(version: &str) -> bool {
 impl PluginCatalog {
     /// Parse a plugin lock, refusing unknown schemas and malformed or duplicate lines.
     /// 解析插件锁；未知 schema、格式错误或重复的记录一律拒绝。
+    ///
+    /// A ten-field line spells the provenance extension, so each of its three extra
+    /// columns is read as written: an empty one becomes `Some("")` (declared empty)
+    /// rather than being collapsed into the seven-field form's `None` (not
+    /// mentioned). Nothing is silently dropped — audit `X-1` / `LGC-LG-40`.
+    /// 十字段行写明了来源扩展，因此它多出的三列按原样读取：空列成为 `Some("")`（声明为空），而
+    /// 不是被塌缩成七字段形式的 `None`（没提到）。没有任何东西被静默丢掉——审计 `X-1` /
+    /// `LGC-LG-40`。
     pub fn parse(lock: &str) -> Result<Self, PluginLockError> {
         let mut records = Vec::new();
         let mut identities = BTreeSet::new();
@@ -176,18 +200,9 @@ impl PluginCatalog {
                 crate_name: fields[4].to_owned(),
                 checksum: fields[5].to_owned(),
                 mode,
-                signature: fields
-                    .get(7)
-                    .filter(|value| !value.is_empty())
-                    .map(ToString::to_string),
-                public_key_fingerprint: fields
-                    .get(8)
-                    .filter(|value| !value.is_empty())
-                    .map(ToString::to_string),
-                revocation_list: fields
-                    .get(9)
-                    .filter(|value| !value.is_empty())
-                    .map(ToString::to_string),
+                signature: fields.get(7).map(ToString::to_string),
+                public_key_fingerprint: fields.get(8).map(ToString::to_string),
+                revocation_list: fields.get(9).map(ToString::to_string),
             };
             let identity = (
                 record.source,
@@ -276,6 +291,12 @@ impl PluginCatalog {
     /// 的就是这种）就交给签名校验。此前用相等比较它们，会让七字段的官方记录在唯一要紧的方向上无法
     /// 满足：它只能等于一个没有签名的 manifest，而没有签名的官方 manifest 会被任何配置了信任根的
     /// 策略拒绝——于是官方插件根本无法经宿主自己写下的锁端到端准入。
+    ///
+    /// An empty ten-field column is the opposite direction of that fix: it is an
+    /// expectation that the field has *no* value, so a manifest that names one is
+    /// refused instead of being waved through as "not mentioned" (audit `X-1`).
+    /// 空的十字段列是那次修复的反方向：它期望该字段*没有*值，因此点了值的 manifest 被拒绝，而不是
+    /// 被当作"没提到"放行（审计 `X-1`）。
     pub fn contains_manifest(&self, manifest: PluginManifest) -> bool {
         self.contains_record(&PluginRecord {
             source: manifest.source,
@@ -322,18 +343,38 @@ fn accounts_for(record: &PluginRecord, candidate: &PluginRecord) -> bool {
         && record.crate_name == candidate.crate_name
         && record.checksum == candidate.checksum
         && record.mode == candidate.mode
-        && record
-            .signature
-            .as_deref()
-            .is_none_or(|recorded| Some(recorded) == candidate.signature.as_deref())
-        && record
-            .public_key_fingerprint
-            .as_deref()
-            .is_none_or(|recorded| Some(recorded) == candidate.public_key_fingerprint.as_deref())
-        && record
-            .revocation_list
-            .as_deref()
-            .is_none_or(|recorded| Some(recorded) == candidate.revocation_list.as_deref())
+        && accounts_for_provenance(record.signature.as_deref(), candidate.signature.as_deref())
+        && accounts_for_provenance(
+            record.public_key_fingerprint.as_deref(),
+            candidate.public_key_fingerprint.as_deref(),
+        )
+        && accounts_for_provenance(
+            record.revocation_list.as_deref(),
+            candidate.revocation_list.as_deref(),
+        )
+}
+
+/// Whether one provenance field of a lock record covers the candidate's, by the
+/// value's meaning rather than by its spelling.
+/// 锁记录的某个来源字段是否覆盖候选记录的同名字段——按值的含义判定，而不是按拼法。
+///
+/// `None` is the seven-field form: the record never mentioned the field, so it pins
+/// nothing and leaves it to the signature check. `Some("")` is the ten-field form
+/// with that column empty: the record **declares** there is no value, so a candidate
+/// that names one is refused and a candidate that names none is still accounted for.
+/// A recorded value pins exactly that value. Reading the empty column as `None` is
+/// what let a spelled-out "no signature" pass as "not mentioned" — audit `X-1` /
+/// `LGC-LG-40`.
+/// `None` 是七字段形式：记录从未提到该字段，因此不钉任何东西，交给签名校验。`Some("")` 是带有
+/// 空列的十字段形式：记录**声明**此处没有值，因此点了值的候选被拒绝，而同样没点值的候选仍被覆盖。
+/// 记录下的值则精确钉住那个值。把空列读成 `None`，正是让一个写明了的"没有签名"混作"没提到"的原因
+/// ——审计 `X-1` / `LGC-LG-40`。
+fn accounts_for_provenance(recorded: Option<&str>, candidate: Option<&str>) -> bool {
+    match recorded {
+        None => true,
+        Some("") => candidate.is_none_or(str::is_empty),
+        Some(recorded) => candidate == Some(recorded),
+    }
 }
 
 #[cfg(test)]

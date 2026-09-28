@@ -51,10 +51,14 @@ set -eu
 # The release workflow calls this instead of carrying its own copy of the reader, because
 # two readers of one number diverge and the tag check is where a wrong answer is
 # irreversible (audit RC4).
+# It is a mode of its own: it prints the number and exits, so it combines with no other
+# mode or flag — the combination exits 2 rather than skipping the other mode silently.
 # 打印本检出点名的发布版本，读法与发布本身一致：
 #   tools/nichlink-publish --workspace-version
 # 发布工作流调用它，而不是自带一份读取器副本——同一个数字的两个读取器会分歧，而 tag 检查正是
 # "答错就不可逆"的地方（审计 RC4）。
+# 它是独立模式：打印这个数字后即退出，因此不与任何其它模式或标志组合——组合会以 2 退出，而不是
+# 静默跳过另一个模式。
 #
 # After it finishes, prove that a stranger can consume the release:
 #   tools/nichlink-publish --verify-consumers
@@ -99,6 +103,7 @@ allow_dirty=false
 verify_consumers=false
 check_table=false
 workspace_version_only=false
+help_requested=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -108,20 +113,45 @@ for arg in "$@"; do
     --verify-consumers) verify_consumers=true ;;
     --check-table) check_table=true ;;
     --workspace-version) workspace_version_only=true ;;
-    -h|--help)
-      # Print the leading comment block: every `#` line, skipping the blank
-      # line after `set -eu`, and stopping at the first line of code.
-      # 打印文件开头的注释块：所有 `#` 行，跳过 `set -eu` 后的空行，遇到第一行代码即停。
-      awk 'NR <= 2 { next } /^#/ { print; next } /^[[:space:]]*$/ { next } { exit }' "$0" |
-        sed 's/^# \{0,1\}//'
-      exit 0
-      ;;
+    -h|--help) help_requested=true ;;
     *)
       echo "error: unknown argument '$arg' (see --help)" >&2
       exit 2
       ;;
   esac
 done
+
+# `--workspace-version` prints one number and exits 0 before any other mode runs,
+# so combining it with one silently skipped that mode and still exited 0: with
+# `--workspace-version --publish` nothing was uploaded while the run read as a
+# finished release, and with `--workspace-version --check-table` the table was
+# never checked. It is a mode of its own, so every combination is refused — `--help`
+# included, which is why help is printed after this check rather than mid-parse.
+# `--workspace-version` 只打印一个数字便以 0 退出，早于任何其它模式，因此与其它模式组合会
+# 静默跳过那个模式却仍退出 0：`--workspace-version --publish` 什么都没上传，运行却会被读成
+# "发布完成"；`--workspace-version --check-table` 则从未核对过那张表。它是独立模式，因此所有
+# 组合都被拒绝——`--help` 也在内，这正是帮助改在此检查之后打印、而不是在解析途中打印的原因。
+if [ "$workspace_version_only" = true ]; then
+  if [ "$help_requested" = true ] ||
+    [ "$publish" = true ] ||
+    [ "$yes" = true ] ||
+    [ "$allow_dirty" = true ] ||
+    [ "$verify_consumers" = true ] ||
+    [ "$check_table" = true ]; then
+    echo "error: --workspace-version is a mode of its own; it does not combine with" \
+      "--help, --publish, --yes, --allow-dirty, --check-table or --verify-consumers" >&2
+    exit 2
+  fi
+fi
+
+if [ "$help_requested" = true ]; then
+  # Print the leading comment block: every `#` line, skipping the blank
+  # line after `set -eu`, and stopping at the first line of code.
+  # 打印文件开头的注释块：所有 `#` 行，跳过 `set -eu` 后的空行，遇到第一行代码即停。
+  awk 'NR <= 2 { next } /^#/ { print; next } /^[[:space:]]*$/ { next } { exit }' "$0" |
+    sed 's/^# \{0,1\}//'
+  exit 0
+fi
 
 if [ "$publish" = true ] && [ "$yes" != true ]; then
   echo "error: --publish also needs --yes; publishing is irreversible" >&2

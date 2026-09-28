@@ -143,10 +143,13 @@ pub fn findings(root: &Path) -> Vec<Finding> {
 /// Boundary: only positions where a name is a *requirement* are read — a dependency
 /// key (`nichlink-x = { … }`) or `package = "nichlink-x"` in a template, and a
 /// `-p`/`--package` argument in a workflow. Everywhere else a `nichlink-…` string is
-/// a tool name, a job name, or prose, and reporting those would make the gate noise.
+/// a tool name, a job name, or prose, and reporting those would make the gate noise. A
+/// comment is the loudest case of "elsewhere": it records what once ran, so a finding there
+/// asks the author to rewrite history rather than to fix a requirement. Audit `G-07`.
 /// 边界：只读名字处于**要求**位置的地方——模板里的依赖键（`nichlink-x = { … }`）或
 /// `package = "nichlink-x"`，以及工作流里的 `-p`/`--package` 实参。其他位置的 `nichlink-…`
-/// 字符串是工具名、任务名或散文，报出来只会让门禁变成噪声。
+/// 字符串是工具名、任务名或散文，报出来只会让门禁变成噪声。注释是"其他位置"里最响亮的一种：它记录
+/// 的是"曾经这么跑过"，那里的发现要求作者改写记录，而不是修一条要求。审计 `G-07`。
 fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
     let mut found = Vec::new();
     let check = |path: &Path, name: &str, found: &mut Vec<Finding>| {
@@ -162,7 +165,7 @@ fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
         for path in rust_sources(&scaffold) {
             let text = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            for name in requirement_names(&text) {
+            for name in requirement_names(&without_comments(&text)) {
                 check(&path, &name, &mut found);
             }
         }
@@ -186,12 +189,138 @@ fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
             }
             let text = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            for name in package_arguments(&text) {
+            for name in package_arguments(&without_yaml_comments(&text)) {
                 check(&path, &name, &mut found);
             }
         }
     }
     found
+}
+
+/// `text` with its comments blanked and its string literals kept.
+/// `text` 中注释被抹白、字符串字面量被保留。
+///
+/// The boundary this gate states is "a name in a *requirement* position", and a comment is not
+/// one: a template's `// … nichlink-old = { … }` is a record of an invocation that once ran, so
+/// reporting it asks the author to rewrite history. Its neighbour *is* one — a template writes
+/// the requirement inside a string literal — which is why neither of the kernel's two masks
+/// fits: `mask_non_code` blanks the literal too, and `mask_literals` keeps the comment. This is
+/// the one caller that needs the other half of each rule, so it scans for that half itself.
+/// 本门禁声明的边界是"处于**要求**位置的名称"，而注释不是要求位置：模板里的
+/// `// … nichlink-old = { … }` 是"曾经这么跑过"的记录，报出来等于要求作者改写记录。它旁边那句
+/// **是**要求位置——模板把要求写在字符串字面量里——因此内核那两道 mask 都不合用：
+/// `mask_non_code` 会把字面量一起抹白，`mask_literals` 会把注释留下。这里是唯一需要两者另一半的
+/// 调用方，于是自己扫出那一半。
+fn without_comments(text: &str) -> String {
+    let characters: Vec<char> = text.chars().collect();
+    let mut kept = String::with_capacity(text.len());
+    let mut index = 0usize;
+    while index < characters.len() {
+        let character = characters[index];
+        // A quoted literal is verbatim text: a `//` inside it is part of a URL or a path, and
+        // the requirement this gate reads is written inside one.
+        // 引号字面量是原文：其中的 `//` 是 URL 或路径的一部分，而本门禁要读的要求正写在里面。
+        if character == '"' {
+            kept.push(character);
+            index += 1;
+            while index < characters.len() {
+                let inner = characters[index];
+                kept.push(inner);
+                index += 1;
+                if inner == '\\' && index < characters.len() {
+                    kept.push(characters[index]);
+                    index += 1;
+                } else if inner == '"' {
+                    break;
+                }
+            }
+            continue;
+        }
+        if character == '/' && characters.get(index + 1) == Some(&'/') {
+            while index < characters.len() && characters[index] != '\n' {
+                kept.push(' ');
+                index += 1;
+            }
+            continue;
+        }
+        if character == '/' && characters.get(index + 1) == Some(&'*') {
+            let mut depth = 0usize;
+            while index < characters.len() {
+                let inner = characters[index];
+                if inner == '/' && characters.get(index + 1) == Some(&'*') {
+                    depth += 1;
+                    kept.push_str("  ");
+                    index += 2;
+                    continue;
+                }
+                if inner == '*' && characters.get(index + 1) == Some(&'/') {
+                    depth = depth.saturating_sub(1);
+                    kept.push_str("  ");
+                    index += 2;
+                    if depth == 0 {
+                        break;
+                    }
+                    continue;
+                }
+                // Line breaks stay, so the text keeps its shape.
+                // 换行保留，文本因此保持原形。
+                kept.push(if inner == '\n' { '\n' } else { ' ' });
+                index += 1;
+            }
+            continue;
+        }
+        kept.push(character);
+        index += 1;
+    }
+    kept
+}
+
+/// `text` with its YAML comments blanked, quoted scalars respected.
+/// `text` 中 YAML 注释被抹白，引号标量不受影响。
+///
+/// YAML starts a comment at a `#` that is at the start of a line or preceded by whitespace, so
+/// `echo a#b` keeps its `#` while `# old: cargo test -p nichlink-old` does not.
+/// YAML 的注释从行首的 `#` 或前面有空白字符的 `#` 开始，因此 `echo a#b` 保留它的 `#`，而
+/// `# old: cargo test -p nichlink-old` 不会。
+fn without_yaml_comments(text: &str) -> String {
+    let mut kept = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let mut quote: Option<char> = None;
+        let mut comment: Option<usize> = None;
+        for (offset, character) in line.char_indices() {
+            match quote {
+                Some(open) => {
+                    if character == open {
+                        quote = None;
+                    }
+                }
+                None => match character {
+                    '"' | '\'' => quote = Some(character),
+                    '#' => {
+                        let preceded_by_space = line[..offset]
+                            .chars()
+                            .next_back()
+                            .is_none_or(char::is_whitespace);
+                        if preceded_by_space {
+                            comment = Some(offset);
+                            break;
+                        }
+                    }
+                    _ => {}
+                },
+            }
+        }
+        match comment {
+            Some(offset) => {
+                kept.push_str(&line[..offset]);
+                if line.ends_with('\n') {
+                    kept.push('\n');
+                }
+            }
+            None => kept.push_str(line),
+        }
+    }
+    kept
 }
 
 /// `nichlink-…` names in dependency-key or `package = "…"` position in a template.
@@ -219,18 +348,55 @@ fn requirement_names(text: &str) -> Vec<String> {
         }
     }
     let mut from = 0usize;
-    while let Some(offset) = text[from..].find("package = \"") {
-        let start = from + offset + "package = \"".len();
-        let end = text[start..]
-            .find('"')
-            .map_or(text.len(), |end| start + end);
-        let value = &text[start..end];
-        if value.starts_with("nichlink-") {
-            found.push(value.to_owned());
+    while let Some(offset) = text[from..].find("package") {
+        let at = from + offset;
+        from = at + "package".len();
+        // The word has to be a field name: `my_package = "…"` and `--package="…"` are not
+        // `package = "…"`, and a bare substring search reads both.
+        // 这个词必须是字段名：`my_package = "…"` 与 `--package="…"` 都不是 `package = "…"`，
+        // 而单纯的子串搜索会把两者都读成字段。
+        let preceded_by_name = text[..at].chars().next_back().is_some_and(|character| {
+            character.is_alphanumeric() || character == '_' || character == '-'
+        });
+        if preceded_by_name {
+            continue;
         }
-        from = end;
+        let Some(value) = package_field_value(text, from) else {
+            continue;
+        };
+        if value.starts_with("nichlink-") {
+            found.push(value);
+        }
     }
     found
+}
+
+/// The value of the `package = "…"` field that starts at `from`, in either spelling.
+/// 从 `from` 处开始的 `package = "…"` 字段的取值，两种拼法都算。
+///
+/// The whitespace around `=` is optional, and the opening quote may carry a backslash: a
+/// template is Rust source, so the manifest line it generates is written inside a string
+/// literal, where every quote is escaped (`package = \"nichlink-core\"`). Reading only the
+/// unescaped needle found nothing there, and the loss was invisible while a dependency key and
+/// its package name agreed — the key half found the name anyway. A *renamed* dependency has
+/// only this field, so a template that renamed one stayed silent (audit `G-07`, finding `F-3`).
+/// `=` 两侧的空白可有可无，开引号还可以带反斜杠：模板是 Rust 源码，它生成的清单行写在字符串
+/// 字面量里，因此每个引号都是转义的（`package = \"nichlink-core\"`）。只认未转义的针在那里什么
+/// 也找不到，而只要依赖键与包名一致，这个损失就不可见——键那半边反正能找到那个名字。**被重命名**
+/// 的依赖只有这个字段，于是一条重命名的模板会保持沉默（审计 `G-07`，发现 `F-3`）。
+fn package_field_value(text: &str, from: usize) -> Option<String> {
+    let rest = text[from..].trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let rest = rest.strip_prefix('\\').unwrap_or(rest);
+    let rest = rest.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    // The closing quote is escaped the same way the opening one is, so the backslash that
+    // escapes it is not part of the name: `\"nichlink-run-method\"` names one package, and the
+    // shipped-tree pin reported a name ending in a backslash before this strip existed.
+    // 闭引号与开引号同样被转义，因此转义它的反斜杠不属于包名：`\"nichlink-run-method\"` 点名的
+    // 是一个包——在这句剥离出现之前，出厂树那条钉子报出的名字是以反斜杠结尾的。
+    let value = rest[..end].strip_suffix('\\').unwrap_or(&rest[..end]);
+    Some(value.to_owned())
 }
 
 /// `nichlink-…` names passed as `-p`/`--package` to a command in a workflow.

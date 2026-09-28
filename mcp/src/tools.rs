@@ -10,7 +10,7 @@
 //! （审计 `L4`）。
 //!
 //! One family reads Rust source text — `nichlink.search` also matches registry faces
-//! (logical path, kind, module, slot) and annotates each with the build's verdict.
+//! (logical path, kind, module, registry_name) and annotates each with the build's verdict.
 //! Another answers from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
 //! (`nichlink_build_method::face_views`), `nichlink.explain` reads the files the
@@ -25,7 +25,7 @@
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
-//! 一类工具读取 Rust 源码文本——`nichlink.search` 还会匹配注册面（逻辑路径、kind、module、slot），
+//! 一类工具读取 Rust 源码文本——`nichlink.search` 还会匹配注册面（逻辑路径、kind、module、registry_name），
 //! 并把构建的判断标在每一条上。另一类用非源码文本的证据作答：`nichlink.registry` 推导出构建所推导
 //! 的那棵树（`nichlink_build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
@@ -60,12 +60,14 @@ pub(crate) fn tools() -> Vec<Value> {
         tool(
             "nichlink.search",
             "Find registration faces, source files, and Rust function declarations by name. Faces \
-             come first and match on logical path, kind, module, or slot name — the spellings the \
+             come first and match on logical path, kind, module, or registry_name — the spellings the \
              other tools use — and each carries the build's verdict: `ok`, `added since build`, \
              `re-identified` (a `kind` change under an unmoved file, with both identities), or \
-             `build unknown` when nothing has been published. Below them the file and function hits \
-             are unchanged. The tree half needs the identity namespace; a root Cargo cannot name \
-             still answers the source half and says the tree half is unavailable.",
+             `build unknown` when nothing has been published. A manifest that no longer describes \
+             these sources is announced above the verdicts as `stale (run nichlink check)`, because \
+             they then describe the tree that build saw rather than this one. Below them the file \
+             and function hits are unchanged. The tree half needs the identity namespace; a root \
+             Cargo cannot name still answers the source half and says the tree half is unavailable.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
         ),
         tool(
@@ -121,19 +123,21 @@ pub(crate) fn tools() -> Vec<Value> {
         tool(
             "nichlink.explain",
             "Report the build's own evidence for one face — identity, logical path, kind, source, \
-             module, parent, slot — or the tree projection the build scoped. `nichlink.registry` \
-             derives from source text and is therefore always fresh; this reads the files the build \
-             *published* under `target/nichlink/out`, so it answers what ships: whether the scope \
-             selected the face and whether release pruning strips its symbols. A missing or stale \
-             build is reported as such, and an unbuilt project is told which command publishes the \
-             evidence. `node` names one face by logical path or identity; omit it for the projection, \
-             bounded by `limit`. With `overlay: true` it renders the *overlay* projection instead — \
-             which slot each declared cut replaces, and which faces the scope prunes — the published \
-             state after replacement, from the same traversal the CLI's `explain --overlay` uses. \
-             That is a static projection and not `Registry::dump`: an overlay needs two live \
-             registries, and the reply carries the note saying where the live tree comes from. \
-             `overlay` and `node` are mutually exclusive. Declared graft state stays in `nichlink \
-             grafts`; contract and admission fields need a loaded registry and are not reported here.",
+             module, parent, registry_name — or the tree projection the build scoped. \
+             `nichlink.registry` derives from source text and is therefore never `stale`; this reads \
+             the files the build *published* under `target/nichlink/out`, so it answers what ships: \
+             whether the scope selected the face and whether release pruning strips its symbols. \
+             The `build` line says `current`, or `stale (run nichlink check)` when the published \
+             output no longer describes these sources; an unbuilt project is told which command \
+             publishes the evidence. `node` names one face by logical path or identity; omit it for \
+             the projection, bounded by `limit`. With `overlay: true` it renders the *overlay* \
+             projection instead — which slot each declared cut replaces, and which faces the scope \
+             prunes — the published state after replacement, from the same traversal the CLI's \
+             `explain --overlay` uses. That is a static projection and not `Registry::dump`: an \
+             overlay needs two live registries, and the reply carries the note saying where the \
+             live tree comes from. `overlay` and `node` are mutually exclusive. Declared graft \
+             state stays in `nichlink grafts`; contract and admission fields need a loaded registry \
+             and are not reported here.",
             json!({"type":"object","properties":{"node":{"type":"string"},"overlay":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
@@ -232,15 +236,17 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.usages",
-            "Report the neighbourhood of one face: its parent and children as the tree has them, the \
-             fields the write path accepts read back from the generated module (preset, parts, the \
-             localized names, exports, requires, provides, handle traits and contracts, registration \
-             rule, admission, flow, runtime checks) — so a contract `nichlink.apply` can set becomes \
-             reportable — and which other faces mention the same capability tokens. Capability matches \
-             are on declared tokens rather than a resolved graph, and the reply says so. A hand-written \
-             module has no generated field list and the executor refuses to invent one, so those faces \
-             are counted as unreadable rather than shown empty. Declared graft cuts are not reported \
-             here; the CLI's `explain --json` carries them.",
+            "Report the neighbourhood of one face: its parent and children as the tree has them, every \
+             field the write path accepts read back from the generated module (`module`, `preset`, \
+             `parts`, `name_zh`, `name_en`, `summary_zh`, `summary_en`, `stable_name`, `exports`, \
+             `requires`, `provides`, `handle_traits`, `handle_contracts`, `part_traits`, \
+             `part_contracts`, `registration_rule`, `admission`, `flow`, `flow_provider`, \
+             `runtime_checks`, `getting_from_other_registry`, `needs_registry`) — so every field \
+             `nichlink.apply` can set becomes reportable — and which other faces mention the same \
+             capability tokens. Capability matches are on declared tokens rather than a resolved graph, \
+             and the reply says so. A hand-written module has no generated field list and the executor \
+             refuses to invent one, so those faces are counted as unreadable rather than shown empty. \
+             Declared graft cuts are not reported here; the CLI's `explain --json` carries them.",
             json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
         tool(
@@ -275,6 +281,67 @@ fn tool(name: &str, description: &str, input_schema: Value) -> Value {
     json!({ "name": name, "description": description, "inputSchema": input_schema })
 }
 
+/// One tool's implementation: the package root plus the `arguments` object.
+/// 一个工具的实现：包根加上 `arguments` 对象。
+type Handler = fn(&Path, &Value) -> Result<String, String>;
+
+/// The dispatch table, in the catalog's order.
+/// 分派表，顺序与目录一致。
+///
+/// This is one ordered table rather than a `match` because the two lists used to be
+/// aligned only by hand: the catalog put `nichlink.apply` sixth while the dispatch put
+/// it last, and adding a tool to one side alone was silent — the missing arm only
+/// surfaced at call time as `unknown tool` (audit `BR-12`).
+/// `tools_tests::the_dispatch_table_follows_the_catalog` pins this table's names and
+/// their order against `tools()`, so a tool added to the catalog without a handler, or
+/// in another position, fails the suite instead of shipping.
+/// 这里用一张有序表而不是 `match`，因为两张名单过去只靠手工对齐：目录把 `nichlink.apply` 放在第 6，
+/// 分派把它放在最后；而只往一侧新增工具是静默的——缺的那条臂只在调用时以 `unknown tool` 现身
+/// （审计 `BR-12`）。`tools_tests::the_dispatch_table_follows_the_catalog` 用 `tools()` 钉住本表的
+/// 名字与顺序：只往目录里加工具而漏掉处理函数、或把它放错位置，都会让测试失败而不是出厂。
+const DISPATCH: &[(&str, Handler)] = &[
+    ("nichlink.search", search),
+    ("nichlink.inspect", inspect),
+    ("nichlink.callgraph", callgraph),
+    ("nichlink.read", read_source),
+    ("nichlink.status", status_tool),
+    ("nichlink.apply", apply),
+    ("nichlink.registry", registry_tool),
+    ("nichlink.explain", explain_tool),
+    ("nichlink.diff", diff),
+    ("nichlink.trace", trace),
+    ("nichlink.mir", mir),
+    ("nichlink.unified", unified),
+    ("nichlink.grafts", grafts),
+    ("nichlink.impact", impact),
+    ("nichlink.usages", usages),
+    ("nichlink.converge", converge),
+    ("nichlink.verify", verify),
+];
+
+/// `nichlink.status` reads no arguments, so it joins the table through a shim.
+/// `nichlink.status` 不读参数，因此经一个转接函数进入分派表。
+fn status_tool(root: &Path, _arguments: &Value) -> Result<String, String> {
+    status(root)
+}
+
+/// `nichlink.registry` reads no arguments either (its `root` is resolved above).
+/// `nichlink.registry` 同样不读参数（它的 `root` 已在上面解析）。
+fn registry_tool(root: &Path, _arguments: &Value) -> Result<String, String> {
+    registry(root)
+}
+
+/// `nichlink.explain` is the one name that routes to two implementations: `overlay:
+/// true` renders the overlay projection, everything else the per-face report.
+/// `nichlink.explain` 是唯一会分到两个实现的名字：`overlay: true` 渲染覆盖投影，其余走逐面报告。
+fn explain_tool(root: &Path, arguments: &Value) -> Result<String, String> {
+    if arguments.get("overlay").and_then(Value::as_bool) == Some(true) {
+        overlay(root, arguments)
+    } else {
+        explain(root, arguments)
+    }
+}
+
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
         return error_response(id, -32602, "tools/call requires name".to_owned());
@@ -290,32 +357,13 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
             );
         }
     };
-    let result = match name {
-        "nichlink.search" => search(&root, arguments),
-        "nichlink.inspect" => inspect(&root, arguments),
-        "nichlink.callgraph" => callgraph(&root, arguments),
-        "nichlink.read" => read_source(&root, arguments),
-        "nichlink.status" => status(&root),
-        "nichlink.registry" => registry(&root),
-        "nichlink.explain" => {
-            if arguments.get("overlay").and_then(Value::as_bool) == Some(true) {
-                overlay(&root, arguments)
-            } else {
-                explain(&root, arguments)
-            }
-        }
-        "nichlink.diff" => diff(&root, arguments),
-        "nichlink.trace" => trace(&root, arguments),
-        "nichlink.mir" => mir(&root, arguments),
-        "nichlink.unified" => unified(&root, arguments),
-        "nichlink.impact" => impact(&root, arguments),
-        "nichlink.grafts" => grafts(&root, arguments),
-        "nichlink.usages" => usages(&root, arguments),
-        "nichlink.converge" => converge(&root, arguments),
-        "nichlink.verify" => verify(&root, arguments),
-        "nichlink.apply" => apply(&root, arguments),
-        _ => Err(format!("unknown tool `{name}`")),
-    };
+    let result = DISPATCH
+        .iter()
+        .find(|(listed, _)| *listed == name)
+        .map_or_else(
+            || Err(format!("unknown tool `{name}`")),
+            |(_, handler)| (*handler)(&root, arguments),
+        );
     match result {
         Ok(value) => success(
             id,
@@ -404,45 +452,3 @@ fn status(root: &Path) -> Result<String, String> {
 #[cfg(test)]
 #[path = "tools_tests.rs"]
 mod tools_tests;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tools_list_is_mcp_shaped() {
-        let listed = tools();
-        assert!(listed.iter().any(|tool| tool["name"] == "nichlink.search"));
-        assert!(
-            listed
-                .iter()
-                .all(|tool| tool["inputSchema"]["type"] == "object")
-        );
-    }
-    /// A line number a caller sends is unbounded; the range must stay forward and
-    /// inside the file whatever it is.
-    /// 调用方发来的行号没有上界；无论它是什么，区间都必须朝前且落在文件内。
-    ///
-    /// `center + context` used to overflow: debug panicked, release produced
-    /// `start > end` with an empty body and `isError: false`.
-    /// `center + context` 过去会溢出：debug 直接 panic，release 产出 `start > end`、正文为空、
-    /// 却仍报 `isError: false`。
-    #[test]
-    fn a_huge_line_number_still_yields_a_forward_range() {
-        let root = std::env::temp_dir().join(format!("nichlink-mcp-read-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("src")).expect("fixture dir");
-        std::fs::write(root.join("src/lib.rs"), "fn a() {}\nfn b() {}\n").expect("fixture file");
-        for line in [u64::MAX, u64::MAX / 2, usize::MAX as u64, 1] {
-            let arguments = serde_json::json!({"path": "src/lib.rs", "line": line});
-            let output = read_source(&root, &arguments).expect("the read succeeds");
-            let header = output.lines().next().expect("a header");
-            let range = header.split_once(':').expect("path:range").1;
-            let (start, end) = range.split_once('-').expect("start-end");
-            let start: usize = start.parse().expect("a start");
-            let end: usize = end.parse().expect("an end");
-            assert!(start <= end, "line {line} inverted the range: {header}");
-            assert!(end <= 2, "line {line} read past the file: {header}");
-        }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-}

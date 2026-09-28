@@ -7,13 +7,19 @@
 //! relative to its directory (the behaviour `mod.rs` would give), which is what
 //! makes the `<dir>/<name>.rs` layout work without `mod.rs`. A bare `mod x;` is
 //! equally correct when the parent is a crate root or is itself `#[path]`-loaded,
-//! which is why 29 such declarations exist and why gating them would mean
-//! churning five crates for no failure mode.
+//! which is why such declarations are common in this tree and why gating them would
+//! mean churning crates for no failure mode. How many crates that would touch is
+//! deliberately not restated here: it changes with every new module and every new
+//! mount, the number this sentence used to carry had already drifted (audit `G-20`),
+//! and no mechanism reconciles a count written in prose — `AGENTS.md` and `size.rs`
+//! both state the same rule.
 //! 为什么只查这两条而不是整条约定：工作区用 `#[path = "<dir>/<name>.rs"] pub mod <name>;`
 //! 挂载模块文件，原因是解析而不是风格。经 `#[path]` 载入的模块会以所在目录为基准解析自己的
 //! 子模块（也就是 `mod.rs` 能给出的行为），这正是 `<dir>/<name>.rs` 布局无需 `mod.rs` 的
-//! 原因。当父文件是 crate 根或本身也是 `#[path]` 载入时，裸 `mod x;` 同样正确——这就是那
-//! 29 处声明的由来，也是为什么对它们设门禁只会为五个 crate 带来没有故障模式的改动。
+//! 原因。当父文件是 crate 根或本身也是 `#[path]` 载入时，裸 `mod x;` 同样正确——这就是这类
+//! 声明在本树里很常见的由来，也是为什么对它们设门禁只会带来没有故障模式的改动。这会牵动多少
+//! crate 刻意不在这里复述：它随每个新模块、每个新挂载变化，而这句话原先写的数字已经漂了（审计
+//! `G-20`），并且没有任何机制为散文里的计数对账——`AGENTS.md` 与 `size.rs` 都写着同一条规则。
 //!
 //! `include!` is different in kind: it is a text splice, so `file!()` inside the
 //! spliced file reports the *including* file. A registration face mounted that

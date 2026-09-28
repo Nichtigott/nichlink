@@ -6,8 +6,14 @@ use super::*;
 use nichlink_run_method::registry_core::declaration::source_file_matches;
 
 impl App {
-    /// Flat, deduplicated rows for one search query.
-    /// 一次搜索查询的扁平、已去重结果行。
+    /// Flat rows for one search query, with **adjacent** duplicates collapsed.
+    /// 一次搜索查询的扁平结果行，**相邻**重复项被合并。
+    ///
+    /// `dedup_by` only folds neighbours, so this is not a promise of global
+    /// uniqueness; the wording says so, because a later reader who needs every row
+    /// distinct has to sort or key the list instead of assuming this call did it.
+    /// `dedup_by` 只合并相邻项，因此这里承诺的不是全局唯一；措辞如实如此——后来需要"每行
+    /// 都不同"的读者必须自行排序或建键，而不是假设这一次调用已经做了。
     ///
     /// The list is intentionally flat: there is no hierarchy to fold, so the
     /// caller has no fold state and `Enter` promotes a row straight into the
@@ -16,10 +22,30 @@ impl App {
     /// 结果是刻意扁平的：没有可折叠的层级，因此调用方不持有折叠状态，`Enter`
     /// 直接把选中行推进调用图。此前展示的折叠键与 `▸/▾` 标记已删除，而非实现。
     pub fn search_rows(&self, query: &str) -> Vec<SearchRow> {
+        // One scan per (query, snapshot), not one per panel: the result list, the
+        // RELATION column, the SELECTED SYMBOL preview and the graph page all ask
+        // `search_rows` in the same frame, and every call used to read and lex each
+        // face's source file again (audit `STU-S-05`). The stamp in the key is what
+        // makes an external edit invalidate the memo; the shape is `CallTreeMemo`'s.
+        // 每个（查询, 快照）只扫一次，而不是每个面板一次：结果列表、RELATION 栏、SELECTED
+        // SYMBOL 预览与调用图页在同一帧都要问 `search_rows`，而过去每次调用都会重新读取并对每个
+        // 注册面的源文件做一遍词法扫描（审计 `STU-S-05`）。键里的戳正是让外部编辑使其失效的东西；
+        // 形状沿用 `CallTreeMemo`。
+        if let Some((memo_query, stamp, rows)) = self.search_memo.borrow().as_ref()
+            && memo_query == query
+            && *stamp == self.last_source_stamp
+        {
+            return rows.as_ref().clone();
+        }
         let mut rows = self.source_symbol_rows(query);
         rows.dedup_by(|left, right| {
             left.node == right.node && left.function == right.function && left.line == right.line
         });
+        *self.search_memo.borrow_mut() = Some((
+            query.to_owned(),
+            self.last_source_stamp,
+            std::rc::Rc::new(rows.clone()),
+        ));
         rows
     }
 

@@ -231,8 +231,6 @@ pub(crate) fn collect_source_files(nodes: &[Node], files: &mut Vec<std::path::Pa
     }
 }
 
-/// Every `.rs` file under `directory`, following the crate's own layout.
-/// `directory` 下的每个 `.rs` 文件，遵循 crate 自己的布局。
 /// The filesystem facts the kernel's source walk asks this surface for.
 /// 内核源码遍历向本执行面索取的文件系统事实。
 struct StdSourceTree;
@@ -258,6 +256,8 @@ impl nichlink::source::SourceTree for StdSourceTree {
     }
 }
 
+/// Every `.rs` file under `directory`, following the crate's own layout.
+/// `directory` 下的每个 `.rs` 文件，遵循 crate 自己的布局。
 pub(crate) fn collect_rust_sources(
     directory: &Path,
     files: &mut Vec<PathBuf>,

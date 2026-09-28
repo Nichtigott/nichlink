@@ -151,10 +151,19 @@ this checkout.
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
 default gate already fails on: I/O in `core/src`, a `mod.rs`, a second `include!`,
 a kernel module file no `mod` declaration names, a deleted execution-surface shim
-re-export, a doc block with only one language, a crate name referenced by a
-scaffold template or a CI `-p` that no manifest defines, a feature-gated target
-whose `required-features` is missing (or names a feature the manifest does not
-declare, or one that is on by default), a `prototype-fixtures` that default
+re-export, a doc block with only one language (`bilingual`), a crate whose name,
+directory and library name disagree, or a crate name referenced by a scaffold
+template or a CI `-p` that no manifest defines (`naming`), an internal
+`nichlink-*` requirement whose version is not the current workspace version
+(`release_version`), a workflow whose upload step can run
+without a tag ref (`release_workflow`), an anchor in a live document that no
+longer points at a line of a `.rs`, `.toml`, `.yml` or `.yaml` file
+(`doc_anchors`: the scan keys on those suffixes, reading the root and member
+`Cargo.toml`s and `.github/workflows/*`; a `.md` target and an extensionless
+script are not covered), a feature-gated target
+whose `required-features` is missing (that half is judged for the hand-listed
+in-checkout-only targets; for every other target the gate checks that the named
+features exist and are not on by default), a `prototype-fixtures` that default
 features turn on, a file pushed past the
 600-line ratchet, a missing `#![warn(missing_docs)]`, an
 `#[allow(missing_docs)]`, or a fenced Rust block in a README that no longer
@@ -168,9 +177,15 @@ skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `--all-features`.
 `cargo test --workspace` 也会跑 `conventions` crate 里的门禁,因此默认门禁已经会在下列情形
 失败:`core/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、没有任何 `mod` 声明指名的
-内核模块文件、被删掉的执行面 shim 重导出、只有一种语言的文档块、脚手架模板或 CI `-p` 指名而
-清单里不存在的 crate 名、按特性门控的 target 少了 `required-features`（或它指名的特性清单里没有
-声明、又或那个特性默认就开着）、`prototype-fixtures` 被默认特性打开、文件越过 600 行棘轮、缺少
+内核模块文件、被删掉的执行面 shim 重导出、只有一种语言的文档块(`bilingual`)、crate 名/目录名/
+库名三者不一致或脚手架模板或 CI `-p` 指名而清单里不存在的 crate 名(`naming`)、内部
+`nichlink-*` 版本要求写着的版本不是当前工作区版本(`release_version`)、上传步骤能在非 tag ref 上
+运行的发布工作流(`release_workflow`)、活文档里不再指向某个 `.rs`、`.toml`、`.yml` 或 `.yaml`
+文件某一行的锚点(`doc_anchors`:扫描以这些后缀触发,读根与各成员的 `Cargo.toml` 以及
+`.github/workflows/*`;`.md` 目标与无扩展名脚本不在覆盖内)、按特性门控的 target 少了
+`required-features`(这一半只对**手列**的那几个
+"只在检出内成立"的 target 判定;其余 target 检查的是指名的特性存在、且默认不开)、
+`prototype-fixtures` 被默认特性打开、文件越过 600 行棘轮、缺少
 `#![warn(missing_docs)]`、出现 `#[allow(missing_docs)]`、或 README 里有不再能解析的 Rust
 围栏。新增全仓规则请加到那里,而不是加到散文文档里。内核的解析入口同样带一道嵌套守卫——
 栈溢出不是 `Result`,畸形源码会带走整个执行面——而 `core/tests/nesting_budget.rs` 是它的
@@ -193,7 +208,7 @@ counterpart for published crates, and it needs the index.
 
 `tools/nichlink-package-audit` checks two different things. Package *contents* —
 every `src/**/*.rs` module and the declared README must be in the package — are
-verified for all nine crates from today, because `cargo package --list` needs no
+verified for all nine crates, because `cargo package --list` needs no
 registry. Packaging itself (building the tarball in isolation) waits for
 each crate's versioned `nichlink-*` dependencies to reach the index, so while the
 workspace version is unpublished eight crates are skipped — a state that recurs on
@@ -201,7 +216,7 @@ every version bump, not only before the first publish. A module that cargo does 
 pick up is a crate that compiles locally and nowhere else, which is why the content
 half exists.
 `tools/nichlink-package-audit` 检查两件不同的事。包**内容**——每个 `src/**/*.rs` 模块与
-清单声明的 README 都必须在包里——从今天起对九个 crate 全部生效，因为
+清单声明的 README 都必须在包里——对九个 crate 全部生效，因为
 `cargo package --list` 不需要 registry。打包本身（从 tarball 隔离构建）要等各 crate 的
 带版本号 `nichlink-*` 依赖进入 index，因此工作区版本尚未发布时会有八个 crate 被跳过——这个
 状态每次推进版本线都会重现，而不只是首次发布之前。cargo 没收进去的模块等于一个只在本地编译得过、

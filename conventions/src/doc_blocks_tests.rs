@@ -189,6 +189,34 @@ fn a_bare_identifier_is_not_a_rust_excerpt() {
     );
 }
 
+/// CommonMark pairs a fence with a closing fence of **the same character** and **at least the same
+/// length**, and the info string is what follows that run — not what follows the first three
+/// characters of it. Reading a bare prefix instead made two whole shapes invisible: a `~~~rust`
+/// block was closed by a ```` ``` ```` line inside it (so the broken code after that line was never
+/// parsed), and a ```` ````rust ```` fence had its info string read as `` `rust `` (so the block
+/// never opened at all). Audit `G-03`.
+/// CommonMark 用**同一字符**、**长度不短于开围栏**的围栏来闭合，而 info string 是那串字符**之后**
+/// 的文本，不是前三个字符之后的文本。只比前缀让两种形状整段隐形：`~~~rust` 块被块内的一行
+/// ```` ``` ```` 闭合（那一行之后的坏代码从未被解析），而 ```` ````rust ```` 围栏的 info string 被读成
+/// `` `rust ``（整块从未打开）。审计 `G-03`。
+#[test]
+fn a_fence_is_paired_by_its_own_character_and_length() {
+    let root = synthetic(&[(
+        "docs/probe.md",
+        "# Probe\n\n~~~rust\nlet kept = 1;\n```\nlet _ = ;\n~~~\n\n\
+         ````rust\nlet _ = ;\n````\n\n```rust\nfn control_is_fine() {}\n```\n",
+    )]);
+    let found = findings(&root);
+    let lines: Vec<usize> = found.iter().map(|finding| finding.line).collect();
+    assert_eq!(
+        lines,
+        vec![3, 9],
+        "the tilde fence is not closed by a backtick line, and a four-backtick \
+         fence is still a Rust fence: {found:#?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A module the tree mounts behind `#[cfg(test)]` is not documentation a reader is shown, whatever
 /// its name says. Location and name are hints, and a hint misses a real case: the tree ships
 /// `core/src/registry_core/tree/graft_ops/fixtures.rs`, mounted behind `#[cfg(test)]`, whose name

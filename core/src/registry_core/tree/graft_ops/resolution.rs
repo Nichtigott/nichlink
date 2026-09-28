@@ -223,10 +223,10 @@ mod tests {
 
     use super::super::fixtures::{FRAMEWORK, face};
 
-    /// Two distinct faces can carry the same slot name. A string selector that
-    /// matches both must be refused instead of silently choosing one, because
+    /// Two distinct faces can carry the same `registry_name`. A string selector
+    /// that matches both must be refused instead of silently choosing one, because
     /// which file happens to come first is not a decision the author made.
-    /// 两个不同的面可以带同一个槽位名。匹配到两者的字符串选择器必须被拒绝，而不是静默
+    /// 两个不同的面可以带同一个 `registry_name`。匹配到两者的字符串选择器必须被拒绝，而不是静默
     /// 选一个——文件谁先出现并不是作者做出的决定。
     #[test]
     fn an_ambiguous_replacement_selector_is_refused() {

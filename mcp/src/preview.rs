@@ -3,21 +3,27 @@
 //!
 //! Copying, rather than writing and reverting, is what makes a preview safe: if
 //! anything goes wrong between the two, the project was never touched. The copy
-//! skips `target/` and NichLink's own runtime directory — they are not inputs to an
-//! edit, and `target/` is the one directory that can be large.
+//! skips the directories that are neither an input to an edit nor small: the build
+//! output `target/`, the version-control store `.git/`, and NichLink's own runtime
+//! data `.nichlink/` — the same three the diff walk skips, because both walks decide
+//! one thing.
 //! 用复制而不是"先写再回滚"，正是预览安全的原因：两者之间无论哪里出错，项目从未被碰过。副本跳过
-//! `target/` 与 NichLink 自己的运行期目录——它们不是编辑的输入，而 `target/` 是唯一可能很大的
-//! 目录。
+//! 那些既不是编辑输入、又不见得小的目录：构建产物 `target/`、版本库 `.git/`，以及 NichLink 自己的
+//! 运行期数据 `.nichlink/`——与 diff 遍历跳过的是同三个，因为两处遍历决定的是同一件事。
 
 use std::path::{Path, PathBuf};
 
 /// A throwaway copy of the package, so a preview cannot touch the project.
 /// 包的一次性副本，因此预览碰不到项目。
 ///
-/// Build output and NichLink's own runtime data are skipped: they are not inputs
-/// to the edit, and `target/` is the one directory that can be large.
-/// 构建产物与 NichLink 自己的运行期数据被跳过：它们不是编辑的输入，而 `target/` 是唯一可能很大的
-/// 目录。
+/// The build output, the version-control store, and NichLink's own runtime data are
+/// skipped: they are not inputs to the edit, and any of the three can be large
+/// (`.git/` alone runs to gigabytes in a real repository). The earlier wording named
+/// only the build output, which is why every preview copied that store too and walked
+/// it into the diff (audit `BR-C2`).
+/// 构建产物、版本库与 NichLink 自己的运行期数据都被跳过：它们不是编辑的输入，而这三者中任何一个
+/// 都可能很大（真实仓库里仅 `.git/` 就常是 GB 级）。早先的措辞只点名了构建产物，于是每一次预览都
+/// 连带复制了那个库、并把它带进 diff（审计 `BR-C2`）。
 pub(crate) fn copy_package(root: &Path) -> Result<PathBuf, String> {
     let destination = std::env::temp_dir().join(format!(
         "nichlink-mcp-preview-{}-{}",
@@ -34,6 +40,19 @@ fn next_sequence() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Whether a directory name is one the preview copy and its diff both skip.
+/// 一个目录名是否属于预览副本与其 diff 都跳过的那一类。
+///
+/// One list, because the two walks answer the same question: a directory the copy
+/// skipped but the diff did not would be reported as removed, and one the diff
+/// skipped but the copy did not is invisible by construction — either way the report
+/// would describe a change the edit never made (audit `BR-C2`, `BR-4`).
+/// 只有一份清单，因为两处遍历回答的是同一个问题：副本跳过而 diff 没跳过的目录会被报成删除，反过来
+/// 的目录则从一开始就看不见——两种都会让报告描述一次编辑根本没做过的改动（审计 `BR-C2`、`BR-4`）。
+fn skipped_directory(name: &std::ffi::OsStr) -> bool {
+    name == "target" || name == ".git" || name == nichlink::lexicon::NICHLINK_DIR
+}
+
 fn copy_directory(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::create_dir_all(to)
         .map_err(|error| format!("cannot create {}: {error}", to.display()))?;
@@ -42,7 +61,7 @@ fn copy_directory(from: &Path, to: &Path) -> Result<(), String> {
     for entry in entries {
         let entry = entry.map_err(|error| format!("cannot read a directory entry: {error}"))?;
         let name = entry.file_name();
-        if name == "target" || name == nichlink::lexicon::NICHLINK_DIR {
+        if skipped_directory(&name) {
             continue;
         }
         let source = entry.path();
@@ -82,7 +101,7 @@ pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
     // 正斜杠，与本桥报告的每一条树内相对路径一致（`FaceView.source`、diff 头）：把锚点与
     // `nichlink.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
     // 路径保持本机写法，与 `status` 的 root 一致。
-    let relative = relative.to_string_lossy().replace('\\', "/");
+    let relative = crate::index::portable_path(relative);
     Some(format!("{relative}:{}", line + 1))
 }
 
@@ -142,14 +161,14 @@ fn collect_files(root: &Path, directory: &Path, files: &mut Vec<String>) -> Resu
     for entry in entries {
         let entry = entry.map_err(|error| format!("cannot read a directory entry: {error}"))?;
         let name = entry.file_name();
-        if name == "target" || name == nichlink::lexicon::NICHLINK_DIR {
+        if skipped_directory(&name) {
             continue;
         }
         let path = entry.path();
         if path.is_dir() {
             collect_files(root, &path, files)?;
         } else if let Ok(relative) = path.strip_prefix(root) {
-            files.push(relative.to_string_lossy().replace('\\', "/"));
+            files.push(crate::index::portable_path(relative));
         }
     }
     Ok(())
@@ -178,3 +197,7 @@ fn line_diff(before: &str, after: &str) -> String {
     }
     output
 }
+
+#[cfg(test)]
+#[path = "preview_tests.rs"]
+mod preview_tests;

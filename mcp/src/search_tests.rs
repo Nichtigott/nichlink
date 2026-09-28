@@ -1,6 +1,6 @@
 //! Tests for `nichlink.search`'s tree half: a face is found by logical path,
-//! `kind`, module or slot name, and each hit says what the build thinks of it.
-//! `nichlink.search` 树那一半的测试：面可以按逻辑路径、`kind`、模块或槽位名找到，而每个命中都说
+//! `kind`, module or `registry_name`, and each hit says what the build thinks of it.
+//! `nichlink.search` 树那一半的测试：面可以按逻辑路径、`kind`、模块或 `registry_name` 找到，而每个命中都说
 //! 出构建对它的看法。
 //!
 //! The classification rule itself is pinned through `nichlink.diff`'s tests as
@@ -60,9 +60,9 @@ fn publish(root: &Path, name: &str) {
         .expect("a healthy tree checks clean");
 }
 
-/// A face is found by its logical path, kind, module and slot name, and with no
+/// A face is found by its logical path, kind, module and `registry_name`, and with no
 /// build published the verdict is `build unknown` rather than a guess.
-/// 面可以按其逻辑路径、kind、模块与槽位名找到；没有发布构建时结论是 `build unknown` 而不是猜。
+/// 面可以按其逻辑路径、kind、模块与 `registry_name` 找到；没有发布构建时结论是 `build unknown` 而不是猜。
 #[test]
 fn a_face_is_found_and_an_unbuilt_tree_says_the_verdict_is_unknown() {
     let (root, _) = package("unbuilt");
@@ -117,7 +117,7 @@ fn a_kind_change_under_an_unmoved_file_is_re_identified() {
     assert!(reply.contains("[re-identified ("), "{reply}");
     assert!(reply.contains(" -> "), "{reply}");
     assert!(
-        reply.contains("build output is stale"),
+        reply.contains("build stale (run `nichlink check`)"),
         "the verdicts are about the build that was published, and the reply says so: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);

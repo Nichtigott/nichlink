@@ -13,6 +13,23 @@ cargo build --workspace --release --all-targets
 audit_dir=target/nichlink-audit/release
 mkdir -p "$audit_dir"
 printf 'artifact\tbytes\tdefined_symbols\n' >"$audit_dir/artifacts.tsv"
+# Every artifact nm could not audit is listed here, with the reason, and a
+# non-empty file fails the run at the end. Without it an unauditable file looked
+# exactly like a symbol-free binary: the old `|| :` swallowed nm's failure, wrote
+# an empty symbol file, put `0` in the table and exited 0 — "the symbols were
+# audited" was a claim nothing had checked (audit GTE-G-10).
+# 每一个 nm 无法审计的 artifact 都记在这里，附带原因；该文件非空会在最后让整条运行失败。
+# 没有它时，一个无法审计的文件和一个没有符号的二进制看起来一模一样：旧的 `|| :` 吞掉 nm 的
+# 失败，写出空的符号文件，在表里写上 `0` 并以 0 退出——"符号已审计"这句话没有任何东西核对过
+# （审计 GTE-G-10）。
+unaudited="$audit_dir/unaudited.tsv"
+: >"$unaudited"
+
+have_nm=true
+if ! command -v nm >/dev/null 2>&1; then
+  have_nm=false
+  echo "warning: nm is not installed; no release artifact can be audited for symbols" >&2
+fi
 
 find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -print \
   | while IFS= read -r artifact; do
@@ -20,12 +37,35 @@ find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -pr
       bytes=$(wc -c <"$artifact" | tr -d ' ')
       safe_name=$(printf '%s' "$name" | tr '/' '_')
       symbols="$audit_dir/$safe_name.symbols"
-      if command -v nm >/dev/null 2>&1; then
-        nm -C --defined-only "$artifact" 2>/dev/null | sort -u >"$symbols" || :
-        count=$(wc -l <"$symbols" | tr -d ' ')
+      if [ "$have_nm" = true ]; then
+        if nm -C --defined-only "$artifact" >"$symbols.raw" 2>"$symbols.nm-stderr"; then
+          sort -u "$symbols.raw" >"$symbols"
+          rm -f "$symbols.raw" "$symbols.nm-stderr"
+          count=$(wc -l <"$symbols" | tr -d ' ')
+          if [ "$count" -eq 0 ]; then
+            # nm answered, and its answer was "no defined symbols": the audit for
+            # this artifact is empty, which must not read as a clean result.
+            # nm 答了，而且答的是"没有已定义符号"：这个 artifact 的审计是空的，不能读成干净结果。
+            printf 'warning: nm found no defined symbols in %s; it is recorded as unaudited\n' \
+              "$artifact" >&2
+            printf '%s\t%s\n' "$name" "nm reported no defined symbols" >>"$unaudited"
+          fi
+        else
+          reason=$(head -n 1 "$symbols.nm-stderr" 2>/dev/null) || reason=
+          if [ -z "$reason" ]; then
+            reason="nm exited non-zero"
+          fi
+          printf 'warning: nm could not audit %s (%s); it is recorded as unaudited\n' \
+            "$artifact" "$reason" >&2
+          printf '%s\n' "nm failed: $reason" >"$symbols"
+          rm -f "$symbols.raw" "$symbols.nm-stderr"
+          count=nm-failed
+          printf '%s\t%s\n' "$name" "$reason" >>"$unaudited"
+        fi
       else
         printf '%s\n' "nm unavailable" >"$symbols"
         count=unavailable
+        printf '%s\t%s\n' "$name" "nm is not installed" >>"$unaudited"
       fi
       printf '%s\t%s\t%s\n' "$name" "$bytes" "$count" >>"$audit_dir/artifacts.tsv"
       if command -v readelf >/dev/null 2>&1 \
@@ -34,6 +74,27 @@ find target/release -path 'target/release/deps' -prune -o -type f -perm -111 -pr
           exit 1
       fi
     done
+
+# The audit's own verdict, printed here and only here: the summary line below is
+# the claim "these artifacts' symbols were audited", so it may only appear when
+# every artifact has at least one defined symbol. An empty or partial symbol
+# audit is a failure, not a pass with zeros in a table.
+# 审计自己的结论，且只在这里打印：下面那行摘要就是"这些 artifact 的符号已审计"这句断言，
+# 因此只有在每个 artifact 都至少有一个已定义符号时它才可以出现。空的或部分的符号审计是失败，
+# 而不是一张写着 0 的通过表。
+total=$(awk -F'\t' 'NR > 1 { n++ } END { print n + 0 }' "$audit_dir/artifacts.tsv")
+audited=$(awk -F'\t' 'NR > 1 && $3 ~ /^[0-9]+$/ && $3 + 0 > 0 { n++ } END { print n + 0 }' \
+  "$audit_dir/artifacts.tsv")
+if [ "$audited" -eq 0 ]; then
+  echo "error: no release artifact could be audited for symbols" \
+    "($total executable(s) found under target/release)" >&2
+  exit 1
+fi
+if [ -s "$unaudited" ]; then
+  echo "error: $((total - audited)) of $total release artifact(s) could not be audited for symbols:" >&2
+  sed 's/^/  /' "$unaudited" >&2
+  exit 1
+fi
 
 find target/release/build -name function_manifest.tsv -type f -print \
   | sort -u \
@@ -67,8 +128,32 @@ if [ -n "${NICH_LINK_FULL_BINARY:-}" ] || [ -n "${NICH_LINK_MINIMAL_BINARY:-}" ]
     >"$audit_dir/size.tsv"
 fi
 
-start=$(date +%s%N)
+# Milliseconds since the epoch. GNU `date` has `%N` for nanoseconds; BSD/macOS
+# `date` has no such conversion and prints the `N` literally, which then failed
+# inside the integer arithmetic below under `set -e` — a failure unrelated to any
+# gate, on a tool AGENTS.md tells maintainers to run locally. The probe keeps the
+# nanosecond answer where it exists and falls back to whole seconds where it does
+# not, so the number stays a number on both.
+# 自 epoch 起的毫秒数。GNU `date` 有 `%N`（纳秒）；BSD/macOS 的 `date` 没有这个转换，会把 `N`
+# 原样打印出来，随后在 `set -e` 下的整数运算里失败——一个与任何门禁都无关的失败，发生在本工具上，
+# 而 AGENTS.md 让维护者在本机跑它。探测让存在纳秒答案的地方仍然用纳秒，不存在的地方回退到整秒，
+# 于是这个数在两边都仍是数字。
+now_ms() {
+  ns=$(date +%s%N 2>/dev/null) || ns=
+  case "$ns" in
+    '' | *[!0-9]*) printf '%s' "$(( $(date +%s) * 1000 ))" ;;
+    *) printf '%s' "$(( ns / 1000000 ))" ;;
+  esac
+}
+
+start=$(now_ms)
 cargo run --quiet --release -p nichlink-run-method --example scale_audit -- 10000 >/dev/null
-end=$(date +%s%N)
-printf 'startup_ms=%s\n' "$(( (end - start) / 1000000 ))"
-printf 'symbol_audit=%s\n' "$audit_dir/artifacts.tsv"
+end=$(now_ms)
+printf 'startup_ms=%s\n' "$(( end - start ))"
+# Still the closing line, and still only reachable when every artifact was
+# actually audited: the two checks above refuse an empty or partial symbol audit
+# before this point.
+# 仍然作为收尾行，而且仍然只在每个 artifact 都真的被审计过时才可达：上面两道检查会在空的或
+# 部分的符号审计到达这里之前就拒绝它。
+printf 'symbol_audit=%s (%s artifacts, each with defined symbols)\n' \
+  "$audit_dir/artifacts.tsv" "$audited"

@@ -160,11 +160,19 @@ fn a_lock_without_a_trailing_newline_is_never_glued_to_the_next_record() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A ten-field official record with empty provenance parses as the seven-field
-/// form, so the trust rule admits a duplicate identity; that append is the one
-/// official outcome this gate changes, and it becomes a visible refusal.
-/// 来源字段为空的十字段官方记录按七字段形态解析，于是信任规则放行同身份第二条；这次追加是
-/// 本闸门唯一改变的官方结局，它变成一次可见的拒绝。
+/// A ten-field official record whose provenance columns are empty parses with
+/// `Some("")` in each of them — the ten-field spelling's "declared: no value", which
+/// is deliberately not the seven-field form's `None` ("never mentioned") — so the
+/// record still accounts for a candidate that names no value either, the trust rule
+/// admits the duplicate identity, and the append runs. That append is the one
+/// official outcome this gate changes, and it becomes a visible refusal; the two
+/// shapes are pinned by `core/tests/plugin_lock_provenance.rs`'s
+/// `an_explicitly_empty_provenance_column_pins_absence`.
+/// 来源字段为空的十字段官方记录，三个空列各解析成 `Some("")`——十字段拼法的"声明此处没有值"，
+/// 刻意不同于七字段形式的 `None`（"没提到"）——因此它仍然覆盖同样没点值的候选，信任规则放行
+/// 同身份第二条，追加被执行。这次追加是本闸门唯一改变的官方结局，它变成一次可见的拒绝；两种形态
+/// 的区别由 `core/tests/plugin_lock_provenance.rs` 的
+/// `an_explicitly_empty_provenance_column_pins_absence` 钉住。
 #[test]
 fn an_official_append_that_would_duplicate_an_identity_is_refused_not_written() {
     let (root, plugins) = temp_plugins("official-duplicate");

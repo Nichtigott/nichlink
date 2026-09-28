@@ -70,7 +70,7 @@ fn the_report_answers_scope_and_pruning_from_the_builds_own_files() {
     let reply = explain(&root, &json!({"node": "root/button"})).expect("the report renders");
     assert!(reply.contains("path root/button"), "{reply}");
     assert!(reply.contains("kind Button"), "{reply}");
-    assert!(reply.contains("slot button"), "{reply}");
+    assert!(reply.contains("registry_name button"), "{reply}");
     assert!(reply.contains("scope selected (all=true"), "{reply}");
     assert!(reply.contains("pruning strips button_symbol"), "{reply}");
     // No `discovery.fingerprint` was published, so the report must admit the
@@ -130,6 +130,133 @@ fn a_face_with_no_tracked_symbol_is_not_reported_as_stripped() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A package with one face written through the write path and no build evidence yet:
+/// every report has a node to answer about, and the freshness word starts out the
+/// "stale" one.
+/// 一个经写入路径写下一个面、尚无构建证据的包：每份报告都有节点可答，而新鲜度词从"stale"那一种开始。
+fn generated_package(label: &str) -> (PathBuf, String) {
+    let (root, name) = package(label);
+    crate::apply::apply(
+        &root,
+        &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
+    )
+    .expect("the face is written");
+    (root, name)
+}
+
+/// The same package with its build evidence just published by a `verify` run, so
+/// `BuildEvidence::current` is true.
+/// 同一个包，但构建证据刚由一次 `verify` 运行发布，因此 `BuildEvidence::current` 为真。
+fn current_build_package(label: &str) -> (PathBuf, String) {
+    let (root, name) = generated_package(label);
+    crate::verify::verify(&root, &json!({})).expect("the tree verifies and publishes the evidence");
+    (root, name)
+}
+
+/// The freshness word is spelled in one place — `BuildEvidence::freshness()`, in this
+/// module — and every report that prints it reads it: `explain` (its first caller),
+/// `overlay`, `converge`, the tree `diff`, and the records `diff`. The others used to
+/// spell it themselves, and nothing coupled the copies: renaming the word here left an
+/// independent check's mutated binary answering the new word for `explain` while
+/// `overlay`/`converge` kept the old one — with every test green (that check's mutation
+/// `E`).
+/// 新鲜度词只在一处拼出——本模块的 `BuildEvidence::freshness()`——而**每一份**打印它的报告都读
+/// 它：`explain`（最早的调用方）、`overlay`、`converge`、树 `diff` 与记录 `diff`。其余的过去
+/// 各拼一份，且没有任何钉子把副本耦合起来：在这里改名后，独立复核的变异二进制里 `explain` 换成了
+/// 新词，而 `overlay`/`converge` 仍是旧词——全部测试仍然全绿（那次复核的变异 `E`）。
+///
+/// The assertions below therefore spell the word *literally*: they are the coupling. A
+/// rename of the one source must fail every report here, and the failure is collected per
+/// report rather than short-circuiting, so one run names *all* the reports that drifted.
+/// 因此下面的断言把词**逐字**写出来：它们就是耦合本身。那一处改名必须让这里的每一份报告都失败，
+/// 而失败是逐份收集的、不是首个就短路，因此一次运行就能点名**所有**漂移的报告。
+#[test]
+fn every_report_spells_the_freshness_word_that_one_place_produces() {
+    let (current, _) = current_build_package("freshness-current");
+    let (stale, _) = generated_package("freshness-stale");
+    let (stale_build, stale_build_name) = package("freshness-stale-build");
+    publish(&stale_build, &stale_build_name, true);
+    let mut drifted = Vec::new();
+    for (label, reply, expected) in [
+        (
+            "explain/current",
+            explain(&current, &json!({"node": "root/label"})).expect("explain renders"),
+            "\nbuild current\n",
+        ),
+        (
+            "overlay/current",
+            crate::overlay::overlay(&current, &json!({})).expect("overlay renders"),
+            "\nbuild current\n",
+        ),
+        (
+            "converge/current",
+            crate::converge::converge(&current, &json!({"node": "root/label"}))
+                .expect("converge renders"),
+            "\nbuild current\n",
+        ),
+        (
+            "diff/current",
+            crate::diff::diff(&current, &json!({})).expect("the tree diff renders"),
+            "\nbuild current\n",
+        ),
+        (
+            "diff records/current",
+            crate::diff::diff(&current, &json!({"records": true}))
+                .expect("the records diff renders"),
+            "\nbuild current\n",
+        ),
+        (
+            "explain/stale",
+            explain(&stale, &json!({"node": "root/label"})).expect("explain renders"),
+            "\nbuild stale (run `nichlink check`)",
+        ),
+        (
+            "overlay/stale",
+            crate::overlay::overlay(&stale, &json!({})).expect("overlay renders"),
+            "\nbuild stale (run `nichlink check`)",
+        ),
+        (
+            "converge/stale",
+            crate::converge::converge(&stale, &json!({"node": "root/label"}))
+                .expect("converge renders"),
+            "\nbuild stale (run `nichlink check`)",
+        ),
+        (
+            "diff records/stale",
+            crate::diff::diff(&stale, &json!({"records": true})).expect("the records diff renders"),
+            "\nbuild stale (run `nichlink check`)",
+        ),
+        // The tree diff has no build line at all when no evidence was ever published:
+        // it answers with the command that produces one instead. The fixture above
+        // (`publish`, no fingerprint) is the "known but stale" case, which does print
+        // the line.
+        // 从未发布过证据时树 diff 根本没有 build 行——它改为回答该用哪条命令产出证据。上面那份
+        // fixture（`publish`，没有指纹）才是"已知但过期"的情形，那种会打印这一行。
+        (
+            "diff/stale",
+            crate::diff::diff(&stale_build, &json!({})).expect("the tree diff renders"),
+            "\nbuild stale (run `nichlink check`)",
+        ),
+    ] {
+        if !reply.contains(expected) {
+            let printed = reply
+                .lines()
+                .find(|line| line.starts_with("build "))
+                .unwrap_or("(no build line)");
+            drifted.push(format!(
+                "{label} printed `{printed}` instead of `{expected}`"
+            ));
+        }
+    }
+    assert!(
+        drifted.is_empty(),
+        "these reports spell the freshness word instead of reading `BuildEvidence::freshness()`: {drifted:#?}"
+    );
+    let _ = std::fs::remove_dir_all(&current);
+    let _ = std::fs::remove_dir_all(&stale);
+    let _ = std::fs::remove_dir_all(&stale_build);
+}
+
 /// The tree projection is bounded, because it is the one answer here that grows
 /// with the project.
 /// 树的投影是有上限的，因为它是这里唯一随项目变大的答案。
@@ -138,7 +265,7 @@ fn the_tree_projection_is_bounded_by_limit() {
     let (root, name) = package("projection");
     publish(&root, &name, true);
     let reply = explain(&root, &json!({"limit": 1})).expect("the projection renders");
-    assert!(reply.contains("slots:"), "{reply}");
+    assert!(reply.contains("faces:"), "{reply}");
     assert!(reply.contains("root/button"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }

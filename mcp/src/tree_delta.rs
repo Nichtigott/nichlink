@@ -37,6 +37,39 @@ pub(crate) enum FaceStatus {
     Reidentified(NodeId),
 }
 
+impl FaceStatus {
+    /// The word for the `ok` status.
+    /// `ok` 状态的那个词。
+    pub(crate) const OK: &'static str = "ok";
+    /// The word for a face the build never saw.
+    /// 构建从未见过的面的那个词。
+    pub(crate) const ADDED_SINCE_BUILD: &'static str = "added since build";
+    /// The word for a face the build recorded under another identity.
+    /// 构建记在另一个身份之下的面的那个词。
+    pub(crate) const REIDENTIFIED: &'static str = "re-identified";
+
+    /// The word this status is printed as, everywhere it is printed.
+    /// 这个状态在任何被打印的地方所用的那个词。
+    ///
+    /// `status` unifies the *rule*, and this unifies the *word*: without it the
+    /// same face came back `reidentified` from `nichlink.diff`'s count line and
+    /// `re-identified` from `nichlink.search`'s annotation, which is the drift
+    /// the tree vocabulary exists to prevent. The count line names its buckets
+    /// before any face is in hand, so it reads the constants above — the words
+    /// still live here and nowhere else.
+    /// `status` 统一的是**规则**，这里统一的是**词形**：没有它，同一个面会从 `nichlink.diff`
+    /// 的计数行回来成 `reidentified`、从 `nichlink.search` 的标注回来成 `re-identified`——
+    /// 而这正是这棵树的词汇要消除的漂移。计数行在任何面到手之前就说出它的桶名，因此它读上面的
+    /// 常量；词形仍然只住在这里。
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            Self::Ok => Self::OK,
+            Self::AddedSinceBuild => Self::ADDED_SINCE_BUILD,
+            Self::Reidentified(_) => Self::REIDENTIFIED,
+        }
+    }
+}
+
 /// The built side of the source-versus-build comparison, read once.
 /// 源码对构建比较中"构建那一侧"，只读一次。
 pub(crate) struct TreeDelta {

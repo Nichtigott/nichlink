@@ -76,12 +76,12 @@ fn a_healthy_tree_passes_and_the_run_publishes_the_evidence() {
 /// the *second* package's published evidence was stamped with the first one's
 /// namespace and this tool reported every face as re-identified — a wrong answer
 /// that looks like a right one. Measured on CI and reproduced here with
-/// `--test-threads=1`: `reidentified 1` with the first package's id on the run
+/// `--test-threads=1`: `re-identified 1` with the first package's id on the run
 /// side. The check is now scoped to the run, and this pins it through the tool
 /// an agent actually calls rather than through the internals.
 /// 构建管线的命名空间过去是"先到先得"的进程固定值，因此**第二个**包发布的证据会盖上第一个包的
 /// 命名空间，本工具于是把每个面都报成身份变了——一个看起来正确的错误答案。CI 上实测到，并在本地用
-/// `--test-threads=1` 复现：`reidentified 1`，运行侧是第一个包的 id。现在该判断被限定在这一次运行
+/// `--test-threads=1` 复现：`re-identified 1`，运行侧是第一个包的 id。现在该判断被限定在这一次运行
 /// 内，而这条测试通过代理真正调用的工具、而不是内部实现来钉住它。
 #[test]
 fn a_second_package_in_one_process_keeps_its_own_namespace() {

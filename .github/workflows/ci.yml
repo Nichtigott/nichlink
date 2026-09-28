@@ -48,10 +48,11 @@ jobs:
         run: tools/nichlink-external-rehearsal
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
-        # nichlink-build-method is not packaged here: its versioned dependency
-        # on nichlink-core cannot resolve until nichlink-core is published.
-        # Add `cargo package -p nichlink-build-method --locked --allow-dirty`
-        # after the first crates.io release.
+        # Early leftover kept as a core-only smoke check. Packaging
+        # nichlink-build-method on its own here would need its versioned
+        # dependency on nichlink-core to resolve on the index, and an unpublished
+        # workspace version does not; the package-audit step below covers every
+        # crate and skips that same set.
         run: cargo package -p nichlink-core --locked --allow-dirty
       - name: Package audit (nine crates, skipping unpublished dependencies)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'

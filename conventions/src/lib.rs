@@ -237,6 +237,15 @@ pub(crate) fn is_real_directory(path: &Path) -> bool {
 /// 行会让条目自己的声明留在文本里，而这正好反了：它报出来的恰恰是最正统的那种拼法。叠放的属性会连同
 /// 它们装饰的声明一起被抹掉。
 ///
+/// A doc comment between the attribute and the item belongs to the item, not to the
+/// declaration: `#[cfg(any())]`, `/// documented`, then the item is the same decorated item as
+/// the two-line spelling. The state machine reads "not an attribute" as "the declaration", and
+/// a comment line is not an attribute — so it ended the stack one line early and the item was
+/// reported. Comments therefore stay in the stack. Audit `G-08`.
+/// 属性与条目之间的文档注释属于那个条目，而不是那条声明：`#[cfg(any())]`、`/// documented`、
+/// 条目，与两行写法修饰的是同一个条目。状态机把"不是属性"读成"就是声明"，而注释行不是属性——于是它
+/// 提前一行结束了属性栈，条目被报了出来。因此注释留在属性栈里。审计 `G-08`。
+///
 /// The predicate is the caller's because "never compiled" is not one attribute: the purity
 /// gate exempts `#[cfg(any())]` alone (an inline `#[cfg(test)]` module *is* compiled in a
 /// test build, and the kernel's promise covers it), while the shim ratchet drops both — a
@@ -258,9 +267,10 @@ pub(crate) fn drop_governed_lines(masked: &str, governs: impl Fn(&str) -> bool) 
                 continue;
             }
             if !started {
-                // Attributes stack, and the declaration is what ends the stack.
-                // 属性可以叠放，而结束这一叠的是声明本身。
-                skipped = Some((level, !trimmed.starts_with('#')));
+                // Attributes stack, and the declaration is what ends the stack. A comment is
+                // not the declaration, so it is blanked with the rest of the stack.
+                // 属性可以叠放，而结束这一叠的是声明本身。注释不是声明，因此它随这一叠一起被抹白。
+                skipped = Some((level, !belongs_to_the_attribute_stack(trimmed)));
                 kept.push('\n');
                 continue;
             }
@@ -279,6 +289,21 @@ pub(crate) fn drop_governed_lines(masked: &str, governs: impl Fn(&str) -> bool) 
         kept.push('\n');
     }
     kept
+}
+
+/// Whether a line belongs to the attribute stack rather than being the item's declaration.
+/// 该行属于属性栈，而不是条目的声明。
+///
+/// Attributes arrive as `#[…]`. Comments arrive as `//…`, `/*…`, a `*`-aligned block-comment
+/// line, or — because the mask keeps the two-character `//` and `/*` markers and blanks the
+/// rest — as a line whose remaining text is just the marker.
+/// 属性以 `#[…]` 出现。注释以 `//…`、`/*…`、`*` 对齐的块注释行出现，或者——因为掩码保留
+/// 两个字符的 `//` 与 `/*` 标记、抹掉其余部分——以只剩标记的行出现。
+fn belongs_to_the_attribute_stack(trimmed: &str) -> bool {
+    trimmed.starts_with('#')
+        || trimmed.starts_with("//")
+        || trimmed.starts_with("/*")
+        || trimmed.chars().all(|character| character == '*')
 }
 
 /// Every `.rs` file under `directory`, sorted, without following symlinks.
@@ -318,11 +343,14 @@ pub fn lines(path: &Path) -> Vec<String> {
 
 /// Render a path relative to the workspace root, with `/` separators.
 /// 以工作区根为基准渲染路径，使用 `/` 分隔符。
+///
+/// The fold is not written here: it forwards to the kernel's
+/// [`nichlink::declaration::portable_path`], the one implementation, so a gate
+/// report and the surface it describes cannot spell the same file two ways.
+/// 这份折叠不在这里写：它转发到内核的 [`nichlink::declaration::portable_path`]，那是唯一的
+/// 实现，因此门禁报告与它所描述的执行面不会把同一个文件拼成两种样子。
 pub fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
+    nichlink::declaration::portable_path(&path.strip_prefix(root).unwrap_or(path).to_string_lossy())
 }
 
 /// Write the workspace manifest a fixture root needs.
@@ -377,7 +405,7 @@ fn collect_fixture_members(root: &Path, directory: &Path, members: &mut Vec<Stri
         if path.file_name().and_then(|name| name.to_str()) == Some("src") {
             let owner = path.parent().unwrap_or(root).strip_prefix(root);
             let text = owner
-                .map(|owner| owner.to_string_lossy().replace('\\', "/"))
+                .map(|owner| nichlink::declaration::portable_path(&owner.to_string_lossy()))
                 .unwrap_or_default();
             members.push(if text.is_empty() {
                 ".".to_owned()
@@ -504,5 +532,31 @@ mod tests {
         fs::write(root.join("Cargo.toml"), "[workspace]\nresolver = \"2\"\n")
             .expect("fixture manifest");
         let _ = crate_directories(&root);
+    }
+
+    /// An attribute governs the item that follows it, and a doc comment between the two is
+    /// part of that item — not the declaration that ends the attribute stack. Reading "the
+    /// first line that does not start with `#`" as the declaration made the *orthodox* third
+    /// spelling of a decorated item report itself: `#[cfg(any())]`, then `/// documented`,
+    /// then the item, is an attribute-plus-documentation-plus-item, exactly like the two
+    /// spellings this helper already handled. Audit `G-08`.
+    /// 属性管辖紧随其后的条目，而夹在两者之间的文档注释属于那个条目，不是结束属性栈的声明。把"第一行
+    /// 不以 `#` 开头的行"读成声明，会让被装饰条目的**第三种正统拼法**把自己报出来：
+    /// `#[cfg(any())]`、`/// documented`、条目——这与本助手已经处理的两种拼法是同一件事。审计 `G-08`。
+    #[test]
+    fn a_doc_comment_between_an_attribute_and_its_item_is_governed_too() {
+        let root = synthetic("governed");
+        fs::create_dir_all(root.join("core/src")).expect("fixture src");
+        fs::write(
+            root.join("core/src/lib.rs"),
+            "#[cfg(any())]\n/// documented\npub fn skipped() { let _ = std::fs::read(\"x\"); }\n",
+        )
+        .expect("fixture file");
+        let found = purity::findings(&root);
+        assert!(
+            found.is_empty(),
+            "the attribute governs the declaration under it, doc comment and all: {found:#?}"
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 }

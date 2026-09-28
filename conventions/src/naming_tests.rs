@@ -203,6 +203,51 @@ fn only_requirement_positions_are_read() {
     );
 }
 
+/// A comment is not a requirement position. The boundary this gate states is "only positions
+/// where a name is a *requirement*", and a `# … nichlink-old` note in a workflow or a
+/// `// … nichlink-old = { … }` note in a template is a record of what was once run, not a
+/// requirement — reporting it asks the author to rewrite history to satisfy a gate. The
+/// string literal beside it is still read: templates write the requirement *inside* one.
+/// 注释不是要求位置。本门禁声明的边界是"只读名字处于**要求**位置的地方"，而工作流里一句
+/// `# … nichlink-old` 或模板里一句 `// … nichlink-old = { … }` 是"曾经这么跑过"的记录而不是要求，
+/// 报出来等于要求作者为了满足门禁去改写记录。它旁边那句字符串字面量仍会被读：模板正是把要求写在
+/// 字面量**里面**的。
+///
+/// Audit `G-07`: both halves were read through a raw scan, so both comments were reported.
+/// 审计 `G-07`：两半边都在原文上扫描，因此两处注释都被报了出来。
+#[test]
+fn a_name_in_a_comment_is_not_a_requirement() {
+    let root = synthetic(&[(
+        "thing",
+        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+    )]);
+    fs::create_dir_all(root.join("build_method/src/scaffold")).expect("scaffold dir");
+    fs::write(
+        root.join("build_method/src/scaffold/probe.rs"),
+        "// old invocation kept for reference: nichlink-old = { path = \"..\" }\n\
+         let requirement = \"nichlink-gone = { path = \\\"../gone\\\" }\";\n",
+    )
+    .expect("template file");
+    fs::create_dir_all(root.join(".github/workflows")).expect("workflow dir");
+    fs::write(
+        root.join(".github/workflows/ci.yml"),
+        "run: cargo test -p nichlink-thing --offline\n# old: cargo test -p nichlink-old\n",
+    )
+    .expect("workflow file");
+
+    let found = findings(&root);
+    assert_eq!(
+        found.len(),
+        1,
+        "only the live requirement is a requirement position: {found:#?}"
+    );
+    assert!(
+        found[0].reason.contains("nichlink-gone"),
+        "the requirement inside the template's string is still read: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
 /// The workspace's own names agree.
 /// 工作区自己的名字是一致的。
 #[test]
@@ -211,5 +256,56 @@ fn the_shipped_crates_follow_the_rule() {
     assert!(
         found.is_empty(),
         "crate, directory and lib names have to agree; a host writes all three: {found:#?}"
+    );
+}
+
+/// The `package = "…"` half has to read the spelling templates actually write.
+/// `package = "…"` 那半边必须读得出模板真正书写的拼法。
+///
+/// A template is Rust source, so its manifest line sits inside a string literal and its quotes
+/// are escaped: `package = \"nichlink-x\"`. Reading only the unescaped needle kept the loss
+/// invisible while a dependency key and its package name agreed — the key half found the name
+/// anyway. A *renamed* dependency has only the field, so the template below names a package
+/// that does not exist and nothing was reported (audit `G-07`, finding `F-3`). The pin lives here
+/// rather than in `naming.rs` because a test-only file is exempt from the ceiling the size gate
+/// enforces.
+/// 模板是 Rust 源码，因此它的清单行写在字符串字面量里、引号是转义的：`package = \"nichlink-x\"`。
+/// 只认未转义的针时，只要依赖键与包名一致，这个损失就不可见——键那半边反正能找到那个名字。
+/// **被重命名**的依赖只有这个字段，因此下面这条模板点名了一个不存在的包，却什么也没报出来
+/// （审计 `G-07`，发现 `F-3`）。钉子放在这里而不是 `naming.rs`：仅测试文件不受尺寸门禁的上限
+/// 约束。
+#[test]
+fn a_renamed_dependency_is_named_through_its_escaped_package_field() {
+    let root = synthetic(&[(
+        "thing",
+        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+    )]);
+    fs::create_dir_all(root.join("build_method/src/scaffold")).expect("scaffold dir");
+    fs::write(
+        root.join("build_method/src/scaffold/probe.rs"),
+        "let r = \"runtime = { package = \\\"nichlink-missing\\\", path = \\\"..\\\" }\";\n",
+    )
+    .expect("template");
+    let found = findings(&root);
+    assert_eq!(
+        found.len(),
+        1,
+        "only the escaped package field names it: {found:#?}"
+    );
+    assert!(found[0].reason.contains("nichlink-missing"), "{found:#?}");
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// The plain spelling still reads, and `--package` is not a manifest field.
+/// 普通拼法仍然有效，而 `--package` 不是清单字段。
+#[test]
+fn the_plain_spelling_still_reads_and_a_command_flag_is_not_a_field() {
+    assert_eq!(
+        requirement_names("kind = { package = \"nichlink-missing\", path = \"..\" }\n"),
+        vec!["nichlink-missing".to_owned()]
+    );
+    assert_eq!(
+        requirement_names("run: cargo build --package=\"nichlink-missing\"\n"),
+        Vec::<String>::new()
     );
 }

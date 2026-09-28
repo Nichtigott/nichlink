@@ -166,13 +166,13 @@ fn split_build_args(args: &[String]) -> (Option<String>, Vec<String>) {
 /// The directory `--manifest-path` names in a passed-through cargo argument list.
 /// 透传给 cargo 的参数列表里，`--manifest-path` 点名的那个目录。
 ///
-/// Cargo accepts both `--manifest-path <p>` and `--manifest-path=<p>`, and `nihlink build` hands the
+/// Cargo accepts both `--manifest-path <p>` and `--manifest-path=<p>`, and `nichlink build` hands the
 /// rest of its arguments to cargo verbatim. Reading only a leading *positional* path meant the two
 /// halves of the command could describe different projects: the registration check ran on the
 /// current directory while cargo built the named one, and the command printed
 /// `registration ok (<cwd package>)` with cargo's exit code — so the named project's red verdict
 /// was never seen and the current project's green one was reported as its conclusion (audit `S11`).
-/// cargo 同时接受 `--manifest-path <p>` 与 `--manifest-path=<p>`，而 `nihlink build` 把其余参数原样
+/// cargo 同时接受 `--manifest-path <p>` 与 `--manifest-path=<p>`，而 `nichlink build` 把其余参数原样
 /// 交给 cargo。只读开头的**位臵**参数意味着本命令的两半可以描述不同的项目：注册校验跑在当前目录上，
 /// 而 cargo 构建被点名的那个，命令还打印 `registration ok (<cwd package>)` 并只取 cargo 的退出码——
 /// 被点名项目的红色判断从未被看到，当前项目的绿色判断却被当成它的结论（审计 `S11`）。

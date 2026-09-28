@@ -15,13 +15,13 @@ macro_rules! application {
 /// captured at build time.
 /// 声明当前 crate 为 NichLink 宿主，并引入构建时捕获的注册计划。
 ///
-/// `nichlink-build` renders the discovered registration tree to
+/// `nichlink-build-method` renders the discovered registration tree to
 /// `OUT_DIR/generated_lib.rs`; this macro includes it at the crate root so
 /// `builtin_static_plan()` and the per-level `{name}_object!` aliases are
 /// available crate-wide. It expands to
 /// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))` — writing that
 /// line directly is an equivalent, advanced alternative.
-/// `nichlink-build` 把发现的注册树渲染到 `OUT_DIR/generated_lib.rs`；
+/// `nichlink-build-method` 把发现的注册树渲染到 `OUT_DIR/generated_lib.rs`；
 /// 此宏将其包含到 crate 根，使 `builtin_static_plan()` 与各层级的
 /// `{name}_object!` 别名在整个 crate 内可用。它展开为
 /// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
@@ -60,11 +60,11 @@ macro_rules! host {
 /// runtime `GraftPlan`.
 /// 声明供构建阶段捕获的 graft selector，不构造运行时 `GraftPlan`。
 ///
-/// Put this at the host crate entry. `nichlink-build` validates the grammar and
+/// Put this at the host crate entry. `nichlink-build-method` validates the grammar and
 /// stores the cuts in the generated `StaticPlan`. Use the dynamic
 /// [`graft_plan!`](crate::graft_plan) expression only when code needs to build
 /// or edit a plan at runtime.
-/// 将它放在宿主 crate 入口。`nichlink-build` 校验语法并把切口写入生成的
+/// 将它放在宿主 crate 入口。`nichlink-build-method` 校验语法并把切口写入生成的
 /// `StaticPlan`；只有运行时代码确实要构造或编辑计划时才使用动态
 /// [`graft_plan!`](crate::graft_plan) 表达式。
 #[macro_export]

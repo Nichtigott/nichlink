@@ -6,8 +6,8 @@
 //! This face defines the canvas-width preview functions and the call edges that
 //! reach the canvas object's clamping function.
 
-use crate::control::{ControlFrame, ControlHandle};
 use crate::control::object::node_editor::object::{MIN_CANVAS_WIDTH, clamp_canvas_width};
+use crate::control::{ControlFrame, ControlHandle};
 use nichlink_run_method::{ContractId, FlowContract};
 
 /// NodeEditor 交给子对象的绘制结果。

@@ -37,7 +37,7 @@ what blocks 1.0, not by when they were found.
 **下一批已完成(尺寸回归 + 未接线能力 + 三条定夺项)**
 
 1. ✅ 尺寸回归第一轮(当时的样本均 ≤450):`record.rs` 900 → 85 父 + `reconcile.rs` 192 / `reports.rs` 136 / `apply.rs` 263;`cli/src/lib.rs` 944 → 243 + `commands/*`;`explain.rs` 598 → 197 + `explain_report/overlay/json.rs`;`face_view.rs` 561 → 435 + `scope_view.rs` 165。公开路径全部逐字兼容。
-   ⚠️ **第四轮更正:这条当时写成"非测试文件均 ≤450"并不成立。** 实测有 15 个非测试文件超过它(最大 `core/src/registry_core/declaration/runtime_checks.rs` 751)。现在不再是口头约定:`conventions` crate 的 `size` 门禁把它变成**只能变短的棘轮**——把超标文件连实测行数一起钉在 `BASELINE` 里,新增超标文件会失败,已缩回上限之内的过期项也会失败(防止清单悄悄变成许可)。清单从 15 项开始,第四轮的第 8 条把 `diagnostic/build.rs` 缩回 429 行后,棘轮**强制**删掉了那一项,现为 14 项。
+   ⚠️ **第四轮更正:这条当时写成"非测试文件均 ≤450"并不成立。** 实测有 15 个非测试文件超过它(最大 `core/src/registry_core/declaration/runtime_checks.rs` 751)。现在不再是口头约定:`conventions` crate 的 `size` 门禁把它变成**只能变短的棘轮**——把超标文件连实测行数一起钉在 `BASELINE` 里,新增超标文件会失败,已缩回上限之内的过期项也会失败(防止清单悄悄变成许可)。清单从 15 项开始,第四轮的第 8 条把 `diagnostic/build.rs` 缩回 429 行后,棘轮**强制**删掉了那一项。条目数不在散文里复述——它就是 `BASELINE.len()`,而 `size.rs` 的模块文档已写明复述数字的散文终会与它漂移(本条此前复述的那个数字正是一例,已删)。
 2. ✅ Feature 2 落地:`health_check` 的宿主 API 文档(含 `no_run` 示例,用补回的 `node()/path()/source()/message()/children()`)、五个检查单测、`examples/control-button` 的 `health_check` example + 端到端测试、`run_method/README*.md` 的宿主调用段。
 3. ✅ trace 1.0 回归测试:`trace_legend_reads_live_sample_and_never_claims_live_data`(断言图例为 `LIVE SAMPLE`,剥掉后不残留裸 `LIVE`),注释指向 `docs/design-trace-ingest.md`。
 4. ✅ 记录路径有了真实宿主:`examples/control-button/examples/graft_record.rs`,把包根重定向到带 `Drop` 清理的临时目录,同时证明类型化声明 `TypedDeclarationKept` 与字符串声明 `DeclarationOverridden`,且基树与 `builtin_static_plan()` 不变。
@@ -73,10 +73,13 @@ what blocks 1.0, not by when they were found.
 
 1. **包形状:九个 crate 保持不动,九个全部发布。** 合并方案否决,理由记录在案:user
    只 `cargo add` 一个库、`cargo install` 一个 bin 包,因此发布面本可收窄;但选择保留
-   编译隔离与独立发版,改为把发布卫生做全(见 B4)。发布顺序是硬链:
-   `core` → `macro`/`build_method`/`mcp` → `run_method` → `debug_method`/`plugin-host`
-   → `studio` → `cli`;依赖版本要求写 `0.1.0`(caret,`>=0.1.0,<0.2.0`),所以补丁版本
-   不会连锁要求重发依赖方,只有真正用到新行为时才抬下界。
+   编译隔离(每个 crate 单独成包、单独带自己的 README/LICENSE),改为把发布卫生做全(见 B4)。
+   发布顺序以 `tools/nichlink-publish` 的 `levels` 表为准(`core` → `macro`/`build_method`
+   → `run_method` → `debug_method`/`plugin-host` → `mcp` → `studio` → `cli`;`--check-table`
+   在每次 push 与每次发布前把那张表与清单核对),本文不另立一份顺序。依赖版本下界**随发布线
+   一起抬**(写 `^<工作区版本>`):`release_version` 与 `--check-table` 两道门禁都强制它等于
+   工作区版本,所以"只把一个 crate 发到新版本、其余不动"在清单层就被判红——发布是一条线、
+   不是九个,只有整条线一起走才发得出去。
 2. **运行期校验:接通。** 把 `Registry::health_check` 文档化为宿主 API(在值的边界调用,
    `call_path` 未接 trace 时传空),补五个检查的测试与一个 example。`runtime_checks`
    字段因此变诚实,约 200 行从死代码变成有文档的能力。
@@ -86,7 +89,9 @@ what blocks 1.0, not by when they were found.
 4. **零调用者公开项:发布前全删**(逐项先确认不是留给宿主的 API)。
 5. **B1 存疑(kind-only 的 `registry_name` 等价性)推到 API 收口批。**
 6. **CI 包检查**:脚本对"依赖尚未发布"的包 warn 并跳过、整体 exit 0,去掉
-   `continue-on-error`。这样这一步现在就抓 core 的打包回归,core 上线后自动覆盖其余包。
+   `continue-on-error`。于是这一步会抓 core 的打包回归,并在其余八个上线后自动覆盖它们
+   (两者均已生效:九个 crate 的内容半边始终生效,打包半边对每个内部依赖已上 index 的 crate
+   生效)。
 
 ## 批次 / Batches
 
@@ -133,9 +138,9 @@ what blocks 1.0, not by when they were found.
 - **`graft_plan_check` 的端到端测试在全量并行跑时撞过一次临时目录名**（同一纳秒）。
   已给 `build_method` 的测试临时目录加进程内 `AtomicU64` 序号（`graft_plan_check.rs`
   与 `pipeline.rs` 四处），与早先 macOS 上的同类修复一致。
-- CI 里 `tools/nichlink-package-audit` 用了 `continue-on-error: true`，因为在 core 发布前
-  它必然在 `nichlink-build-method` 那步失败。**待决**：首次发布后必须去掉这个开关，
-  否则一个永远失败却被容忍的步骤等于没有。
+- CI 里 `tools/nichlink-package-audit` 曾用 `continue-on-error: true`，因为 core 发布前
+  它必然在 `nichlink-build-method` 那步失败。**该开关已去掉**（2026-09-25 首次发布之后）：
+  这一步现在与 `cargo package -p nichlink-core` 并列，打包回归会让它失败，而不再被容忍掩盖。
 
 ### B2 单一事实来源（去重复，改一份就够）
 
@@ -156,7 +161,8 @@ what blocks 1.0, not by when they were found.
 
 ### B2 完成情况（已收口）
 
-六项全部落地,core 测试 94 → 106,全量门禁绿。四对静态/Owned 校验各只剩一份核:
+各项全部落地,core 测试 94 → 106,全量门禁绿。下表逐项列出收口结果——四对静态/Owned 校验各只剩一份核,
+末行是本批把执行面副本也收回内核后的注册规范渲染:
 
 | 项 | 唯一实现 | 对照测试 |
 | --- | --- | --- |
@@ -166,6 +172,7 @@ what blocks 1.0, not by when they were found.
 | 路径前缀判断 | `lexicon::path_is_under`（`is_registration_path` 改为经它表达,原有"模块名本身不算在其下"语义保留） | `admission_twins_accept_and_reject_identical_paths`、`the_shared_prefix_check_owns_equality_and_the_directory_boundary` |
 | flow / admission 解析 | `parse_compact_flow`、`parse_compact_admission`（渲染方消费解析结果） | `flow_render_and_parse_read_one_parser`、`admission_render_and_parse_read_one_parser` |
 | kind 归一化 | `normalize_kind_name` 改为 validate-else-`pascal_case` | `normalizing_a_kind_uses_the_shared_pascal_case_fallback` |
+| 注册规范渲染 | `authoring/parse/rules.rs::compact_registration_rule`（内核唯一的紧凑拼法渲染器；`rule_syntax_from_text` 与 Studio 的 `registration_rule_text` 都经它渲染） | `registration_rule_entry.rs`（crate 之外）、`the_call_site_renders_what_the_kernel_renders`、`the_call_site_carries_no_second_rule_renderer` |
 
 - 零调用者 `OwnedFlowContract::matches` 已删（全仓 grep 无引用），私有 `path_matches` 已删，连接器里
   `format!("{owner_path}/")` 的每次比较分配已消。
@@ -251,12 +258,13 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    LICENSE 不会被复制进包，cargo 只自动包含 crate 目录下的 `LICENSE*`）；每个 crate 一份
    README（`macro` 缺）；补 `macro`/`run_method` 的 `documentation`；加一份根 CHANGELOG，
    不按 crate 分九份。
-6. **发布顺序与自动化**：新增 `tools/nichlink-publish`——按决策 1 的依赖链**分层**发布
-   （core → macro/build_method/mcp → run_method → debug_method/plugin-host → studio → cli），
+6. **发布顺序与自动化**：新增 `tools/nichlink-publish`——按 `levels` 表**分层**发布
+   （core → macro/build_method → run_method → debug_method/plugin-host → mcp → studio → cli；
+   该表是唯一一份顺序，`--check-table` 会把它与清单核对），
    每层发完轮询 index 直到该版本可见再进下一层（这一步是人最容易忘的）。默认是 **dry-run**，
    只有 `--publish --yes` 才真的上传（版本不可变，只能 yank）；真实发布前拒绝脏工作区，除非
    显式 `--allow-dirty`。dry-run 对"依赖版本尚未上 index"的 crate 跳过并警告，与
-   `tools/nichlink-package-audit` 行为一致，因此今天就可用：实测完整校验了
+   `tools/nichlink-package-audit` 行为一致，因此无需等首次发布即可用：当时实测完整校验了
    `nichlink-core` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
    `cargo workspaces publish`**：那个配置我无法在离线环境里跑起来验证，交一份没验证过的配置
    正是这个仓库拒绝的东西；脚本的顺序与轮询逻辑可以在本地实测（已实测）。
@@ -397,7 +405,7 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
    stdio 桥是在代理所处理的项目里启动的，而编译进去的清单路径属于构建该二进制的那台机器。
 
 10. **包内容检查覆盖九个 crate（此前只覆盖 core）。** `cargo package --list` 不需要 registry，
-    因此"每个 `src/**/*.rs` 模块与清单声明的 README 都在包里"这一半**今天**对九个 crate 全部
+    因此"每个 `src/**/*.rs` 模块与清单声明的 README 都在包里"这一半对九个 crate 全部
     生效——而本工作区用 `#[path]` 挂载模块，cargo 没收进去的文件等于一个对任何人都编译不过的
     crate。已实测：给 `core` 加一条 `exclude`，门禁只报 `core` 并点名那个文件。
     顺带修掉该脚本一个**先前就存在**的 bug：依赖表用空白分隔，而 `for entry in $crates` 也按

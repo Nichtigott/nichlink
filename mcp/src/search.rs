@@ -7,12 +7,12 @@
 //! reconstruct the tree — the drift `nichlink.registry` exists to remove. A search
 //! that stops at source text also cannot say whether the face it found is still
 //! the one the build published, so this page answers both halves in one call: the
-//! faces whose logical path, `kind`, module or slot name match, each annotated
+//! faces whose logical path, `kind`, module or `registry_name` match, each annotated
 //! `ok`, `added since build`, `re-identified` or `build unknown`, followed by the
 //! file and function hits exactly as before.
 //! 源码索引回答"哪个文件或函数叫这个名字"；它对注册树一无所知，这正是代理过去靠 grep 宏名、自己
 //! 重建那棵树的原因——而那正是 `nichlink.registry` 要消除的漂移。止步于源码文本的搜索也说不出它找到
-//! 的面是否仍是构建发布的那一个，因此本页一次回答两半：逻辑路径、`kind`、模块或槽位名匹配的面，各自
+//! 的面是否仍是构建发布的那一个，因此本页一次回答两半：逻辑路径、`kind`、模块或 `registry_name` 匹配的面，各自
 //! 标注 `ok`、`added since build`、`re-identified` 或 `build unknown`；随后是与此前完全相同的文件与
 //! 函数命中。
 //!
@@ -70,11 +70,14 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
             }
             if !tree.is_empty() {
                 // A stale manifest still answers, but every verdict below it is
-                // about the tree that build saw rather than this one.
-                // 过期的清单仍能作答，但它下面每个结论针对的是那次构建看到的树，而不是眼前这棵。
+                // about the tree that build saw rather than this one. The state word
+                // is the one every other report prints; the clause after it belongs
+                // to this note rather than to the word.
+                // 过期的清单仍能作答，但它下面每个结论针对的是那次构建看到的树，而不是眼前这棵。状态词
+                // 与其余每份报告打印的那一种相同；后面的从句属于这条备注，而不是那个词。
                 if built.known && !built.current {
                     results.push(
-                        "tree  build output is stale (run `nichlink check`); the statuses below \
+                        "tree  build stale (run `nichlink check`); the statuses below \
                          compare against that build"
                             .to_owned(),
                     );
@@ -112,9 +115,9 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     Ok(results.join("\n"))
 }
 
-/// Whether a face is named by the query: its logical path, kind, module, or slot
-/// name.
-/// 查询是否点名了某个面：它的逻辑路径、kind、模块或槽位名。
+/// Whether a face is named by the query: its logical path, kind, module, or
+/// `registry_name`.
+/// 查询是否点名了某个面：它的逻辑路径、kind、模块或 `registry_name`。
 ///
 /// The source path is deliberately not one of the four: a file hit already answers
 /// "which file", and letting a face match on its source would make every file line
@@ -133,12 +136,11 @@ fn face_line(face: &FaceView, built: &TreeDelta) -> String {
     let status = if !built.known {
         "build unknown (run `nichlink check`)".to_owned()
     } else {
-        match built.status(face) {
-            FaceStatus::Ok => "ok".to_owned(),
-            FaceStatus::AddedSinceBuild => "added since build".to_owned(),
-            FaceStatus::Reidentified(previous) => {
-                format!("re-identified ({previous} -> {})", face.id)
-            }
+        let verdict = built.status(face);
+        if let FaceStatus::Reidentified(previous) = verdict {
+            format!("{} ({previous} -> {})", verdict.label(), face.id)
+        } else {
+            verdict.label().to_owned()
         }
     };
     format!(

@@ -1,5 +1,17 @@
-//! Shared interaction geometry and editor helpers.
-//! 交互几何与编辑器辅助。
+//! Shared Studio support: project context and manifests, the `cargo` probe, and the
+//! interaction geometry plus editor handoff the UI drives.
+//! Studio 共享支撑：项目上下文与清单、`cargo` 探测，以及界面驱动的交互几何与编辑器交接。
+//!
+//! Three unrelated subjects share this module, and this line is the honest map of
+//! them: resolving the selected project from the session/environment/manifest,
+//! asking `cargo` for a MIR snapshot or a host's binary targets, and the pure TUI
+//! helpers (divider geometry, selection movement, editor handoff). Splitting them is
+//! tracked as the naming findings `NAM-01`/`STU-S-15`; until then a reader importing
+//! this module should know it also brings in `std::process` and `std::env`.
+//! 三个互不相干的主语共用本模块，这一行就是它们诚实的分布图：从会话/环境/清单解析已选项目、
+//! 向 `cargo` 要 MIR 快照或宿主的二进制 target，以及纯 TUI 辅助（分隔条几何、选中移动、编辑器
+//! 交接）。拆分它们由命名条目 `NAM-01`/`STU-S-15` 跟踪；在那之前，import 本模块的读者就知道它
+//! 也带进了 `std::process` 与 `std::env`。
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -456,12 +468,21 @@ impl App {
 
     /// Open an arbitrary runtime source location, including a local value.
     /// 打开任意运行时源码位置，包括局部变量位置。
-    pub(super) fn open_editor_file(&mut self, path: PathBuf, line: u32) {
+    ///
+    /// The failure is returned as well as written to `event`: `event` is the only
+    /// feedback channel this screen has, so a caller that shows a success banner
+    /// right afterwards has to be able to keep the failure instead of assigning
+    /// over it (audit `LGC-LG-50`).
+    /// 失败既写进 `event` 也作为返回值交回：`event` 是本界面唯一的反馈通道，因此紧接着要显示
+    /// 成功横幅的调用方必须能保住这条失败，而不是把它覆盖掉（审计 `LGC-LG-50`）。
+    pub(super) fn open_editor_file(&mut self, path: PathBuf, line: u32) -> Result<(), String> {
         if !path.is_file() {
-            self.event = format!("Editor failed: source file not found at {}", path.display());
-            return;
+            let failure = format!("Editor failed: source file not found at {}", path.display());
+            self.event = failure.clone();
+            return Err(failure);
         }
         self.editor_request = Some((path, line.max(1)));
+        Ok(())
     }
 }
 

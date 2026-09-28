@@ -37,21 +37,55 @@ pub(crate) fn out_dir(root: &Path) -> PathBuf {
     root.join("target/nichlink/out")
 }
 
-/// The three pieces of build evidence, read once for every caller that needs them.
-/// 三块构建证据，为每个需要它们的调用方读一次。
+/// The build's evidence for this package, read once for every caller that needs it.
+/// 本包构建给出的证据，为每个需要它们的调用方读一次。
+///
+/// These readings used to be a tuple whose meaning lived in this file's prose, so
+/// every caller had to remember their order — and `overlay` simply dropped the
+/// third one. Named fields say what each reading answers instead.
+/// 这些读数过去是一个元组，含义只住在本文件的散文里，因此每个调用方都得记住它们的顺序——而
+/// `overlay` 干脆丢掉了第三个。现在由具名字段说出每个读数回答的是什么。
 ///
 /// A missing or stale build is not an error: it is the answer to "why does this
 /// face not know whether it ships".
 /// 缺失或过期的构建不是错误：它正是"这个面为什么不知道自己发不发布"的答案。
-pub(crate) fn build_evidence(
-    root: &Path,
-) -> (bool, Option<BuildScopeView>, Option<Vec<PruningRow>>) {
+pub(crate) struct BuildEvidence {
+    /// Whether the published output still describes these sources.
+    /// 已发布的产物是否仍在描述这批源码。
+    pub(crate) current: bool,
+    /// The scope the build selected, when `source_scope.tsv` was readable.
+    /// 构建选中的作用域；`source_scope.tsv` 可读时才有。
+    pub(crate) scope: Option<BuildScopeView>,
+    /// The pruning manifest rows, when `pruning_manifest.tsv` was readable.
+    /// 修剪清单行；`pruning_manifest.tsv` 可读时才有。
+    pub(crate) pruning: Option<Vec<PruningRow>>,
+}
+
+impl BuildEvidence {
+    /// The word for how fresh the published output is.
+    /// 已发布产物新鲜度的那个词。
+    ///
+    /// `current` answers "does this output still describe these sources" and not
+    /// "is the build healthy", and both reports below used to spell that answer
+    /// themselves. The spelling lives here, with the field that answers it.
+    /// `current` 回答的是"这份产物是否仍在描述这批源码"，而不是"构建健不健康"，而下面两份报告过去
+    /// 各拼一次这个答案。拼法住在这里，与回答它的那个字段放在一起。
+    pub(crate) fn freshness(&self) -> &'static str {
+        if self.current {
+            "current"
+        } else {
+            "stale (run `nichlink check`)"
+        }
+    }
+}
+
+pub(crate) fn build_evidence(root: &Path) -> BuildEvidence {
     let out = out_dir(root);
-    (
-        build_output_is_current(root, &out),
-        read_build_scope(&out).ok(),
-        read_pruning_manifest(&out).ok(),
-    )
+    BuildEvidence {
+        current: build_output_is_current(root, &out),
+        scope: read_build_scope(&out).ok(),
+        pruning: read_pruning_manifest(&out).ok(),
+    }
 }
 
 /// Report the build's evidence for one face, or for the whole scoped tree.
@@ -68,7 +102,7 @@ pub(crate) fn explain(root: &Path, arguments: &Value) -> Result<String, String> 
     // A missing or stale build is not an error: it is the answer to "why does
     // this face not know whether it ships".
     // 缺失或过期的构建不是错误：它正是"这个面为什么不知道自己发不发布"的答案。
-    let (current, scope, pruning) = build_evidence(root);
+    let evidence = build_evidence(root);
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -80,36 +114,17 @@ pub(crate) fn explain(root: &Path, arguments: &Value) -> Result<String, String> 
                 .iter()
                 .find(|face| face.id == id)
                 .ok_or_else(|| format!("no face in the derived tree has identity {id}"))?;
-            Ok(node_report(
-                &namespace,
-                face,
-                scope.as_ref(),
-                pruning.as_deref(),
-                current,
-            ))
+            Ok(node_report(&namespace, face, &evidence))
         }
-        None => Ok(tree_report(
-            &namespace,
-            &faces,
-            scope.as_ref(),
-            pruning.as_deref(),
-            current,
-            limit,
-        )),
+        None => Ok(tree_report(&namespace, &faces, &evidence, limit)),
     }
 }
 
 /// One face, plus what the build says about its scope and pruning.
 /// 一个面，外加构建对其作用域与剪枝的说法。
-fn node_report(
-    namespace: &str,
-    face: &FaceView,
-    scope: Option<&BuildScopeView>,
-    pruning: Option<&[PruningRow]>,
-    current: bool,
-) -> String {
+fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence) -> String {
     let mut output = format!(
-        "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n  source {}\n  module {}\n  parent {}{}\n  slot {}\n",
+        "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n  source {}\n  module {}\n  parent {}{}\n  registry_name {}\n",
         face.id,
         face.path,
         face.kind,
@@ -123,16 +138,9 @@ fn node_report(
         },
         face.registry_name,
     );
-    output.push_str(&format!(
-        "build {}\n",
-        if current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
-        }
-    ));
-    output.push_str(&scope_line(scope, face));
-    output.push_str(&pruning_line(pruning, face));
+    output.push_str(&format!("build {}\n", evidence.freshness()));
+    output.push_str(&scope_line(evidence.scope.as_ref(), face));
+    output.push_str(&pruning_line(evidence.pruning.as_deref(), face));
     output
 }
 
@@ -190,21 +198,12 @@ pub(crate) fn pruning_line(pruning: Option<&[PruningRow]>, face: &FaceView) -> S
 fn tree_report(
     namespace: &str,
     faces: &[FaceView],
-    scope: Option<&BuildScopeView>,
-    pruning: Option<&[PruningRow]>,
-    current: bool,
+    evidence: &BuildEvidence,
     limit: usize,
 ) -> String {
     let mut output = format!("namespace {namespace}\nfaces {}\n", faces.len());
-    output.push_str(&format!(
-        "build {}\n",
-        if current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
-        }
-    ));
-    match scope {
+    output.push_str(&format!("build {}\n", evidence.freshness()));
+    match evidence.scope.as_ref() {
         Some(scope) => output.push_str(&format!(
             "scope mode={} all={} reason={} selected_ids={} selected_sources={}\n",
             scope.mode,
@@ -216,11 +215,16 @@ fn tree_report(
         None => output.push_str("scope unknown (no source_scope.tsv; run `nichlink check`)\n"),
     }
     // Rows carry the scope verdict each, so the projection answers "what ships"
-    // per face rather than only in aggregate.
-    // 每一行都带自己的作用域结论，因此这个投影逐个面地回答"什么会发布"，而不只是给个总数。
-    output.push_str("slots:\n");
+    // per face rather than only in aggregate. The header names what a row is — a
+    // face, by logical path, `kind`, scope verdict and source — because `slot`
+    // belongs to the overlay's graft cuts and to the plugin host's plugin slots,
+    // and a reader searching for `slot` must not land here.
+    // 每一行都带自己的作用域结论，因此这个投影逐个面地回答"什么会发布"，而不只是给个总数。表头
+    // 说出每一行是什么——一个面，按逻辑路径、`kind`、作用域结论与源码——因为 `slot` 属于叠加层的
+    // graft 切口与插件宿主的插件槽，按 `slot` 检索的读者不该落到这里。
+    output.push_str("faces:\n");
     for face in faces.iter().take(limit) {
-        let selected = scope.map_or("unknown", |scope| {
+        let selected = evidence.scope.as_ref().map_or("unknown", |scope| {
             if scope.all
                 || scope.selected_ids.contains(&face.id)
                 || scope.selected_sources.contains(&face.source)
@@ -241,7 +245,7 @@ fn tree_report(
             faces.len() - limit
         ));
     }
-    match pruning {
+    match evidence.pruning.as_deref() {
         Some(rows) => {
             output.push_str(&format!("pruned {}\n", rows.len()));
             for row in rows.iter().take(limit) {

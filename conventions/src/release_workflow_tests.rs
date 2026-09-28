@@ -145,6 +145,174 @@ fn a_second_workflow_is_checked_too() {
     let _ = fs::remove_dir_all(&root);
 }
 
+/// The negation category a substring test cannot see: `!(startsWith(…))` and the spaced
+/// `! startsWith(…)` both *contain* the positive tag test, so a `contains` check accepted
+/// them while the step published on every non-tag ref. The shape is what has to be judged,
+/// not the substring.
+/// 子串判定看不见的取反类别：`!(startsWith(…))` 与带空格的 `! startsWith(…)` 都**含有**那个
+/// 肯定式 tag 判断，因此 `contains` 检查接受它们，而那个步骤在每个非 tag ref 上都会发布。
+/// 要判定的是形状，不是子串。
+#[test]
+fn both_spellings_of_a_negated_tag_test_are_reported() {
+    let fixtures = [
+        ("a negated call", "!(startsWith(github.ref, 'refs/tags/'))"),
+        (
+            "a spaced negation",
+            "! startsWith(github.ref, 'refs/tags/')",
+        ),
+    ];
+    let mut missed = Vec::new();
+    for (name, condition) in fixtures {
+        let text = format!(
+            "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
+             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+        );
+        let found = findings(&text);
+        if !found
+            .iter()
+            .any(|finding| finding.contains("true without a tag ref"))
+        {
+            missed.push(format!("{name}: {found:#?}"));
+        }
+    }
+    assert!(
+        missed.is_empty(),
+        "a negated guard publishes on branches:\n{}",
+        missed.join("\n")
+    );
+}
+
+/// The whitelist is a whitelist. Each of these carries the tag test as text and still
+/// cannot be read as a conjunction of positive tests, so each is reported.
+/// 白名单就是白名单。下列每条都以文本形式带着 tag 判断，却都读不成"肯定式测试的合取"，因此
+/// 都被报出。
+#[test]
+fn shapes_off_the_whitelist_are_reported() {
+    let fixtures = [
+        (
+            "a disjunction",
+            "github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')",
+        ),
+        (
+            "an inequality",
+            "github.ref != 'refs/tags/v0.1.0' && startsWith(github.ref, 'refs/tags/')",
+        ),
+        (
+            "an operator the gate does not enumerate",
+            "github.run_number > 3 && startsWith(github.ref, 'refs/tags/')",
+        ),
+    ];
+    let mut missed = Vec::new();
+    for (name, condition) in fixtures {
+        let text = format!(
+            "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
+             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+        );
+        let found = findings(&text);
+        if !found
+            .iter()
+            .any(|finding| finding.contains("true without a tag ref"))
+        {
+            missed.push(format!("{name}: {found:#?}"));
+        }
+    }
+    assert!(
+        missed.is_empty(),
+        "a shape off the whitelist is reported:\n{}",
+        missed.join("\n")
+    );
+}
+
+/// The other half of a whitelist: the shapes it does allow stay silent, so the gate does
+/// not fire on the spellings this repository ships and on the ones a maintainer would
+/// reach for.
+/// 白名单的另一半：它允许的形状保持沉默，因此门禁不会在本仓库出厂的拼法上、也不会在维护者会
+/// 顺手写出的拼法上误报。
+#[test]
+fn positive_guard_shapes_are_accepted() {
+    let fixtures = [
+        ("the tag test alone", "startsWith(github.ref, 'refs/tags/')"),
+        (
+            "a conjunction",
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')",
+        ),
+        (
+            "a parenthesized conjunction",
+            "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))",
+        ),
+        (
+            "the explicit expression wrapper",
+            "${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}",
+        ),
+    ];
+    for (name, condition) in fixtures {
+        let text = format!(
+            "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
+             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+        );
+        let found = findings(&text);
+        assert!(
+            found.is_empty(),
+            "{name}: an allowed positive shape is accepted: {found:#?}"
+        );
+    }
+}
+
+/// `inputs['publish']` is the same read as `inputs.publish`, and the substring test read
+/// neither: the bracket spelling produced no finding at all, so an input could make a
+/// manual run differ from a rehearsal without the gate saying so.
+/// `inputs['publish']` 与 `inputs.publish` 是同一次读取，而子串判定两者都读不到：方括号写法
+/// 完全不产生发现，因此一个输入可以让手动运行与演练不同，而门禁什么都不说。
+#[test]
+fn a_bracketed_input_reference_is_reported() {
+    let text = "\
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    steps:
+      - name: Publish
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: tools/nichlink-publish --publish --yes
+      - name: Rehearse
+        run: echo \"${{ inputs['publish'] }}\"
+";
+    let found = findings(text);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].contains("reads an input"), "{found:#?}");
+}
+
+/// Both reference spellings are read, and prose in a comment is not a reference — the
+/// same boundary the upload test already draws, because a comment cannot change what a
+/// run does.
+/// 两种引用拼法都会被读到，而注释里的散文不是引用——与上传判定早已画出的边界相同，因为注释
+/// 改变不了运行的行为。
+#[test]
+fn an_input_reference_is_read_in_either_spelling_and_not_in_prose() {
+    let head = "\
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    steps:
+      - name: Publish
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: tools/nichlink-publish --publish --yes
+      - name: Rehearse
+        run: ";
+    let dotted = format!("{head}echo \"${{{{ inputs.publish }}}}\"\n");
+    let found = findings(&dotted);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].contains("reads an input"), "{found:#?}");
+
+    let prose = format!("# a manual run used to tick inputs.publish\n{head}echo rehearsal\n");
+    let found = findings(&prose);
+    assert!(
+        found.is_empty(),
+        "a comment cannot read an input: {found:#?}"
+    );
+}
+
 /// A manual input is still reported on its own.
 /// 手动输入依然单独被报出。
 #[test]

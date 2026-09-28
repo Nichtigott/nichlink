@@ -237,13 +237,14 @@ mod tests {
                     format!(
                         "{} {}",
                         target.editor.name(),
-                        target
-                            .path
-                            .strip_prefix(&root)
-                            .expect("under root")
-                            .display()
-                            .to_string()
-                            .replace('\\', "/")
+                        nichlink::declaration::portable_path(
+                            &target
+                                .path
+                                .strip_prefix(&root)
+                                .expect("under root")
+                                .display()
+                                .to_string()
+                        )
                     )
                 })
                 .collect::<Vec<_>>()

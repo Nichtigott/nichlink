@@ -152,16 +152,31 @@ fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
     }
     let source =
         fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
-    let relative = path
-        .strip_prefix(root)
-        .map_err(|_| "source path escaped root".to_owned())?
-        .to_string_lossy()
-        .replace(std::path::MAIN_SEPARATOR, "/");
+    let relative = portable_path(
+        path.strip_prefix(root)
+            .map_err(|_| "source path escaped root".to_owned())?,
+    );
     Ok(SourceFile {
         functions: parse_functions(&source),
         relative,
         source,
     })
+}
+
+/// Render a tree-relative path with `/` separators on every platform.
+/// 在任何平台上都以 `/` 分隔符渲染树内相对路径。
+///
+/// The rule is not re-derived here: this forwards to the kernel's one
+/// implementation, so a file whose name contains a backslash cannot be spelled
+/// one way by this module and another way by a caller that reports the same file
+/// (`preview`'s declaration anchor, `converge_trace`'s recorded paths). The
+/// kernel folds for the same reason it does at display: identity uses the raw
+/// bytes, so only what is *shown* may be normalized.
+/// 这条规则不在这里重新推导：它转发到内核里唯一的实现，因此名字里含反斜杠的文件不会被本模块
+/// 和报告同一个文件的调用方（`preview` 的声明锚点、`converge_trace` 的记录路径）拼成两种样子。
+/// 内核做折叠的理由与显示时相同：身份用的是原始字节，只有**展示**出来的东西才可以归一化。
+pub(crate) fn portable_path(path: &Path) -> String {
+    nichlink::declaration::portable_path(&path.to_string_lossy())
 }
 
 pub(crate) fn is_safe_child(root: &Path, path: &Path) -> bool {
@@ -216,116 +231,5 @@ pub(crate) fn display_list(items: &[String]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The write path's recoverable trash lives under `.nichlink/` and holds
-    /// `.rs` files, so a deleted fact must not keep answering `status` and
-    /// `search` from its own backup.
-    /// 写入路径的可恢复回收目录在 `.nichlink/` 下、里面就是 `.rs` 文件，因此被删掉的东西不得继续
-    /// 从它自己的备份里回答 `status` 与 `search`。
-    #[test]
-    fn the_recoverable_trash_is_not_indexed() {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("mcp-scan-{}-{sequence}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("src")).expect("source directory");
-        std::fs::create_dir_all(root.join(".nichlink/trash/faces")).expect("trash directory");
-        std::fs::write(root.join("src/live.rs"), "pub fn live() {}\n").expect("live file");
-        std::fs::write(
-            root.join(".nichlink/trash/faces/deleted.rs"),
-            "pub fn deleted() {}\n",
-        )
-        .expect("backup file");
-        let files = load_sources(&root).expect("the scan reads the tree");
-        let names = files
-            .iter()
-            .map(|file| file.relative.clone())
-            .collect::<Vec<_>>();
-        assert!(names.iter().any(|name| name == "src/live.rs"), "{names:?}");
-        assert!(
-            !names.iter().any(|name| name.contains(".nichlink")),
-            "the trash must not be indexed: {names:?}"
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn parser_indexes_functions_and_direct_calls() {
-        let functions = parse_functions(
-            "fn source() { let value = helper(1); sink(value); }\nfn helper(_: i32) {}\nfn sink(_: i32) {}",
-        );
-        assert_eq!(functions.len(), 3);
-        assert_eq!(functions[0].name, "source");
-        assert_eq!(functions[0].calls, ["helper", "sink"]);
-    }
-
-    #[test]
-    fn registration_kinds_are_compact_and_deduplicated() {
-        let kinds = nichlink::source::registration_kinds(
-            "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
-        );
-        assert_eq!(kinds, ["Button"]);
-    }
-
-    /// A throwaway source root, unique per call.
-    /// 每次调用唯一的临时源码根。
-    fn temporary_root(tag: &str) -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-mcp-{tag}-{}-{sequence}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).expect("create root");
-        root
-    }
-
-    /// A file genuinely inside the root is read, so the guard is about location
-    /// and not about links as such.
-    /// 真正位于根内的文件照常读取，因此这道守卫针对的是位置而不是链接本身。
-    #[test]
-    fn a_file_inside_the_source_root_is_still_read() {
-        let root = temporary_root("inside");
-        fs::write(root.join("inside.rs"), "fn inside() {}\n").expect("write");
-        let sources = load_sources(&root).expect("the walk reads the root");
-        assert_eq!(sources.len(), 1);
-        assert!(sources[0].source.contains("fn inside"));
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// A link out of the root is neither walked into nor read. A prefix
-    /// comparison accepts both, because the link's own path is inside the root.
-    /// 指向根外的链接既不会被进入，也读不到。前缀比较两者都会接受，因为链接自身的路径就在
-    /// 根内。
-    #[cfg(unix)]
-    #[test]
-    fn a_link_out_of_the_source_root_is_neither_walked_nor_read() {
-        let root = temporary_root("escape");
-        let outside = root.with_file_name(format!(
-            "{}-outside",
-            root.file_name().expect("a name").to_string_lossy()
-        ));
-        let _ = fs::remove_dir_all(&outside);
-        fs::create_dir_all(&outside).expect("create outside tree");
-        fs::write(outside.join("secret.rs"), "fn secret() {}\n").expect("write outside file");
-        std::os::unix::fs::symlink(&outside, root.join("linked")).expect("link the outside tree");
-        std::os::unix::fs::symlink(outside.join("secret.rs"), root.join("secret.rs"))
-            .expect("link the outside file");
-
-        let sources = load_sources(&root).expect("the walk survives an escaping link");
-        assert!(
-            sources
-                .iter()
-                .all(|file| !file.source.contains("fn secret")),
-            "a file outside the root must not be indexed: {sources:?}"
-        );
-        let error = load_one(&root, "secret.rs").expect_err("a link out of the root is refused");
-        assert!(error.contains("source root"), "{error}");
-
-        let _ = fs::remove_dir_all(&root);
-        let _ = fs::remove_dir_all(&outside);
-    }
-}
+#[path = "index_tests.rs"]
+mod index_tests;

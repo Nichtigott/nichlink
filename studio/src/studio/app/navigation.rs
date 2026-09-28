@@ -163,11 +163,10 @@ pub(super) fn advance_graph_focus(search: &mut SearchState) {
 }
 
 pub(super) fn retreat_graph_focus(search: &mut SearchState) {
-    // BackTab walks the same two panes the other way.
-    // BackTab 以相反方向走同样这两块面板。
-    search.graph_focus = match search.graph_focus {
-        0 => 1,
-        _ => 0,
-    };
-    search.outline_focus = search.graph_focus == 0;
+    // BackTab lands on the same toggle: with two panes, "the other one" is the same
+    // destination whichever key asked for it, so both share one body and the second
+    // name exists only to keep the keyboard mapping readable.
+    // BackTab 落回同一个开关：只有两块面板时，"另一块"无论哪个键来问都是同一个目的地，因此两者
+    // 共用一个函数体，第二个名字只为让键盘映射读起来清楚。
+    advance_graph_focus(search);
 }

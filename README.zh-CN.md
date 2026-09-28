@@ -667,8 +667,9 @@ cargo check
 NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
-MCP 提供 `nichlink.search`（面排在最前，按逻辑路径、kind、模块或槽位名匹配，并标注构建的结论
-——`ok`、`added since build`、`re-identified` 或 `build unknown`——随后才是文件与函数命中）、
+MCP 提供 `nichlink.search`（面排在最前，按逻辑路径、kind、模块或 `registry_name` 匹配，并标注构建的
+结论——`ok`、`added since build`、`re-identified` 或 `build unknown`；不再描述这批源码的清单会在这些
+结论之上被说成 `stale (run nichlink check)`——随后才是文件与函数命中）、
 `nichlink.inspect`、`nichlink.callgraph`、
 `nichlink.read`、`nichlink.status` 和 `nichlink.registry`——最后一个报告构建推导出的
 注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.explain`（构建发布的

@@ -66,6 +66,9 @@ mod registry;
 #[path = "apply.rs"]
 mod apply;
 
+#[path = "apply_target.rs"]
+mod apply_target;
+
 #[path = "nodes.rs"]
 mod nodes;
 

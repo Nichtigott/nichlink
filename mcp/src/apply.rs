@@ -27,8 +27,9 @@ use nichlink_build_method::{face_views, source_layout};
 use nichlink_run_method::{AuthoringContext, NewModuleFace};
 use serde_json::Value;
 
+use crate::apply_target::Target;
 use crate::nodes::{parent_id, resolve_node};
-use crate::preview::{copy_package, declaration_line, diff_package, remove_copy};
+use crate::preview::{copy_package, declaration_line, diff_package};
 use crate::registry::namespace;
 
 /// One `nichlink.apply` request.
@@ -81,48 +82,34 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("apply")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let work = if apply {
-        root.to_path_buf()
+    let target = if apply {
+        Target::Project
     } else {
-        copy_package(root)?
+        Target::Copy(copy_package(root)?)
     };
     let outcome = match action {
-        Action::Add => run_add(&work, &namespace, arguments),
-        Action::Edit | Action::Rename => run_edit(&work, &namespace, arguments, action),
-        Action::Delete => run_delete(&work, &namespace, arguments),
+        Action::Add => run_add(target.work_dir(root), &namespace, arguments),
+        Action::Edit | Action::Rename => {
+            run_edit(target.work_dir(root), &namespace, arguments, action)
+        }
+        Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
     };
     let outcome = match outcome {
-        // A preview ran in the copy, so the path the executor reported belongs to
-        // the copy. Report it where it *would* be written: an agent reading
-        // `would write /tmp/...` would be told about a directory that is deleted a
-        // moment later.
-        // 预览在副本里运行，因此执行器报告的路径属于副本。把它报告在**将要**写入的位置：读到
-        // `would write /tmp/...` 的代理会被告知一个随后就被删掉的目录。
+        // A preview ran in the copy, so the paths the executor reported belong to
+        // the copy. They are rewritten here, before anything reads them, rather
+        // than left to a reader to reinterpret: an agent reading `would write
+        // /tmp/...` would be told about a directory that is deleted a moment later.
+        // 预览在副本里运行，因此执行器报告的路径属于副本。它们在这里、在任何读取方之前被改写，
+        // 而不是留给读者自行解释：读到 `would write /tmp/...` 的代理会被告知一个随后就被删掉的目录。
         Ok(mut outcome) => {
             // The declaration anchor is read while the tree it happened in still
             // exists: for a preview that is the copy, for an apply it is the project.
             // 声明锚点是在改动发生的那棵树仍然存在时读取的：预览是副本，落盘是项目。
             let original = outcome.source.clone();
-            let relative = original
-                .strip_prefix(&work)
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|_| {
-                    original
-                        .strip_prefix(root)
-                        .map(Path::to_path_buf)
-                        .unwrap_or_else(|_| original.clone())
-                });
-            outcome.declaration = declaration_line(&original, &relative);
-            if let Ok(relative) = outcome.source.strip_prefix(&work) {
-                outcome.source = root.join(relative);
-            }
-            // The executor's own message names paths too, so a preview would
-            // otherwise print a directory that is deleted a moment later.
-            // 执行器自己的消息也会点名路径，否则预览会打印出一个随后就被删掉的目录。
-            let from = work.display().to_string();
-            if from != root.display().to_string() {
-                outcome.message = outcome.message.replace(&from, &root.display().to_string());
-            }
+            outcome.declaration =
+                declaration_line(&original, &target.report_relative(&original, root));
+            outcome.source = target.report_path(&outcome.source, root);
+            outcome.message = target.report_message(outcome.message, root);
             outcome
         }
         Err(error) => {
@@ -130,18 +117,17 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
             // keeps the project, and the executor has already refused before
             // touching it.
             // 失败的预览不必留下副本；失败的落盘保留项目，而执行器在碰它之前就已经拒绝。
-            remove_copy(root, &work);
+            target.discard(root);
             return Err(error);
         }
     };
-    let report = report(&work, &namespace, &outcome, apply)?;
+    let report = report(root, &target, &namespace, &outcome)?;
     // The copy's diff is computed before it goes away.
-    let diff = if apply {
-        String::new()
-    } else {
-        diff_package(root, &work)?
+    let diff = match &target {
+        Target::Project => String::new(),
+        Target::Copy(work) => diff_package(root, work)?,
     };
-    remove_copy(root, &work);
+    target.discard(root);
     let mut text = report;
     if !diff.is_empty() {
         text.push_str("\ndiff:\n");
@@ -511,10 +497,11 @@ pub(crate) fn load_registry(root: &Path, namespace: &str) -> Result<Registry, St
 /// 发生了什么，以代理接下来要读的形状给出。
 fn report(
     root: &Path,
+    target: &Target,
     namespace: &str,
     outcome: &Outcome,
-    applied: bool,
 ) -> Result<String, String> {
+    let applied = target.applied();
     let verb = match (outcome.moved, applied) {
         (false, true) => "applied",
         (false, false) => "would write",
@@ -526,7 +513,7 @@ fn report(
     // changed, so a validation failure shows up here rather than after a write.
     // 变更产生的树是预览最强的部分：它与注册树查询报告的是同一份推导，只是跑在执行器刚改过的
     // 那棵树上，因此校验失败会在这里出现，而不是在写入之后。
-    let faces = face_views(root, namespace)?;
+    let faces = face_views(target.work_dir(root), namespace)?;
     let list = faces
         .iter()
         .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))

@@ -1,6 +1,22 @@
 //! The release version has exactly one source, and every requirement names it.
 //! 发布版本只有一个来源，而每一处要求都命名它。
 //!
+//! The requirements are read for **every** workspace member, including the ones that are
+//! `publish = false`. A skip there was measured to be a silent hole rather than a boundary: a
+//! stale `version = "0.1.5"` in an example host is skipped by this gate, by the publish table
+//! check and by the package audit alike, so it drifts until the next version line makes it a
+//! build failure somewhere else. What an unpublished member is free of is the *obligation* to
+//! name a version at all (nothing resolves it from a registry) and the rule that `[package]
+//! version` has to inherit — its own version is its own. What it is not free of is naming a
+//! version: once it writes one, that version is on the release line like anyone's (audit
+//! `G-05`).
+//! 要求会为**每个**工作区成员读取，包括 `publish = false` 的那些。那里的跳过被实测证明是一个静默
+//! 的洞而不是一条边界：示例宿主里一条陈旧的 `version = "0.1.5"` 会被本门禁、发布表检查与包审计
+//! 一同跳过，于是一路漂移到下一次抬版本线，在别处以构建失败的形式现身。非发布成员真正豁免的是**必须
+//! 写出**版本这件事（没有任何东西会从 registry 解析它）以及"`[package] version` 必须继承"这条规则
+//! ——它自己的版本就是它自己的。它不豁免的是写下版本这件事：一旦写了，那个版本就与任何人的一样落在
+//! 发布线上（审计 `G-05`）。
+//!
 //! The tag check and the pre-upload table check both used to read the *first*
 //! `version = "…"` line of the root manifest, while every member inherits
 //! `[workspace.package]`. With a centralized requirement above that section the two
@@ -113,9 +129,25 @@ pub fn findings(root: &Path) -> Vec<Finding> {
             }
         }
         if !published {
-            // A `publish = false` member may depend on a path with no version: nothing
-            // resolves it from a registry.
-            // `publish = false` 的成员可以依赖没有版本的路径：没有任何东西会从 registry 解析它。
+            // A `publish = false` member may e.g. carry its own `[package] version` and a
+            // requirement with no version: nothing resolves it from a registry, so the two
+            // rules above do not apply to it. Its *versioned* requirements do: a stale
+            // `version = "0.1.5"` in an example host is the same drift as a stale one in a
+            // published crate, and it is invisible everywhere else — this gate, the publish
+            // table check and the package audit all skip `publish = false`, so the drift would
+            // surface at the next version line and nowhere before it (audit `G-05`).
+            // `publish = false` 成员可以自己写 `[package] version`、也可以依赖没有版本的路径：
+            // 没有任何东西会从 registry 解析它，因此上面两条规则不适用于它。但它的**带版本**要求适用：
+            // 示例宿主里一条陈旧的 `version = "0.1.5"` 与已发布 crate 里的一条是同样的漂移，而它在
+            // 别处都不可见——本门禁、发布表检查与包审计都跳过 `publish = false`，因此漂移只会在下一次
+            // 抬版本线时现身，之前无人报出（审计 `G-05`）。
+            found.extend(requirement_findings(
+                root,
+                &manifest,
+                &flatten_inline_tables(&text),
+                &release,
+                false,
+            ));
             continue;
         }
         found.extend(requirement_findings(
@@ -123,6 +155,7 @@ pub fn findings(root: &Path) -> Vec<Finding> {
             &manifest,
             &flatten_inline_tables(&text),
             &release,
+            true,
         ));
     }
     found.sort();
@@ -206,13 +239,22 @@ fn flatten_inline_tables(text: &str) -> String {
     flattened
 }
 
-/// The requirement problems in one published manifest.
-/// 一份已发布清单里的依赖要求问题。
+/// The requirement problems in one member's manifest.
+/// 一个成员清单里的依赖要求问题。
+///
+/// `require_version` is what distinguishes a published member from a `publish = false` one: a
+/// published package with no requirement version cannot be resolved from a registry, while an
+/// unpublished one is never resolved at all and may omit it. A version that *is* written is
+/// held to the release line in both cases.
+/// `require_version` 区分已发布成员与 `publish = false` 成员：已发布的包若要求上没有版本，就无法
+/// 从 registry 解析；而未发布的包根本不会被解析，因此可以省略。**写出来的**版本在两种情况下都被绑到
+/// 发布线上。
 fn requirement_findings(
     root: &Path,
     manifest: &Path,
     flattened: &str,
     release: &str,
+    require_version: bool,
 ) -> Vec<Finding> {
     let mut found = Vec::new();
     let mut section = String::new();
@@ -230,7 +272,15 @@ fn requirement_findings(
         // 点表形式的依赖把版本写在自己打开的那一节里的独立一行上。
         if let Some(name) = &dotted {
             if trimmed.starts_with("version") {
-                record(&mut found, root, manifest, name, trimmed, release);
+                record(
+                    &mut found,
+                    root,
+                    manifest,
+                    name,
+                    trimmed,
+                    release,
+                    require_version,
+                );
             }
             continue;
         }
@@ -259,7 +309,15 @@ fn requirement_findings(
                 None => continue,
             }
         };
-        record(&mut found, root, manifest, &target, value.trim(), release);
+        record(
+            &mut found,
+            root,
+            manifest,
+            &target,
+            value.trim(),
+            release,
+            require_version,
+        );
     }
     found
 }
@@ -278,6 +336,11 @@ fn package_field(value: &str) -> Option<String> {
 
 /// Add a finding when a requirement's version is missing or wrong.
 /// 当依赖要求的版本缺失或不对时记一条。
+///
+/// `require_version` is what keeps a `publish = false` member legal while still holding the
+/// version it *does* write to the release line — see [`requirement_findings`].
+/// `require_version` 让 `publish = false` 成员保持合法，同时仍然把它**写出来的**版本绑到发布线上
+/// ——见 [`requirement_findings`]。
 fn record(
     found: &mut Vec<Finding>,
     root: &Path,
@@ -285,6 +348,7 @@ fn record(
     name: &str,
     value: &str,
     release: &str,
+    require_version: bool,
 ) {
     match version_in(value) {
         Some(version) if version == release => {}
@@ -292,13 +356,14 @@ fn record(
             manifest: relative(root, manifest),
             reason: format!("`{name}` requires {version}, but the workspace version is {release}"),
         }),
-        None => found.push(Finding {
+        None if require_version => found.push(Finding {
             manifest: relative(root, manifest),
             reason: format!(
                 "`{name}` has no `version`; a published package cannot be resolved from a \
                  registry without one"
             ),
         }),
+        None => {}
     }
 }
 

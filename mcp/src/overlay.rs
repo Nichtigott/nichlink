@@ -53,9 +53,14 @@ pub(crate) fn overlay(root: &Path, arguments: &Value) -> Result<String, String> 
     }
     let namespace = namespace(root)?;
     let faces = face_views(root, &namespace)?;
-    let (current, scope, _) = build_evidence(root);
+    let evidence = build_evidence(root);
     let declared = declared_grafts(root);
-    let projection = overlay_projection(root, &faces, scope.as_ref(), declared.as_ref().ok())?;
+    let projection = overlay_projection(
+        root,
+        &faces,
+        evidence.scope.as_ref(),
+        declared.as_ref().ok(),
+    )?;
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -64,8 +69,8 @@ pub(crate) fn overlay(root: &Path, arguments: &Value) -> Result<String, String> 
         });
     Ok(render(
         &namespace,
-        current,
-        scope.as_ref(),
+        evidence.freshness(),
+        evidence.scope.as_ref(),
         &declared,
         &projection,
         limit,
@@ -76,7 +81,7 @@ pub(crate) fn overlay(root: &Path, arguments: &Value) -> Result<String, String> 
 /// 把一份投影渲染成代理阅读的行。
 fn render(
     namespace: &str,
-    current: bool,
+    freshness: &str,
     scope: Option<&BuildScopeView>,
     declared: &Result<DeclaredGrafts, String>,
     projection: &OverlayProjection,
@@ -88,14 +93,14 @@ fn render(
         Ok(declared) => output.push_str(&format!("entry {}\n", declared.entry.display())),
         Err(error) => output.push_str(&format!("entry unreadable ({error})\n")),
     }
-    output.push_str(&format!(
-        "build {}\n",
-        if current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
-        }
-    ));
+    // The state word comes from the one place that spells it, `BuildEvidence::freshness()`,
+    // and is passed in: this report used to spell the freshness word itself, which left two
+    // more copies to drift from the one in `evidence.rs` — nothing coupled them, as an
+    // independent check found with mutation `E`.
+    // 状态词来自唯一拼它的地方 `BuildEvidence::freshness()`，由调用方传进来：本报告过去自己拼这个
+    // 新鲜度词，于是相对 `evidence.rs` 里的那一份又多了两处可能漂移的副本——没有任何钉子把三者耦合
+    // 起来，这正是独立复核用变异 `E` 发现的。
+    output.push_str(&format!("build {freshness}\n"));
     match scope {
         Some(scope) => output.push_str(&format!(
             "scope mode={} all={} reason={}\n",

@@ -7,6 +7,7 @@
 #   tools/nichlink-visual                 # every scene
 #   tools/nichlink-visual tree add-form   # named scenes only
 #   tools/nichlink-visual --list
+#   tools/nichlink-visual --help
 #   NICHLINK_VISUAL_X=240 NICHLINK_VISUAL_Y=60 tools/nichlink-visual graph
 #   NICHLINK_VISUAL_STDOUT=1 tools/nichlink-visual tree
 #
@@ -112,8 +113,17 @@ known_scene() {
     return 1
 }
 
+# The header block itself, with no line numbers in it: the range used to be
+# hardcoded (`sed -n '2,26p'`), which cut the sentence about `target/visual` in
+# half and dropped the whole "Why tmux" paragraph — and every later edit to the
+# header shifted which sentences were lost (audit G-11). The dump stops at the
+# first line of code, so the header can grow without touching this function.
+# 头部注释块本身，不带行号：过去那个范围是写死的（`sed -n '2,26p'`），它把关于
+# `target/visual` 的那句话拦腰截断，并整段丢掉了"Why tmux"（审计 G-11）；此后每次改头部，
+# 被丢掉的句子都会换一批。转储在遇到第一行代码时停止，因此头部可以增长而不必碰这个函数。
 usage() {
-    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    awk '/^#!/ { next } /^#/ { print; next } /^[[:space:]]*$/ { next } { exit }' "$0" |
+        sed 's/^# \{0,1\}//'
     printf '\nAvailable scenes: %s\n' "$(scenes)"
     printf 'Pane size: %sx%s (NICHLINK_VISUAL_X / NICHLINK_VISUAL_Y)\n' "$COLUMNS" "$ROWS"
 }

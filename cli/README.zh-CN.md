@@ -18,7 +18,8 @@ cd my-app && nichlink studio
 | `nichlink explain <node-id \| logical/path> [--path <dir>] [--json]` | 报告单个节点的身份、构建作用域、剪枝状态，以及命名它的声明切口 |
 | `nichlink explain --overlay [--path <dir>] [--json]` | 渲染每个槽位与计划的静态覆盖投影（不是活的树） |
 | `nichlink grafts [path] [--json]` | 列出 `.nichlink/external-grafts/*/graft.plan` 及其目标，以及宿主入口是否声明该槽位 |
-| `nichlink studio` | 为当前项目启动 Studio TUI |
+| `nichlink snippets [path] [--editor vscode \| nvim \| blink \| auto] [--stdout]` | 把面字段编辑器片段注入项目或编辑器配置 |
+| `nichlink studio [path]` | 为当前项目或指定 `path` 启动 Studio TUI |
 | `nichlink mcp` | 运行 MCP stdio 桥：源码与注册树查询，外加 authoring 写入——除非带 `apply: true`，否则只预览 |
 
 依赖来源自动检测：从 NichLink checkout 运行的 CLI 写入 path 依赖；

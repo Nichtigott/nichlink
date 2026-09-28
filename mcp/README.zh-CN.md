@@ -13,27 +13,32 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 读取类工具：
 
-- `nichlink.search`：查找注册面、文件与函数声明。面排在最前，按逻辑路径、kind、模块或槽位名匹配，
-  每个都带上构建的结论——`ok`、`added since build`、`re-identified`（文件没动而 `kind` 变了，两个身份
-  都给出），或者尚未发布任何构建时的 `build unknown`；下面的文件与函数命中与此前相同。树那一半需要身份
-  命名空间，因此 Cargo 叫不出名字的根仍然回答源码那一半，并说明这一点；
+- `nichlink.search`：查找注册面、文件与函数声明。面排在最前，按逻辑路径、kind、模块或
+  `registry_name` 匹配，每个都带上构建的结论——`ok`、`added since build`、`re-identified`
+  （文件没动而 `kind` 变了，两个身份都给出），或者尚未发布任何构建时的 `build unknown`；不再描述这批
+  源码的清单会在这些结论之上被说成 `stale (run nichlink check)`，因为它们针对的是那次构建看到的树。
+  下面的文件与函数命中与此前相同。树那一半需要身份命名空间，因此 Cargo 叫不出名字的根仍然回答源码
+  那一半，并说明这一点；
 - `nichlink.inspect`：查看单文件中的函数和注册声明；
 - `nichlink.callgraph`：查找函数的直接调用者和被调用者；
 - `nichlink.read`：读取有大小上限的源码窗口；
 - `nichlink.status`：报告源码根目录和索引数量；
 - `nichlink.registry`：报告本包声明的注册面——逻辑路径、kind、源码与宿主编译出的
   `NodeId`。
-- `nichlink.explain`：报告构建对某个面给出的证据（身份、路径、kind、源码、模块、父级、槽位），或
-  它划定作用域的整棵树投影。上面那个注册树答案由源码文本推导，因此永远新鲜；这一个读构建**发布**在
-  `target/nichlink/out` 下的文件，因此回答真正会发布什么：作用域是否选中该面、发布剪枝是否剥掉它的
-  符号。缺失或过期的构建会被如实报告。给出 `overlay: true` 时改为渲染**覆盖**投影——每条已声明切口
+- `nichlink.explain`：报告构建对某个面给出的证据（身份、路径、kind、源码、模块、父级、
+  `registry_name`），或它划定作用域的整棵树投影。上面那个注册树答案由源码文本推导，因此永远不会
+  `stale`；这一个读构建**发布**在 `target/nichlink/out` 下的文件，因此回答真正会发布什么：作用域是否
+  选中该面、发布剪枝是否剥掉它的符号。`build` 那一行说 `current`，或者当产物不再描述这批源码时说
+  `stale (run nichlink check)`。给出 `overlay: true` 时改为渲染**覆盖**投影——每条已声明切口
   替换哪个槽位、作用域剪掉哪些面，也就是替换之后的发布态，用的是 CLI `explain --overlay` 同一次遍历。
   那是静态投影而不是 `Registry::dump`，回复里的说明写明了活的树从哪来；`overlay` 与 `node` 互斥。
 - `nichlink.diff`：源码现在与构建清单之间的面级差异——新增、消失，以及文件没动而身份变了
   （`kind` 变化就是身份变化，只有这个比较看得见）。给出 `records: true` 时改为把外部 graft 记录与
   源码对照：记录里存着它写下时针对的身份，因此槽位没动而面换了身份会被报成 `re-identified`
-  （`old -> now`），而不是悄悄弄坏那条 graft；`stale`、`unmatched`（类型化切口存的是表达式，身份缺席
-  时无法与"身份变了"区分）与读不了的记录各自分开。
+  （`old -> now`），而不是悄悄弄坏那条 graft。每条记录都落在五个桶之一，彼此分开计数：`ok`、
+  `undeclared`（身份在树里，但没有任何 `static_graft_plan!` 切口点名它的槽位——`nichlink.grafts`
+  把这种报成 `NOT declared by the host entry`）、`stale`（树里没有任何东西带着那个身份或那个路径）、
+  `re-identified`（路径在、身份移动了）与 `unreadable`（读不了的记录文件）。
 - `nichlink.trace`：读取本包已记录的 trace artifact，并用它蕴含的无终端调用报告作答——真正跑了
   什么，这是任何静态读取都说不出的。给出 `values: true` 时，同一次读取改为回答那次运行**看见了**
   什么：记录下的局部值按捕获它们的帧分组（名字、类型、值、角色、observed 或 inferred、调用点）、
@@ -61,11 +66,13 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
   点名了它所提供能力的面，以及把它交出去的已声明 graft 切口。每个到达的节点带上最短跳数、所有到达它的
   理由与跳的链条。能力环被计数而不是被反复走；没走到的面会被如实报成在 `depth` 内未到达，而那并不等于
   独立。
-- `nichlink.usages`：一个面的邻域——它在树里的父级与子面、`nichlink.apply` 作为输入接受的那些字段
-  从生成模块里读回的结果（preset、parts、名称、exports、`requires`、`provides`、handle 与 part 的
-  traits/contracts、registration rule、admission、flow、runtime checks），以及哪些别的面提到同一批
-  能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；手写模块没有生成的
-  字段清单，因此那些面被计为不可读，而不是被显示成空的。
+- `nichlink.usages`：一个面的邻域——它在树里的父级与子面、`nichlink.apply` 作为输入接受的**每一个**
+  字段从生成模块里读回的结果（`module`、`preset`、`parts`、`name_zh`、`name_en`、`summary_zh`、
+  `summary_en`、`stable_name`、`exports`、`requires`、`provides`、`handle_traits`、
+  `handle_contracts`、`part_traits`、`part_contracts`、`registration_rule`、`admission`、`flow`、
+  `flow_provider`、`runtime_checks`、`getting_from_other_registry`、`needs_registry`），以及哪些别的
+  面提到同一批能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；手写模块
+  没有生成的字段清单，因此那些面被计为不可读，而不是被显示成空的。
 - `nichlink.converge`：代理着手处理一个面所需的全部，集中在一个答案里——构建的作用域与剪枝判断、
   树的边、声明的字段、每条 `capability=>ProviderKind` 需求是否真的有答案（有就点名是谁）、该读哪些
   文件，以及细节在哪个工具里。当本包自己的面**确实**被内核拒绝时，那次拒绝在这里就是判断本身而不是
@@ -110,6 +117,6 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 
 contract、admission 与 registration rule 的**数据**仍然不报告：那些住在已构建的
 `RegistrationSnapshot` 里而不是源码里，需要构建产物而不是扫描（`docs/roadmap-1.0.md` 第 10 条）。
-graft 写入、插件、项目脚手架、树 diff 与一致性分析仍待做（`docs/roadmap-1.0.md` 第 7 条）。
+本桥读取与写入的全部能力即上面两张清单。
 
 调用图标记为 `static-heuristic`。动态分派、函数指针、FFI 和运行时选择的调用不保证静态解析，应结合 `nichlink-debug-method` 和实时 `CallTrace`——MIR 转储与已记录的 trace 都在手边时，`nichlink.unified` 做的正是这件事。

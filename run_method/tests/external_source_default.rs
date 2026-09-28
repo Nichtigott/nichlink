@@ -36,6 +36,7 @@
 
 use std::path::Path;
 
+use nichlink_run_method::registry_core::declaration::portable_path;
 use nichlink_run_method::registry_core::{FrameworkId, Registry};
 
 nichlink_run_method::external_object! {
@@ -61,7 +62,7 @@ fn an_external_face_defaults_its_source_to_this_file() {
     // Separator-normalized so the expectation holds on Windows too: `file!()`
     // records the platform separator, and a declaration cannot rewrite it.
     // 做分隔符归一化以便在 Windows 上也成立：`file!()` 记录平台分隔符，声明无法改写它。
-    let source = face.source.file.replace('\\', "/");
+    let source = portable_path(&face.source.file);
     assert!(
         source.ends_with("tests/external_source_default.rs"),
         "the default names this file, however Cargo spelled it: {source}"

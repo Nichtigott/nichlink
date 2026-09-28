@@ -12,12 +12,18 @@
 //! `#![warn(missing_docs)]`，或用 `#[allow(missing_docs)]` 让单个项闭嘴。两者对被它们关掉的
 //! lint 都是不可见的，而这正是本 crate 存在的意义所在的那种腐化。
 //!
-//! Boundary: the requirement covers the nine published crates' library roots.
-//! Binary roots are not required, because the roadmap scoped the promise to the
-//! documented published surface; the MCP bridge's `main.rs` carries the
-//! attribute anyway and is listed so that removing it is also caught.
-//! 边界：要求覆盖九个已发布 crate 的库根。二进制根不作要求，因为路线图把承诺限定在已文档化
-//! 的发布表面上；MCP 桥的 `main.rs` 反正也带着该属性，一并列出，这样删掉它同样会被抓到。
+//! Boundary: the requirement covers every crate directory's library root except the example
+//! hosts — which includes `conventions` itself, the one `publish = false` crate that carries the
+//! lint — plus the MCP bridge's `main.rs`, the one binary root that carries the attribute today
+//! (binary roots are not required; it is listed so that removing it is also caught). The function
+//! below states the same boundary; this paragraph used to say "the nine published crates' library
+//! roots", which undercounted by leaving out the gates crate itself — the very deletion the
+//! function's history mentions (audit `G-22`).
+//! 边界：要求覆盖除示例宿主之外的每个 crate 目录的库根——其中包括 `conventions` 自己，那个带着
+//! 该 lint 的 `publish = false` crate——外加 MCP 桥的 `main.rs`，即今天带着该属性的那一个二进制根
+//! （二进制根不作要求；列出它是为了删掉它同样会被抓到）。下面那个函数写着同一条边界；本段过去写的是
+//! "九个已发布 crate 的库根"，漏掉了门禁 crate 自己——而函数的历史里提到的正是它的属性曾被删除
+//! （审计 `G-22`）。
 
 use std::path::Path;
 

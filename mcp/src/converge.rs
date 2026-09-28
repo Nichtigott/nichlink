@@ -67,7 +67,7 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         .iter()
         .find(|face| face.id == id)
         .ok_or_else(|| format!("no face in the derived tree has identity {id}"))?;
-    let (current, scope, pruning) = build_evidence(root);
+    let evidence = build_evidence(root);
     // Loading the package's own faces *validates* them — the registry rejects a
     // tree whose requirement has no provider — and that refusal is the most
     // valuable answer this tool can give, so it is a verdict rather than an error.
@@ -115,16 +115,24 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n",
         face.id, face.path, face.kind
     );
-    output.push_str(&format!(
-        "build {}\n",
-        if current {
-            "current"
-        } else {
-            "stale (run `nichlink check` before trusting the scope below)"
-        }
-    ));
-    output.push_str(&scope_line(scope.as_ref(), face));
-    output.push_str(&pruning_line(pruning.as_deref(), face));
+    // The state word comes from the one place that spells it, `BuildEvidence::freshness()`,
+    // and is read here: this report used to spell the freshness word itself, so renaming it
+    // in that one place left this line — and `overlay`'s — printing the old one with every
+    // test still green (the gap an independent check found as mutation `E`). Only this line's
+    // tail is local, because no other report carries the reminder that the scope and pruning
+    // below come from that build.
+    // 状态词来自唯一拼它的地方 `BuildEvidence::freshness()`，由这里读取：本报告过去自己拼这个
+    // 新鲜度词，于是在那一处改名后，这一行与 `overlay` 的那一行仍打印旧词，而全部测试依然全绿
+    // （独立复核以变异 `E` 发现的缺口）。只有这一行的尾巴是本地的，因为"下面的作用域与剪枝来自
+    // 那次构建"这句提醒没有别的报告会带。
+    let stale_tail = if evidence.current {
+        ""
+    } else {
+        "; the scope and pruning below come from that build"
+    };
+    output.push_str(&format!("build {}{stale_tail}\n", evidence.freshness()));
+    output.push_str(&scope_line(evidence.scope.as_ref(), face));
+    output.push_str(&pruning_line(evidence.pruning.as_deref(), face));
     let children = faces
         .iter()
         .filter(|candidate| candidate.parent == id)

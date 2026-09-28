@@ -21,12 +21,12 @@ use serde_json::Value;
 use crate::index::{display_list, load_sources};
 
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
-    // Two bounds, because this answer is the one that grows without limit: a
-    // common name like `new` had 151 definitions and every call site of the name
-    // in the tree, which arrived as a 4.5 MB reply. Definitions and callers are
-    // capped separately, and both say how much they withheld.
-    // 两道上限，因为这是唯一会无界增长的答案：像 `new` 这样的常见名有 151 个定义、外加树里该名字
-    // 的每一个调用点，曾以 4.5 MB 的回复抵达。定义数与调用者各自设上限，且都说出自己扣下了多少。
+    // Two bounds, because this answer is the one that grows without limit: the
+    // measurement in the module doc above is the failure they exist against.
+    // Definitions and callers are capped separately, and both say how much they
+    // withheld.
+    // 两道上限，因为这是唯一会无界增长的答案：上面模块文档记下的那次实测就是它们针对的失败。
+    // 定义数与调用者各自设上限，且都说出自己扣下了多少。
     const DEFINITIONS: usize = 5;
     const CALLERS: usize = 20;
     let query = arguments

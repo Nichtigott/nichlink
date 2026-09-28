@@ -751,8 +751,10 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 ```
 
 MCP tools include `nichlink.search` (faces first, matched on logical path, kind, module,
-or slot name and annotated with the build's verdict — `ok`, `added since build`,
-`re-identified`, or `build unknown` — then the file and function hits),
+or `registry_name` and annotated with the build's verdict — `ok`, `added since build`,
+`re-identified`, or `build unknown`; a manifest that no longer describes these sources is
+announced above the verdicts as `stale (run nichlink check)` — then the file and function
+hits),
 `nichlink.inspect`, `nichlink.callgraph`,
 `nichlink.read`, `nichlink.status`, and `nichlink.registry` — the last reports the
 registration tree the build derives, so an agent can read the registry instead of

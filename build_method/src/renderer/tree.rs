@@ -110,7 +110,7 @@ fn render_node(
     let absolute = node
         .file
         .as_ref()
-        .map(|file| file.to_string_lossy().replace('\\', "/"));
+        .map(|file| nichlink::declaration::portable_path(&file.to_string_lossy()));
     let chain = if parent_chain.is_empty() {
         node.name.clone()
     } else {

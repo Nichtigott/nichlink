@@ -16,11 +16,14 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
 The server exposes compact tools. Reads:
 
 - `nichlink.search`: find registration faces, files, and function declarations. Faces
-  come first, matched on logical path, kind, module, or slot name, and each carries the
-  build's verdict — `ok`, `added since build`, `re-identified` (a `kind` change under an
-  unmoved file, with both identities), or `build unknown` when nothing was published;
-  the file and function hits below are unchanged. The tree half needs the identity
-  namespace, so a root Cargo cannot name still answers the source half and says so.
+  come first, matched on logical path, kind, module, or `registry_name`, and each
+  carries the build's verdict — `ok`, `added since build`, `re-identified` (a `kind`
+  change under an unmoved file, with both identities), or `build unknown` when nothing
+  was published; a manifest that no longer describes these sources is announced above
+  the verdicts as `stale (run nichlink check)`, because they then describe the tree
+  that build saw. The file and function hits below are unchanged. The tree half needs
+  the identity namespace, so a root Cargo cannot name still answers the source half and
+  says so.
 - `nichlink.inspect`: list the functions and registration declarations in one file.
 - `nichlink.callgraph`: find direct static callers and callees for a function.
 - `nichlink.read`: read a bounded source window.
@@ -28,24 +31,29 @@ The server exposes compact tools. Reads:
 - `nichlink.registry`: report the registration faces this package declares —
   logical path, kind, source, and the `NodeId` the host compiled.
 - `nichlink.explain`: report the build's own evidence for one face (identity,
-  path, kind, source, module, parent, slot) or the tree projection it scoped. The
-  registry answer above is derived from source text and is therefore always fresh;
-  this one reads the files the build *published* under `target/nichlink/out`, so it
-  answers what ships: whether the scope selected the face and whether release
-  pruning strips its symbols. A missing or stale build is reported as such. With
-  `overlay: true` it renders the *overlay* projection instead — which slot each declared
-  cut replaces and which faces the scope prunes, the published state after replacement,
-  from the same traversal the CLI's `explain --overlay` uses. That is a static projection
-  and not `Registry::dump`, the reply's note says where the live tree comes from, and
-  `overlay` and `node` are mutually exclusive.
+  path, kind, source, module, parent, `registry_name`) or the tree projection it
+  scoped. The registry answer above is derived from source text, so it is never
+  `stale`; this one reads the files the build *published* under `target/nichlink/out`,
+  so it answers what ships: whether the scope selected the face and whether release
+  pruning strips its symbols. The `build` line says `current`, or
+  `stale (run nichlink check)` when the published output no longer describes these
+  sources. With `overlay: true` it renders the *overlay* projection instead — which slot
+  each declared cut replaces and which faces the scope prunes, the published state after
+  replacement, from the same traversal the CLI's `explain --overlay` uses. That is a
+  static projection and not `Registry::dump`, the reply's note says where the live tree
+  comes from, and `overlay` and `node` are mutually exclusive.
 - `nichlink.diff`: the face-level delta between the sources now and the build's
   manifest — added, gone, and re-identified under an unmoved file (a `kind` change
   is an identity change, so only this comparison sees it). With `records: true` it
   compares the external graft records against the sources instead: a record stores the
   identity it was written for, so a face that changed identity under an unmoved slot is
-  reported `re-identified` (`old -> now`) rather than breaking the graft silently;
-  `stale`, `unmatched` (a typed cut stores an expression, so an absent identity cannot
-  be told from a re-identified one) and unreadable records are kept apart.
+  reported `re-identified` (`old -> now`) rather than breaking the graft silently.
+  Every record lands in one of five buckets, counted apart from each other: `ok`,
+  `undeclared` (the identity is in the tree, but no `static_graft_plan!` cut names its
+  slot — what `nichlink.grafts` reports as `NOT declared by the host entry`), `stale`
+  (nothing in the tree has that identity or that path), `re-identified` (the path is
+  there and the identity moved), and `unreadable` (a record file that could not be
+  read).
 - `nichlink.trace`: read this package's recorded trace artifact and answer with the
   headless call report it implies — what actually ran, which no static read can
   tell you. With `values: true` the same read answers what that run *saw*: the
@@ -89,13 +97,15 @@ The server exposes compact tools. Reads:
   face the walk did not reach is reported as unreached within `depth`, which is not
   proof of independence.
 - `nichlink.usages`: a face's neighbourhood — its parent and children as the tree
-  has them, the fields `nichlink.apply` accepts read back from the generated module
-  (preset, parts, names, exports, `requires`, `provides`, handle and part traits and
-  contracts, registration rule, admission, flow, runtime checks), and which other
-  faces mention the same capability tokens. Capability matches are on declared
-  tokens rather than a resolved graph, and the reply says so; a hand-written module
-  has no generated field list, so those faces are counted as unreadable rather than
-  shown empty.
+  has them, every field `nichlink.apply` accepts read back from the generated module
+  (`module`, `preset`, `parts`, `name_zh`, `name_en`, `summary_zh`, `summary_en`,
+  `stable_name`, `exports`, `requires`, `provides`, `handle_traits`, `handle_contracts`,
+  `part_traits`, `part_contracts`, `registration_rule`, `admission`, `flow`,
+  `flow_provider`, `runtime_checks`, `getting_from_other_registry`, `needs_registry`),
+  and which other faces mention the same capability tokens. Capability matches are on
+  declared tokens rather than a resolved graph, and the reply says so; a hand-written
+  module has no generated field list, so those faces are counted as unreadable rather
+  than shown empty.
 - `nichlink.converge`: everything an agent needs to start on one face in a single
   answer — the build's scope and pruning verdicts, the tree's edges, the declared
   fields, whether each `capability=>ProviderKind` requirement is actually answered
@@ -161,9 +171,8 @@ did not author would discard content it does not model. `add` works in any packa
 
 Contract, admission, and registration-rule *data* are still not reported: those
 live in the built `RegistrationSnapshot`s rather than in the source, so they need
-the build output and not a scan (`docs/roadmap-1.0.md` item 10). Graft writes, plugins, project
-scaffolding, tree diffs, and the consistency analysis are still to come
-(`docs/roadmap-1.0.md` item 7).
+the build output and not a scan (`docs/roadmap-1.0.md` item 10). Everything this
+bridge reads or writes is the two lists above.
 
 Call-graph results are labelled `static-heuristic`. They intentionally do not
 claim to resolve dynamic dispatch, function pointers, FFI, or runtime-selected

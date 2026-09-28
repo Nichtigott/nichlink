@@ -128,6 +128,66 @@ fn names_rust(info: &str) -> bool {
     matches!(info.trim().to_ascii_lowercase().as_str(), "rust" | "rs")
 }
 
+/// One fence run: which character it is written with, how many of them, and what follows.
+/// 一段围栏：用哪个字符写成、写了几个，以及它后面是什么。
+///
+/// CommonMark pairs a fence with a closing fence of the *same character* and *at least the
+/// same length*, and the info string is what follows that whole run. Comparing a bare
+/// three-character prefix instead made two shapes invisible: a ```` ``` ```` line inside a
+/// `~~~rust` block was read as its close (so the broken code after that line was never
+/// parsed), and a ```` ````rust ```` fence had its info string read as `` `rust ``, so the
+/// block never opened. Audit `G-03`.
+/// CommonMark 用**同一字符**、**长度不短于开围栏**的围栏来闭合，而 info string 是整串围栏字符
+/// 之后的文本。只比三个字符的前缀让两种形状隐形：`~~~rust` 块内的一行 ```` ``` ```` 被读成它的
+/// 闭合（那一行之后的坏代码从此不被解析），而 ```` ````rust ```` 围栏的 info string 被读成
+/// `` `rust ``，整块从未打开。审计 `G-03`。
+struct Fence {
+    /// `` ` `` or `~`.
+    /// `` ` `` 或 `~`。
+    character: char,
+    /// How many of them, which is what a closing fence has to reach.
+    /// 写了几个——闭合围栏的长度要达到它。
+    length: usize,
+    /// What follows the run, trimmed: the info string when the line opens, empty when it closes.
+    /// 围栏字符之后trimmed 的文本：开围栏时是 info string，闭合时为空。
+    info: String,
+}
+
+/// The fence run `trimmed` begins, when it begins one at all.
+/// `trimmed` 行首开始的那段围栏（若确实有）。
+fn fence_run(trimmed: &str) -> Option<Fence> {
+    let character = trimmed.chars().next()?;
+    if character != '`' && character != '~' {
+        return None;
+    }
+    let length = trimmed.chars().take_while(|run| *run == character).count();
+    // A fence is at least three characters; a shorter run is inline code or prose.
+    // 围栏至少三个字符；更短的串是行内代码或散文。
+    if length < 3 {
+        return None;
+    }
+    Some(Fence {
+        character,
+        length,
+        info: trimmed[length..].trim().to_owned(),
+    })
+}
+
+/// A Rust fence that is open, and what it takes to close it.
+/// 一个已打开的 Rust 围栏，以及闭合它的条件。
+struct OpenFence {
+    /// One-based line the opening fence sat on.
+    /// 开围栏所在行（从 1 开始）。
+    line: usize,
+    /// The code collected so far, without the fence lines.
+    /// 已收集的代码，不含围栏行。
+    code: String,
+    /// Which character opened it, and how long its run was.
+    /// 用哪个字符打开、那一串有多长。
+    character: char,
+    length: usize,
+}
+
 /// Whether a markdown path is a record rather than living documentation.
 /// 该 markdown 路径是记录而不是活文档。
 pub fn is_record(path: &Path) -> bool {
@@ -165,60 +225,65 @@ fn markdown_findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     for path in markdown_files(root) {
         let file = relative(root, &path);
-        let mut open: Option<(usize, String)> = None;
+        let mut open: Option<OpenFence> = None;
         for (index, line) in lines(&path).iter().enumerate() {
             let trimmed = line.trim_start();
-            // CommonMark has two fence characters. Reading only backticks made a broken
-            // block inside a `~~~rust` fence invisible.
-            // CommonMark 有两种围栏字符。只认反引号会让 `~~~rust` 围栏里的一段坏代码隐形。
-            let fence = if trimmed.starts_with("```") {
-                Some("```")
-            } else if trimmed.starts_with("~~~") {
-                Some("~~~")
-            } else {
-                None
-            };
-            let Some(fence) = fence else {
-                if let Some((_, code)) = open.as_mut() {
-                    code.push_str(line);
-                    code.push('\n');
+            let fence = fence_run(trimmed);
+            if let Some(open_fence) = open.as_mut() {
+                // Inside a block, only a fence of the same character, at least as long, with
+                // nothing after its run, closes it. Anything else is content: CommonMark has
+                // two fence characters, and reading whichever one appears as the close cut
+                // blocks short — a `~~~rust` block ended at a ```` ``` ```` line inside it,
+                // and everything after that line was never parsed.
+                // 块内只有"同一字符、长度不短、其后无内容"的围栏会闭合它。其余都是内容：CommonMark
+                // 有两种围栏字符，把出现的任一种都读成闭合会把块截短——`~~~rust` 块曾在块内一行
+                // ```` ``` ```` 处结束，而那一行之后的一切从此不被解析。
+                let closes = fence.as_ref().is_some_and(|fence| {
+                    fence.character == open_fence.character
+                        && fence.length >= open_fence.length
+                        && fence.info.is_empty()
+                });
+                if !closes {
+                    open_fence.code.push_str(line);
+                    open_fence.code.push('\n');
+                    continue;
+                }
+                let finished = open.take().expect("an open fence was just matched");
+                // The parser message is what makes the report actionable, so it is kept verbatim.
+                // 解析器的消息让报告可操作，因此原样保留。
+                if let Err(error) = parses(&finished.code) {
+                    found.push(Finding {
+                        file: file.clone(),
+                        line: finished.line,
+                        error,
+                    });
                 }
                 continue;
+            }
+            let Some(fence) = fence else {
+                continue;
             };
-            match open.take() {
-                // A closing fence ends the block; the parser message is what
-                // makes the report actionable, so it is kept verbatim.
-                // 闭合围栏结束该块；解析器的消息让报告可操作，因此原样保留。
-                Some((start, code)) => {
-                    if let Err(error) = parses(&code) {
-                        found.push(Finding {
-                            file: file.clone(),
-                            line: start,
-                            error,
-                        });
-                    }
-                }
-                None => {
-                    // `rust,ignore` and friends name the same language; only the
-                    // text before the first comma selects it.
-                    // `rust,ignore` 之类命名的是同一种语言；只有第一个逗号之前的文本用于选择。
-                    let info = trimmed.trim_start_matches(fence).trim();
-                    let mut tags = info.split(',');
-                    let language = tags.next().unwrap_or("");
-                    // `macro-input` is this repository's documented escape hatch for a
-                    // field-list excerpt that is Rust-shaped but not a file: the
-                    // doc-comment half honours it, and the markdown half did not, so a
-                    // sanctioned tag was reported as a broken block.
-                    // `macro-input` 是本仓库为"形状像 Rust 但不是文件的字段列表摘录"写下的
-                    // 逃逸口：注释那一半认它，markdown 这一半不认，于是一个被认可过的标记被报成
-                    // 坏块。
-                    if names_rust(language) && !tags.any(|tag| tag.trim() == "macro-input") {
-                        open = Some((index + 1, String::new()));
-                    }
-                }
+            // `rust,ignore` and friends name the same language; only the text before the
+            // first comma selects it.
+            // `rust,ignore` 之类命名的是同一种语言；只有第一个逗号之前的文本用于选择。
+            let mut tags = fence.info.split(',');
+            let language = tags.next().unwrap_or("");
+            // `macro-input` is this repository's documented escape hatch for a field-list
+            // excerpt that is Rust-shaped but not a file: the doc-comment half honours it,
+            // and the markdown half did not, so a sanctioned tag was reported as a broken
+            // block.
+            // `macro-input` 是本仓库为"形状像 Rust 但不是文件的字段列表摘录"写下的逃逸口：
+            // 注释那一半认它，markdown 这一半不认，于是一个被认可过的标记被报成坏块。
+            if names_rust(language) && !tags.any(|tag| tag.trim() == "macro-input") {
+                open = Some(OpenFence {
+                    line: index + 1,
+                    code: String::new(),
+                    character: fence.character,
+                    length: fence.length,
+                });
             }
         }
-        if let Some((start, _)) = open {
+        if let Some(unclosed) = open {
             // A fence that never closes is not "nothing to check": the reader sees the
             // code and the parser never gets it. The comment half of this gate already
             // flushed its open block; the markdown half did not.
@@ -226,7 +291,7 @@ fn markdown_findings(root: &Path) -> Vec<Finding> {
             // 的注释那一半已经会收尾未闭合的块，markdown 这一半此前不会。
             found.push(Finding {
                 file: file.clone(),
-                line: start,
+                line: unclosed.line,
                 error:
                     "unterminated Rust fence: it opens here and the file ends without a closing ```"
                         .to_owned(),
@@ -261,14 +326,14 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
             let file = relative(root, &path);
             // The block a doc comment opened, with the line its fence sat on.
             // 文档注释打开的那个块，以及它的围栏所在行号。
-            let mut open: Option<(usize, String)> = None;
-            let finish = |open: Option<(usize, String)>, found: &mut Vec<Finding>| {
-                if let Some((start, code)) = open
-                    && let Err(error) = parses(&code)
+            let mut open: Option<OpenFence> = None;
+            let finish = |open: Option<OpenFence>, found: &mut Vec<Finding>| {
+                if let Some(finished) = open
+                    && let Err(error) = parses(&finished.code)
                 {
                     found.push(Finding {
                         file: file.clone(),
-                        line: start,
+                        line: finished.line,
                         error,
                     });
                 }
@@ -285,42 +350,54 @@ fn doc_comment_findings(root: &Path) -> Vec<Finding> {
                     continue;
                 };
                 let text = comment.strip_prefix(' ').unwrap_or(comment);
-                if !text.trim_start().starts_with("```") {
-                    if let Some((_, code)) = open.as_mut() {
-                        code.push_str(text);
-                        code.push('\n');
+                // The same CommonMark pairing the markdown half uses: rustdoc reads these
+                // fences, so a `~~~rust` block here is a block too, and only a fence of the
+                // same character and at least the same length closes a block.
+                // 与 markdown 那半边相同的 CommonMark 配对：rustdoc 读的正是这些围栏，因此这里一段
+                // `~~~rust` 也是一个块，而只有同一字符、长度不短的围栏才会闭合一个块。
+                let fence = fence_run(text.trim_start());
+                if let Some(open_fence) = open.as_mut() {
+                    let closes = fence.as_ref().is_some_and(|fence| {
+                        fence.character == open_fence.character
+                            && fence.length >= open_fence.length
+                            && fence.info.is_empty()
+                    });
+                    if !closes {
+                        open_fence.code.push_str(text);
+                        open_fence.code.push('\n');
+                        continue;
                     }
+                    let finished = open.take().expect("an open fence was just matched");
+                    finish(Some(finished), &mut found);
+                }
+                let Some(fence) = fence else {
+                    continue;
+                };
+                let mut tags = fence.info.split(',').map(str::trim);
+                if !names_rust(tags.next().unwrap_or("")) {
                     continue;
                 }
-                match open.take() {
-                    Some(block) => {
-                        finish(Some(block), &mut found);
-                        finish(None::<(usize, String)>, &mut found);
-                    }
-                    None => {
-                        let info = text.trim_start().trim_start_matches('`').trim();
-                        let mut tags = info.split(',').map(str::trim);
-                        if !names_rust(tags.next().unwrap_or("")) {
-                            continue;
-                        }
-                        // `macro-input` marks an excerpt whose shape is decided by a
-                        // macro matcher rather than by Rust: `name: { zh: … }` is how
-                        // an author writes a field inside a face macro, and a bare
-                        // brace in field-value position is not valid Rust on its own.
-                        // Those shapes are pinned by the macro front end's own tests
-                        // (`run_method/tests/face_*.rs`); a documentation gate cannot
-                        // parse them, and pretending otherwise would only hide them.
-                        // `macro-input` 标出的是形状由宏匹配器而非 Rust 决定的摘录：
-                        // `name: { zh: … }` 是作者在注册面宏里写字段的方式，而字段值位置上的
-                        // 裸花括号本身不是合法 Rust。那些形状由宏前端自己的测试钉住
-                        // （`run_method/tests/face_*.rs`）；文档门禁解析不了它们，假装能解析
-                        // 只会把它们藏起来。
-                        if tags.any(|tag| tag == "macro-input") {
-                            continue;
-                        }
-                        open = Some((index + 1, String::new()));
-                    }
+                // `macro-input` marks an excerpt whose shape is decided by a
+                // macro matcher rather than by Rust: `name: { zh: … }` is how
+                // an author writes a field inside a face macro, and a bare
+                // brace in field-value position is not valid Rust on its own.
+                // Those shapes are pinned by the macro front end's own tests
+                // (`run_method/tests/face_*.rs`); a documentation gate cannot
+                // parse them, and pretending otherwise would only hide them.
+                // `macro-input` 标出的是形状由宏匹配器而非 Rust 决定的摘录：
+                // `name: { zh: … }` 是作者在注册面宏里写字段的方式，而字段值位置上的
+                // 裸花括号本身不是合法 Rust。那些形状由宏前端自己的测试钉住
+                // （`run_method/tests/face_*.rs`）；文档门禁解析不了它们，假装能解析
+                // 只会把它们藏起来。
+                if tags.any(|tag| tag == "macro-input") {
+                    continue;
                 }
+                open = Some(OpenFence {
+                    line: index + 1,
+                    code: String::new(),
+                    character: fence.character,
+                    length: fence.length,
+                });
             }
             finish(open, &mut found);
         }

@@ -1,6 +1,13 @@
-//! Write guards: every operation that creates, rewrites, moves, or deletes
-//! something in the project the reader opened.
-//! 写入守卫：每一个在读者打开的项目里创建、重写、移动或删除东西的操作。
+//! Write guards: the context split between reading a project and writing to it,
+//! and the refusal that keeps a write inside the selected project.
+//! 写入守卫：读取项目与写入项目之间的上下文分野，以及那道把写入限制在已选中项目内的拒绝。
+//!
+//! The writes themselves are not here — they live in `super::mutations`
+//! (`create_project`, `add_module_from_face`, `edit_module_face`, `submit_plugin`).
+//! This module owns only the guard those writes run inside.
+//! 真正的写入不在这里——它们在 `super::mutations`（`create_project`、
+//! `add_module_from_face`、`edit_module_face`、`submit_plugin`）。本模块只拥有那些写入
+//! 运行其内的那道守卫。
 //!
 //! The distinction this module exists for is read versus write. `package_root`
 //! resolves a project from the session, then the environment, then the working

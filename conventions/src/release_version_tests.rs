@@ -104,6 +104,42 @@ fn a_published_requirement_without_a_version_is_reported() {
     let _ = fs::remove_dir_all(&root);
 }
 
+/// An unpublished member is a workspace member like any other, and a stale version
+/// requirement in its manifest drifts exactly like a published one's — it is only *invisible*:
+/// `publish = false` members are skipped by every command that reads requirement versions
+/// (this gate, `--check-table`, the package audit), so the drift surfaces at the next version
+/// line and nowhere else. Both example hosts are `publish = false` and both carry a
+/// `version = "0.1.x"` requirement today, so the shape is the tree's own.
+/// 非发布成员与任何其它工作区成员一样，它清单里陈旧的版本要求会像已发布成员那样漂移——它只是
+/// **不可见**：每个读版本要求的命令（本门禁、`--check-table`、包审计）都会跳过 `publish = false`
+/// 成员，于是漂移只在下一次抬版本线时现身，此外无人报出。两个示例宿主都是 `publish = false`，
+/// 而且今天都带着一条 `version = "0.1.x"` 要求，因此这个形状就是本树自己的形状。
+///
+/// Audit `G-05`.
+/// 审计 `G-05`。
+#[test]
+fn an_unpublished_members_stale_requirement_is_reported() {
+    let root = synthetic(
+        "[workspace]\nmembers = [\"host\"]\n\n[workspace.package]\nversion = \"0.1.6\"\n",
+        &[(
+            "host",
+            "[package]\nname = \"host\"\nversion.workspace = true\npublish = false\n\n\
+             [dependencies]\nnichlink-core = { path = \"../core\", version = \"0.1.5\" }\n",
+        )],
+    );
+    let found = findings(&root);
+    assert_eq!(
+        found.len(),
+        1,
+        "an unpublished member's requirement is still on the release line: {found:#?}"
+    );
+    assert!(
+        found[0].reason.contains("requires 0.1.5"),
+        "the finding names both versions: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
 /// A `publish = false` member may depend on a path with no version.
 /// `publish = false` 的成员可以依赖没有版本的路径。
 #[test]

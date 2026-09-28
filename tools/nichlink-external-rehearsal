@@ -60,8 +60,25 @@ for host in $HOSTS; do
   # `path = "../../run_method"` reaches outside the host; inside the temporary
   # root that name means nothing, so repoint it at the checkout.
   # `path = "../../run_method"` 伸到宿主之外；在临时根目录里那个名字没有意义，因此指向本检出。
+  #
+  # Rewritten through a temporary file rather than in place. In-place editing is a
+  # GNU spelling of `sed`: BSD/macOS `sed` reads whatever follows its in-place flag
+  # as the backup suffix, so it read this replacement script as a suffix and the
+  # manifest as the script, and the rehearsal failed on a Mac for a reason
+  # unrelated to what it rehearses (audit G-12). The checkout path is escaped for
+  # the replacement text first, so `&`, `\` or `|` in a directory name stay
+  # literal instead of becoming `sed` syntax; the escaping avoids bracket
+  # expressions containing a backslash, whose meaning in that position varies
+  # between implementations, and uses only the plain substitutions POSIX fixes.
+  # 经临时文件改写，而不是就地改写。就地改写是 `sed` 的 GNU 拼法：BSD/macOS 的 `sed` 会把
+  # 就地标志之后的参数当成备份后缀，于是它把这个替换脚本当成后缀、把清单当成脚本，演练于是在
+  # Mac 上因一个与它要演练的东西无关的原因失败（审计 G-12）。先转义检出路径再拼进替换文本，
+  # 因此目录名里的 `&`、`\` 或 `|` 保持字面量，而不会变成 `sed` 语法；转义避开在方括号表达式
+  # 里含反斜杠的写法（那种写法在该位置的含义随实现而异），只用 POSIX 明确规定的普通替换。
   manifest="$WORK/$host/Cargo.toml"
-  sed -i "s|path = \"\.\./\.\./|path = \"$ROOT/|g" "$manifest"
+  escaped_root=$(printf '%s' "$ROOT" | sed 's/\\/\\\\/g; s/&/\\&/g; s/|/\\|/g')
+  sed "s|path = \"\.\./\.\./|path = \"$escaped_root/|g" "$manifest" >"$manifest.repointed"
+  mv "$manifest.repointed" "$manifest"
   # Detach from any workspace: the host is now a project of its own, which is what
   # a user's project is.
   # 脱离工作区：这个宿主现在是一个独立项目，而用户的项目就是这样。

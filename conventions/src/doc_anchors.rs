@@ -21,6 +21,19 @@
 //! 边界，明说以免被当成比实际更强的东西：本门禁检查文件存在、行号落在文件内。它无法判断某个
 //! 行号**只差几行**——锚点仍然可解析，而那句话仍指向错的行，只有读者能发现。审计与设计文档里的
 //! 锚点同它们的代码块一样豁免：它们记录的是写下时的事实。
+//!
+//! Coverage, and why it stops where it does: the scan keys on the written path's suffix, so
+//! it reads Rust sources, the workspace manifests and `.github/workflows/*.yml` — the three
+//! kinds a document cites by line, the release workflow's tag guard among them. Two kinds
+//! stay out, at a stated price: a `.md` target names prose, so a line number in it carries no
+//! symbol to check, and widening the scan to markdown would sweep the self-references of every
+//! living document; an extensionless script (`tools/nichlink-publish:88`) has no suffix to key
+//! on. Both therefore rot silently, and this paragraph is the record.
+//! 覆盖范围，以及它为什么停在这里：扫描以写下路径的后缀为判据，因此它读 Rust 源码、工作区清单与
+//! `.github/workflows/*.yml`——文档按行引用的正是这三类，发布工作流的 tag 守卫也在其中。有两类
+//! 留在外面，代价写明：`.md` 目标命名的是散文，其中的行号没有可供核对的符号，而把扫描扩到
+//! markdown 会扫过每一份活文档的自引用；无扩展名的脚本（`tools/nichlink-publish:88`）没有可作
+//! 判据的后缀。两者因此会静默腐化，而这一段就是那份记录。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,8 +41,8 @@ use std::path::{Path, PathBuf};
 use crate::doc_blocks::markdown_files;
 use crate::{crate_directories, relative, rust_sources};
 
-/// One documented `<file>.rs:<line>` reference that no longer resolves.
-/// 一处不再可解析的文档 `<file>.rs:<line>` 引用。
+/// One documented `<file>:<line>` reference that no longer resolves.
+/// 一处不再可解析的文档 `<file>:<line>` 引用。
 #[derive(Debug, PartialEq, Eq)]
 pub struct Finding {
     /// Document holding the reference, relative to the workspace root.
@@ -147,8 +160,14 @@ pub fn findings(root: &Path) -> Vec<Finding> {
     found
 }
 
-/// Every `.rs` file in the workspace, as `(root-relative path, path)`, sorted.
-/// 工作区里每个 `.rs` 文件，形如 `(根相对路径, 路径)`，已排序。
+/// The file kinds a documented `path:line` reference may name: the suffixes the scan keys
+/// on, and the kinds [`workspace_sources`] therefore collects.
+/// 文档 `path:line` 引用可以命名的文件种类：扫描据以触发的后缀，也是 [`workspace_sources`]
+/// 因此收集的种类。
+const READ_EXTENSIONS: &[&str] = &[".rs", ".toml", ".yml", ".yaml"];
+
+/// Every file a documented anchor may name, as `(root-relative path, path)`, sorted.
+/// 文档锚点可以命名的每个文件，形如 `(根相对路径, 路径)`，已排序。
 fn workspace_sources(root: &Path) -> Vec<(String, PathBuf)> {
     let mut files = Vec::new();
     for directory in crate_directories(root) {
@@ -156,8 +175,45 @@ fn workspace_sources(root: &Path) -> Vec<(String, PathBuf)> {
             files.push((relative(root, &path), path));
         }
     }
+    files.extend(manifests(root));
+    files.extend(workflows(root));
     files.sort();
     files.dedup();
+    files
+}
+
+/// The root manifest and every member's manifest, as `(root-relative path, path)`.
+/// 根清单与每个成员的清单，形如 `(根相对路径, 路径)`。
+fn manifests(root: &Path) -> Vec<(String, PathBuf)> {
+    std::iter::once(root.join("Cargo.toml"))
+        .chain(
+            crate_directories(root)
+                .into_iter()
+                .map(|directory| directory.join("Cargo.toml")),
+        )
+        .filter(|manifest| manifest.is_file())
+        .map(|manifest| (relative(root, &manifest), manifest))
+        .collect()
+}
+
+/// Every workflow in `.github/workflows`, as `(root-relative path, path)`.
+/// `.github/workflows` 里的每个工作流，形如 `(根相对路径, 路径)`。
+fn workflows(root: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(entries) = fs::read_dir(root.join(".github").join("workflows")) else {
+        return Vec::new();
+    };
+    let mut files = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension == "yml" || extension == "yaml")
+        })
+        .map(|path| (relative(root, &path), path))
+        .collect::<Vec<_>>();
+    files.sort();
     files
 }
 
@@ -241,20 +297,36 @@ impl Anchor {
     }
 }
 
-/// Every `.rs:<line>` reference in `text`, in order.
-/// `text` 中每一处 `.rs:<line>` 引用，按出现顺序。
+/// Every `path:line` reference in `text` for a [`READ_EXTENSIONS`] file kind, in order.
+/// `text` 中每一处指向 [`READ_EXTENSIONS`] 文件种类的 `path:line` 引用，按出现顺序。
+///
+/// A colon is not a reference by itself, so the trigger is the *written path's suffix*: the
+/// scan used to key on `.rs:` alone, which left every citation of a manifest or a workflow
+/// (`Cargo.toml:12`, `.github/workflows/release.yml:66`) outside the gate forever.
+/// 冒号本身不是引用，因此判据是**写下路径的后缀**：扫描过去只以 `.rs:` 触发，把所有指向清单或
+/// 工作流的引用（`Cargo.toml:12`、`.github/workflows/release.yml:66`）永远挡在门禁之外。
 fn anchors(text: &str) -> Vec<Anchor> {
     let bytes = text.as_bytes();
     let mut found = Vec::new();
     let mut cursor = 0;
-    while let Some(offset) = text[cursor..].find(".rs:") {
+    while let Some(offset) = text[cursor..].find(':') {
         let at = cursor + offset;
+        cursor = at + 1;
+        let digits = at + 1;
+        if !bytes.get(digits).is_some_and(u8::is_ascii_digit) {
+            continue;
+        }
         let mut start = at;
         while start > 0 && is_path_byte(bytes[start - 1]) {
             start -= 1;
         }
-        let path = text[start..at + 3].to_owned();
-        let digits = at + 4;
+        let path = &text[start..at];
+        if !READ_EXTENSIONS
+            .iter()
+            .any(|extension| path.ends_with(extension))
+        {
+            continue;
+        }
         let mut after = digits;
         while after < bytes.len() && bytes[after].is_ascii_digit() {
             after += 1;
@@ -280,12 +352,12 @@ fn anchors(text: &str) -> Vec<Anchor> {
         if let Some(first) = first {
             found.push(Anchor {
                 token: paired_token(text, start),
-                path,
+                path: path.to_owned(),
                 first,
                 last: last.unwrap_or(first),
             });
         }
-        cursor = after.max(at + 4);
+        cursor = after.max(digits);
     }
     found
 }
@@ -348,210 +420,5 @@ fn token_fragment(literal: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A throwaway checkout with the given documents and sources.
-    /// 一个只含给定文档与源码的一次性检出。
-    fn synthetic(documents: &[(&str, &str)], sources: &[(&str, &str)]) -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nichlink-anchors-{}-{sequence}",
-            std::process::id()
-        ));
-        for (relative, contents) in sources.iter().chain(documents) {
-            let path = root.join(relative);
-            fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
-            fs::write(&path, contents).expect("fixture file");
-        }
-        crate::fixture_manifest(&root);
-        root
-    }
-
-    /// A line number can stay inside the file while the code moves under it: the paired
-    /// token is what makes the number checkable. Both halves are pinned — a drifted
-    /// reference is reported, and a reference whose token is on the named line is not.
-    /// 代码在下面移动时行号仍可能留在文件内：成对写出的 token 才是让行号可被检查的东西。两侧都
-    /// 钉住——漂移的引用被报出，token 正好在它点名那一行的引用不被报。
-    #[test]
-    fn a_paired_token_that_is_not_on_the_named_line_is_reported() {
-        let sources = [("core/src/probe.rs", "fn first() {}\nfn second() {}\n")];
-        let drifted = synthetic(
-            &[("docs/note.md", "`second` (`core/src/probe.rs:1`)\n")],
-            &sources,
-        );
-        let found = findings(&drifted);
-        assert!(
-            found
-                .iter()
-                .any(|finding| finding.reason.contains("drifted")),
-            "a token that is not on the named line is reported: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&drifted);
-
-        let honest = synthetic(
-            &[("docs/note.md", "`second` (`core/src/probe.rs:2`)\n")],
-            &sources,
-        );
-        let found = findings(&honest);
-        assert!(
-            found.is_empty(),
-            "the same reference with the right number stays clean: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&honest);
-    }
-
-    /// A path written from a crate root, and a line number that is not a line number. Both
-    /// spellings were silent: the missing-file check asked whether the *first* segment was a
-    /// workspace root directory (so `src/definitely-gone.rs` was never asked), and `:0`
-    /// passed the past-the-end comparison because zero never is.
-    /// 一处从 crate 根写起的路径，以及一个不是行号的行号。两种拼法过去都是沉默的：缺失文件检查问的
-    /// 是**第一段**是否为工作区根目录（因此 `src/definitely-gone.rs` 从未被问），而 `:0` 能通过
-    /// "越过末尾"那次比较，因为 0 永远不会越过。
-    #[test]
-    fn a_crate_relative_path_and_a_zero_line_are_reported() {
-        let crate_relative = synthetic(
-            &[("docs/note.md", "see `src/definitely-gone.rs:99`\n")],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&crate_relative);
-        assert!(
-            found.iter().any(|finding| finding.reason == "no such file"),
-            "a path written as a path is checked wherever it starts: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&crate_relative);
-
-        let zero = synthetic(
-            &[("docs/note.md", "see `core/src/probe.rs:0`\n")],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&zero);
-        assert!(
-            found
-                .iter()
-                .any(|finding| finding.reason.contains("1-based")),
-            "line 0 is not a line: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&zero);
-    }
-
-    /// A path that climbs with `..` is the path it resolves to, not a string that matches
-    /// nothing: `declaration/../../tree/probe.rs` names `core/src/probe.rs`, and calling that
-    /// "no such file" is the false positive that gets a gate switched off.
-    /// 用 `..` 向上爬的路径就是它解析到的那个路径，而不是一个什么都匹配不到的字符串：
-    /// `declaration/../../tree/probe.rs` 命名的就是 `core/src/probe.rs`，说它 "no such file"
-    /// 正是那种让人把门禁关掉的假阳性。
-    #[test]
-    fn a_climbing_path_resolves_to_the_file_it_names() {
-        let root = synthetic(
-            &[
-                ("docs/note.md", "see `declaration/../../src/probe.rs:1`\n"),
-                ("core/src/registry_core/declaration/marker.rs", "// x\n"),
-            ],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&root);
-        assert!(
-            found.is_empty(),
-            "a climbing path that names a real file is not a broken reference: {found:#?}"
-        );
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// The reference this gate exists for: a line number past the end of the file.
-    /// 本门禁为之存在的引用：行号超出文件末尾。
-    #[test]
-    fn a_reference_past_the_end_of_a_file_is_reported() {
-        let root = synthetic(
-            &[(
-                "docs/probe.md",
-                "see `core/src/probe.rs:99` for the check\n",
-            )],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&root);
-        assert_eq!(found.len(), 1, "{found:#?}");
-        assert_eq!(found[0].document, "docs/probe.md");
-        assert_eq!(found[0].anchor, "core/src/probe.rs:99");
-        assert!(found[0].reason.contains("1 lines"), "{found:#?}");
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// A reference to a file that is gone is reported too: a rename is the other
-    /// way an anchor rots.
-    /// 指向已消失文件的引用同样被报出：改名是锚点腐化的另一种方式。
-    #[test]
-    fn a_reference_to_a_missing_file_is_reported() {
-        let root = synthetic(
-            &[("docs/probe.md", "moved to `core/src/gone.rs:1`\n")],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&root);
-        assert_eq!(found.len(), 1, "{found:#?}");
-        assert_eq!(found[0].reason, "no such file");
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// A bare name that two files share is not guessed at, and a bare name no file
-    /// owns is prose.
-    /// 两个文件共有的裸名不去猜；没有文件拥有的裸名是散文。
-    #[test]
-    fn an_ambiguous_or_unknown_bare_name_is_left_alone() {
-        let root = synthetic(
-            &[(
-                "docs/probe.md",
-                "`same.rs:99` is ambiguous, `elsewhere.rs:99` is not ours\n",
-            )],
-            &[
-                ("core/src/same.rs", "fn a() {}\n"),
-                ("cli/src/same.rs", "fn b() {}\n"),
-            ],
-        );
-        assert_eq!(findings(&root), Vec::new());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// A bare name that is unique is checked, because it can be resolved without
-    /// guessing.
-    /// 唯一的裸名会被检查，因为它无需猜测即可解析。
-    #[test]
-    fn a_unique_bare_name_is_checked() {
-        let root = synthetic(
-            &[("docs/probe.md", "the arm is in `probe.rs:99`\n")],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        let found = findings(&root);
-        assert_eq!(found.len(), 1, "{found:#?}");
-        assert_eq!(found[0].anchor, "probe.rs:99");
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// An audit document is a record: its anchors are as true as they were when it
-    /// was written, and the gate leaves it alone.
-    /// 审计文档是记录：它的锚点在写下时是真的，门禁不碰它。
-    #[test]
-    fn an_anchor_inside_a_record_is_exempt() {
-        let root = synthetic(
-            &[(
-                "docs/audit-probe.md",
-                "it used to be `core/src/probe.rs:99`\n",
-            )],
-            &[("core/src/probe.rs", "fn probe() {}\n")],
-        );
-        assert_eq!(findings(&root), Vec::new());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    /// The documentation in this checkout resolves.
-    /// 本检出里的文档可解析。
-    #[test]
-    fn the_shipped_documentation_anchors_resolve() {
-        let found = findings(&crate::workspace_root());
-        assert!(
-            found.is_empty(),
-            "a documented anchor no longer points anywhere; fix the reference or the \
-             sentence that needs it: {found:#?}"
-        );
-    }
-}
+#[path = "doc_anchors_tests.rs"]
+mod doc_anchors_tests;

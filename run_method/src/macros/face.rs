@@ -136,8 +136,8 @@ pub struct FaceFields<
     /// needs_registry: true
     /// ```
     pub needs_registry: NeedsRegistryValue,
-    /// Where this face hangs. Required.
-    /// 本面挂在谁下面。必填。
+    /// Where this face hangs; omitted, it resolves to the package root.
+    /// 本面挂在谁下面；省略时解析到包根。
     /// ```rust,ignore
     /// parent: crate::control::NODE_ID
     /// ```

@@ -1,56 +1,58 @@
 #!/bin/sh
 set -eu
 
-# Local package audit for the nine publishable crates.
-# 九个待发布 crate 的本地打包审计。
+# Local package audit for every publishable crate.
+# 每个待发布 crate 的本地打包审计。
 #
-# The audit has two halves, and only one of them waits for the first publish.
-# 审计有两半，只有一半需要等首次发布。
+# The audit has two halves, and only one of them can be answered without the index.
+# 审计有两半，只有一半不依赖 index 就能回答。
 #
-# Contents are checked for all nine crates today. `cargo package --list` needs no
+# Contents are checked for every publishable crate: `cargo package --list` needs no
 # registry, so every source module under a crate's `src/` and the README its
 # manifest declares must appear in the package or the audit fails. This matters
 # more here than in most workspaces: modules are mounted with
 # `#[path = "..."]`, so a file cargo did not pick up is a crate that does not
 # compile for anyone, and it would compile fine locally where the file exists.
-# 内容检查今天对九个 crate 全部生效。`cargo package --list` 不需要 registry，因此每个
+# 内容检查对每个待发布 crate 都生效：`cargo package --list` 不需要 registry，因此每个
 # crate `src/` 下的每个源码模块、以及清单声明的 README 都必须出现在包里，否则审计失败。
 # 这在本工作区比在多数工作区更重要：模块是用 `#[path = "..."]` 挂载的，因此 cargo 没收进去
 # 的文件等于一个对任何人都编译不过的 crate，而在文件存在的本地它编译得好好的。
 #
 # A crate can only be *packaged* (built from the tarball in isolation, which is
 # what `cargo package` verifies) once every versioned `nichlink-*` dependency it
-# names is resolvable on the target registry. Before the first publish those
-# dependencies are absent, so this script warns about the affected crate and
-# skips that half, then exits 0. Every crate whose dependencies are already
-# published is still checked in full: core is checked from today, and the rest
-# start being checked automatically as they land on crates.io. A packaging
-# failure in a checkable crate is a real error and makes the script exit
-# non-zero; the CI step that calls it no longer sets continue-on-error.
+# names is resolvable on the target registry. A crate whose dependency is not
+# there yet is warned about and its packaging half skipped; a skip is not a
+# failure, and every crate whose dependencies do resolve is checked in full. That
+# state recurs on every version bump, not only before a first publish. A
+# packaging failure in a checkable crate is a real error and makes the script
+# exit non-zero; the CI step that calls it does not set continue-on-error.
 # 只有当某个 crate 写下的每个带版本号的 `nichlink-*` 依赖都能在目标 registry 上解析
-# 时，它才能被打包（从 tarball 隔离构建，也就是 `cargo package` 所校验的事）。首次发布
-# 之前这些依赖都不存在，因此脚本会警告受影响的 crate、跳过这一半，然后以 0 退出。依赖
-# 已经发布的 crate 仍会被完整检查：core 从今天起就被检查，其余 crate 上线后自动开始被
-# 检查。可检查的 crate 若打包失败就是真实错误，脚本以非零退出——调用它的 CI 步骤已不再
-# 设置 continue-on-error。
+# 时，它才能被打包（从 tarball 隔离构建，也就是 `cargo package` 所校验的事）。依赖还不在
+# index 上的 crate 会被警告并跳过打包这一半；跳过不算失败，而依赖能解析的 crate 会被
+# 完整检查。这个状态每次推进版本线都会重现，而不只是首次发布之前。可检查的 crate 若打包失败
+# 就是真实错误，脚本以非零退出——调用它的 CI 步骤不设置 continue-on-error。
 #
-# The order below mirrors docs/roadmap-1.0.md decision 1:
-#   core -> macro / build_method / mcp -> run_method -> debug_method /
-#   plugin-host -> studio -> cli
-# 下面的顺序与 docs/roadmap-1.0.md 决策 1 一致。
+# The crate set and each crate's internal dependencies are derived from the
+# workspace, the same way `tools/nichlink-publish --check-table` derives them; the
+# derivation itself is commented at the `$crates` loop below. The release *order*
+# is deliberately not restated here: it is owned by the `levels` table in
+# `tools/nichlink-publish`, whose `--check-table` mode compares that table against
+# these manifests on every push and before every publish. A second copy of the
+# order in prose is a copy nothing checks, and this one had `nichlink-mcp` in the
+# wrong layer.
+# 已发布的 crate 集合与每个 crate 的内部依赖都从工作区推导，与
+# `tools/nichlink-publish --check-table` 同一口径；推导本身见下面 `$crates` 循环处的注释。
+# 发布**顺序**有意不在这里复述：它归 `tools/nichlink-publish` 的 `levels` 表所有，而它的
+# `--check-table` 模式在每次 push 与每次发布前把那张表与这些清单对比。散文里的第二份顺序是
+# 一份没有任何东西核对的副本——这一份曾把 `nichlink-mcp` 放在错误的层。
 #
 # Each entry is "<crate>:<directory>:<comma-separated versioned nichlink-* deps>".
-# The directory is spelled out rather than derived because the mapping is not a
-# rule: `nichlink-build-method` lives in `build_method/` while
-# `nichlink-plugin-host` lives in `plugin-host/`. Dependencies are comma
-# separated, not space separated: the entries are read by `for entry in $crates`,
-# so a space inside one would split it into several and silently evaluate a crate
-# with only its first dependency.
-# 每项形如 "<crate>:<目录>:<以逗号分隔的带版本号 nichlink-* 依赖>"。目录是写出来的而不是
-# 推导的，因为映射不是一条规则：`nichlink-build-method` 在 `build_method/`，而
-# `nichlink-plugin-host` 在 `plugin-host/`。依赖用逗号而不是空格分隔：这些项由
-# `for entry in $crates` 读取，项内的空格会把它拆成多项，并静默地只按第一个依赖去评估
-# 一个 crate。
+# Dependencies are comma separated, not space separated: the entries are read by
+# `for entry in $crates`, so a space inside one would split it into several and
+# silently evaluate a crate with only its first dependency.
+# 每项形如 "<crate>:<目录>:<以逗号分隔的带版本号 nichlink-* 依赖>"。依赖用逗号而不是空格
+# 分隔：这些项由 `for entry in $crates` 读取，项内的空格会把它拆成多项，并静默地只按第一个
+# 依赖去评估一个 crate。
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
@@ -439,6 +441,10 @@ for entry in $crates; do
   fi
 done
 
+# The delimiter is unquoted, so `$…` expands here — and so would backticks, which
+# would run the words inside them as commands. Keep this block backtick-free.
+# 分隔符未加引号，因此 `$…` 在这里会展开——反引号同理，会被当作命令加以执行。本块不要用
+# 反引号。
 cat <<EOF
 Package audit summary
   contents checked: all $crate_count shipped crates
@@ -446,13 +452,14 @@ Package audit summary
   verified:${verified:- none}
   skipped:${skipped:- none}
   failed:${failed:- none}
-Contents are checked for every crate from today. Skipped crates have a
+Contents are checked for every crate. Skipped crates have a
 versioned nichlink-* dependency that is not on $index_url yet; they become
-checkable automatically once that dependency is published. See
-docs/roadmap-1.0.md decision 1 for the publish order.
-内容检查从今天起对每个 crate 生效。跳过的 crate 有尚未发布到 $index_url 的
+checkable automatically once that dependency is published. The publish order is
+the levels table in tools/nichlink-publish, whose --check-table mode compares it
+against the manifests.
+内容检查对每个 crate 都生效。跳过的 crate 有尚未发布到 $index_url 的
 nichlink-* 版本依赖；该依赖发布后它们会自动变为可检查。发布顺序见
-docs/roadmap-1.0.md 决策 1。
+tools/nichlink-publish 的 levels 表，--check-table 会把它与清单核对。
 EOF
 
 if [ -n "$content_failed" ]; then

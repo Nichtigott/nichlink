@@ -28,7 +28,7 @@ version moved because a published `0.1.4` CLI could not be corrected any other w
 "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 Raising the line to `1.0.0` is a separate decision that would move every internal
-`version = "0.1.4"` requirement with it, and that step is what freezes the public
+`nichlink-*` version requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
 without a red package audit; `0.1.3` moved the same way and for the same reason
@@ -53,7 +53,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 生成它的那个发布，属于模板修复而不是跨 crate 符号——移动版本线是因为已发布的 `0.1.4` CLI 没有别的
 办法被修正。而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同每一处内部 `version = "0.1.4"` 要求一起移动——那一步才是冻结
+`1.0.0` 是另一个决定，需要连同每一处内部 `nichlink-*` 版本要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
 使用 `nichlink_build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
@@ -96,12 +96,17 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   (`records: true`).** A record stores the identity it was written for, so a face that
   changed identity under an unmoved slot breaks it *silently*: the path is still there, the
   record still parses, and nothing in a text diff or a build log says so. The comparison
-  reuses the tree diff's vocabulary — a record comes back `ok`, `stale` (nothing in the tree
-  has that identity or that path), or `re-identified` (the path is there and the identity
-  moved, reported as `old -> now`), which is the one thing no symbol graph can tell you about
-  a graft. A typed cut stores a Rust expression rather than a logical path, so an absent
-  identity there is reported as `unmatched` instead of being guessed as `stale`; unreadable
-  records are counted rather than dropped. Measured on a scaffolded host with three records:
+  reuses the tree diff's vocabulary, and every record lands in one of five buckets: `ok`;
+  `undeclared` (the identity is in the tree, but no `static_graft_plan!` cut names its slot —
+  the release prunes that slot, which is what `nichlink.grafts` reports as `NOT declared by the
+  host entry` and counts under `unkept plans`); `stale` (nothing in the tree has that identity
+  or that path); `re-identified` (the path is there and the identity moved, reported as
+  `old -> now`), which is the one thing no symbol graph can tell you about a graft; and
+  `unreadable` (a record file that could not be read), counted rather than dropped. There is no
+  separate bucket for a typed cut: the plan's path is always a logical path (every writer uses
+  `registry.path_for`), and with the identity absent nothing resolves a typed declaration's
+  module, so such a record is `stale` — and the reply prints the path it looked for rather than
+  guessing. Measured on a scaffolded host with three records:
   `ok 1  stale 1  re-identified 1`, the last resolving
   `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`. Two
   tests; the two load-bearing ones measured red (show the stale identity as "now"; let a
@@ -157,6 +162,23 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   under an unmoved file, `[re-identified (daca0f7b… -> bc2df33a…)]`. Five tests; the shared rule
   was mutation-checked (every published face read as `ok`) and four tests went red across diff and
   search together.
+
+- **Two kernel entry points replace the compact renderers the execution surfaces had to keep
+  themselves: `nichlink::authoring::parse::compact_admission` and
+  `nichlink::authoring::parse::compact_registration_rule`.** Studio's `admission_text` and
+  `registration_rule_text` assembled the compact clause form themselves in
+  `studio/src/studio/app/source_index.rs`, because no public entry could render it from the
+  owned value — the second-implementation family `FIXR-01` recorded, whose admission copy
+  widened the deny gate the kernel had just fixed. Both entries are public now, Studio's call
+  sites are pure delegation, and the kernel's own historical branches render through them, so
+  the bytes consumers already read did not move: the single-list
+  `allow_paths(`/`deny_paths(` branches and the registration rule's source-text branch
+  (`rule_syntax_from_text`) go through the one renderer. Each entry is pinned from outside the
+  crate by `core/tests/compact_admission_entry.rs` and
+  `core/tests/registration_rule_entry.rs`, and Studio's `registration_rule_text_tests`
+  (`the_call_site_renders_what_the_kernel_renders`,
+  `the_call_site_carries_no_second_rule_renderer`) pins that its call site carries no renderer
+  of its own.
 
 ### Changed
 
@@ -1267,10 +1289,14 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 - **`nichlink.diff` 现在也能把外部 graft 记录与源码对照（`records: true`）。** 记录里存着它写下时
   针对的身份，因此槽位没动而面换了身份会**悄悄**弄坏它：路径还在、记录仍能解析，而文本 diff 与构建
-  日志都不会说这件事。这次比较沿用树 diff 的词汇——一条记录会是 `ok`、`stale`（树里没有那个身份、
-  也没有那条路径）或 `re-identified`（路径在、身份换了，报成 `old -> now`），而这正是符号图对一条
-  graft 说不出的事。类型化切口存的是 Rust 表达式而不是逻辑路径，因此那里的身份缺席会被报成
-  `unmatched`，而不是被猜成 `stale`；读不了的记录会被计数而不是丢掉。脚手架宿主上三条记录实测：
+  日志都不会说这件事。这次比较沿用树 diff 的词汇，而每条记录都落在五个桶之一：`ok`；`undeclared`
+  （身份在树里，但没有任何 `static_graft_plan!` 切口点名它的槽位——发布态会剪掉那个槽位，这正是
+  `nichlink.grafts` 报成 `NOT declared by the host entry` 并计入 `unkept plans` 的那种）；`stale`
+  （树里没有那个身份、也没有那条路径）；`re-identified`（路径在、身份换了，报成 `old -> now`），
+  而这正是符号图对一条 graft 说不出的事；以及 `unreadable`（读不了的记录文件），它被计数而不是
+  丢掉。类型化切口没有单独的桶：计划的路径永远是逻辑路径（每个写入方都用 `registry.path_for`），而
+  身份缺席时没有任何东西能解析类型化声明的模块，因此这类记录就是 `stale`——回复同时打印出它查找的
+  那个路径，而不是猜。脚手架宿主上三条记录实测：
   `ok 1  stale 1  re-identified 1`，最后一条解析出
   `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`。两条测试，
   其中两条承载主张的实测为红（把旧身份当作"现在"；让类型化切口落进 `stale`）。
@@ -1314,6 +1340,17 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `face  root/gauge … [added since build]`（其上还有构建过期那一行）；而在文件没动的情况下改了 `kind`
   之后是 `[re-identified (daca0f7b… -> bc2df33a…)]`。五条测试；那条共享规则做了变异实测（把每个已发布
   的面都读成 `ok`），diff 与 search 合计四条测试同时变红。
+
+- **两个内核入口取代了执行面过去只能自己保留的紧凑渲染器：`nichlink::authoring::parse::compact_admission`
+  与 `nichlink::authoring::parse::compact_registration_rule`。** Studio 的 `admission_text` 与
+  `registration_rule_text` 在 `studio/src/studio/app/source_index.rs` 里自己装配紧凑子句，因为当时没有
+  任何公开入口能从 owned 值渲染它——这正是 `FIXR-01` 记录的第二份实现一族，其中 admission 那份副本还
+  放宽了内核刚修好的 deny 门禁。现在两个入口都是公开 API、Studio 的调用点变成纯委派，而内核自己的历史
+  分支也经它们渲染，因此消费方已在读的字节没有移动：单列表 `allow_paths(`/`deny_paths(` 分支与注册规则的
+  源码文本分支（`rule_syntax_from_text`）都走那唯一一个渲染器。两个入口分别由 crate 之外的
+  `core/tests/compact_admission_entry.rs` 与 `core/tests/registration_rule_entry.rs` 钉住，Studio 的
+  `registration_rule_text_tests`（`the_call_site_renders_what_the_kernel_renders`、
+  `the_call_site_carries_no_second_rule_renderer`）钉住它的调用点不再自带渲染器。
 
 变更：
 

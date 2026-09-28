@@ -297,8 +297,8 @@ mod tests {
             &[],
         );
 
-        let control_path = control.to_string_lossy().replace('\\', "/");
-        let button_path = button.to_string_lossy().replace('\\', "/");
+        let control_path = nichlink::declaration::portable_path(&control.to_string_lossy());
+        let button_path = nichlink::declaration::portable_path(&button.to_string_lossy());
         assert!(
             output.contains(&format!("#[path = {control_path:?}]")),
             "folder face must load its real file: {output}"
@@ -394,6 +394,49 @@ mod tests {
         assert!(
             !output.contains("__nichlink_ra_"),
             "a face the IDE already sees needs no shadow: {output}"
+        );
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    /// The `#[path]` text the renderer writes is the kernel's portable form, not
+    /// a fold of its own. The two agree on Windows precisely because both fold,
+    /// so a path whose *name* carries a backslash is where a divergent copy shows
+    /// up — and that assertion is the same one on every platform.
+    /// 渲染器写出的 `#[path]` 文本用的是内核的可移植形式，而不是它自己的一份折叠。两者在
+    /// Windows 上一致恰恰因为都做了折叠，因此名称里含反斜杠的路径正是分叉副本会露出的地方——
+    /// 而这个断言在每个平台上都是同一句话。
+    #[test]
+    fn a_rendered_path_is_the_kernel_portable_form() {
+        let root = temporary_directory("portable-path");
+        let face = root.join("control\\control.rs");
+        write_registry(&face, "root_object", "Control", "crate::ROOT_NODE_ID");
+        let nodes = vec![Node {
+            name: "control".to_owned(),
+            file: Some(face.clone()),
+            children: Vec::new(),
+        }];
+
+        let output = render_lib(
+            &root,
+            &nodes,
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            &[],
+            &[],
+        );
+
+        let folded = nichlink::declaration::portable_path(&face.to_string_lossy());
+        assert!(
+            folded.ends_with("control/control.rs"),
+            "the fixture has to exercise a fold: {folded}"
+        );
+        assert!(
+            output.contains(&format!("#[path = {folded:?}]")),
+            "the rendered path must be the kernel's portable form: {output}"
         );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }

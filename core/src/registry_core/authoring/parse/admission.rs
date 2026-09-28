@@ -23,11 +23,62 @@
 //! **两张都不会丢**：deny 列表是 `Admission::accepts` 优先给出的否决权，只保留 allow 列表的
 //! 读取会放宽门禁，而写回源码的正是被放宽的那一份。`;` 现在是子句分隔符，因此含 `;` 的
 //! 路径会被拒绝，而不是被读成一条很长的路径。
+//!
+//! The compact spelling is rendered by [`compact_admission`], which is **public
+//! API**: a surface that shows or saves the compact form calls it instead of
+//! spelling the grammar a second time. Studio had to spell it itself while this was
+//! private, and its copy widened the gate the kernel had just fixed (`FIXR-01`).
+//! 紧凑拼法由 [`compact_admission`] 渲染，而它是**公开 API**：展示或保存紧凑形式的执行面调用它，
+//! 而不是把语法再拼一遍。本函数私有时 Studio 只能自己拼，而它那份副本放宽了内核刚修好的门禁
+//! （`FIXR-01`）。
 
 use crate::registry_core::authoring::validation::rust_string;
 use crate::registry_core::declaration::OwnedAdmission;
 
 use super::{FaceParseError, quoted_list_field, split_csv_owned};
+
+/// Render one admission policy as the compact clause the editor carries.
+/// 将一条 admission 策略渲染成编辑器所携带的紧凑子句。
+///
+/// This is the kernel's only renderer for the compact spelling, and it is public
+/// because the alternative was a second implementation outside the kernel: Studio
+/// needed the compact form for its Edit-form prefill and, with this function
+/// private, spelled the same grammar itself — including the same deny-list
+/// widening the kernel had just fixed (`FIXR-01`). A surface that shows or saves
+/// the compact form calls this function; it must not decide the spelling itself.
+/// 这是内核唯一的紧凑拼法渲染器，之所以公开，是因为另一条路是内核之外的第二份实现：Studio 的
+/// Edit 表单预填需要紧凑形式，而本函数私有时，它只能自己拼同一套语法——连内核刚修好的 deny
+/// 列表被放宽的问题也一并复制（`FIXR-01`）。展示或保存紧凑形式的执行面调用本函数，不得自行决定
+/// 拼法。
+///
+/// One clause per list and `;` between them, in the historical order
+/// (`allow:ui,controls`, `deny:ui/experimental`, `ANY` for the unconstrained gate,
+/// `allow:ui;deny:ui/experimental` when a declaration names both lists). A
+/// declaration that names one list keeps the spelling consumers already read, so
+/// routing the historical single-list branches through this function changed no
+/// bytes; a declaration that names both renders both, because the deny list is the
+/// veto `Admission::accepts` gives priority to and a rendering that dropped it
+/// would widen the gate it shows.
+/// 每张列表一个子句，之间用 `;`，顺序沿用历史（`allow:ui,controls`、
+/// `deny:ui/experimental`、表示不受限门禁的 `ANY`，同时点名两张列表时为
+/// `allow:ui;deny:ui/experimental`）。只点名一张列表的声明保持消费方已在读的拼法，因此把历史
+/// 单列表分支改走本函数没有改动任何字节；同时点名两张的声明把两张都渲染出来，因为 deny 列表是
+/// `Admission::accepts` 优先采用的否决权，丢掉它的渲染会放宽它所展示的那道门禁。
+///
+/// The output is exactly what [`parse_admission_owned`] reads back, and the two are
+/// pinned against each other from outside the crate by
+/// `core/tests/compact_admission_entry.rs`.
+/// 输出正是 [`parse_admission_owned`] 读得回的那一份，两者由 crate 之外的
+/// `core/tests/compact_admission_entry.rs` 互钉。
+pub fn compact_admission(admission: &OwnedAdmission) -> String {
+    let (allow, deny) = (&admission.allowed_paths, &admission.denied_paths);
+    match (allow.is_empty(), deny.is_empty()) {
+        (true, true) => "ANY".to_owned(),
+        (false, true) => format!("allow:{}", allow.join(",")),
+        (true, false) => format!("deny:{}", deny.join(",")),
+        (false, false) => format!("allow:{};deny:{}", allow.join(","), deny.join(",")),
+    }
+}
 
 /// Read an admission expression, accepting both the compact and constructor
 /// spellings.
@@ -38,18 +89,35 @@ use super::{FaceParseError, quoted_list_field, split_csv_owned};
 /// (`both_lists_survive_the_read_and_write_round_trip`).
 /// 同时点名两张列表的构造函数会读成两个子句，因此 deny 列表会抵达编辑器与下一次写盘，
 /// 而不是被丢掉（见 `both_lists_survive_the_read_and_write_round_trip`）。
+///
+/// Every spelling is spelled by [`compact_admission`] and by nothing else: the
+/// historical `allow_paths(`/`deny_paths(` branches are a policy with one list,
+/// and the constructor form is a policy with two. That is the whole reason the
+/// function is public — the kernel and any surface that shows this value render it
+/// in one place, and the bytes of the historical spellings are pinned by
+/// `core/tests/compact_admission_entry.rs`.
+/// 每一种拼法都只由 [`compact_admission`] 拼出：历史的 `allow_paths(`/`deny_paths(` 分支就是
+/// 只有一张列表的策略，构造形式则是两张列表的策略。这正是本函数公开的全部原因——内核与任何
+/// 展示该值的执行面只有一处渲染它，而历史拼法的字节由 `core/tests/compact_admission_entry.rs`
+/// 钉住。
 pub fn parse_admission_expression(expression: &str) -> Result<String, FaceParseError> {
     let expression = expression.trim().trim_end_matches(',');
+    let policy = |allowed_paths, denied_paths| {
+        compact_admission(&OwnedAdmission {
+            allowed_paths,
+            denied_paths,
+        })
+    };
     if expression.is_empty() || expression.contains("Admission::ANY") {
-        return Ok("ANY".to_owned());
+        return Ok(policy(Vec::new(), Vec::new()));
     }
     let paths = quoted_list_field(expression, "allow_paths(");
     if !paths.is_empty() {
-        return Ok(format!("allow:{}", paths.join(",")));
+        return Ok(policy(paths, Vec::new()));
     }
     let paths = quoted_list_field(expression, "deny_paths(");
     if !paths.is_empty() {
-        return Ok(format!("deny:{}", paths.join(",")));
+        return Ok(policy(Vec::new(), paths));
     }
     // The editor writes the constructor form, because a face holds real Rust.
     // Reading only the `allow_paths(`/`deny_paths(` spellings meant the editor
@@ -60,7 +128,7 @@ pub fn parse_admission_expression(expression: &str) -> Result<String, FaceParseE
         let mut parts = rest.split(']');
         let allow = parts.next().map(quoted_strings).unwrap_or_default();
         let deny = parts.next().map(quoted_strings).unwrap_or_default();
-        return Ok(compact_admission(&allow, &deny));
+        return Ok(policy(allow, deny));
     }
     Err("generated face has an invalid admission expression"
         .to_owned()
@@ -81,24 +149,6 @@ fn quoted_strings(fragment: &str) -> Vec<String> {
                 .map(str::to_owned)
         })
         .collect()
-}
-
-/// The compact spelling of the two lists one declaration carries.
-/// 一份声明所携带两张列表的紧凑拼法。
-///
-/// A declaration that names one list keeps the historical spelling (`allow:ui`,
-/// `deny:c`, `ANY`), so every consumer that only knows the old forms still reads
-/// them; a declaration that names both has no old spelling, which is why the
-/// second clause exists at all.
-/// 只写一张列表的声明保持历史拼法（`allow:ui`、`deny:c`、`ANY`），因此只认旧形式的
-/// 消费方照旧可读；同时写两张列表的声明没有旧拼法可依，这正是第二个子句存在的原因。
-fn compact_admission(allow: &[String], deny: &[String]) -> String {
-    match (allow.is_empty(), deny.is_empty()) {
-        (true, true) => "ANY".to_owned(),
-        (false, true) => format!("allow:{}", allow.join(",")),
-        (true, false) => format!("deny:{}", deny.join(",")),
-        (false, false) => format!("allow:{};deny:{}", allow.join(","), deny.join(",")),
-    }
 }
 
 /// One compact admission value split into the lists it names.

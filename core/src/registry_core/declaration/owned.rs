@@ -215,8 +215,11 @@ pub struct RegistrationSnapshot {
     /// Whether this face owns a registry others may register into.
     /// 本注册面是否拥有一个可供他人注册的注册机。
     pub needs_registry: bool,
-    /// Registry slot name this face is registered under, defaulting to the kind.
-    /// 本注册面所注册到的注册机槽位名，默认为 kind。
+    /// The registry name this face is registered under, defaulting to the kind. It
+    /// is not an overlay slot: `slot` is the graft cut a plan targets, and the
+    /// plugin host's plugin slot.
+    /// 本注册面所注册到的注册面名，默认为 kind。它不是叠加层的槽位：`slot` 指计划针对的
+    /// graft 切口，以及插件宿主的插件槽。
     pub registry_name: String,
     /// Name of the external registry this face takes its dependency from.
     /// 本注册面从哪个外部注册机取得依赖的名称。
