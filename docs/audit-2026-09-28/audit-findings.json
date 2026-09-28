@@ -370,7 +370,20 @@
      "line": 476,
      "kind": "ledger"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "verified",
+   "post_freeze_line": 100,
+   "pre_freeze_line": 36,
+   "fix_round_note": "缓存键现在含 namespace（`NodeIdCache::insert`/`get` 见 `:59`/`:81`），`:36` 的键检索移到 `:100`",
+   "fix_round_verification": {
+    "verdict": "证实",
+    "reports": [
+     "audit-verify-fix-b1.md"
+    ],
+    "means": "t51 §4：端到端 4 组（冷/热 × A→B/B→A，两个夹具包共享同一相对路径），两包各拿到自己命名空间下现算的身份（`e0851ccb…` / `325377c4…`）；变异成「键只有相对路径 + 无读取侧复核」后热 A→B 复现旧污染、作者两条钉子 FAILED，还原零残留。",
+    "verified": true
+   }
   },
   {
    "id": "LGC-LG-02",
@@ -442,7 +455,21 @@
      "line": 477,
      "kind": "ledger"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "verified",
+   "post_freeze_line": 63,
+   "pre_freeze_line": 40,
+   "fix_round_note": "读回构造形式时两张列表都进 `compact_admission`（`:63`），旧 `:40` 的「只写 allow」分支已不存在",
+   "fix_round_verification": {
+    "verdict": "证实",
+    "reports": [
+     "audit-verify-fix-b1.md",
+     "audit-verify-fix-b1-1.md"
+    ],
+    "means": "t51 §2：构造形式读回 `allow:ui,ui/controls;deny:ui/experimental`，`denied` 未丢、读写往返稳定；变异回旧三分支后探针 FAIL 且作者钉子 FAILED。t55：树外第二条装置（探针 B11 共 18 项）——把读回的两张列表还原成运行期门禁后`accepts(\"ui/experimental\")==false`（断言的是门禁，不是文本）；变异后该行变红。",
+    "verified": true
+   }
   },
   {
    "id": "LGC-LG-03",
@@ -520,7 +547,20 @@
      "line": 488,
      "kind": "ledger"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "verified",
+   "post_freeze_line": 320,
+   "pre_freeze_line": 257,
+   "fix_round_note": "写盘前交给内核裁决（`PluginCatalog::with_appended_line`，`:320`）；`:257` 的 record 拼接本身未变",
+   "fix_round_verification": {
+    "verdict": "证实",
+    "reports": [
+     "audit-verify-fix-b1.md"
+    ],
+    "means": "t51 §3：重复身份追加被 `with_appended_line` 拒（Err、不写盘）；无换行的锁追加后补换行、parse 得 2 条；被拒时入口文件逐字节未变；变异成「不校验不补换行」后探针 FAIL 且作者四条 `lock_writes` 钉子全 FAILED。",
+    "verified": true
+   }
   },
   {
    "id": "LGC-LG-04",
@@ -592,7 +632,18 @@
      "line": 487,
      "kind": "ledger"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "fixed",
+   "post_freeze_line": 131,
+   "pre_freeze_line": 126,
+   "fix_round_note": "schema 门禁落在 `parse` 的表头处理 `:131` 与 `schema_matches`（`:115`）",
+   "fix_round_verification": {
+    "verdict": "未复核",
+    "reports": [],
+    "means": "三份复核均未覆盖 schema 门禁本身（t51 §1「已核范围」只覆盖三条 B1 修复与 t44 写盘路径的调用点）。",
+    "verified": false
+   }
   },
   {
    "id": "LGC-LG-05",
@@ -2984,7 +3035,18 @@
      "line": 454,
      "kind": "ledger"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "fixed",
+   "post_freeze_line": 317,
+   "pre_freeze_line": 281,
+   "fix_round_note": "`accounts_for` 现为 `:317`（旧锚点落在一条测试断言上）",
+   "fix_round_verification": {
+    "verdict": "未复核（且 t51 记录该族仍未修完）",
+    "reports": [],
+    "means": "t51 §3 的附带记录：official 七/十字段等价（`strict_contains=false`、`contains_record=true`）；但 X-1/LG-40 的「十字段空来源仍被当作 None 接受」**仍未修**，t51 明写它「MINOR、不在 B1 三条之内」。因此本条**不计 verified**。",
+    "verified": false
+   }
   },
   {
    "id": "LGC-LG-41",
@@ -5885,7 +5947,18 @@
      "line": 101,
      "kind": "verify"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "fixed",
+   "post_freeze_line": 337,
+   "pre_freeze_line": 320,
+   "fix_round_note": "入口导入的判定现为 `:337`（`entry_text.contains(&format!(\"use {crate_name} as _;\"))`）",
+   "fix_round_verification": {
+    "verdict": "未复核",
+    "reports": [],
+    "means": "三份复核均未单独覆盖入口导入判定（t51 只核到 `mutations.rs` 的调用点与内核 API 行为）。",
+    "verified": false
+   }
   },
   {
    "id": "STU-S-09",
@@ -9278,7 +9351,20 @@
      "line": 164,
      "kind": "verify"
     }
-   ]
+   ],
+   "fixed_in_fix_round": true,
+   "fix_round_state": "verified",
+   "post_freeze_line": 238,
+   "pre_freeze_line": 332,
+   "fix_round_note": "行终止补齐移到内核侧追加助手（`core/src/registry_core/plugin/catalog/catalog.rs:238-242`）；调用点 `studio/src/studio/app/mutations.rs:319`",
+   "fix_round_verification": {
+    "verdict": "证实",
+    "reports": [
+     "audit-verify-fix-b1.md"
+    ],
+    "means": "t51 §3 同一次探针：「无换行锁追加后补换行、parse 得 2 条」正是本条的缺陷面；变异体下该面与四条作者钉子同时变红。",
+    "verified": true
+   }
   },
   {
    "id": "STU-V-02",
@@ -15806,5 +15892,327 @@
    "verifier": "t12",
    "source": "audit-verify-bridges.md 汇总表 BR-10 行"
   }
- ]
+ ],
+ "fix_round": {
+  "as_of": "产物冻结 17:12 → 本次记账（2026-09-28，t43/t44 的 B1 修复 + t52 的同族残余修复 + t54 的拆文件收口）",
+  "note": "本报告主体（§0–§11）描述的是 **17:12 冻结的树**；此后就地落地的修复见本节与报告 §12。主清单 212 条及其严重度/结论**未改**；受影响条目只增加 `fixed_in_fix_round` / `post_freeze_line` 两个字段，原 file/line/title/severity 原样保留（那描述的是冻结态）。",
+  "files": [
+   {
+    "path": "build_method/src/identity_cache.rs",
+    "frozen_lines": 101,
+    "now_lines": 306,
+    "delta": 205,
+    "landing": "t43/t44：B1-1（LG-01）身份缓存按 namespace 分桶 + 钉子"
+   },
+   {
+    "path": "build_method/src/node_id.rs",
+    "frozen_lines": 117,
+    "now_lines": 181,
+    "delta": 64,
+    "landing": "t43/t44：LG-01（缓存键含 namespace；读回时校验该 namespace 是否在册）"
+   },
+   {
+    "path": "core/src/registry_core/authoring/parse/admission.rs",
+    "frozen_lines": 235,
+    "now_lines": 366,
+    "delta": 131,
+    "landing": "t43：B1-1（LG-02）紧凑形式双向承载 allow 与 deny"
+   },
+   {
+    "path": "core/src/registry_core/plugin/catalog/catalog.rs",
+    "frozen_lines": 382,
+    "now_lines": 538,
+    "delta": 156,
+    "landing": "t44：LG-03/LG-04/LG-40（写前校验、schema 门禁、字段语义）"
+   },
+   {
+    "path": "studio/src/studio/app/mutations.rs",
+    "frozen_lines": 388,
+    "now_lines": 420,
+    "delta": 32,
+    "landing": "t44：LG-03 写前校验 +228（含测试）→ t54 把测试模块拆出（-196）"
+   },
+   {
+    "path": "studio/src/studio/app/keyboard.rs",
+    "frozen_lines": 177,
+    "now_lines": 280,
+    "delta": 103,
+    "landing": "t52：B1-4 同族残余（Edit 表单预填）"
+   },
+   {
+    "path": "studio/src/studio/app/source_index.rs",
+    "frozen_lines": 102,
+    "now_lines": 217,
+    "delta": 115,
+    "landing": "t52：B1-4 同族残余（admission_text 第二份实现）"
+   },
+   {
+    "path": "studio/src/studio/app/tests/lock_writes.rs",
+    "frozen_lines": 0,
+    "now_lines": 201,
+    "delta": 201,
+    "landing": "t54：从 mutations.rs 拆出的仅测试模块（#[path] 挂载，免尺寸棘轮）"
+   }
+  ],
+  "counts": {
+   "files_touched": 8,
+   "lines_added": 1007,
+   "lines_removed": 0,
+   "lines_delta_total": 1007,
+   "affected_entries": 7,
+   "fixed": 3,
+   "verified": 4,
+   "new_findings": 1,
+   "new_findings_verified": 1,
+   "verified_total": 5,
+   "verification_reports": 3,
+   "unverified_entries": [
+    "LGC-LG-04",
+    "LGC-LG-40",
+    "STU-S-08"
+   ]
+  },
+  "numbers": {
+   "code_size": {
+    "predicate": "find . -name '*.rs' -not -path './target/*' -not -path '*/target/*'",
+    "frozen": {
+     "files": 394,
+     "lines": 78951,
+     "source": "audit-structure-base.md（§1.1 采信）"
+    },
+    "r5_review": {
+     "files": 394,
+     "lines": 79622,
+     "delta_lines": 671,
+     "note": "t46 复核人 R5 当时（只有 5 个 B1 文件落地，t52/t54 尚未落地）"
+    },
+    "now": {
+     "files": 395,
+     "lines": 79878,
+     "delta_lines": 927,
+     "note": "t53 本次实测；逐文件 Δ 之和为 1007（含新增文件 201 行）"
+    }
+   },
+   "r4_enumeration": {
+    "predicate": "全树行首 `mod NAME;` / `mod NAME {`（含 inline），排除 target/",
+    "frozen": {
+     "names": 296,
+     "sites": 440
+    },
+    "r5_review": {
+     "names": 297,
+     "sites": 442
+    },
+    "now": {
+     "names": 299,
+     "sites": 444
+    },
+    "new_declarations": [
+     {
+      "file": "build_method/src/identity_cache.rs",
+      "line": 121,
+      "name": "tests",
+      "round": "B1 修复轮"
+     },
+     {
+      "file": "studio/src/studio/app/mutations.rs",
+      "line": 420,
+      "name": "lock_writes",
+      "round": "B1 修复轮（t54）"
+     },
+     {
+      "file": "studio/src/studio/app/keyboard.rs",
+      "line": 180,
+      "name": "edit_form_tests",
+      "round": "t52"
+     },
+     {
+      "file": "studio/src/studio/app/source_index.rs",
+      "line": 140,
+      "name": "admission_text_tests",
+      "round": "t52"
+     }
+    ],
+    "verdicts_unchanged": {
+     "R-4a": "14 名 / 14 处",
+     "R-4b": "15 名 / 26 处（豁免 1 处）",
+     "R-4c": "6 对违规 + 1 对登记豁免 + 7 对单复数族",
+     "source": "实跑 /tmp/r4_from_report.py（t42 从报告 §G 原样抽取的脚本）"
+    }
+   }
+  },
+  "affected": [
+   {
+    "id": "LGC-LG-01",
+    "state": "verified",
+    "file": "build_method/src/node_id.rs",
+    "pre_freeze_line": 36,
+    "post_freeze_line": 100,
+    "note": "缓存键现在含 namespace（`NodeIdCache::insert`/`get` 见 `:59`/`:81`），`:36` 的键检索移到 `:100`"
+   },
+   {
+    "id": "LGC-LG-02",
+    "state": "verified",
+    "file": "core/src/registry_core/authoring/parse/admission.rs",
+    "pre_freeze_line": 40,
+    "post_freeze_line": 63,
+    "note": "读回构造形式时两张列表都进 `compact_admission`（`:63`），旧 `:40` 的「只写 allow」分支已不存在"
+   },
+   {
+    "id": "LGC-LG-03",
+    "state": "verified",
+    "file": "studio/src/studio/app/mutations.rs",
+    "pre_freeze_line": 257,
+    "post_freeze_line": 320,
+    "note": "写盘前交给内核裁决（`PluginCatalog::with_appended_line`，`:320`）；`:257` 的 record 拼接本身未变"
+   },
+   {
+    "id": "LGC-LG-04",
+    "state": "fixed",
+    "file": "core/src/registry_core/plugin/catalog/catalog.rs",
+    "pre_freeze_line": 126,
+    "post_freeze_line": 131,
+    "note": "schema 门禁落在 `parse` 的表头处理 `:131` 与 `schema_matches`（`:115`）"
+   },
+   {
+    "id": "LGC-LG-40",
+    "state": "fixed",
+    "file": "core/src/registry_core/plugin/catalog/catalog.rs",
+    "pre_freeze_line": 281,
+    "post_freeze_line": 317,
+    "note": "`accounts_for` 现为 `:317`（旧锚点落在一条测试断言上）"
+   },
+   {
+    "id": "STU-S-08",
+    "state": "fixed",
+    "file": "studio/src/studio/app/mutations.rs",
+    "pre_freeze_line": 320,
+    "post_freeze_line": 337,
+    "note": "入口导入的判定现为 `:337`（`entry_text.contains(&format!(\"use {crate_name} as _;\"))`）"
+   },
+   {
+    "id": "STU-V-01",
+    "state": "verified",
+    "file": "studio/src/studio/app/mutations.rs",
+    "pre_freeze_line": 332,
+    "post_freeze_line": 238,
+    "note": "行终止补齐移到内核侧追加助手（`core/src/registry_core/plugin/catalog/catalog.rs:238-242`）；调用点 `studio/src/studio/app/mutations.rs:319`"
+   }
+  ],
+  "verifications": [
+   {
+    "id": "t51",
+    "report": "audit-verify-fix-b1.md",
+    "lines": 213,
+    "title": "独立验证 B1 三条 CRITICAL 修复（含变异测试）",
+    "verdicts": [
+     {
+      "finding": "LGC-LG-02",
+      "verdict": "证实",
+      "section": "§2 B1-1（t43）"
+     },
+     {
+      "finding": "LGC-LG-03",
+      "verdict": "证实",
+      "section": "§3 B1-2（t44）"
+     },
+     {
+      "finding": "LGC-LG-01",
+      "verdict": "证实",
+      "section": "§4 B1-3（t45）"
+     },
+     {
+      "finding": "STU-V-01",
+      "verdict": "证实",
+      "section": "§3（无换行锁补换行）"
+     }
+    ],
+    "means": "自建探针（`/tmp/vs-probe`，path 依赖真实 crate；两个夹具包共享相对路径、命名空间不同）+ 每条一次变异测试（改回旧行为 → 探针与作者钉子变红 → 逐字节还原）+ 全仓进程级缓存普查 + 五条门禁在**哈希钉住的树**上复跑。",
+    "not_covered": [
+     "LGC-LG-04",
+     "LGC-LG-40",
+     "STU-S-08"
+    ],
+    "disclosures": [
+     "第一次 identity 探针有取证 bug（在共享 units 目录取第一个命中 → 误报 FAIL），改成按包自己的 fingerprint 精确打开后四组全 PASS；误报输出不作证据",
+     "变异窗口 18:31–18:33 与另一位成员的 `cargo test --workspace` 重叠——**那一窗口里别人跑出的 workspace 结果应作废重跑**；t51 自己的门禁改在 18:36–18:37 并用源文件哈希钉住"
+    ],
+    "conclusion": "三条 B1 修复（B1-1/B1-2/B1-3）判定为**已关闭**。"
+   },
+   {
+    "id": "t55",
+    "report": "audit-verify-fix-b1-1.md",
+    "lines": 136,
+    "title": "独立验证 B1-1（第二条装置）：admission 读回不丢 deny",
+    "verdicts": [
+     {
+      "finding": "LGC-LG-02",
+      "verdict": "证实",
+      "section": "§5 结论"
+     }
+    ],
+    "means": "树外 `/tmp/nk-probe`（path 依赖只读 core、features=[\"syntax\"]），探针 B11 共 18 项；不复用作者测试；把读回的 `OwnedAdmission` 还原成运行期 `Admission` 再问 `accepts`，因此断言的是门禁语义而不是文本；变异回旧实现后 `accepts(\"ui/experimental\")==true` 变红。",
+    "not_covered": [],
+    "disclosures": [
+     "未复核紧凑语法其它扩展的语义取舍；`admission.rs:48/52` 的历史单列表分支建议下一轮并入 `compact_admission`"
+    ],
+    "conclusion": "B1-1 成立（B1-1 的**第二条独立验证**，装置与 t51 不同）。"
+   },
+   {
+    "id": "t56",
+    "report": "audit-verify-fix-b1-4.md",
+    "lines": 101,
+    "title": "独立验证 B1-4：Studio Edit 表单 / 检视器不再丢 deny（t52 的修复）",
+    "verdicts": [
+     {
+      "finding": "FIXR-01",
+      "verdict": "证实",
+      "section": "§7 结论与范围"
+     }
+    ],
+    "means": "检出的完整副本 `/tmp/nk-b14` + 自写探针：种子工程 → `App::load()` → **真按键** `handle_key('e')` 取 Edit 预填 → `parse_admission_owned` 重建门禁 → 断言 `accepts(\"ui/experimental\")==false`；再用保存路径的 `render_admission` 断言写回源码仍含 deny；最后用 `TestBackend(200×50)` 真渲染一帧断言缓冲文本含被 deny 的路径。变异 A 复现 t52 之前的丢失，变异 B 证明 `debug_assert` 是活的。",
+    "not_covered": [],
+    "disclosures": [
+     "极窄面板下的检视器换行/截断形态未测（200 列宽未触发截断）",
+     "`debug_assert` 只在 debug/test 构建生效——release 下由作者两条测试把关"
+    ],
+    "conclusion": "B1-4 关闭（= 本节的 `FIXR-01`）。"
+   }
+  ],
+  "verification_gap": "**三份独立复核已落地，逐条结论见 `verifications` 与 §12.5**（数据来自 `audit-verify-fix-b1.md`（t51）、`audit-verify-fix-b1-1.md`（t55）、`audit-verify-fix-b1-4.md`（t56）——本块只记账，不替复核下结论）。7 条受影响条目里 **4 条**被复核**证实**（`LGC-LG-01`/`LGC-LG-02`/`LGC-LG-03`/`STU-V-01`，均由 t51 逐条复算；`LGC-LG-02` 另获 t55 的第二条装置），**3 条仍未被任何独立复核覆盖**（`LGC-LG-04` schema 门禁、`LGC-LG-40`——t51 明确记录其「十字段空来源」一族的读取语义**仍未修**、`STU-S-08` 入口导入判定），这 3 条**留在 `fixed`、不计 verified**。**作者自验（先红后绿的钉子）一律不计入 verified**。另有 1 条修复轮新增条目 `FIXR-01` 由 t56 证实（`new_findings_verified = 1`）。t51 的两条披露（identity 探针取证 bug 的误报不作证据；变异窗口 18:31–18:33 与另一位成员的 `cargo test --workspace` 重叠 → 那一窗口的他人结果应作废重跑）照实收录于 `verifications`。",
+  "new_findings": [
+   {
+    "id": "FIXR-01",
+    "severity": "MAJOR",
+    "severity_note": "与 LGC-LG-02（CRITICAL）同源同后果，但路径是 Studio 表单的预填/写回、且内核侧读回已不再静默丢字段，故记 MAJOR 而不是 CRITICAL。",
+    "file": "studio/src/studio/app/source_index.rs",
+    "pre_freeze_line": 47,
+    "post_freeze_line": 71,
+    "severity_source": "fix-round",
+    "verify_status": "partial",
+    "verifier": null,
+    "evidence_kind": "runtime",
+    "batch": "B1-立即：安全与数据完整性",
+    "title": "Studio Edit 表单预填/写回仍丢 deny：`admission_text` 是内核紧凑拼法的第二份实现",
+    "evidence": "修复前的红测试逐字：`prefill=\"allow:ui\" read=Ok(OwnedAdmission { allowed_paths: [\"ui\"], denied_paths: [] })`；后果是**写回**——`saving the untouched form erased the deny list: event=updated registration face …/control.rs …`（重写后的源码里已无 `ui/experimental`）。根因：`admission_text` 自己拼一整串紧凑形式，而内核的紧凑渲染器 `compact_admission` （`core/src/registry_core/authoring/parse/admission.rs:95`）是私有的，Studio 无法复用。",
+    "fix_hint": "t52 已改为按内核子句语法逐列表渲染（两张都空则 `ANY`）+ `debug_assert` 交给内核解析器裁决，并以 `both_lists_survive_the_compact_rendering` 与 `the_kernel_reads_back_every_value_this_renderer_emits` 双向互钉；**建议下一步**把内核的 `compact_admission` 提升为公开入口（core 提供 `OwnedAdmission` 的紧凑渲染），Studio 这份即可删除——本任务因 `core/` 不在 inScope 未能做到。",
+    "provenance": "t43 的 out-of-scope 报告（B1-4：LGC-LG-02 的同族残余，t43 inScope 之外；t52 承接修复）",
+    "fixed_in_fix_round": true,
+    "fix_round_state": "verified",
+    "fix_round_verification": {
+     "verdict": "证实",
+     "reports": [
+      "audit-verify-fix-b1-4.md"
+     ],
+     "means": "t56：检出差副本 + 自写探针（真按键取 Edit 预填 → 重建运行期门禁断言被 deny 的路径仍被否决；保存路径写回仍含 deny；`TestBackend(200×50)` 真渲染一帧含被 deny 的路径）+ 两次变异（变异 A 复现 t52 之前的丢失；变异 B 证明 `debug_assert` 是活的）。",
+     "verified": true
+    },
+    "consumers_fixed": [
+     "studio/src/studio/app/keyboard.rs:79（Edit 预填）",
+     "studio/src/studio/ui/search.rs:97 → studio/src/studio/ui/panels.rs:151（检视器显示）"
+    ]
+   }
+  ],
+  "new_findings_note": "这 1 条**不计入**主清单的 212 条（也不计入 §2 队列、§3 映射表与批次计数），是本节的「修复轮新增」小计。"
+ }
 }

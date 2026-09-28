@@ -45,6 +45,8 @@
 
 ## 1. 方法与口径（先把数字定死，再谈结论）
 
+> **冻结声明**：本报告主体（§0–§11）描述的是**冻结在 17:12 的树**——其中的计数、行号与结论都以那棵树为准。此后就地落地的修复（含受影响锚点的**现行**行号、体量与枚举行的变化）记在 **§12「修复轮 delta」**；`audit-findings.json` 的 `fix_round` 块是同一份账的机器可读形式。
+
 ### 1.1 代码规模：两个口径并存，都标出处
 
 | 口径 | 文件 / 行数 | 出处 |
@@ -1702,3 +1704,123 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 - 结构化明细：`docs/audit-2026-09-28/audit-findings.json`（字段 `id/severity/category/file/line/title/evidence/verify_status/verifier/fix_hint/batch` + `old_ids`/`ledger_id`/`source_report`/`source_line`/`evidence_kind`）
 - 交互对照图：`docs/audit-2026-09-28/audit-structure-map.html`（数据只来自 `audit-boundary-refactor-plan.md` 与 `audit-inventory.{json,md}`，无虚构数字）
 
+## 12. 修复轮 delta（产物冻结 17:12 之后）
+
+**本节是账，不是新结论。** 本报告主体（§0–§11）描述的是一棵**冻结在 17:12 的树**：那棵树上的计数、行号与结论都不改。此后（17:43–17:53 起）有修复**就地**落到工作树里，若不记账，读者会拿冻结时的行数与今天的树对照。本节只列变化本身，不改任何既有判定。
+
+- 记账时点：产物冻结 17:12 → 本次记账（2026-09-28，t43/t44 的 B1 修复 + t52 的同族残余修复 + t54 的拆文件收口）
+- 落地文件：**8** 个，逐文件净差合计 **+1007** 行（表里的 Δ 是「现行行数 − 冻结行数」的**净差**：拆/并文件时增删会在同一格里相抵，例如 `mutations.rs` 在 t44 增了 228 行、t54 又拆出 196 行测试，净 +32）
+- 受影响条目：**7** 条（`fixed` 3、`verified` 4）
+- 修复轮**新增**条目：**1** 条（`FIXR-01`，**不计入**主清单的 212 条）
+
+### 12.1 修复轮落地的文件
+
+| 文件 | 冻结行数 | 现行行数 | Δ | 落地内容 |
+| --- | --- | --- | --- | --- |
+| `build_method/src/identity_cache.rs` | 101 | 306 | **+205** | t43/t44：B1-1（LG-01）身份缓存按 namespace 分桶 + 钉子 |
+| `build_method/src/node_id.rs` | 117 | 181 | **+64** | t43/t44：LG-01（缓存键含 namespace；读回时校验该 namespace 是否在册） |
+| `core/src/registry_core/authoring/parse/admission.rs` | 235 | 366 | **+131** | t43：B1-1（LG-02）紧凑形式双向承载 allow 与 deny |
+| `core/src/registry_core/plugin/catalog/catalog.rs` | 382 | 538 | **+156** | t44：LG-03/LG-04/LG-40（写前校验、schema 门禁、字段语义） |
+| `studio/src/studio/app/mutations.rs` | 388 | 420 | **+32** | t44：LG-03 写前校验 +228（含测试）→ t54 把测试模块拆出（-196） |
+| `studio/src/studio/app/keyboard.rs` | 177 | 280 | **+103** | t52：B1-4 同族残余（Edit 表单预填） |
+| `studio/src/studio/app/source_index.rs` | 102 | 217 | **+115** | t52：B1-4 同族残余（admission_text 第二份实现） |
+| `studio/src/studio/app/tests/lock_writes.rs` | 0 | 201 | **+201** | t54：从 mutations.rs 拆出的仅测试模块（#[path] 挂载，免尺寸棘轮） |
+
+### 12.2 三处新旧数字对照
+
+**（a）代码体量**（谓词：`find . -name '*.rs' -not -path './target/*' -not -path '*/target/*'`）
+
+| 时点 | 文件 | 行数 | 说明 |
+| --- | --- | --- | --- |
+| 冻结（本报告 §1.1 采信） | 394 | 78,951 | audit-structure-base.md（§1.1 采信） |
+| t46 复核人 R5 当时 | 394 | 79,622 | t46 复核人 R5 当时（只有 5 个 B1 文件落地，t52/t54 尚未落地）（+671） |
+| **t53 记账时（本次实测）** | 395 | 79,878 | t53 本次实测；逐文件 Δ 之和为 1007（含新增文件 201 行） |
+
+**口径注（必须写清）**：逐文件 Δ 之和（1007）与「实测总量 − 冻结总量」（927）**差 80 行**——因为冻结之后 HEAD 已被推进（`a524956`），`git diff` 已无法还原 17:12 的逐文件基线。因此本节只报**实测值 + 逐文件对照**（逐文件表以 HEAD 为冻结态，对修复文件成立），**不做减法推算**；任何需要逐字节对账的场合请以 12.1 的表为准。
+
+**（b）R-4 枚举行**（谓词：全树行首 `mod NAME;` / `mod NAME {`（含 inline），排除 target/）
+
+| 时点 | 模块名 | 声明处 |
+| --- | --- | --- |
+| 冻结（报告 §7.6/§7.7 引用） | 296 | 440 |
+| t46/R5 复核当时 | 297 | 442 |
+| **t53 记账时（本次复算）** | **299** | **444** |
+
+新增的 4 条声明（这就是 +3 名 / +4 处）：
+
+| 文件:行 | 模块名 | 所属轮次 |
+| --- | --- | --- |
+| `build_method/src/identity_cache.rs:121` | `tests` | B1 修复轮 |
+| `studio/src/studio/app/mutations.rs:420` | `lock_writes` | B1 修复轮（t54） |
+| `studio/src/studio/app/keyboard.rs:180` | `edit_form_tests` | t52 |
+| `studio/src/studio/app/source_index.rs:140` | `admission_text_tests` | t52 |
+
+即当前枚举为 **299 / 444**（模块名 / 声明处）。
+
+**裁决数不变（已实跑复算）**：R-4a 14 名 / 14 处、R-4b 15 名 / 26 处（豁免 1 处）、R-4c 6 对违规 + 1 对登记豁免 + 7 对单复数族——出处：实跑 /tmp/r4_from_report.py（t42 从报告 §G 原样抽取的脚本）。4 条新声明都是测试模块名，不在任何角色谓词的违规集里，所以只动枚举行、不动裁决。
+
+**（c）因内容移位需要更新的标题锚点**（`file:line` 的旧值仍指向真实文件与界内行号，但「标题行就是缺陷发生处」已不成立）
+
+| 条目 | 严重度 | 文件 | 冻结锚点 | **现行锚点** | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| `LGC-LG-01` | CRITICAL | `build_method/src/node_id.rs` | `:36` | **`:100`** | 缓存键现在含 namespace（`NodeIdCache::insert`/`get` 见 `:59`/`:81`），`:36` 的键检索移到 `:100` |
+| `LGC-LG-02` | CRITICAL | `core/src/registry_core/authoring/parse/admission.rs` | `:40` | **`:63`** | 读回构造形式时两张列表都进 `compact_admission`（`:63`），旧 `:40` 的「只写 allow」分支已不存在 |
+| `LGC-LG-03` | CRITICAL | `studio/src/studio/app/mutations.rs` | `:257` | **`:320`** | 写盘前交给内核裁决（`PluginCatalog::with_appended_line`，`:320`）；`:257` 的 record 拼接本身未变 |
+| `LGC-LG-04` | MAJOR | `core/src/registry_core/plugin/catalog/catalog.rs` | `:126` | **`:131`** | schema 门禁落在 `parse` 的表头处理 `:131` 与 `schema_matches`（`:115`） |
+| `LGC-LG-40` | MINOR | `core/src/registry_core/plugin/catalog/catalog.rs` | `:281` | **`:317`** | `accounts_for` 现为 `:317`（旧锚点落在一条测试断言上） |
+| `STU-S-08` | MAJOR | `studio/src/studio/app/mutations.rs` | `:320` | **`:337`** | 入口导入的判定现为 `:337`（`entry_text.contains(&format!("use {crate_name} as _;"))`） |
+| `STU-V-01` | MINOR | `studio/src/studio/app/mutations.rs` | `:332` | **`:238`** | 行终止补齐移到内核侧追加助手（`core/src/registry_core/plugin/catalog/catalog.rs:238-242`）；调用点 `studio/src/studio/app/mutations.rs:319` |
+
+### 12.3 修复轮新增条目（不进主清单）
+
+**`FIXR-01` / MAJOR / `studio/src/studio/app/source_index.rs:47`（现行 `:71`） / 批次 B1-立即：安全与数据完整性**
+
+- **标题**：Studio Edit 表单预填/写回仍丢 deny：`admission_text` 是内核紧凑拼法的第二份实现
+- **现象与判据**：修复前的红测试逐字：`prefill="allow:ui" read=Ok(OwnedAdmission { allowed_paths: ["ui"], denied_paths: [] })`；后果是**写回**——`saving the untouched form erased the deny list: event=updated registration face …/control.rs …`（重写后的源码里已无 `ui/experimental`）。根因：`admission_text` 自己拼一整串紧凑形式，而内核的紧凑渲染器 `compact_admission` （`core/src/registry_core/authoring/parse/admission.rs:95`）是私有的，Studio 无法复用。
+- **最小修复方向**：t52 已改为按内核子句语法逐列表渲染（两张都空则 `ANY`）+ `debug_assert` 交给内核解析器裁决，并以 `both_lists_survive_the_compact_rendering` 与 `the_kernel_reads_back_every_value_this_renderer_emits` 双向互钉；**建议下一步**把内核的 `compact_admission` 提升为公开入口（core 提供 `OwnedAdmission` 的紧凑渲染），Studio 这份即可删除——本任务因 `core/` 不在 inScope 未能做到。
+- **出处（provenance）**：t43 的 out-of-scope 报告（B1-4：LGC-LG-02 的同族残余，t43 inScope 之外；t52 承接修复）
+- **严重度说明**：与 LGC-LG-02（CRITICAL）同源同后果，但路径是 Studio 表单的预填/写回、且内核侧读回已不再静默丢字段，故记 MAJOR 而不是 CRITICAL。
+- **两处消费方**：studio/src/studio/app/keyboard.rs:79（Edit 预填）；studio/src/studio/ui/search.rs:97 → studio/src/studio/ui/panels.rs:151（检视器显示）
+- **复核状态**：`partial`（无独立复核人）
+
+这 1 条**不计入**主清单的 212 条（也不计入 §2 队列、§3 映射表与批次计数），是本节的「修复轮新增」小计。
+
+### 12.4 复核进度与剩余缺口（必须与 12.1 一起读）
+
+**三份独立复核已落地，逐条结论见 `verifications` 与 §12.5**（数据来自 `audit-verify-fix-b1.md`（t51）、`audit-verify-fix-b1-1.md`（t55）、`audit-verify-fix-b1-4.md`（t56）——本块只记账，不替复核下结论）。7 条受影响条目里 **4 条**被复核**证实**（`LGC-LG-01`/`LGC-LG-02`/`LGC-LG-03`/`STU-V-01`，均由 t51 逐条复算；`LGC-LG-02` 另获 t55 的第二条装置），**3 条仍未被任何独立复核覆盖**（`LGC-LG-04` schema 门禁、`LGC-LG-40`——t51 明确记录其「十字段空来源」一族的读取语义**仍未修**、`STU-S-08` 入口导入判定），这 3 条**留在 `fixed`、不计 verified**。**作者自验（先红后绿的钉子）一律不计入 verified**。另有 1 条修复轮新增条目 `FIXR-01` 由 t56 证实（`new_findings_verified = 1`）。t51 的两条披露（identity 探针取证 bug 的误报不作证据；变异窗口 18:31–18:33 与另一位成员的 `cargo test --workspace` 重叠 → 那一窗口的他人结果应作废重跑）照实收录于 `verifications`。
+
+**计数**：受影响 7 条 = verified **4** + fixed 3；修复轮新增 1 条（其中 verified 1）；**合计 verified 5 条**、独立复核报告 3 份。
+
+### 12.5 三份独立复核与逐条结论（t51 / t55 / t56）
+
+数据来自三份复核报告本身；本节**只记账、不替复核下结论**。
+
+| 复核 | 报告 | 判定对象 | 手段（摘要） | 结论 |
+| --- | --- | --- | --- | --- |
+| **t51** | `audit-verify-fix-b1.md`（213 行） | `LGC-LG-02`（证实）；`LGC-LG-03`（证实）；`LGC-LG-01`（证实）；`STU-V-01`（证实） | 自建探针（`/tmp/vs-probe`，path 依赖真实 crate；两个夹具包共享相对路径、命名空间不同）+ 每条一次变异测试（改回旧行为 → 探针与作者钉子变红 → 逐字节还原）+ 全仓进程级缓存普查 + 五条门禁在**哈希钉住的树**上复跑。 | 三条 B1 修复（B1-1/B1-2/B1-3）判定为**已关闭**。 |
+| **t55** | `audit-verify-fix-b1-1.md`（136 行） | `LGC-LG-02`（证实） | 树外 `/tmp/nk-probe`（path 依赖只读 core、features=["syntax"]），探针 B11 共 18 项；不复用作者测试；把读回的 `OwnedAdmission` 还原成运行期 `Admission` 再问 `accepts`，因此断言的是门禁语义而不是文本；变异回旧实现后 `accepts("ui/experimental")==true` 变红。 | B1-1 成立（B1-1 的**第二条独立验证**，装置与 t51 不同）。 |
+| **t56** | `audit-verify-fix-b1-4.md`（101 行） | `FIXR-01`（证实） | 检出的完整副本 `/tmp/nk-b14` + 自写探针：种子工程 → `App::load()` → **真按键** `handle_key('e')` 取 Edit 预填 → `parse_admission_owned` 重建门禁 → 断言 `accepts("ui/experimental")==false`；再用保存路径的 `render_admission` 断言写回源码仍含 deny；最后用 `TestBackend(200×50)` 真渲染一帧断言缓冲文本含被 deny 的路径。变异 A 复现 t5 …（全文见 `audit-findings.json`） | B1-4 关闭（= 本节的 `FIXR-01`）。 |
+
+**逐条映射**（哪条 finding 被哪份复核、以什么手段、判为什么）：
+
+| finding | 现状态 | 复核 | 判定 | 手段与证据（引自复核报告） |
+| --- | --- | --- | --- | --- |
+| `LGC-LG-01` | **verified** | `audit-verify-fix-b1.md` | 证实 | t51 §4：端到端 4 组（冷/热 × A→B/B→A，两个夹具包共享同一相对路径），两包各拿到自己命名空间下现算的身份（`e0851ccb…` / `325377c4…`）；变异成「键只有相对路径 + 无读取侧复核」后热 A→B 复现旧污染、作者两条钉子 FAILED，还原零残留。 |
+| `LGC-LG-02` | **verified** | `audit-verify-fix-b1.md`、`audit-verify-fix-b1-1.md` | 证实 | t51 §2：构造形式读回 `allow:ui,ui/controls;deny:ui/experimental`，`denied` 未丢、读写往返稳定；变异回旧三分支后探针 FAIL 且作者钉子 FAILED。t55：树外第二条装置（探针 B11 共 18 项）——把读回的两张列表还原成运行期门禁后`accepts("ui/experimental")==false`（断言的是门禁，不是文本）；变异后该行变红。 |
+| `LGC-LG-03` | **verified** | `audit-verify-fix-b1.md` | 证实 | t51 §3：重复身份追加被 `with_appended_line` 拒（Err、不写盘）；无换行的锁追加后补换行、parse 得 2 条；被拒时入口文件逐字节未变；变异成「不校验不补换行」后探针 FAIL 且作者四条 `lock_writes` 钉子全 FAILED。 |
+| `LGC-LG-04` | **fixed** | —（三份复核均未覆盖） | 未复核 | 三份复核均未覆盖 schema 门禁本身（t51 §1「已核范围」只覆盖三条 B1 修复与 t44 写盘路径的调用点）。 |
+| `LGC-LG-40` | **fixed** | —（三份复核均未覆盖） | 未复核（且 t51 记录该族仍未修完） | t51 §3 的附带记录：official 七/十字段等价（`strict_contains=false`、`contains_record=true`）；但 X-1/LG-40 的「十字段空来源仍被当作 None 接受」**仍未修**，t51 明写它「MINOR、不在 B1 三条之内」。因此本条**不计 verified**。 |
+| `STU-S-08` | **fixed** | —（三份复核均未覆盖） | 未复核 | 三份复核均未单独覆盖入口导入判定（t51 只核到 `mutations.rs` 的调用点与内核 API 行为）。 |
+| `STU-V-01` | **verified** | `audit-verify-fix-b1.md` | 证实 | t51 §3 同一次探针：「无换行锁追加后补换行、parse 得 2 条」正是本条的缺陷面；变异体下该面与四条作者钉子同时变红。 |
+| `FIXR-01`（修复轮新增） | **verified** | `audit-verify-fix-b1-4.md` | 证实 | t56：检出差副本 + 自写探针（真按键取 Edit 预填 → 重建运行期门禁断言被 deny 的路径仍被否决；保存路径写回仍含 deny；`TestBackend(200×50)` 真渲染一帧含被 deny 的路径）+ 两次变异（变异 A 复现 t52 之前的丢失；变异 B 证明 `debug_assert` 是活的）。 |
+
+**复核报告自报的披露与未覆盖范围**（照实收录，供读者判断证据强度）：
+
+- **t51**：第一次 identity 探针有取证 bug（在共享 units 目录取第一个命中 → 误报 FAIL），改成按包自己的 fingerprint 精确打开后四组全 PASS；误报输出不作证据
+- **t51**：变异窗口 18:31–18:33 与另一位成员的 `cargo test --workspace` 重叠——**那一窗口里别人跑出的 workspace 结果应作废重跑**；t51 自己的门禁改在 18:36–18:37 并用源文件哈希钉住
+- **t51** 未覆盖的条目：`LGC-LG-04`、`LGC-LG-40`、`STU-S-08`
+- **t55**：未复核紧凑语法其它扩展的语义取舍；`admission.rs:48/52` 的历史单列表分支建议下一轮并入 `compact_admission`
+- **t56**：极窄面板下的检视器换行/截断形态未测（200 列宽未触发截断）
+- **t56**：`debug_assert` 只在 debug/test 构建生效——release 下由作者两条测试把关
+
+**规矩**：`verified` 只记**独立复核**的结论；作者自验（先红后绿的钉子）一律不计入。被复核证伪或部分证实的条目会**留在 `fixed`** 并在上表如实写明——本轮三份复核的判定都是「证实」，没有证伪项；但 `LGC-LG-40` 的这一族（official 十字段空来源读取语义）被 t51 明确记录为**仍未修**，所以它留在 `fixed`、不计 verified。
