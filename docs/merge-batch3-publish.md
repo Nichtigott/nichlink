@@ -42,32 +42,40 @@ tools/nichlink-publish --verify-publish --verify-consumers
 
 ## 3. 旧名 yank 清单（八名；`nichlink-macro` 保留 ✓）
 
-yank 的版本号 = 该名字**最后发布的版本**。按仓库记录（`CHANGELOG.md` 的发布状态段）当前
-发布线是 **`0.1.6`**；执行前请用 index 复核（`cargo info <name>` 或 index API），若与实际不同，
-把下面的 `<v>` 换成实际版本：
+**index 实测（2026-09-29）**：八个旧名的已发布版本各为 **`0.1.0`、`0.1.1`、`0.1.3`、`0.1.4`、`0.1.5`**
+（没有 `0.1.2`；**最新是 `0.1.5`，不是 `0.1.6`** —— 0.1.6 从未发布）。`nichlink-kernel` 与
+`nichlink-toolchain` 在 index 上**尚不存在**（本次是首次发布，无旧版本可 yank）；`nichlink-macro`
+已发布到 `0.1.5`，**保留不 yank**。
 
-| 旧名 | 最后发布版本（复核项） | 命令 |
+**要真正"退役"一个旧名，必须把它的每个已发布版本都 yank**：只 yank 最新版会让
+`nichlink-core = "0.1"` 这类新解析退回到未 yank 的旧版本（yank 只影响**新解析**，
+已有 lockfile 仍可解析被 yank 的版本 ✓）。
+
+| 旧名 | 要 yank 的版本 | 命令 |
 | --- | --- | --- |
-| `nichlink-core` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-core` |
-| `nichlink-run-method` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-run-method` |
-| `nichlink-build-method` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-build-method` |
-| `nichlink-debug-method` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-debug-method` |
-| `nichlink-plugin-host` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-plugin-host` |
-| `nichlink-studio` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-studio` |
-| `nichlink-mcp` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-mcp` |
-| `nichlink-cli` | `0.1.6` | `cargo yank --version 0.1.6 nichlink-cli` |
+| `nichlink-core` | 0.1.0 / 0.1.1 / 0.1.3 / 0.1.4 / 0.1.5 | `for v in 0.1.0 0.1.1 0.1.3 0.1.4 0.1.5; do cargo yank --version "$v" nichlink-core; done` |
+| `nichlink-run-method` | 同上五行 | 同上，把名字换掉 |
+| `nichlink-build-method` | 同上 | 同上 |
+| `nichlink-debug-method` | 同上 | 同上 |
+| `nichlink-plugin-host` | 同上 | 同上 |
+| `nichlink-studio` | 同上 | 同上 |
+| `nichlink-mcp` | 同上 | 同上 |
+| `nichlink-cli` | 同上 | 同上 |
 | `nichlink-macro` | — | **保留，不 yank** ✓ |
 
-批量形式（逐条执行，别合并成一条以免中间失败无从定位）：
+批量形式（**逐条执行**，别合并成一条以免中间失败无从定位；执行前先按上表逐名复核 index）：
 
 ```sh
 for n in nichlink-core nichlink-run-method nichlink-build-method nichlink-debug-method \
          nichlink-plugin-host nichlink-studio nichlink-mcp nichlink-cli; do
-  cargo yank --version 0.1.6 "$n"
+  for v in 0.1.0 0.1.1 0.1.3 0.1.4 0.1.5; do
+    cargo yank --version "$v" "$n" || echo "yank 失败: $n $v"
+  done
 done
 ```
 
-yank **只影响解析**，历史版本仍在 index 上；一旦 yank 不可撤销 ✓ ⇒ 第 2 步未绿之前不要执行本步。
+yank **只影响解析**（历史版本仍在 index 上，已锁定的 lockfile 不受影响）；一旦 yank **不可撤销** ✓
+⇒ 第 2 步（`--verify-publish --verify-consumers`）未绿之前不要执行本步。
 
 ## 4. 收尾
 
