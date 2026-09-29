@@ -23,7 +23,7 @@ the authoring executor as `authoring`, `studio` gates test-only fixtures as
 `prototype-fixtures`, and `plugin-host` uses `wasm` / `process-tools`. Do not
 rename a feature to match another crate: they are public API. `prototype-fixtures`
 gates test-only fixtures — the source-only host package under
-`toolchain/studio/tests/fixtures/node-editor/` — and is not part of the published surface.
+`toolchain/tests/fixtures/node-editor/` — and is not part of the published surface.
 It is off by default, so the CI job that runs the workspace with
 `--all-features` is the only gate that exercises it; keep that job green.
 `studio` also gates its `nichlink-dev` rebuild supervisor behind the
@@ -35,7 +35,7 @@ per-target equivalent of `publish = false` — it is what keeps
 `syntax`，`run_method` 把 authoring 执行器门控为 `authoring`，`studio` 把仅测试用的
 fixture 门控为 `prototype-fixtures`，`plugin-host` 使用 `wasm` / `process-tools`。
 不要为对齐其他 crate 而重命名特性：它们是公开 API。`prototype-fixtures` 只门控测试用
-fixture——`toolchain/studio/tests/fixtures/node-editor/` 下仅源码的宿主包——不属于发布表面。它默认
+fixture——`toolchain/tests/fixtures/node-editor/` 下仅源码的宿主包——不属于发布表面。它默认
 关闭，因此只有以 `--all-features` 跑整个工作区的 CI 任务会碰它；保持那个任务常绿。
 `studio` 还把 `nichlink-dev` 重建监督器门控在非默认的 `dev-supervisor` 特性之后：该二进制
 从本检出重建 Studio，安装副本永远做不到，而 `required-features` 就是按 target 的
@@ -47,14 +47,14 @@ the point rather than a collision: `kernel`'s `syntax` gates the registration-fa
 parser, `run_method`'s `authoring` gates the authoring executor, and
 `plugin-host`'s `wasm` / `process-tools` name execution backends. The two that are
 not capabilities say so in their own names: `prototype-fixtures` gates the
-checkout-only fixture package under `toolchain/studio/tests/fixtures/node-editor/`, and
+checkout-only fixture package under `toolchain/tests/fixtures/node-editor/`, and
 `dev-supervisor` gates the `nichlink-dev` binary that rebuilds this checkout (the
 table above is the whole set — no crate outside `kernel`, `run_method`, `studio` and
 `plugin-host` declares features).
 与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`kernel` 的 `syntax` 门控注册面
 解析器，`run_method` 的 `authoring` 门控 authoring 执行器，`plugin-host` 的 `wasm` /
 `process-tools` 点名的是执行后端。另外两个不是能力，名字里就写明了：
-`prototype-fixtures` 门控 `toolchain/studio/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
+`prototype-fixtures` 门控 `toolchain/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
 `dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`kernel`、
 `run_method`、`studio`、`plugin-host` 之外没有 crate 声明特性）。
 
@@ -89,7 +89,7 @@ current crate cannot be called by an absolute path from inside a macro expansion
 `macro_rules!` call resolves at the call site, so it breaks external callers; and a private
 `macro_rules!` is reachable only through textual scope, so a test that uses one has to be
 mounted inside the module that defines it. **Known residue**: six in-module test files
-(25 `#[test]` items) are not wired back yet; the diagnosis and the two candidate fixes live in
+(20 `#[test]` items) are not wired back yet; the diagnosis and the two candidate fixes live in
 `docs/b3-registration-diagnosis.md`.
 `nichlink-toolchain` 是**一个 crate、七个模块**，每个模块就是原来的一个 crate：
 `build_time`、`runtime`、`call_evidence`、`plugin_host`、`studio`、`mcp`、`cli`。
@@ -104,7 +104,7 @@ mounted inside the module that defines it. **Known residue**: six in-module test
 会把宏提升到 crate 根（写模块路径解析不到）；同 crate 的 `macro_export` 宏**不能在宏展开里经
 绝对路径**调用；裸名 `macro_rules!` 调用在**调用点**解析，因此会弄坏外部调用者；私有
 `macro_rules!` 只能靠文本作用域到达——用它的测试**必须挂载在定义它的模块之内**。**已知遗留**：
-六个模块内测试文件（25 个 `#[test]`）尚未接回；诊断与两条候选修法在
+六个模块内测试文件（20 个 `#[test]`）尚未接回；诊断与两条候选修法在
 `docs/b3-registration-diagnosis.md`。
 
 ## Kernel modules (`kernel/src/registry_core/`)

@@ -74,4 +74,10 @@ yank **只影响解析**，历史版本仍在 index 上；一旦 yank 不可撤�
 1. `CHANGELOG.md`：把 `## [0.2.0] — unreleased` 的头改成带日期的 `## [0.2.0] — YYYY-MM-DD`（发布当天）。
 2. 旧 8 名 yank 之后，若 `tools/nichlink-publish` 的两张表仍写 3 个包 ⇒ `--check-table` 仍应绿 ✓。
 3. **已知遗留（不阻塞发布，但要在下次发布说明里复述）**：批 2 的 `(b)` 六个模块内测试文件
-   （25 个 `#[test]`）尚未接回 ✗ —— 诊断见 `docs/b3-registration-diagnosis.md`。
+   （复核 t139 现算 **20 个** `#[test]`，非 25）尚未接回 ✗ —— 诊断见 `docs/b3-registration-diagnosis.md`。
+4. **发布前另加两条显式检查**（来自复核 t139 的 findings，避免"绿了但没人看见"）：
+   - `tools/nichlink-package-audit` 的**内容半段必须绿**：它逐 crate 核对 `cargo package --list` 是否覆盖
+     `src/**/*.rs` 与清单声明的 README；批 2 曾因 fixture 包住在 `src/` 下而红 ✗（收口见
+     `docs/audit-2026-09-28/audit-merge-landing.md` 的身份结论节）。
+   - 上面那 20 个未接回的 `#[test]` 属**已声明的覆盖降级** ⇒ 发布说明里必须复述，并在下个发布前决定
+     是否按 `docs/b3-registration-diagnosis.md` 的 F1/F2 收口。

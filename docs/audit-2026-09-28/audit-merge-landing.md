@@ -33,7 +33,9 @@
   `nichlink-toolchain` / `nichlink-conventions` / 两个示例宿主）；
   `--check-table` = **3 crates**；接回 cargo 的测试 = **10 个集成测试文件 + 1 个示例**，
   函数守恒 **54/54**。
-- 批 3 准备：全仓 `version = "0.1.6"` 残留 0；`release_version` 门禁绿。
+- 批 3 准备：全仓 `version = "0.1.6"` 残留 **2 处**（复核 t139 现算；两处都在测试夹具里当字符串用，
+  不是依赖声明）⇒ 判据应写成"清单行谓词：没有一行是 `nichlink-*` 的**依赖/版本声明**写 0.1.6"，
+  而不是"全仓 0 命中"；`release_version` 门禁绿 ✓。
 
 ## 与方案的漂移（方案读数 → 落地前现算；说明"为什么每步都要先算"）
 
@@ -50,12 +52,19 @@
 ## 身份结论（合并为什么不动 `NodeId`）
 
 - `NodeId` = hash(命名空间 = 宿主自己的包名, `file!()`, 名字) ⇒ **任何参与身份计算的文件被移动或改名，都会静默改变身份**。
-- 因此全过程中**两个真正的身份载体——`examples/**` 的两个示例宿主——一次都没有被移动或改名**；
-  `studio/tests/fixtures/**` 的源文件同样未被移动或改名。
-- **一处知情接受的偏差**：`studio/tests/fixtures/node-editor/**` 在批 2 早期随 studio 整目录并入
-  `toolchain/src/studio/tests/fixtures/**`。核查结论：该 fixture **没有任何落盘身份物**
+- 因此全过程中**两个真正的身份载体——`examples/**` 的两个示例宿主——一次都没有被移动或改名**：
+  复核者用 `git show --name-status` 核过四个提交，`examples/**` 的命中**全为 `M`（内容编辑），无 `R`/`D`** ✓。
+- **一处知情接受的偏差（含复核 t139 的更正）**：`studio/tests/fixtures/node-editor/**` 在批 2 早期随 studio
+  整目录并入 `toolchain/src/studio/tests/fixtures/**`——`13c0b13` 里那一侧是 **9 条 `D` + 目的地 9 条 `A`**
+  （t137 的表述只覆盖了 `examples/` 一侧，这条由 t139 更正）。核查结论：该 fixture **没有任何落盘身份物**
   （无 `.json` / `.jsonl` / `.bin`），也不硬编码 `NodeId`（只有运行时计算的 `root_node_id(...)`）
   ⇒ 身份逐次运行重算，行为无影响；记为"偏差 + 证据"，不写成"没有偏差"。
+- **复核的 MAJOR 发现（F-13-1 / F-14-1）已收口**：该 fixture 住在 `src/` 下时两件事同时坏 ✗ ——
+  ① `tools/nichlink-package-audit` 的**内容半段红**（内容判据要求 `src/**/*.rs` 都在包里，而 `cargo package`
+  不收嵌套包）；② `toolchain/src/studio/src/studio/app/tests.rs` 找的是
+  `CARGO_MANIFEST_DIR + "tests/fixtures/node-editor"` ⇒ 夹具**从未被找到**，测试走 `Option` 分支**静默跳过** ✗。
+  现已把它移到**代码本来就期望的** `toolchain/tests/fixtures/` 下 ⇒ 内容半段转绿、夹具真正可用 ✓
+  （AGENTS.md 的路径措辞与夹具自己的注释同步更正）。
 
 ## 回滚与不可回滚点
 
@@ -68,7 +77,12 @@
 
 ## 仍开放（点名，不粉饰）
 
-1. **批 2 遗留：6 个模块内测试文件 / 25 个 `#[test]` 未接回** ✗（74 个里 49 个已接回）。
+1. **批 2 遗留：6 个模块内测试文件 / 20 个 `#[test]` 未接回** ✗（复核 t139 现算：**总数 74 = 20 未接回 + 54 已接回**；
+   先前记的"25 / 49"是普查口径偏差，已按复核更正）。复核用三条独立探针把这件事**钉死**：两个构建面的 `--list` 里
+   这 20 个名字命中 **0**；在 HEAD 副本里给六个文件各插 `compile_error!` 后
+   `cargo check --workspace --all-targets` 两个面**仍 exit 0**（给已挂载的文件插则 exit 101 ⇒ 对照有牙）；
+   且在 `75e4387` 的副本里这 20 个**当年是活的集成测试目标** ⇒ **降级发生在批 2（`13c0b13`）**。
+   三处文档（本记录、AGENTS.md 的 Known residue、b3 诊断）都点了名 ⇒ 这是**已声明**的覆盖降级，不是隐瞒 ✗。
    背景：合并把宏定义从 crate 根移进了模块 ⇒ 宏可达性的三条规则同时改变（`#[macro_export]` 上提到
    crate 根；同 crate 展开里禁用绝对路径；裸名在调用点解析 ⇒ 会弄坏外部调用者；私有 `macro_rules!`
    只活在文本作用域）。成因、实测原文与两条候选修法（F1 逐文件归一成严格 arm / F2 生产侧加
@@ -80,8 +94,16 @@
    - 复核第一轮（`gates-auditor`）**部分完成**，但它用**自选探针**（`git show --name-status --format=`）
      独立确认了本记录最要紧的那条：四个提交里 **`examples/**` 与 `studio/tests/fixtures/**` 的命中全为
      `M`（内容编辑），没有任何 `R`/`D`** ⇒ 身份红线未被越过 ✓。它的深度探针部分因预算耗尽未做，
-     分提交清单已交回，现已另派一轮补齐（含核心必做项：那 25 个未接回的 `#[test]` 是否真的没跑 ——
+     分提交清单已交回，现已另派一轮补齐（含核心必做项：那 20 个未接回的 `#[test]` 是否真的没跑 ——
      "代码搬了、测试没接回"正是典型的**未声明覆盖降级**）。
+   - **第二轮（`bridge-auditor`）已完成**：报告 `docs/audit-2026-09-28/audit-review-merge.md`（255 行），
+     **整轮 needs_revision**（对合并阶梯而言）——逐提交 verdict：`75e4387` **pass**（显式标注"含作者自审成分"）、
+     `2656ddb` **pass**、`13c0b13` **needs_revision**、`ddaa33e` **needs_revision**。
+     四条 findings 的处置：**F-13-1 / F-14-1（MAJOR，同一根因）→ 已修**（fixture 移出 `src/`，见上）；
+     **F-13-2（MEDIUM，净减 20 个测试覆盖）→ 升级为发布前的显式检查项**（写进
+     `docs/merge-batch3-publish.md` 的收尾清单：不阻塞发布，但必须在发布清单里被看见）；
+     **F-13-3 / F-14-2（LOW）→ 已按复核更正**（本记录 25/49 → 20/54；"`0.1.6` 残留 0" 实测 2 处，
+     皆为测试夹具里的字符串 ⇒ 判据改成清单行谓词）。
 4. 两条已记账的小残留：`examples/**` 仍写旧名 `cut.full()` 两处（转发器保证可用）；
    根 glob 让 `nichlink-toolchain` 的根部"glob 一切"，因此 README/AGENTS 已按"模块路径是官方地址、
    只有精选清单承诺裸名"的口径写明策略。
