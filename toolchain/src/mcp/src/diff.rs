@@ -13,14 +13,14 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use crate::build_time::{FaceView, GraftPlanRow, declared_grafts, graft_plan_rows};
+use crate::build_time::{GraftPlanRow, declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
 use crate::mcp::build_evidence::build_evidence;
 use crate::mcp::protocol::DEFAULT_LIMIT;
 use crate::mcp::tree_delta::{FaceStatus, TreeDelta};
 use crate::mcp::truncation::withheld;
-use crate::mcp::workspace::{self, Scope};
+use crate::mcp::workspace::{self, Member, Scope};
 
 /// Report the face-level delta between two sides of this package.
 /// 报告本包两侧之间的面级差异。
@@ -44,25 +44,39 @@ use crate::mcp::workspace::{self, Scope};
 pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     match workspace::scope(root)? {
         Scope::Package(namespace) => {
-            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-            diff_body(root, &namespace, &faces, &unparsable, arguments)
+            let member = Member::package(root, namespace);
+            diff_body(&member, arguments)
         }
         Scope::Workspace(members) => workspace::merge(root, &members, arguments, diff_body),
         Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
     }
 }
 
+/// Why this answer derives instead of reading a member's published records.
+/// 这份答案为什么推导，而不是读成员的已发布记录。
+///
+/// A comparison needs **both** sides. The built side is already the member's
+/// records — that is what `TreeDelta::read` reads — but the other side is the tree
+/// the sources declare *right now*, and the record cannot say that: a face added
+/// since the build exists in no published file. The records are still read first;
+/// this is the reason they could not answer, and every reply says it took this
+/// path.
+/// 一次比较需要**两侧**。构建那一侧本来就是这个成员的记录——`TreeDelta::read` 读的正是它——但
+/// 另一侧是源码**此刻**声明的那棵树，而记录说不出它：构建之后新增的面不在任何已发布文件里。记录
+/// 仍然先被读取；这是它们答不了的原因，而每份回复都会说自己走了这条路。
+const DERIVES_BECAUSE: &str = "a comparison needs the tree the sources declare now, which no \
+                               published record can carry";
+
 /// One package's comparison, as the merged view and the single-package view both call it.
 /// 一个包的比较；合并视图与单包视图都调用它。
-pub(crate) fn diff_body(
-    root: &Path,
-    namespace: &str,
-    faces: &[FaceView],
-    unparsable: &str,
-    arguments: &Value,
-) -> Result<String, String> {
+pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, String> {
+    let root = member.dir.as_path();
+    let namespace = member.name.as_str();
+    let (faces, unparsable) = member.derived_tree()?;
+    let faces = faces.as_slice();
+    let unparsable = unparsable.as_str();
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
-        return diff_records(root, faces, namespace, arguments, unparsable);
+        return diff_records(root, faces, namespace, arguments, unparsable, member);
     }
     // The built side and its per-face verdicts come from one rule
     // (`crate::mcp::tree_delta`), which `nichlink.search` reads too: the same face must
@@ -85,7 +99,8 @@ pub(crate) fn diff_body(
     let source_sources: BTreeSet<_> = faces.iter().map(|face| face.source.as_str()).collect();
 
     let mut output = format!(
-        "namespace {namespace}\n{unparsable}build {}\nfaces {} (source) vs {} (build)\n",
+        "namespace {namespace}\n{}{unparsable}build {}\nfaces {} (source) vs {} (build)\n",
+        member.evidence_line(DERIVES_BECAUSE),
         // The freshness word comes from the one place that spells it. `built.current`
         // answers the same question through the same rule (`build_output_is_current`)
         // but spells nothing, so reading the word from here is what keeps this report
@@ -203,6 +218,7 @@ fn diff_records(
     namespace: &str,
     arguments: &Value,
     unparsable: &str,
+    member: &Member,
 ) -> Result<String, String> {
     // The records report used to spell the freshness word itself; it comes from the one
     // place that spells it now, which is also why this call reads the evidence rather
@@ -299,7 +315,8 @@ fn diff_records(
         }
     }
     let mut output = format!(
-        "namespace {namespace}\n{unparsable}build {freshness}\nrecords {} (external graft plans)\n",
+        "namespace {namespace}\n{}{unparsable}build {freshness}\nrecords {} (external graft plans)\n",
+        member.evidence_line(DERIVES_BECAUSE),
         rows.len()
     );
     output.push_str(&format!(

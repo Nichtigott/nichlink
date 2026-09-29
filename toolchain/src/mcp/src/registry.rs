@@ -3,36 +3,52 @@
 //!
 //! The bridge used to answer registry questions by re-deriving them: an agent
 //! grepped for macro names and reconstructed the tree itself, which is the drift
-//! the registry exists to remove. The rows here come from the build's own
-//! derivation (`crate::build_time::face_views`), so a path or an identity
-//! this tool reports is the one the host actually compiled.
+//! the registry exists to remove. The rows here now come from the build's **own
+//! published records** (`<package>/target/nichlink/out`, read through
+//! `build_method`'s readers — `published.rs`), so a workspace-rooted answer costs
+//! the records instead of every member's source walk; the derivation
+//! (`crate::build_time::face_views`) is the fallback for a member that published
+//! nothing, and every answer says which of the two it used.
 //! 本桥过去靠重新推导来回答注册问题：代理 grep 宏名，自己重建那棵树——这正是注册树要消除
-//! 的漂移。这里的行来自构建自己的推导（`crate::build_time::face_views`），因此本工具
-//! 报告的路径或身份就是宿主真正编译出的那一个。
+//! 的漂移。这里的行现在来自构建**自己已发布的记录**（`<package>/target/nichlink/out`，经
+//! `build_method` 的读取器读取——`published.rs`），因此工作区根上的一次答案花的是记录而不是
+//! 每个成员的源码遍历；推导（`crate::build_time::face_views`）是给什么都没发布的成员的回落，
+//! 而每一份答案都会说出自己用的是哪一种。
+//!
+//! What the published rows carry is `node`, `source` and the symbol release
+//! pruning tracks, plus the scope verdict — the record's own columns. `path`,
+//! `kind`, `registry_name` and `parent` are *derived* facts and are not in it, so
+//! an answer built from the record says so and names `nichlink.explain` (the one
+//! report that derives a per-face projection) as where to read them.
+//! 已发布的行携带的是 `node`、`source` 与发布剪枝跟踪的符号，外加作用域结论——也就是记录自己的
+//! 列。`path`、`kind`、`registry_name` 与 `parent` 是**推导**出来的事实、不在其中，因此由记录
+//! 构成的答案会说出来，并点名 `nichlink.explain`（唯一推导逐面投影的报告）为读取它们的地方。
 
 use std::path::Path;
 
-use crate::build_time::{FaceView, package_name};
+use crate::build_time::FaceView;
 use nichlink_kernel::lexicon;
+use serde_json::Value;
 
-use crate::mcp::workspace::{self, Scope};
+use crate::mcp::published::{FACES_UNKNOWN, PublishedTree};
+use crate::mcp::workspace::{self, Member, Scope, Tree};
 
 /// Report every registration face declared under the package root `root`.
 /// 报告 `root` 这个包根下声明的每个注册面。
 ///
-/// `root` is a package root, because that is what the derivation needs: the
-/// faces' identities are hashed over paths relative to the package's `src/`, and
-/// their namespace is the package's own name. A **virtual manifest** names no package,
+/// `root` is a package root, because that is what an identity needs: the faces'
+/// identities are hashed over paths relative to the package's `src/`, and their
+/// namespace is the package's own name. A **virtual manifest** names no package,
 /// so it is answered as the workspace it is: one section per member, each under its own
 /// name, with every member's status in the census above them.
-/// `root` 是包根，因为推导需要它：面的身份是对相对该包 `src/` 的路径取散列，而它们的命名空间
+/// `root` 是包根，因为身份需要它：面的身份是对相对该包 `src/` 的路径取散列，而它们的命名空间
 /// 就是这个包自己的名字。**虚拟清单**不命名任何包，因此它按它实际的样子——工作区——作答：逐成员
 /// 一节，各自在自己的名字之下，而它们上方是每个成员的状态普查。
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
     match workspace::scope(root)? {
         Scope::Package(namespace) => {
-            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-            Ok(render_registry(&namespace, &faces, &unparsable))
+            let member = Member::package(root, namespace);
+            registry_body(&member, &serde_json::json!({}))
         }
         Scope::Workspace(members) => {
             let arguments = serde_json::json!({});
@@ -45,14 +61,24 @@ pub(crate) fn registry(root: &Path) -> Result<String, String> {
 /// One package's registry report, as the merged view and the single-package view both
 /// call it.
 /// 一个包的注册树报告；合并视图与单包视图都调用它。
-pub(crate) fn registry_body(
-    _root: &Path,
-    namespace: &str,
-    faces: &[FaceView],
-    unparsable: &str,
-    _arguments: &serde_json::Value,
-) -> Result<String, String> {
-    Ok(render_registry(namespace, faces, unparsable))
+///
+/// The evidence is chosen once, here, and the two renderings below share nothing
+/// but the namespace line: they answer from different facts and say so. A body
+/// that quietly derived over a published member would make the perf note on this
+/// page false, so the branch is a `match` a reader can see.
+/// 证据在这里被选一次，下面两种渲染只共享命名空间那一行：它们用不同的事实作答，并且说出来。
+/// 一个在发布过的成员之上悄悄推导的主体会让本页的性能注记变成假话，因此这个分支是一个读者看得见
+/// 的 `match`。
+pub(crate) fn registry_body(member: &Member, _arguments: &Value) -> Result<String, String> {
+    match member.tree()? {
+        Tree::Published(tree) => Ok(render_published(&member.name, tree)),
+        Tree::Derived { faces, unparsable } => Ok(render_registry(
+            &member.name,
+            faces,
+            unparsable,
+            &member.evidence_line(""),
+        )),
+    }
 }
 
 /// The identity namespace this package's faces were stamped with.
@@ -113,7 +139,7 @@ pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<St
     if let Some(configured) = configured {
         return Ok(configured.to_owned());
     }
-    package_name(&root.join("Cargo.toml")).map_err(|error| {
+    crate::build_time::package_name(&root.join("Cargo.toml")).map_err(|error| {
         format!(
             "cannot learn the identity namespace of {}: {error}; \
              set {} to name it explicitly",
@@ -123,16 +149,24 @@ pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<St
     })
 }
 
-/// One line per face, plus the namespace the identities live in.
-/// 每个面一行，外加这些身份所属的命名空间。
+/// One line per derived face, plus the namespace the identities live in.
+/// 每个推导出的面一行，外加这些身份所属的命名空间。
 ///
 /// The namespace heads the report because every id below it is meaningless
 /// without it: a reader comparing these rows against a built tree has to know
 /// which identity domain they are in.
 /// 命名空间写在报告开头，因为下面的每个 id 离开它都没有意义：把这些行与已构建的树对照的读取方
 /// 必须知道它们处在哪个身份域。
-fn render_registry(namespace: &str, faces: &[FaceView], unparsable: &str) -> String {
-    let mut output = format!("namespace {namespace}\n{unparsable}faces {}\n", faces.len());
+fn render_registry(
+    namespace: &str,
+    faces: &[FaceView],
+    unparsable: &str,
+    evidence: &str,
+) -> String {
+    let mut output = format!(
+        "namespace {namespace}\n{evidence}{unparsable}faces {}\n",
+        faces.len()
+    );
     for face in faces {
         // An unresolved parent is named rather than hidden: the face is real,
         // and the fact that its parent is not is the answer to "why is this node
@@ -152,6 +186,63 @@ fn render_registry(namespace: &str, faces: &[FaceView], unparsable: &str) -> Str
     if faces.is_empty() {
         output.push_str("no registration face is declared under the package's src/\n");
     }
+    output
+}
+
+/// The record's own rows: an identity, a source, a symbol, and the scope's verdict.
+/// 记录自己的行：一个身份、一条源码、一个符号，以及作用域的结论。
+///
+/// The face list is `pruning_manifest.tsv`'s, which the build writes for **every**
+/// face it found — not `source_scope.tsv`'s, which lists only the *roots* a
+/// narrowed scope selected (two rows for a three-face package, measured on
+/// `examples/control-button`). Reading the scope's list as the tree would
+/// under-report it, and the last line says where the derived projection lives so
+/// nobody has to guess why a `path` is missing.
+/// 面清单是 `pruning_manifest.tsv` 的，构建为它找到的**每个**面都写这一份——而不是
+/// `source_scope.tsv` 的，后者只列收窄作用域选中的**根**（在 `examples/control-button` 上实测：
+/// 三个面的包只有两行）。把作用域那份清单读成树会少报，而最后一行说出推导投影住在哪里，因此没人
+/// 需要猜为什么没有 `path`。
+fn render_published(namespace: &str, tree: &PublishedTree) -> String {
+    let mut output = format!(
+        "namespace {namespace}\n{}build {}\n",
+        tree.evidence_line(),
+        tree.freshness()
+    );
+    output.push_str(&format!(
+        "scope mode={} all={} reason={} selected_ids={} selected_sources={} selected_modules={}\n",
+        tree.scope.mode,
+        tree.scope.all,
+        tree.scope.reason.as_deref().unwrap_or("-"),
+        tree.scope.selected_ids.len(),
+        tree.scope.selected_sources.len(),
+        tree.scope.selected_modules.len(),
+    ));
+    let rows = tree.faces();
+    if tree.faces_unknown() {
+        output.push_str(FACES_UNKNOWN);
+        output.push('\n');
+    } else {
+        output.push_str(&format!("faces {}\n", rows.len()));
+    }
+    for row in rows {
+        let verdict = if tree.selected(row) {
+            "selected"
+        } else {
+            "not-selected"
+        };
+        output.push_str(&format!(
+            "  {:<13} {:<38} {:<44} {}\n",
+            verdict, row.id, row.source, row.symbol
+        ));
+    }
+    if rows.is_empty() && !tree.faces_unknown() {
+        output.push_str("no registration face is recorded for this package\n");
+    }
+    output.push_str(
+        "note: these are the build's published rows (node, source, tracked symbol, scope verdict). \
+         `path`, `kind`, `registry_name` and `parent` are derived facts and are not in the record — \
+         `nichlink.explain` reports that derived projection.\n",
+    );
     output
 }
 

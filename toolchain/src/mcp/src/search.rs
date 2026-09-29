@@ -41,7 +41,7 @@ use serde_json::Value;
 use crate::mcp::protocol::DEFAULT_LIMIT;
 use crate::mcp::source_index::load_sources;
 use crate::mcp::tree_delta::{FaceStatus, TreeDelta};
-use crate::mcp::workspace::{self, MemberState, Scope};
+use crate::mcp::workspace::{self, Scope};
 
 /// Find registration faces, source files, and Rust function declarations by name.
 /// 按名字查找注册面、源码文件与 Rust 函数声明。
@@ -116,12 +116,12 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         Ok(Scope::Workspace(members)) => {
             results.push(workspace::roster(root, &members));
             for member in &members {
-                match &member.state {
-                    MemberState::Derived { faces, unparsable } => {
+                match member.derived_tree() {
+                    Ok((faces, unparsable)) => {
                         let lines = package_tree_lines(
                             &member.dir,
-                            faces,
-                            unparsable,
+                            &faces,
+                            &unparsable,
                             &query,
                             limit,
                             &mut hits,
@@ -129,10 +129,12 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
                         );
                         if !lines.is_empty() {
                             results.push(format!("member {} ({})", member.name, member.status()));
+                            results
+                                .push(member.evidence_line(DERIVES_BECAUSE).trim_end().to_owned());
                             results.extend(lines);
                         }
                     }
-                    MemberState::Unresolvable(reason) => results.push(format!(
+                    Err(reason) => results.push(format!(
                         "member {} ({})  tree unavailable ({reason})",
                         member.name,
                         member.status()
@@ -191,6 +193,19 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     Ok(results.join("\n"))
 }
+
+/// Why this answer derives instead of reading a member's published records.
+/// 这份答案为什么推导，而不是读成员的已发布记录。
+///
+/// A face is matched on its logical path, `kind`, module and `registry_name`, and
+/// the published record carries none of the first two and only the source for the
+/// rest — so the tree half of a search reads the sources. The records are still
+/// read first: they are what tells this answer whether a member was built at all,
+/// and every group says which tree its rows came from.
+/// 面是按逻辑路径、`kind`、模块与 `registry_name` 匹配的，而已发布记录既不携带前两者，对后者也只有
+/// 源码——因此搜索的树那一半读源码。记录仍然先被读取：正是它告诉这份答案一个成员到底有没有被构建过，
+/// 而每个分组都会说出它的行来自哪棵树。
+const DERIVES_BECAUSE: &str = "faces are matched on logical path, kind, module and registry_name, which the published record      does not carry";
 
 /// The tree half one package contributes: the file that could not be parsed, the
 /// stale-manifest note, and the face rows the query matched.

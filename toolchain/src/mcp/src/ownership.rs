@@ -50,7 +50,7 @@ use nichlink_kernel::NodeId;
 use serde_json::{Value, json};
 
 use crate::mcp::source_index::portable_path;
-use crate::mcp::workspace::{self, Member, MemberState, Scope};
+use crate::mcp::workspace::{self, Member, Scope};
 
 /// One tool's implementation: the package root plus the `arguments` object.
 /// 一个工具的实现：包根加上 `arguments` 对象。
@@ -276,18 +276,18 @@ fn owned_answer(
     // The body is the tool's own single-package implementation. A member whose tree cannot
     // be read gets no body: it says so, because the reader is looking here.
     // 主体就是该工具自己的单包实现。树读不了的成员没有主体：它说出来，因为读者正是在看这里。
-    match &member.state {
-        MemberState::Derived { .. } => match handler(&member.dir, &redirected) {
+    match member.tree() {
+        Ok(_) => match handler(&member.dir, &redirected) {
             Ok(text) => output.push_str(&text),
             Err(reason) => output.push_str(&format!(
                 "tree unavailable ({})\n",
                 workspace::one_line(&reason)
             )),
         },
-        MemberState::Unresolvable(reason) => {
+        Err(reason) => {
             output.push_str(&format!(
                 "tree unavailable ({})\n",
-                workspace::one_line(reason)
+                workspace::one_line(&reason)
             ));
         }
     }
@@ -319,11 +319,35 @@ fn no_owner(members: &[Member], path: &str) -> String {
 /// 根，每个成员都有，因此它点名每一个成员、也就没有唯一拥有者。
 fn owners_of(members: &[Member], target: &str) -> Vec<usize> {
     let target = target.trim_start_matches('/');
+    // An identity the build published is a hit: the manifest pairs it with this
+    // package and no other package can hold it — every id is a hash over the
+    // namespace — so the search stops at the member the build wrote it into
+    // instead of deriving every member's tree. Whether that member still declares
+    // it is a question only that member's own answer can settle, and it is asked
+    // there: a face deleted since the build comes back as that member's own
+    // refusal rather than as "no member owns it". A **miss** proves nothing — a
+    // face added since the build lives in the sources only — so the loop below
+    // still derives every member, exactly as this resolver always did.
+    // 构建发布过的身份就是命中：清单把它与这个包配对，别的包不可能持有它——每个 id 都是对命名空间
+    // 的散列——因此搜索停构建把它写进的那个成员，而不是推导每个成员的树。那个成员是否仍然声明它，
+    // 只有它自己的答案能裁定，而问题就在那里问：构建之后被删掉的面会以该成员自己的拒绝回来，而不是
+    // "没有成员拥有它"。**未命中**什么也证明不了——构建之后新增的面只住在源码里——因此下面的循环
+    // 仍然推导每个成员，与本解析器一直以来的做法完全相同。
+    if let Ok(id) = target.parse::<NodeId>() {
+        let published: Vec<usize> = members
+            .iter()
+            .enumerate()
+            .filter_map(|(index, member)| member.publishes(id).then_some(index))
+            .collect();
+        if !published.is_empty() {
+            return published;
+        }
+    }
     members
         .iter()
         .enumerate()
         .filter_map(|(index, member)| {
-            let MemberState::Derived { faces, .. } = &member.state else {
+            let Ok((faces, _)) = member.derived_tree() else {
                 return None;
             };
             if target.is_empty() || target == "root" {
@@ -382,8 +406,8 @@ fn every_member(
     let mut no_tree: Vec<String> = Vec::new();
     for member in members {
         sections.push_str(&format!("\n== {} ({})\n", member.name, member.status()));
-        match &member.state {
-            MemberState::Derived { .. } => match handler(&member.dir, arguments) {
+        match member.tree() {
+            Ok(_) => match handler(&member.dir, arguments) {
                 Ok(text) => {
                     answered += 1;
                     sections.push_str(&text);
@@ -396,11 +420,11 @@ fn every_member(
                     ));
                 }
             },
-            MemberState::Unresolvable(reason) => {
+            Err(reason) => {
                 no_tree.push(member.name.clone());
                 sections.push_str(&format!(
                     "tree unavailable ({})\n",
-                    workspace::one_line(reason)
+                    workspace::one_line(&reason)
                 ));
             }
         }

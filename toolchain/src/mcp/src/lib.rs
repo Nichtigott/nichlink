@@ -4,8 +4,12 @@
 //!
 //! Five tools index Rust source text; the rest answer from evidence that is not
 //! source text. `nichlink.registry` reports the registration tree the *build*
-//! derives, through the same `face_views` the CLI's `explain` uses, so an agent
-//! can ask what the registry is instead of reconstructing it from macro names.
+//! published — `<package>/target/nichlink/out`, read through `build_method`'s
+//! readers — so an agent can ask what the registry is instead of reconstructing
+//! it from macro names, and a workspace-rooted answer costs the records rather
+//! than every member's source walk. The derivation (`face_views`, what the CLI's
+//! `explain` uses) is the fallback for a member that published nothing, and every
+//! reply says which of the two it used.
 //! `nichlink.explain` reads the build's *published* files (`target/nichlink/out`)
 //! and answers what actually ships — scope and release pruning — which the source
 //! cannot, or the static overlay projection (`overlay: true`) that says which slot
@@ -78,6 +82,9 @@ mod resolve;
 
 #[path = "workspace.rs"]
 mod workspace;
+
+#[path = "published.rs"]
+mod published;
 
 #[path = "ownership.rs"]
 mod ownership;

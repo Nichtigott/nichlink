@@ -25,8 +25,9 @@ use super::{Scope, scope};
 /// 一个夹具工作区：根，以及三个成员的包名。
 struct Workspace {
     root: PathBuf,
-    /// A host member: it declares one face, so its tree is `queried`.
-    /// 宿主成员：声明一个面，因此它的树是 `queried`。
+    /// A host member: it declares one face and published nothing, so its tree was
+    /// derived now and is reported as `not built`.
+    /// 宿主成员：声明一个面且什么都没发布，因此它的树是现推的，报成 `not built`。
     host: String,
     /// A framework member: a library with no registration face at all.
     /// 框架成员：一个完全没有注册面的库。
@@ -39,8 +40,14 @@ struct Workspace {
 impl Workspace {
     /// The census line every merged tree answer carries.
     /// 每份合并树级答案都带的那条普查行。
+    ///
+    /// `queried` is the face axis this census has always counted; `published` and
+    /// `not built` are the evidence axis, and this fixture publishes nothing, so
+    /// the one member with faces is `not built`.
+    /// `queried` 是这个普查一直在数的面那一轴；`published` 与 `not built` 是证据轴，而本夹具什么
+    /// 都没发布，因此那个有面的成员是 `not built`。
     fn census(&self) -> String {
-        "members 3  queried 1  no faces 1  unresolvable 1".to_owned()
+        "members 3  queried 1  no faces 1  unresolvable 1  published 0  not built 1".to_owned()
     }
 }
 
@@ -138,13 +145,17 @@ fn the_registry_tool_answers_a_virtual_root_with_every_member() {
         fixture.host
     );
     assert!(reply.contains("root/button"), "{reply}");
+    assert!(
+        reply.contains("tree derived now (no published records at"),
+        "a member with no records must say so rather than read as an unpublished tree: {reply}"
+    );
     let expected = NodeId::from_namespaced_path(&fixture.host, "button/button.rs", "Button");
     assert!(
         reply.contains(&expected.to_string()),
         "the host member's face must carry its compiled identity {expected}: {reply}"
     );
     assert!(
-        reply.contains(&format!("== {} (queried)\n", fixture.host)),
+        reply.contains(&format!("== {} (not built)\n", fixture.host)),
         "the host member `{}` has no section: {reply}",
         fixture.host
     );
@@ -187,7 +198,7 @@ fn a_workspace_search_states_every_member_and_its_degradation() {
     }
     assert!(reply.contains("face  root/button"), "{reply}");
     assert!(
-        reply.contains(&format!("member {} (queried)", fixture.host)),
+        reply.contains(&format!("member {} (not built)", fixture.host)),
         "the host member's hits are grouped under it: {reply}"
     );
     assert!(

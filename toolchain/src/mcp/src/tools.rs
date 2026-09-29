@@ -74,9 +74,12 @@ pub(crate) fn tools() -> Vec<Value> {
              and function hits are unchanged. The tree half needs the identity namespace; a root \
              Cargo cannot name still answers the source half and says the tree half is unavailable. \
              A virtual workspace root is a root too, and it is answered as the workspace it is: \
-             every member appears with its status (`queried`, `no faces`, or `unresolvable` with \
-             the reason), each member's matching faces are grouped under it, and a member whose \
-             tree cannot be derived is named rather than hidden behind the file hits.",
+             every member appears with its status (`published`, `not built`, `no faces`, or \
+             `unresolvable` with the reason), each member's matching faces are grouped under it \
+             with a line naming which tree those rows came from — a face is matched on facts the \
+             published record does not carry, so a member's own records are read first and the \
+             sources are derived when they cannot answer — and a member whose tree cannot be \
+             derived is named rather than hidden behind the file hits.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
         ),
         tool(
@@ -158,15 +161,24 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.registry",
-            "Report the registration faces this package declares, as the build derives them: \
-             logical path, kind, source, and the NodeId the host compiled. Contract, admission, \
-             and registration-rule data need the built snapshots and are not included. `root` is \
-             a package root; omitting it uses NICH_LINK_PACKAGE_ROOT. A **virtual workspace root** \
-             (a manifest with no `[package]`) names no package, so it is answered as the workspace: \
-             one section per member under that member's own package name, with a census naming \
-             every member's status above them — `queried`, `no faces` (a framework crate declares \
-             none), or `unresolvable` with the reason. Point `root` at one member for that \
-             package's own answer.",
+            "Report the registration faces this package declares, as the build sees them. A \
+             **member that published records** under `target/nichlink/out` is answered from them — \
+             the face rows `pruning_manifest.tsv` carries (`node`, `source`, the tracked symbol) \
+             and the scope verdict `source_scope.tsv` carries — without re-deriving its tree, and \
+             the reply opens with `tree published from <dir>` naming the `discovery.fingerprint` \
+             and whether that output still describes these sources (`build current`, or `build \
+             stale (run nichlink check)`). Those records carry no logical path and no `kind`, so a \
+             member answered that way has no `root/...` column and the reply's last line says so: \
+             `nichlink.explain` reports the derived per-face projection that has them. A member \
+             that published nothing is derived now and says `tree derived now (no published records \
+             at ...)` above the derived rows. Contract, admission, and registration-rule data need \
+             the built snapshots and are not included. `root` is a package root; omitting it uses \
+             NICH_LINK_PACKAGE_ROOT. A **virtual workspace root** (a manifest with no `[package]`) \
+             names no package, so it is answered as the workspace: one section per member under \
+             that member's own package name, with a census naming every member's status above them \
+             — `published`, `not built` (no records, so its tree was derived now), `no faces` (a \
+             framework crate declares none), or `unresolvable` with the reason. Point `root` at \
+             one member for that package's own answer.",
             json!({"type":"object","properties":{"root":{"type":"string"}}}),
         ),
         tool(
@@ -291,8 +303,10 @@ pub(crate) fn tools() -> Vec<Value> {
              the *slot* a plan targets, not the implementation it selects, so each row shows the \
              plan's own target and graft next to the declaration's cut and graft. Read-only. A \
              **virtual workspace root** is answered as the workspace: a census of every member \
-             with its status, then each member's own plans, since a plan is a record under one \
-             package's `.nichlink/`.",
+             with its status (`published`, `not built`, `no faces`, or `unresolvable` with the \
+             reason), then each member's own plans, since a plan is a record under one package's \
+             `.nichlink/` and a declaration is judged against a logical path, which is a fact the \
+             published record does not carry.",
             json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":400},"root":{"type":"string"}}}),
         ),
         tool(

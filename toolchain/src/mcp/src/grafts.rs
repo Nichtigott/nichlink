@@ -22,11 +22,11 @@
 
 use std::path::Path;
 
-use crate::build_time::{FaceView, declared_grafts, graft_plan_rows};
+use crate::build_time::{declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
-use crate::mcp::workspace::{self, Scope};
+use crate::mcp::workspace::{self, Member, Scope};
 
 /// The most plan rows one reply carries before it says it truncated.
 /// 一条回复在声明被截断之前最多携带的计划条目数。
@@ -43,23 +43,36 @@ const MAX_ROWS: usize = 400;
 pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
     match workspace::scope(root)? {
         Scope::Package(namespace) => {
-            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-            grafts_body(root, &namespace, &faces, &unparsable, arguments)
+            let member = Member::package(root, namespace);
+            grafts_body(&member, arguments)
         }
         Scope::Workspace(members) => workspace::merge(root, &members, arguments, grafts_body),
         Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
     }
 }
 
+/// Why this answer derives instead of reading a member's published records.
+/// 这份答案为什么推导，而不是读成员的已发布记录。
+///
+/// A declaration is judged against the face a plan's target names, and a target is
+/// a *logical path* — the one fact the published record does not carry, because a
+/// path is assembled from the parent chain and the declared registry name rather
+/// than written down. The records are still read first; this is the reason they
+/// could not answer, and every reply says it took this path.
+/// 声明的判定依据是计划目标点名的那个面，而目标是**逻辑路径**——正是已发布记录不携带的那一个事实，
+/// 因为路径是由父链与声明的注册面名拼出来的，而不是写下来的。记录仍然先被读取；这是它们答不了的
+/// 原因，而每份回复都会说自己走了这条路。
+const DERIVES_BECAUSE: &str =
+    "graft targets are logical paths, which the published record does not carry";
+
 /// One package's graft report, as the merged view and the single-package view both call it.
 /// 一个包的 graft 报告；合并视图与单包视图都调用它。
-pub(crate) fn grafts_body(
-    root: &Path,
-    namespace: &str,
-    faces: &[FaceView],
-    unparsable: &str,
-    arguments: &Value,
-) -> Result<String, String> {
+pub(crate) fn grafts_body(member: &Member, arguments: &Value) -> Result<String, String> {
+    let root = member.dir.as_path();
+    let namespace = member.name.as_str();
+    let (faces, unparsable) = member.derived_tree()?;
+    let faces = faces.as_slice();
+    let unparsable = unparsable.as_str();
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -82,7 +95,10 @@ pub(crate) fn grafts_body(
     // `graft_plan_rows`, so the reader has to be told the tree was short.
     // 解析不了的注册面文件数属于做出这个判断所依据的那棵树：推导读不了的面在 `graft_plan_rows` 看来
     // 与不存在的面一样，因此必须告诉读者这棵树是短的。
-    let mut output = format!("namespace {namespace}\n{unparsable}{entry_line}");
+    let mut output = format!(
+        "namespace {namespace}\n{}{unparsable}{entry_line}",
+        member.evidence_line(DERIVES_BECAUSE),
+    );
 
     if let Err(error) = &declared {
         let _ = error;

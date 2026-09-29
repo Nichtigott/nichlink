@@ -91,6 +91,14 @@ pub(crate) fn derived_faces(
     root: &Path,
     namespace: &str,
 ) -> Result<(Vec<FaceView>, String), String> {
+    // Every derivation is counted, so "this answer read the build's published
+    // records instead" is a checkable claim rather than a comment
+    // (`published::derivations`). Test-only instrumentation: nothing in a shipped
+    // bridge reads the count.
+    // 每一次推导都被计数，因此"这份答案读的是构建已发布的记录"是可核对的声称而不是一句注释
+    // （`published::derivations`）。这是仅供测试的埋点：出厂的桥里没有东西读这个计数。
+    #[cfg(test)]
+    crate::mcp::published::note_derivation();
     let (faces, unreadable) = crate::build_time::face_views_and_unreadable(root, namespace)?;
     let line = if unreadable.is_empty() {
         String::new()
