@@ -216,7 +216,7 @@ fn a_workspace_search_states_every_member_and_its_degradation() {
         crate::mcp::search::search(&fixture.root, &json!({"query": "nothing-matches-this"}))
             .expect("the search answers");
     assert!(
-        nothing.contains(&fixture.census()) && nothing.ends_with("no matches"),
+        nothing.contains(&fixture.census()) && nothing.contains("no matches"),
         "a workspace query with no hits still states the tree it read, and says nothing matched: \
          {nothing}"
     );

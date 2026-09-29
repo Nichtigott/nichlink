@@ -49,20 +49,36 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // The convergence layer asks the call graph about the name as it was written: a function name
     // is case-sensitive, and the face matcher below is not.
     // 收敛层按写下的原名去问调用图：函数名区分大小写，而下面的面匹配不区分。
+    // Two questions live behind one tool, and they are answered differently: `query` matches
+    // **names** (faces, files, functions) while `literal` matches **text** anywhere in a source
+    // file, comments and string literals included. Asking both at once is refused rather than
+    // silently preferring one, because the two answers are not the same shape.
+    // 一个工具后面住着两个问题，而它们答法不同：`query` 匹配**名字**（面、文件、函数），`literal` 匹配
+    // 源码文件里任何位置的**文本**，注释与字符串字面量都算。同时问两个会被拒绝，而不是静默偏向其中
+    // 一个，因为两个答案不是同一种形状。
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
+    if arguments.get("query").is_some() && arguments.get("literal").is_some() {
+        return Err(
+            "`query` matches names and `literal` matches text; pass one of them, not both"
+                .to_owned(),
+        );
+    }
+    if let Some(literal) = arguments.get("literal").and_then(Value::as_str) {
+        return literal_search(root, literal, limit);
+    }
     let written = arguments
         .get("query")
         .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.search requires query".to_owned())?
+        .ok_or_else(|| "nichlink.search requires `query` (a name) or `literal` (text)".to_owned())?
         .trim()
         .to_owned();
     let query = written.to_ascii_lowercase();
     if query.is_empty() {
         return Err("query must not be empty".to_owned());
     }
-    let limit = arguments
-        .get("limit")
-        .and_then(Value::as_u64)
-        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
     let mut results = Vec::new();
     // The limit used to cut the scan short with nothing said, so a caller that got
     // `limit` rows could not tell a complete answer from a full one. The rows the limit
@@ -184,7 +200,19 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // 跟在普查之后，而说出来正是为了让普查——关于"被读到的那棵树"的事实而不是结果——不会被读成一份被
     // 截短的结果清单。
     if hits == 0 {
-        results.push("no matches".to_owned());
+        // A dead end is where a caller most needs the next step: names and text are different
+        // questions, and the spellings that fail *as names* (`Type::method`, an enum variant, the
+        // message a failing assertion printed) are exactly the ones `literal` answers. The
+        // evaluation measured this cost: three rounds in a row the narrowing step was "find where
+        // this message is produced", and the answer had to come from a grep outside the bridge.
+        // 死路正是调用方最需要下一步的地方：名字与文本是两个问题，而**按名字**失败的拼法
+        // （`Type::method`、枚举变体、失败断言印出的那句话）恰恰是 `literal` 能答的那些。评测量出了
+        // 这个代价：连着三轮，"范围收窄"那一步都是"去找这句话在哪里产出"，而答案只能来自桥外的 grep。
+        results.push(
+            "no matches — names only; for text (a message, an enum variant, a qualified spelling \
+             like `Type::method`) pass `literal`"
+                .to_owned(),
+        );
     }
     if withheld_hits > 0 {
         results.push(crate::mcp::truncation::withheld(
@@ -224,6 +252,96 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         );
     }
     Ok(results.join("\n"))
+}
+
+/// Every line of every source file that contains this text, verbatim.
+/// 每个源码文件里含有这段文本的那些行，原样给出。
+///
+/// This is the one question the bridge could not answer before, and the evaluation measured what
+/// that cost: three times in three rounds the narrowing step was "the failing assertion's message
+/// names a constant, find where that message is produced" — a string in the sources — and every
+/// time the agent had to leave the bridge and grep. The search is deliberately literal: raw bytes,
+/// case-sensitive, comments and string literals included. A masked view would be the wrong answer
+/// for exactly this question, because the thing being looked for usually *is* a string literal.
+/// 这是桥此前唯一答不了的问题，而评测量出了它的代价：三轮里三次，"范围收窄"的那一步都是"失败的断言
+/// 文案里点名了一个常量，去找这句话是在哪里产出的"——源码里的一处字符串——而每一次代理都只能离开桥
+/// 去 grep。检索刻意做成字面的：原始字节、区分大小写、注释与字符串字面量都算。对这种问题，屏蔽过的
+/// 视图恰恰是错答案，因为要找的东西通常**就是**一个字符串字面量。
+fn literal_search(root: &Path, literal: &str, limit: usize) -> Result<String, String> {
+    if literal.is_empty() {
+        return Err("`literal` must not be empty".to_owned());
+    }
+    let mut results = vec![format!(
+        "literal {literal:?} (raw bytes, case-sensitive; comments and string literals included)"
+    )];
+    let mut hits = 0usize;
+    let mut withheld = 0usize;
+    let mut record = |file: &str, line: usize, text: &str, results: &mut Vec<String>| {
+        if hits < limit {
+            results.push(format!("{file}:{line}: {}", clipped(text)));
+            hits += 1;
+        } else {
+            withheld += 1;
+        }
+    };
+    match workspace::scope(root)? {
+        Scope::Package(_) => {
+            literal_lines(root, literal, &mut results, &mut record)?;
+        }
+        Scope::Workspace(members) => {
+            for member in &members {
+                let found = literal_lines(&member.dir, literal, &mut results, &mut record)?;
+                if found > 0 {
+                    results.push(format!("member {} ({found} lines)", member.name));
+                }
+            }
+        }
+        Scope::Unresolvable(reason) => results.push(format!("tree  unavailable ({reason})")),
+    }
+    if hits == 0 {
+        results.push("no matches".to_owned());
+    }
+    if withheld > 0 {
+        results.push(crate::mcp::truncation::withheld(
+            withheld,
+            hits + withheld,
+            limit,
+            "lines",
+            "raise `limit` or make the literal longer",
+        ));
+    }
+    Ok(results.join("\n"))
+}
+
+/// One root's literal hits, in file order then line order.
+/// 一个根上的字面命中，按文件顺序、再按行顺序。
+fn literal_lines(
+    root: &Path,
+    literal: &str,
+    results: &mut Vec<String>,
+    record: &mut impl FnMut(&str, usize, &str, &mut Vec<String>),
+) -> Result<usize, String> {
+    let mut found = 0usize;
+    for file in load_sources(root)? {
+        for (index, line) in file.source.lines().enumerate() {
+            if line.contains(literal) {
+                record(&file.relative, index + 1, line, results);
+                found += 1;
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// One source line, capped, saying so when it was.
+/// 一行源码，设上限，被截时说出来。
+fn clipped(line: &str) -> String {
+    const COLUMNS: usize = 200;
+    if line.chars().count() <= COLUMNS {
+        return line.trim().to_owned();
+    }
+    let head = line.chars().take(COLUMNS).collect::<String>();
+    format!("{} … (line cut at {COLUMNS} columns)", head.trim_end())
 }
 
 /// Why this answer derives instead of reading a member's published records.

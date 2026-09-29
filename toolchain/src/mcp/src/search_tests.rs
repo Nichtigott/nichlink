@@ -141,7 +141,12 @@ fn the_source_half_still_answers_file_and_function_names() {
 
     let none =
         search(&root, &json!({"query": "nothing-matches-this"})).expect("the search answers");
-    assert_eq!(none, "no matches");
+    // The intent is unchanged — a query that matches nothing says so — and the answer now also
+    // names the question that would have matched it, because names and text are different searches.
+    // 意图没变——什么都没匹配上的查询会说出来——而答案现在也点名那个本可以匹配的问题，因为名字与文本
+    // 是两种检索。
+    assert!(none.starts_with("no matches"), "{none}");
+    assert!(none.contains("pass `literal`"), "{none}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -254,5 +259,58 @@ fn the_convergence_layer_labels_each_layer_and_its_bounds() {
     // 不带这个开关时答案与从前完全一样：分层是显式请求的，因此既有调用方的形状不变。
     let plain = search(&root, &json!({"query": "Button"})).expect("an answer");
     assert!(!plain.contains("chain:"), "{plain}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A literal search finds raw text — what a failing assertion's message sends you looking for — and
+/// it finds it where a masked view would not: inside a string literal and inside a comment. Asking
+/// for a name and a literal at once is refused by name, because the two answers are not the same
+/// shape.
+/// 字面检索找的是原始文本——失败断言的文案正是让人去找的那个东西——而且它能在屏蔽过的视图找不到的
+/// 地方找到：字符串字面量里与注释里。同时要名字与字面会被按名拒绝，因为两种答案不是同一种形状。
+#[test]
+fn a_literal_search_finds_text_in_strings_and_comments() {
+    let (root, _name) = package("literal");
+    std::fs::write(
+        root.join("src/literal_probe.rs"),
+        "// the message: plugin does not target framework\n\
+         pub const MESSAGE: &str = \"plugin does not target framework `graft-test`\";\n",
+    )
+    .expect("probe source");
+    let text = search(&root, &json!({"literal": "does not target framework"})).expect("an answer");
+    assert!(text.contains("raw bytes, case-sensitive"), "{text}");
+    assert!(text.contains("src/literal_probe.rs:1:"), "{text}");
+    assert!(text.contains("src/literal_probe.rs:2:"), "{text}");
+    let error = search(&root, &json!({"query": "Button", "literal": "x"})).expect_err("a refusal");
+    assert!(error.contains("pass one of them"), "{error}");
+    let none = search(&root, &json!({"literal": "nowhere-at-all"})).expect("an answer");
+    assert!(none.contains("no matches"), "{none}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Neither argument at all: the tool names both, so the caller is not left guessing which one it
+/// wanted.
+/// 两个参数都不给：工具把两个都点名，调用方不必猜它要的是哪一个。
+#[test]
+fn a_search_with_neither_a_name_nor_a_literal_names_both() {
+    let (root, _name) = package("neither");
+    let error = search(&root, &json!({})).expect_err("a refusal");
+    assert!(
+        error.contains("`query`") && error.contains("`literal`"),
+        "{error}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A name that matches nothing points at the other question instead of stopping at "no matches":
+/// the spellings that fail as names are the ones the literal mode answers.
+/// 按名字查不到时，答案指向另一个问题，而不是停在"no matches"：按名字失败的拼法正是字面模式能答的。
+#[test]
+fn a_name_that_matches_nothing_points_at_the_literal_mode() {
+    let (root, _name) = package("hint");
+    let text = search(&root, &json!({"query": "FrameworkMismatch"})).expect("an answer");
+    assert!(text.contains("no matches"), "{text}");
+    assert!(text.contains("pass `literal`"), "{text}");
+    assert!(text.contains("Type::method"), "{text}");
     let _ = std::fs::remove_dir_all(&root);
 }
