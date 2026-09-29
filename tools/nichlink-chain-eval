@@ -1,0 +1,313 @@
+#!/bin/sh
+set -eu
+
+# The call-chain evaluation: construct faults in /tmp copies, ask both tools, score.
+# 调用链评测：在 /tmp 副本里构造故障，问两个工具，机械判分。
+#
+# Nothing here is a test bank. The sites are chosen by a seed out of the tree's own
+# call graph (`nichlink-chain-eval-graph.py`), the answer key is the construction
+# itself, and the judging is string and edge arithmetic (`...-judge.py`). No symbol
+# name or file name of a scenario appears in this directory.
+# 这里没有题库。站点由种子从树自己的调用图里挑（`nichlink-chain-eval-graph.py`），参考答案就是构造
+# 本身，判分是字符串与边的算术（`...-judge.py`）。本目录里不含任何场景的符号名或文件名。
+#
+# Why every copy comes from `git archive <pinned-rev>` and not from the worktree: the
+# worktree is shared and moves (it moved three times during this evaluation). The
+# revision is pinned once in `prepare`, every copy is unpacked from that same object,
+# and the archive's sha256 is recorded, so "the copies are the same tree" is a fact a
+# reader can re-derive instead of a promise.
+# 为什么每份副本都来自 `git archive <pinned-rev>` 而不是工作树：工作树是共享的，而且会动（本次评测
+# 期间它动了三次）。`prepare` 里把修订固定一次，之后每份副本都从同一个对象解包，并记下归档流的
+# sha256，于是"各副本是同一棵树"是读者能自己复现的事实，而不是一句承诺。
+#
+# Mutations never touch the worktree: only `$work/round-*` copies, each with its own
+# `CARGO_TARGET_DIR`. No `git stash`/`checkout`/`restore`/`clean` is used anywhere, and
+# nothing is committed. Every cargo command carries `--offline`.
+# 变异绝不碰工作树：只有 `$work/round-*` 副本，且每个副本自带 `CARGO_TARGET_DIR`。任何地方都不用
+# `git stash`/`checkout`/`restore`/`clean`，也不提交。每条 cargo 命令都带 `--offline`。
+#
+# Usage / 用法:
+#   tools/nichlink-chain-eval prepare    # pin revision, build instrument, pick sites
+#   tools/nichlink-chain-eval run [N]     # rounds: inject, ask both tools, judge
+#   tools/nichlink-chain-eval table      # markdown tables + verdicts.json
+#   tools/nichlink-chain-eval repair "1 4 7" 3   # red/green + repair rubric
+#   tools/nichlink-chain-eval scan       # sensitive-string scan of the new files
+#   tools/nichlink-chain-eval all        # prepare, run, table
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$root"
+
+work=${NICHLINK_CHAIN_EVAL_WORK:-/tmp/nichlink-eval}
+plan_spec=${NICHLINK_CHAIN_EVAL_PLAN:-1:impl,1:chain,1:both,2:impl,2:chain,2:both,3:impl,3:chain,3:both,4:impl,4:chain,4:both,5:impl,5:chain}
+seed=${NICHLINK_CHAIN_EVAL_SEED:-20260929}
+# The evaluated revision. It defaults to HEAD, and it is pinned into `$work/pinned-rev`
+# so every later copy comes from the same tree; a revision that does not build stops
+# `prepare` here rather than producing 14 rounds of nothing.
+# 被评测的修订。默认取 HEAD，并固定写入 `$work/pinned-rev`，使之后每份副本都来自同一棵树；构建不过的
+# 修订会在这里停住 prepare，而不是产出 14 轮什么都没有的结果。
+rev=${NICHLINK_CHAIN_EVAL_REV:-}
+export PATH="$HOME/.local/bin:$PATH"
+
+graph="$here/nichlink-chain-eval-graph.py"
+mutate="$here/nichlink-chain-eval-mutate.py"
+ask="$here/nichlink-chain-eval-ask.py"
+judge="$here/nichlink-chain-eval-judge.py"
+repair="$here/nichlink-chain-eval-repair.py"
+
+log() { printf '%s\n' "$*" | tee -a "$work/run.log"; }
+
+# Run one step, echo its command and its exit code into the run log. The exit code is
+# part of the evidence, not a detail: a step that failed quietly would be a hole.
+# 跑一步，把命令与退出码写进运行日志。退出码是证据的一部分，不是细节：悄悄失败的一步就是个洞。
+run() {
+  printf '$ %s\n' "$*" | tee -a "$work/run.log"
+  set +e
+  "$@" >"$work/.step.out" 2>&1
+  code=$?
+  set -e
+  cat "$work/.step.out" | tee -a "$work/run.log"
+  printf 'EXIT %s\n' "$code" | tee -a "$work/run.log"
+  return $code
+}
+
+pinned() { cat "$work/pinned-rev"; }
+
+# The build must happen *inside* the copy. Running cargo with the worktree as the
+# working directory builds the worktree into the copy's target directory: the copy is
+# then only a place for artifacts, and the instrument is whatever the shared tree
+# happened to be at that moment. That is not hypothetical — the first attempt did
+# exactly that, and while the worktree later gained an untracked module the build
+# failed on a file no pinned revision contains.
+# 构建必须发生在**副本里面**。以工作树为工作目录跑 cargo，构建的是工作树、只是把产物放进副本的
+# target 目录：那样副本只是个放产物的地方，而仪器是共享树当时恰好的样子。这不是假设——第一次尝试
+# 就是这样，后来工作树多了一个未跟踪模块，构建便在一个任何固定修订里都不存在的文件上失败。
+build_in_base() {
+  ( cd "$work/base" && CARGO_TARGET_DIR="$work/base/target" \
+    cargo build -p nichlink-toolchain --offline --features mcp --bin nichlink-mcp )
+}
+
+plan_members() {
+  python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1]))["members_in_scope"]))' \
+    "$work/plan.json"
+}
+
+unpack() {
+  # One copy of the pinned revision, byte-identical to every other copy.
+  # 固定修订的一份副本，与其它每份副本逐字节相同。
+  target=$1
+  rm -rf "$target"
+  mkdir -p "$target"
+  git archive "$(pinned)" | tar -x -C "$target"
+}
+
+prepare() {
+  mkdir -p "$work"
+  : >"$work/run.log"
+  [ -n "$rev" ] || rev=$(git rev-parse HEAD)
+  printf '%s\n' "$rev" >"$work/pinned-rev"
+  log "pinned revision $rev ($(git log -1 --format=%ci "$rev"))"
+  git archive "$rev" | sha256sum | awk '{print $1}' >"$work/archive.sha256"
+  log "archive sha256 $(cat "$work/archive.sha256")"
+  rm -rf "$work/out" "$work/scored" "$work/round-"* "$work/scored-"*
+  unpack "$work/base"
+  log "base copy $work/base"
+  if ! run build_in_base; then
+    log "pinned revision $rev does not build; pin a buildable one with NICHLINK_CHAIN_EVAL_REV"
+    exit 1
+  fi
+  test -x "$work/base/target/debug/nichlink-mcp"
+  log "instrument $work/base/target/debug/nichlink-mcp"
+  run codegraph init "$work/base"
+  run python3 "$graph" --root "$work/base" --out "$work/plan.json" \
+    --seed "$seed" --plan "$plan_spec"
+  python3 - "$work/plan.json" <<'PY' >"$work/plan.txt"
+import json, sys
+plan = json.load(open(sys.argv[1]))
+for picked in plan["plan"]:
+    print(
+        f"round {picked['round']:>2} d={picked['depth']} {picked['layer']:<5}"
+        f" seed={picked['seed']}"
+        f" observable={picked['observable']['file']}::{picked['observable']['name']}"
+        f" site={picked['site']['file']}::{picked['site']['name']}"
+    )
+PY
+  cat "$work/plan.txt" | tee -a "$work/run.log"
+}
+
+rounds_total() {
+  python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["plan"]))' "$work/plan.json"
+}
+
+run_rounds() {
+  limit=${1:-99}
+  members=$(plan_members)
+  out="$work/out"
+  mkdir -p "$out"
+  total=$(rounds_total)
+  index=1
+  while [ "$index" -le "$total" ] && [ "$index" -le "$limit" ]; do
+    number=$(printf '%02d' "$index")
+    copy="$work/round-$number"
+    directory="$out/round-$number"
+    mkdir -p "$directory"
+    unpack "$copy"
+    run python3 "$mutate" --plan "$work/plan.json" --round "$index" --copy "$copy" \
+      --truth "$directory/truth.json"
+    # codegraph does not follow a copy: the mutated tree is indexed here, in the copy.
+    # codegraph 不跟随副本：变异后的树在这里、在副本内建索引。
+    ( cd "$copy" && codegraph init . ) >"$directory/index.log" 2>&1
+    run python3 "$ask" --tool mcp --truth "$directory/truth.json" --copy "$copy" \
+      --out-dir "$directory" --members "$members" \
+      --binary "$work/base/target/debug/nichlink-mcp"
+    run python3 "$ask" --tool codegraph --truth "$directory/truth.json" --copy "$copy" \
+      --out-dir "$directory" --members "$members"
+    run python3 "$judge" --mode one --truth "$directory/truth.json" --out-dir "$directory" \
+      --db "$work/base/.codegraph/codegraph.db" --copy "$copy" --members "$members" \
+      --out "$directory/verdict.json"
+    rm -rf "$copy"
+    index=$((index + 1))
+  done
+}
+
+table() {
+  if ! ls "$work"/out/round-*/verdict.json >/dev/null 2>&1; then
+    echo "no verdicts under $work/out; run 'run' first" >&2
+    exit 1
+  fi
+  run python3 "$judge" --mode table --verdicts "$work/out/round-*/verdict.json" \
+    --out "$work/summary.md"
+  python3 - "$work"/out/round-*/verdict.json >"$work/verdicts.json" <<'PY'
+import json, sys
+print(json.dumps([json.load(open(path)) for path in sys.argv[1:]], ensure_ascii=False, indent=2))
+PY
+  printf 'verdicts: %s\n' "$work/verdicts.json" | tee -a "$work/run.log"
+}
+
+crate_of() {
+  # The package a file belongs to, read from the nearest manifest that declares one.
+  # 文件所属的包，从最近的、声明了包的清单里读。
+  file=$1
+  directory=$(dirname "$file")
+  while [ "$directory" != "." ] && [ "$directory" != "/" ]; do
+    if [ -f "$work/base/$directory/Cargo.toml" ] &&
+      grep -q '^\[package\]' "$work/base/$directory/Cargo.toml"; then
+      sed -n 's/^name = "\(.*\)"$/\1/p' "$work/base/$directory/Cargo.toml" | head -1
+      return 0
+    fi
+    directory=$(dirname "$directory")
+  done
+  sed -n 's/^name = "\(.*\)"$/\1/p' "$work/base/Cargo.toml" | head -1
+}
+
+# One scored round: baseline green, injected red, root-cause repair green, and the
+# negative control that silences the failing test instead. Candidates are tried in
+# order until `wanted` of them actually go red; a candidate that stays green is kept
+# as evidence (a body rewrite that no test reaches is a fact about the suite, not a
+# licence to invent a red light).
+# 一个评分轮：基线绿、注入后红、根因修复转绿，外加"让失败测试闭嘴"的负对照。候选按顺序试，直到
+# `wanted` 个真的变红；没变红的候选也留证（没有测试够得着的函数体重写是关于测试套件的事实，不是
+# 编造红灯的许可）。
+repair_rounds() {
+  candidates=${1:-1 4 7}
+  wanted=${2:-3}
+  out="$work/scored"
+  mkdir -p "$out"
+  scored=0
+  for index in $candidates; do
+    [ "$scored" -lt "$wanted" ] || break
+    number=$(printf '%02d' "$index")
+    directory="$out/round-$number"
+    copy="$work/scored-$number"
+    mkdir -p "$directory"
+    unpack "$copy"
+    file=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["plan"][int(sys.argv[2])-1]["site"]["file"])' "$work/plan.json" "$index")
+    crate=$(crate_of "$file")
+    command="cargo test -p $crate --offline"
+    printf '%s\n' "$command" >"$directory/command.txt"
+    log "scored round $index: site $file crate $crate"
+    set +e
+    ( cd "$copy" && CARGO_TARGET_DIR="$copy/target" $command ) >"$directory/baseline.log" 2>&1
+    baseline_exit=$?
+    set -e
+    run python3 "$repair" --mode log --log "$directory/baseline.log" \
+      --exit-code "$baseline_exit" --out "$directory/baseline.json"
+    run python3 "$mutate" --plan "$work/plan.json" --round "$index" --copy "$copy" \
+      --truth "$directory/truth.json"
+    set +e
+    ( cd "$copy" && CARGO_TARGET_DIR="$copy/target" $command ) >"$directory/red.log" 2>&1
+    red_exit=$?
+    set -e
+    run python3 "$repair" --mode log --log "$directory/red.log" \
+      --exit-code "$red_exit" --out "$directory/red.json"
+    run python3 "$repair" --mode patch --base "$work/base" --copy "$copy" \
+      --truth "$directory/truth.json" --out "$directory/injected.patch.json"
+    if [ "$red_exit" -eq 0 ]; then
+      log "scored round $index: no red light under '$command'; kept as evidence, not scored"
+      rm -rf "$copy"
+      continue
+    fi
+    run python3 "$mutate" --plan "$work/plan.json" --round "$index" --copy "$copy" \
+      --truth "$directory/truth.json" --revert
+    set +e
+    ( cd "$copy" && CARGO_TARGET_DIR="$copy/target" $command ) >"$directory/green.log" 2>&1
+    green_exit=$?
+    set -e
+    run python3 "$repair" --mode log --log "$directory/green.log" \
+      --exit-code "$green_exit" --out "$directory/green.json"
+    run python3 "$repair" --mode patch --base "$work/base" --copy "$copy" \
+      --truth "$directory/truth.json" --out "$directory/reverted.patch.json"
+    failing=$(python3 -c 'import json,sys; log=json.load(open(sys.argv[1])); print((log.get("failed_tests") or [""])[0])' "$directory/red.json")
+    if [ -n "$failing" ]; then
+      run python3 "$repair" --mode mask --copy "$copy" --test-name "$failing" \
+        --out "$directory/mask.json"
+      set +e
+      ( cd "$copy" && CARGO_TARGET_DIR="$copy/target" $command ) >"$directory/masked.log" 2>&1
+      masked_exit=$?
+      set -e
+      run python3 "$repair" --mode log --log "$directory/masked.log" \
+        --exit-code "$masked_exit" --out "$directory/masked.json"
+      run python3 "$repair" --mode patch --base "$work/base" --copy "$copy" \
+        --truth "$directory/truth.json" --out "$directory/masked.patch.json"
+    fi
+    log "scored round $index: baseline=$baseline_exit red=$red_exit green=$green_exit masked=${masked_exit:-n/a}"
+    scored=$((scored + 1))
+    rm -rf "$copy"
+  done
+  log "scored rounds completed: $scored of $wanted"
+}
+
+scan() {
+  # Sensitive-string scan over the files this evaluation adds. The command and its
+  # result both belong in the record: publishing the evidence is the point.
+  # 本次评测新增文件上的敏感串扫描。命令与结果都该进记录：公开证据才是要点。
+  files="tools/nichlink-chain-eval tools/nichlink-chain-eval-graph.py tools/nichlink-chain-eval-mutate.py tools/nichlink-chain-eval-ask.py tools/nichlink-chain-eval-judge.py tools/nichlink-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md"
+  pattern='(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}|BEGIN [A-Z ]*PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|token[[:space:]]*=)'
+  printf '$ grep -nE %s %s\n' "$pattern" "$files"
+  set +e
+  # shellcheck disable=SC2086
+  grep -nE "$pattern" $files
+  printf 'scan exit %s (1 = no credential-shaped string)\n' "$?"
+  printf '$ grep -nF "$HOME" %s   # 家目录的具体路径不该写进脚本，扫的是它\n' "$files"
+  # shellcheck disable=SC2086
+  grep -nF "$HOME" $files
+  printf 'scan exit %s (1 = no machine-specific path)\n' "$?"
+  set -e
+}
+
+usage() { sed -n '25,40p' "$0"; }
+
+command=${1:-all}
+shift || true
+case "$command" in
+prepare) prepare ;;
+run) run_rounds "$@" ;;
+table) table ;;
+repair) repair_rounds "$@" ;;
+scan) scan ;;
+all) prepare; run_rounds; table ;;
+*)
+  usage
+  exit 2
+  ;;
+esac
