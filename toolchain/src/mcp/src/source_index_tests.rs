@@ -135,3 +135,28 @@ fn a_backslash_in_a_file_name_is_spelled_one_way() {
     assert_eq!(names, ["a/b.rs"], "{names:?}");
     let _ = fs::remove_dir_all(&root);
 }
+
+/// The containment refusal names the base it checked and the rule that makes the base matter: with
+/// `root` set, a path is relative to that root, which is exactly what a caller who pasted a
+/// tree-relative path needs to hear.
+/// 越界拒绝点名它检查的基准，以及让基准要紧的那条规则：给了 `root` 时路径相对那个根——这正是一个照抄
+/// 树相对路径的调用方需要听到的话。
+#[test]
+fn the_containment_refusal_names_the_base_and_the_rule() {
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-load-one-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(root.join("src")).expect("root");
+    std::fs::write(root.join("src/lib.rs"), "// entry\n").expect("file");
+    let error = load_one(&root, "../outside.rs").expect_err("a refusal");
+    assert!(error.contains("must stay inside"), "{error}");
+    assert!(error.contains("relative to that root"), "{error}");
+    assert!(error.contains("`src/…`"), "{error}");
+    assert!(error.contains(&root.display().to_string()), "{error}");
+    let _ = std::fs::remove_dir_all(&root);
+}

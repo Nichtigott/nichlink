@@ -129,7 +129,19 @@ fn visit_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
 pub(crate) fn load_one(root: &Path, relative: &str) -> Result<SourceFile, String> {
     let path = root.join(relative);
     if !is_safe_child(root, &path) {
-        return Err("path must stay inside the configured source root".to_owned());
+        // The refusal names the base it checked and the rule that makes the base matter. Measured
+        // in the second simulation round: a member-relative path and a tree-relative path look
+        // alike, and the old sentence ("inside the configured source root") did not say *which*
+        // root `root` had just changed the paths to be relative to, so the caller's next guess was
+        // another tree-relative path.
+        // 拒绝话术点名它检查的基准，以及让基准变得要紧的那条规则。第 2 轮模拟评测实测：成员相对路径与
+        // 树相对路径长得一样，而旧句子（"inside the configured source root"）没说 `root` 刚把路径改成
+        // 相对**哪个**根，于是调用方的下一次尝试还是树相对路径。
+        return Err(format!(
+            "path must stay inside the configured source root ({}); with `root` set, a path is \
+             relative to that root, so write it as that root sees it (`src/…`)",
+            root.display()
+        ));
     }
     if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
         return Err("only Rust source files can be read".to_owned());

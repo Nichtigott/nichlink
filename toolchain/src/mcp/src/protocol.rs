@@ -287,7 +287,9 @@ fn dispatch(root: &Path, request: &Value) -> Value {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": { "tools": { "listChanged": false } },
                 "serverInfo": { "name": "nichlink-toolchain", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": "Use nichlink.search before reading source; callgraph is static-heuristic."
+                "instructions": "Use nichlink.search before reading source (it also takes \
+                 `literal` for text); callgraph is static-heuristic. With `root`, every path \
+                 argument is relative to that root (root \"kernel\" means path \"src/…\")."
             }),
         ),
         // An id-carrying `notifications/…` member is a *request* by the envelope rule
