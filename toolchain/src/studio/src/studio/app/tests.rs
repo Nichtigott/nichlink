@@ -97,6 +97,21 @@ pub(super) use super::{CallRef, CallTreeView, same_symbol, source_path_for};
 pub(super) use crate::call_evidence::{CallEvidence, MirGraph};
 
 // The call-tree tests read a real call graph, so they need the fixture project.
+// A "the source must not say this" pin has to survive a rewrite that only changes case or
+// spacing, or the absence check can be bypassed (audit `N-6`; `M7` escaped exactly this way).
+// The positive half keeps plain `contains`: loosening a presence check would make it weaker,
+// not stronger — so the two halves of a table-driven pin are deliberately read differently.
+// "源码里不该出现这个"这类钉子必须能扛住"只改大小写或空白"的重写，否则缺席判据会被绕过（审计
+// `N-6`；`M7` 就是这样逃过去的）。正例那一半继续用普通 `contains`：对"存在"判据放宽只会让它更弱
+// 而不是更强——因此同一张表驱动的钉子，两半故意按不同的方式读。
+pub(crate) fn flattened(source: &str) -> String {
+    source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 // 调用树测试要读真实调用图，因此需要夹具项目。
 #[cfg(feature = "prototype-fixtures")]
 #[path = "tests/call_tree.rs"]

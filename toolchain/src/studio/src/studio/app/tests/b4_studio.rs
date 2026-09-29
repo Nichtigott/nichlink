@@ -99,8 +99,11 @@ fn module_docs_describe_what_the_module_does() {
             assert!(source.contains(needle), "{file} no longer says `{needle}`");
         }
         for needle in removed {
+            // Absence checks read the flattened view, so a rewrite that only changes case or
+            // spacing is still caught (audit `N-6`).
+            // 缺席判据按"去空白 + 小写"的视图读，因此只改大小写或空白的重写同样会被抓住（审计 `N-6`）。
             assert!(
-                !source.contains(needle),
+                !super::flattened(source).contains(&super::flattened(needle)),
                 "{file} still carries the drifted wording `{needle}`"
             );
         }

@@ -38,7 +38,7 @@ fn only_the_four_arrows_ask_for_a_tree_step() {
     let navigation = include_str!("../navigation.rs");
     assert!(
         navigation.contains("let Some(step) = TreeStep::from_key(key) else {")
-            && !navigation.contains("_ => TreeStep::Right"),
+            && !super::flattened(navigation).contains(&super::flattened("_ => TreeStep::Right")),
         "the cursor step must refuse an unknown key, not default to `Right`"
     );
 }
@@ -56,7 +56,9 @@ fn the_editor_form_has_one_entry_point() {
         .next()
         .expect("a production half");
     assert!(
-        !production.contains("handle_key(KeyEvent::from(KeyCode::Char('e')))"),
+        !super::flattened(production).contains(&super::flattened(
+            "handle_key(KeyEvent::from(KeyCode::Char('e')))"
+        )),
         "the details-pane Enter must not synthesise a key press"
     );
     assert_eq!(
@@ -85,7 +87,7 @@ fn the_stamp_lives_outside_navigation() {
         "package_root",
     ] {
         assert!(
-            !navigation.contains(leaked),
+            !super::flattened(navigation).contains(&super::flattened(leaked)),
             "navigation still reaches for `{leaked}`"
         );
     }
@@ -111,7 +113,10 @@ fn the_write_guard_is_named_for_what_it_holds_and_the_watch_lists_agree() {
     );
     let app = include_str!("../app.rs");
     assert!(app.contains("#[path = \"write_guard.rs\"]"));
-    assert!(!app.contains("mod writers;"), "the old module name is gone");
+    assert!(
+        !super::flattened(app).contains(&super::flattened("mod writers;")),
+        "the old module name is gone"
+    );
     let stamp = include_str!("../source_stamp.rs");
     let watcher = include_str!("../../../../../bin/nichlink-dev.rs");
     for name in [
