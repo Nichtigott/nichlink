@@ -210,3 +210,42 @@ fn an_official_append_that_would_duplicate_an_identity_is_refused_not_written() 
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The three provenance rows write the ten-column form, and leaving them empty keeps the
+/// seven-column one. Both come from the kernel's single renderer, so this form cannot spell a
+/// column layout of its own — and the upgrade replaces the bare record in place rather than
+/// leaving two lines with one identity.
+/// 三个来源行写出十列形式，留空则保持七列。两者都出自内核唯一的渲染器，因此这份表单拼不出自己的一套
+/// 列布局——而这次升级就地把裸记录换掉，而不是留下两行同身份的记录。
+#[test]
+fn the_provenance_rows_write_the_ten_column_form() {
+    let (_root, plugins) = temp_plugins("provenance");
+    let lock = plugins.join("official.lock");
+    std::fs::write(
+        &lock,
+        "# source|framework|package|version|crate|checksum|mode\n\
+         official|nichlink.default|plugin-app|1.0.0|plugin_app|sha256:00|extension\n",
+    )
+    .expect("seed lock");
+    let mut plugin = PluginState::new();
+    plugin.values[plugin_field::PACKAGE] = "plugin-app".to_owned();
+    plugin.values[plugin_field::VERSION] = "1.0.0".to_owned();
+    plugin.values[plugin_field::CRATE] = "plugin_app".to_owned();
+    plugin.values[plugin_field::CHECKSUM] = "sha256:00".to_owned();
+    plugin.values[plugin_field::SIGNATURE] = "sig-v1".to_owned();
+    plugin.values[plugin_field::FINGERPRINT] = "key-v1".to_owned();
+    let mut app = App::load_app();
+    app.submit_plugin(&plugin);
+    let text = std::fs::read_to_string(&lock).expect("lock");
+    let records = text
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(records.len(), 1, "one identity, one record: {text}");
+    assert_eq!(records[0].split('|').count(), 10, "{text}");
+    assert!(records[0].ends_with("|sig-v1|key-v1|"), "{text}");
+    assert!(
+        PluginCatalog::parse_plugin_catalog(&text).is_ok(),
+        "the lock the form wrote must parse: {text}"
+    );
+}

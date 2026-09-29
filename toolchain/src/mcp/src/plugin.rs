@@ -148,17 +148,6 @@ impl Request {
         let fingerprint = optional_text(arguments, "fingerprint");
         let revocations = optional_text(arguments, "revocations");
         let ten_fields = signature.is_some() || fingerprint.is_some() || revocations.is_some();
-        let mut line = format!(
-            "{source_text}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode_text}"
-        );
-        if ten_fields {
-            line.push_str(&format!(
-                "|{}|{}|{}",
-                signature.as_deref().unwrap_or_default(),
-                fingerprint.as_deref().unwrap_or_default(),
-                revocations.as_deref().unwrap_or_default(),
-            ));
-        }
         let declared = |value: Option<String>| -> Option<String> {
             if ten_fields {
                 Some(value.unwrap_or_default())
@@ -178,6 +167,12 @@ impl Request {
             public_key_fingerprint: declared(fingerprint),
             revocation_list: declared(revocations),
         };
+        // The lock line is the kernel's own rendering: one writer used to spell it here and
+        // another inside Studio, which is how the seven-column and ten-column forms could drift
+        // from the parser that reads them.
+        // 锁行由内核自己渲染：过去这里手写一份、Studio 里手写另一份，七列与十列两种形式正是这样与
+        // 读它们的解析器漂移的。
+        let line = record.line();
         let (lock_name, entry_name) = match source {
             PluginSource::Official => ("official.lock", "official.rs"),
             PluginSource::User => ("user.lock", "user.rs"),

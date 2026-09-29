@@ -58,6 +58,44 @@ pub struct PluginRecord {
     pub revocation_list: Option<String>,
 }
 
+impl PluginRecord {
+    /// The canonical lock line for this record.
+    /// 本记录的规范锁行。
+    ///
+    /// Seven columns, or ten when any provenance column is declared: a record that declares
+    /// provenance writes all three columns, spelling an absent one empty, because that is what
+    /// "this line declares there is no such value" looks like ([`PluginRecord::signature`]). Two
+    /// writers used to spell this line by hand — Studio's form and the bridge — which is how the
+    /// seven-column and ten-column forms could drift apart from the parser that reads them.
+    /// 七列；只要声明了任何一个来源列就是十列：声明了来源的记录三列都写，缺的那列拼成空，因为
+    /// "这一行声明此处没有值"就长这样（见 [`PluginRecord::signature`]）。过去有两个写入方各自
+    /// 手写这一行——Studio 的表单与桥——七列与十列两种形式正是在那里可能与读它们的解析器漂移。
+    pub fn line(&self) -> String {
+        let mut line = format!(
+            "{}|{}|{}|{}|{}|{}|{}",
+            self.source.text(),
+            self.framework,
+            self.package,
+            self.version,
+            self.crate_name,
+            self.checksum,
+            self.mode.text(),
+        );
+        let provenance = self.signature.is_some()
+            || self.public_key_fingerprint.is_some()
+            || self.revocation_list.is_some();
+        if provenance {
+            line.push_str(&format!(
+                "|{}|{}|{}",
+                self.signature.as_deref().unwrap_or_default(),
+                self.public_key_fingerprint.as_deref().unwrap_or_default(),
+                self.revocation_list.as_deref().unwrap_or_default(),
+            ));
+        }
+        line
+    }
+}
+
 /// Why a plugin lock was refused.
 /// 插件锁被拒绝的原因。
 ///

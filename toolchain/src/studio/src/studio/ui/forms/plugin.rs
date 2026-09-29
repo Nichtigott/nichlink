@@ -13,7 +13,7 @@ pub(crate) fn draw_plugin(
 ) -> (Rect, Rect, Rect, Rect) {
     let inner = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(9), Constraint::Length(4)])
+        .constraints([Constraint::Min(12), Constraint::Length(4)])
         .split(area);
     let rows = plugin_field::LABELS
         .iter()

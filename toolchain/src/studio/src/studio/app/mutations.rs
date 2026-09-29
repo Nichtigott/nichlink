@@ -220,10 +220,25 @@ impl App {
         let crate_name = plugin.values[plugin_field::CRATE].trim();
         let checksum = plugin.values[plugin_field::CHECKSUM].trim();
         let mode = plugin.values[plugin_field::MODE].trim();
-        if !matches!(source, "official" | "user") {
+        // The three provenance rows are optional, and they are the whole reason this form and the
+        // MCP bridge can write the same lock: empty rows mean the seven-column form, and naming
+        // any one of them declares the extension (the other two columns then spell empty). The
+        // record is built once here, and the kernel renders the line from it, so neither writer
+        // spells a column layout of its own.
+        // 三个来源行是可选的，而它们正是这份表单与 MCP 桥能写同一把锁的全部原因：三行都空就是七列
+        // 形式，点名其中任意一个就声明了该扩展（另外两列随即拼成空）。记录在这里建一次，锁行由内核
+        // 从它渲染，因此两个写入方都不再自己拼一套列布局。
+        let signature = plugin.values[plugin_field::SIGNATURE].trim();
+        let fingerprint = plugin.values[plugin_field::FINGERPRINT].trim();
+        let revocations = plugin.values[plugin_field::REVOCATIONS].trim();
+        let Some(source_kind) = PluginSource::parse_plugin_source(source) else {
             self.alert("Plugin failed: source must be official or user".to_owned());
             return;
-        }
+        };
+        let Some(mode_kind) = PluginMode::parse_plugin_mode(mode) else {
+            self.alert("Plugin failed: mode must be extension or replacement".to_owned());
+            return;
+        };
         if [framework, package, version, crate_name, checksum]
             .iter()
             .any(|value| value.is_empty())
@@ -231,10 +246,6 @@ impl App {
             self.event =
                 "Plugin failed: framework, package, version, crate and checksum are required"
                     .to_owned();
-            return;
-        }
-        if !matches!(mode, "extension" | "replacement") {
-            self.alert("Plugin failed: mode must be extension or replacement".to_owned());
             return;
         }
         // One of Studio's writers, so it needs the project the reader opened, not
@@ -256,10 +267,25 @@ impl App {
             "user.lock"
         };
         let lock = plugin_root.join(lock_name);
-        let record =
-            format!("{source}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode}");
+        let declares_provenance = [signature, fingerprint, revocations]
+            .iter()
+            .any(|value| !value.is_empty());
+        let column =
+            |value: &str| -> Option<String> { declares_provenance.then(|| value.to_owned()) };
+        let record = PluginRecord {
+            source: source_kind,
+            framework: framework.to_owned(),
+            package: package.to_owned(),
+            version: version.to_owned(),
+            crate_name: crate_name.to_owned(),
+            checksum: checksum.to_owned(),
+            mode: mode_kind,
+            signature: column(signature),
+            public_key_fingerprint: column(fingerprint),
+            revocation_list: column(revocations),
+        };
         let existing = std::fs::read_to_string(&lock).unwrap_or_default();
-        if existing.lines().any(|line| line.trim() == record) {
+        if existing.lines().any(|line| line.trim() == record.line()) {
             self.note("Plugin already selected".to_owned());
             self.overlay = None;
             return;
@@ -271,26 +297,6 @@ impl App {
                 return;
             }
         };
-        let candidate = PluginRecord {
-            source: if source == "official" {
-                PluginSource::Official
-            } else {
-                PluginSource::User
-            },
-            framework: framework.to_owned(),
-            package: package.to_owned(),
-            version: version.to_owned(),
-            crate_name: crate_name.to_owned(),
-            checksum: checksum.to_owned(),
-            mode: if mode == "replacement" {
-                PluginMode::Replacement
-            } else {
-                PluginMode::Extension
-            },
-            signature: None,
-            public_key_fingerprint: None,
-            revocation_list: None,
-        };
         // The runtime's rule, not an identical-record rule: a ten-field official record must be
         // writable when the lock carries the seven-field form, because that is the artifact the
         // runtime accepts. `contains` asked for all ten fields to match and refused this write
@@ -298,7 +304,7 @@ impl App {
         // 用的是运行期那条规则，而不是"记录完全相同"：当锁里是七字段形式时，一条十字段的官方记录
         // 必须写得进去，因为那正是运行期接受的工件。`contains` 要求十个字段全等，因此拒绝了这次写入
         // （审计 `PH-7`）。
-        if source == "official" && !catalog.contains_record(&candidate) {
+        if source_kind == PluginSource::Official && !catalog.contains_record(&record) {
             self.event =
                 "Plugin failed: official package is not present in the trusted lock".to_owned();
             return;
@@ -318,7 +324,7 @@ impl App {
         // 锁是宿主读取的工件，因此这次追加是否合法由解析器决定，而且是在写任何东西之前决定：
         // 内核拒绝的记录不得落盘，拒绝必须到达读者而不是被成功横幅盖掉。交回的文本就是下面写下
         // 的文本，因此被校验的就是被存下的。
-        let line = format!("{record}\n");
+        let line = format!("{}\n", record.line());
         let candidate = match PluginCatalog::with_record(&existing, &line) {
             Ok(text) => text,
             Err(error) => {

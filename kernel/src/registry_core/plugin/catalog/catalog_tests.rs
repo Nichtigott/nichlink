@@ -340,3 +340,56 @@ fn a_checksum_is_compared_by_its_digest_not_its_spelling() {
         "the duplicate-identity rule is exact"
     );
 }
+
+/// The kernel renders the one line its own parser reads: seven columns until provenance is
+/// declared, ten after, with an absent column spelled empty. Two writers used to spell this line
+/// themselves — Studio's form and the bridge — which is exactly how a form could drift from the
+/// parser that reads it.
+/// 内核渲染的正是它自己解析器读的那一行：未声明来源时七列、声明后十列，缺的那列拼成空。过去有两个
+/// 写入方各自拼这一行——Studio 的表单与桥——一份表单与读它的解析器正是这样漂移的。
+#[test]
+fn a_record_renders_the_line_its_own_parser_reads() {
+    let bare = PluginRecord {
+        source: PluginSource::Official,
+        framework: "nichlink.default".to_owned(),
+        package: "canvas".to_owned(),
+        version: "1.0.0".to_owned(),
+        crate_name: "canvas".to_owned(),
+        checksum: "sha256:a".to_owned(),
+        mode: PluginMode::Extension,
+        signature: None,
+        public_key_fingerprint: None,
+        revocation_list: None,
+    };
+    let plain = bare.line();
+    assert_eq!(plain.split('|').count(), 7, "{plain}");
+    let signed = PluginRecord {
+        signature: Some("sig-v1".to_owned()),
+        public_key_fingerprint: Some("key-v1".to_owned()),
+        revocation_list: Some(String::new()),
+        ..bare.clone()
+    };
+    let declared = signed.line();
+    assert_eq!(declared.split('|').count(), 10, "{declared}");
+    assert!(declared.ends_with("|sig-v1|key-v1|"), "{declared}");
+    // Both spellings read back as the record that rendered them, which is the property that makes
+    // one renderer safe for both writers.
+    // 两种拼法都读回渲染它的那条记录——正是这条性质让一份渲染器对两个写入方都安全。
+    for (header, line, record) in [
+        (
+            "# source|framework|package|version|crate|checksum|mode\n",
+            &plain,
+            &bare,
+        ),
+        (
+            "# source|framework|package|version|crate|checksum|mode|signature|key|revocations\n",
+            &declared,
+            &signed,
+        ),
+    ] {
+        let text = format!("{header}{line}\n");
+        let catalog = PluginCatalog::parse_plugin_catalog(&text)
+            .unwrap_or_else(|error| panic!("the rendered line parses: {error}\n{text}"));
+        assert_eq!(&catalog.records()[0], record, "{text}");
+    }
+}

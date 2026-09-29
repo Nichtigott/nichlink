@@ -27,10 +27,19 @@ pub(crate) const CHECKSUM: usize = 5;
 /// Index of the plugin mode row.
 /// 插件模式行的下标。
 pub(crate) const MODE: usize = 6;
+/// Index of the recorded-signature row, empty when the plugin was not signed.
+/// 记录签名行的下标；插件未签名时留空。
+pub(crate) const SIGNATURE: usize = 7;
+/// Index of the signing-key-fingerprint row, empty when no key was recorded.
+/// 签名密钥指纹行的下标；未记录密钥时留空。
+pub(crate) const FINGERPRINT: usize = 8;
+/// Index of the revocation-list-snapshot row, empty when none was recorded.
+/// 撤销列表快照行的下标；未记录时留空。
+pub(crate) const REVOCATIONS: usize = 9;
 
 /// How many rows the form has.
 /// 表单的行数。
-pub(crate) const COUNT: usize = 7;
+pub(crate) const COUNT: usize = 10;
 
 /// Row labels in index order.
 /// 按下标顺序排列的行标签。
@@ -42,6 +51,9 @@ pub(crate) const LABELS: [&str; COUNT] = [
     "crate",
     "checksum",
     "mode",
+    "signature",
+    "fingerprint",
+    "revocations",
 ];
 
 #[cfg(test)]
@@ -54,8 +66,19 @@ mod tests {
     #[test]
     fn the_row_names_are_dense_and_labelled() {
         assert_eq!(
-            [SOURCE, FRAMEWORK, PACKAGE, VERSION, CRATE, CHECKSUM, MODE],
-            [0, 1, 2, 3, 4, 5, 6]
+            [
+                SOURCE,
+                FRAMEWORK,
+                PACKAGE,
+                VERSION,
+                CRATE,
+                CHECKSUM,
+                MODE,
+                SIGNATURE,
+                FINGERPRINT,
+                REVOCATIONS,
+            ],
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         );
         assert_eq!(COUNT, LABELS.len());
         assert_eq!(LABELS[SOURCE], "source");
@@ -65,5 +88,8 @@ mod tests {
         assert_eq!(LABELS[CRATE], "crate");
         assert_eq!(LABELS[CHECKSUM], "checksum");
         assert_eq!(LABELS[MODE], "mode");
+        assert_eq!(LABELS[SIGNATURE], "signature");
+        assert_eq!(LABELS[FINGERPRINT], "fingerprint");
+        assert_eq!(LABELS[REVOCATIONS], "revocations");
     }
 }

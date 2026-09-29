@@ -405,24 +405,44 @@ pub enum PluginSource {
 }
 
 impl PluginSource {
+    /// The word a lock line spells for this source.
+    /// 锁记录为这个来源拼写的词。
+    ///
+    /// This is the one place the spelling lives: the parser below reads it back instead of
+    /// repeating it, so a lock line this kernel writes can never use a word this kernel would not
+    /// accept.
+    /// 这是该词形唯一的所在地：下面的解析器把它读回来，而不是再写一遍，因此内核写出的锁记录
+    /// 不可能用一个内核自己不接受的词。
+    pub fn text(self) -> &'static str {
+        match self {
+            Self::Official => "official",
+            Self::User => "user",
+        }
+    }
+
     #[doc(hidden)]
     pub fn parse_plugin_source(value: &str) -> Option<Self> {
-        match value {
-            "official" => Some(Self::Official),
-            "user" => Some(Self::User),
-            _ => None,
-        }
+        [Self::Official, Self::User]
+            .into_iter()
+            .find(|source| source.text() == value)
     }
 }
 
 impl PluginMode {
+    /// The word a lock line spells for this mode; see [`PluginSource::text`].
+    /// 锁记录为这个模式拼写的词；见 [`PluginSource::text`]。
+    pub fn text(self) -> &'static str {
+        match self {
+            Self::Extension => "extension",
+            Self::Replacement => "replacement",
+        }
+    }
+
     #[doc(hidden)]
     pub fn parse_plugin_mode(value: &str) -> Option<Self> {
-        match value {
-            "extension" => Some(Self::Extension),
-            "replacement" => Some(Self::Replacement),
-            _ => None,
-        }
+        [Self::Extension, Self::Replacement]
+            .into_iter()
+            .find(|mode| mode.text() == value)
     }
 }
 
