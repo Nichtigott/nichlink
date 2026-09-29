@@ -161,6 +161,23 @@ fn record_unplaced(unplaced: &mut Vec<UnplacedFace>, src: &Path, path: &Path) {
     };
     match parse_face(&source) {
         Ok(None) => {}
+        // Two different things used to get one message. A face written with `external_object!`
+        // declares its own registry and is deliberately *not* part of this package's generated
+        // tree — the example host that grafts it registers it explicitly — so saying "the build
+        // can never compile it" was false about a working crate. Only a face of the generated
+        // layout that sits outside it has a layout problem.
+        // 过去有两种不同的东西共用一句话。用 `external_object!` 写的面声明了自己的注册机、并且**有意**
+        // 不属于本包的生成树——graft 它的那个示例宿主显式注册它——因此"构建永远编译不了它"对一个能工作的
+        // crate 来说是假话。只有生成本该在 `<name>/<name>.rs` 却长在别处的面才是布局问题。
+        Ok(Some(face)) if is_external_face(&face.macro_name) => unplaced.push(UnplacedFace {
+            relative: super::relative_display(src, path),
+            line: face.location.line,
+            phase: "face-external",
+            message: "external face (`external_object!`): it declares its own registry and this \
+                      package's generated tree does not contain it; the host that grafts it \
+                      registers it explicitly"
+                .to_owned(),
+        }),
         Ok(Some(face)) => unplaced.push(UnplacedFace {
             relative: super::relative_display(src, path),
             line: face.location.line,
@@ -174,6 +191,18 @@ fn record_unplaced(unplaced: &mut Vec<UnplacedFace>, src: &Path, path: &Path) {
             message: error.message,
         }),
     }
+}
+
+/// Whether a registration macro declares a face of its own registry rather than of the
+/// generated tree.
+/// 一个注册宏声明的面是自己注册机的，还是生成树的。
+///
+/// `external_object!` is the framework's out-of-project declaration, and its `__`-prefixed
+/// re-export is the same macro under the spelling reserved for generated code.
+/// `external_object!` 是框架的项目外声明，而它带 `__` 前缀的重导出是同一个宏在"生成代码专用"拼法下的
+/// 名字。
+fn is_external_face(macro_name: &str) -> bool {
+    matches!(macro_name, "external_object" | "__external_object")
 }
 
 fn has_source(node: &Node) -> bool {

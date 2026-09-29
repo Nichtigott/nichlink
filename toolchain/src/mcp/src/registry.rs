@@ -236,7 +236,7 @@ fn render_published(namespace: &str, tree: &PublishedTree) -> String {
         ));
     }
     if rows.is_empty() && !tree.faces_unknown() {
-        output.push_str("no registration face is recorded for this package\n");
+        output.push_str("no registration face is recorded for this package — the sources may still declare `external_object!` faces, which this package's generated tree deliberately does not contain; `nichlink.search` derives and names them\n");
     }
     output.push_str(
         "note: these are the build's published rows (node, source, tracked symbol, scope verdict). \

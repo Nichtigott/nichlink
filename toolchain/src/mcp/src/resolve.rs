@@ -99,11 +99,48 @@ pub(crate) fn derived_faces(
     // （`published::derivations`）。这是仅供测试的埋点：出厂的桥里没有东西读这个计数。
     #[cfg(test)]
     crate::mcp::published::note_derivation();
-    let (faces, unreadable) = crate::build_time::face_views_and_unreadable(root, namespace)?;
+    let (faces, unreadable, external) =
+        crate::build_time::face_views_with_external(root, namespace)?;
+    // External faces are not a defect and are not hidden either: a crate whose faces are
+    // `external_object!` declarations is a crate the generated tree deliberately does not
+    // contain, and a reader told only "faces 0" would file a bug against a working example.
+    // 外部面不是缺陷，但也不该被藏起来：一个用 `external_object!` 声明面的 crate 是本包生成树有意不含的
+    // crate，而只被告知"faces 0"的读者会去给一个能工作的示例报 bug。
+    let mut line = String::new();
+    if !external.is_empty() {
+        line.push_str(&format!("external faces {}\n", external.len()));
+        for entry in external.iter().take(5) {
+            line.push_str(&format!("  {entry}\n"));
+        }
+    }
     let line = if unreadable.is_empty() {
-        String::new()
+        line
     } else {
-        format!("unparsable faces {}\n", unreadable.len())
+        // The count alone leaves a reader holding a smaller tree with no way to learn why.
+        // The reason is in this value already, and a registration file that does not parse is
+        // the one thing a caller can act on — so the file and its complaint are printed beside
+        // the count, capped, and the cap declares itself.
+        // 只有计数会让读者拿到一棵更小的树、却无从得知原因。原因本来就在这个值里，而"注册面文件解析不了"
+        // 正是调用方唯一能据以行动的东西——因此文件名与它的报错印在计数旁边，设上限，而上限自己声明自己。
+        let mut text = line;
+        text.push_str(&format!("unparsable faces {}\n", unreadable.len()));
+        const REASONS: usize = 5;
+        for reason in unreadable.iter().take(REASONS) {
+            text.push_str(&format!("  {reason}\n"));
+        }
+        if unreadable.len() > REASONS {
+            text.push_str(&format!(
+                "  {}\n",
+                crate::mcp::truncation::withheld(
+                    unreadable.len() - REASONS,
+                    unreadable.len(),
+                    REASONS,
+                    "unparsable reasons",
+                    "run `nichlink check` for the build's own list"
+                )
+            ));
+        }
+        text
     };
     Ok((faces, line))
 }

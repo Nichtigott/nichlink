@@ -169,6 +169,26 @@ pub fn face_views_and_unreadable(
     root: &Path,
     package: &str,
 ) -> Result<(Vec<FaceView>, Vec<String>), String> {
+    let (views, unreadable, _external) = face_views_with_external(root, package)?;
+    Ok((views, unreadable))
+}
+
+/// What one read of the face tree found: the faces the generated tree holds, the registration
+/// files it could not read, and the external faces that are deliberately not part of it.
+/// 一次注册面树读取发现的东西：生成树持有的面、它读不了的注册面文件，以及有意不属于它的外部面。
+pub type FaceRead = (Vec<FaceView>, Vec<String>, Vec<String>);
+
+/// The same answer, with the external faces separated from the unreadable ones.
+/// 同一个答案，只是把**外部面**与**读不了的面**分开。
+///
+/// They are different facts and used to share one list: a file that does not parse cannot be a
+/// face, while a file written with `external_object!` is a face of its own registry that this
+/// package's generated tree deliberately does not contain. A reader deciding whether a crate is
+/// broken needs the difference, and a count alone made a working example look like one.
+/// 它们是两个不同的事实，过去共用一张清单：解析不了的文件当不成面，而用 `external_object!` 写的文件是
+/// 它自己注册机的面、本包的生成树有意不含它。要判断一个 crate 是否坏掉的读者需要这个区别，而光有计数
+/// 会让一个能工作的示例看起来是坏的。
+pub fn face_views_with_external(root: &Path, package: &str) -> Result<FaceRead, String> {
     // The build's own layout resolution, so this read-only view reports the paths
     // and identities the build computes — including for a library target outside
     // `src/`, where the identity path keeps its leading directory component.
@@ -193,13 +213,25 @@ pub fn face_views_and_unreadable(
     // 确实是某个节点所附的 `<name>/<name>.rs` 的文件不属于"安放不了"：遍历已给它安排了位置，而
     // 构建经它对每个节点文件都用的同一条语法规则报告它。两类都必须进这个答案，否则长在预期位置上的
     // 坏面文件仍会一声不响地消失。
+    let mut external = unplaced
+        .iter()
+        .filter(|face| face.phase == "face-external")
+        .map(|face| format!("{}:{} {}", face.relative, face.line, face.message))
+        .collect::<Vec<_>>();
     let mut unreadable = unplaced
         .iter()
+        .filter(|face| face.phase != "face-external")
         .map(|face| format!("{}:{} {}", face.relative, face.line, face.message))
         .collect::<Vec<_>>();
     unreadable.extend(
         super::face_syntax_check::face_syntax_errors(src, &nodes)
             .iter()
+            .map(|error| format!("{}:{} {}", error.source, error.line, error.message)),
+    );
+    external.extend(
+        super::face_syntax_check::face_syntax_errors(src, &nodes)
+            .iter()
+            .filter(|error| error.phase == "face-external")
             .map(|error| format!("{}:{} {}", error.source, error.line, error.message)),
     );
     let identity = &layout.identity_base;
@@ -238,7 +270,7 @@ pub fn face_views_and_unreadable(
         })
         .collect::<Vec<_>>();
     views.sort_by(|left, right| (&left.path, left.id).cmp(&(&right.path, right.id)));
-    Ok((views, unreadable))
+    Ok((views, unreadable, external))
 }
 
 /// Resolve one collected parent against the module-to-face map, matching the

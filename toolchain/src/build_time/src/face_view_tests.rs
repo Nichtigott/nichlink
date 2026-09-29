@@ -2,7 +2,10 @@
 //! the registration files it cannot read.
 //! 只读注册面视图的测试：它推导出的路径与身份，以及它读不了的注册面文件。
 
-use super::{face_views, face_views_and_unreadable, read_build_scope, read_pruning_manifest};
+use super::{
+    face_views, face_views_and_unreadable, face_views_with_external, read_build_scope,
+    read_pruning_manifest,
+};
 use std::fs;
 use std::path::PathBuf;
 
@@ -235,4 +238,54 @@ fn a_registration_file_that_does_not_parse_is_named_not_dropped() {
         "the file that could not be read is named: {unreadable:?}"
     );
     let _ = fs::remove_dir_all(&root);
+}
+
+/// An `external_object!` face is a face of its own registry, not an unreadable file: the
+/// generated tree deliberately does not contain it, and saying "the build can never compile
+/// it" about a working example was false. The two lists stay separate so a reader can tell a
+/// broken crate from a deliberately out-of-tree one.
+/// `external_object!` 写的面是它自己注册机的面，不是读不了的文件：生成树有意不含它，而对着一个能工作的
+/// 示例说"构建永远编译不了它"是假话。两张清单保持分开，读者才能分清"坏掉的 crate"与"有意在树外的 crate"。
+#[test]
+fn an_external_face_is_reported_as_external_rather_than_unparsable() {
+    let root = temporary_root("external");
+    fs::write(
+        root.join("src/button_fast.rs"),
+        "nichlink_toolchain::runtime::external_object! {\n    source: \"button_fast/button_fast.rs\",\n    kind: ButtonFast,\n}\n",
+    )
+    .expect("external face");
+    let (views, unreadable, external) =
+        face_views_with_external(&root, "graft-host").expect("an answer");
+    assert!(
+        views.is_empty(),
+        "not part of the generated tree: {views:?}"
+    );
+    assert!(
+        unreadable.is_empty(),
+        "an external face is not an unreadable one: {unreadable:?}"
+    );
+    assert_eq!(external.len(), 1, "{external:?}");
+    assert!(external[0].contains("button_fast.rs"), "{external:?}");
+    assert!(external[0].contains("external face"), "{external:?}");
+    // The older entry point keeps its promise: it reports the unreadable half, and the
+    // external face is not in it.
+    // 旧的入口保持它的承诺：它报的是读不了的那一半，而外部面不在其中。
+    let (_, only_unreadable) = face_views_and_unreadable(&root, "graft-host").expect("an answer");
+    assert!(only_unreadable.is_empty(), "{only_unreadable:?}");
+}
+
+/// A generated-layout face that sits outside the layout is still a layout problem.
+/// 本该在生成布局里、却长在布局之外的面仍然是布局问题。
+#[test]
+fn a_misplaced_generated_face_is_still_a_layout_problem() {
+    let root = temporary_root("misplaced");
+    fs::write(
+        root.join("src/panel.rs"),
+        "crate::root_object! {\n    kind: Panel,\n}\n",
+    )
+    .expect("misplaced face");
+    let (_, unreadable, external) = face_views_with_external(&root, "host").expect("an answer");
+    assert_eq!(unreadable.len(), 1, "{unreadable:?}");
+    assert!(unreadable[0].contains("outside the"), "{unreadable:?}");
+    assert!(external.is_empty(), "{external:?}");
 }
