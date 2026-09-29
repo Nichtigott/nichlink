@@ -68,12 +68,22 @@
 
 ## 回滚与不可回滚点
 
-- 批 1 / 批 2 / 批 3 准备**都可 `git revert`**。
-- **只有批 3 的注册表动作不可回滚**：`cargo publish` 不能撤回，`cargo yank` 也不可撤销
-  （yank 只影响解析，历史版本仍在 index 上）。执行顺序与前置写死在 `docs/merge-batch3-publish.md`：
-  发布（`nichlink-kernel` → `nichlink-macro` → `nichlink-toolchain`，依赖序）→
-  `tools/nichlink-publish --verify-publish --verify-consumers` → **两个开关都绿之前不 yank** → 旧八名 yank。
-  维护者已选定 **0.2.0**；本机无 registry 凭据，执行前由维护者 `cargo login`（不把 token 写进对话）。
+- **可回滚的**：批 1 / 批 2 / 批 3 准备的提交本身都可 `git revert`；**yank 也可逆** ✓
+  （`cargo yank --version <v> <name> --undo`）。
+- **不可回滚的只有"发布"这一个动作** ✗：crates.io 是永久归档——**已发布的版本不可覆盖、代码不可删除**
+  （Cargo Book：*the version can never be overwritten, and the code cannot be deleted*）。执行顺序与前置
+  写死在 `docs/merge-batch3-publish.md`：发布（`nichlink-kernel` → `nichlink-macro` → `nichlink-toolchain`，
+  依赖序）→ `tools/nichlink-publish --verify-consumers`（**该工具没有 `--verify-publish`，实测 exit 2** ✗）
+  → **它绿之前不 yank** → 旧八名**逐版本** yank（各 `0.1.0/0.1.1/0.1.3/0.1.4/0.1.5`；只 yank 最新版会让
+  `= "0.1"` 的新解析退回未 yank 的旧版 ✗）。维护者选定 **0.2.0**，并在本机 `cargo login` 后由队长执行 ✓。
+- **执行结果（2026-09-29，追记）**：三个 crate 的 `0.2.0` **已全部发布** ✓（`cargo publish` 逐条 EXIT=0、
+  index 已收录）；`tools/nichlink-publish --verify-consumers` **绿** ✓（"consumer resolved and built:
+  nichlink-kernel nichlink-macro nichlink-toolchain"）；旧 8 名 × 5 版本共 **40 次 yank** 已按上表执行 ✓
+  （`nichlink-macro` 保留 ✓）。**两处踩坑如实记**：① 首轮 `cargo publish` 在第二条 crate 的 `verify`
+  阶段被 **workspace-write 沙箱**拦成 `Permission denied (os error 13)`（`~/.cargo` 归属正常却写不进 ⇒
+  是沙箱而不是权限），改用**一次性 `danger-full-access`** 后全过 ✓；② 清单里 `--verify-publish` 这个开关
+  **不存在** ✗（真实开关只有 `--help/--publish/--yes/--allow-dirty/--check-table/--verify-consumers`）——
+  引用前没核实，已更正 ✓。
 
 ## 仍开放（点名，不粉饰）
 

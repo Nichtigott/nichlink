@@ -64,7 +64,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 （run `36297635525`），`--verify-consumers` 在同一次运行里通过：检出之外的一次性 crate 按版本解析并
 构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-09-29
 
 ### Changed
 
@@ -88,28 +88,35 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   `node-graph`、`authoring`、`prototype-fixtures`、`dev-supervisor`）；
   `build_time`/`runtime` 默认开启。
 
-- **Yank plan for the old names.** After `0.2.0` resolves on the index and
-  `tools/nichlink-publish --verify-publish --verify-consumers` is green, the eight merged-away
-  names are yanked at their last published version (`0.1.6`): `nichlink-core`,
+- **The old names are yanked (done 2026-09-29).** `0.2.0` resolved on the index and
+  `tools/nichlink-publish --verify-consumers` is green, the eight merged-away
+  names are yanked at **every** version they ever published (`0.1.0`, `0.1.1`, `0.1.3`, `0.1.4`,
+  `0.1.5`) — forty yanks in all (yanking only the newest would let a fresh `= "0.1"` resolve back
+  to an older un-yanked one; yank is reversible with `--undo`): `nichlink-core`,
   `nichlink-run-method`, `nichlink-build-method`, `nichlink-debug-method`, `nichlink-plugin-host`,
   `nichlink-studio`, `nichlink-mcp`, `nichlink-cli`. **`nichlink-macro` is kept** (it never merged).
   The executable command list, in order, is in `docs/merge-batch3-publish.md`.
-  旧名 yank 计划：`0.2.0` 在 index 上可解析、且 `tools/nichlink-publish --verify-publish
-  --verify-consumers` 绿之后，把八个已合并掉的名字按它们最后发布的版本（`0.1.6`）yank：
+  旧名 yank（**2026-09-29 已完成**）：`0.2.0` 在 index 上可解析、且 `tools/nichlink-publish
+  --verify-consumers` 绿之后，把八个已合并掉的名字按**每一个已发布版本**（`0.1.0`、`0.1.1`、`0.1.3`、`0.1.4`、`0.1.5`）yank
+  ——共四十次（只 yank 最新版会让新的 `= "0.1"` 退回更旧、未 yank 的那版；yank 可用 `--undo` 撤销）：
   `nichlink-core`、`nichlink-run-method`、`nichlink-build-method`、`nichlink-debug-method`、
   `nichlink-plugin-host`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`。**`nichlink-macro`
   保留**（它没有被合并）。可按序执行的命令清单见 `docs/merge-batch3-publish.md`。
 
-- **Known leftover.** Batch 2's six in-module test files (25 `#[test]` functions, the `(b)` class)
+- **Known leftover.** Batch 2's six in-module test files (**20** `#[test]` functions, the `(b)` class)
   are **not** wired back yet: the tolerant arm of `__control_object!` cannot be reached from inside
-  the merged crate, so those files stay in their module trees (49 of the 74 `#[test]` functions did
-  come back). The diagnosis and the two candidate fixes are in
-  `docs/b3-registration-diagnosis.md`.
-  **已知遗留**：批 2 的六个模块内测试文件（25 个 `#[test]`，即 `(b)` 类）**尚未接回**：合并后的
+  the merged crate, so those files stay in their module trees (54 of the 74 `#[test]` functions did
+  come back). Independent review t139 confirmed with three probes that the 20 really do not run —
+  both build faces' `--list` match none of them, and a `compile_error!` planted in each file still
+  leaves `cargo check --all-targets` at exit 0 on both faces. The diagnosis and the two candidate
+  fixes are in `docs/b3-registration-diagnosis.md`.
+  **已知遗留**：批 2 的六个模块内测试文件（**20** 个 `#[test]`，即 `(b)` 类）**尚未接回**：合并后的
   crate 内部到达不了 `__control_object!` 的宽容 arm，因此它们仍留在各自模块树里（74 个 `#[test]`
-  中有 49 个已接回）。诊断与两条候选修法见 `docs/b3-registration-diagnosis.md`。
+  中有 **54** 个已接回，20 个未接回；独立复核 t139 用三条探针核过：两个构建面 `--list` 命中 0、
+  变异 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0 ⇒ 它们确实没跑）。诊断与两条候选修法
+  见 `docs/b3-registration-diagnosis.md`。
 
-## [0.1.6] — unreleased
+## [0.1.6] — never released (its content shipped in 0.2.0)
 
 ### Added
 

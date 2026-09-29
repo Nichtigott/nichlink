@@ -34,11 +34,19 @@ cargo publish -p nichlink-toolchain --locked
 ## 2. 发布后验证（需要 index）
 
 ```sh
-tools/nichlink-publish --verify-publish --verify-consumers
+tools/nichlink-publish --verify-consumers
 ```
 
-两个开关都要绿：前者核对 index 上的版本，后者在已发布 crate 上重建消费者。
+**只有一个开关**：`--verify-consumers` 会在**已发布的 crate** 上重建消费者（对应
+`tools/nichlink-external-rehearsal` 的检出外那一半）。该工具的开关全集是
+`--help / --publish / --yes / --allow-dirty / --check-table / --verify-consumers`
+——**没有 `--verify-publish`** ✗（本清单早先按方案写的那一条是错的，2026-09-27 执行时实测：
+`error: unknown argument '--verify-publish'`，exit 2）。
 **在它绿之前不要 yank。**
+
+（另记：真正"按依赖序批量发布"的入口是 `tools/nichlink-publish --publish --yes` ✓——它会在
+每层等 index 可解析 ✓；本次是一次性迁移的第一版发布，所以第 1 节用等价的逐条 `cargo publish`
+加自建等待跑完的 ✓。）
 
 ## 3. 旧名 yank 清单（八名；`nichlink-macro` 保留 ✓）
 
@@ -74,8 +82,11 @@ for n in nichlink-core nichlink-run-method nichlink-build-method nichlink-debug-
 done
 ```
 
-yank **只影响解析**（历史版本仍在 index 上，已锁定的 lockfile 不受影响）；一旦 yank **不可撤销** ✓
-⇒ 第 2 步（`--verify-publish --verify-consumers`）未绿之前不要执行本步。
+yank **只影响解析**（历史版本仍在 index 上，已锁定的 lockfile 不受影响）✓，而且 **yank 是可逆的** ✓
+——`cargo yank --version <v> <name> --undo` 可撤销（Cargo Book 同一段就写着这个用法）。**真正不可逆
+的是"发布"本身**：已发布的版本**永不可覆盖、代码不可删除**（crates.io 是永久归档）✗ ⇒ 想"删掉"某个
+已发布版本，唯一自助手段就是 yank，删除需要联系 crates.io 支持且只适用于极窄情形 ✓。
+⇒ 第 2 步（`tools/nichlink-publish --verify-consumers`）未绿之前不要执行本步。
 
 ## 4. 收尾
 
