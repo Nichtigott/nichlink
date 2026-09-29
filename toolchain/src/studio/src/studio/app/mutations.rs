@@ -319,7 +319,7 @@ impl App {
         // 内核拒绝的记录不得落盘，拒绝必须到达读者而不是被成功横幅盖掉。交回的文本就是下面写下
         // 的文本，因此被校验的就是被存下的。
         let line = format!("{record}\n");
-        let candidate = match PluginCatalog::with_appended_line(&existing, &line) {
+        let candidate = match PluginCatalog::with_record(&existing, &line) {
             Ok(text) => text,
             Err(error) => {
                 self.event =

@@ -213,9 +213,14 @@ pub(crate) fn tools() -> Vec<Value> {
              `apply` is true**: the preview computes the exact bytes with the same kernel calls \
              and prints what each file would gain, so it cannot drift from the write; `apply: \
              true` stores them. A plugin write requires the request to say `confirm: true` itself, \
-             because the lock is the artifact the host admits plugins from. A **virtual workspace \
-             root** names no package, so a plugin write there is refused with the candidate member \
-             directories.",
+             because the lock is the artifact the host admits plugins from. The three provenance \
+             columns of the ten-field spelling — `signature`, `fingerprint`, `revocations` — are \
+             optional and are what an `official` write is *for*: the trusted lock already accounts \
+             for that package identity, and a record carrying provenance the bare one does not is \
+             the promotion the kernel accepts (it replaces that record rather than colliding with \
+             it), while a request that names none of them writes the seven-field line. A \
+             **virtual workspace root** names no package, so a plugin write there is refused with \
+             the candidate member directories.",
             json!({"type":"object","properties":{
                 "source":{"type":"string","enum":["official","user"],"description":"which lock the record goes into: `official.lock` or `user.lock`"},
                 "framework":{"type":"string","description":"the target framework the record was written for"},
@@ -224,6 +229,9 @@ pub(crate) fn tools() -> Vec<Value> {
                 "crate":{"type":"string","description":"the Rust crate that carries the plugin implementation; must be an identifier"},
                 "checksum":{"type":"string","description":"the digest the plugin bytes must match, with or without a `sha256:` prefix"},
                 "mode":{"type":"string","enum":["extension","replacement"],"description":"whether the plugin extends a slot or replaces the face in it"},
+                "signature":{"type":"string","description":"optional provenance (ten-field spelling): the signature over the plugin bytes; naming any provenance column writes the ten-field form"},
+                "fingerprint":{"type":"string","description":"optional provenance: the signing key's fingerprint"},
+                "revocations":{"type":"string","description":"optional provenance: the revocation list the record was checked against"},
                 "apply":{"type":"boolean","description":"false (the default) previews the exact bytes; true stores them"},
                 "confirm":{"type":"boolean","description":"must be true to write: the lock is the artifact the host admits plugins from, so the request says it rather than the bridge assuming it"},
                 "root":{"type":"string"}

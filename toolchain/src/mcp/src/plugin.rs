@@ -17,13 +17,13 @@
 //!
 //! **Preview is the default, and it is the write.** The preview computes the exact bytes
 //! with the same kernel calls the write uses — `parse_plugin_catalog`,
-//! `contains_record`, `with_appended_line` — and prints them, so there is no copy to
+//! `contains_record`, `with_record` — and prints them, so there is no copy to
 //! drift from: the text a preview shows is the text an apply stores. Nothing is read
 //! into the preview that the apply does not read, and nothing is written either way
 //! until `apply: true` **and** `confirm: true` are both in the request, because the lock
 //! is the artifact the host admits plugins from.
 //! **预览是默认，而且它就是那次写入。** 预览用与写入相同的核内调用（`parse_plugin_catalog`、
-//! `contains_record`、`with_appended_line`）算出确切字节并打印出来，因此没有副本可以漂移：预览显示的
+//! `contains_record`、`with_record`）算出确切字节并打印出来，因此没有副本可以漂移：预览显示的
 //! 文本就是落盘存下的文本。预览读的东西与落盘读的完全相同，而两者都不会在请求同时带上 `apply: true`
 //! **与** `confirm: true` 之前写下任何字节，因为锁正是宿主据以准入插件的工件。
 //!
@@ -133,9 +133,39 @@ impl Request {
                 "`crate` must be a Rust identifier, not `{crate_name}`"
             ));
         }
-        let line = format!(
+        // The three provenance columns of the ten-field spelling (PH-7): a request that names
+        // none of them writes Studio's seven-field line, and a request that names one writes
+        // the ten-field form with the others **declared absent** (`|||`), which is the shape
+        // the lock's parser reads. This is what gives an official write something to do: the
+        // trusted lock already accounts for the package identity, and the record this request
+        // adds carries provenance that bare record does not, so the kernel replaces it
+        // (`PluginCatalog::supersedes`) instead of refusing a duplicate.
+        // 十字段拼法的那三个来源列（PH-7）：一个都不点名的请求写 Studio 的七字段行，点名其中一个的请求
+        // 写十字段形式、其余列**声明为空**（`|||`），也就是锁的解析器所读的形状。这正是官方写入有活干的
+        // 原因：受信锁本来就覆盖那个包身份，而这次请求追加的记录携带了那条裸记录没有的来源，于是核内用
+        // `PluginCatalog::supersedes` **取代**它，而不是以重复为由拒绝。
+        let signature = optional_text(arguments, "signature");
+        let fingerprint = optional_text(arguments, "fingerprint");
+        let revocations = optional_text(arguments, "revocations");
+        let ten_fields = signature.is_some() || fingerprint.is_some() || revocations.is_some();
+        let mut line = format!(
             "{source_text}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode_text}"
         );
+        if ten_fields {
+            line.push_str(&format!(
+                "|{}|{}|{}",
+                signature.as_deref().unwrap_or_default(),
+                fingerprint.as_deref().unwrap_or_default(),
+                revocations.as_deref().unwrap_or_default(),
+            ));
+        }
+        let declared = |value: Option<String>| -> Option<String> {
+            if ten_fields {
+                Some(value.unwrap_or_default())
+            } else {
+                value
+            }
+        };
         let record = PluginRecord {
             source,
             framework,
@@ -144,14 +174,9 @@ impl Request {
             crate_name: crate_name.clone(),
             checksum,
             mode,
-            // The bridge writes Studio's seven-field spelling. The ten-field form's three
-            // provenance columns are `Some("")` ("declared absent") rather than `None`
-            // ("not mentioned"), and no field of this request declares either.
-            // 桥写的是 Studio 的七字段拼法。十字段形式的那三个来源列是 `Some("")`
-            // （"声明此处没有值"）而不是 `None`（"没提到"），而本次请求没有任何字段声明其中任何一个。
-            signature: None,
-            public_key_fingerprint: None,
-            revocation_list: None,
+            signature: declared(signature),
+            public_key_fingerprint: declared(fingerprint),
+            revocation_list: declared(revocations),
         };
         let (lock_name, entry_name) = match source {
             PluginSource::Official => ("official.lock", "official.rs"),
@@ -251,7 +276,7 @@ fn plan(root: &Path, request: &Request) -> Result<Plan, String> {
     // 锁是宿主读取的工件，因此这次追加是否合法由解析器决定——在写下任何东西之前——而交回的文本就是落盘
     // 存下的文本，因此被校验的就是被存下的。
     let line = format!("{}\n", request.line);
-    let after = PluginCatalog::with_appended_line(&before, &line).map_err(|error| {
+    let after = PluginCatalog::with_record(&before, &line).map_err(|error| {
         format!(
             "REFUSED: {} would not parse with this record: {error}. Nothing was written",
             request.lock_name
@@ -442,6 +467,24 @@ fn appended(before: &str, after: &str) -> String {
 
 /// The one required string argument named `key`.
 /// 名为 `key` 的那一个必填字符串参数。
+/// An optional argument's trimmed value, or `None` when the request never names it.
+/// 可选参数修剪后的值；请求从未点名它时是 `None`。
+///
+/// The three provenance columns are the only optional fields of this request, and the
+/// difference between "not mentioned" and "declared absent" is the lock format's, not this
+/// helper's: a caller that names none of them writes the seven-field line, and one that names
+/// one writes empty columns for the rest.
+/// 三个来源列是本次请求仅有的可选字段，而"没提到"与"声明为空"的区别属于锁格式、不属于这个助手：
+/// 一个都不点名的调用方写七字段行，点名其中一个的调用方给其余列写空值。
+fn optional_text(arguments: &Value, key: &str) -> Option<String> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
 fn text(arguments: &Value, key: &str) -> Result<String, String> {
     match arguments.get(key).and_then(Value::as_str) {
         Some(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),

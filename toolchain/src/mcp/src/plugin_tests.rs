@@ -231,6 +231,55 @@ fn an_official_record_the_lock_does_not_account_for_is_refused() {
     assert!(!fixture.plugins().exists());
 }
 
+/// The promotion an official write exists for (PH-7): the trusted lock carries the bare
+/// seven-field record, the request names a signature, and the kernel *replaces* that record
+/// instead of refusing a duplicate — one identity, one record, now carrying provenance.
+/// 官方写入存在的理由（PH-7）：受信锁里是裸的七字段记录，请求点名了签名，于是核内**取代**那条记录，
+/// 而不是以重复为由拒绝——一个身份一条记录，现在携带来源。
+#[test]
+fn an_official_write_promotes_the_trusted_record_with_its_provenance() {
+    let fixture = package("official-promotion");
+    let seeded =
+        "official|nichlink.test|official-plugin|1.0.0|official_plugin|sha256:00|extension\n";
+    std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
+    std::fs::write(fixture.lock("official"), seeded).expect("seed lock");
+
+    let text = plugin(
+        &fixture.root,
+        &json!({
+            "source": "official",
+            "framework": "nichlink.test",
+            "package": "official-plugin",
+            "version": "1.0.0",
+            "crate": "official_plugin",
+            "checksum": "sha256:00",
+            "mode": "extension",
+            "signature": "sig-v1",
+            "fingerprint": "key-v1",
+            "apply": true,
+            "confirm": true,
+        }),
+    )
+    .expect("the trusted record is promoted");
+
+    let written = std::fs::read_to_string(fixture.lock("official")).expect("lock text");
+    assert!(written.contains("|sig-v1|key-v1|"), "{written}");
+    // The promotion replaces the trusted line rather than sitting beside it.
+    // 这次升级**替换**掉那条受信记录，而不是与它并排。
+    assert_eq!(
+        written
+            .lines()
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+            .count(),
+        1,
+        "{written}"
+    );
+    let catalog = PluginCatalog::parse_plugin_catalog(&written).expect("the lock parses");
+    assert_eq!(catalog.records().len(), 1, "one identity keeps one record");
+    assert_eq!(catalog.records()[0].signature.as_deref(), Some("sig-v1"));
+    assert!(text.contains("sig-v1"), "{text}");
+}
+
 /// An official record the lock *does* account for still has to pass the lock's parser, and
 /// a second record with the same identity is refused there — with the existing bytes left
 /// exactly as they were.
@@ -278,18 +327,44 @@ fn an_official_record_the_lock_accounts_for_is_still_judged_by_the_parser() {
     );
 }
 
-/// A user record the parser refuses (same identity, another checksum) is not written, and
-/// the lock that was there keeps its bytes.
-/// 解析器拒绝的用户记录（同身份、另一个校验和）不会被写下，而原本在那里的锁保留自己的字节。
+/// One package version can carry two digests, and `accounts_for` reads that pair as two
+/// identities — so the append lands instead of being refused as a duplicate. The pair the
+/// parser refuses is the one whose seven fields are equal, and the downgrade below is the
+/// reachable refusal for this lane.
+/// 同一个包版本可以承载两个摘要，而 `accounts_for` 把这一对读成两个身份——因此这次追加会落盘，而不是以
+/// 重复为由被拒绝。解析器拒绝的是七个字段相等的那一对，而下面那条降级是这个通道上可达的拒绝。
 #[test]
-fn a_user_record_the_parser_refuses_is_not_written() {
-    let fixture = package("user-parser");
+fn a_second_digest_for_one_package_version_is_a_second_identity() {
+    let fixture = package("user-two-digests");
     let seeded = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("user"), seeded).expect("seed lock");
 
-    let error = plugin(&fixture.root, &user_request("sha256:01", true, true))
-        .expect_err("the parser refuses the duplicate identity");
+    plugin(&fixture.root, &user_request("sha256:01", true, true))
+        .expect("a second digest is a second identity");
+    let written = std::fs::read_to_string(fixture.lock("user")).expect("lock text");
+    assert_eq!(
+        PluginCatalog::parse_plugin_catalog(&written)
+            .expect("the lock parses")
+            .records()
+            .len(),
+        2,
+        "{written}"
+    );
+}
+
+/// A record that would drop a provenance column is a downgrade, and the parser refuses it:
+/// the lock keeps its bytes and the reply carries the parser's own reason.
+/// 会让某一来源列消失的记录是降级，解析器拒绝它：锁保留自己的字节，而回复携带解析器自己的理由。
+#[test]
+fn a_user_record_that_would_drop_provenance_is_not_written() {
+    let fixture = package("user-downgrade");
+    let seeded = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension|sig-v1||\n";
+    std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
+    std::fs::write(fixture.lock("user"), seeded).expect("seed lock");
+
+    let error = plugin(&fixture.root, &user_request("sha256:00", true, true))
+        .expect_err("the parser refuses the downgrade");
     assert!(error.contains("duplicates package identity"), "{error}");
     assert_eq!(
         std::fs::read_to_string(fixture.lock("user")).expect("the seed survives"),

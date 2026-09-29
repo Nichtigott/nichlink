@@ -2,7 +2,6 @@
 //! 插件锁记录与清单匹配。
 
 use crate::registry_core::declaration::{PluginManifest, PluginMode, PluginSource};
-use std::collections::BTreeSet;
 use std::fmt;
 
 use crate::registry_core::identity::IDENTITY_SCHEMA;
@@ -114,7 +113,28 @@ impl From<PluginLockError> for String {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PluginCatalog {
     records: Vec<PluginRecord>,
+    /// The lock line each record was read from, and the identity it was keyed by. A writer
+    /// needs both to replace the line a promotion supersedes: leaving the old record in the
+    /// file would put two records for one identity in a lock only a reader who knows the
+    /// supersede rule can interpret.
+    /// 每条记录读自哪一行，以及它据以做键的身份。写入方需要这两样才能替换掉被升级取代的那一行：把旧记录
+    /// 留在文件里，等于让一份锁承载同一身份的两条记录，而只有懂得取代规则的读者才解释得了它。
+    lines: Vec<usize>,
+    keys: Vec<Identity>,
 }
+
+/// One record's identity: the seven fields `accounts_for` compares, with the digest reduced to
+/// its body and lowercased.
+/// 一条记录的身份：`accounts_for` 比较的那七个字段，摘要已归到本体并转小写。
+type Identity = (
+    PluginSource,
+    String,
+    String,
+    String,
+    String,
+    String,
+    PluginMode,
+);
 
 /// Whether a lock's declared schema is the identity schema this build reads.
 /// 锁声明的 schema 是否就是本次构建所读的身份 schema。
@@ -142,7 +162,13 @@ impl PluginCatalog {
     /// `LGC-LG-40`。
     pub fn parse_plugin_catalog(lock: &str) -> Result<Self, PluginLockError> {
         let mut records = Vec::new();
-        let mut identities = BTreeSet::new();
+        let mut identities: std::collections::BTreeMap<_, usize> =
+            std::collections::BTreeMap::new();
+        // Kept beside the records so [`PluginCatalog::with_record`] can replace the exact line
+        // a promotion supersedes.
+        // 与记录并列留着，[`PluginCatalog::with_record`] 才能替换掉升级所取代的那一行。
+        let mut lines: Vec<usize> = Vec::new();
+        let mut keys: Vec<Identity> = Vec::new();
         // The gate belongs to the whole file, not to the line the parser reached: per-record
         // checking let an empty lock and a header written after the records read as "this
         // build's schema" (audit `LGC-LG-04`).
@@ -225,30 +251,61 @@ impl PluginCatalog {
                 public_key_fingerprint: fields.get(8).map(ToString::to_string),
                 revocation_list: fields.get(9).map(ToString::to_string),
             };
+            // The identity is the seven fields `accounts_for` compares, not the five that
+            // name the package: the checksum (by meaning, `LGC-LG-40`) and the mode are part
+            // of what makes two records describe the same plugin, and keying on five of the
+            // seven made the parser refuse a pair every reader of this lock treats as two
+            // identities. One identity has one record; a second record may replace the first
+            // only by carrying provenance the first does not (`supersedes`), which is the
+            // promotion an official write performs.
+            // 身份是 `accounts_for` 比较的那七个字段，而不是点名包的五个：校验和（按含义，`LGC-LG-40`）
+            // 与 mode 同样决定两条记录是否在描述同一个插件，而只按五个做键会让解析器拒绝一对在本锁的每个
+            // 读取方看来都是两个身份的记录。一个身份只有一条记录；第二条只有在携带第一条没有的来源时才能
+            // 取代它（`supersedes`）——那正是官方写入所做的那次升级。
             let identity = (
                 record.source,
                 record.framework.clone(),
                 record.package.clone(),
                 record.version.clone(),
                 record.crate_name.clone(),
+                checksum_body(&record.checksum).to_ascii_lowercase(),
+                record.mode,
             );
-            if !identities.insert(identity) {
-                return Err(PluginLockError::new(
-                    line_number + 1,
-                    format!(
-                        "duplicates package identity `{}` `{}`",
-                        record.package, record.version
-                    ),
-                ));
+            match identities.entry(identity.clone()) {
+                std::collections::btree_map::Entry::Occupied(slot) => {
+                    if !supersedes(&records[*slot.get()], &record) {
+                        return Err(PluginLockError::new(
+                            line_number + 1,
+                            format!(
+                                "duplicates package identity `{}` `{}`: a second record for one \
+                                 identity must carry provenance the first does not",
+                                record.package, record.version
+                            ),
+                        ));
+                    }
+                    let index = *slot.get();
+                    records[index] = record;
+                    lines[index] = line_number + 1;
+                    keys[index] = identity;
+                }
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    records.push(record);
+                    lines.push(line_number + 1);
+                    keys.push(identity);
+                    slot.insert(records.len() - 1);
+                }
             }
-            records.push(record);
         }
-        Ok(Self { records })
+        Ok(Self {
+            records,
+            lines,
+            keys,
+        })
     }
 
-    /// The lock text that carries `line` as one more record, or the parser's
-    /// refusal of the text that would result.
-    /// 把 `line` 作为又一条记录承载的锁文本，或解析器对将产生文本的拒绝。
+    /// The lock text that carries `line` — appended, or replacing the record it supersedes —
+    /// or the parser's refusal of the text that would result.
+    /// 承载 `line` 的锁文本——追加它，或让它替换掉被它取代的那条记录——或解析器对将产生文本的拒绝。
     ///
     /// A writer must not decide for itself what a legal lock is: appending a
     /// record the parser rejects produces an artifact the host refuses to read
@@ -268,7 +325,8 @@ impl PluginCatalog {
     /// writing another is how a lock stops being the one that was checked.
     /// 交回的文本就是调用方必须写下的文本：校验一份、写另一份，是锁不再是被检查过的那一份的
     /// 开始。
-    pub fn with_appended_line(lock: &str, line: &str) -> Result<String, PluginLockError> {
+    pub fn with_record(lock: &str, line: &str) -> Result<String, PluginLockError> {
+        let before = Self::parse_plugin_catalog(lock)?;
         let mut candidate = String::with_capacity(lock.len() + line.len() + 2);
         candidate.push_str(lock);
         if !candidate.is_empty() && !candidate.ends_with('\n') {
@@ -278,8 +336,34 @@ impl PluginCatalog {
         if !candidate.ends_with('\n') {
             candidate.push('\n');
         }
-        Self::parse_plugin_catalog(&candidate)?;
-        Ok(candidate)
+        let after = Self::parse_plugin_catalog(&candidate)?;
+        // A record the new line superseded is dead, and it leaves the file: a lock carrying two
+        // records for one identity is readable only by someone who knows the supersede rule,
+        // and it contradicts this parser's own refusal message. The replacement is by line, so
+        // comments and the order of every surviving record stay exactly as they were.
+        // 被新行取代的记录已经死了，它要离开文件：承载同一身份两条记录的锁，只有懂得取代规则的人才读得懂，
+        // 而且与这个解析器自己的拒绝话术相矛盾。替换按行进行，因此注释与每条存活记录的顺序原样不变。
+        let dead: Vec<usize> = before
+            .keys
+            .iter()
+            .enumerate()
+            .filter_map(|(index, key)| {
+                let position = after.keys.iter().position(|other| other == key)?;
+                (after.lines[position] != before.lines[index]).then_some(before.lines[index])
+            })
+            .collect();
+        if dead.is_empty() {
+            return Ok(candidate);
+        }
+        let mut text = String::with_capacity(candidate.len());
+        for (index, existing) in candidate.lines().enumerate() {
+            if dead.contains(&(index + 1)) {
+                continue;
+            }
+            text.push_str(existing);
+            text.push('\n');
+        }
+        Ok(text)
     }
 
     /// The parsed records, in lock order.
@@ -367,6 +451,41 @@ impl PluginCatalog {
 /// 与 `is_sha256` 都接受两种拼法），十六进制也不区分大小写，因此锁里的 `sha256:abc…` 与清单里的
 /// `abc…` 指的是同一段字节。字面比较会用 `LockMismatch`——"锁里没有这个插件"——拒绝这一对，而同一份
 /// 摘要在其它每个读取点都会被接受（审计 `LGC-LG-40`）。
+/// Whether `new` may replace `old` for one identity: its provenance columns are at least
+/// the ones `old` carries, and at least one of them is one `old` did not carry.
+/// `new` 是否可以取代同一身份的 `old`：它的来源列至少不比 `old` 少，且至少多出一列。
+///
+/// An empty column is *declared absent* — the ten-field spelling writes `|||` for provenance
+/// it does not have — so it counts as not carried. A record that would drop a column is
+/// refused rather than accepted as a replacement: silently losing a signature a lock pinned
+/// is exactly the downgrade this rule exists to prevent, and a re-signing (the same columns
+/// with different values) is a maintainer's edit to the lock, not an append.
+/// 空列意为**声明此处没有值**——十字段拼法用它没有的来源写成 `|||`——因此算作未携带。会让某一列消失的
+/// 记录被拒绝而不是接受为替代：悄悄丢掉锁曾钉住的签名，正是这条规则要防的降级；而重新签名（同样的列、
+/// 不同的值）是维护者对锁的编辑，不是一次追加。
+fn supersedes(old: &PluginRecord, new: &PluginRecord) -> bool {
+    let carried = |value: Option<&str>| value.is_some_and(|text| !text.is_empty());
+    let mut gained = false;
+    for (old, new) in [
+        (old.signature.as_deref(), new.signature.as_deref()),
+        (
+            old.public_key_fingerprint.as_deref(),
+            new.public_key_fingerprint.as_deref(),
+        ),
+        (
+            old.revocation_list.as_deref(),
+            new.revocation_list.as_deref(),
+        ),
+    ] {
+        match (carried(old), carried(new)) {
+            (true, false) => return false,
+            (false, true) => gained = true,
+            _ => {}
+        }
+    }
+    gained
+}
+
 fn accounts_for(record: &PluginRecord, candidate: &PluginRecord) -> bool {
     record.source == candidate.source
         && record.framework == candidate.framework
