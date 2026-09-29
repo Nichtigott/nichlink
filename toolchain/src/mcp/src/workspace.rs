@@ -212,12 +212,22 @@ where
             }
         }
     }
-    output.push_str(
-        "detail: pass `root` as one member's directory (relative to this root) for that package's \
-         own answer\n",
-    );
+    output.push_str(DETAIL);
     Ok(output)
 }
+
+/// The closing line every merged tree answer ends with, and the one place that spells it.
+/// 每份合并树级答案结尾都会带的那一行，以及拼出它的唯一地方。
+///
+/// Two shapes of merged answer exist — the one [`merge`] renders, and the narrower ones
+/// that resolve one owner or ask every member for its own answer — and they are read by
+/// the same caller, so the sentence telling that caller how to get a single package's
+/// answer has to read the same in all of them.
+/// 合并答案有两种形状——[`merge`] 渲染的那一种，以及只解析出一个拥有者、或逐成员索取各自答案的更窄的
+/// 那几种——而读它们的是同一个调用方，因此告诉它"怎么拿到单个包的答案"的那句话在它们之间必须读起来
+/// 一样。
+pub(crate) const DETAIL: &str = "detail: pass `root` as one member's directory (relative to this \
+                                 root) for that package's own answer\n";
 
 /// The body a tool answers with when the root itself has a manifest Cargo cannot resolve.
 /// 根本身有一份 Cargo 解析不了的清单时，工具作答所用的正文。
@@ -324,7 +334,15 @@ fn member(dir: PathBuf, name: String) -> Member {
 
 /// Fold a possibly multiline reason into the one line a roster row can carry.
 /// 把可能多行的原因折成表头一行装得下的那一行。
-fn one_line(text: &str) -> String {
+///
+/// It is `pub(crate)` because the ownership entrance renders the same kind of line for a
+/// member that derived its tree but could not answer this request: `one_line` here, not a
+/// second folding rule there, is what keeps a two-line Cargo message from breaking the
+/// layout of a body that both entrances write.
+/// 它是 `pub(crate)`，因为归属入口会为"推导出了树、但答不了这次请求"的成员渲染同一类行：这里
+/// 的 `one_line`、而不是那里的第二条折叠规则，才是让两行的 Cargo 消息不会弄坏两个入口所写正文排版的
+/// 原因。
+pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 

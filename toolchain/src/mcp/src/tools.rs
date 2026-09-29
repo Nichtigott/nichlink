@@ -47,7 +47,8 @@ use crate::mcp::grafts::grafts;
 use crate::mcp::impact::impact;
 use crate::mcp::mir::{mir, unified};
 use crate::mcp::overlay::overlay;
-use crate::mcp::protocol::{MAX_READ_LINES, error_response, success};
+use crate::mcp::protocol::{error_response, success};
+use crate::mcp::read::read_source;
 use crate::mcp::registry::registry;
 use crate::mcp::search::search;
 use crate::mcp::source_index::{load_one, load_sources, required_path, resolve_root};
@@ -80,20 +81,47 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.inspect",
-            "Summarize functions and registration declarations in one Rust file.",
+            "Summarize functions and registration declarations in one Rust file. A **virtual \
+             workspace root** is answered as the workspace: the member whose root contains the \
+             path answers it, from that member's own root, or the reply says no member owns the \
+             path.",
             json!({"type":"object","properties":{"path":{"type":"string"},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
             "nichlink.callgraph",
             "Show direct static callers and callees for one function. `limit` bounds how many \
              definitions are listed (default 5, at most 50); a truncation line names how many \
-             were withheld, and `path` selects one definition when several share the name.",
+             were withheld, and `path` selects one definition when several share the name. A \
+             **virtual workspace root** is answered as the workspace: a named `path` is answered \
+             by the member that owns it, and without one every member is asked and its answer \
+             grouped under it, with `tree unavailable (reason)` where a member could not answer.",
             json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"root":{"type":"string"}},"required":["function"]}),
         ),
         tool(
             "nichlink.read",
-            "Read a bounded source window around a line.",
-            json!({"type":"object","properties":{"path":{"type":"string"},"line":{"type":"integer","minimum":1},"context":{"type":"integer","minimum":0,"maximum":120},"root":{"type":"string"}},"required":["path"]}),
+            "Read a bounded source window around a line, an explicit `lines` range, or the \
+             `whole` file. **Every header states the file's total**, as `path:START-END (N \
+             lines)`: `N` is the file's own line count, not the printed range, so a windowed \
+             read still says how much of the file is left — which is the fact the old \
+             81-line window withheld, forcing six calls for a 473-line file. Default: a \
+             window of `context` lines either side of `line` (context 40, at most 120, \
+             240 lines). `whole: true` prints the file; `lines: \"120-260\"` prints that \
+             forward, 1-based range. The three shapes are exclusive and mixing them is \
+             refused by name. An explicit whole/range read is bounded at 1200 lines and a \
+             reply past that bound is cut by the shared truncation notice, which names the \
+             withheld count, the cap, and the narrower request that reaches the rest — \
+             never a silently short answer. The header keeps the file's total either way. A \
+             **virtual workspace root** is answered as the workspace: the member whose root \
+             contains the path answers it, from that member's own root, or the reply says no \
+             member owns the path.",
+            json!({"type":"object","properties":{
+                "path":{"type":"string"},
+                "line":{"type":"integer","minimum":1,"description":"window: the line to centre on (default 1)"},
+                "context":{"type":"integer","minimum":0,"maximum":120,"description":"window: lines either side of `line` (default 40)"},
+                "whole":{"type":"boolean","description":"print the whole file (bounded at 1200 lines)"},
+                "lines":{"type":"string","description":"print one forward, 1-based range, e.g. `120-260` (bounded at 1200 lines)"},
+                "root":{"type":"string"}
+            },"required":["path"]}),
         ),
         tool(
             "nichlink.status",
@@ -114,7 +142,10 @@ pub(crate) fn tools() -> Vec<Value> {
              **A request is previewed unless `apply` is true**: the \
              preview runs the real operation on a throwaway copy and returns the file diff plus \
              the registration tree it produces; `apply: true` writes it and names the files it \
-             wrote. Every reply is the tree that results, so the next call can be aimed with it.",
+             wrote. Every reply is the tree that results, so the next call can be aimed with it. A \
+             **virtual workspace root** names no package and no unique owner, so a write there is \
+             refused with the candidate member directories and nothing is copied or written — a \
+             write runs against a member it is the unique owner of, or it does not run.",
             json!({"type":"object","properties":{
                 "action":{"type":"string","enum":["add","edit","rename","delete"]},
                 "node":{"type":"string","description":"edit/rename/delete: the face, by logical path or identity"},
@@ -155,7 +186,9 @@ pub(crate) fn tools() -> Vec<Value> {
              overlay needs two live registries, and the reply carries the note saying where the \
              live tree comes from. `overlay` and `node` are mutually exclusive. Declared graft \
              state stays in `nichlink grafts`; contract and admission fields need a loaded registry \
-             and are not reported here.",
+             and are not reported here. A **virtual workspace root** is answered as the workspace: \
+             a census of every member with its status, then each member's own report under it, with \
+             `tree unavailable (reason)` where a member could not answer the named face.",
             json!({"type":"object","properties":{"node":{"type":"string"},"overlay":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
@@ -199,7 +232,10 @@ pub(crate) fn tools() -> Vec<Value> {
              describes a different tree is refused by name rather than rendered, because frames are \
              node identities and foreign ones would draw a plausible, wrong call tree. Absence is \
              reported together with the way to produce one; `query` filters either report and a long \
-             one is truncated with its total named.",
+             one is truncated with its total named. A **virtual workspace root** is answered as the \
+             workspace: a census of every member with its status, then each member's own read of \
+             its own trace artifact, with `tree unavailable (reason)` where a member could not \
+             answer.",
             json!({"type":"object","properties":{"query":{"type":"string"},"values":{"type":"boolean"},"root":{"type":"string"}}}),
         ),
         tool(
@@ -222,7 +258,9 @@ pub(crate) fn tools() -> Vec<Value> {
              `against`, that other artifact is the baseline and the reply is the call-graph delta \
              from it forward: added and gone relations, plus function symbols. The text producer \
              stays `cargo rustc -Zunpretty=mir` on a nightly toolchain; a missing artifact says \
-             exactly that instead of reporting an empty graph.",
+             exactly that instead of reporting an empty graph. A **virtual workspace root** is \
+             answered as the workspace: the member whose root contains the artifact path answers \
+             it, from that member's own root, or the reply says no member owns the path.",
             json!({"type":"object","properties":{"path":{"type":"string"},"against":{"type":"string"},"jsonl":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
@@ -234,7 +272,9 @@ pub(crate) fn tools() -> Vec<Value> {
              cannot drift from the library's own. The trace is read from this package's artifact \
              path; when none has been recorded the merge still answers and labels every relation a \
              compiler candidate rather than failing, because an absent trace is a weaker answer and \
-             not a broken one.",
+             not a broken one. A **virtual workspace root** is answered as the workspace: the \
+             member whose root contains the artifact path answers it, from that member's own root, \
+             or the reply says no member owns the path.",
             json!({"type":"object","properties":{"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
@@ -264,7 +304,11 @@ pub(crate) fn tools() -> Vec<Value> {
              that got there, so a capability cycle is a shorter path rather than a hang. A face the \
              traversal did not reach is reported as unreached within `depth` — which is not proof of \
              independence — and graft records or recorded traces naming the same identity are not \
-             traversed, which the reply states.",
+             traversed, which the reply states. A **virtual workspace root** is answered as the \
+             workspace: a census of every member with its status, then each member's own radius \
+             under it, with `tree unavailable (reason)` where a member could not answer the named \
+             face — and a face no member declares is reported as such rather than as another \
+             member's answer.",
             json!({"type":"object","properties":{"node":{"type":"string"},"depth":{"type":"integer","minimum":1,"maximum":16},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
         tool(
@@ -284,7 +328,10 @@ pub(crate) fn tools() -> Vec<Value> {
              verdict printed and the field and capability halves named unavailable rather than shown \
              empty; that is the same verdict `nichlink.verify` prints on its connector line, and it is \
              an answer about the tree rather than a tool failure, so `isError` stays false. \
-             Declared graft cuts are not reported here; the CLI's `explain --json` carries them.",
+             Declared graft cuts are not reported here; the CLI's `explain --json` carries them. A \
+             **virtual workspace root** is answered as the workspace: a census of every member \
+             with its status, then each member's own neighbourhood under it, with `tree \
+             unavailable (reason)` where a member could not answer the named face.",
             json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
         tool(
@@ -298,7 +345,10 @@ pub(crate) fn tools() -> Vec<Value> {
              starts from the recorded run instead and collapses the whole tree to the files that both \
              declare a face and actually ran, with the frames that landed in each; frames are matched \
              to faces by source file, which the reply states, because a face is a declaration and a \
-             frame is a function. Everything is composed from what the other tools report.",
+             frame is a function. Everything is composed from what the other tools report. A \
+             **virtual workspace root** is answered as the workspace: a census of every member \
+             with its status, then each member's own converged point under it, with `tree \
+             unavailable (reason)` where a member could not answer the named face.",
             json!({"type":"object","properties":{"node":{"type":"string"},"trace":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
@@ -317,7 +367,9 @@ pub(crate) fn tools() -> Vec<Value> {
              ones the build scoped, so a tree can pass the static line and be refused here. A rejection \
              is rendered the same way — the diagnostic names the field and the line — and `isError` \
              stays false for it too, because `rejected` is what this surface says about the tree rather \
-             than a failure to ask.",
+             than a failure to ask. A **virtual workspace root** is answered as the workspace: a \
+             census of every member with its status, then each member's own verdict and delta \
+             under it, with `tree unavailable (reason)` where a member has no tree to verify.",
             json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
     ]
@@ -403,13 +455,10 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
             );
         }
     };
-    let result = DISPATCH
-        .iter()
-        .find(|(listed, _)| *listed == name)
-        .map_or_else(
-            || Err(format!("unknown tool `{name}`")),
-            |(_, handler)| (*handler)(&root, arguments),
-        );
+    let result = match DISPATCH.iter().find(|(listed, _)| *listed == name) {
+        Some((_, handler)) => crate::mcp::ownership::dispatch(&root, name, arguments, *handler),
+        None => Err(format!("unknown tool `{name}`")),
+    };
     match result {
         Ok(value) => success(
             id,
@@ -443,43 +492,6 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     if file.functions.is_empty() && registrations.is_empty() {
         output.push_str("no function or registration declaration found\n");
-    }
-    Ok(output)
-}
-
-fn read_source(root: &Path, arguments: &Value) -> Result<String, String> {
-    let relative = required_path(arguments)?;
-    let file = load_one(root, &relative)?;
-    let total = file.source.lines().count();
-    let center = arguments
-        .get("line")
-        .and_then(Value::as_u64)
-        .map_or(1, |line| line.max(1) as usize);
-    let context = arguments
-        .get("context")
-        .and_then(Value::as_u64)
-        .map_or(40, |value| value.min(120) as usize);
-    // A caller-supplied line number is unbounded, and `center + context` used to
-    // overflow: a panic in a debug build, and in release a wrapped range whose start is
-    // past its end while the reply still says `isError: false` — a wrong answer an agent
-    // would trust. Clamp the centre to the file first, then do the arithmetic
-    // saturating.
-    // 调用方给的行号没有上界，而 `center + context` 过去会溢出：debug 构建里 panic，release
-    // 里回绕成一个起点超过终点的区间、回复却仍写着 `isError: false`——这是 agent 会相信的错误
-    // 答案。先把中心夹到文件内，再用饱和运算做后面的加法。
-    let total = total.max(1);
-    let center = center.min(total);
-    let start = center.saturating_sub(context).max(1);
-    let end = center
-        .saturating_add(context)
-        .min(total)
-        .min(start.saturating_add(MAX_READ_LINES - 1));
-    let mut output = format!("{}:{}-{}\n", file.relative, start, end);
-    for (index, line) in file.source.lines().enumerate() {
-        let line_number = index + 1;
-        if (start..=end).contains(&line_number) {
-            output.push_str(&format!("{line_number:>5} | {line}\n"));
-        }
     }
     Ok(output)
 }

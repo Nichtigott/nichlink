@@ -1,0 +1,242 @@
+//! `nichlink.read`: one bounded look at a source file, and the file's total.
+//! `nichlink.read`：对一份源码文件的一次有界读取，以及该文件的总行数。
+//!
+//! The window was the only shape this tool had, and it was a shape the caller could
+//! not see: `{path, line}` answered with ±40 lines around that line, capped at 81,
+//! and said nothing about how much file was left. Reading a 473-line file therefore
+//! took six calls and no call could tell the reader it was done — the reply carried
+//! no total. The bounded window stays the default, because the maintainer's rule is
+//! that a bridge does not feed the whole tree by default, but the two explicit
+//! shapes are now available and the **total line count is on every header**, so even
+//! a windowed read says how much of the file is still unread.
+//! 窗口是此前唯一的形状，而这是调用方看不见的形状：`{path, line}` 以该行为中心返回 ±40 行、上限 81
+//! 行，且对"还剩多少文件"一言不发。于是读一个 473 行的文件要六次调用，而没有一次调用能告诉读者它读完了
+//! ——回复里没有总数。有界窗口仍是默认，因为维护者的原则是本桥默认不投喂整棵树；但两种显式形状现在可用，
+//! 而**每个标头都带总行数**，因此即使是一次窗口读取，也说得出这个文件还有多少没读。
+//!
+//! Three shapes, one header. `whole: true` prints the file; `lines: "120-260"` prints
+//! that forward range; neither means the window around `line`. The window and the
+//! explicit shapes have different caps on purpose: a window is a peek and stays at
+//! [`MAX_READ_LINES`], while an explicit whole/range read is the caller saying "I want
+//! this much" and is bounded by [`MAX_FULL_READ_LINES`]. Past that bound the reply is
+//! cut by `crate::mcp::truncation`, the one outlet, so the withheld count, the cap and
+//! the way to the rest are all named rather than silently dropped.
+//! 三种形状，一个标头。`whole: true` 打印整个文件；`lines: "120-260"` 打印那段朝前的区间；两者都没有时
+//! 是围绕 `line` 的窗口。窗口与显式形状的上限有意不同：窗口是一次窥视，保持在 [`MAX_READ_LINES`]；而显式
+//! 的整文件/区间读取是调用方在说"我要这么多"，由 [`MAX_FULL_READ_LINES`] 约束。越过那道界限时，回复由
+//! `crate::mcp::truncation` 这唯一出口切分，因此被扣下的数量、上限与拿到其余部分的办法都会被点名，
+//! 而不是被静默丢弃。
+
+use std::path::Path;
+
+use serde_json::Value;
+
+use crate::mcp::protocol::MAX_READ_LINES;
+use crate::mcp::source_index::{load_one, required_path};
+use crate::mcp::truncation::withheld;
+
+/// The most lines an explicit whole-file or span read prints before it says it truncated.
+/// 一次显式的整文件或区间读取在声明被截断之前最多打印的行数。
+///
+/// It is separate from [`MAX_READ_LINES`] because the two bounds answer two different
+/// requests. A window is the *default* — a caller that named only a line asked for a
+/// peek, and 240 lines of peek is already generous — while `whole`/`lines` is a caller
+/// stating how much it wants, and the answer has to be able to be a whole file: the
+/// largest file this repository ships is under this bound, which is why one explicit
+/// call replaces the six windowed calls a 473-line file used to take. Past it the reply
+/// is not silently short: the shared truncation sentence names the withheld count, this
+/// cap, and the narrower request that reaches the rest.
+/// 它与 [`MAX_READ_LINES`] 分开，因为两道上限回答的是两种不同的请求。窗口是**默认**——只点名了一行的
+/// 调用方要的是一次窥视，而 240 行的窥视已经很宽——而 `whole`/`lines` 是调用方在声明它要多少，其答案必须
+/// 能够是一整个文件：本仓库出厂的最大文件在此界限之下，因此一次显式调用就取代了过去读一个 473 行文件所需
+/// 的六次窗口调用。越过它时回复不会静默地变短：共享的截断说明会点名被扣下的数量、这道理上限，以及能拿到
+/// 其余部分的那个更窄的请求。
+pub(crate) const MAX_FULL_READ_LINES: usize = 1200;
+
+/// The half-width of the window a request that names no span gets.
+/// 没有点名区间的请求所得窗口的半宽。
+const DEFAULT_CONTEXT: usize = 40;
+
+/// The widest window half-width a caller can ask for.
+/// 调用方能要求的最大窗口半宽。
+const MAX_CONTEXT: usize = 120;
+
+/// What a read request asked for, before the file is consulted.
+/// 一次读取请求要什么，在查阅文件之前。
+enum Span {
+    /// The whole file.
+    /// 整个文件。
+    Whole,
+    /// A forward, 1-based line range.
+    /// 一段朝前的、以 1 起始的行区间。
+    Range(usize, usize),
+    /// A window around one line.
+    /// 围绕某一行的窗口。
+    Window { center: usize, context: usize },
+}
+
+/// Read a source file: a window by default, a whole file or an explicit range on request.
+/// 读取一份源码文件：默认是窗口，按要求则给出整份文件或一个显式区间。
+///
+/// The header is always `path:start-end (N lines)`, where `N` is the **file's** total
+/// rather than the printed range: that number is what lets a caller that got a window
+/// know how much is left, and it is what a whole-file read is checked against.
+/// 标头始终是 `path:start-end (N lines)`，其中 `N` 是**文件**的总行数而不是打印区间的行数：正是这个数字
+/// 让只拿到窗口的调用方知道还剩多少，也是整文件读取据以自证的依据。
+pub(crate) fn read_source(root: &Path, arguments: &Value) -> Result<String, String> {
+    let relative = required_path(arguments)?;
+    let file = load_one(root, &relative)?;
+    let lines = file.source.lines().collect::<Vec<_>>();
+    // The file's own line count, and the number the header always reports. An empty
+    // file has zero lines and still has a header: "nothing to read here" is an answer.
+    // 文件自己的行数，也就是标头始终报告的那个数字。空文件有零行，也仍然有标头："这里没有可读的东西"
+    // 本身就是一个答案。
+    let total = lines.len();
+    let (start, end, cap) = bounds(requested_span(arguments)?, total);
+    let mut output = format!("{}:{}-{} ({} lines)\n", file.relative, start, end, total);
+    let span_lines = if end >= start { end - start + 1 } else { 0 };
+    let mut shown = 0usize;
+    for (index, line) in lines.iter().enumerate() {
+        let number = index + 1;
+        if number < start {
+            continue;
+        }
+        if number > end || shown >= cap {
+            break;
+        }
+        output.push_str(&format!("{number:>5} | {line}\n"));
+        shown += 1;
+    }
+    if span_lines > cap {
+        output.push_str(&format!(
+            "{}\n",
+            withheld(
+                span_lines - shown,
+                span_lines,
+                cap,
+                "lines",
+                "narrow the range with `lines`, or read a window around one `line`"
+            )
+        ));
+    }
+    Ok(output)
+}
+
+/// What a request named, or why its arguments cannot be honoured together.
+/// 请求点名了什么，或者它的参数为何无法同时被满足。
+///
+/// The three shapes are mutually exclusive rather than layered: `whole` plus `lines` is
+/// two answers to one question, and `lines` plus `line`/`context` mixes a range with a
+/// window. Silently letting one win is how a caller comes to believe it read a range it
+/// did not, and the reply is the only place it would ever find out.
+/// 三种形状是互斥的而不是叠加的：`whole` 加 `lines` 是对同一个问题的两个答案，而 `lines` 加
+/// `line`/`context` 是把区间与窗口混在一起。让其中一个静默胜出，正是调用方以为自己读了某个区间、实际没有的
+/// 原因，而回复是它唯一会发现这件事的地方。
+fn requested_span(arguments: &Value) -> Result<Span, String> {
+    let whole = arguments.get("whole").and_then(Value::as_bool) == Some(true);
+    let range = arguments.get("lines").and_then(Value::as_str);
+    if whole && range.is_some() {
+        return Err(
+            "`whole` reads the file and `lines` reads a range; ask for one of them".to_owned(),
+        );
+    }
+    if let Some(range) = range {
+        if arguments.get("line").is_some() || arguments.get("context").is_some() {
+            return Err(
+                "`lines` names an explicit range while `line`/`context` describe a window around \
+                 one line; ask for one of them"
+                    .to_owned(),
+            );
+        }
+        let (start, end) = parse_range(range)?;
+        return Ok(Span::Range(start, end));
+    }
+    if whole {
+        return Ok(Span::Whole);
+    }
+    // A caller-supplied line number is unbounded, and `center + context` used to
+    // overflow: a panic in a debug build, and in release a wrapped range whose start is
+    // past its end while the reply still says `isError: false` — a wrong answer an agent
+    // would trust. The centre is clamped to the file here, and every step below
+    // saturates.
+    // 调用方给的行号没有上界，而 `center + context` 过去会溢出：debug 构建里 panic，release 里回绕成
+    // 一个起点超过终点的区间、回复却仍写着 `isError: false`——这是 agent 会相信的错误答案。这里先把中心
+    // 夹到文件内，下面每一步都用饱和运算。
+    let center = arguments
+        .get("line")
+        .and_then(Value::as_u64)
+        .map_or(1, |line| line.max(1) as usize);
+    let context = arguments
+        .get("context")
+        .and_then(Value::as_u64)
+        .map_or(DEFAULT_CONTEXT, |value| {
+            value.min(MAX_CONTEXT as u64) as usize
+        });
+    Ok(Span::Window { center, context })
+}
+
+/// Parse the `START-END` spelling of `lines`.
+/// 解析 `lines` 的 `START-END` 拼法。
+///
+/// The range must run forward and be 1-based: `0-10` and `260-120` are refusals with the
+/// spelling in the message, because a reversed range silently answered an empty body
+/// once and that reads exactly like a range past the end of the file.
+/// 区间必须朝前且以 1 起始：`0-10` 与 `260-120` 都是拒绝，消息里带着正确拼法，因为反向区间曾经静默地
+/// 回答出空正文，而那读起来和"区间在文件末尾之外"一模一样。
+fn parse_range(text: &str) -> Result<(usize, usize), String> {
+    let text = text.trim();
+    let Some((start, end)) = text.split_once('-') else {
+        return Err(format!(
+            "`lines` must be spelled `START-END` (for example `120-260`); got `{text}`"
+        ));
+    };
+    let number = |part: &str| {
+        part.trim().parse::<usize>().map_err(|_| {
+            format!("`lines` must be spelled `START-END` with whole numbers; got `{text}`")
+        })
+    };
+    let (start, end) = (number(start)?, number(end)?);
+    if start == 0 || end == 0 {
+        return Err(format!(
+            "`lines` is 1-based: line numbers start at 1; got `{text}`"
+        ));
+    }
+    if start > end {
+        return Err(format!(
+            "`lines` must run forward (`START-END` with START <= END); got `{text}`"
+        ));
+    }
+    Ok((start, end))
+}
+
+/// The printed range and its cap, clamped into a file of `total` lines.
+/// 打印区间与它的上限，夹进一个有 `total` 行的文件里。
+fn bounds(span: Span, total: usize) -> (usize, usize, usize) {
+    // An empty file has no line to print, and a window still has to be a forward range:
+    // `at_least_one` is the file as far as the window arithmetic is concerned, while
+    // `total` (zero) is what the header keeps reporting.
+    // 空文件没有可打印的行，而窗口仍必须是一段朝前的区间：就窗口运算而言，`at_least_one` 就是这个文件，
+    // 而标头继续报告的是 `total`（零）。
+    let at_least_one = total.max(1);
+    match span {
+        Span::Whole => (1, at_least_one, MAX_FULL_READ_LINES),
+        Span::Range(start, end) => (
+            start.min(at_least_one),
+            end.min(at_least_one).max(start.min(at_least_one)),
+            MAX_FULL_READ_LINES,
+        ),
+        Span::Window { center, context } => {
+            let center = center.min(at_least_one);
+            let start = center.saturating_sub(context).max(1);
+            let end = center
+                .saturating_add(context)
+                .min(at_least_one)
+                .min(start.saturating_add(MAX_READ_LINES - 1));
+            (start, end, MAX_READ_LINES)
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "read_tests.rs"]
+mod read_tests;

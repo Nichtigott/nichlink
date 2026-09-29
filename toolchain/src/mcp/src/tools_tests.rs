@@ -347,30 +347,3 @@ fn tools_list_is_mcp_shaped() {
             .all(|tool| tool["inputSchema"]["type"] == "object")
     );
 }
-
-/// A line number a caller sends is unbounded; the range must stay forward and
-/// inside the file whatever it is.
-/// 调用方发来的行号没有上界；无论它是什么，区间都必须朝前且落在文件内。
-///
-/// `center + context` used to overflow: debug panicked, release produced
-/// `start > end` with an empty body and `isError: false`.
-/// `center + context` 过去会溢出：debug 直接 panic，release 产出 `start > end`、正文为空、
-/// 却仍报 `isError: false`。同样从 `tools.rs` 的内联测试并入（审计 `BR-11`）。
-#[test]
-fn a_huge_line_number_still_yields_a_forward_range() {
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-read-{}", std::process::id()));
-    std::fs::create_dir_all(root.join("src")).expect("fixture dir");
-    std::fs::write(root.join("src/lib.rs"), "fn a() {}\nfn b() {}\n").expect("fixture file");
-    for line in [u64::MAX, u64::MAX / 2, usize::MAX as u64, 1] {
-        let arguments = serde_json::json!({"path": "src/lib.rs", "line": line});
-        let output = super::read_source(&root, &arguments).expect("the read succeeds");
-        let header = output.lines().next().expect("a header");
-        let range = header.split_once(':').expect("path:range").1;
-        let (start, end) = range.split_once('-').expect("start-end");
-        let start: usize = start.parse().expect("a start");
-        let end: usize = end.parse().expect("an end");
-        assert!(start <= end, "line {line} inverted the range: {header}");
-        assert!(end <= 2, "line {line} read past the file: {header}");
-    }
-    let _ = std::fs::remove_dir_all(&root);
-}

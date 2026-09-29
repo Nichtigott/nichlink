@@ -79,11 +79,17 @@ mod resolve;
 #[path = "workspace.rs"]
 mod workspace;
 
+#[path = "ownership.rs"]
+mod ownership;
+
 #[path = "preview.rs"]
 mod preview;
 
 #[path = "source_index.rs"]
 mod source_index;
+
+#[path = "read.rs"]
+mod read;
 
 #[path = "build_evidence.rs"]
 mod build_evidence;
