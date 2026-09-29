@@ -51,14 +51,14 @@ fn a_recorded_path_renders_portably_on_every_platform() {
 #[test]
 fn a_query_with_slashes_matches_a_backslashed_source() {
     assert!(source_file_matches(
-        r"run_method\tests\external_compact_face.rs",
-        "run_method/tests/external"
+        r"toolchain\tests\runtime_external_compact_face.rs",
+        "toolchain/tests/runtime_external"
     ));
     // A caller that searched with the raw value's spelling keeps working, and
     // case is still folded.
     // 按原始值拼法搜索的调用方继续可用，大小写依然被折叠。
     assert!(source_file_matches(
-        r"run_method\tests\external_compact_face.rs",
+        r"toolchain\tests\runtime_external_compact_face.rs",
         "external_compact"
     ));
     assert!(source_file_matches(
@@ -70,12 +70,12 @@ fn a_query_with_slashes_matches_a_backslashed_source() {
     // 这次折叠是分隔符折叠而不是子串救场：无关路径依然不匹配。
     assert!(!source_file_matches(
         r"run_method\tests\external.rs",
-        "studio/tests"
+        "toolchain/src/studio/tests"
     ));
     // A POSIX-recorded path is unaffected by the fold's presence.
     // POSIX 记录的路径不受折叠是否存在的影响。
     assert!(source_file_matches(
-        "run_method/tests/external.rs",
-        "tests/external"
+        "toolchain/tests/runtime_external_compact_face.rs",
+        "tests/runtime_external"
     ));
 }

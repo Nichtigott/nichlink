@@ -26,73 +26,73 @@ use std::path::Path;
 /// 但不会因疏忽而缩短。条目按空白规范化后存放，见 [`nichlink_reexports`]。
 pub const SHIMS: &[(&str, &str)] = &[
     (
-        "run_method/src/lib.rs",
+        "toolchain/src/runtime/src/lib.rs",
         "pub use nichlink_kernel::registry_core;",
     ),
     (
-        "run_method/src/lib.rs",
+        "toolchain/src/runtime/src/lib.rs",
         "pub use nichlink_kernel::registry_core::*;",
     ),
     (
-        "run_method/src/registry.rs",
+        "toolchain/src/runtime/src/registry.rs",
         "pub use nichlink_kernel::tree;",
     ),
     (
-        "run_method/src/registry.rs",
+        "toolchain/src/runtime/src/registry.rs",
         "pub use nichlink_kernel::tree::*;",
     ),
     (
-        "run_method/src/authoring/face_file.rs",
+        "toolchain/src/runtime/src/authoring/face_file.rs",
         "pub use nichlink_kernel::authoring::{FACE_FIELD_COUNT, face_field};",
     ),
     (
-        "run_method/src/authoring/parse/parse.rs",
+        "toolchain/src/runtime/src/authoring/parse/parse.rs",
         "pub use nichlink_kernel::authoring::parse::*;",
     ),
     (
-        "run_method/src/authoring/context.rs",
+        "toolchain/src/runtime/src/authoring/context.rs",
         "pub use nichlink_kernel::authoring::validation::*;",
     ),
     (
-        "run_method/src/runtime/runtime.rs",
+        "toolchain/src/runtime/src/runtime/runtime.rs",
         "pub use nichlink_kernel::{ COORDINATES_IN_VIEWPORT, Coordinates, FINITE_NUMBER, NON_EMPTY_TEXT, \
          Provenance, ProvenanceStep, RuntimeCheckFailure, RuntimeCheckSpec, RuntimeValue, };",
     ),
     (
-        "run_method/src/runtime/trace/trace.rs",
+        "toolchain/src/runtime/src/runtime/trace/trace.rs",
         "pub use nichlink_kernel::CallSite;",
     ),
     (
-        "run_method/src/runtime/trace/trace.rs",
+        "toolchain/src/runtime/src/runtime/trace/trace.rs",
         "pub use nichlink_kernel::declaration::source_file_matches;",
     ),
     (
-        "run_method/src/runtime/trace/trace.rs",
+        "toolchain/src/runtime/src/runtime/trace/trace.rs",
         "pub use nichlink_kernel::TraceMode;",
     ),
     (
-        "run_method/src/runtime/evidence.rs",
+        "toolchain/src/runtime/src/runtime/evidence.rs",
         "pub use nichlink_kernel::{CallEdge, EvidenceKind, LogicalCallEdge};",
     ),
     (
-        "run_method/src/plugin.rs",
+        "toolchain/src/runtime/src/plugin.rs",
         "pub use nichlink_kernel::plugin;",
     ),
     (
-        "run_method/src/plugin.rs",
+        "toolchain/src/runtime/src/plugin.rs",
         "pub use nichlink_kernel::plugin::*;",
     ),
     (
-        "build_method/src/syntax.rs",
+        "toolchain/src/build_time/src/syntax.rs",
         "pub use nichlink_kernel::registry_core::syntax::{ FaceSyntax, GraftSyntax, ParentSyntax, \
          application_entries, graft_entries, parse_face, source_references, };",
     ),
     (
-        "build_method/src/identity.rs",
+        "toolchain/src/build_time/src/identity.rs",
         "pub use nichlink_kernel::registry_core::identity::NodeId;",
     ),
     (
-        "build_method/src/identity.rs",
+        "toolchain/src/build_time/src/identity.rs",
         "pub use nichlink_kernel::registry_core::identity::IDENTITY_SCHEMA;",
     ),
 ];

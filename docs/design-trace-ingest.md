@@ -115,7 +115,7 @@ visible effect.（因此那两处标注标的是一条任何注册节点都选�
 不成立，但"看得见"也不成立。）
 
 ### 1.5 Plain answer: can a host hand its trace to a separate Studio process today?
-**No.** A `cargo install`ed `nichlink-studio` is a different process; the trace
+**No.** A `cargo install`ed `nichlink-toolchain` is a different process; the trace
 is an owned, unserialized, private-field value with no writer and no reader.
 Even **in-process** it cannot: `App::new` is private (`studio/src/studio/app/lifecycle.rs:39`),
 `App::load` unconditionally installs the sample (`:57,80-98`), and no API
@@ -256,7 +256,7 @@ once after the traced operation:
 ```rust
 let trace = CallTrace::full();
 // … trace.with_at(...), trace.local(...), trace.transform(...) …
-nichlink_run_method::write_trace_artifact(
+nichlink_toolchain::runtime::write_trace_artifact(
     &trace,
     &trace_artifact_path(package_root()),
     env!("CARGO_PKG_NAME"), // the identity the faces were stamped with
@@ -285,7 +285,7 @@ applies exactly that precedence, so an override cannot move the file for the
 writer and not the reader. A CLI `--trace <path>` flag is deferred and stays
 deferred: it would only move the *reader* (the host still decides where to write),
 so the user would have to type one path into two processes and a mismatch shows up
-as "no trace attached"; `nichlink_studio::launch_with` is also published API with
+as "no trace attached"; `nichlink_toolchain::studio::launch_with` is also published API with
 three call sites, while the variable costs none. Add the flag when a workflow
 genuinely needs to *name* one artifact rather than point at the convention one,
 and have it share this same resolution function.

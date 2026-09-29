@@ -17,7 +17,7 @@ core 声明只是元数据，不执行插件代码。Studio 和 debug collector 
 - release 使用经过检查的 `StaticPlan`，不保留 inventory linker section；
 - 外部注册面在发布前校验来源、框架、版本、父节点和合同闭合；
 - 官方插件需要匹配信任策略和签名，社区/本地插件至少需要已验证 checksum；执行这条策略的路径是
-  `nichlink-plugin-host` 里的 `PluginAdmission`：它读取插件 lock，在任何 verifier 运行**之前**
+  `nichlink-toolchain` 里的 `PluginAdmission`：它读取插件 lock，在任何 verifier 运行**之前**
   拒绝不在名单上的官方插件，并在校验签名**之前**拒绝已被撤销的版本。签名覆盖随插件字节一起传输的
   注册信息，而不只是清单；
 - Wasm 限制线性内存、表元素、fuel、输入与输出大小，以及接受的工件字节数；模块还在引擎的严格限制下编译；

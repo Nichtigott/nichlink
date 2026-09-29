@@ -24,5 +24,5 @@ NichLink 的 kernel：协议名词 + 纯方法——无 I/O、无环境绑定。
 | `lexicon` | 共享文本契约：生成入口文件名、运行期 crate 名、环境变量、`.nichlink` 路径、范围豁免表 |
 
 分界规则：无 I/O、无 `std::env`/时间/进程绑定的代码属于这里；执行面
-（`nichlink-build-method`、`nichlink-run-method`、`nichlink-debug-method`、
-`nichlink-plugin-host`、studio、mcp、cli）把这些方法绑定到各自的上下文。
+（`nichlink-toolchain`、`nichlink-toolchain`、`nichlink-toolchain`、
+`nichlink-toolchain`、studio、mcp、cli）把这些方法绑定到各自的上下文。

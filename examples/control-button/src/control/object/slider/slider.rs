@@ -3,7 +3,7 @@
 //! over a contiguous range of siblings under one parent.
 
 use crate::control::{ControlFrame, ControlHandle};
-use nichlink_run_method::{ContractId, FlowContract};
+use nichlink_toolchain::runtime::{ContractId, FlowContract};
 
 pub struct Slider;
 

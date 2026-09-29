@@ -10,14 +10,14 @@
 //! record addresses, whether a declaration keeps that slot alive, and whether
 //! the record or the declaration names the implementation that finally occupies
 //! it. Reading `.nichlink/...` is an execution-surface job and lives in
-//! `nichlink-run-method`.
+//! `nichlink-toolchain`.
 //! `graft.plan` 文件是创作界面写下、运行期宿主读取的声明；它不参与编译，构建也
 //! 从不应用它。有两个读者会打开它但不应用：构建的未声明计划警告
 //! （`build_method::graft_plan_check::planned_slots`）与 CLI 的 `grafts` 命令。
 //! 本页拥有把它接进 [`Registry::overlay`](crate::Registry::overlay)
 //! 的纯逻辑那一半：判定一条记录指向哪个现存槽位、是否有声明让该槽位活着，以及最终
 //! 由记录还是声明命名占据该槽位的实现。读取 `.nichlink/...` 属于执行面的工作，位于
-//! `nichlink-run-method`。
+//! `nichlink-toolchain`。
 
 use crate::registry_core::plugin::graft::document::GraftPlanDocument;
 

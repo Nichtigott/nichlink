@@ -80,14 +80,14 @@ crates.io; it provides the `nichlink` command, including `nichlink
 studio` for the Ratatui Studio:
 
 ```sh
-cargo install nichlink-cli
+cargo install nichlink-toolchain
 nichlink new my-app
 cd my-app && nichlink studio
 ```
 
 The released versions are on crates.io (`CHANGELOG.md` names the newest). The Git source still works if you want the checkout's tip
 rather than the released version: `cargo install --git
-https://github.com/Nichtigott/nichlink nichlink-cli`.
+https://github.com/Nichtigott/nichlink nichlink-toolchain`.
 The plugin binary also answers to `cargo nichlink <command>`. To inspect an
 existing project instead, point the CLI at it:
 
@@ -95,7 +95,7 @@ existing project instead, point the CLI at it:
 NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
 ```
 
-The standalone `nichlink-studio` binary remains available for direct installs.
+The standalone `nichlink-toolchain` binary remains available for direct installs.
 
 ### Run from a clone
 
@@ -104,13 +104,13 @@ This is handy while developing NichLink itself and does not install anything:
 ```sh
 git clone https://github.com/Nichtigott/nichlink
 cd nichlink
-cargo run -p nichlink-cli -- studio
+cargo run -p nichlink-toolchain -- studio
 ```
 
 To inspect another project from the clone:
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-cli -- studio
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-toolchain -- studio
 ```
 
 Studio's `n` action creates a binary or library project. It writes the manifest,
@@ -123,36 +123,36 @@ the thin build entry, and the source entry point; the first face is added with
 The application owns its declarations, so Cargo needs one small build adapter:
 
 ```sh
-# From Git. `nichlink-build-method` belongs to the build dependency table.
-cargo add nichlink-run-method --git https://github.com/Nichtigott/nichlink --branch main
-cargo add nichlink-build-method --build --git https://github.com/Nichtigott/nichlink --branch main
+# From Git. `nichlink-toolchain` belongs to the build dependency table.
+cargo add nichlink-toolchain --git https://github.com/Nichtigott/nichlink --branch main
+cargo add nichlink-toolchain --build --git https://github.com/Nichtigott/nichlink --branch main
 
 # Or, while developing both projects from local checkouts:
-cargo add nichlink-run-method --path /path/to/nichlink/run_method
-cargo add nichlink-build-method --build --path /path/to/nichlink/build_method
+cargo add nichlink-toolchain --path /path/to/nichlink/run_method
+cargo add nichlink-toolchain --build --path /path/to/nichlink/build_method
 ```
 
-Do not add `nichlink-build-method` once under `[dependencies]` and again from a
+Do not add `nichlink-toolchain` once under `[dependencies]` and again from a
 different source under `[build-dependencies]`; Cargo requires one canonical
 source for a package throughout a manifest.
 
 ```rust
 // build.rs
 fn main() {
-    nichlink_build_method::run();
+    nichlink_toolchain::build_time::run();
 }
 ```
 
 In the crate root, connect the generated plan once:
 
 ```rust
-nichlink_run_method::host!();
+nichlink_toolchain::runtime::host!();
 ```
 
 This expands to `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`;
 writing the include directly is an equivalent, advanced alternative.
-`nichlink-run-method` re-exports the kernel, so face code refers to
-contracts, plans, and traces through `nichlink_run_method::…`.
+`nichlink-toolchain` re-exports the kernel, so face code refers to
+contracts, plans, and traces through `nichlink_toolchain::runtime::…`.
 
 `main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
 framework library uses `src/lib.rs`. The build adapter scans the host crate's
@@ -171,12 +171,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_run_method::PresetContract for CanvasPreset {
+impl nichlink_toolchain::runtime::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_run_method::PartsContract for CanvasParts {
+impl nichlink_toolchain::runtime::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -199,8 +199,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_run_method::FlowContract::new(
-        nichlink_run_method::ContractId::new("canvas.render.v1"),
+    flow: nichlink_toolchain::runtime::FlowContract::new(
+        nichlink_toolchain::runtime::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -231,7 +231,7 @@ For a replacement, both sides publish a flow contract. The host validates the
 contract id, version, input, and output before applying the graft:
 
 ```rust
-let plan = nichlink_run_method::GraftPlan::command(
+let plan = nichlink_toolchain::runtime::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -379,7 +379,7 @@ Four layers validate this declaration:
 
 | Check | Enforced by | What it proves here |
 | --- | --- | --- |
-| Parent topology | `nichlink-build-method` | Button's macro, folder, and `parent` all point to Control |
+| Parent topology | `nichlink-toolchain` | Button's macro, folder, and `parent` all point to Control |
 | Rust type contract | rustc | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
 | Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum |
 | External admission | Registry connector | Cross-tree `requires` stay within Control's allowed `admission` paths |
@@ -477,11 +477,11 @@ or third-party source. The static macro constructs no `Vec` or `String`; the
 builder writes its contents directly into the `StaticPlan`:
 
 ```rust
-use nichlink_run_method::{FrameworkId, Registry};
+use nichlink_toolchain::runtime::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -532,7 +532,7 @@ When several data boundaries must change together, put all cuts in one static
 declaration:
 
 ```rust
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -545,7 +545,7 @@ reload path must construct and modify a plan at runtime.
 A path range can target contiguous siblings under one parent Registry:
 
 ```rust
-let plan = nichlink_run_method::GraftPlan::command(
+let plan = nichlink_toolchain::runtime::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -572,7 +572,7 @@ screen keeps them apart:
   registry untouched.
 * `.nichlink/external-grafts/<selector>/graft.plan` is the **record** the screen
   writes: the authoring input the runtime can now apply over the declaration.
-  It is not compiled; `nichlink_run_method::apply_recorded_grafts` loads it and
+  It is not compiled; `nichlink_toolchain::runtime::apply_recorded_grafts` loads it and
   `Registry::overlay_recorded` reconciles it under the precedence rule in
   [`docs/graft.md`](docs/graft.md) — a record overrides a string-form
   `static_graft_plan!` cut, a typed-form cut stays final, and a record selector
@@ -606,7 +606,7 @@ NichLink's two pruning stages solve different problems.
 The first stage runs before rustc expands the generated module tree. Its unit is
 a complete registration face:
 
-1. the host crate's thin `build.rs` calls `nichlink-build-method`;
+1. the host crate's thin `build.rs` calls `nichlink-toolchain`;
 2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
    `application!(entry = …)`, or whatever `NICH_LINK_ENTRY` names (a value that
    names no file fails the build; the same entry feeds pruning and the cut
@@ -679,7 +679,7 @@ ships reproducible checks instead of a fixed benchmark claim:
 
 ```sh
 # Build and index a large Registry
-cargo run --release -p nichlink-run-method --example scale_audit -- 100000
+cargo run --release -p nichlink-toolchain --example scale_audit -- 100000
 
 # fmt, tests, Clippy, docs, release artifacts, symbols, and linker sections
 tools/nichlink-release-audit
@@ -716,12 +716,12 @@ For source-driven hot rebuild while working on Studio itself:
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch
+  cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch
 ```
 
 `nichlink-dev` is **workspace-only**: it rebuilds Studio from this checkout and
 launches that checkout's `target/debug` binary. The `dev-supervisor` feature is
-not enabled by default, so `cargo install nichlink-studio` installs the TUI and
+not enabled by default, so `cargo install nichlink-toolchain` installs the TUI and
 not a supervisor that would have nothing to rebuild.
 
 The command-line surface is intentionally small. `nichlink` is the unified
@@ -843,9 +843,9 @@ choice.
 ## Runtime tracing
 
 ```rust
-let trace = nichlink_run_method::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_run_method::CallTrace::disabled();
-let detailed = nichlink_run_method::CallTrace::full();
+let trace = nichlink_toolchain::runtime::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_toolchain::runtime::CallTrace::disabled();
+let detailed = nichlink_toolchain::runtime::CallTrace::full();
 ```
 
 `errors-only` keeps failed chains and discards successful evidence. `full` keeps
@@ -868,13 +868,13 @@ same methods.
 
 | Crate | Directory | Execution surface |
 | --- | --- | --- |
-| `nichlink-build-method` | `build_method/` | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives |
-| `nichlink-run-method` | `run_method/` | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor |
-| `nichlink-debug-method` | `debug_method/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
-| `nichlink-plugin-host` | `plugin-host/` | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table |
-| `nichlink-studio` | `studio/` | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods |
-| `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |
-| `nichlink-cli` | `cli/` | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding |
+| `nichlink-toolchain` | `toolchain/build_time/` | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives |
+| `nichlink-toolchain` | `toolchain/runtime/` | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor |
+| `nichlink-toolchain` | `toolchain/call_evidence/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
+| `nichlink-toolchain` | `toolchain/plugin_host/` | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table |
+| `nichlink-toolchain` | `toolchain/studio/` | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods |
+| `nichlink-toolchain` | `toolchain/mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |
+| `nichlink-toolchain` | `toolchain/cli/` | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding |
 
 `nichlink-macro` is the ninth published crate: a proc-macro crate that
 normalises face fields at compile time (tolerant separators and order, spanned
@@ -889,12 +889,12 @@ kernel/       nichlink-kernel (lib nichlink_kernel): protocol vocabulary and pur
               source, authoring, syntax, json, lexicon
 macro/        nichlink-macro: compile-time face-field front end (tolerant
               separators and order, spanned diagnostics, editor mirror)
-build_method/ nichlink-build-method: build-time discovery, cache, coarse StaticPlan
-run_method/   nichlink-run-method: runtime trace state, host!/trace_call! macros,
+build_method/ nichlink-toolchain: build-time discovery, cache, coarse StaticPlan
+run_method/   nichlink-toolchain: runtime trace state, host!/trace_call! macros,
               authoring executor
-debug_method/ nichlink-debug-method: optional CallTrace adapters, MIR evidence,
+debug_method/ nichlink-toolchain: optional CallTrace adapters, MIR evidence,
               data-flow and graph models
-cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/
+cli/          nichlink-toolchain: unified entry (nichlink new/check/build/snippets/
               explain/grafts/studio/mcp, cargo-nichlink)
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          MCP bridge for AI-assisted queries and previewed writes

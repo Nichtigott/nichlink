@@ -1,0 +1,150 @@
+[package]
+name = "nichlink-toolchain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
+description = "The seven thin execution surfaces of NichLink in one crate"
+keywords = ["registration", "cli", "studio", "bridge", "toolchain"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "README.md"
+autobins = false
+autotests = false
+autoexamples = false
+
+[lib]
+name = "nichlink_toolchain"
+path = "src/lib.rs"
+
+[features]
+# The host-facing half of the package must not drag a TUI in by default.
+# 宿主面向的那一半不能默认拖进 TUI。
+default = ["build", "run"]
+
+# ── Host-facing (two halves: `[build-dependencies]` and `[dependencies]`)
+# ── 宿主面向（两半，分别对应 build-dependencies 与 dependencies）
+build = ["nichlink-kernel/syntax", "dep:syn", "dep:proc-macro2", "dep:serde_json"]  # module build_time
+run = ["dep:nichlink-macro"]                                                        # module runtime
+
+# ── Execution surfaces (the names of their own public API gates, unchanged)
+# ── 执行面（今天各自的公开 API 门控，名字不变）
+authoring = ["run", "nichlink-kernel/syntax", "dep:syn"]
+evidence = ["run", "dep:inventory", "dep:petgraph", "dep:tracing"]  # module call_evidence
+plugins = ["run", "dep:arc-swap", "dep:ed25519-dalek"]              # module plugin_host
+wasm = ["plugins", "dep:wasmi"]
+process-tools = ["plugins", "dep:tempfile"]
+node-graph = ["dep:rataflow"]
+studio = ["build", "run", "authoring", "evidence", "dep:crossterm", "dep:notify", "dep:ratatui", "dep:serde_json"]
+mcp = ["build", "run", "authoring", "evidence", "dep:serde_json"]
+cli = ["build", "run", "studio", "mcp", "dep:serde_json"]  # umbrella: nichlink-toolchain's closure
+
+# ── Workspace-only (never in the published surface)
+# ── 仅工作区（不进发布面）
+prototype-fixtures = []
+dev-supervisor = []
+
+[[bin]]
+name = "nichlink"
+path = "src/bin/nichlink.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "cargo-nichlink"
+path = "src/bin/cargo-nichlink.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "nichlink-mcp"
+path = "src/bin/nichlink-mcp.rs"
+required-features = ["mcp"]
+
+[[bin]]
+name = "nichlink-studio"
+path = "src/bin/nichlink-studio.rs"
+required-features = ["studio"]
+
+[[bin]]
+name = "nichlink-dev"
+path = "src/bin/nichlink-dev.rs"
+required-features = ["dev-supervisor", "studio"]
+
+# Dependencies merged from the seven execution surfaces.
+[dependencies]
+nichlink-kernel = { path = "../kernel", version = "0.1.6", features = ["syntax"] }
+proc-macro2 = { optional = true, version = "1", features = ["span-locations"] }
+serde_json = { version = "1", optional = true }
+syn = { version = "2", features = ["full", "parsing", "visit"], optional = true}
+nichlink-macro = { optional = true, path = "../macro", version = "0.1.6" }
+petgraph = { version = "0.8", optional = true }
+tracing = { version = "0.1", optional = true }
+inventory = { version = "0.3.24", optional = true }
+arc-swap = { version = "1.9", optional = true }
+ed25519-dalek = { optional = true, version = "2", default-features = false, features = ["std"] }
+tempfile = { version = "3.22", optional = true }
+wasmi = { version = "1.0.9", default-features = false, features = ["std"], optional = true }
+crossterm = { version = "0.29", optional = true }
+notify = { version = "7", optional = true }
+ratatui = { optional = true, version = "0.30", default-features = false, features = ["all-widgets", "crossterm", "layout-cache"] }
+rataflow = { version = "0.1", optional = true, default-features = false, features = ["crossterm"] }
+[dev-dependencies]
+wat = "1"
+
+[[test]]
+name = "build_time_missing_source_tree"
+path = "tests/build_time_missing_source_tree.rs"
+
+[[test]]
+name = "build_time_outside_src_layout"
+path = "tests/build_time_outside_src_layout.rs"
+
+[[test]]
+name = "plugin_host_admission"
+path = "tests/plugin_host_admission.rs"
+required-features = ["wasm", "process-tools"]
+
+[[test]]
+name = "plugin_host_fault_matrix"
+path = "tests/plugin_host_fault_matrix.rs"
+required-features = ["wasm", "process-tools"]
+
+[[test]]
+name = "plugin_host_process_load_cost"
+path = "tests/plugin_host_process_load_cost.rs"
+required-features = ["wasm", "process-tools"]
+
+[[test]]
+name = "plugin_host_wasm_table_cost"
+path = "tests/plugin_host_wasm_table_cost.rs"
+required-features = ["wasm", "process-tools"]
+
+[[test]]
+name = "runtime_external_compact_face"
+path = "tests/runtime_external_compact_face.rs"
+required-features = ["authoring"]
+
+[[test]]
+name = "runtime_external_source_default"
+path = "tests/runtime_external_source_default.rs"
+required-features = ["authoring"]
+
+[[test]]
+name = "runtime_graft_record"
+path = "tests/runtime_graft_record.rs"
+required-features = ["authoring"]
+
+[[test]]
+name = "studio_launch"
+path = "tests/studio_launch.rs"
+required-features = ["prototype-fixtures"]
+
+[[example]]
+name = "scale_audit"
+path = "examples/scale_audit.rs"
+
+#  is an IDE-only gate the runtime surface already carried; declare it so
+#  (unexpected_cfgs) stays clean.
+#  是该执行面原有的仅 IDE 门控；在此登记，使 clippy 的 unexpected_cfgs 保持为 0。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }

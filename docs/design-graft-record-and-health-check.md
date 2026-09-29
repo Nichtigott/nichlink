@@ -74,7 +74,7 @@ pub struct GraftOverlay { pub effective: Registry, pub reports: Vec<RecordReport
 
 ### 1.5 How a host and the CLI call it
 
-Host: `apply_recorded_grafts(&base_registry(), &external, builtin_static_plan().grafts(), Path::new(env!("CARGO_MANIFEST_DIR")))`; print `outcome.reports` and `outcome.unreadable`, then use `outcome.effective`. CLI (roadmap B4 item 2, `nichlink grafts [--json]`) calls only `load_graft_records(root)` and prints selector/`target`/`target_path`/`graft`/`full` or the parse reason. Cost: `cli/Cargo.toml` has no `nichlink-run-method` dependency, so this needs one direct dep (its `studio` dep is transitive and unusable).
+Host: `apply_recorded_grafts(&base_registry(), &external, builtin_static_plan().grafts(), Path::new(env!("CARGO_MANIFEST_DIR")))`; print `outcome.reports` and `outcome.unreadable`, then use `outcome.effective`. CLI (roadmap B4 item 2, `nichlink grafts [--json]`) calls only `load_graft_records(root)` and prints selector/`target`/`target_path`/`graft`/`full` or the parse reason. Cost: `cli/Cargo.toml` has no `nichlink-toolchain` dependency, so this needs one direct dep (its `studio` dep is transitive and unusable).
 
 ### 1.6 Reconciliation: `target` NodeId vs `target_path` vs the tree
 
@@ -122,12 +122,12 @@ Reasoning: (1) the record is the newest, most specific artifact and the build is
 | 8 | core | `.../record.rs` | `full=true` discards base children, `full=false` keeps them (mirror `resolution.rs:266-314`) |
 | 9 | core | `.../record.rs` | differing `full` reports `GranularityOverridden`, never mixes graft/full |
 | 10 | core | `.../record.rs` | after the stored `target_path` goes stale, the applied cut uses the current `path_for` |
-| 11 | `nichlink-run-method` | `run_method/tests/graft_record.rs` | **`a_record_on_disk_reaches_overlay`**: write a `graft.plan` under a temp root, call `apply_recorded_grafts`, assert the effective kind at the slot is the record's implementation — the test that would have caught "record never reaches overlay" |
+| 11 | `nichlink-toolchain` | `run_method/tests/graft_record.rs` | **`a_record_on_disk_reaches_overlay`**: write a `graft.plan` under a temp root, call `apply_recorded_grafts`, assert the effective kind at the slot is the record's implementation — the test that would have caught "record never reaches overlay" |
 | 12 | run_method | `run_method/tests/graft_record.rs` | directory ≠ `document.graft` → `Err` naming both names (S1+ superseded the report) |
 | 13 | run_method | `run_method/tests/graft_record.rs` | unparseable plan → `Err` naming every unreadable plan; no record is applied (S1+ superseded "land in `unreadable`") |
 | 14 | run_method | `run_method/tests/graft_record.rs` | loader/overlay works with `default-features` (no `authoring`) |
 | 15 | example | `examples/control-button/tests/registry.rs` | a record overriding `root/control/button` changes the effective tree but not `builtin_static_plan()` |
-| 16 | `nichlink-build-method` | `build_method/src/graft_plan_check.rs` | `an_undeclared_plan_target_is_an_error_with_the_clause`: a plan no declaration can name is a build error carrying the paste-ready clause; `a_gated_declaration_still_counts` keeps a `#[cfg]`-off declaration sufficient |
+| 16 | `nichlink-toolchain` | `build_method/src/graft_plan_check.rs` | `an_undeclared_plan_target_is_an_error_with_the_clause`: a plan no declaration can name is a build error carrying the paste-ready clause; `a_gated_declaration_still_counts` keeps a `#[cfg]`-off declaration sufficient |
 
 Tests 11–15 are new. Test 11 alone closes the gap.
 
@@ -203,7 +203,7 @@ Pass `Vec::new()`. `CallTrace::current_path()` (`frames.rs:223`) is the traced v
 /// 声明源与来源链；用 `Display` 渲染。存在与否就是宿主的决策信号：注册机不替宿主决定是否致命。
 ///
 /// ```no_run
-/// # use nichlink_run_method::{Provenance, Registry, RuntimeValue};
+/// # use nichlink_toolchain::runtime::{Provenance, Registry, RuntimeValue};
 /// # fn demo(registry: &Registry, node: nichlink::NodeId) {
 /// let value = RuntimeValue::number(0.5, Provenance::default().push(node, "Slider", "measure", "0.5"));
 /// if let Err(error) = registry.health_check(node, &value, Vec::new()) { eprintln!("{error}"); }

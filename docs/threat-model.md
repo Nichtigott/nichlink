@@ -23,7 +23,7 @@ child process per call.
   contract closure before publication.
 - Official plugins require a matching trust policy and signature assurance;
   community and local plugins still require a verified checksum artifact. The host
-  path that applies this is `PluginAdmission` in `nichlink-plugin-host`: it reads
+  path that applies this is `PluginAdmission` in `nichlink-toolchain`: it reads
   the plugin locks, refuses an unlisted official plugin before any verifier runs,
   and refuses a revoked version before the signature. The signature covers the
   registration that travels with the plugin bytes, not only the manifest.

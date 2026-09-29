@@ -49,7 +49,7 @@ jobs:
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging
-        # nichlink-build-method on its own here would need its versioned
+        # nichlink-toolchain on its own here would need its versioned
         # dependency on nichlink-kernel to resolve on the index, and an unpublished
         # workspace version does not; the package-audit step below covers every
         # crate and skips that same set.
@@ -125,12 +125,12 @@ jobs:
         # No network: `--check-table` compares the dependency and level tables in
         # `tools/nichlink-publish` against the manifests that decide the real
         # publish order. It runs here as well as in the release workflow because
-        # the tables are hand-maintained and rot between releases — `nichlink-cli`
+        # the tables are hand-maintained and rot between releases — `nichlink-toolchain`
         # grew a direct `nichlink-kernel` requirement while the table still listed
         # only the other three, and every gate stayed green.
         # 不需要网络：`--check-table` 把 `tools/nichlink-publish` 里的依赖表与层表同决定真实
         # 发布顺序的清单对比。它既在这里跑也在发布工作流里跑，因为这两张表是手工维护的、会在
-        # 两次发布之间腐烂——`nichlink-cli` 增加了对 `nichlink-kernel` 的直接依赖，而表里仍只列
+        # 两次发布之间腐烂——`nichlink-toolchain` 增加了对 `nichlink-kernel` 的直接依赖，而表里仍只列
         # 另外三个，所有门禁却都是绿的。
         run: tools/nichlink-publish --check-table
       - name: Publish dry run
@@ -178,4 +178,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -p nichlink-plugin-host --features process-tools
+      - run: cargo test -p nichlink-toolchain --features process-tools

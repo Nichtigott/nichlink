@@ -60,7 +60,7 @@ pub const GENERATED_LIB_FILE: &str = "generated_lib.rs";
 /// The runtime crate's name, as generated code and the face front end address
 /// it.
 /// 运行期 crate 的名字——生成代码与宏前端这样寻址它。
-pub const RUN_METHOD_CRATE: &str = "nichlink_run_method";
+pub const RUN_METHOD_CRATE: &str = "nichlink_toolchain";
 
 /// The face field that marks replaceable plugin surface.
 /// 标记可替换插件面的注册面字段。

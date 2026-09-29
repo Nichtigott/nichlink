@@ -67,20 +67,20 @@ NichLink 目前处于早期阶段：核心协议已可用于真实工程，静�
 `nichlink` 命令（包含 Ratatui Studio 的 `nichlink studio` 子命令）：
 
 ```sh
-cargo install nichlink-cli
+cargo install nichlink-toolchain
 nichlink new my-app
 cd my-app && nichlink studio
 ```
 
 已发布的版本都在 crates.io（最新的看 `CHANGELOG.md`）。想要检出里的最新提交而不是已发布版本时，Git 源依然可用：
-`cargo install --git https://github.com/Nichtigott/nichlink nichlink-cli`。
+`cargo install --git https://github.com/Nichtigott/nichlink nichlink-toolchain`。
 插件二进制同时支持 `cargo nichlink <命令>` 形式。如果要检查已有项目：
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
 ```
 
-独立的 `nichlink-studio` 二进制仍可单独安装。
+独立的 `nichlink-toolchain` 二进制仍可单独安装。
 
 ### 方式二：直接克隆源码运行
 
@@ -89,13 +89,13 @@ NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
 ```sh
 git clone https://github.com/Nichtigott/nichlink
 cd nichlink
-cargo run -p nichlink-cli -- studio
+cargo run -p nichlink-toolchain -- studio
 ```
 
 从源码仓库检查另一个项目：
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-cli -- studio
+NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-toolchain -- studio
 ```
 
 Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo 清单、
@@ -108,36 +108,36 @@ Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo �
 注册声明属于宿主项目，所以 Cargo 需要一个很薄的构建入口：
 
 ```sh
-# 使用 Git。nichlink-build-method 必须进入 build-dependencies。
-cargo add nichlink-run-method --git https://github.com/Nichtigott/nichlink --branch main
-cargo add nichlink-build-method --build --git https://github.com/Nichtigott/nichlink --branch main
+# 使用 Git。nichlink-toolchain 必须进入 build-dependencies。
+cargo add nichlink-toolchain --git https://github.com/Nichtigott/nichlink --branch main
+cargo add nichlink-toolchain --build --git https://github.com/Nichtigott/nichlink --branch main
 
 # 或者，在两个本地源码仓库之间联调：
-cargo add nichlink-run-method --path /path/to/nichlink/run_method
-cargo add nichlink-build-method --build --path /path/to/nichlink/build_method
+cargo add nichlink-toolchain --path /path/to/nichlink/run_method
+cargo add nichlink-toolchain --build --path /path/to/nichlink/build_method
 ```
 
-不要把 `nichlink-build-method` 同时以一种来源放进 `[dependencies]`、又以另一种
+不要把 `nichlink-toolchain` 同时以一种来源放进 `[dependencies]`、又以另一种
 来源放进 `[build-dependencies]`。Cargo 要求同一个包在整份清单中只有一个
 canonical source。
 
 ```rust
 // build.rs
 fn main() {
-    nichlink_build_method::run();
+    nichlink_toolchain::build_time::run();
 }
 ```
 
 在 crate 根部只接线一次生成计划：
 
 ```rust
-nichlink_run_method::host!();
+nichlink_toolchain::runtime::host!();
 ```
 
 它展开为 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
-直接书写该 include 是等价的高级写法。`nichlink-run-method` 再导出整个
+直接书写该 include 是等价的高级写法。`nichlink-toolchain` 再导出整个
 kernel，注册面代码中的合同、计划和追踪 API 都通过
-`nichlink_run_method::…` 引用。
+`nichlink_toolchain::runtime::…` 引用。
 
 不要求必须有 `main.rs`：二进制项目以 `src/main.rs` 作为入口，前端框架
 这类库项目以 `src/lib.rs` 作为入口。构建适配器扫描的是宿主自己的源码；
@@ -155,12 +155,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_run_method::PresetContract for CanvasPreset {
+impl nichlink_toolchain::runtime::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_run_method::PartsContract for CanvasParts {
+impl nichlink_toolchain::runtime::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -183,8 +183,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_run_method::FlowContract::new(
-        nichlink_run_method::ContractId::new("canvas.render.v1"),
+    flow: nichlink_toolchain::runtime::FlowContract::new(
+        nichlink_toolchain::runtime::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -213,7 +213,7 @@ crate::node_editor_object! {
 通过后才执行嫁接：
 
 ```rust
-let plan = nichlink_run_method::GraftPlan::command(
+let plan = nichlink_toolchain::runtime::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -354,7 +354,7 @@ crate::control_object! {
 
 | 检查 | 由谁执行 | 在本例中验证什么 |
 | --- | --- | --- |
-| 父子拓扑 | `nichlink-build-method` | Button 的宏名、目录位置和 `parent` 是否都指向 Control |
+| 父子拓扑 | `nichlink-toolchain` | Button 的宏名、目录位置和 `parent` 是否都指向 Control |
 | Rust 类型合同 | rustc | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
 | 父级注册规范 | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则 |
 | 外部准入 | Registry 连接器 | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内 |
@@ -441,11 +441,11 @@ src/                                    src/
 不构造 `Vec` 或 `String`；构建器会把内容直接写进 `StaticPlan`：
 
 ```rust
-use nichlink_run_method::{FrameworkId, Registry};
+use nichlink_toolchain::runtime::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -492,7 +492,7 @@ a1_fast                           A
 需要同时修改多个数据边界时，把切口写在同一个静态声明里：
 
 ```rust
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -505,7 +505,7 @@ nichlink_run_method::static_graft_plan!(FRAMEWORK,
 也可以选择同一父 Registry 下的一段兄弟节点：
 
 ```rust
-let plan = nichlink_run_method::GraftPlan::command(
+let plan = nichlink_toolchain::runtime::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -524,7 +524,7 @@ Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西�
   存活下来，并填充发布态静态计划。它不删除任何代码。
 * `Registry::overlay` 是**应用**：它在运行期校验并返回有效树，原树与外部树都不被改动。
 * `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它是运行期
-  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_run_method::apply_recorded_grafts`
+  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_toolchain::runtime::apply_recorded_grafts`
   读取它，`Registry::overlay_recorded` 按 [`docs/graft.zh-CN.md`](docs/graft.zh-CN.md) 中的优先级规则
   对账——记录覆盖字符串形式的 `static_graft_plan!` 切口，类型化切口保持最终，外部注册机
   解析不出的记录选择器回退到声明。界面读回它来列出、打开、改范围和删除计划。
@@ -550,7 +550,7 @@ NichLink 的两阶段修剪解决两个不同问题。
 
 第一阶段发生在 rustc 展开生成模块之前，颗粒度是整个注册面：
 
-1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-build-method`；
+1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-toolchain`；
 2. 构建器读取目录注册面以及 `main.rs`、`lib.rs`、`application!(entry = …)` 或
    `NICH_LINK_ENTRY` 指定的入口（指不到文件即构建失败；同一个入口同时喂给剪枝与
    切口表）；
@@ -605,7 +605,7 @@ NichLink core 不会重写任意 Rust 调用点。所谓“静态绑定实现”
 
 ```sh
 # 构造并索引大树
-cargo run --release -p nichlink-run-method --example scale_audit -- 100000
+cargo run --release -p nichlink-toolchain --example scale_audit -- 100000
 
 # fmt、测试、Clippy、文档、release 产物、符号和 linker section
 tools/nichlink-release-audit
@@ -640,11 +640,11 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 
 ```sh
 NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch
+  cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch
 ```
 
 `nichlink-dev` **仅限工作区**：它从本检出重建 Studio，并启动该检出的 `target/debug`
-产物。`dev-supervisor` 特性默认关闭，因此 `cargo install nichlink-studio` 装的是 TUI，
+产物。`dev-supervisor` 特性默认关闭，因此 `cargo install nichlink-toolchain` 装的是 TUI，
 而不是一个没有东西可重建的监督器。
 
 命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
@@ -736,9 +736,9 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 ## 运行时追踪
 
 ```rust
-let trace = nichlink_run_method::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_run_method::CallTrace::disabled();
-let detailed = nichlink_run_method::CallTrace::full();
+let trace = nichlink_toolchain::runtime::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_toolchain::runtime::CallTrace::disabled();
+let detailed = nichlink_toolchain::runtime::CallTrace::full();
 ```
 
 `errors-only` 只保留失败链路并丢弃成功证据；`full` 保留 frame、局部变量和
@@ -757,13 +757,13 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 
 | Crate | 目录 | 执行面职责 |
 | --- | --- | --- |
-| `nichlink-build-method` | `build_method/` | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令 |
-| `nichlink-run-method` | `run_method/` | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器 |
-| `nichlink-debug-method` | `debug_method/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
-| `nichlink-plugin-host` | `plugin-host/` | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表 |
-| `nichlink-studio` | `studio/` | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法 |
-| `nichlink-mcp` | `mcp/` | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护 |
-| `nichlink-cli` | `cli/` | 进程胶水：argv 分发、cargo 子进程、子命令转发 |
+| `nichlink-toolchain` | `toolchain/build_time/` | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令 |
+| `nichlink-toolchain` | `toolchain/runtime/` | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器 |
+| `nichlink-toolchain` | `toolchain/call_evidence/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
+| `nichlink-toolchain` | `toolchain/plugin_host/` | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表 |
+| `nichlink-toolchain` | `toolchain/studio/` | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法 |
+| `nichlink-toolchain` | `toolchain/mcp/` | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护 |
+| `nichlink-toolchain` | `toolchain/cli/` | 进程胶水：argv 分发、cargo 子进程、子命令转发 |
 
 `nichlink-macro` 是第九个发布的 crate：一个在编译期归一化注册面字段的过程宏
 crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像）。它是构建期前端而不是
@@ -777,11 +777,11 @@ kernel/       nichlink-kernel（lib 名 nichlink_kernel）：协议名词 + 纯�
               release、source、authoring、syntax、json、lexicon
 macro/        nichlink-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span
               诊断、编辑器镜像）
-build_method/ nichlink-build-method：构建期源码发现、缓存、第一阶段 StaticPlan
-run_method/   nichlink-run-method：运行期 trace 状态、host!/trace_call! 宏、
+build_method/ nichlink-toolchain：构建期源码发现、缓存、第一阶段 StaticPlan
+run_method/   nichlink-toolchain：运行期 trace 状态、host!/trace_call! 宏、
               authoring 执行器
-debug_method/ nichlink-debug-method：可选 CallTrace 适配、MIR 证据、数据流与图模型
-cli/          nichlink-cli：统一入口（nichlink new/check/build/snippets/
+debug_method/ nichlink-toolchain：可选 CallTrace 适配、MIR 证据、数据流与图模型
+cli/          nichlink-toolchain：统一入口（nichlink new/check/build/snippets/
               explain/grafts/studio/mcp、cargo-nichlink）
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的 MCP 桥：查询与带预览的写入

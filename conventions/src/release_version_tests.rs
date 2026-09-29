@@ -94,7 +94,7 @@ fn a_published_requirement_without_a_version_is_reported() {
         "[workspace]\nmembers = [\"cli\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "cli",
-            "[package]\nname = \"nichlink-cli\"\nversion.workspace = true\n\n\
+            "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
              [dependencies]\nnichlink-kernel = { path = \"../core\" }\n",
         )],
     );
@@ -182,7 +182,7 @@ fn a_renamed_internal_requirement_is_reported() {
         "[workspace]\nmembers = [\"cli\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "cli",
-            "[package]\nname = \"nichlink-cli\"\nversion.workspace = true\n\n\
+            "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
              [dependencies]\nkernel = { package = \"nichlink-kernel\", path = \"../core\", \
              version = \"0.0.9\" }\n",
         )],

@@ -12,7 +12,7 @@ use super::*;
 /// 特性需要显式打开。
 const WELL_SHAPED: &str = "\
 [package]
-name = \"nichlink-studio\"
+name = \"nichlink-toolchain\"
 version = \"0.1.6\"
 
 [features]
@@ -37,13 +37,13 @@ fn workspace(manifest: &str) -> PathBuf {
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(root.join("studio/src")).expect("fixture directory");
+    fs::create_dir_all(root.join("toolchain/src")).expect("fixture directory");
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\"studio\"]\nresolver = \"2\"\n",
+        "[workspace]\nmembers = [\"toolchain\"]\nresolver = \"2\"\n",
     )
     .expect("root manifest");
-    fs::write(root.join("studio/Cargo.toml"), manifest).expect("member manifest");
+    fs::write(root.join("toolchain/Cargo.toml"), manifest).expect("member manifest");
     root
 }
 

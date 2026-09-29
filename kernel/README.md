@@ -25,6 +25,6 @@ Modules under `registry_core`:
 | `lexicon` | Shared text contracts: generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions |
 
 The boundary rule: anything with no I/O and no `std::env`/time/process binding
-belongs here; execution surfaces (`nichlink-build-method`, `nichlink-run-method`,
-`nichlink-debug-method`, `nichlink-plugin-host`, studio, mcp, cli) bind these
+belongs here; execution surfaces (`nichlink-toolchain`, `nichlink-toolchain`,
+`nichlink-toolchain`, `nichlink-toolchain`, studio, mcp, cli) bind these
 methods to their contexts.

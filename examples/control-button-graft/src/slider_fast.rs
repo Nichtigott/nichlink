@@ -1,13 +1,13 @@
 //! 替换 `Slider` 的项目外实现，用于兄弟区间切口。
 //! An out-of-project replacement for `Slider`, used by a sibling-range cut.
 
-use nichlink_run_method::registry_core::{
+use nichlink_toolchain::runtime::registry_core::{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 };
 
 pub struct SliderFast;
 
-nichlink_run_method::external_object! {
+nichlink_toolchain::runtime::external_object! {
     source: "slider_fast/slider_fast.rs",
     kind: SliderFast,
     preset: NoPreset,

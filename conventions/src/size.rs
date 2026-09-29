@@ -370,6 +370,35 @@ fn cfg_call(expression: &str) -> Option<(&str, Vec<&str>)> {
 /// 格式化的文件在真正要命的那种情形下是两者中较短的那个——因此量磁盘字节是藏住欠账而不是约束它。
 /// 格式化的文本也正是本仓库维护的产物：`cargo fmt --all -- --check` 是第一道门禁，因此 rustfmt
 /// 写出的文件才是这棵树本该包含的文件。问不出 rustfmt 时的行为见 [`rewritten_line_counts`]。
+/// Whether a candidate belongs to the pre-merge crate layout rather than this crate.
+/// 候选文件属于合并前的 crate 布局，而不是本 crate。
+///
+/// The merged crate nests the seven execution surfaces, and each nested surface still
+/// carries the old crate's non-module directories (`tests/`, `examples/`, `target/`).
+/// A directory that has a `src/` child is a crate root of its own, so only that `src/`
+/// subtree holds Rust modules; a `.rs` file beside it is residue that no `mod`
+/// declaration names, and the pre-merge walk (which covered `<member>/src/**` and
+/// nothing else) never measured it either.
+/// 合并后的 crate 嵌套着七个执行面，每个执行面仍带着旧 crate 的非模块目录（`tests/`、
+/// `examples/`、`target/`）。一个拥有 `src/` 子目录的目录本身就是 crate 根，因此只有它的
+/// `src/` 子树里装着 Rust 模块；旁边的 `.rs` 文件是没有 `mod` 声明指名的残留，合并前的遍历
+/// （只覆盖 `<member>/src/**`）也从不量它。
+fn is_pre_merge_residue(member: &Path, path: &Path) -> bool {
+    let mut directory = path.parent();
+    while let Some(current) = directory {
+        if current == member {
+            return false;
+        }
+        if current.join("src").is_dir() && !path.starts_with(current.join("src")) {
+            return true;
+        }
+        directory = current.parent();
+    }
+    false
+}
+
+/// Every oversize line as a (file, lines) pair, sorted by path.
+/// 每一条超限记录，形如（文件，行数），按路径排序。
 pub fn oversized(root: &Path) -> Vec<(String, usize)> {
     let mut measured = Vec::new();
     for directory in crate_directories(root) {
@@ -383,6 +412,9 @@ pub fn oversized(root: &Path) -> Vec<(String, usize)> {
             candidates.push(build);
         }
         for path in candidates {
+            if is_pre_merge_residue(&directory, &path) {
+                continue;
+            }
             // A file is test-only when the tree *says* so: the declaration that mounts it
             // carries `#[cfg(test)]`. Location alone is not proof, and treating it as proof
             // exempted a real module that merely sat under a `tests/` directory inside

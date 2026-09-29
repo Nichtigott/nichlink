@@ -174,17 +174,23 @@ fn a_deep_mount_chain_is_still_test_only() {
 /// 仅测试文件按所在位置识别，或按名字加 `#[cfg(test)]` 挂载识别。
 #[test]
 fn test_only_files_are_recognised() {
-    assert!(is_test_shaped(Path::new("cli/src/lib_tests.rs")));
+    assert!(is_test_shaped(Path::new(
+        "toolchain/src/cli/src/lib_tests.rs"
+    )));
     assert!(is_test_shaped(Path::new(
         "kernel/src/registry_core/syntax/face_tests.rs"
     )));
-    assert!(is_test_shaped(Path::new("studio/src/studio/app/tests.rs")));
+    assert!(is_test_shaped(Path::new(
+        "toolchain/src/studio/src/studio/app/tests.rs"
+    )));
     assert!(!is_test_shaped(Path::new(
         "kernel/src/registry_core/syntax/face.rs"
     )));
-    assert!(is_test_by_location(Path::new("studio/tests/graph.rs")));
+    assert!(is_test_by_location(Path::new(
+        "toolchain/src/studio/tests/graph.rs"
+    )));
     assert!(!is_test_by_location(Path::new(
-        "studio/src/studio/app/tests.rs"
+        "toolchain/src/studio/src/studio/app/tests.rs"
     )));
 }
 

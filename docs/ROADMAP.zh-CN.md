@@ -14,9 +14,9 @@
 - [x] MCP 桥——查询，外加一条先预览的 authoring 写入路径——以及经过校验的 Wasm/进程插件适配器；
 - [x] 跨平台 CI、规模审计、符号审计和打包检查。
 - [x] kernel / 执行面分界：一个纯 kernel（`nichlink-kernel`）承载协议名词与纯方法，
-  薄执行面（`nichlink-build-method`、`nichlink-run-method`、
-  `nichlink-debug-method`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`、
-  `nichlink-plugin-host`）把这些方法绑定到各自上下文。
+  薄执行面（`nichlink-toolchain`、`nichlink-toolchain`、
+  `nichlink-toolchain`、`nichlink-toolchain`、`nichlink-toolchain`、`nichlink-toolchain`、
+  `nichlink-toolchain`）把这些方法绑定到各自上下文。
 
 0.1 可用于实验和选定的内部生产项目，但不宣称能完整分析任意 Rust 程序。
 

@@ -17,8 +17,8 @@ Three different artifacts meet at a graft, and none of them copies source:
 | **Record** | `.nichlink/external-grafts/<selector>/graft.plan` | Studio (authoring) and the runtime host | The authoring input the runtime can apply over the declaration. Not compiled. |
 | **Application** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | runtime host | Validates and returns a new effective tree, mutating neither the base registry nor the external registry. |
 
-The declaration macro is exported by `nichlink-run-method`
-(`nichlink_run_method::static_graft_plan!`); the kernel only parses the text the
+The declaration macro is exported by `nichlink-toolchain`
+(`nichlink_toolchain::runtime::static_graft_plan!`); the kernel only parses the text the
 macro stringifies. The application methods live in the kernel
 (`nichlink_kernel::Registry`).
 
@@ -47,11 +47,11 @@ way, but report a problem as a message instead of failing a build.
 ## How a record reaches the overlay
 
 A record is loaded and applied by the ungated runtime API in
-`nichlink-run-method` (it is deliberately **not** behind the `authoring`
+`nichlink-toolchain` (it is deliberately **not** behind the `authoring`
 feature, so a host does not need `syn` merely to read a plan file):
 
 ```rust
-use nichlink_run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
+use nichlink_toolchain::runtime::{apply_recorded_grafts, Registry, StaticGraftCut};
 
 // `declared` is the build-captured static plan and the arbiter of which slots
 // stay alive; `external` is the linked external registry.
@@ -174,7 +174,7 @@ cuts.
 
 The build never applies a plan, so it cannot wait for the runtime to notice a
 pruned slot. It refuses the build instead: when a plan exists whose target slot
-**no** declaration could name, `nichlink-build-method` emits a build error
+**no** declaration could name, `nichlink-toolchain` emits a build error
 (`phase=static-plan`, pointing at the plan file) whose message carries the exact
 clause to paste:
 
@@ -255,7 +255,7 @@ same way (both Rust expressions or both strings):
 ```rust
 // String form: names the slot by logical path and the implementation by
 // selector name. Resolved dynamically at overlay time; needs no link.
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -263,7 +263,7 @@ nichlink_run_method::static_graft_plan!(FRAMEWORK,
 // external implementation's `NODE_ID`; the external crate must be linked, so a
 // typed declaration is final against a record. A range is `cut(a to b)`; see
 // the "Ranges over siblings" section above.
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
 );

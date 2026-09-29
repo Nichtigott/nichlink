@@ -6,9 +6,9 @@
 
 The registration protocol stays in `nichlink-kernel`. Build-time discovery,
 identity caching, scope calculation, and `StaticPlan` generation are now in
-`nichlink-build-method`; MIR and data-flow evidence are in `nichlink-debug-method`; the TUI
-is in `nichlink-studio`; isolated plugin execution is in `nichlink-plugin-host`.
-The unified command-line entry (`nichlink new/check/build/snippets/explain/grafts/studio/mcp`) is in `nichlink-cli`.
+`nichlink-toolchain`; MIR and data-flow evidence are in `nichlink-toolchain`; the TUI
+is in `nichlink-toolchain`; isolated plugin execution is in `nichlink-toolchain`.
+The unified command-line entry (`nichlink new/check/build/snippets/explain/grafts/studio/mcp`) is in `nichlink-toolchain`.
 
 Applications provide their own root registry through
 `Registry::root_for_namespace`. Release builds consume the host application's
@@ -16,7 +16,7 @@ generated `StaticPlan`; this workspace does not ship a concrete `root_registry`.
 
 ## External declarations
 
-Use `nichlink_run_method::external_object!` for declarations owned by another
+Use `nichlink_toolchain::runtime::external_object!` for declarations owned by another
 crate. After B3b only `kind` is required; every other field is optional and
 defaults the way the generated compact form defaults it: `source` to the
 declaring file, `registry_name` to the module's last segment, `parent` to the
@@ -157,8 +157,8 @@ Use `1` through `3` to select Search, Inspect, or Data. `watch` is
 provided by `nichlink-dev`, a workspace-only binary behind the non-default
 `dev-supervisor` feature: it rebuilds the child Studio process after source,
 Cargo, or plugin catalog changes, so it needs this checkout
-(`cargo run -p nichlink-studio --features dev-supervisor --bin nichlink-dev -- watch`)
-and is not installed by `cargo install nichlink-studio`.
+(`cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch`)
+and is not installed by `cargo install nichlink-toolchain`.
 
 ## Plugin host
 
@@ -172,7 +172,7 @@ The current graft model is an immutable overlay. A host keeps its original
 source tree and declares the external implementation at its entry point:
 
 ```rust
-let plan = nichlink_run_method::graft_plan!(framework,
+let plan = nichlink_toolchain::runtime::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -196,14 +196,14 @@ unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
 format now has a reader: `GraftPlanDocument` in the kernel parses and renders it,
 refuses an unknown version or key instead of guessing, and is the only place the
 layout is defined. The record is also now the **input** to an overlay:
-`nichlink_run_method::apply_recorded_grafts` loads `.nichlink/external-grafts/`
+`nichlink_toolchain::runtime::apply_recorded_grafts` loads `.nichlink/external-grafts/`
 and `Registry::overlay_recorded` reconciles each record against the static
 declarations, applies it, and reports every adjustment; see [`graft.md`](graft.md)
 for the precedence policy and which reports are fatal.
-`nichlink-build-method` gained `declared_grafts`/`host_entry_source`
+`nichlink-toolchain` gained `declared_grafts`/`host_entry_source`
 for authoring surfaces that need to know which slots the build ships.
 
-`nichlink_run_method::ExternalGraftPlanFile` no longer exposes `target`,
+`nichlink_toolchain::runtime::ExternalGraftPlanFile` no longer exposes `target`,
 `graft`, and `full` as public fields; it carries the parsed `GraftPlanDocument`
 and the selector, and answers through `target()`, `target_path()`, `graft()`,
 `full()`, and `plan_path()`. `root` is still a public `PathBuf` field — there is

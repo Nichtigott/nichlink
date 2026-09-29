@@ -16,7 +16,7 @@
 | **记录** | `.nichlink/external-grafts/<selector>/graft.plan` | Studio（创作）与运行期宿主 | 运行期可以叠加在声明之上的创作输入。不参与编译。 |
 | **应用** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | 运行期宿主 | 校验并返回一棵新的有效树，不改动原树与外部树。 |
 
-声明宏由 `nichlink-run-method` 导出（`nichlink_run_method::static_graft_plan!`）；
+声明宏由 `nichlink-toolchain` 导出（`nichlink_toolchain::runtime::static_graft_plan!`）；
 kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nichlink_kernel::Registry`）。
 
 ## 哪个文件是宿主入口
@@ -40,11 +40,11 @@ kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nic
 
 ## 记录如何到达覆盖层
 
-记录的加载与应用由 `nichlink-run-method` 中不受门控的运行期 API 完成（它刻意**不**放在
+记录的加载与应用由 `nichlink-toolchain` 中不受门控的运行期 API 完成（它刻意**不**放在
 `authoring` 特性之后，宿主读取计划文件不需要 `syn` 依赖）：
 
 ```rust
-use nichlink_run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
+use nichlink_toolchain::runtime::{apply_recorded_grafts, Registry, StaticGraftCut};
 
 // `declared` 是构建捕获的静态计划，也是哪些槽位存活的仲裁者；
 // `external` 是已链接的外部注册机。
@@ -147,7 +147,7 @@ let effective: Registry = overlay.effective;
 ## 构建期拒绝
 
 构建从不应用计划，因此它不能等运行期去发现被剪掉的槽位。它改为拒绝该构建：当存在一条
-计划，而**没有**任何声明能命名它的目标槽位时，`nichlink-build-method` 报出一条构建错误
+计划，而**没有**任何声明能命名它的目标槽位时，`nichlink-toolchain` 报出一条构建错误
 （`phase=static-plan`，指向计划文件），消息里带着可直接粘贴的子句：
 
 ```text
@@ -210,14 +210,14 @@ external graft plan `<selector>` targets `<path>`, which no declaration in the h
 ```rust
 // 字符串形式：用逻辑路径命名槽位，用选择器名命名实现。
 // 在覆盖时动态解析；不需要链接。
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
 // 类型化形式：编译器解析目标面的 `NODE_ID` 与外部实现的 `NODE_ID`；
 // 外部 crate 必须已链接，因此类型化声明对记录保持最终。区间写成 `cut(a to b)`，
 // 见上文“兄弟区间”一节。
-nichlink_run_method::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
 );

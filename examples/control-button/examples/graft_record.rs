@@ -43,9 +43,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_run_method::registry_core::lexicon;
-use nichlink_run_method::registry_core::{Registry, StaticGraftCut};
-use nichlink_run_method::{
+use nichlink_toolchain::runtime::registry_core::lexicon;
+use nichlink_toolchain::runtime::registry_core::{Registry, StaticGraftCut};
+use nichlink_toolchain::runtime::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 

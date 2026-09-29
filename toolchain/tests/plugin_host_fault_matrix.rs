@@ -1,0 +1,1135 @@
+//! Fault-matrix integration tests for the plugin host adapters.
+//! 插件宿主适配器的故障矩阵集成测试。
+
+// The imports exist for the feature-gated modules below (which re-import them
+// through `use super::*`), so they are gated with the same condition; otherwise
+// `-D warnings` refuses them as unused when no adapter feature is on.
+// 这些导入供下面按特性门控的模块使用（它们经 `use super::*` 再导入），因此用同一个条件
+// 门控；否则在没有适配器特性时 `-D warnings` 会把它们当作未使用而拒绝。
+#[cfg(any(feature = "wasm", feature = "process-tools"))]
+use nichlink_toolchain::runtime::{
+    Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
+    PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
+    RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
+};
+
+// Only the feature-gated test modules below build a plugin artifact, so without
+// either adapter feature this helper is dead — which `-D dead-code` refuses.
+// 只有下面按特性门控的测试模块会构造插件产物，因此在两个适配器特性都关闭时这个辅助函数
+// 是死代码，而 `-D dead-code` 会拒绝它。
+#[cfg(any(feature = "wasm", feature = "process-tools"))]
+fn artifact(
+    bytes: Vec<u8>,
+    mode: PluginMode,
+) -> nichlink_toolchain::runtime::VerifiedPluginArtifact {
+    let checksum = Box::leak(sha256_hex(&bytes).into_boxed_str());
+    let registration = RegistrationInfo {
+        namespace: "plugin-test",
+        id: NodeId::from_path("plugin.rs", "plugin"),
+        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+        kind: "Plugin",
+        preset: "",
+        parts: "",
+        params: "",
+        handle: "PluginHandle",
+        stable_name: None,
+        name: LocalizedText {
+            zh: "插件",
+            en: "Plugin",
+        },
+        summary: LocalizedText { zh: "", en: "" },
+        exports: &[],
+        needs_registry: false,
+        registry_name: "plugin",
+        getting_from_other_registry: None,
+        registry_rule_path: "<test>",
+        registry_rule: RegistrationRule::ANY,
+        admission: Admission::ANY,
+        requires: &[],
+        provides: &[],
+        contract: ObjectContract {
+            required_parts: &[],
+            provided_parts: &[],
+        },
+        flow: FlowContract::NONE,
+        flow_provider: None,
+        handle_traits: &[],
+        part_traits: &[],
+        runtime_checks: &[] as &[RuntimeCheckSpec],
+        plugin: Some(PluginManifest {
+            name: "plugin-test",
+            crate_name: "plugin_test",
+            version: "1.0.0",
+            framework: FrameworkId::new("nichlink.test"),
+            source: PluginSource::User,
+            mode,
+            checksum,
+            signature: None,
+            public_key_fingerprint: None,
+            revocation_list: None,
+        }),
+        source: SourceLocation {
+            file: "plugin.rs",
+            line: 1,
+            column: 1,
+            function: "plugin",
+        },
+    };
+    PluginArtifact {
+        registration,
+        bytes,
+        key_fingerprint: None,
+    }
+    .verify_artifact(PluginTrustPolicy::open())
+    .expect("test artifact digest must verify")
+}
+
+#[cfg(feature = "wasm")]
+mod wasm_faults {
+    use super::*;
+    use nichlink_toolchain::plugin_host::{
+        ValidationChannel, WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
+    };
+
+    fn slot() -> WasmPluginSlot {
+        WasmPluginSlot::new(
+            "test",
+            FrameworkId::new("nichlink.test"),
+            PluginMode::Extension,
+            FlowContract::NONE,
+            &[ValidationChannel::Local],
+        )
+    }
+
+    fn table(wat: &str, limits: WasmLimits) -> WasmPluginTable {
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::new(limits))
+                .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .unwrap();
+        table
+    }
+
+    const ECHO: &str = r#"
+        (module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_echo") (param i32 i32) (result i64)
+            (i64.extend_i32_u (local.get 1)))
+        )
+    "#;
+
+    #[test]
+    fn lazy_activation_and_generation_are_observable() {
+        let table = table(ECHO, WasmLimits::default());
+        assert!(!table.is_loaded("test").unwrap());
+        assert_eq!(table.call("test", "echo", b"abc").unwrap(), b"abc");
+        assert!(table.is_loaded("test").unwrap());
+        assert_eq!(table.generation("test").unwrap(), Some(1));
+    }
+
+    /// A pending generation can be activated on its own. Activation used to happen only inside
+    /// `call`, so a host that installed an artifact and then polled `is_loaded` could not learn
+    /// whether the slot was loadable without performing an operation — and when activation fails,
+    /// no operation exists that would ever make `is_loaded` true (audit `PH-4`).
+    /// 待定代际可以单独激活。激活过去只发生在 `call` 里，因此"装好工件再轮询 `is_loaded`"的宿主
+    /// 不执行一次操作就无法知道该槽能否加载——而当激活失败时，没有任何操作能让 `is_loaded` 变成
+    /// true（审计 `PH-4`）。
+    #[test]
+    fn a_pending_generation_activates_without_an_operation() {
+        let table = table(ECHO, WasmLimits::default());
+        assert!(
+            table.activate_pending("test").unwrap(),
+            "the install queued a generation"
+        );
+        assert!(table.is_loaded("test").unwrap());
+        assert_eq!(table.generation("test").unwrap(), Some(1));
+        assert!(
+            !table.activate_pending("test").unwrap(),
+            "nothing is pending any more, and that is not an error"
+        );
+
+        // A slot with no install at all reports "nothing to do" rather than activating.
+        // 完全没有装过东西的槽报告"无事可做"，而不是去激活。
+        let bare =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+        assert!(!bare.activate_pending("test").unwrap());
+        assert!(!bare.is_loaded("test").unwrap());
+    }
+
+    /// The failed case is the one that used to be a dead end: the attempt itself reports why, and
+    /// the slot stays unloaded — exactly what a poller could never get past.
+    /// 失败那一种正是过去的死路：这次尝试本身说明原因，而槽保持未加载——正是轮询方永远越不过的状态。
+    #[test]
+    fn activate_pending_reports_a_failed_activation() {
+        let bad = r#"(module
+          (memory (export "memory") 1)
+          (func (export "nichlink_abi_version") (result i32) (i32.const 99))
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
+        let table = table(bad, WasmLimits::default());
+        let error = table
+            .activate_pending("test")
+            .expect_err("an incompatible ABI must not activate");
+        assert!(!error.to_string().is_empty(), "{error}");
+        assert!(
+            !table.is_loaded("test").unwrap(),
+            "the slot never became loaded, which is why the report matters"
+        );
+        assert!(
+            table.activation_error("test").unwrap().is_some(),
+            "the reason is kept for the caller that asks afterwards"
+        );
+    }
+
+    /// A failed activation changes nothing a poller can already see — the
+    /// previous generation keeps answering and `is_loaded` stays `true` — so the
+    /// failure has to be reported somewhere other than the load flag.
+    /// 失败的激活不会改变轮询方已经能看到的东西——上一代继续作答，`is_loaded` 保持 `true`
+    /// ——因此失败必须报在加载标志之外的地方。
+    #[test]
+    fn a_failed_activation_is_observable() {
+        let good = wat::parse_str(ECHO).expect("valid WAT");
+        let bad = wat::parse_str(
+            r#"(module
+              (memory (export "memory") 1)
+              (func (export "nichlink_abi_version") (result i32) (i32.const 99))
+              (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#,
+        )
+        .expect("valid WAT");
+        let table =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+
+        table
+            .install(
+                "test",
+                ValidationChannel::Local,
+                artifact(good, PluginMode::Extension),
+            )
+            .expect("the first install queues");
+        assert_eq!(table.call("test", "echo", b"abc").unwrap(), b"abc");
+        assert_eq!(table.activation_error("test").unwrap(), None);
+
+        table
+            .install(
+                "test",
+                ValidationChannel::Local,
+                artifact(bad, PluginMode::Extension),
+            )
+            .expect("the second install queues as well");
+        assert!(table.call("test", "echo", b"abc").is_err());
+        let reported = table
+            .activation_error("test")
+            .unwrap()
+            .expect("the failed activation must be reported");
+        assert!(reported.contains("ABI"), "{reported}");
+        // The old generation still answers; a poller that only reads `is_loaded`
+        // sees a healthy slot while every call fails.
+        // 旧代仍在作答；只读 `is_loaded` 的轮询方会看到一个健康的槽，而每次调用都失败。
+        assert!(table.is_loaded("test").unwrap());
+        assert_eq!(table.generation("test").unwrap(), Some(1));
+    }
+
+    /// The generation an install returns is the one that stays pending, even
+    /// when installs race: the number used to be allocated before the state lock
+    /// was taken, so the caller that took the lock second stored a *lower*
+    /// generation last and the higher one was silently dropped. The barrier makes
+    /// every install in a round start together, so the order they are numbered in
+    /// and the order they take the lock in are independent; activation then says
+    /// which generation actually stayed.
+    /// 安装返回的代际就是留在待发布位的那个，即使安装并发也是如此：编号过去在取得状态锁之前
+    /// 分配，因此后拿到锁的调用方最后写入一个**更小**的代际，更大的那个被静默丢弃。屏障让每轮
+    /// 所有安装同时开始，编号顺序与取锁顺序因而相互独立；随后由激活来说明实际留下的是哪一代。
+    #[test]
+    fn the_highest_generation_is_the_one_that_stays_pending() {
+        const THREADS: usize = 8;
+        const ROUNDS: usize = 64;
+        let bytes = wat::parse_str(ECHO).expect("valid WAT");
+        let table =
+            WasmPluginTable::with_backend(Box::leak(Box::new([slot()])), WasmBackend::default())
+                .expect("the slot definition is valid");
+
+        for round in 0..ROUNDS {
+            let barrier = std::sync::Barrier::new(THREADS);
+            let returned = std::sync::Mutex::new(Vec::new());
+            std::thread::scope(|scope| {
+                for _ in 0..THREADS {
+                    let barrier = &barrier;
+                    let returned = &returned;
+                    let bytes = &bytes;
+                    let table = &table;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let generation = table
+                            .install(
+                                "test",
+                                ValidationChannel::Local,
+                                artifact(bytes.clone(), PluginMode::Extension),
+                            )
+                            .expect("every install queues");
+                        returned
+                            .lock()
+                            .expect("the collector lock")
+                            .push(generation);
+                    });
+                }
+            });
+            let highest = returned
+                .into_inner()
+                .expect("the collector lock")
+                .into_iter()
+                .max()
+                .expect("every thread returned a generation");
+            table
+                .call("test", "echo", b"abc")
+                .expect("the pending generation activates");
+            assert_eq!(
+                table.generation("test").unwrap(),
+                Some(highest),
+                "round {round}: the pending generation must be the greatest one handed out"
+            );
+        }
+    }
+
+    #[test]
+    fn incompatible_abi_is_rejected_before_instance_is_published() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (func (export "nichlink_abi_version") (result i32) (i32.const 99))
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let error = match WasmBackend::default().load(artifact(bytes, PluginMode::Extension)) {
+            Ok(_) => panic!("ABI mismatch must reject the instance"),
+            Err(error) => error,
+        };
+        let message = error.to_string();
+        assert!(
+            message.contains("ABI") && message.contains("incompatible"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn fuel_exhaustion_is_reported() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func $spin (param i32 i32) (result i64)
+            (call $spin (local.get 0) (local.get 1)))
+          (export "nichlink_spin" (func $spin))
+        )"#;
+        let table = table(
+            wat,
+            WasmLimits {
+                fuel_per_call: 100,
+                ..WasmLimits::default()
+            },
+        );
+        let error = table.call("test", "spin", &[]).unwrap_err().to_string();
+        assert!(
+            error.contains("fuel") || error.contains("out of fuel"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn output_limit_is_enforced_before_memory_read() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_large") (param i32 i32) (result i64) (i64.const 4294967396)
+          )
+        )"#;
+        let table = table(
+            wat,
+            WasmLimits {
+                max_output_bytes: 8,
+                ..WasmLimits::default()
+            },
+        );
+        let error = table.call("test", "large", &[]).unwrap_err().to_string();
+        assert!(
+            error.contains("output") && error.contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// The table ceiling is wired to the store, not only declared: with it at
+    /// zero even a one-element table cannot activate.
+    /// 表的上限是真的接到存储上的，而不只是声明：把它设为零时，连只有一个元素的表也无法
+    /// 激活。
+    #[test]
+    fn the_table_element_limit_is_enforced() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 1 funcref)
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                table_elements: 0,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        // Registration is lazy; activation is the first call.
+        // 注册是惰性的；激活发生在第一次调用。
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a table past the ceiling must not activate");
+        assert!(
+            error.to_string().contains("table") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// A hostile module cannot buy host memory through a table: the memory
+    /// ceiling does not bound a table, which is a separate eagerly-instantiated
+    /// array of function references.
+    /// 敌对模块无法通过表买到宿主内存：内存上限并不约束表，而表是一块独立的、即时实例化的
+    /// 函数引用数组。
+    #[test]
+    fn a_huge_table_is_refused() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 100000000 funcref)
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a hundred million table entries must not be allocated");
+        assert!(
+            error.to_string().contains("table") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// The memory ceiling is the only thing between a tiny artifact and four gigabytes of
+    /// *declared initial* memory. Growth never happens here, so neither the growth trap nor the
+    /// growth half of the limiter can be what refuses it: without this pin, commenting out
+    /// `.memory_size(self.limits.memory_bytes)` left the module instantiating, and the shipped
+    /// suite only went red incidentally, through a growth assertion (audit `PH-2`).
+    /// 一个微小产物与四吉字节**声明的初始**内存之间，唯一的屏障就是内存上限。这里不会发生增长，
+    /// 因此既不是增长陷阱、也不是限制器的增长那一半在拒绝它：没有这条钉子时，注释掉
+    /// `.memory_size(self.limits.memory_bytes)` 会让该模块照样实例化，而出厂套件只是经由一条
+    /// **增长**断言顺带变红（审计 `PH-2`）。
+    #[test]
+    fn a_huge_declared_memory_is_refused() {
+        // 65536 pages × 64 KiB = 4 GiB, declared as the initial size rather than grown into.
+        // 65536 页 × 64 KiB = 4 GiB，作为初始大小声明，而不是增长出来的。
+        let wat = r#"(module
+          (memory (export "memory") 65536)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        assert!(
+            bytes.len() < 1024,
+            "the artifact is tiny ({} bytes); the cost lives in the declaration",
+            bytes.len()
+        );
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("four gigabytes of declared memory must not be allocated");
+        assert!(
+            error.to_string().contains("memory") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// And the ceiling is wired to the store rather than only declared: with it at zero even a
+    /// one-page memory cannot activate.
+    /// 而且上限是真接到存储上的，而不只是声明：把它设为零时，连一页内存也无法激活。
+    #[test]
+    fn the_memory_ceiling_is_enforced() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+        )"#;
+        let bytes = wat::parse_str(wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                memory_bytes: 0,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a memory past the ceiling must not activate");
+        assert!(
+            error.to_string().contains("memory") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// Compilation happens before any runtime limit can apply, so the artifact
+    /// ceiling is checked by hand and reported as a limit rather than as a broken
+    /// module.
+    /// 编译发生在任何运行期限制生效之前，因此工件上限是手工检查的，并且报成"超限"而不是
+    /// "模块损坏"。
+    #[test]
+    fn an_oversized_artifact_is_refused_before_compilation() {
+        let bytes = wat::parse_str(ECHO).expect("valid WAT");
+        let ceiling = bytes.len() - 1;
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits {
+                max_module_bytes: ceiling,
+                ..WasmLimits::default()
+            }),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "echo", &[])
+            .expect_err("an artifact past the ceiling must not be compiled");
+        assert!(error.to_string().contains("artifact is"), "{error}");
+    }
+
+    /// A passive element segment is invisible to both ceilings that look like they
+    /// cover it: `table_elements` bounds a table's *growth* (a passive segment
+    /// never grows one), and the artifact cap counts encoding bytes while wasmi
+    /// materializes every entry at instantiation for about 32 bytes each. Measured
+    /// before this budget existed: a 2 000 103-byte module carrying two million
+    /// entries loaded and cost 64 070 402 bytes of host memory.
+    /// 被动元素段对两道看起来覆盖它的上限都不可见：`table_elements` 约束的是表的**增长**
+    /// （被动段从不增长表），而工件上限数的是编码字节，wasmi 却在实例化时为每个条目物化约
+    /// 32 字节。本预算存在之前实测：一个 2 000 103 字节、带两百万条目的模块能加载，并花掉
+    /// 64 070 402 字节宿主内存。
+    #[test]
+    fn a_large_passive_element_segment_is_refused_before_instantiation() {
+        // About 400 000 entries: one byte each in the compact encoding, so the
+        // element payload alone is around 400 KiB.
+        // 约 40 万条目：紧凑编码下每条约一字节，因此仅元素段负载就约 400 KiB。
+        let entries = "$f ".repeat(400_000);
+        let wat = format!(
+            r#"(module
+              (memory (export "memory") 1)
+              (data (i32.const 0) "ok")
+              (table 1 funcref)
+              (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+              (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+              (elem func {entries})
+            )"#
+        );
+        let bytes = wat::parse_str(&wat).expect("valid WAT");
+        let artifact = artifact(bytes, PluginMode::Extension);
+        let table = WasmPluginTable::with_backend(
+            Box::leak(Box::new([slot()])),
+            WasmBackend::new(WasmLimits::default()),
+        )
+        .unwrap();
+        table
+            .install("test", ValidationChannel::Local, artifact)
+            .expect("registration does not activate");
+        let error = table
+            .call("test", "probe", &[])
+            .expect_err("a passive element segment must be budgeted, not materialized");
+        assert!(
+            error.to_string().contains("element") || error.to_string().contains("limit"),
+            "{error}"
+        );
+    }
+
+    /// The control: a small passive element segment still loads, so the budget is
+    /// not a refusal of the feature.
+    /// 对照：小的被动元素段仍能加载，因此这个预算不是对功能的一律拒绝。
+    #[test]
+    fn a_small_passive_element_segment_still_loads() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (table 4 funcref)
+          (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (elem func $f $f $f)
+        )"#;
+        let table = table(wat, WasmLimits::default());
+        assert_eq!(
+            table
+                .call("test", "probe", &[])
+                .expect("small segment loads"),
+            b"ok".to_vec()
+        );
+    }
+
+    #[test]
+    fn linear_memory_growth_is_capped() {
+        let wat = r#"(module
+          (memory (export "memory") 1)
+          (data (i32.const 0) "ok")
+          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "nichlink_grow") (param i32 i32) (result i64)
+            (drop (memory.grow (i32.const 1000))) (i64.const 2))
+        )"#;
+        let table = table(
+            wat,
+            WasmLimits {
+                memory_bytes: 64 * 1024,
+                ..WasmLimits::default()
+            },
+        );
+        let error = table.call("test", "grow", &[]).unwrap_err().to_string();
+        assert!(
+            error.contains("memory") || error.contains("trap") || error.contains("limited"),
+            "{error}"
+        );
+    }
+}
+
+#[cfg(feature = "process-tools")]
+mod process_faults {
+    use super::*;
+    use nichlink_toolchain::plugin_host::{
+        PluginInstance, ProcessBackend, ProcessLimits, ProcessProgram,
+    };
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+
+    fn executable(script: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plugin.sh");
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(script.as_bytes()).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        (dir, path)
+    }
+
+    /// A child that is still running is a `Timeout`; a child that exited
+    /// non-zero is a `Process` failure with its stderr.
+    /// 仍在运行的子进程是 `Timeout`；非零退出的子进程是带 stderr 的 `Process` 失败。
+    ///
+    /// The deadline is 250 ms rather than a few milliseconds on purpose: the
+    /// assertion is "still running at the deadline", and a deadline tight enough
+    /// to race the scheduler makes this test fail under a loaded machine for a
+    /// reason that has nothing to do with the behaviour under test. The message
+    /// prints the outcome so a failure under load is diagnosable rather than a
+    /// bare assertion.
+    /// 超时有意取 250 ms 而不是几毫秒：断言的是"到期时它仍在运行"，而紧到与调度器赛跑的超时
+    /// 会让本测试在机器繁忙时因为与被测行为无关的原因失败。消息里打印实际结果，因此负载下的
+    /// 失败是可诊断的，而不是一个光秃秃的断言。
+    #[test]
+    fn timeout_and_crash_are_distinct_failures() {
+        let (dir, path) = executable("#!/bin/sh\nsleep 2\n");
+        let bytes = std::fs::read(&path).unwrap();
+        let plugin = ProcessBackend::new(ProcessLimits {
+            timeout: Duration::from_millis(250),
+            ..ProcessLimits::default()
+        })
+        .load(
+            artifact(bytes, PluginMode::Extension),
+            ProcessProgram::new(&path),
+        )
+        .unwrap();
+        let outcome = plugin.call("run", &[]);
+        assert!(
+            matches!(
+                outcome,
+                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+            ),
+            "a child that is still running must report Timeout, got {outcome:?}"
+        );
+        drop(dir);
+
+        let (dir, path) = executable("#!/bin/sh\nexit 7\n");
+        let bytes = std::fs::read(&path).unwrap();
+        let plugin = ProcessBackend::default()
+            .load(
+                artifact(bytes, PluginMode::Extension),
+                ProcessProgram::new(&path),
+            )
+            .unwrap();
+        assert!(matches!(
+            plugin.call("run", &[]),
+            Err(nichlink_toolchain::plugin_host::HostError::Process(_))
+        ));
+        drop(dir);
+    }
+
+    /// Write one plugin script and return its path.
+    /// 写一个插件脚本并返回其路径。
+    fn script(directory: &Path, name: &str, body: &str) -> PathBuf {
+        let path = directory.join(format!("{name}.sh"));
+        std::fs::write(&path, body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        path
+    }
+
+    /// Encode one response frame: the length prefix the host reads, then the body.
+    /// 编码一个响应帧：宿主会读取的长度前缀，然后负载。
+    fn framed(body: &[u8]) -> Vec<u8> {
+        let mut frame = Vec::with_capacity(4 + body.len());
+        frame.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        frame.extend_from_slice(body);
+        frame
+    }
+
+    /// Stage `bytes` as a plugin executable and load it with `limits`.
+    /// 把 `bytes` 暂存为插件可执行文件，并以 `limits` 加载它。
+    fn load(path: &Path, limits: ProcessLimits) -> impl PluginInstance {
+        let bytes = std::fs::read(path).unwrap();
+        ProcessBackend::new(limits)
+            .load(
+                artifact(bytes, PluginMode::Extension),
+                ProcessProgram::new(path),
+            )
+            .unwrap()
+    }
+
+    /// Build a plugin that emits the prepared `frame` on stdout without reading stdin.
+    /// 构造一个插件：不读 stdin，把预先准备的 `frame` 写到 stdout。
+    fn emitter(directory: &Path, name: &str, frame: &[u8]) -> PathBuf {
+        let payload = directory.join(format!("{name}.frame"));
+        std::fs::write(&payload, frame).unwrap();
+        script(
+            directory,
+            name,
+            &format!("#!/bin/sh\nexec cat {}\n", payload.display()),
+        )
+    }
+
+    /// A response larger than a pipe buffer is an ordinary response, not a timeout.
+    /// 大于一个管道缓冲的响应是正常响应，而不是超时。
+    ///
+    /// This is the regression pin for the measured boundary: frames of 65_532 bytes
+    /// succeeded and 65_537 bytes reported `Timeout` before the pipes were drained.
+    /// 这是实测边界的回归钉子：在管道被排空之前，65_532 字节的帧成功而 65_537 字节的帧
+    /// 报 `Timeout`。
+    #[test]
+    fn output_larger_than_the_pipe_buffer_is_returned() {
+        for body in [65_532_usize, 65_533, 65_536, 65_537, 200 * 1024] {
+            let directory = tempfile::tempdir().unwrap();
+            let payload = vec![b'x'; body];
+            let plugin = emitter(directory.path(), "emit", &framed(&payload));
+            let loaded = load(&plugin, ProcessLimits::default());
+            assert_eq!(
+                loaded.call("run", &[]).unwrap().len(),
+                body,
+                "a {body}-byte response is inside the declared 1 MiB limit"
+            );
+        }
+    }
+
+    /// A child that keeps writing after its answer must still deliver it.
+    /// Reading only the first frame left the child blocked on a full pipe, so the
+    /// host waited for an exit that could not come and killed it at the deadline,
+    /// reporting `Timeout` and discarding an answer it already had.
+    /// 已经给出答案却继续写入的子进程仍必须交付那个答案。只读第一帧会让子进程阻塞在满管道
+    /// 上，于是宿主去等一个不可能到来的退出、在超时点杀掉它，报出 `Timeout` 并丢掉它其实
+    /// 已经拿到的答案。
+    #[test]
+    fn a_child_that_writes_past_its_answer_still_delivers_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let payload = b"answer";
+        let frame = directory.path().join("answer.frame");
+        std::fs::write(&frame, framed(payload)).unwrap();
+        let plugin = script(
+            directory.path(),
+            "chatty",
+            &format!(
+                "#!/bin/sh\ncat {}\nhead -c 200000 /dev/zero\n",
+                frame.display()
+            ),
+        );
+        let loaded = load(&plugin, ProcessLimits::default());
+        assert_eq!(loaded.call("run", &[]).unwrap(), payload);
+    }
+
+    /// A frame that stops mid-flight must be named, not reported as a bare reader error.
+    /// 写到一半就断掉的帧必须**被点名**，而不是作为裸的读取错误上报。
+    ///
+    /// The child declares a 6-byte payload, delivers one byte and exits 0: the answer never
+    /// becomes a frame, so the call fails — but the caller has to learn *which* operation lost
+    /// it and how much of the declared frame arrived, not just `failed to fill whole buffer`.
+    /// That bare message is what the caller used to get, with no plugin, operation or shape in it
+    /// (audit `LGC-LG-32`, the second half of the evidence).
+    /// 子进程声明 6 字节负载、只送出 1 字节，然后以 0 退出：答案从未成为一帧，调用因此失败——
+    /// 但调用方必须能得知是**哪一步**丢了它、以及声明的那一帧**到了多少**，而不只是
+    /// `failed to fill whole buffer`。那条裸消息正是过去拿到的全部，里面没有插件、操作或形状
+    /// （审计 `LGC-LG-32` 证据的第二半）。
+    #[test]
+    fn an_incomplete_frame_names_the_operation_and_keeps_the_reader_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let frame = directory.path().join("cut.frame");
+        std::fs::write(&frame, framed(b"answer")).unwrap();
+        // 4-byte length prefix + one payload byte, then a clean exit.
+        // 4 字节长度前缀 + 1 字节负载，然后干净退出。
+        let plugin = script(
+            directory.path(),
+            "truncated",
+            &format!("#!/bin/sh\nhead -c 5 {}\nexit 0\n", frame.display()),
+        );
+        let loaded = load(&plugin, ProcessLimits::default());
+        let error = loaded
+            .call("run", &[])
+            .expect_err("a cut-off frame is not an answer");
+        let text = error.to_string();
+        assert!(
+            matches!(
+                error,
+                nichlink_toolchain::plugin_host::HostError::Process(_)
+            ),
+            "a broken frame is a process-level failure, got {error:?}"
+        );
+        // The whole message is pinned, not just its parts: the operation, how much of the
+        // declared frame arrived, and the reader's own error (`failed to fill whole buffer`,
+        // `UnexpectedEof`) all have to survive, because the last one is the only trace of the
+        // original failure a caller can follow — `HostError::Process` has no source slot.
+        // 整条消息逐字钉住，而不只是它的几个片段：操作、声明的那一帧**到了多少**、以及读取器
+        // 自己的错误（`failed to fill whole buffer`、`UnexpectedEof`）都必须留下来——最后一项
+        // 是调用方能追的唯一原始线索，因为 `HostError::Process` 没有存放源错误的槽位。
+        assert_eq!(
+            text,
+            "plugin process failed: the process adapter got no complete frame for `run`: it \
+             declared 6 bytes of answer and 1 arrived, then the stream ended (failed to fill \
+             whole buffer; kind UnexpectedEof)"
+        );
+
+        // "Nothing started" and "half a frame" must not read the same. Same declaration, but the
+        // child writes the length prefix and then nothing at all: the count is the whole
+        // difference (`0 arrived` against `1 arrived`), and `read_exact` alone could not tell
+        // them apart — it only ever said the buffer could not be filled (audit `LGC-LG-32`, the
+        // minimal improvement the t77 review asked for).
+        // "一个字节都没开始写"与"写了半帧"不能读起来一样。同一个声明，但子进程写完长度前缀后
+        // **一个负载字节都没写**：区别全在到达字节数上（`0 arrived` 对 `1 arrived`），而单靠
+        // `read_exact` 分不出来——它只会说"某个缓冲区没被填满"（审计 `LGC-LG-32`，即 t77 复核
+        // 要求的最小改进）。
+        let never_started = script(
+            directory.path(),
+            "never-started",
+            &format!("#!/bin/sh\nhead -c 4 {}\nexit 0\n", frame.display()),
+        );
+        let loaded = load(&never_started, ProcessLimits::default());
+        let error = loaded
+            .call("run", &[])
+            .expect_err("a declared frame that never started is not an answer");
+        assert!(
+            matches!(
+                error,
+                nichlink_toolchain::plugin_host::HostError::Process(_)
+            ),
+            "a broken frame is a process-level failure, got {error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            "plugin process failed: the process adapter got no complete frame for `run`: it \
+             declared 6 bytes of answer and 0 arrived, then the stream ended (failed to fill \
+             whole buffer; kind UnexpectedEof)"
+        );
+    }
+
+    /// A complete frame is the answer even when the child never exits.
+    /// 完整的一帧就是答案，即使子进程永不退出。
+    ///
+    /// The child writes its frame and then lingers past the deadline (`exec sleep`): the
+    /// answer already exists, so the call has its product and must deliver it. It used to be
+    /// dropped into `Timeout`, which is the same defect the comment above `drain_to_eof`
+    /// claims to have removed — that fix only covered the child that blocks on a full pipe
+    /// (audit `LGC-LG-32`).
+    /// 子进程写完帧后用 `exec sleep` 挂过超时点：答案已经存在，调用已经拿到它的产物，必须交付。
+    /// 过去它会被丢成 `Timeout`——这正是 `drain_to_eof` 上方注释声称已经修掉的那个缺陷，而那次
+    /// 修复只覆盖了阻塞在满管道上的子进程（审计 `LGC-LG-32`）。
+    #[test]
+    fn an_answer_from_a_child_that_never_exits_is_delivered() {
+        let directory = tempfile::tempdir().unwrap();
+        let payload = b"answer";
+        let frame = directory.path().join("answer.frame");
+        std::fs::write(&frame, framed(payload)).unwrap();
+        let plugin = script(
+            directory.path(),
+            "answers-then-lingers",
+            &format!("#!/bin/sh\ncat {}\nexec sleep 30\n", frame.display()),
+        );
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_millis(600),
+                ..ProcessLimits::default()
+            },
+        );
+        let start = std::time::Instant::now();
+        let outcome = loaded.call("run", &[]);
+        let answer = match outcome {
+            Ok(bytes) => bytes,
+            Err(error) => panic!("a delivered answer must not decay into Timeout, got {error:?}"),
+        };
+        assert_eq!(answer, payload);
+        assert!(
+            start.elapsed() < Duration::from_millis(600),
+            "the answer is delivered when it arrives, not at the deadline: {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// A child that never writes a frame still hits the deadline, and that is a `Timeout`.
+    /// 从不写帧的子进程仍然撞到超时点，而那仍是一个 `Timeout`。
+    ///
+    /// The answer semantics must not turn "no answer at all" into an empty success: the
+    /// deadline only decides the frame that never came.
+    /// 答案语义绝不能把"根本没有答案"变成一次空的成功：超时点只决定那个从未到来的帧。
+    #[test]
+    fn a_child_that_never_writes_a_frame_still_times_out() {
+        let directory = tempfile::tempdir().unwrap();
+        let plugin = script(directory.path(), "silent", "#!/bin/sh\nsleep 30\n");
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_millis(250),
+                ..ProcessLimits::default()
+            },
+        );
+        let outcome = loaded.call("run", &[]);
+        assert!(
+            matches!(
+                outcome,
+                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+            ),
+            "no frame by the deadline is a Timeout, got {outcome:?}"
+        );
+    }
+
+    /// The declared output cap is refused as `Limit`, and the refusal survives the
+    /// child, instead of degrading into a misleading `Timeout`.
+    /// 声明的输出上限以 `Limit` 拒绝，且该拒绝不会被降级成误导性的 `Timeout`。
+    #[test]
+    fn output_over_the_declared_limit_is_a_limit_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let plugin = emitter(directory.path(), "emit", &framed(&vec![b'x'; 4096]));
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                max_output_bytes: 1024,
+                ..ProcessLimits::default()
+            },
+        );
+        assert!(matches!(
+            loaded.call("run", &[]),
+            Err(nichlink_toolchain::plugin_host::HostError::Limit(_))
+        ));
+    }
+
+    /// The deadline must bound the input write, not only the child's run.
+    /// 超时必须约束输入写入，而不只是子进程的运行。
+    ///
+    /// Measured before the fix: a 1 MiB input (exactly `max_input_bytes`) to a child
+    /// that never reads stdin blocked for the child's whole lifetime (5 s) and then
+    /// reported a broken pipe, so the 2 s deadline never applied at all.
+    /// 修复前实测：1 MiB 输入（正好等于 `max_input_bytes`）写给从不读 stdin 的子进程，
+    /// 会阻塞整个子进程生存期（5 秒），随后报 broken pipe——2 秒超时根本没有生效。
+    #[test]
+    fn a_child_that_never_reads_stdin_still_hits_the_deadline() {
+        let directory = tempfile::tempdir().unwrap();
+        let plugin = script(directory.path(), "sleepy", "#!/bin/sh\nsleep 5\n");
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_millis(200),
+                ..ProcessLimits::default()
+            },
+        );
+        let start = std::time::Instant::now();
+        let outcome = loaded.call("run", &vec![7_u8; 1024 * 1024]);
+        assert!(
+            matches!(
+                outcome,
+                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+            ),
+            "expected the deadline to win, got {outcome:?}"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "the deadline must bound the input write, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// An input larger than a pipe buffer still reaches a child that reads it.
+    /// 大于一个管道缓冲的输入仍然能到达读取它的子进程。
+    #[test]
+    fn input_larger_than_the_pipe_buffer_reaches_a_reading_child() {
+        let directory = tempfile::tempdir().unwrap();
+        let payload = directory.path().join("ok.frame");
+        std::fs::write(&payload, framed(b"ok")).unwrap();
+        let plugin = script(
+            directory.path(),
+            "drain",
+            &format!(
+                "#!/bin/sh\ncat > /dev/null\nexec cat {}\n",
+                payload.display()
+            ),
+        );
+        let loaded = load(&plugin, ProcessLimits::default());
+        assert_eq!(loaded.call("run", &vec![7_u8; 1024 * 1024]).unwrap(), b"ok");
+    }
+
+    /// A child that floods stderr is drained too, so it cannot block the call.
+    /// 向 stderr 灌大量数据的子进程同样被排空，因此不会阻塞调用。
+    #[test]
+    fn stderr_larger_than_the_pipe_buffer_does_not_block() {
+        let directory = tempfile::tempdir().unwrap();
+        let noise = directory.path().join("noise.bin");
+        std::fs::write(&noise, vec![b'e'; 200 * 1024]).unwrap();
+        let plugin = script(
+            directory.path(),
+            "noisy",
+            &format!("#!/bin/sh\ncat {} >&2\nexit 7\n", noise.display()),
+        );
+        let loaded = load(
+            &plugin,
+            ProcessLimits {
+                timeout: Duration::from_secs(3),
+                ..ProcessLimits::default()
+            },
+        );
+        let start = std::time::Instant::now();
+        let outcome = loaded.call("run", &[]);
+        assert!(
+            matches!(
+                outcome,
+                Err(nichlink_toolchain::plugin_host::HostError::Process(_))
+            ),
+            "expected the child's failure, got {outcome:?}"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "stderr must be drained, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// The host chooses the child's environment and working directory, and the
+    /// default still inherits.
+    /// 宿主选择子进程的环境与工作目录，而默认仍然是继承。
+    ///
+    /// The child reports three bits in one three-byte frame: whether the variable
+    /// the host passed deliberately is present, whether `HOME` — the host's, not
+    /// the child's — survived, and whether it ran in the directory the host named.
+    /// `HOME` is the inheritance probe because it is the one that survives the
+    /// shell: a bare `/bin/sh` invents `PATH` (measured here: `/no-such-path`),
+    /// `PWD`, `SHLVL`, `_`, `TERM` and `IFS` from an empty environment, so any of
+    /// those would report "inherited" for a child that inherited nothing. The
+    /// inherited expectation is computed from this process's own environment
+    /// rather than assumed, so the test states what it measured.
+    /// 子进程在一帧三字节载荷里报告三位：宿主有意传入的变量是否存在、`HOME`（宿主的，不是子进程
+    /// 自己的）是否还在、它是否在宿主指定的目录里运行。用 `HOME` 探测继承，是因为它是唯一能活过
+    /// shell 的那个：空的 `/bin/sh` 会凭空造出 `PATH`（本机实测为 `/no-such-path`）、`PWD`、
+    /// `SHLVL`、`_`、`TERM` 与 `IFS`，用其中任何一个都会把一个什么都没继承到的子进程报成"已继承"。
+    /// 继承情形下的期望值由本进程自己的环境算出而不是假设，因此这条测试陈述的是它实测到的东西。
+    #[test]
+    fn the_host_narrows_the_environment_and_the_working_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let probe = script(
+            directory.path(),
+            "probe",
+            concat!(
+                "#!/bin/sh\n",
+                "bits=\"\"\n",
+                "if [ -n \"$NICHLINK_TEST_MARKER\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ -n \"$HOME\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ \"$PWD\" = \"$NICHLINK_TEST_CWD\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "printf '\\003\\000\\000\\000'\n",
+                "printf '%s' \"$bits\"\n"
+            ),
+        );
+        let artifact = |path: &Path| artifact(std::fs::read(path).unwrap(), PluginMode::Extension);
+
+        // Cleared, with exactly what the host chose: the deliberate variable
+        // present, no inherited `HOME`, and the child somewhere the host picked.
+        let narrowed = ProcessBackend::new(ProcessLimits {
+            inherit_env: false,
+            ..ProcessLimits::default()
+        })
+        .load(
+            artifact(&probe),
+            ProcessProgram::new(&probe)
+                .environment("NICHLINK_TEST_MARKER", "set-by-host")
+                .environment("NICHLINK_TEST_CWD", directory.path().display().to_string())
+                .current_dir(directory.path()),
+        )
+        .unwrap();
+        assert_eq!(narrowed.call("run", &[]).unwrap(), b"101");
+
+        // Cleared with nothing added: the child still starts — it is run by
+        // absolute path, so it needs no `PATH` to be executed — and answers with
+        // all three bits clear, which is an empty environment rather than the
+        // host's. Its working directory is the host's here, so the third bit is
+        // clear for the other reason: the cwd probe compares against a variable
+        // this case deliberately does not set.
+        let empty = ProcessBackend::new(ProcessLimits {
+            inherit_env: false,
+            ..ProcessLimits::default()
+        })
+        .load(artifact(&probe), ProcessProgram::new(&probe))
+        .unwrap();
+        assert_eq!(empty.call("run", &[]).unwrap(), b"000");
+
+        // The default still inherits, which is what an existing host expects: the
+        // host's own `HOME` reaches the child, and nothing else changed.
+        let expected: &[u8] = if std::env::var_os("HOME").is_some() {
+            b"010"
+        } else {
+            b"000"
+        };
+        let inherited = ProcessBackend::default()
+            .load(artifact(&probe), ProcessProgram::new(&probe))
+            .unwrap();
+        assert_eq!(inherited.call("run", &[]).unwrap(), expected);
+    }
+}

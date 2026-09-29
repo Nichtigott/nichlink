@@ -15,8 +15,8 @@ This roadmap covers NichLink itself. NichUI product work, funding, and community
 - [x] Cross-platform CI, scale audits, symbol audits, and package checks.
 - [x] Kernel/execution-surface split: one pure kernel (`nichlink-kernel`) holding
   protocol vocabulary and pure methods, with thin surfaces
-  (`nichlink-build-method`, `nichlink-run-method`, `nichlink-debug-method`,
-  `nichlink-studio`, `nichlink-mcp`, `nichlink-cli`, `nichlink-plugin-host`)
+  (`nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`,
+  `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`)
   binding those methods to their own contexts.
 
 0.1 is suitable for experiments and selected internal production use. It does not claim complete static analysis for arbitrary Rust programs.

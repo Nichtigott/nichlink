@@ -169,7 +169,10 @@ pub(crate) fn mirror_item(fields: &[Field]) -> Tokens {
     let literal = group(Delimiter::Brace, literal);
 
     // `let _: FaceFields<<arguments>> = FaceFields <literal>;`
-    let face_fields = format!("::{}::macros::FaceFields", lexicon::RUN_METHOD_CRATE);
+    let face_fields = format!(
+        "::{}::runtime::macros::FaceFields",
+        lexicon::RUN_METHOD_CRATE
+    );
     let mut body = Tokens::new();
     body.extend([ident("let"), ident("_"), punct(':', Spacing::Alone)]);
     body.extend(tokens_of(&face_fields));

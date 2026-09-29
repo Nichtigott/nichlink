@@ -61,7 +61,7 @@ pub fn required_roots(root: &Path) -> Vec<String> {
     // The MCP bridge's binary root carries the attribute as well, so removing it
     // is caught too.
     // MCP 桥的二进制根同样带着该属性，因此删掉它也会被抓到。
-    let bridge = root.join("mcp/src/main.rs");
+    let bridge = root.join("toolchain/src/bin/nichlink-mcp.rs");
     if bridge.is_file() {
         roots.push(relative(root, &bridge));
     }

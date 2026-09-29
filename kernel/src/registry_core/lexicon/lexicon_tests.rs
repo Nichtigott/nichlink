@@ -12,7 +12,7 @@ use crate::registry_core::declaration::FACE_FIELD_ORDER;
 #[test]
 fn the_text_contracts_keep_their_published_values() {
     assert_eq!(GENERATED_LIB_FILE, "generated_lib.rs");
-    assert_eq!(RUN_METHOD_CRATE, "nichlink_run_method");
+    assert_eq!(RUN_METHOD_CRATE, "nichlink_toolchain");
     assert_eq!(FACE_FIELD_PLUGIN, "plugin");
     assert_eq!(FACE_FIELD_COLLECTOR, "collector");
     assert_eq!(SCOPE_ENV, "NICH_LINK_SCOPE");

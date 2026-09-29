@@ -1,3 +1,3 @@
 fn main() {
-    nichlink_build_method::run();
+    nichlink_toolchain::build_time::run();
 }

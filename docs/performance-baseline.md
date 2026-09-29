@@ -19,7 +19,7 @@ is why every ceiling is an order-of-magnitude guard rather than a grade.
 available):
 
 ```sh
-cargo run --release -p nichlink-run-method --example scale_audit -- 10000 100000
+cargo run --release -p nichlink-toolchain --example scale_audit -- 10000 100000
 ```
 
 | Nodes | Register (ms) | Index (ms) | Entries | Pages | Static-face bytes |
@@ -76,7 +76,7 @@ table may grow. Measured with a counting global allocator, in
 `plugin-host/tests/wasm_table_cost.rs`:
 
 ```sh
-cargo test --release -p nichlink-plugin-host --test wasm_table_cost -- --nocapture
+cargo test --release -p nichlink-toolchain --test wasm_table_cost -- --nocapture
 ```
 
 | Declaration | Peak bytes allocated | Note |
@@ -138,7 +138,7 @@ comparing two totals.
 时它还会给出 `peak_rss_kb`）：
 
 ```sh
-cargo run --release -p nichlink-run-method --example scale_audit -- 10000 100000
+cargo run --release -p nichlink-toolchain --example scale_audit -- 10000 100000
 ```
 
 | 节点数 | 注册 (ms) | 索引 (ms) | 条目 | 页 | 静态面字节 |
@@ -185,7 +185,7 @@ runner 上进程启动更多说明的是 runner 而不是二进制；那里真�
 `plugin-host/tests/wasm_table_cost.rs`：
 
 ```sh
-cargo test --release -p nichlink-plugin-host --test wasm_table_cost -- --nocapture
+cargo test --release -p nichlink-toolchain --test wasm_table_cost -- --nocapture
 ```
 
 | 声明 | 分配峰值字节 | 说明 |

@@ -89,12 +89,8 @@ wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
 # 每行一层，按依赖顺序。同一行内的 crate 互不依赖。
 levels='
 nichlink-kernel
-nichlink-macro nichlink-build-method
-nichlink-run-method
-nichlink-debug-method nichlink-plugin-host
-nichlink-mcp
-nichlink-studio
-nichlink-cli
+nichlink-macro
+nichlink-toolchain
 '
 
 publish=false
@@ -352,13 +348,7 @@ resolved_version() {
 dependencies='
 nichlink-kernel:
 nichlink-macro:nichlink-kernel
-nichlink-build-method:nichlink-kernel
-nichlink-mcp:nichlink-build-method nichlink-kernel nichlink-debug-method nichlink-run-method
-nichlink-run-method:nichlink-kernel nichlink-macro
-nichlink-debug-method:nichlink-run-method
-nichlink-plugin-host:nichlink-run-method
-nichlink-studio:nichlink-run-method nichlink-debug-method nichlink-build-method
-nichlink-cli:nichlink-build-method nichlink-kernel nichlink-mcp nichlink-studio
+nichlink-toolchain:nichlink-kernel nichlink-macro
 '
 
 # The internal dependencies of one crate, read from the table above.

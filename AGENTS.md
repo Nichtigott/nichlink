@@ -13,14 +13,14 @@ surface that binds kernel methods to its own context.
 | Crate | Directory | One-line responsibility |
 | --- | --- | --- |
 | `nichlink-kernel` (lib `nichlink_kernel`) | `kernel/` | Kernel: protocol nouns and pure methods |
-| `nichlink-build-method` | `build_method/` | Build-time filesystem / `OUT_DIR` orchestration |
-| `nichlink-run-method` | `run_method/` | Runtime state instance + trace binding |
-| `nichlink-debug-method` | `debug_method/` | Observation evidence surface |
+| `nichlink-toolchain` | `toolchain/` | Build-time filesystem / `OUT_DIR` orchestration |
+| `nichlink-toolchain` | `toolchain/` | Runtime state instance + trace binding |
+| `nichlink-toolchain` | `toolchain/` | Observation evidence surface |
 | `nichlink-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
-| `nichlink-plugin-host` | `plugin-host/` | Wasm/process plugin host execution |
-| `nichlink-studio` | `studio/` | Ratatui authoring/inspection surface |
-| `nichlink-mcp` | `mcp/` | AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path |
-| `nichlink-cli` | `cli/` | Process glue: argv dispatch, cargo subprocesses |
+| `nichlink-toolchain` | `toolchain/` | Wasm/process plugin host execution |
+| `nichlink-toolchain` | `toolchain/` | Ratatui authoring/inspection surface |
+| `nichlink-toolchain` | `toolchain/` | AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path |
+| `nichlink-toolchain` | `toolchain/` | Process glue: argv dispatch, cargo subprocesses |
 | `nichlink-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
 
 Feature names intentionally follow each crate's own vocabulary instead of one
@@ -29,23 +29,23 @@ the authoring executor as `authoring`, `studio` gates test-only fixtures as
 `prototype-fixtures`, and `plugin-host` uses `wasm` / `process-tools`. Do not
 rename a feature to match another crate: they are public API. `prototype-fixtures`
 gates test-only fixtures — the source-only host package under
-`studio/tests/fixtures/node-editor/` — and is not part of the published surface.
+`toolchain/studio/tests/fixtures/node-editor/` — and is not part of the published surface.
 It is off by default, so the CI job that runs the workspace with
 `--all-features` is the only gate that exercises it; keep that job green.
 `studio` also gates its `nichlink-dev` rebuild supervisor behind the
 non-default `dev-supervisor` feature: that binary rebuilds Studio from this
 checkout, so an installed copy could never work, and `required-features` is the
 per-target equivalent of `publish = false` — it is what keeps
-`cargo install nichlink-studio` from shipping a tool with nothing to rebuild.
+`cargo install nichlink-toolchain` from shipping a tool with nothing to rebuild.
 特性名有意遵循各 crate 自己的词汇，而不是全工作区统一命名：`kernel` 把解析器门控为
 `syntax`，`run_method` 把 authoring 执行器门控为 `authoring`，`studio` 把仅测试用的
 fixture 门控为 `prototype-fixtures`，`plugin-host` 使用 `wasm` / `process-tools`。
 不要为对齐其他 crate 而重命名特性：它们是公开 API。`prototype-fixtures` 只门控测试用
-fixture——`studio/tests/fixtures/node-editor/` 下仅源码的宿主包——不属于发布表面。它默认
+fixture——`toolchain/studio/tests/fixtures/node-editor/` 下仅源码的宿主包——不属于发布表面。它默认
 关闭，因此只有以 `--all-features` 跑整个工作区的 CI 任务会碰它；保持那个任务常绿。
 `studio` 还把 `nichlink-dev` 重建监督器门控在非默认的 `dev-supervisor` 特性之后：该二进制
 从本检出重建 Studio，安装副本永远做不到，而 `required-features` 就是按 target 的
-`publish = false` 等价物——正是它让 `cargo install nichlink-studio` 不会带出一个没有东西可
+`publish = false` 等价物——正是它让 `cargo install nichlink-toolchain` 不会带出一个没有东西可
 重建的工具。
 
 A feature that shares a name with a module gates that module, so the sameness is
@@ -53,27 +53,27 @@ the point rather than a collision: `kernel`'s `syntax` gates the registration-fa
 parser, `run_method`'s `authoring` gates the authoring executor, and
 `plugin-host`'s `wasm` / `process-tools` name execution backends. The two that are
 not capabilities say so in their own names: `prototype-fixtures` gates the
-checkout-only fixture package under `studio/tests/fixtures/node-editor/`, and
+checkout-only fixture package under `toolchain/studio/tests/fixtures/node-editor/`, and
 `dev-supervisor` gates the `nichlink-dev` binary that rebuilds this checkout (the
 table above is the whole set — no crate outside `kernel`, `run_method`, `studio` and
 `plugin-host` declares features).
 与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`kernel` 的 `syntax` 门控注册面
 解析器，`run_method` 的 `authoring` 门控 authoring 执行器，`plugin-host` 的 `wasm` /
 `process-tools` 点名的是执行后端。另外两个不是能力，名字里就写明了：
-`prototype-fixtures` 门控 `studio/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
+`prototype-fixtures` 门控 `toolchain/studio/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
 `dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`kernel`、
 `run_method`、`studio`、`plugin-host` 之外没有 crate 声明特性）。
 
-Host usage: `[dependencies] nichlink-run-method` +
-`[build-dependencies] nichlink-build-method`; the crate root calls
-`nichlink_run_method::host!();` and the thin `build.rs` calls
-`nichlink_build_method::run()`. `run_method`'s `entry` module was removed: the
+Host usage: `[dependencies] nichlink-toolchain` +
+`[build-dependencies] nichlink-toolchain`; the crate root calls
+`nichlink_toolchain::runtime::host!();` and the thin `build.rs` calls
+`nichlink_toolchain::build_time::run()`. `run_method`'s `entry` module was removed: the
 build-time entry is now `host!()` plus `build.rs`, and `application!(entry = …)`
 remains only as the optional source-scope discovery hint.
-宿主用法：`[dependencies] nichlink-run-method` +
-`[build-dependencies] nichlink-build-method`；crate 根部调用
-`nichlink_run_method::host!();`，薄 `build.rs` 调用
-`nichlink_build_method::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
+宿主用法：`[dependencies] nichlink-toolchain` +
+`[build-dependencies] nichlink-toolchain`；crate 根部调用
+`nichlink_toolchain::runtime::host!();`，薄 `build.rs` 调用
+`nichlink_toolchain::build_time::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
 `host!()` 加 `build.rs`，`application!(entry = …)` 仅作为可选的源码范围发现提示保留。
 
 ## Kernel modules (`kernel/src/registry_core/`)
@@ -179,9 +179,9 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 | kept | why it is kept, and what is scheduled | source |
 | --- | --- | --- |
 | `kernel/` + `nichlink-kernel` + lib `nichlink_kernel` | **Landed in batch 1**: the old `core/` directory, the `nichlink-core` package and the `nichlink` library are gone (the ambiguity this row registered is why `kernel/` was chosen). The *crate* merge into `nichlink-toolchain` is batch 2, and the published 0.1.x names stay frozen. | `verify.md:62`, `merge-plan.md:38/:53` |
-| `build_method/`, `run_method/`, `plugin-host/` | Each crate name is kept and its README says what the word means in this repository; the *module* names `build_time`, `runtime`, `plugin_host` belong to the merge batch. | `verify.md:63-65`, `merge-plan.md:17/:19` |
+| `toolchain/build_time/`, `toolchain/runtime/`, `toolchain/plugin_host/` | Each crate name is kept and its README says what the word means in this repository; the *module* names `build_time`, `runtime`, `plugin_host` belong to the merge batch. | `verify.md:63-65`, `merge-plan.md:17/:19` |
 | `Registry`, `examples/`, `picture/` | Kept. The public type is the registration-tree root and its doc line limits it to that; `examples/` holds two host packages rather than cargo example targets; `picture/` holds the brand wordmark and Studio screenshots. | `verify.md:66/:67/:79` |
-| `debug_method/` | Kept with no extra action; the crate becomes the `call_evidence` module, so the name disappears in the merge. | `verify.md:77`, `merge-plan.md:42` |
+| `toolchain/call_evidence/` | Kept with no extra action; the crate becomes the `call_evidence` module, so the name disappears in the merge. | `verify.md:77`, `merge-plan.md:42` |
 | bin `nichlink-dev`, feature `dev-supervisor` | Kept; `required-features` is per-target `publish = false`, and both names are already the contract scripts and CI write. | `verify.md:78`, `merge-plan.md:24` |
 | `docs/ROADMAP.md` vs `docs/roadmap-1.0.md` | Kept, and neither may be renamed or exported into one directory on a case-insensitive filesystem: the two names would overwrite each other there. | `verify.md:80` |
 | kernel modules `syntax`, `json`, `release`, `requirements`, `source`, `index`, `host` | Kept and registered here rather than renamed; each one's module doc says which sense it means. | `verify.md:81-83` |
@@ -199,7 +199,7 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
    If it needs such a value, take it as a parameter.
 4. Keep crate names, directory names, and lib names consistent
    (`nichlink-<x>` / `<x>/` / `nichlink_<x>`); scaffold templates in
-   `build_method/` and CI reference them too.
+   `toolchain/build_time/` and CI reference them too.
 
 ## Verify
 
@@ -229,8 +229,8 @@ A single crate can also be verified into a false green. When a crate's tests sit
 non-default feature, `cargo test -p <crate>` compiles it without that feature and runs none of
 them, reporting `0 passed` — which reads like a pass. Measured here: `run_method`'s
 `manifest::face` module (which carries the two nesting-guard pins from audit `LGC-LG-05`) is
-gated behind `authoring` in `run_method/src/lib.rs`, so
-`cargo test -p nichlink-run-method --offline -- manifest::face` prints `0 passed; 0 failed`
+gated behind `authoring` in `toolchain/runtime/src/lib.rs`, so
+`cargo test -p nichlink-toolchain --offline -- manifest::face` prints `0 passed; 0 failed`
 while the same command with `--features authoring` prints that module's pins (`8 passed` when
 this was measured; the count grows with every pin, so treat it as an illustration rather than a
 contract). `kernel` has the same shape, with its parser behind `syntax` (`kernel/src/lib.rs` gates
@@ -239,20 +239,20 @@ against each other, never a quoted total: `0 passed` is the half that stays true
 nothing ran. The workspace command above and CI's `--all-features` job merge features and do
 reach all of them, which is why the workspace run stays the default gate; verifying one crate
 on its own means naming the feature:
-`cargo test -p nichlink-run-method --offline --features authoring`. Read `0 passed` as
+`cargo test -p nichlink-toolchain --offline --features authoring`. Read `0 passed` as
 "nothing ran", not as "nothing failed".
 单个 crate 也可能被"验证"出一个假绿。当一个 crate 的测试门控在非默认特性之后时,
 `cargo test -p <crate>` 会在不带那个特性的情况下编译它,于是一个都不跑,报出 `0 passed`
 ——看起来就像通过了。本检出实测:`run_method` 的 `manifest::face` 模块(审计 `LGC-LG-05`
-那两条嵌套守卫钉子就在其中)门控在 `run_method/src/lib.rs` 的 `authoring` 之后,因此
-`cargo test -p nichlink-run-method --offline -- manifest::face` 打印 `0 passed; 0 failed`,
+那两条嵌套守卫钉子就在其中)门控在 `toolchain/runtime/src/lib.rs` 的 `authoring` 之后,因此
+`cargo test -p nichlink-toolchain --offline -- manifest::face` 打印 `0 passed; 0 failed`,
 而同一条命令加 `--features authoring` 会打印出那个模块的钉子(写下这段时是 `8 passed`;
 这个数每加一条钉子就变,所以只当示意,不当契约)。`kernel` 是同一种形状:解析器门控在 `syntax`
 之后(`kernel/src/lib.rs` 就是那道门),其它非默认特性也以同样的方式把模块挡住——所以请把两次
 运行**对比着读**,不要去引某个总数:`0 passed` 才是恒真的那一半,它只意味着什么都没跑。
 上面的工作区命令与 CI 的 `--all-features` 作业会合并特性,因此覆盖得到它们——这也是工作区
 那条仍是默认门禁的原因;单独验证一个 crate 时请点名特性:
-`cargo test -p nichlink-run-method --offline --features authoring`。把 `0 passed` 读作
+`cargo test -p nichlink-toolchain --offline --features authoring`。把 `0 passed` 读作
 "什么都没跑",而不是"什么都没失败"。
 
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the

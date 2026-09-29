@@ -32,7 +32,7 @@ Raising the line to `1.0.0` is a separate decision that would move every interna
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
 without a red package audit; `0.1.3` moved the same way and for the same reason
-(`mcp` now uses `nichlink_build_method::face_views`), and publishing it closed the
+(`mcp` now uses `nichlink_toolchain::build_time::face_views`), and publishing it closed the
 waiting state that change opened. `0.1.4` followed on 2026-09-27: its content is a batch
 of MCP evidence tools (`nichlink.mir`/`unified`/`impact`, the trace-driven `converge`,
 recorded values and data edges in `nichlink.trace`, and one cross-process identity
@@ -56,7 +56,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 `1.0.0` 是另一个决定，需要连同每一处内部 `nichlink-*` 版本要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
-使用 `nichlink_build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
+使用 `nichlink_toolchain::build_time::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
 于 2026-09-27 跟进：它的内容是一批 MCP 证据工具（`nichlink.mir`/`unified`/`impact`、由 trace 驱动的
 `converge`、`trace` 的值与数据边、一个跨进程身份缺陷的修复），而**必须**移动版本线的原因只有一个——
 `lexicon::TRACE_MODE_ENV` 是 `0.1.3` 发布之后新增的第一个 core 符号，被 `run_method` 消费，因此
@@ -88,7 +88,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   plan targets, the release prunes that slot and the record can never take effect. The
   build *warns* about that, and a long `cargo` log is where a warning goes to die — the CLI
   answered it since `nichlink grafts`, and now the bridge does too, from one rule
-  (`nichlink_build_method::graft_plan_rows`, extracted from the CLI in this release, so the
+  (`nichlink_toolchain::build_time::graft_plan_rows`, extracted from the CLI in this release, so the
   two surfaces cannot answer differently). Each row names the selector, the logical path
   and replacement the plan targets, whether it covers the whole subtree, and either the
   declaration that keeps it (`cut \`…\` graft \`…\`` at its entry line) or
@@ -127,7 +127,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   typed cut fall through to `stale`).
 
 - **`nichlink.explain` renders the *overlay* projection (`overlay: true`), and the traversal
-  behind it moved into `nichlink_build_method::overlay_projection`.** `explain` answered one face,
+  behind it moved into `nichlink_toolchain::build_time::overlay_projection`.** `explain` answered one face,
   or projected the tree the build scoped; neither said which slot a declared graft cut replaces,
   which the CLI's `explain --overlay` had answered since it existed. The bridge now answers it
   from the same traversal, so the two surfaces cannot disagree about which slot is replaced —
@@ -181,7 +181,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   themselves: `nichlink::authoring::parse::compact_admission` and
   `nichlink::authoring::parse::compact_registration_rule`.** Studio's `admission_text` and
   `registration_rule_text` assembled the compact clause form themselves in
-  `studio/src/studio/app/source_index.rs`, because no public entry could render it from the
+  `toolchain/studio/src/studio/app/source_index.rs`, because no public entry could render it from the
   owned value — the second-implementation family `FIXR-01` recorded, whose admission copy
   widened the deny gate the kernel had just fixed. Both entries are public now, Studio's call
   sites are pure delegation, and the kernel's own historical branches render through them, so
@@ -205,7 +205,7 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   `a_malformed_requires_entry_refuses_the_rewrite`, measured red with the caller put back on
   the lossy entry.
 
-- **`nichlink_build_method::face_views_and_unreadable`, so an unreadable face is named
+- **`nichlink_toolchain::build_time::face_views_and_unreadable`, so an unreadable face is named
   instead of dropped.** `face_views` answered only with the faces that could be placed, so a
   registration file that does not parse and a node file whose syntax failed disappeared from
   the reply with nothing to look at. The new entry returns `(Vec<FaceView>, Vec<String>)` — the
@@ -257,11 +257,11 @@ Studio now calls kernel entries that are not published yet. The contents half al
 new modules, and the release order stays core first.
 ### Changed
 
-- The CLI's `grafts` now renders rows computed by `nichlink_build_method::graft_plan_rows`;
+- The CLI's `grafts` now renders rows computed by `nichlink_toolchain::build_time::graft_plan_rows`;
   its JSON and text output are byte-identical (pinned by its own tests), and the rule that
   decides "is this plan's slot declared" has one home instead of two.
 - `explain --overlay`'s projection now comes from
-  `nichlink_build_method::overlay_projection`, so the CLI and the bridge cannot disagree about
+  `nichlink_toolchain::build_time::overlay_projection`, so the CLI and the bridge cannot disagree about
   which slot a cut replaces; its JSON and text output are unchanged.
 - **The naming batch (B7+B8): modules say what they mean, published names stay
   put.** Files that were named after their folder are named after their subject
@@ -360,11 +360,11 @@ new modules, and the release order stays core first.
   the writer that existed nowhere in the workspace — Studio could render and parse
   this artifact and nothing ever produced one. `nichlink.unified` then merges that
   graph with the package's recorded trace through
-  `nichlink_debug_method::UnifiedCallGraph`, the one place the two evidence sources
+  `nichlink_toolchain::call_evidence::UnifiedCallGraph`, the one place the two evidence sources
   are joined, so a call the trace confirms carries `evidence=Live` and *replaces* its
   compiler candidate rather than sitting beside it, while the rest stay `evidence=Mir`.
   An absent trace is a weaker answer and not a broken one: the merge still answers and
-  labels every relation a compiler candidate. `mcp` gained a `nichlink-debug-method`
+  labels every relation a compiler candidate. `mcp` gained a `nichlink-toolchain`
   dependency for it; the version line moved to `0.1.4` for a different reason (a core
   symbol `run_method` consumes), which is why this entry rides along rather than
   demanding the move itself. The producer of the *text* stays outside the bridge, and the tool says
@@ -502,7 +502,7 @@ new modules, and the release order stays core first.
 - The MCP bridge's write path, `nichlink.apply`: an agent can create or rewrite a
   registration face through the **same authoring executor Studio uses**, so the
   kernel's admission, parent-rule, and topology checks run on the change instead of
-  being re-implemented in the bridge. `mcp` gained a `nichlink-run-method`
+  being re-implemented in the bridge. `mcp` gained a `nichlink-toolchain`
   dependency (feature `authoring`) for it; the version line stays `0.1.3`, which is
   still unreleased, so no new symbol needed a new version to be distinguishable
   from a published one. `action` is `add` or `edit`, `parent` takes a logical path
@@ -525,14 +525,14 @@ new modules, and the release order stays core first.
   unchanged and now documented: it rewrites the faces **NichLink generated** and
   refuses a hand-written one (`this module was not generated by NichLink`), because
   rewriting a file it did not author would discard content it does not model.
-- `nichlink_build_method::source_layout` and `SourceLayout` are public API: the
+- `nichlink_toolchain::build_time::source_layout` and `SourceLayout` are public API: the
   write path needs the same answer the build uses about where a package's faces
   live, and guessing `src/` there would author a face the build never reads.
-- `nichlink-mcp`'s `nichlink.registry` tool: the registration faces this package
+- `nichlink-toolchain`'s `nichlink.registry` tool: the registration faces this package
   declares, one row per face with its logical path, kind, source, and the
   `NodeId` the host compiled. The rows are derived by
-  `nichlink_build_method::face_views` — the same derivation the CLI's `explain`
-  uses — so `mcp` gained a `nichlink-build-method` dependency and the version line
+  `nichlink_toolchain::build_time::face_views` — the same derivation the CLI's `explain`
+  uses — so `mcp` gained a `nichlink-toolchain` dependency and the version line
   moved to `0.1.3`. This closes a standing dishonesty in the bridge: it
   registered only five source-text tools while its documentation had advertised a
   registry query, so an agent re-derived the tree by grepping for macro names.
@@ -547,7 +547,7 @@ new modules, and the release order stays core first.
   `host/`, and each face's identity path is `host/…` — the manifest-relative path,
   because the declaration macros drop one leading `src/` and nothing else. The two
   decisions that had been one hardcoded constant, `<root>/src`, are now two bases
-  resolved once (`build_method/src/source_layout.rs`): the tree the walk reads and
+  resolved once (`toolchain/build_time/src/source_layout.rs`): the tree the walk reads and
   the base an identity path is relative to; `relative_display` and the
   `src.join(relative)` inversions keep working, and entry resolution — the one
   place that needs both — takes the layout. A `[lib] path` naming no file is a
@@ -555,17 +555,17 @@ new modules, and the release order stays core first.
   manifest read is deliberately narrow (one key, one table, quotes, comments, the
   dotted `lib.path = "…"` spelling) and never spawns `cargo`, because the pipeline
   runs inside a build script. `[[bin]]` targets do not move the root: a package may
-  have several and nothing chooses between them. `build_method/src/entry.rs` came
+  have several and nothing chooses between them. `toolchain/build_time/src/entry.rs` came
   back **under** the 450-line ceiling on the way (its conventional-entry choice
   moved to `entry_default.rs`), so its size-ratchet entry is deleted rather than
   enlarged.
-- `nichlink_build_method::package_name`: the Cargo-authoritative package-name
-  read moved out of `nichlink-cli`, so the command line and the MCP bridge ask one
+- `nichlink_toolchain::build_time::package_name`: the Cargo-authoritative package-name
+  read moved out of `nichlink-toolchain`, so the command line and the MCP bridge ask one
   authority instead of each carrying a copy. The CLI's commands behave exactly as
   before, and the two tests that pinned the private copy moved with it. Nothing in
   the build pipeline calls it: a build script receives `CARGO_PKG_NAME` from Cargo,
   which is the same value.
-- `nichlink-plugin-host`'s `PluginAdmission`: the host-side path from the plugin
+- `nichlink-toolchain`'s `PluginAdmission`: the host-side path from the plugin
   locks to a loadable artifact. It reads
   `<package_root>/.nichlink/plugins/{official,user}.lock`, selects the manifest
   against that catalogue, verifies it (`verify_signed` for an official source,
@@ -581,11 +581,11 @@ new modules, and the release order stays core first.
   recorded node that no longer resolves. A matching artifact puts the recorded
   values in the DATA panel; a refused one installs nothing, keeps the registry
   visible, and states the reason on the event line.
-- `nichlink-plugin-host`'s process adapter can narrow the child:
+- `nichlink-toolchain`'s process adapter can narrow the child:
   `ProcessLimits::inherit_env` (default `true`) clears the environment,
   `ProcessProgram::environment` names the variables the child may then see, and
   `ProcessProgram::current_dir` chooses where it runs.
-- The trace artifact's first slice in `nichlink-run-method`: `TraceArtifact`
+- The trace artifact's first slice in `nichlink-toolchain`: `TraceArtifact`
   (`from_trace`, `render`, `parse`, `into_trace`), `write_trace_artifact`,
   `read_trace_artifact`, and `trace_artifact_path`, plus the
   `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` contracts in the kernel lexicon. A
@@ -602,7 +602,7 @@ new modules, and the release order stays core first.
 
 ### Changed
 
-- `nichlink-build-method` depends on `serde_json` for `package_name`. It is the
+- `nichlink-toolchain` depends on `serde_json` for `package_name`. It is the
   only JSON the crate reads, and `syn` was already there, so a host's build script
   pays for one more leaf rather than a second implementation of the rule.
 - Documentation claims re-measured and corrected for the tool set and the trace
@@ -622,7 +622,7 @@ new modules, and the release order stays core first.
   script stamps `env!("CARGO_PKG_NAME")` as the identity namespace — and a session
   that rebuilt the tree under a different name put every recorded `NodeId` (a
   trace, a graft record) out of reach. The name now comes from Cargo
-  (`nichlink_build_method::package_name`), the same authority the CLI and the MCP
+  (`nichlink_toolchain::build_time::package_name`), the same authority the CLI and the MCP
   bridge use, rather than from a literal `[package] name` line scan: TOML's dotted
   `package.name = "x"` form is the same table without a `[package]` header, so the
   scan found nothing and Studio authored such a project in the wrong identity
@@ -668,7 +668,7 @@ new modules, and the release order stays core first.
   bug by forgetting to establish a context. Reads keep the fallback, and a launched
   session still adopts its project before the terminal is taken over, so nothing
   user-visible changes.
-- `nichlink-build-method` no longer aborts when the source tree is missing. A
+- `nichlink-toolchain` no longer aborts when the source tree is missing. A
   package whose `[lib] path` points outside `src/` — a legal Cargo layout — used
   to reach `expect("src directory must exist")` inside discovery: the build script
   died with exit 101 and `check --json` printed nothing at all, which is the
@@ -720,14 +720,14 @@ new modules, and the release order stays core first.
   `LICENSE*`). `conventions/` has none and needs none: it is `publish = false`.
 - `macro/README.md` plus the matching `readme` field for `nichlink-macro`.
 - `repository` and `homepage` on all nine manifests, `documentation` where it
-  was missing (`nichlink-macro`, `nichlink-run-method`), and
+  was missing (`nichlink-macro`, `nichlink-toolchain`), and
   `[package.metadata.docs.rs] all-features = true` on the crates whose
   non-default features are public API.
 - `tools/nichlink-package-audit` now warns about and skips packages whose
   versioned NichLink dependencies are not on crates.io yet, and exits 0; the CI
   audit step no longer hides a failure behind `continue-on-error`.
 - `studio`: a workspace-only `dev-supervisor` feature gating `nichlink-dev`, and
-  the source-only fixture host package under `studio/tests/fixtures/node-editor/`
+  the source-only fixture host package under `toolchain/studio/tests/fixtures/node-editor/`
   that the `prototype-fixtures` tests were written against.
 - `tools/nichlink-publish`: publishes the nine crates level by level in
   dependency order, waiting for each level to reach the index before starting the
@@ -817,7 +817,7 @@ new modules, and the release order stays core first.
   there, and the built CLI checks that external project (`check: ok`). It is what
   catches a host layout assumption that only holds in-tree, and CI runs it on one
   matrix cell.
-- `plugin-host/tests/wasm_table_cost.rs`: what a Wasm table actually costs the
+- `toolchain/plugin_host/tests/wasm_table_cost.rs`: what a Wasm table actually costs the
   host, measured with a counting global allocator instead of estimated. A
   function reference is 8 bytes, so the default `table_elements` ceiling of 4096
   is 32 KiB, the hundred-million-entry table `a_huge_table_is_refused` pins would
@@ -826,7 +826,7 @@ new modules, and the release order stays core first.
   which limit does the work: wasmi's `EnforcedLimits::strict()` caps how many
   tables and element segments a module may declare, not how large one table may
   grow, so `WasmLimits::table_elements` is the only bound on table size.
-- Two observation tests in `studio/src/studio/app/tests/evidence.rs` that replace
+- Two observation tests in `toolchain/studio/src/studio/app/tests/evidence.rs` that replace
   an argument about `CallEvidence::Live` with a measurement: with the shipped demo
   trace installed, no edge of a real project classifies as `Live` — and the test
   asserts that the trace is installed and that its nodes belong to no node of the
@@ -834,7 +834,7 @@ new modules, and the release order stays core first.
   over the loaded faces and the same enumeration reports exactly the edge that
   trace recorded. `Live` is thus not dead code; it is unreachable for a real
   project only because Studio ingests no real trace yet.
-- Budgets in `run_method/examples/scale_audit.rs`: 40 µs per node registered and
+- Budgets in `toolchain/runtime/examples/scale_audit.rs`: 40 µs per node registered and
   20 µs per node indexed, roughly eight times the measured values and overridable
   with `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US`, so an
   order-of-magnitude regression fails the run instead of only printing a larger
@@ -944,14 +944,14 @@ new modules, and the release order stays core first.
   record that is skipped can no longer be silent.
 - A sibling range written from the later name to the earlier one is refused with
   the ordering rule (`registry_name` order) instead of being silently swapped.
-- `nichlink-plugin-host`'s process backend now enforces the limits it declares.
+- `nichlink-toolchain`'s process backend now enforces the limits it declares.
   The request frame is written from its own thread, stdout and stderr are drained
   from theirs, and the deadline bounds the whole call, so
   `ProcessLimits::max_output_bytes` (1 MiB by default) is the real ceiling. It
   used to be the ~64 KiB pipe buffer, and exceeding it reported `Timeout`.
 - `petgraph` moved from 0.6 to 0.8. It backs `CallGraph`'s private fields only,
   so no public API changes.
-- `studio/src/studio/ui/forms.rs` mounts `face_fields` with `#[path]`, like its
+- `toolchain/studio/src/studio/ui/forms.rs` mounts `face_fields` with `#[path]`, like its
   four siblings. This was a style difference rather than a defect: both spellings
   resolve, because a `#[path]`-loaded parent resolves children by directory.
 - Studio, the authoring executor and the MCP bridge resolve the project through
@@ -1067,7 +1067,7 @@ new modules, and the release order stays core first.
   list a comparison page that was removed (and now list `p`), `debug_method` is
   no longer credited with running the MIR subprocess, the install section says
   plainly that only the Git source resolves today, the `cargo run -p
-  nichlink-cli` commands work again (`default-run`), the MCP README no longer
+  nichlink-toolchain` commands work again (`default-run`), the MCP README no longer
   promises stderr diagnostics, and `## Boundaries` records the face-layout rule
   and the plugin-trust boundary.
 - A verified plugin signature is reachable, so the official channel can admit
@@ -1147,7 +1147,7 @@ new modules, and the release order stays core first.
   face into NichLink's own tree. The rule now takes the session's selection, then
   a path argument, then `NICH_LINK_PACKAGE_ROOT`, then the working directory when
   it holds a `Cargo.toml`, and refuses every candidate that names something
-  unusable by name. `nichlink-studio` also accepts `[PROJECT]` and `--help`, and a
+  unusable by name. `nichlink-toolchain` also accepts `[PROJECT]` and `--help`, and a
   failed launch prints one line and exits non-zero before the terminal is taken
   over.
 - Rewriting a face keeps its previous text where the reader can find it. The
@@ -1208,7 +1208,7 @@ new modules, and the release order stays core first.
   independent strict parser. The scaffold snippet writer had the same weak escape
   for its VS Code JSON; both now use the kernel encoder.
 - `tools/nichlink-package-audit` read a crate's dependency list with a loop that
-  split on whitespace, so `nichlink-studio` and `nichlink-cli` were evaluated
+  split on whitespace, so `nichlink-toolchain` and `nichlink-toolchain` were evaluated
   with only their first dependency and the summary listed phantom crates.
   Dependencies are comma separated and parsed as such, and the summary names each
   crate exactly once.
@@ -1259,7 +1259,7 @@ new modules, and the release order stays core first.
   so the canonical `<dir>/<dir>.rs` layout works (`entry = crate::control` for
   `src/control/control.rs`) and a segment that resolves to nothing in the middle is
   refused instead of passing as a function name. The resolver lives in
-  `build_method/src/entry_paths.rs`, split out with the filesystem walk moved to
+  `toolchain/build_time/src/entry_paths.rs`, split out with the filesystem walk moved to
   `discovery.rs` to keep `entry.rs` inside the size ratchet.
 - `WasmLimits::max_element_bytes` bounds what a module can make wasmi materialize
   at instantiation: a passive element segment never grows a table, so
@@ -1276,7 +1276,7 @@ new modules, and the release order stays core first.
   `<pkg>/.nichlink/graft.plan`, and was then never listed — a record the runtime
   never applied while the author saw a created plan.
 - Build output is trusted only while it still describes the sources:
-  `nichlink_build_method::build_output_is_current` compares the published
+  `nichlink_toolchain::build_time::build_output_is_current` compares the published
   `discovery.fingerprint` against a freshly computed one, the pipeline writes that
   fingerprint only on a clean run, and `explain` (and `--overlay`) reports
   `known: false` with the existing "run `nichlink check`" note when it is missing or
@@ -1296,13 +1296,13 @@ new modules, and the release order stays core first.
   `a_pathologically_nested_fence_is_reported_not_fatal` pins that a refusal is a
   message: with the guard removed, that test aborts.
 - `tools/nichlink-publish` read its own dependency table word-wise, so a crate
-  with more than one internal dependency reported only the first — `nichlink-cli`
-  was checked against `nichlink-build-method` alone — and the guard that refuses
+  with more than one internal dependency reported only the first — `nichlink-toolchain`
+  was checked against `nichlink-toolchain` alone — and the guard that refuses
   to publish a crate before its dependencies are on the index was effectively off.
   The same traversal also handed back an edge line's dependencies as crates of
   their own, so nine table lines produced fourteen nodes. Both tables are now read
   as whole lines, and `--check-table` compares them against the manifests: the
-  first run found a real drift, `nichlink-cli` depending on `nichlink-core`
+  first run found a real drift, `nichlink-toolchain` depending on `nichlink-core`
   directly while the table listed only the other three. The same check reads
   workspace members with `awk` rather than a `sed` address range, because a sed
   range does not test its end address on the start line: the one-line `members`
@@ -1313,9 +1313,9 @@ new modules, and the release order stays core first.
 The first release. All nine crates went out together in dependency order on
 2026-09-25, and the workflow's last step resolved all nine from crates.io in a
 throwaway consumer outside the checkout. The chain was:
-`nichlink-core` → `nichlink-macro` / `nichlink-build-method` / `nichlink-mcp`
-→ `nichlink-run-method` → `nichlink-debug-method` / `nichlink-plugin-host`
-→ `nichlink-studio` → `nichlink-cli`. Dependency requirements are written as
+`nichlink-core` → `nichlink-macro` / `nichlink-toolchain` / `nichlink-toolchain`
+→ `nichlink-toolchain` → `nichlink-toolchain` / `nichlink-toolchain`
+→ `nichlink-toolchain` → `nichlink-toolchain`. Dependency requirements are written as
 caret `0.1.0`, so a patch release does not force dependents to republish.
 
 - **`nichlink-core`** (library `nichlink`): the pure kernel — registration
@@ -1324,16 +1324,16 @@ caret `0.1.0`, so a patch release does not force dependents to republish.
   MIR/source evidence models, and the `syntax` registration-face parser.
 - **`nichlink-macro`**: the compile-time face-field front end (tolerant
   separators and field order, spanned diagnostics, editor mirror).
-- **`nichlink-build-method`**: build-time source discovery, identity cache,
+- **`nichlink-toolchain`**: build-time source discovery, identity cache,
   scope pruning, and `StaticPlan` generation.
-- **`nichlink-run-method`**: runtime trace state, the `host!`/`trace_call!`
+- **`nichlink-toolchain`**: runtime trace state, the `host!`/`trace_call!`
   macros, and the `authoring` executor.
-- **`nichlink-debug-method`**: MIR, `CallTrace`, data-flow, and graph evidence.
-- **`nichlink-plugin-host`**: verified Wasm (`wasm`, default) and process
+- **`nichlink-toolchain`**: MIR, `CallTrace`, data-flow, and graph evidence.
+- **`nichlink-toolchain`**: verified Wasm (`wasm`, default) and process
   (`process-tools`) adapters with atomic hot deployment.
-- **`nichlink-studio`**: the Ratatui authoring and inspection surface.
-- **`nichlink-mcp`**: the read-only MCP stdio bridge for five source queries.
-- **`nichlink-cli`**: the unified `nichlink` / `cargo-nichlink` binaries.
+- **`nichlink-toolchain`**: the Ratatui authoring and inspection surface.
+- **`nichlink-toolchain`**: the read-only MCP stdio bridge for five source queries.
+- **`nichlink-toolchain`**: the unified `nichlink` / `cargo-nichlink` binaries.
 
 Known limits for this line are in the root `README.md`'s `## Boundaries`
 section and [`docs/threat-model.md`](docs/threat-model.md). Version-dependent behaviour
@@ -1374,7 +1374,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `.nichlink/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；宿主入口的
   `static_graft_plan!` 没有点名计划所针对的槽位时，发布态会剪掉那个槽位，这条记录便永远无法生效。
   构建对此**只警告**，而冗长的 `cargo` 日志正是警告湮没的地方——CLI 从 `nichlink grafts` 起就在回答
-  它，现在桥也回答，而且用的是同一条规则（本发布把 `nichlink_build_method::graft_plan_rows` 从 CLI
+  它，现在桥也回答，而且用的是同一条规则（本发布把 `nichlink_toolchain::build_time::graft_plan_rows` 从 CLI
   提出来，因此两个执行面不可能给出不同答案）。每条记录点名 selector、计划针对的逻辑路径与替换件、
   是否覆盖整棵子树，以及保住它的那条声明（`cut \`…\` graft \`…\`` 与入口行号）或者
   `NOT declared by the host entry`——并以 `unkept plans N` 收尾，因为那才是读取方要据以行动的东西。
@@ -1401,7 +1401,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   其中两条承载主张的实测为红（把旧身份当作"现在"；让类型化切口落进 `stale`）。
 
 - **`nichlink.explain` 渲染覆盖投影（`overlay: true`），而它背后的遍历搬进了
-  `nichlink_build_method::overlay_projection`。** `explain` 一次回答一个面，或投影构建划定作用域的
+  `nichlink_toolchain::build_time::overlay_projection`。** `explain` 一次回答一个面，或投影构建划定作用域的
   那棵树；两者都不说哪个槽位被已声明 graft 切口替换——而 CLI 的 `explain --overlay` 从存在起就在回答
   它。桥现在用同一次遍历回答，因此两个执行面不可能就"哪个槽位被替换"产生分歧——这就是本发布里
   `graft_plan_rows` 那次搬家的下一项；`DeclaredGraft::form` 随之搬走，所以切口的拼法也只有一条规则，
@@ -1442,7 +1442,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 - **两个内核入口取代了执行面过去只能自己保留的紧凑渲染器：`nichlink::authoring::parse::compact_admission`
   与 `nichlink::authoring::parse::compact_registration_rule`。** Studio 的 `admission_text` 与
-  `registration_rule_text` 在 `studio/src/studio/app/source_index.rs` 里自己装配紧凑子句，因为当时没有
+  `registration_rule_text` 在 `toolchain/studio/src/studio/app/source_index.rs` 里自己装配紧凑子句，因为当时没有
   任何公开入口能从 owned 值渲染它——这正是 `FIXR-01` 记录的第二份实现一族，其中 admission 那份副本还
   放宽了内核刚修好的 deny 门禁。现在两个入口都是公开 API、Studio 的调用点变成纯委派，而内核自己的历史
   分支也经它们渲染，因此消费方已在读的字节没有移动：单列表 `allow_paths(`/`deny_paths(` 分支与注册规则的
@@ -1459,7 +1459,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   由 `a_malformed_requires_entry_refuses_the_rewrite` 走真实 `render_source` 钉住，变异（调用方改回
   有损入口）实测变红。
 
-- **`nichlink_build_method::face_views_and_unreadable`：读不出来的面要**被点名**，而不是被丢掉。**
+- **`nichlink_toolchain::build_time::face_views_and_unreadable`：读不出来的面要**被点名**，而不是被丢掉。**
   过去 `face_views` 只回答"安放得了"的面，于是安放不了的注册面文件、语法失败的节点文件从回答里消失、
   无处可查。新入口返回 `(Vec<FaceView>, Vec<String>)`——面加上读不出来的路径（复用
   `validation::face_syntax_errors`）——`face_views` 委托它，两者因此不可能不一致；文档写明
@@ -1498,9 +1498,9 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   走：已发布的宽容入口与依赖表都不动。
 变更：
 
-- CLI 的 `grafts` 现在渲染由 `nichlink_build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本
+- CLI 的 `grafts` 现在渲染由 `nichlink_toolchain::build_time::graft_plan_rows` 计算出的记录；它的 JSON 与文本
   输出逐字节相同（由它自己的测试钉住），而"这条计划的槽位是否被声明"这条规则从此只有一个家。
-- `explain --overlay` 的投影现在来自 `nichlink_build_method::overlay_projection`，因此 CLI 与桥不可能
+- `explain --overlay` 的投影现在来自 `nichlink_toolchain::build_time::overlay_projection`，因此 CLI 与桥不可能
   就"哪个槽位被切口替换"产生分歧；它的 JSON 与文本输出不变。
 - **命名批次（B7+B8）：模块按它意味的东西命名，公开名一个不动。** 原先按所在目录取名的文件
   改成按它的主语取名：`run_method` 的 trace 快照目录、`authoring/context` 与
@@ -1568,10 +1568,10 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   一行畸形就整体失败；文本转储从不失败，因为不是调用的行就只是不是调用。`jsonl: true` 让这个工具成为
   工作区里从来不存在的那个写入方——Studio 能渲染、也能解析这种 artifact，而从没有任何东西产出过一份。
   `nichlink.unified` 随后把该图与本包已记录的 trace 经
-  `nichlink_debug_method::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
+  `nichlink_toolchain::call_evidence::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
   带 `evidence=Live` 并**取代**它的编译器候选、而不是与它并列，其余保持 `evidence=Mir`。缺失 trace
   是更弱的答案、不是坏掉的答案：合并仍然作答，并把每条关系标为编译器候选。`mcp` 为此新增
-  `nichlink-debug-method` 依赖；版本线移到 `0.1.4` 是另一条原因（一个被 `run_method` 消费的 core
+  `nichlink-toolchain` 依赖；版本线移到 `0.1.4` 是另一条原因（一个被 `run_method` 消费的 core
   符号），因此这一条是随车走，而不是它本身要求移动。*文本*的生产者仍在桥之外，工具
   把这一点说出来而不是藏起来：那是 nightly 工具链上的 `cargo rustc -Zunpretty=mir`。
 - `nichlink.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
@@ -1658,7 +1658,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 - MCP 桥的写入路径 `nichlink.apply`：代理可以经**与 Studio 相同的 authoring 执行器**创建或重写
   注册面，因此内核的准入、父规则与拓扑校验会作用在改动上，而不是在桥里重新实现一遍。为此 `mcp`
-  新增 `nichlink-run-method` 依赖（`authoring` 特性）；版本线仍是尚未发布的 `0.1.3`，因此没有
+  新增 `nichlink-toolchain` 依赖（`authoring` 特性）；版本线仍是尚未发布的 `0.1.3`，因此没有
   新符号需要靠新版本与已发布版本区分。`action` 为 `add` 或 `edit`，`parent` 接受逻辑路径
   （`nichlink.registry` 报告的那条）或身份，而**除非 `apply: true`，请求只做预览**：预览在一份
   一次性的包副本上运行真实操作——用复制而不是"先写再回滚"，正是它不会留下改了一半的树的原因——
@@ -1672,11 +1672,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   （`docs/roadmap-1.0.md` 第 7 条）。执行器自己的边界被原样继承并已记录在文档里：它重写的是
   **NichLink 生成**的面，对手写的面以 `this module was not generated by NichLink` 拒绝，因为
   重写一个并非它创作的文件会丢掉它并未建模的内容。
-- `nichlink_build_method::source_layout` 与 `SourceLayout` 成为公开 API：写入路径需要与构建相同
+- `nichlink_toolchain::build_time::source_layout` 与 `SourceLayout` 成为公开 API：写入路径需要与构建相同
   的答案——包的注册面住在哪里——而在那里猜 `src/` 会创作出构建永远不读的注册面。
-- `nichlink-mcp` 的 `nichlink.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
-  源码，以及宿主编译出的 `NodeId`。这些行由 `nichlink_build_method::face_views` 推导——也就是
-  CLI 的 `explain` 所用的同一份推导——因此 `mcp` 新增了 `nichlink-build-method` 依赖，版本线随之
+- `nichlink-toolchain` 的 `nichlink.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
+  源码，以及宿主编译出的 `NodeId`。这些行由 `nichlink_toolchain::build_time::face_views` 推导——也就是
+  CLI 的 `explain` 所用的同一份推导——因此 `mcp` 新增了 `nichlink-toolchain` 依赖，版本线随之
   移到 `0.1.3`。这修掉了桥里一处长期存在的不实：它只注册了五个源码文本工具，文档却宣称具备注册树
   查询，于是代理靠 grep 宏名重建那棵树。命名空间是这里藏着的真正设计问题：包名**就是** `NodeId`
   命名空间，因此工具先解 `NICH_LINK_NAMESPACE`，再解 Cargo 报告的包名，否则**拒绝作答**——绝不
@@ -1685,14 +1685,14 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - `src/` 之外的库目标就地读取。清单声明 `[lib] path = "host/lib.rs"` 的包，其注册面现在从
   `host/` 读入，而每个面的身份路径是 `host/…`——相对清单的路径，因为声明宏只去掉一个前导
   `src/`，别的都不去。过去被写死为一个常量 `<root>/src` 的两个决定，现在是只解析一次的两个基准
-  （`build_method/src/source_layout.rs`）：遍历读取的树，以及身份路径所相对的基准；
+  （`toolchain/build_time/src/source_layout.rs`）：遍历读取的树，以及身份路径所相对的基准；
   `relative_display` 与 `src.join(relative)` 那些反向拼接照常工作，而入口解析——唯一同时需要
   两者的地方——接收布局。`[lib] path` 指不到文件时是一条点名它的 `face-layout` 诊断，而不是去
   遍历别的树；这次清单读取是有意窄的（一张表里的一个键、引号、注释、点式 `lib.path = "…"` 写法），
   并且绝不 spawn `cargo`，因为管线是在构建脚本里运行的。`[[bin]]` 目标不移动源码根：一个包可能有
-  多个二进制目标，没有任何东西能在它们之间做选择。顺带把 `build_method/src/entry.rs` 带回 450 行
+  多个二进制目标，没有任何东西能在它们之间做选择。顺带把 `toolchain/build_time/src/entry.rs` 带回 450 行
   **上限之内**（它的约定入口选择移到 `entry_default.rs`），因此它的尺寸棘轮项是被删除而不是被放大。
-- `nichlink_build_method::package_name`：Cargo 权威的包名读取从 `nichlink-cli` 移出，因此命令行
+- `nichlink_toolchain::build_time::package_name`：Cargo 权威的包名读取从 `nichlink-toolchain` 移出，因此命令行
   与 MCP 桥问的是同一个权威，而不是各带一份副本。CLI 各命令行为完全不变，钉住那份私有副本的两条
   测试随它一同移动。构建管线不调用它：构建脚本从 Cargo 拿到 `CARGO_PKG_NAME`，也就是同一个值。
 - Studio 的 trace **加载方**，即上面那份 artifact 的消费一半：`TraceStatus { Absent, Loaded,
@@ -1700,15 +1700,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `trace_artifact_path`，四条身份检查决定这份 artifact 是否属于本会话——解析器先拒绝不支持的
   版式版本，然后是命名空间、注册树根、以及每个已不再解析的已记录节点。匹配的 artifact 把记录的
   数值放进 DATA 面板；被拒绝的不装入任何东西、保持注册表可见，并把原因写到事件行。
-- `nichlink-plugin-host` 的进程适配器可以收窄子进程：`ProcessLimits::inherit_env`（默认
+- `nichlink-toolchain` 的进程适配器可以收窄子进程：`ProcessLimits::inherit_env`（默认
   `true`）清空环境，`ProcessProgram::environment` 指明子进程随后能看到哪些变量，
   `ProcessProgram::current_dir` 决定它在哪里运行。
-- `nichlink-plugin-host` 的 `PluginAdmission`：宿主侧从插件锁到可加载工件的那条路。它读
+- `nichlink-toolchain` 的 `PluginAdmission`：宿主侧从插件锁到可加载工件的那条路。它读
   `<package_root>/.nichlink/plugins/{official,user}.lock`、按这份目录筛选 manifest、校验它
   （官方来源走 `verify_signed`，用户来源走 `verify_artifact`），并给出换来的保证等级所对应的
   通道；`install`（Wasm）与 `load_process`（进程）一步完成准入与加载。在此之前**树内 `core`
   之外没有任何代码调用过 `verify_signed`**，Official 通道因此不可达。
-- `nichlink-run-method` 里 trace artifact 的第一片：`TraceArtifact`（`from_trace`、`render`、
+- `nichlink-toolchain` 里 trace artifact 的第一片：`TraceArtifact`（`from_trace`、`render`、
   `parse`、`into_trace`）、`write_trace_artifact`、`read_trace_artifact` 与
   `trace_artifact_path`，以及内核词典里的 `TRACE_DIR`/`TRACE_FILE`/`TRACE_FILE_ENV` 契约。
   宿主现在能把已记录的 `CallTrace` 写成带版本的文档，由独立读取方重建；Studio 的加载方是下一片
@@ -1717,7 +1717,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
-- `nichlink-build-method` 为 `package_name` 依赖 `serde_json`。这是本 crate 读取的唯一一份 JSON，
+- `nichlink-toolchain` 为 `package_name` 依赖 `serde_json`。这是本 crate 读取的唯一一份 JSON，
   而 `syn` 本来就在，因此宿主的构建脚本多付的是一片叶子，而不是这条规则的第二份实现。
 - 重新实测并更正了工具集与 trace 加载方的文档主张：根 README 与两份讨论引言仍在说 Studio 渲染内置
   样例 trace、尚无 ingest 路径，以及桥没有注册树查询。MCP 工具清单现在包含 `nichlink.registry`，
@@ -1729,7 +1729,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - Studio 读出宿主 crate 自己的包名，并在它之下创作，不再默认 `nichlink.default`。两端必须一致
   ——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成身份命名空间——而一个在别的名字下重建注册树的
   会话会让每个已记录的 `NodeId`（trace、graft 记录）都指不到东西。包名现在来自 Cargo
-  （`nichlink_build_method::package_name`），也就是 CLI 与 MCP 桥所用的同一个权威，而不再来自对
+  （`nichlink_toolchain::build_time::package_name`），也就是 CLI 与 MCP 桥所用的同一个权威，而不再来自对
   `[package] name` 的逐行字面扫描：TOML 的点式写法 `package.name = "x"` 是同一张表却没有
   `[package]` 表头，扫描什么也找不到，于是 Studio 把这样的项目创作在错误的身份域里。
   `NICH_LINK_NAMESPACE` 仍原样覆盖一切，而 Cargo 说不出包名的清单（虚拟工作区根）仍回落到文档化
@@ -1758,7 +1758,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   把模块从环境变量指到的那个项目里搬走。现在每个写入方都走 `with_selected_project`（或
   `selected_package_root`），没有选中项目时以具名错误拒绝，因此将来的调用点不会因为忘记建立
   上下文而重演。读取保留回落；已启动的会话仍在接管终端之前采纳项目，因此用户可见行为不变。
-- `nichlink-build-method` 在源树缺失时不再中止。`[lib] path` 指向 `src/` 之外的包——一种合法的
+- `nichlink-toolchain` 在源树缺失时不再中止。`[lib] path` 指向 `src/` 之外的包——一种合法的
   Cargo 布局——过去会走到 discovery 里的 `expect("src directory must exist")`：构建脚本以退出
   101 死掉，而 `check --json` 什么都不打印，而那正是那条命令要守住的契约。现在是一条
   `face-layout` 诊断，点名它找的是哪棵树：结构化调用方拿回它（`check --json` 写出文档），构建
@@ -1794,13 +1794,13 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   包含 crate 目录下的 `LICENSE*`）；`conventions/` 没有也不需要：它是 `publish = false`。
 - `macro/README.md` 与 `nichlink-macro` 的 `readme` 字段；
 - 九个 manifest 补上 `repository` 与 `homepage`，缺失处补 `documentation`
-  （`nichlink-macro`、`nichlink-run-method`）；非默认特性属于公开 API 的 crate 补
+  （`nichlink-macro`、`nichlink-toolchain`）；非默认特性属于公开 API 的 crate 补
   `[package.metadata.docs.rs] all-features = true`；
 - `tools/nichlink-package-audit` 现在会警告并跳过版本依赖尚未上 crates.io 的包，并以 0
   退出；CI 的包审计步骤不再用 `continue-on-error` 掩盖失败；
 - `studio`：新增仅限工作区的 `dev-supervisor` 特性以门控 `nichlink-dev`，并签入
   `prototype-fixtures` 测试当初针对的、仅含源码的夹具宿主包
-  `studio/tests/fixtures/node-editor/`；
+  `toolchain/studio/tests/fixtures/node-editor/`；
 - `tools/nichlink-publish`：按依赖顺序**分层**发布九个 crate，每层发完等它出现在 index 里
   再进下一层。除非给出 `--publish --yes`，否则只做 dry-run。
 - 新增 `conventions` crate（`publish = false`），其测试是五条此前只存在于散文中的规则的可执行
@@ -1856,18 +1856,18 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   检出之外、把它们的路径依赖指向这里、让它们脱离工作区，并在自己的 `target/` 里从零构建与测试。
   示例宿主的 27 条测试在那里全部通过，构建出的 CLI 也能检查那个外部项目（`check: ok`）。它抓的
   是"只在树内成立的宿主布局假设"，CI 在一个矩阵单元上跑它。
-- 新增 `plugin-host/tests/wasm_table_cost.rs`：一张 Wasm 表在宿主一侧到底花多少，用计数式
+- 新增 `toolchain/plugin_host/tests/wasm_table_cost.rs`：一张 Wasm 表在宿主一侧到底花多少，用计数式
   全局分配器实测而不是估计。一个函数引用是 8 字节，因此 `table_elements` 的默认上限 4096 是
   32 KiB，而 `a_huge_table_is_refused` 钉住的一亿条目表本来会是 762 MiB；限制器在峰值 5 225
   字节之后就拒绝了那个模块，因为它在表存在之前就拒绝。同一次核对还确定了是哪条限制在起作用：
   wasmi 的 `EnforcedLimits::strict()` 限制的是一个模块可以声明多少张表与多少个元素段，而不是
   单张表能长到多大，因此 `WasmLimits::table_elements` 是表大小的唯一约束。
-- 新增两条运行观察 `studio/src/studio/app/tests/evidence.rs`，把关于 `CallEvidence::Live` 的
+- 新增两条运行观察 `toolchain/studio/src/studio/app/tests/evidence.rs`，把关于 `CallEvidence::Live` 的
   论证换成实测：装上出厂的演示追踪后，真实工程里没有任何一条边被判为 `Live`——而且测试断言的
   是"追踪确实装上了、且它的节点不属于已加载工程的任何节点"，因此它不会因为"根本没有追踪"而
   通过。换成针对已加载注册面的追踪后，同一份枚举恰好报出那条追踪记录过的边。所以 `Live`
   不是死代码；它对真实工程不可达的唯一原因是 Studio 目前不载入真实追踪。
-- `run_method/examples/scale_audit.rs` 现在带预算：注册 40 µs/节点、索引 20 µs/节点，约为实测值
+- `toolchain/runtime/examples/scale_audit.rs` 现在带预算：注册 40 µs/节点、索引 20 µs/节点，约为实测值
   的八倍，可用 `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US` 覆盖，因此数量级回归会
   让运行失败，而不是只打印一个更大的数字。
 - `features` CI 任务新增三步，补上没有其他任务覆盖的缺口：`--all-targets
@@ -1936,11 +1936,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   沉默；
 - 从靠后的名字写到靠前的名字的兄弟区间会被拒绝，并说明顺序规则（`registry_name` 顺序），
   而不是静默交换。
-- `nichlink-plugin-host` 的进程后端现在真正执行它声明的限制：请求帧由独立线程写入，stdout 与
+- `nichlink-toolchain` 的进程后端现在真正执行它声明的限制：请求帧由独立线程写入，stdout 与
   stderr 各由独立线程排空，超时覆盖整个调用，因此 `ProcessLimits::max_output_bytes`（默认
   1 MiB）就是真实上限。此前真实上限是约 64 KiB 的管道缓冲，超过它报的是 `Timeout`。
 - `petgraph` 从 0.6 升到 0.8。它只支撑 `CallGraph` 的私有字段，因此不改变任何公开 API。
-- `studio/src/studio/ui/forms.rs` 改为像它的四个兄弟一样用 `#[path]` 挂载 `face_fields`。这是
+- `toolchain/studio/src/studio/ui/forms.rs` 改为像它的四个兄弟一样用 `#[path]` 挂载 `face_fields`。这是
   风格差异而不是缺陷：两种写法都能解析，因为经 `#[path]` 载入的父文件按目录解析子模块。
 - Studio、authoring 执行器与 MCP 桥改为通过同一条内核规则解析项目，而不是三份副本。行为
   不变；唯一有意的差异写在它所在之处：桥的最后兜底仍是当前目录，因为 stdio 桥是在代理所处理
@@ -2013,7 +2013,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   已发布，而 crates.io 上什么都没有；现在它说首次发布尚未切割，并由头部一句话说清版本线——
   首个发布是 `0.1.0`，"1.0"是里程碑名，抬版本线要连同十四处内部要求一起移动。README 的 Studio
   键位不再列出已删除的对比页（并补上了 `p`），`debug_method` 不再被说成运行 MIR 子进程，安装段
-  明说今天只有 Git 源能解析，`cargo run -p nichlink-cli` 那两条命令重新可用（`default-run`），
+  明说今天只有 Git 源能解析，`cargo run -p nichlink-toolchain` 那两条命令重新可用（`default-run`），
   MCP README 不再承诺 stderr 诊断，`## Boundaries` 记录了注册面布局规则与插件信任边界。
 - 已验证的插件签名现在可达，因此官方通道终于能接纳任何东西。`PluginArtifact::verify_artifact`
   永远记录摘要等级，而官方通道要求签名等级，于是那条通道失败关闭、威胁模型点名的控制从未运行。
@@ -2062,7 +2062,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   crate 编译时所在的目录——检出目录，或已安装 crate 的源码——因此从别处启动看起来一切正常，
   而下一条创作命令会把新注册面写进 NichLink 自己的树里。规则现在依次取：本会话的选择、路径
   参数、`NICH_LINK_PACKAGE_ROOT`、持有 `Cargo.toml` 的当前目录，并把每个指不到东西的候选按
-  名字拒绝。`nichlink-studio` 另外接受 `[PROJECT]` 与 `--help`；启动失败会打印一行并在接管
+  名字拒绝。`nichlink-toolchain` 另外接受 `[PROJECT]` 与 `--help`；启动失败会打印一行并在接管
   终端之前以非零退出。
 - 重写注册面时把先前的文本留在读者找得到的地方。编辑器用自己建模的字段重建文件，因此手工
   加进去的内容不在结果里；写入本身是原子的，但那次丢失既静默又永久。现在先前的文本落在删除
@@ -2100,7 +2100,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   非法），修复后用独立的严格解析器验证。脚手架片段写入器给 VS Code JSON 用的也是同一份弱
   转义；两者现在都用内核编码器。
 - `tools/nichlink-package-audit` 用一个按空白切分的循环读取 crate 的依赖表，因此
-  `nichlink-studio` 与 `nichlink-cli` 只按第一个依赖被评估，摘要里还列出了并不存在的 crate。
+  `nichlink-toolchain` 与 `nichlink-toolchain` 只按第一个依赖被评估，摘要里还列出了并不存在的 crate。
   依赖改为逗号分隔并据此解析，摘要对每个 crate 只列一次。
 - 进程适配器在多个插件调用并发时不再报出假失败。`exec` 可能瞬时以 `ETXTBSY`
   （"Text file busy"）拒绝一个刚暂存的可执行文件，在并行测试中表现为 `ExecutableFileBusy`；
@@ -2134,7 +2134,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   该形状的上限（线性串 1024、定界符组 128）。
 - `application!(entry = …)` 的每一段路径都对包内目录树解析，因此规范的 `<dir>/<dir>.rs` 布局可用
   （`src/control/control.rs` 对应 `entry = crate::control`），而夹在中间解析不出任何东西的段会被拒，
-  不再被当作函数名放过。解析器位于 `build_method/src/entry_paths.rs`；为使 `entry.rs` 留在尺寸棘轮
+  不再被当作函数名放过。解析器位于 `toolchain/build_time/src/entry_paths.rs`；为使 `entry.rs` 留在尺寸棘轮
   之内，它与该文件里的文件系统遍历（并入 `discovery.rs`）一起被拆出。
 - `WasmLimits::max_element_bytes` 约束一个模块能让 wasmi 在实例化时物化多少：被动元素段从不增长
   表，因此 `table_elements` 从来看不到它，而实测代价是每条约 32 字节（紧凑编码每条约一字节）——
@@ -2146,7 +2146,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - 以 `.` 开头的 graft 选择器被写入方、解析方与 Studio 已在共用的那条规则拒绝：`..` 过去会被接受、
   把计划写到 `<pkg>/.nichlink/graft.plan`，然后永远不会被列出——一份运行期从不应用、作者却看到
   "计划已创建"的记录。
-- 构建产物只在仍然描述当前源码时才被信任：`nichlink_build_method::build_output_is_current` 把已发布
+- 构建产物只在仍然描述当前源码时才被信任：`nichlink_toolchain::build_time::build_output_is_current` 把已发布
   的 `discovery.fingerprint` 与新算出的指纹比对，pipeline 只在干净的一次运行写下那枚指纹，而
   `explain`（以及 `--overlay`）在它缺失或过期时报 `known: false` 并沿用既有的"跑 `nichlink
   check`"提示。失败的 check 不再留下会被 `explain` 当作当前作用域提供的产物。
@@ -2159,18 +2159,18 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `a_pathologically_nested_fence_is_reported_not_fatal` 钉住"拒绝是一条消息"：把守卫删掉，该
   测试就会 abort。
 - `tools/nichlink-publish` 按词读取自己的依赖表，因此有多个内部依赖的 crate 只报出第一个——
-  `nichlink-cli` 只被按 `nichlink-build-method` 检查——"依赖还没上 index 就不许发布"的守卫因此
+  `nichlink-toolchain` 只被按 `nichlink-toolchain` 检查——"依赖还没上 index 就不许发布"的守卫因此
   形同虚设。同一次遍历还把边行的被依赖者当成独立 crate，九行表产出十四个节点。现在两张表都按整行
-  读取，`--check-table` 会把它们与清单对比：第一次运行就找出一条真实漂移——`nichlink-cli` 直接依赖
+  读取，`--check-table` 会把它们与清单对比：第一次运行就找出一条真实漂移——`nichlink-toolchain` 直接依赖
   `nichlink-core`，而表里只列了另外三个。同一个检查用 `awk` 而不是 `sed` 地址范围读取工作区成员，
   因为 sed 的范围不在起始行上测试结束地址：单行的 `members` 数组会让范围一直跑到
   `[workspace.package]`，它的名字随后进入成员列表——只因不存在同名目录才隐形。
 ### [0.1.0] 首次发布（2026-09-25 已发布）
 
 九个 crate 在发布时按依赖顺序一同发布：`nichlink-core` → `nichlink-macro` /
-`nichlink-build-method` / `nichlink-mcp` → `nichlink-run-method` →
-`nichlink-debug-method` / `nichlink-plugin-host` → `nichlink-studio` →
-`nichlink-cli`。依赖版本要求写 caret `0.1.0`，因此补丁版本不会连锁要求依赖方重发。
+`nichlink-toolchain` / `nichlink-toolchain` → `nichlink-toolchain` →
+`nichlink-toolchain` / `nichlink-toolchain` → `nichlink-toolchain` →
+`nichlink-toolchain`。依赖版本要求写 caret `0.1.0`，因此补丁版本不会连锁要求依赖方重发。
 
 各 crate 职责见上方英文列表。本版本线的已知边界见根 `README.md` 的 `## Boundaries` 一节与
 [`docs/threat-model.md`](docs/threat-model.md)；kind-only `registry_name` 派生等

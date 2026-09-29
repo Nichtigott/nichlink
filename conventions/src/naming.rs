@@ -160,7 +160,7 @@ fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
             });
         }
     };
-    let scaffold = root.join("build_method/src/scaffold");
+    let scaffold = root.join("toolchain/src/build_time/src/scaffold");
     if is_real_directory(&scaffold) {
         for path in rust_sources(&scaffold) {
             let text = fs::read_to_string(&path)
@@ -391,9 +391,9 @@ fn package_field_value(text: &str, from: usize) -> Option<String> {
     let rest = rest.strip_prefix('"')?;
     let end = rest.find('"')?;
     // The closing quote is escaped the same way the opening one is, so the backslash that
-    // escapes it is not part of the name: `\"nichlink-run-method\"` names one package, and the
+    // escapes it is not part of the name: `\"nichlink-toolchain\"` names one package, and the
     // shipped-tree pin reported a name ending in a backslash before this strip existed.
-    // 闭引号与开引号同样被转义，因此转义它的反斜杠不属于包名：`\"nichlink-run-method\"` 点名的
+    // 闭引号与开引号同样被转义，因此转义它的反斜杠不属于包名：`\"nichlink-toolchain\"` 点名的
     // 是一个包——在这句剥离出现之前，出厂树那条钉子报出的名字是以反斜杠结尾的。
     let value = rest[..end].strip_suffix('\\').unwrap_or(&rest[..end]);
     Some(value.to_owned())

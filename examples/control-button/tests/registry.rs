@@ -6,12 +6,12 @@
 
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-use nichlink_run_method::registry_core::lexicon;
-use nichlink_run_method::registry_core::{
+use nichlink_toolchain::runtime::registry_core::lexicon;
+use nichlink_toolchain::runtime::registry_core::{
     FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
     PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 };
-use nichlink_run_method::{
+use nichlink_toolchain::runtime::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 
@@ -317,7 +317,7 @@ fn static_plan_carries_faces_and_the_declared_graft() {
 #[test]
 fn the_authoring_query_sees_the_declared_typed_slots() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let declared = nichlink_build_method::declared_grafts(&root).expect("the entry reads");
+    let declared = nichlink_toolchain::build_time::declared_grafts(&root).expect("the entry reads");
     assert!(
         declared.entry.ends_with("src/lib.rs"),
         "the file calling host!() is the entry: {}",
@@ -589,7 +589,7 @@ fn plugin_bytes_must_verify_before_they_can_replace_a_face() {
     let checksum = Box::leak(
         format!(
             "sha256:{}",
-            nichlink_run_method::registry_core::sha256_hex(payload)
+            nichlink_toolchain::runtime::registry_core::sha256_hex(payload)
         )
         .into_boxed_str(),
     );
@@ -645,8 +645,13 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
 
     let registry = base_registry();
     let target = control_button::control::object::button::NODE_ID;
-    let plan = nichlink_run_method::create_external_graft(&registry, target, "button_graft", false)
-        .expect("the studio graft flow creates a plan");
+    let plan = nichlink_toolchain::runtime::create_external_graft(
+        &registry,
+        target,
+        "button_graft",
+        false,
+    )
+    .expect("the studio graft flow creates a plan");
 
     let plan_path = plan.plan_path();
     let text = std::fs::read_to_string(&plan_path).expect("read the created plan");
