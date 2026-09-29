@@ -140,7 +140,7 @@
 ### 1.5 锚点纪律与自检
 
 - **权威定位只有一处**：每个条目的**标题行** `file:line`，也就是 `audit-findings.json` 的 `file`/`line` 字段。**自检的扫描范围**：这 212 个字段各一条（断言「文件存在 + `line ≤ 文件总行数`」），外加正文里每一个形如 `<path>:<line>` 与 `<path>:<line>-<line>` 的锚点（区间两端都查）。**排除项（三类）**：① `meta.unresolved_quoted_anchors` 列出的示意/夹具/工具输出相对路径（含 `control/control.rs:43` 这类探针包内路径）、`/tmp` 与 `target/`；② **命名专项里的模式化文件名**——`<x>/<x>.rs`、`<dir>.rs`、`*_tests.rs`、`search*.rs`、`app/<module>.rs` 等是谓词形状（谓词 P1–P8 的输入模式），不是工作树路径，完整清单见 `meta.nam_pattern_tokens`（§8 的条目与 §7.2 规则表会用到它们）；③ §7 条目里的**文件级定位**（`path:1`）——该条目针对的是整个文件或目录族（例如 `NAM-01` 的 `studio/src/studio/app/support.rs:1`），全文共 21 条，它们在 §7.1 的「旧名」列里带「（文件级定位）」标注；这不是缺陷，而是这类命名条目没有单一函数行可指。以上都不是对工作树的定位；除此以外的每一个 `<path>:<line>`（含区间两端）都必须可解析。上一版此处只写「0 violation」而未给扫描范围与排除项，使一条区间锚点被收窄成单行后仍自称 0 违规；本版把范围与排除项写出来，并按区间重新扫描。
-- **引文与定位的分界（复核脚本请按此读）**：§2 每个条目的「**现象与判据**」「**最小修复方向**」两行是对原报告的**引用**（保留原文措辞便于对账），引用里可能残留裸名锚点；所有**可解析**的引文锚点已机械改写为工作区相对路径，剩下 63 个 token 是原报告的最小反例路径、夹具路径或方案里**尚未存在**的新增文件名（如 `src/alpha/alpha.rs`、`myrepo/src/foo/foo.rs`、`generated_lib.rs`、`geometry.rs`），在真实工作树里本就不存在——完整清单在 `audit-findings.json` 的 `meta.unresolved_quoted_anchors`。因此全文扫描锚点时请排除这 63 个 token 与上述两个引文行。
+- **引文与定位的分界（复核脚本请按此读）**：§2 每个条目的「**现象与判据**」「**最小修复方向**」两行是对原报告的**引用**（保留原文措辞便于对账），引用里可能残留裸名锚点；所有**可解析**的引文锚点已机械改写为工作区相对路径，剩下 77 个 token 是原报告的最小反例路径、夹具路径或方案里**尚未存在**的新增文件名（如 `src/alpha/alpha.rs`、`myrepo/src/foo/foo.rs`、`generated_lib.rs`、`geometry.rs`），在真实工作树里本就不存在——完整清单在 `audit-findings.json` 的 `meta.unresolved_quoted_anchors`。因此全文扫描锚点时请排除这 77 个 token 与上述两个引文行。
 - 每条 finding 的定位取自**片区报告自己的定位**（`位置`/`file:line` 段或标题），不是我从代码里新推的；若片区报告的锚点无法解析（绝对路径缺失、行号越界、只有 basename），我用该条在报告里的第一处**可解析**锚点，且优先取「缺陷发生处」而不是「调用方」。
 
 ### 1.6 复核状态怎么读
@@ -1340,24 +1340,24 @@ MINOR 逐条明细见 `audit-findings.json`（同样的字段）；下表给出 
 
 | id | 严重度 | 旧名（现状） | 建议新名 | 判据（摘要） | 复核 |
 | --- | --- | --- | --- | --- | --- |
-| `NAM-01` | MAJOR | `studio/src/studio/app/support.rs:1（文件级定位）` | `studio/src/studio/app/project_context.rs`、`studio/src/studio/app/editor_launch.rs` | 文件 509 行、23 个函数。模块文档第 1 行写「Shared interaction geometry and editor helpers」（共享交互几何与编辑器辅助），但前 12 个 item 是**项目上下文与 cargo 子进程**：`select_project`（:23）、`pac …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-01` | MAJOR | `studio/src/studio/app/support.rs:1（文件级定位）` | `studio/src/studio/app/project_context.rs`、`studio/src/studio/app/support.rs` | 文件 509 行、23 个函数。模块文档第 1 行写「Shared interaction geometry and editor helpers」（共享交互几何与编辑器辅助），但前 12 个 item 是**项目上下文与 cargo 子进程**：`select_project`（:23）、`pac …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-02` | MINOR | `studio/src/studio/app/state/misc.rs:55` | `studio/src/studio/app/state/misc.rs`、`state/call_tree_view.rs`、`state/reload.rs` | 181 行，模块文档自陈「Ungrouped Studio state: reload errors, overlays, and call references」（**未归类**的 Studio 状态）。内容是 `CallRef`（:55）与 `CallTreeView`（:76，`refs: V …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-03` | MAJOR | `run_method/src/authoring/validation/validation.rs:1（文件级定位）` | `run_method/src/authoring/context.rs`、`context`、`authoring_context.rs` | 文件叫 `validation`，内容是 `AuthoringContext`（:47 的 `new(package_root, namespace)`、:56 的 `scope(...)`）与**进程级环境访问器** `authoring_namespace()`（:71）、`package_ro …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-04` | MAJOR | `build_method/src/cache.rs:1（文件级定位）` | `discovery_cache.rs`、`build_method/src/scope.rs` | 文件叫 `cache`，8 个函数里只有一半是缓存：`update_discovery_cache`（:77）、`cached_parent_id`（:184）、`collect_discovery_rows`（:205）；另一半是**作用域判定**与**通用写盘**：`write_if_chang …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-05` | MINOR | `mcp/src/evidence.rs:65` | `mcp/src/build_evidence.rs` | 261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `nichlink.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line` …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-03` | MAJOR | `run_method/src/authoring/validation/validation.rs:1（文件级定位）` | `run_method/src/authoring/context.rs`、`context`、`run_method/src/authoring/validation/validation.rs` | 文件叫 `validation`，内容是 `AuthoringContext`（:47 的 `new(package_root, namespace)`、:56 的 `scope(...)`）与**进程级环境访问器** `authoring_namespace()`（:71）、`package_ro …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-04` | MAJOR | `build_method/src/cache.rs:1（文件级定位）` | `discovery_cache.rs`、`build_method/src/scope.rs`、`build_method/src/cache.rs` | 文件叫 `cache`，8 个函数里只有一半是缓存：`update_discovery_cache`（:77）、`cached_parent_id`（:184）、`collect_discovery_rows`（:205）；另一半是**作用域判定**与**通用写盘**：`write_if_chang …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-05` | MINOR | `mcp/src/evidence.rs:65` | — | 261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `nichlink.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line` …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-06` | MINOR | `studio/src/studio/app/writers.rs:1（文件级定位）` | `studio/src/studio/app/writers.rs` | 42 行、2 个函数；名字 `writers` 读起来像"所有写入都在这儿"，而它其实是一个**写入守卫/上下文包装**的窄缝。 名字暗示的实现范围比文件实际承担的更宽（读者会以为写盘逻辑在此，实际写盘在 `studio/src/studio/app/mutations.rs` + `run_met …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-07` | MINOR | `core/src/registry_core/tree/connector/connector.rs:1（文件级定位）` | — | **t27 复核后的修订（谓词口径）**：本节原写"39 处"，用的是更松的谓词。三档谓词实测如下（命令与输出见 §G-1）： 结果 | --- | **34**（其中十个发布 crate 内 **28**，另 6 个在两个 example 宿主与 Studio 夹具里） | 39 —— 多出的 5 …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-08` | MINOR | `run_method/src/runtime/trace/call_trace.rs:1（文件级定位）` | `locals/recording.rs`、`locals/local_recording.rs` | `run_method/src/runtime/trace/call_trace.rs`（348 行，模块文档「调用追踪收集器及其记录的协议表面」）与 `run_method/src/runtime/trace/locals/call_trace.rs`（228 行，模块文档「`CallTrace` …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-09` | MINOR | `run_method/src/authoring/face_manifest.rs:1（文件级定位）` | `authoring/face_file.rs`、`face_store.rs` | `run_method/src/authoring/face_manifest.rs`（89 行，自述「File-backed authoring for NichLink registration faces」，做文件化创作）与 `run_method/src/authoring/manifest …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-08` | MINOR | `run_method/src/runtime/trace/call_trace.rs:1（文件级定位）` | `locals/recording.rs`、`run_method/src/runtime/trace/locals/call_trace.rs`、`locals/local_recording.rs` | `run_method/src/runtime/trace/call_trace.rs`（348 行，模块文档「调用追踪收集器及其记录的协议表面」）与 `run_method/src/runtime/trace/locals/call_trace.rs`（228 行，模块文档「`CallTrace` …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-09` | MINOR | `run_method/src/authoring/face_manifest.rs:1（文件级定位）` | `authoring/face_file.rs`、`run_method/src/authoring/face_manifest.rs`、`face_store.rs` | `run_method/src/authoring/face_manifest.rs`（89 行，自述「File-backed authoring for NichLink registration faces」，做文件化创作）与 `run_method/src/authoring/manifest …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-10` | MINOR | `run_method/src/authoring/parse/parse.rs:1（文件级定位）` | `authoring/parse/historical.rs` | `run_method/src/authoring/parse/parse.rs` 54 行，模块文档第 3–4 行自陈「pure source-text transformations live in the kernel… **this shim** keeps the historical [ …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-11` | MINOR | `mcp/src/evidence.rs:1（文件级定位）` | `studio/src/studio/app/source_index.rs`、`snapshot.rs`、`build_evidence.rs` | （机器统计 + 逐个读模块文档）： | 词 | 出现处 | 各自含义 | | --- | --- | --- | | `evidence` | `mcp/src/evidence.rs`、`run_method/src/runtime/evidence.rs`、`studio/src/studio/ …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-11` | MINOR | `mcp/src/evidence.rs:1（文件级定位）` | `studio/src/studio/app/source_index.rs`、`mcp/src/index.rs`、`snapshot.rs` | （机器统计 + 逐个读模块文档）： | 词 | 出现处 | 各自含义 | | --- | --- | --- | | `evidence` | `mcp/src/evidence.rs`、`run_method/src/runtime/evidence.rs`、`studio/src/studio/ …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-12` | MINOR | `mcp/src/search.rs:1（文件级定位）` | — | studio 有 `studio/src/studio/app/overlay/search.rs`（1 fn）、`studio/src/studio/app/state/search.rs`（0 fn，状态）、`studio/src/studio/ui/search.rs`（1 fn，入口）、`u …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-17` | MINOR | `build_method/src/faces.rs:1（文件级定位）` | `scope_faces.rs`、`face_discovery.rs` | `build_method/src/faces.rs`（96 行，`FaceSource`/`collect_faces`/`has_selected_face`，做**首轮作用域的面发现**）与 `build_method/src/face_view.rs`（444 行，`FaceView`/`f …（全文见 `audit-findings.json`） | 已复核 |
-| `NAM-18` | MINOR | `build_method/src/node.rs:1（文件级定位）` | `discovery_node.rs`、`node_identity.rs` | `build_method/src/node.rs`（26 行，`Node` = 已发现的注册模块树节点 + `relative_display`）与 `build_method/src/node_id.rs`（117 行，`node_id()`/`collect_node_ids`/`select …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-17` | MINOR | `build_method/src/faces.rs:1（文件级定位）` | `scope_faces.rs`、`build_method/src/faces.rs`、`face_discovery.rs` | `build_method/src/faces.rs`（96 行，`FaceSource`/`collect_faces`/`has_selected_face`，做**首轮作用域的面发现**）与 `build_method/src/face_view.rs`（444 行，`FaceView`/`f …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-18` | MINOR | `build_method/src/node.rs:1（文件级定位）` | `discovery_node.rs`、`node_identity.rs`、`build_method/src/node.rs` | `build_method/src/node.rs`（26 行，`Node` = 已发现的注册模块树节点 + `relative_display`）与 `build_method/src/node_id.rs`（117 行，`node_id()`/`collect_node_ids`/`select …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-19` | MINOR | `studio/src/studio/app/tests/project.rs:1（文件级定位）` | — | `studio/src/studio/app/tests/` 11 个文件按特性命名：`studio/src/studio/app/tests/call_tree.rs`（空间调用树回归，文件文档已写清）、`studio/src/studio/app/tests/trace_ingest.rs`（端 …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-20` | MINOR | `mcp/src/index.rs:1（文件级定位）` | — | - **判据**：`mcp/src` 平铺 39 个文件时，`mcp/src/index.rs`/`mcp/src/evidence.rs`/`mcp/src/registry.rs`/`mcp/src/search.rs` 与各自语义靠文件名硬区分；一旦按职责分成 `tools/`、`source …（全文见 `audit-findings.json`） | unverified |
 | `NAM-21` | MINOR | `build_method/src/discovery.rs:1（文件级定位）` | `source_walk.rs`、`registration_phase.rs`、`face_syntax_check.rs` | `build_method/src/discovery.rs`（272 行，遍历与指纹）、`build_method/src/node.rs`、`build_method/src/node_id.rs`、`build_method/src/faces.rs`、`build_method/src/fa …（全文见 `audit-findings.json`） | unverified |
-| `NAM-22` | MINOR | `mcp/src/nodes.rs:1（文件级定位）` | `mcp/src/resolve.rs`、`node_refs.rs` | 76 行，两个函数 `parent_id`（:27）、`resolve_node`（:58）；模块文档说"代理所命名的东西，解析成执行器需要的身份"。 文件名 `nodes` 是名词复数、且与 `studio/src/studio/ui/graph/nodes.rs`（画节点）同名不同义（A④）；它 …（全文见 `audit-findings.json`） | 已复核 |
+| `NAM-22` | MINOR | `mcp/src/nodes.rs:1（文件级定位）` | `mcp/src/resolve.rs`、`mcp/src/nodes.rs`、`node_refs.rs` | 76 行，两个函数 `parent_id`（:27）、`resolve_node`（:58）；模块文档说"代理所命名的东西，解析成执行器需要的身份"。 文件名 `nodes` 是名词复数、且与 `studio/src/studio/ui/graph/nodes.rs`（画节点）同名不同义（A④）；它 …（全文见 `audit-findings.json`） | 已复核 |
 | `NAM-23` | MINOR | `plugin-host/src/lazy_wasm.rs:24` | — | `plugin-host/src/lazy_wasm.rs:24` 把内核的 `PluginChannel` 重导出为 `ValidationChannel`，文档（:20-23）说明是"保留历史路径"。 别名 `ValidationChannel` 与本体 `PluginChannel` 不同名不 …（全文见 `audit-findings.json`） | 已复核 |
 
 #### B 函数名与方法（8 条）
@@ -1662,7 +1662,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 - **锚点自检（扫描范围与排除项见 §1.5）**：`audit-findings.json` 的 212 条各含 `file`/`line`，逐条断言「文件存在 + 行号 ≤ 总行数」；正文里每一个 `path:NNN`（含区间两端）另跑一遍同样的断言，排除 `meta.unresolved_quoted_anchors` 与 `/tmp`、`target/`。自检命令与结果见交付消息。
 - **计数自检（t19 加入）**：`counts` 由脚本在**全部加工之后**从逐条字段重算（不是手抄）；随后一个独立检查脚本（`/tmp/nichlink-audit-logs/check_report.py`）再从逐条字段重算一遍，并逐句断言正文里的每个统计数字与之相等：`212` 条、`3/66/143`、`confirmed 164、partial 31、unverified 17`、`none 17、read 18、reviewed 136、runtime 41`、批次 `B1-立即：安全与数据完整性 3、B2-门禁与工具 23、B3-桥与宿主 14、B4-MAJOR 逻辑与实现缺陷 50、B5-注释与自述 21、B6-MINOR 一致性与清扫 51、B7-命名抽象与可读性 30、B8-命名歧义与约定冲突 20`——0 处不符。脚本还带一条**严重度不变量**：逐条断言 `severity ≥ max(来源片区报告, 总账, 独立复核)`，除非该条带 `severity_note`；违规则打印 id、三处来源值与 `file:line` 并退出非零（已用故意违规的 findings 副本实测会失败）。
 - **计数自检（原有）**：§0/§1.4 的计数与 `audit-findings.json` 的 `counts` 同源；§2.1+§2.2+§2.3 的条目数（3+66+143）等于 212。
-- **引文里的锚点**：`evidence`/`fix_hint` 是原报告的引用。所有**可解析**的引文锚点已机械改写为工作区相对路径；剩下 63 个 token 保留原样，它们是原报告的最小反例路径、夹具路径或方案里**尚未存在**的新增文件名（如 `src/alpha/alpha.rs`、`myrepo/src/foo/foo.rs`、`generated_lib.rs`、`geometry.rs`），在真实工作树里本就不存在——完整清单在 `audit-findings.json` 的 `meta.unresolved_quoted_anchors`，复核脚本请把这份清单排除。**每条 finding 的权威定位是其 `file`/`line` 字段**，已逐条自检（0 violation）。
+- **引文里的锚点**：`evidence`/`fix_hint` 是原报告的引用。所有**可解析**的引文锚点已机械改写为工作区相对路径；剩下 77 个 token 保留原样，它们是原报告的最小反例路径、夹具路径或方案里**尚未存在**的新增文件名（如 `src/alpha/alpha.rs`、`myrepo/src/foo/foo.rs`、`generated_lib.rs`、`geometry.rs`），在真实工作树里本就不存在——完整清单在 `audit-findings.json` 的 `meta.unresolved_quoted_anchors`，复核脚本请把这份清单排除。**每条 finding 的权威定位是其 `file`/`line` 字段**，已逐条自检（0 violation）。
 - **门禁基线（本报告落盘后重跑，用来证明报告文件本身不会把门禁弄红）**：`cargo test --workspace --offline` → **exit 0**（52 个套件 / 740 passed / 0 failed / 25 ignored，与 t1 的门禁快照同数）；本轮 17 份报告 + 3 份产物全部以 `audit-` 前缀落在 `docs/audit-2026-09-28/`，符合 `conventions/src/doc_blocks.rs:69` 的 `RECORD_PREFIXES` 豁免规则。日志：`/tmp/nichlink-audit-logs/final_test.log`。
 - **没做的事（如实标注）**：① 没有对 17 条 `unverified` 条目做独立复核（它们是 MINOR 或复核新增，已在 §2.3/§11 标出）；② 没有评估修复的工作量（那是下一轮的事）；③ 没有为四条 DEC 决策给推荐排序。
 
@@ -2286,3 +2286,68 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 
 - 本节数字全部来自 `fix_batch_4` 的清单（轮次 30、复核 9、关闭挂账 5、引用刷新 2、公开面 1），引用的报告：`audit-verify-build-method-b5.md`、`audit-verify-conventions-b4.md`、`audit-verify-k10-family.md`、`audit-verify-lg27.md`、`audit-verify-lg47-timing-r2.md`、`audit-verify-lg47-timing.md`、`audit-verify-mcp-batch.md`、`audit-verify-plugin-host-b.md`、`audit-verify-plugin-host.md`。
 - 落盘：`/tmp/nichlink-audit-logs/patch_fix_batch_4.py`（在 `patch_fix_batch_2.py`、`patch_fix_batch_3.py` 之后跑；`build_findings.py` 再生成后三个脚本都要重跑），再由 `gen_report.py` / `gen_html.py` 现算重出；HTML 角标同源。
+
+## 16. 命名批次记账（B7+B8：50 条 + A1 的 24 处搬迁，t92–t105）
+
+**本节是账，不是新结论。** §0–§15 一字未改；本节把命名批次 14 条单（t93–t106）的落地物与判别性证据折进来，并登记两条本批不收的残留、以及"合并批次"必须重算的行与值。每个数字都由 `audit-findings.json` 的 `fix_batch_5` 现算（`check_report.py` 逐条复算）。
+
+### 16.1 分组（9 组，覆盖 14 条单：`t100`、`t101`、`t102`、`t103`、`t104`、`t105`、`t106`、`t93`、`t94`、`t95`、`t96`、`t97`、`t98`、`t99`）
+
+| 组 | 单 | 做了什么 | 判别性证据 / 口径 |
+| --- | --- | --- | --- |
+| G1 · studio | `t93` | `NAM-01` 剩余（`app/geometry.rs` 删除：分隔条/命中框与选中移动 → `app/hot_zones.rs`、`graph_locals` → `app/graph_queries.rs`、编辑器入口 → `app/editor_launch.rs`；`app/support.rs` 14 行历史 shim 删除、14 处引用改指名模块）+ `NAM-12`（`ui/search.rs` 首行点明入口）+ `NAM-19`（18/18 个 `app/tests/*.rs` 首行写 covers）。 | 判别性：`grep -rnE '::support(::|[^a-zA-Z_])'|mod support;' studio/src` **15 → 0**；`mod support;`/`mod geometry;` 挂载行消失。仅计数：改动 `studio/src` 的下述方向。 |
+| G2 · mcp | `t94` | `NAM-05` `evidence.rs` → `build_evidence.rs`（连 `evidence_tests.rs`）、`NAM-22` `nodes.rs` → `resolve.rs`、`NAM-11①` `index.rs` → `source_index.rs`（连 `index_tests.rs`）；三者都是私有 `mod`，公开面零变动；`mcp/src/registry.rs`（`NAM-11④`）按裁定保留。 | 判别性：三个模块标识符 grep **7 → 0 / 11 → 0 / 7 → 0**；`--list` **132 → 132**，叶子名集合 diff 为空。字面 `grep -F` 不为 0 的原因已核：新名包含旧名字串，命中全落在新名内部。 |
+| G3 · build_method | `t95` | `NAM-17` `faces.rs` → `scope_faces.rs`；`NAM-18` `node.rs` → `discovery_node.rs` 与 `node_id.rs` → `node_identity.rs`（两条同时做）；`NAM-21` `discovery.rs` → `source_walk.rs`、`registration_check.rs` → `registration_phase.rs`、`validation.rs` → `face_syntax_check.rs`（五条改名一次改完 `lib.rs` 挂载区）；`NAM-04` `cache.rs` → `discovery_cache.rs` 且四条活跃/作用域判定搬进既有的 `scope.rs`（`write_if_changed` 暂留本 crate）。 | 判别性：七种旧模块名在 `build_method/` 内 **0 命中**（改前 `discovery` 15+2、`node_id` 11+2、`validation` 5+2 …；`cache` 的判别面是挂载两行+文件本身，属仅计数者已标明）；叶子名 **95 → 95 逐名相同**；`--test registry` **25 passed**。 |
+| G4a · run_method | `t96`、`t98`、`t101` | 公开路径"保旧 + 加新"三处：`NAM-03` `authoring/validation/validation.rs` → `authoring/context.rs`（别名 `pub use self::context as validation;`）、`NAM-09` `authoring/face_manifest.rs` → `authoring/face_file.rs`、`NAM-11②` `runtime/trace/artifact/` → `runtime/trace/snapshot/`（别名 `pub use self::snapshot as artifact;`，旧模块路径由编译器钉子保住）；`NAM-08`（t98）`runtime/trace/locals/call_trace.rs` → `locals/recording.rs`（只改 locals 那处挂载）；`NAM-10`（t101 hand-off）两处模块首行 shim 声明；`conventions/src/shims.rs` 同步 `NAM-03/09` 两行。 | 判别性：R-2 = `run_method/src/authoring/validation` 0→0、`trace::artifact` 0→0、`NAM-08` 的 `mod call_trace;`/`path = "…call_trace.rs"` → 0；R-3 = 0；叶子测试名 **121 → 121 逐名相同**（只有模块前缀变）。⚠️ 一条计划描述被实测纠正：`authoring/manifest/face_manifest.rs` 是**另一个文件**，未动。 |
+| A1 収平（核心 17 处 + run_method 7 处 = 24 处） | `t97`、`t103`、`t104`、`t105` | 把 `<x>/<x>.rs` 上提为同级 `<x>.rs`（**保 `#[path]`、去嵌层**，绝不写裸 `mod`）：核心 17 处 = t97 的 `json`/`release`/`requirements` 3 处 + t103 的 `tree/` 8 处（connector/entry_pages/header/index/inspection/metadata/query/transaction）+ t104 的 `authoring/{snapshot,validation}` 与 `plugin/{contracts/signing,plugin_policy,slot,trust}` 6 处；run_method 7 处 = t105（`authoring/filesystem`、`authoring/manifest/parse`、`call_report`、`plugin`、`registry`、`runtime/trace/{edges,frames}`）。 | 判别性：本批收口后 **R-6 = 6/6/0**（总 6 / 豁免 6 / 非豁免 **0**）——用同一谓词现算（目录 `d` 存在 `d/<basename>.rs` 且其递归 .rs 集恰为该文件）；豁免 6 处 = `examples/**` 3 + `studio/tests/fixtures/**` 3（身份红线，永不搬）。仅计数：收平前起点 30/24/6（t97 前）→ 13/7/6（t104 前后）→ **6/6/0**（t105 后）。⚠️ t104 的**任务级**状态是 failed，原因**不在它自己**：`docs/roadmap-1.0.md:118` 的 tree 锚点（t103 的片）当时未落地；其 6 处收平与 `:157` 锚点刷新都已落地并被 t105 的收口复测覆盖。 |
+| NAM-32..37 符号层 | `t99` | 16 个符号：**已发布 9 条**按"新名为真身 + 旧名保留为一行转发器（双语"历史名字"文档）"——`StaticGraftCut::full`→`is_full`、`StaticPlan::find`→`find_face`、`Registry::find`→`find_by_id`、`RuntimeCheckSpec::run`→`evaluate`、`PluginManifest::targets`→`targets_framework`、`split_csv_owned`→`parse_field_list`、`parse_admission_owned`/`parse_requirements_owned`/`parse_registration_rule_owned`→`*_snapshot`；**内部 7 条**纯改名：`quoted_strings`→`read_string_literals`、`skips`→`skips_path`、`EntryPages::get/remove`→`entry`/`remove_entry`、`collect_node_path`/`collect_kind`/`collect_depth_first`→`visit_node_path`/`visit_kinds`/`walk_depth_first`。`NAM-33` 动词表写进 `core/src/registry_core/lexicon/lexicon.rs` 的词汇共识块。 | 判别性：16 个新名定义 **0 → 1**；内部旧标识符 **N → 0**（`quoted_strings` 3、`fn skips` 2、`get`/`remove` 定义+3 调用、三个 `collect_*` 各 3）；旧已发布名各留 1 处转发器（按设计不为 0）。叶子名 **206 → 206**、完整路径 diff 也为空；`conventions/src/shims.rs` **一条都不用加**（无旧名被删）。⚠️ 两处计划描述被实测纠正：`Release::full` 实为 `StaticGraftCut::full`；`NAM-34` 的公开面是 5 条（不是 2 条）。 |
+| NAM-40/41/43 与 B8 保留表（文书尾段） | `t100` | `AGENTS.md` 新节：四族挂载差（2/5/3/4）与共享读法、`NAM-41` 别名纪律、`NAM-43` 测试挂载规则、**B8 保留表 9 行**（逐行引 `audit-naming-ambiguity-verify.md` 与 `audit-publish-surface-merge-plan.md` 两份裁定文件）、`AMB-19` 特性对照；四个 crate README 各补名字说明（EN+ZH）、根 README 补 `AMB-06/09`、`CHANGELOG.md` 加本批条目（EN+ZH，历史条目一字未动）、`docs/roadmap-1.0.md:34` 旧指针改为 `…/snapshot/` 并把三处符号引用按新名口径更新。 | 计数：R-1 = 33 份活文档（与计划同值）；R-2 = 无"当前状态"旧指针（旧名转发器与其活文档提及按队长口径不算命中；残留四类已分类：内核活锚点、转发器名、子串误报、历史 CHANGELOG 条目）；R-3 = 0；R-7 = 0。 |
+| NAM-43 四处 `mod tests;` 收口 | `t102` | 四处测试模块改回"按自己的名字挂载"：`cli/src/lib.rs:306` `mod tests;` → `mod lib_tests;`、`core/src/registry_core/lexicon/lexicon.rs:317` → `mod lexicon_tests;`、`core/src/registry_core/source/source.rs:568` → `mod source_tests;`、`core/src/registry_core/syntax/face.rs:321` → `mod face_tests;`（`#[cfg(test)]` 与 `#[path = "…_tests.rs"]` 原样保留）。 | 判别性：`grep -rnE '^[[:space:]]*mod tests;' cli/src core/src` **4 → 0**；四条新挂载名各 1 处。 |
+| 尾部清扫（尚未收） | `t106` | `t106`：源码/测试注释里"已搬走路径"的旧引用归零（含 `discovery_cache.rs` 两处）。**本记账轮开始时该单仍是 claimed** ⇒ 本节只登记它，不代做，也不把它的数字写成已完成。 | 仅计数：本批已知的注释残留 = `run_method/src` 5 处（`run_method/src/authoring/snapshot/snapshot.rs` 的 :18/:24、`run_method/src/authoring/snapshot/snapshot_tests.rs` 的 :17/:23、`run_method/src/authoring/face_file.rs` 的 :45）+ 其它（以 t106 的收口为准）。 |
+
+- **G1 · studio** 复核索引：t93 output（含六条门禁同树全绿 + 身份红线 `git status -- examples studio/tests` 空）
+- **G2 · mcp** 复核索引：t94 output
+- **G3 · build_method** 复核索引：t95 output
+- **G4a · run_method** 复核索引：t96 / t98 / t101 output；SHIMS 两行见 `conventions/src/shims.rs:42/:50`
+- **A1 収平（核心 17 处 + run_method 7 处 = 24 处）** 复核索引：t97 / t103 / t104 / t105 output；R-6 本轮现算见 §16.5
+- **NAM-32..37 符号层** 复核索引：t99 output
+- **NAM-40/41/43 与 B8 保留表（文书尾段）** 复核索引：t100 output（12 个改动文件全在 inScope）
+- **NAM-43 四处 `mod tests;` 收口** 复核索引：t102 output（六条门禁 08:07:48 同一扫描全绿）
+- **尾部清扫（尚未收）** 复核索引：t106 状态见 `.agent-teams/…/team.json`（claimed）
+
+### 16.2 本批不收的两条残留（如实登记，不写成已完成）
+
+- **`fix5-R1`**：`examples/**` 里仍写旧符号名 `cut.full()` **2 处**：`examples/control-button/tests/static_plan_allocations.rs:138` 与 `examples/control-button/tests/registry.rs:300`。
+  - **为什么不收**：`NAM-35` 的口径是"保旧名 + 加新名"，因此旧名仍可用、示例仍编译 ✓；而 `examples/**` 是身份红线且不在本批各组 inScope ⇒ 本批不收，转尾段/后续按新名口径收敛。
+  - 证据：`grep -rn "\.full()" examples/` = 2 处（上述两行）；`cargo test -p nichlink-example-control-button --offline` exit 0（旧名转发器在生效）。
+- **`fix5-R2`**：`NAM-33` 的动词表目前**只是文档**：落在 `core/src/registry_core/lexicon/lexicon.rs` 的词汇共识块（`read_*`/`load_*`/`resolve_*`/`find_*`/`collect_*`/`parse_*`/`render_*`/`write_*`/`validate_*`/`check_*` + 裸动词只允许入口位）。
+  - **为什么不收**：计划的口径把 `NAM-33` 归为"文书型"；若要让它可以**机械检查**，按 `AGENTS.md` 的规则应新增一道 `conventions/` 门禁，而那超出本批各组的 inScope ⇒ 本批只落文书，门禁候选登记在此。
+  - 证据：`conventions/src/*.rs` 无任何消费该词表的检查（`grep -rn '动词表\|VERB' conventions/src` = 0）；词表可见于 `lexicon.rs` 模块文档。
+
+### 16.3 合并批次必须重算的行与值
+
+| 行 | 原值 | 现值 | 依据 |
+| --- | --- | --- | --- |
+| 合并方案 §5.1 SHIMS 条目数 | `16` | **`17`** | 本批动了 `conventions/src/shims.rs`：`NAM-03/09` 两行**路径**更新（t96）、A1 末片 4 行路径更新（t105）；条目**总数**从 16 到 17。 |
+| 合并方案 §? bilingual 违例数 | `9` | **`8`** | 本批把若干只有一种语言的文档块补齐/改写（t93 的 covers 首行、t100 的 README/AGENTS 节、t102 的挂载名行）。 |
+| 合并方案 §3.5 文件数 / 同名数 | `{"files": 17, "same_name": 17}` | **`{"files": 25, "same_name": 0}`** | A1 的 24 处收平让 `<x>/<x>.rs` 与模块名一一对齐（文件数升、同名降为 0），合并方案据此表做替换时必须以本批后的树为准。 |
+
+- **合并方案 §5.1 SHIMS 条目数**：本单复算：`grep -cE '^\s+\\(' conventions/src/shims.rs` = **17**；`cargo test -p nichlink-conventions --offline` 的 shims 棘轮两条绿。
+- **合并方案 §? bilingual 违例数**：值由队长给定（属合并批次的口径）；本单只记账，未在本书内复算。
+- **合并方案 §3.5 文件数 / 同名数**：R-6 本单现算 = 6/6/0（非豁免 0）；与之同口径。
+
+### 16.4 锚点账
+
+- **报告自身的引用全部可解析**：命名批次改名/搬迁/删除（14 处改名 + A1 的 24 处收平 + `NAM-01` 删 shim + `NAM-43` 测试挂载）之后，§0–§12 里那些坐标是**记录**——按既有自愈机制逐条登记进 `meta.frozen_record_anchors`（现 **84** 条；每条的 `why` 写明成因，并逐条复验"它现在确实解析不了"，同名文件回来即重新受检）⇒ `check_report.py` 的报告锚点检查 **0 violations**。
+- **B1 记录的 8 条坐标已刷新（只换路径/行号，判定与结论一字未动）**：`docs/audit-2026-09-28/audit-verify-fix-b1.md` 在本单 inScope 内，逐条换成现行坐标 ⇒ **`/tmp/anchor_check.py` = `violations: 0`**。映射：`core/src/registry_core/authoring/snapshot/snapshot.rs:80` → `core/src/registry_core/authoring/snapshot.rs:80`；`build_method/src/node_id.rs:37` → `build_method/src/node_identity.rs:37`；`run_method/src/authoring/validation/validation.rs:26` → `run_method/src/authoring/context.rs:33`；`run_method/src/runtime/trace/artifact/parse.rs:295` → `run_method/src/runtime/trace/snapshot/parse.rs:295`；`run_method/src/runtime/trace/artifact/io.rs:119` → `run_method/src/runtime/trace/snapshot/io.rs:119`；`run_method/src/authoring/filesystem/filesystem.rs:29` → `run_method/src/authoring/filesystem.rs:29`；`mcp/src/index.rs:229` → `mcp/src/source_index.rs:229`；`build_method/src/lib.rs:233` → `build_method/src/lib.rs:234`。该记录里另有一条**既有**描述与行号不符：`run_method/src/runtime/trace/artifact/parse.rs` 的旧坐标 `:295` 与它自述的 token `Mutex<BTreeSet<&'static str>>` 相差约 27 行（该 token 实际在 `run_method/src/runtime/trace/snapshot/parse.rs` 的 :322/:326）——这一处**不是本批造成的**，本单按“只换坐标”未改它，如实登记在此，留给下一轮决定是否改行号。
+
+- `fix_batch_4.references_refreshed[1]`：`build_method/src/lib.rs:233` → 第 `234` 行（令牌 `run_as_package`）。命名批次 G3（t95）改了 `build_method/src/lib.rs`，`run_as_package` 的调用点已不在 :233 ⇒ B1 记录里那条坐标再次漂移。该记录不在本单 inScope，故此处只登记现行坐标（自愈：`fix_batch_5` 的这条由 check_report.py 逐次复验）。
+- `fix_batch_4.references_refreshed[0]`：`studio/src/studio/app/support.rs:17` → **文件已不存在**（令牌 `PROJECT_CONTEXT`）。`NAM-01`（t93）把那个 14 行历史 shim 整页删除 ⇒ 这条**原始**坐标（刷新前的拼写）连文件都不在了；记录里现行拼写是 `studio/src/studio/app/project_context.rs:24`（存在、可解析）。记录不在本单 inScope，故只登记事实。
+
+### 16.5 现算复算（可逐条重跑）
+
+- **R-6（A1 收平完成度）**：总 **6** / 豁免 **6** / 非豁免 **0** —— 谓词：目录 `d` 存在 `d/<basename>.rs` 且其递归 `.rs` 集恰为该文件；豁免 6 处 = `examples/**` 3 + `studio/tests/fixtures/**` 3（身份红线）。**A1 全仓收口**。
+- **SHIMS 条目数**：`conventions/src/shims.rs` 现算 **17** 条（合并方案 §5.1 的 16 需按此重算）。
+- **符号层**：已发布保旧加新 **9** 条 + 内部纯改名 **7** 条；未删任何 `pub` 项。
+- **搬迁规模**：A1 **24** 处（核心 17 + run_method 7）；改名 14 处（G2 3 + G3 7 + G4a 3 + `NAM-08` 1）。
+- **复算方式**：`python3 /tmp/nichlink-audit-logs/patch_fix_batch_5.py`（幂等，含冻结锚点自愈与 `anchor_state` 现算）→ `gen_report.py` / `gen_html.py` → `check_report.py`；`/tmp/anchor_check.py` 的 B1 记录口径与本节的 `anchor_state` 同规则。
