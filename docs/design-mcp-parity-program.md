@@ -75,29 +75,38 @@ codegraph 的命令面：`init/uninit/index/sync/status/query/explore/node/files
 **绝不把"没核验"说成"当前"**；强校验的代价变成可复用/可选（调用方显式要求时付全费）。
 **不采纳**：把判据换成 mtime ✗（本仓踩过 `cp -a`/`rsync -a` 保留 mtime：内容变了却看着新鲜）；无标注的进程内记忆化 ✗（长驻桥会把陈旧答案当当前报出去）。
 
-### 7.1 归因更正：那 1.5 秒不是新鲜度判定 ✗
+### 7.1 成因（实测，两轮才对）：那 1.5 秒确实是新鲜度校验
 
-S1 报「根上剩余 1.1–1.5 s **全部**是 `build_output_is_current`（6 成员各一次）」。**我复算后判定这条不成立** ✗，逐成员实测（每项取 3 次最小值）：
+第一轮我把"有记录就不该贵"当成结论，还写了一句**没量过**的"这些成员记录 0 个" ✗ —— 实测每个成员都有 5–6 个记录文件。
+第二轮逐成员量出耗时与**答案里自报的来源**：
 
-| 成员 | 耗时 | `target/nichlink/out` 记录 |
-| --- | --- | --- |
-| `kernel` | **1063 ms** | **0 个** |
-| `macro` | 76 ms | 0 个 |
-| `toolchain` | 53 ms | 0 个 |
-| `conventions` | **505 ms** | **0 个** |
-| `examples/control-button` | **44 ms** | **6 个** ✓ |
-| `examples/control-button-graft` | 52 ms | 0 个 |
-| 六者之和 | 1792 ms | |
-| **根一次（virtual manifest）** | **1589 ms** | 普查 `published 1 not built 0` |
+| 成员 | 耗时 | 答案自报 | `target/nichlink/out/` |
+| --- | --- | --- | --- |
+| `kernel` | **1070 ms** | `tree published from …/kernel/target/nichlink/out` + `build current` | 6 个文件（**含指纹**） |
+| `conventions` | **498 ms** | 同上 + `build current` | 6 个文件（含指纹） |
+| `macro` | 68 ms | 同上 + `build current` | 6 个（树只有 3 个源文件） |
+| `examples/control-button` | 44 ms | 同上 + `build current` | 6 个（树极小） |
+| `toolchain` | 41 ms | `… published …` + **`build stale`** | 5 个（**无指纹** ⇒ 读文件失败，提前 false） |
+| `examples/control-button-graft` | 46 ms | 同上 + **`build stale`** | 5 个（无指纹） |
+| 六者之和 1792 ms；根一次（virtual manifest）**1589 ms** | | 普查 `published 1 not built 0` | |
 
-⇒ 贵的是 **`kernel` 与 `conventions`（合计 1568 ms）**，而这两个成员**恰好没有发布记录** ⇒ 它们走的是**回落"现推面"**那条路（整棵源码树推导，最后得到 0 个面）。
-有记录的 `control-button` 只花 44 ms ✓ —— 也就是说**读记录 + 新鲜度判定本来就很便宜**。
-S1 的 stub 实验之所以"降到 88–107 ms"，是因为把判据改成恒 `true` **顺带把这些成员当成 published，连推导一起跳过了**，它把这一步的效果误记成"新鲜度判定的成本" ✗。
+⇒ **两个结论**：① **每个成员都在读发布记录，全树没有一处回落推导** ✓；② 贵的是**指纹存在的成员**上的
+`build_output_is_current` —— 它要读遍并哈希整棵源码树，成本随树大小走（`kernel` + `conventions` = 1568 ms ≈ 根一次 1589 ms ✓）。
+无指纹的成员读文件失败即返回 `false`，所以看起来"便宜"，那正是它们报 `stale` 的原因。
 
-### 7.2 于是目标改为：不要让"没有记录的成员"付全量推导
+**S1 的归因成立** ✓（"根上剩余 1.1–1.5 s 是 `build_output_is_current`"）；我中途推翻它是错的 ✗。
+两条记账：⑴ **先量再写**——计划文本里不许出现还没量过的数字（本轮我写进了"记录 0 个"）；⑵ **闸必须逐条判**——
+`{ a; b; c; } && git commit` 只看分组里**最后一条**的退出码，本轮因此**穿过红灯提交了一次** ✗（见 §8）。
 
-两条互补做法（同片实施）：
-1. **便宜的负数预检**：在推导面之前，先做一次廉价的"这棵树里到底有没有注册面标记"的判定；没有就直接答 0 个面，不付全量遍历。判据必须**只用于否定**（"没有标记 ⇒ 确实没有面"要成立），有标记时仍走原推导。
-2. **把推导变成可要求、且分级**：没有记录时默认答 `faces: not derived (no published records; pass derive: true)`，并保留"要现推就来"的通路 —— 与新鲜度分级是同一套纪律（**不把没做的事说成做过的**）。
+### 7.2 于是目标就落在新鲜度校验上
 
-新鲜度分级（§7 主体）仍然实施：它的价值在**诚实**（不把未核验说成当前），而**不是**性能；性能的账记在 §7.2。
+不需要做"便宜的负数预检"，也不需要"把推导变成可要求"——**没有推导发生**。要做的只有 §7 主体那一条：
+**把内容核验的结论按"可复用 + 带等级"呈现**，让 `kernel`/`conventions` 那 1.5 秒不必每次调用都付，
+而**判据本身一字不改**（`build_output_is_current` 仍是唯一权威）。
+
+具体形态（交给实施）：
+- 进程内记忆化**以内容核验的结论为值**，并在答案里印出它的**等级与时刻**：`freshness: content-verified at HH:MM:SS` /
+  `freshness: reused (content-verified at HH:MM:SS)` / `build stale (run nichlink check)` / `unknown`。
+- **可复用窗口是被声明的**，不是隐藏的：窗口内的答案必须写明"复用自何时"，窗口外重付全费；
+  调用方可以要求立即核验（与"跑 `nichlink check`"是同一件事的两种触发）。
+- **绝不**把"复用"说成"当前"；**绝不用 mtime 代替内容哈希**做"当前"的判据（本仓踩过 `cp -a`/`rsync -a` 保留 mtime）。
