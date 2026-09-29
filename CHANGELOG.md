@@ -103,18 +103,8 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   `nichlink-plugin-host`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`。**`nichlink-macro`
   保留**（它没有被合并）。可按序执行的命令清单见 `docs/merge-batch3-publish.md`。
 
-- **Known leftover.** Batch 2's six in-module test files (**20** `#[test]` functions, the `(b)` class)
-  are **not** wired back yet: the tolerant arm of `__control_object!` cannot be reached from inside
-  the merged crate, so those files stay in their module trees (54 of the 74 `#[test]` functions did
-  come back). Independent review t139 confirmed with three probes that the 20 really do not run —
-  both build faces' `--list` match none of them, and a `compile_error!` planted in each file still
-  leaves `cargo check --all-targets` at exit 0 on both faces. The diagnosis and the two candidate
-  fixes are in `docs/b3-registration-diagnosis.md`.
-  **已知遗留**：批 2 的六个模块内测试文件（**20** 个 `#[test]`，即 `(b)` 类）**尚未接回**：合并后的
-  crate 内部到达不了 `__control_object!` 的宽容 arm，因此它们仍留在各自模块树里（74 个 `#[test]`
-  中有 **54** 个已接回，20 个未接回；独立复核 t139 用三条探针核过：两个构建面 `--list` 命中 0、
-  变异 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0 ⇒ 它们确实没跑）。诊断与两条候选修法
-  见 `docs/b3-registration-diagnosis.md`。
+- **Wired back (2026-09-29).** Batch 2's six target-less test files (**20** `#[test]` functions, the `(b)` class) are targets again: nineteen as integration tests under `toolchain/tests/` (an external caller reaches the tolerant arm of `__control_object!` — the in-crate ban is on absolute-path calls from inside an expansion), and one mounted in-crate because it collects *this* crate's opted-in declarations. Wiring them back exposed the branch only they reached: a `collector: debug` declaration could not compile (`$crate::submit!`, not `$crate::call_evidence::submit!`), and the merged crate gained `extern crate self as nichlink_toolchain;` for the expansions that carry `::nichlink_toolchain::…` paths. The earlier probe evidence — both build faces' `--list` matching none of them, and a `compile_error!` in each file leaving `cargo check --all-targets` at exit 0 — is kept as the record of what the gap was.
+  **已接回（2026-09-29）**：批 2 的六个没有 target 的测试文件（**20** 个 `#[test]`，即 `(b)` 类）重新有了 target：十九个是 `toolchain/tests/` 下的集成测试（外部调用者能到达 `__control_object!` 的宽容 arm——crate 内的禁令针对的是「展开里经绝对路径调用」），一个留在 crate 内挂载，因为它采集的是**本 crate** 已选择加入的声明。接回它们才暴露出「只有它们才会走到」的那一支：`collector: debug` 声明根本编译不过（应是 `$crate::submit!`，不是 `$crate::call_evidence::submit!`），而合并后的 crate 也补上了 `extern crate self as nichlink_toolchain;`，供那些带 `::nichlink_toolchain::…` 路径的展开解析。此前的探针证据（两个构建面 `--list` 命中 0、给每个文件插 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0）作为「当时的洞长什么样」的记录保留。
 
 ## [0.1.6] — never released (its content shipped in 0.2.0)
 

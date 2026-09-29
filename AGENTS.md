@@ -88,9 +88,16 @@ macro to the crate root (a module path will not resolve it); a `macro_export` ma
 current crate cannot be called by an absolute path from inside a macro expansion; a bare-name
 `macro_rules!` call resolves at the call site, so it breaks external callers; and a private
 `macro_rules!` is reachable only through textual scope, so a test that uses one has to be
-mounted inside the module that defines it. **Known residue**: six in-module test files
-(20 `#[test]` items) are not wired back yet; the diagnosis and the two candidate fixes live in
-`docs/b3-registration-diagnosis.md`.
+mounted inside the module that defines it. **Wired back (2026-09-29)**: the six files that batch 2
+left without a target (20 `#[test]` items) are targets again — nineteen as integration tests under
+`toolchain/tests/` (an *external* caller reaches the tolerant arm; rule ② only bans same-crate
+absolute-path calls from inside an expansion), and the collector probe in-crate because it reads
+*this* crate's registry. Wiring them back is what exposed the branch only they reached: a
+`collector: debug` declaration could not compile (`$crate::submit!`, not
+`$crate::call_evidence::submit!`, now that the macro is hoisted), and the merged crate needed
+`extern crate self as nichlink_toolchain;` for expansions that still carry
+`::nichlink_toolchain::…` paths. `docs/b3-registration-diagnosis.md` keeps the diagnosis for the
+record.
 `nichlink-toolchain` 是**一个 crate、七个模块**，每个模块就是原来的一个 crate：
 `build_time`、`runtime`、`call_evidence`、`plugin_host`、`studio`、`mcp`、`cli`。
 `toolchain/src/lib.rs` 用 `#[path = "<module>/src/lib.rs"] pub mod <module>;` 逐个声明，再用
@@ -103,9 +110,13 @@ mounted inside the module that defines it. **Known residue**: six in-module test
 与逐 target 的 `required-features`。**代码一搬动，宏的可达性就要单独审计**：`#[macro_export]`
 会把宏提升到 crate 根（写模块路径解析不到）；同 crate 的 `macro_export` 宏**不能在宏展开里经
 绝对路径**调用；裸名 `macro_rules!` 调用在**调用点**解析，因此会弄坏外部调用者；私有
-`macro_rules!` 只能靠文本作用域到达——用它的测试**必须挂载在定义它的模块之内**。**已知遗留**：
-六个模块内测试文件（20 个 `#[test]`）尚未接回；诊断与两条候选修法在
-`docs/b3-registration-diagnosis.md`。
+`macro_rules!` 只能靠文本作用域到达——用它的测试**必须挂载在定义它的模块之内**。**已接回（2026-09-29）**：
+批 2 里没有 target 的那六个文件（20 个 `#[test]`）重新有了 target——其中十九个是 `toolchain/tests/` 下的
+集成测试（**外部**调用者能到达宽容分支；规则 ② 只禁"同 crate 展开里经绝对路径调用"），采集探针则留在
+crate 内，因为它读的是**本 crate** 的注册表。接回它们才暴露出"只有它们才会走到"的那一支：`collector: debug`
+的声明根本编译不过（宏提升到根之后应是 `$crate::submit!` 而不是 `$crate::call_evidence::submit!`），
+而合并后的 crate 还需要 `extern crate self as nichlink_toolchain;` 才能让展开里那些
+`::nichlink_toolchain::…` 路径解析。诊断按记录留在 `docs/b3-registration-diagnosis.md`。
 
 ## Kernel modules (`kernel/src/registry_core/`)
 
