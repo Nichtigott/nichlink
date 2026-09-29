@@ -85,7 +85,7 @@ pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
             }
         }
     }
-    collect_markdown(&root.join("docs"), &mut files);
+    visit_markdown(&root.join("docs"), &mut files);
     for directory in crate_directories(root) {
         files.push(directory.join("README.md"));
         files.push(directory.join("README.zh-CN.md"));
@@ -98,7 +98,7 @@ pub fn markdown_files(root: &Path) -> Vec<PathBuf> {
 
 /// Every markdown file under `directory`, at any depth.
 /// `directory` 下每个 markdown 文件，任意深度。
-fn collect_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
+fn visit_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
         return;
     };
@@ -106,7 +106,7 @@ fn collect_markdown(directory: &Path, files: &mut Vec<PathBuf>) {
         let path = entry.path();
         if crate::is_real_directory(&path) {
             if !crate::is_skipped_directory(&path) {
-                collect_markdown(&path, files);
+                visit_markdown(&path, files);
             }
         } else if path.extension().is_some_and(|extension| extension == "md") {
             files.push(path);

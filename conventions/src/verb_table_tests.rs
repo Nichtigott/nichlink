@@ -87,7 +87,7 @@ fn the_shipped_workspace_verb_table_holds() {
     // PINNED is the measured workspace count at the time this gate landed; it may fall
     // but must not grow.
     // PINNED 是本门禁落地时实测的工作区数量；它只许下降，不许上升。
-    const PINNED: usize = 81;
+    const PINNED: usize = 77;
     assert!(
         found.len() <= PINNED,
         "the verb table grew {} violations (pinned {PINNED}); see the list above",

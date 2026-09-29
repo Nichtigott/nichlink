@@ -317,14 +317,14 @@ fn belongs_to_the_attribute_stack(trimmed: &str) -> bool {
 /// `directory` 下每个 `.rs` 文件，已排序，不跟随符号链接。
 pub fn rust_sources(directory: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    collect_rust_sources(directory, &mut files);
+    visit_rust_sources(directory, &mut files);
     files.sort();
     files
 }
 
 /// Recursive worker for [`rust_sources`].
 /// [`rust_sources`] 的递归实现。
-fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
+fn visit_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(directory) else {
         return;
     };
@@ -332,7 +332,7 @@ fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
         let path = entry.path();
         if is_real_directory(&path) {
             if !is_skipped_directory(&path) {
-                collect_rust_sources(&path, files);
+                visit_rust_sources(&path, files);
             }
         } else if path.extension().is_some_and(|extension| extension == "rs") {
             files.push(path);
@@ -378,7 +378,7 @@ pub fn relative(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 pub(crate) fn fixture_manifest(root: &Path) {
     let mut members = Vec::new();
-    collect_fixture_members(root, root, &mut members);
+    visit_fixture_members(root, root, &mut members);
     members.sort();
     members.dedup();
     if members.is_empty() {
@@ -402,7 +402,7 @@ pub(crate) fn fixture_manifest(root: &Path) {
 /// `root`.
 /// 收集 `directory` 下拥有 `src/` 树的那些目录，以 `root` 为基准。
 #[cfg(test)]
-fn collect_fixture_members(root: &Path, directory: &Path, members: &mut Vec<String>) {
+fn visit_fixture_members(root: &Path, directory: &Path, members: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(directory) else {
         return;
     };
@@ -423,7 +423,7 @@ fn collect_fixture_members(root: &Path, directory: &Path, members: &mut Vec<Stri
             });
             continue;
         }
-        collect_fixture_members(root, &path, members);
+        visit_fixture_members(root, &path, members);
     }
 }
 

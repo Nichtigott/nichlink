@@ -65,7 +65,7 @@ pub fn findings(root: &Path) -> Vec<Finding> {
         let text = fs::read_to_string(&document)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", document.display()));
         for anchor in anchors(&text) {
-            let matches = resolve(&anchor.path, &sources);
+            let matches = resolve_written_path(&anchor.path, &sources);
             let target = match matches.as_slice() {
                 [only] => (*only).clone(),
                 [] => {
@@ -225,7 +225,7 @@ fn workflows(root: &Path) -> Vec<(String, PathBuf)> {
 /// `app/lifecycle.rs` for `studio/src/studio/app/lifecycle.rs`.
 /// 正好等于根相对路径者优先；否则由唯一一个以它结尾的路径命中——这正是让 crate 小节里的文档
 /// 用 `app/lifecycle.rs` 指 `studio/src/studio/app/lifecycle.rs` 的原因。
-fn resolve<'a>(written: &str, sources: &'a [(String, PathBuf)]) -> Vec<&'a PathBuf> {
+fn resolve_written_path<'a>(written: &str, sources: &'a [(String, PathBuf)]) -> Vec<&'a PathBuf> {
     // A written path may climb with `..` — `declaration/../../tree/transaction/…` is how one
     // roadmap row names a file two levels up — and the suffix test below compares strings, so
     // the segments are collapsed first. Without this the gate called a file that exists
