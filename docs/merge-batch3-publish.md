@@ -88,6 +88,32 @@ yank **只影响解析**（历史版本仍在 index 上，已锁定的 lockfile 
 已发布版本，唯一自助手段就是 yank，删除需要联系 crates.io 支持且只适用于极窄情形 ✓。
 ⇒ 第 2 步（`tools/nichlink-publish --verify-consumers`）未绿之前不要执行本步。
 
+## 3.5 事后发展：旧名被**整体删除**了，随之而来的是约 24 小时的冷却窗口（2026-09-29 实测）
+
+维护者在 2026-09-29 用 crates.io 的删除入口把**八个旧名（连同当时的三个新名，共 11 个名字）全部删除**了
+✓ —— 也就是说 §3 的 yank 表是**实际做过、随后被更强的动作取代**的历史记录（先 yank 全部版本，再把
+crate 整体删掉）✓。**删除是可能的**（crates.io 允许所有者删除，条件见下），但**名字不能立刻再用**：
+
+```
+error: failed to publish nichlink-kernel v0.2.0 to registry at https://crates.io
+Caused by:
+  the remote server responded with an error (status 400 Bad Request):
+  A crate with the name `nichlink-kernel` was recently deleted.
+  Reuse of this name will be available after 2026-09-30T07:41:46Z.
+```
+
+- **冷却窗口按名字各自计时**（约 24 小时）⇒ 上面 `nichlink-kernel` 的解封时间是 **2026-09-30T07:41:46Z**；
+  另两个名字在同一分钟内被删，窗口与之接近。**以发布尝试为准**：窗口未到时 `cargo publish` 会用上面
+  这种 400 直接告诉你还要等多久 ✓。
+- **因此重新发布必须等到窗口之后** ✓；在此之前**不要再做任何删除动作**（会把窗口往后推 ✓）。
+- **窗口开着的时候正好把尾巴收完**：`docs/audit-2026-09-28/audit-merge-landing.md` 的"仍开放"清单里
+  剩 ④/⑦b/⑦c/⑦d ✓；收完后三个 crate 一起作为**首次发布**发出（`0.2.0`，含全部修复 ✓），CHANGELOG 的
+  `## [0.2.0]` 日期改成**真正的发布日** ✓。
+- **删除的现实条件（顺带记下，供下次判断）**：crates.io 允许所有者删除 crate 的情形是"发布不到
+  **72 小时**"，或（**单一 owner** + **无反向依赖** + **每月下载 < 100**）⇒ 一串互相依赖的 crate 可以
+  **从叶子往根**逐个删掉 ✓；**"删除某个已发布版本"仍然不存在**（版本永远不可删、不可覆盖 ✗）；
+  被删掉的名字**约 24 小时内不可复用** ✓。
+
 ## 4. 收尾
 
 1. `CHANGELOG.md`：把 `## [0.2.0] — unreleased` 的头改成带日期的 `## [0.2.0] — YYYY-MM-DD`（发布当天）。
