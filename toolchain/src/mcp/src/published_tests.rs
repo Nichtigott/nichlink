@@ -141,7 +141,7 @@ fn a_published_package_reads_its_scope_and_face_rows() {
     assert!(tree.selected(&tree.faces()[0]) || tree.selected(&tree.faces()[1]));
     assert_eq!(
         tree.freshness(),
-        "stale (run `nichlink check`)",
+        "build stale (run `nichlink check`)",
         "a record with no published fingerprint does not describe these sources"
     );
     assert!(

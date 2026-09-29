@@ -565,6 +565,12 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
             );
         }
     };
+    // The `freshness` argument is a request-level policy: it decides how much this one call is
+    // willing to pay for a content verification. Setting it here — the single place every tool
+    // enters through — is what keeps a body from having to remember it.
+    // `freshness` 参数是**请求级**策略：它决定这一次调用愿意为内容核验付多少。在这里设置它——每个
+    // 工具进入的唯一位置——就不必让每个主体自己记着这件事。
+    crate::mcp::freshness::set_policy(crate::mcp::freshness::policy_from(arguments));
     let result = match DISPATCH.iter().find(|(listed, _)| *listed == name) {
         Some((_, handler)) => crate::mcp::ownership::dispatch(&root, name, arguments, *handler),
         None => Err(format!("unknown tool `{name}`")),

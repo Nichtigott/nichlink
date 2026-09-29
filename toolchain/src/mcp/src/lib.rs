@@ -105,6 +105,9 @@ mod workspace;
 #[path = "published.rs"]
 mod published;
 
+#[path = "freshness.rs"]
+mod freshness;
+
 #[path = "ownership.rs"]
 mod ownership;
 

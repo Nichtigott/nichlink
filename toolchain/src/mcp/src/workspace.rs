@@ -175,11 +175,24 @@ impl Member {
     /// scope time. Never reads a source file.
     /// 该成员持有的树那一半：它自己的记录，或解析作用域时推导出的树。绝不读源码文件。
     ///
+    /// This is the entrance a body is handed its tree through, so it is also where a
+    /// member's records are marked **used** — the answer is about to be built from them —
+    /// and a used record is one whose freshness is checked. A member the answer never
+    /// reaches through here is reported as not checked instead of being claimed current.
+    /// 这就是主体拿到它的那棵树的入口，因此这里也是把成员记录标为**已用**的地方——答案即将据它构成
+    /// ——而已用的记录才会被核验新鲜度。答案从未经这里到达的成员报成"未核验"，而不是被声称成当前。
+    ///
     /// `Err` is the derivation that could not run, which is the answer a caller
     /// must report rather than swallow.
     /// `Err` 是跑不了的推导，那是调用方必须报出而不是吞掉的答案。
     pub(crate) fn tree(&self) -> Result<Tree<'_>, String> {
         match &self.state {
+            // Handing the tree over is not the same as answering from it: a body that only
+            // asks whether a tree exists must not buy a content hash. The records mark
+            // themselves used where their *content* is read (`faces`, `has_identity`,
+            // `evidence_line`), which is the moment this answer starts resting on them.
+            // 把树交出去不等于据它作答：只探"有没有树"的主体不该买一次内容哈希。记录在**内容**被读到的
+            // 地方自己标已用（`faces`、`has_identity`、`evidence_line`），那才是这份答案开始依托它的时刻。
             MemberState::Published(tree) => Ok(Tree::Published(tree)),
             MemberState::Unpublished {
                 faces, unparsable, ..
@@ -226,8 +239,35 @@ impl Member {
     /// caller that needs "no" still has to derive.
     /// 肯定答案是终局——构建把那个身份写进了这个包的清单，因此别的包不会持有它。否定答案不是：
     /// 构建之后新增的面在源码里而不在记录里，因此需要"没有"的调用方仍然必须推导。
+    ///
+    /// A **positive** answer is also what marks this record used: the reply's "this member
+    /// owns it" came out of the record. A probe that came back negative is only routing —
+    /// every member is asked, and the one that answers is the one the answer rests on.
+    /// **肯定**答案同时也是把这份记录标为已用的东西：回复里"这个成员拥有它"出自这份记录。否定回来的
+    /// 探问只是路由——每个成员都被问到，而答案真正依托的是答出肯定的那一个。
     pub(crate) fn publishes(&self, id: NodeId) -> bool {
+        // `has_identity` marks the record used when — and only when — it answers yes, so the
+        // rule has one spelling rather than two.
+        // `has_identity` 在答"是"时（也只有那时）把记录标为已用，因此这条规则只有一处拼写。
         self.published().is_some_and(|tree| tree.has_identity(id))
+    }
+
+    /// The freshness line this member's census row carries.
+    /// 这个成员的普查行所携带的新鲜度行。
+    ///
+    /// Only a member whose records an answer used gets a level: the census is composed
+    /// after the bodies precisely so it can see which ones they read, and a member nothing
+    /// was answered from says `not checked` rather than borrowing `current`. A member with
+    /// no records at all gets the empty string — its row already says `not built (reason)`.
+    /// 只有被某个答案用过的成员才拿到等级：普查在主体之后构成，正是为了看见主体读了哪些；没有答案据以
+    /// 作答的成员写着"未核验"，而不是借用"当前"。完全没有记录的成员拿到空串——它那一行已经写着
+    /// `not built (原因)`。
+    pub(crate) fn freshness_line(&self) -> String {
+        match &self.state {
+            MemberState::Published(tree) if tree.was_used() => tree.freshness(),
+            MemberState::Published(_) => crate::mcp::freshness::NOT_CHECKED.to_owned(),
+            MemberState::Unpublished { .. } | MemberState::Unresolvable(_) => String::new(),
+        }
     }
 
     /// The line naming which of the two trees this answer used.
@@ -363,16 +403,26 @@ pub(crate) fn merge<F>(
 where
     F: FnMut(&Member, &Value) -> Result<String, String>,
 {
-    let mut output = roster(root, members);
+    // The bodies run **before** the census is composed, and that order is load-bearing:
+    // handing a body its tree is what marks that member's records *used*, and a used record
+    // is the only one worth paying a content hash for. Composing the census first would print
+    // `not checked` for every member — including the ones these very sections were built
+    // from, which is a false statement about this answer.
+    // 主体**先**跑、普查后构成，这个次序是要紧的：把树交给主体正是把该成员的记录标为**已用**的动作，
+    // 而已用的记录才值得付一次内容哈希。先构成普查会对每个成员都印"未核验"——包括这些小节正是据以
+    // 构成的成员，那是对这份答案本身的假陈述。
+    let mut sections = String::new();
     for member in members {
-        output.push_str(&format!("\n== {} ({})\n", member.name, member.status()));
+        sections.push_str(&format!("\n== {} ({})\n", member.name, member.status()));
         match &member.state {
             MemberState::Unresolvable(reason) => {
-                output.push_str(&format!("tree unavailable ({reason})\n"));
+                sections.push_str(&format!("tree unavailable ({reason})\n"));
             }
-            _ => output.push_str(&body(member, arguments)?),
+            _ => sections.push_str(&body(member, arguments)?),
         }
     }
+    let mut output = roster(root, members);
+    output.push_str(&sections);
     output.push_str(DETAIL);
     Ok(output)
 }
@@ -435,7 +485,7 @@ fn detail(member: &Member) -> String {
             } else {
                 format!("{} faces", tree.faces().len())
             };
-            format!("{head}; build {}", tree.freshness())
+            format!("{head}; {}", member.freshness_line())
         }
         MemberState::Unpublished {
             faces,
@@ -513,7 +563,7 @@ fn metadata_members(manifest: &Path) -> Vec<(PathBuf, String)> {
 /// 推导没有被删掉，它变成了**回落**，而它产出的状态会说出答案用的是哪一种。
 fn member(dir: PathBuf, name: String) -> Member {
     let state = match published::read(&dir) {
-        Publication::Published(tree) => MemberState::Published(tree),
+        Publication::Published(tree) => MemberState::Published(*tree),
         Publication::NotBuilt(reason) => match derived_faces(&dir, &name) {
             Ok((faces, unparsable)) => MemberState::Unpublished {
                 reason,

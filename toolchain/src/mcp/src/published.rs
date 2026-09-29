@@ -8,12 +8,12 @@
 //! formats keep their one parser and it is not here — and hands the answer on in
 //! the record's own vocabulary: the face rows `pruning_manifest.tsv` carries
 //! (`node`, `source`, `symbol`), the scope verdict `source_scope.tsv` carries,
-//! and the freshness token.
+//! and the `discovery.fingerprint` the freshness rule reads.
 //! 构建已经把这棵树推导过一次并写进 `<package>/target/nichlink/out`；逐成员重新推导正是让
 //! 工作区根上的一次调用等于每个成员源码遍历之和的原因。本模块改为读那些文件——经
 //! `build_method` 自己的读取器，因此各格式保持它们唯一的解析器、而且不在本模块——并用记录
 //! 自己的词汇交出答案：`pruning_manifest.tsv` 携带的面行（`node`、`source`、`symbol`）、
-//! `source_scope.tsv` 携带的作用域结论，以及新鲜度凭据。
+//! `source_scope.tsv` 携带的作用域结论，以及新鲜度规则所读的 `discovery.fingerprint`。
 //!
 //! What the record does **not** carry is as load-bearing as what it does: `path`,
 //! `kind`, `registry_name`, `parent` and `parent_resolved` are derived facts, not
@@ -32,13 +32,10 @@
 //! 绝不要 glob `target/debug/build/<pkg>-<hash>/out/`：同一个包实测有 134 份哈希分身、旧的还
 //! 在，因此 glob 可能取到陈旧记录。已发布的路径就是 `<package>/target/nichlink/out`，不是别的。
 
-#[cfg(test)]
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 
-use crate::build_time::{
-    BuildScopeView, PruningRow, build_output_is_current, read_build_scope, read_pruning_manifest,
-};
+use crate::build_time::{BuildScopeView, PruningRow, read_build_scope, read_pruning_manifest};
 use nichlink_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;
@@ -70,9 +67,23 @@ pub(crate) struct PublishedTree {
     /// The published `discovery.fingerprint`, or `None` when the build removed it.
     /// 已发布的 `discovery.fingerprint`；构建移除它时为 `None`。
     pub(crate) fingerprint: Option<String>,
-    /// Whether the published output still describes these sources.
-    /// 已发布的产物是否仍在描述这批源码。
-    pub(crate) current: bool,
+    /// The package root the content check needs, kept so it can run when it is asked for.
+    /// 内容核验所需的包根；留着它是为了在被问到时才跑。
+    root: PathBuf,
+    /// Whether an answer *used* this record, which is what decides if it is checked.
+    /// 是否有答案**用过**这份记录，而这决定了它是否被核验。
+    ///
+    /// A record nobody answered from costs no content hash: the census still says what the
+    /// record holds, and says that freshness was not checked for it rather than claiming
+    /// it. The flag is set by [`crate::mcp::workspace::Member::tree`] — the entrance a
+    /// body is handed its tree through — and never by the census itself.
+    /// 没有答案据以作答的记录不花内容哈希的钱：普查仍然说出记录里有什么，并说它没有被核验过新鲜度，
+    /// 而不是去声称。这个标记由 [`crate::mcp::workspace::Member::tree`] 设置——也就是主体拿到它的
+    /// 那棵树的入口——普查自己绝不设置它。
+    used: Cell<bool>,
+    /// The line this record already produced, so one answer cannot print two levels for it.
+    /// 这份记录已经产出过的那一行，因此同一份答案不会为它印出两个等级。
+    line: RefCell<Option<String>>,
     /// The scope `source_scope.tsv` recorded.
     /// `source_scope.tsv` 记录的作用域。
     pub(crate) scope: BuildScopeView,
@@ -82,20 +93,36 @@ pub(crate) struct PublishedTree {
 }
 
 impl PublishedTree {
-    /// The word for how fresh the published output is.
-    /// 已发布产物新鲜度的那个词。
+    /// Whether an answer has used this record, which is what a check is bought for.
+    /// 是否有答案用过这份记录，而这正是买一次核验的理由。
+    pub(crate) fn was_used(&self) -> bool {
+        self.used.get()
+    }
+
+    /// Mark this record as one an answer was built from.
+    /// 把这份记录标为"某个答案据以构成"。
+    pub(crate) fn mark_used(&self) {
+        self.used.set(true);
+    }
+
+    /// The graded line for how fresh the published output is.
+    /// 已发布产物新鲜度的分级行。
     ///
-    /// The spelling lives in `build_evidence` for every report that asks the same
-    /// question, and it is spelled the same way here: one rule, one word, no drift
-    /// between two tools describing one build.
-    /// 问同一个问题的每份报告，其词形都住在 `build_evidence`，这里也照那个词形写：一条规则、一个
-    /// 词，描述同一次构建的两个工具之间不会漂移。
-    pub(crate) fn freshness(&self) -> &'static str {
-        if self.current {
-            "current"
-        } else {
-            "stale (run `nichlink check`)"
+    /// The rule lives in `freshness` for every report that asks the same question, so one
+    /// build cannot be described by two vocabularies; what is decided here is only that
+    /// this record asks once per answer. Without that, the census (which is composed after
+    /// the bodies, exactly so it can see what they used) would buy its own verification and
+    /// print `reused` for a member the body had just printed `content-verified` for.
+    /// 规则住在 `freshness`，每一份问同一个问题的报告都读它，因此同一次构建不会被两套词汇描述；
+    /// 这里只决定这份记录每份答案只问一次。没有这一条，普查（它在主体之后才构成，正是为了看见主体
+    /// 用了什么）会自己再买一次核验，于是对主体刚印出 `content-verified` 的成员印出 `reused`。
+    pub(crate) fn freshness(&self) -> String {
+        if let Some(line) = self.line.borrow().as_ref() {
+            return line.clone();
         }
+        let line = crate::mcp::freshness::line(&self.root, &self.out);
+        *self.line.borrow_mut() = Some(line.clone());
+        line
     }
 
     /// The one line every published answer opens its tree half with.
@@ -107,6 +134,7 @@ impl PublishedTree {
     /// 指纹是被点名而不是被概括的：它是读取方与下一次构建对照的凭据，而 `absent` 本身就是个事实
     /// ——校验失败时管线会把它移除。
     pub(crate) fn evidence_line(&self) -> String {
+        self.mark_used();
         format!(
             "tree published from {} (discovery.fingerprint {})\n",
             self.out.display(),
@@ -117,6 +145,7 @@ impl PublishedTree {
     /// The face rows this record carries.
     /// 这份记录携带的面行。
     pub(crate) fn faces(&self) -> &[PruningRow] {
+        self.mark_used();
         self.pruning.as_deref().unwrap_or_default()
     }
 
@@ -169,8 +198,20 @@ impl PublishedTree {
     /// The faces this record has, by identity: what an ownership question can be
     /// answered from without reading a source file.
     /// 这份记录拥有的面，按身份：归属问题可以据此作答而不读任何源码文件。
+    /// Whether this record names that identity, and marking the record used only when it
+    /// does: a probe that comes back negative is routing, not answering.
+    /// 这份记录是否点名了那个身份；只有答"是"时才把记录标为已用——否定回来的探问是路由，不是作答。
     pub(crate) fn has_identity(&self, id: NodeId) -> bool {
-        self.faces().iter().any(|row| row.id == id)
+        let owned = self
+            .pruning
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|row| row.id == id);
+        if owned {
+            self.mark_used();
+        }
+        owned
     }
 }
 
@@ -179,7 +220,7 @@ impl PublishedTree {
 pub(crate) enum Publication {
     /// `source_scope.tsv` was readable, so this member has published records.
     /// `source_scope.tsv` 可读，因此这个成员有已发布的记录。
-    Published(PublishedTree),
+    Published(Box<PublishedTree>),
     /// No readable `source_scope.tsv`; the reader's own reason.
     /// `source_scope.tsv` 读不了；读取方自己给出的原因。
     NotBuilt(String),
@@ -195,6 +236,12 @@ pub(crate) enum Publication {
 /// `source_scope.tsv` 就是那枚凭据：它是作用域读取方拥有的文件，也是每次构建最先发布的东西，
 /// 因此它缺失意味着"这个成员从未被构建"，而不是"这个成员没有面"。两者是不同的答案，调用方也
 /// 用不同的话说出来。
+///
+/// Reading a record is reading files; it is **not** a content verification. The hash over
+/// the sources is what costs, and it is bought when a report asks for this record's
+/// freshness (`PublishedTree::freshness`), which a member no answer used never does.
+/// 读记录就是读文件；它**不是**内容核验。花钱的是对源码的哈希，而它在这份记录的新鲜度被报告问起
+/// 时才买（`PublishedTree::freshness`）——没有被任何答案用到的成员永远不会问。
 pub(crate) fn read(root: &Path) -> Publication {
     let out = out_dir(root);
     let scope = match read_build_scope(&out) {
@@ -212,13 +259,20 @@ pub(crate) fn read(root: &Path) -> Publication {
     // 读不了的修剪清单是 `None` 而不是空清单："构建没有跟踪任何面"与"这里说不出来"是不同的答案，
     // 把它们抹平的合并普查会因为一个文件缺失而把一个包报成没有面。
     let pruning = read_pruning_manifest(&out).ok();
-    Publication::Published(PublishedTree {
-        current: build_output_is_current(root, &out),
+    // Boxed: the enum is built once per member and read many times, and a record dwarfs the
+    // "not built" variant next to it — `clippy::large_enum_variant` was right about the shape,
+    // and a pointer is the shape that says "one of these is a record, the other is a sentence".
+    // 装箱：这个枚举每个成员构造一次、读取多次，而一条记录比它旁边的"未构建"支大得多——
+    // `clippy::large_enum_variant` 说的形状没错，而指针正是那种"一支是记录、另一支是一句话"的形状。
+    Publication::Published(Box::new(PublishedTree {
         out,
         fingerprint,
+        root: root.to_path_buf(),
+        used: Cell::new(false),
+        line: RefCell::new(None),
         scope,
         pruning,
-    })
+    }))
 }
 
 #[cfg(test)]

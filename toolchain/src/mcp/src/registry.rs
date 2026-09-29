@@ -204,7 +204,7 @@ fn render_registry(
 /// 需要猜为什么没有 `path`。
 fn render_published(namespace: &str, tree: &PublishedTree) -> String {
     let mut output = format!(
-        "namespace {namespace}\n{}build {}\n",
+        "namespace {namespace}\n{}{}\n",
         tree.evidence_line(),
         tree.freshness()
     );
