@@ -19,7 +19,8 @@
 
 - 编译器原文（t123 第 2 轮实测）：`error: macro-expanded `macro_export` macros from the current crate cannot be referred to by absolute paths` ✗
 - 本仓自己的记载（`runtime/src/authoring/operations/migration_tests.rs:66-69`）：`crate::runtime::test_object!` 这类**路径写法**只在“父模块改名”等场景里被讨论，而它能跑通的形态是**同文件/同模块文本作用域**下的裸名调用 ✓。
-- 链里有两处**路径调用**：`:81` 的 `$crate::__registration_face!` ✓（手写宏，路径可用）与 **`:161` 的 `$crate::runtime::face_fields!`** ✗ —— 后者是**前端生成的**宏（`face_fields!` 由 `authoring/manifest/face` 前端按父级形状产出 ✓，与 `__face_rule_or!`（:118）同类）⇒ **它是整条链最脆的一环** ✗。
+- 链里有两处**路径调用**：`:81` 的 `$crate::__registration_face!` ✓（手写宏，路径可用）与 **`:161` 的 `$crate::runtime::face_fields!`** ✗ ⇒ **它是整条链最脆的一环** ✗。
+- **校正（批 4 追加；t135 实测更正）**：`face_fields!` **不是**"前端生成的宏" ✗ —— 它是 **proc-macro 的再导出**：`toolchain/src/runtime/src/lib.rs` 里 `pub use nichlink_macro::face_fields;`（另有 `face_fields_mirror`）✓。那条禁令的准确形态是"**同 crate 的宏展开里对 `macro_export` 宏的绝对路径调用被拒**"，而它对**外部调用者本来可用** ✓ —— 这正好解释了为什么"改裸名"会把外部调用点弄坏 ✗（t135 实测：`cannot find macro face_fields in this scope` 直接报在集成测试那一行上 ✓）。
 - 因此语义根因：**任何走进“宽容 arm”（`:157-162`）的声明都会掉进前端路径调用** ✗ ⇒ 展开不成立 ⇒ `canonical|shuffled|parens|external_shuffled|handle_without_preset_or_parts…` 里的 `REGISTRATION`/`NODE_ID` 全缺 ✗（t126 计数 19 条正落在这几个模块 ✓）。
 
 ## 3. 能跑的既有测试 vs `face_fields.rs` 的差异
@@ -52,3 +53,12 @@
 
 - `canonical`（逗号、且顺序看似合规 ✓）也报了 15 条 ✗ ⇒ 说明**除「宽容 arm」外还有第二个未定位因素**（下一步建议：对 `canonical` 单独做一次最小复现，或对 `__registration_face!` 展开取 `cargo expand` 级别的证据 ✓）。
 - 本次未做任何临时改动（无 /tmp 复现落地、无临时断言）⇒ 无需回滚 ✓。
+
+## 7. 现状（批 2 落地后）与修法候选（批 4 追加；§5 的建议已被后续实测修正）
+
+- **现状**：批 2（提交 `13c0b13`）已把七个执行面合并为 `nichlink-toolchain`；**(b) 类的 6 个文件 / 25 个 `#[test]` 仍留在模块内、尚未接回** ✗（74 个 `#[test]` 里 49 个已作为集成测试接回并被 `toolchain/tests/` 的清单声明覆盖 ✓）。
+- **两条路都已被实测否决**：① **路径形式**（`$crate::runtime::face_fields!`）在**同 crate 的展开里**被编译器拒 ✗；② **裸名形式**又把**外部调用点**弄坏 ✗（原文见 §2 的校正）。⇒ §5 的"归一成严格 arm 形状"只对**不测宽容行为**的文件成立；对 `shuffled`/`parens` 这类"存在意义就是验证重排与 `;` 分隔"的文件，归一化等于**把被测行为抹掉** ✗。
+- **候选修法**（后续单；属**生产侧**，且必须**先修好"可用形式"再读最小复现** ✓）：
+  - **F1**：逐文件判断——不测宽容行为的声明归一成严格 arm（`face_objects.rs` 里严格 arm 的顺序 + 全逗号），使其**不进宽容 arm** ✓；
+  - **F2**：给两个宏定义文件各加一行文本作用域别名（`use crate::runtime::face_fields;`）再把宏体内的调用改成裸名，使解析点落在**定义文件的作用域**；改完**先用三行最小复现只看 `NODE_ID`** 是否出现 ✓（t135 的复现曾被更早的编译错误掩盖 ✗）。
+- **第二个未定位因素仍在**：`canonical`（逗号、顺序看似合规）也报 15 条 ✗ —— 先定位、再改，**不要盲改** ✓。

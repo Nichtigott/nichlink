@@ -13,14 +13,8 @@ surface that binds kernel methods to its own context.
 | Crate | Directory | One-line responsibility |
 | --- | --- | --- |
 | `nichlink-kernel` (lib `nichlink_kernel`) | `kernel/` | Kernel: protocol nouns and pure methods |
-| `nichlink-toolchain` | `toolchain/` | Build-time filesystem / `OUT_DIR` orchestration |
-| `nichlink-toolchain` | `toolchain/` | Runtime state instance + trace binding |
-| `nichlink-toolchain` | `toolchain/` | Observation evidence surface |
+| `nichlink-toolchain` | `toolchain/` | The seven execution surfaces of the old nine-crate layout, now one module each: `build_time` (build-time filesystem / `OUT_DIR`), `runtime` (runtime state instance + trace binding), `call_evidence` (observation evidence), `plugin_host` (wasm/process plugin host execution), `studio` (ratatui authoring/inspection), `mcp` (AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path), `cli` (argv dispatch, cargo subprocesses) |
 | `nichlink-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
-| `nichlink-toolchain` | `toolchain/` | Wasm/process plugin host execution |
-| `nichlink-toolchain` | `toolchain/` | Ratatui authoring/inspection surface |
-| `nichlink-toolchain` | `toolchain/` | AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path |
-| `nichlink-toolchain` | `toolchain/` | Process glue: argv dispatch, cargo subprocesses |
 | `nichlink-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
 
 Feature names intentionally follow each crate's own vocabulary instead of one
@@ -75,6 +69,43 @@ remains only as the optional source-scope discovery hint.
 `nichlink_toolchain::runtime::host!();`，薄 `build.rs` 调用
 `nichlink_toolchain::build_time::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
 `host!()` 加 `build.rs`，`application!(entry = …)` 仅作为可选的源码范围发现提示保留。
+
+## Toolchain modules (batch 2: nine crates → three)
+
+`nichlink-toolchain` is one crate with seven modules, each one a former crate:
+`build_time`, `runtime`, `call_evidence`, `plugin_host`, `studio`, `mcp`, `cli`.
+`toolchain/src/lib.rs` declares each with `#[path = "<module>/src/lib.rs"] pub mod <module>;`
+and then re-exports every module with a `cfg`-gated `pub use self::<module>::*;`, so a path
+written as `crate::<name>` inside a module's own sources still resolves after the merge.
+The host-facing pair is on by default — `default = ["build", "run"]` — because the documented
+host entries are `build_time::run()` and `runtime::host!()`; the optional backends stay behind
+their own features (`wasm`, `process-tools`, `node-graph`, `authoring`, `prototype-fixtures`,
+`dev-supervisor`), so nothing optional is switched on silently. The five bin names are kept
+(`nichlink`, `cargo-nichlink`, `nichlink-mcp`, `nichlink-studio`, `nichlink-dev`), with
+`autobins = false` and a `required-features` entry per target.
+**Macro reachability needs its own audit whenever code moves**: `#[macro_export]` hoists a
+macro to the crate root (a module path will not resolve it); a `macro_export` macro of the
+current crate cannot be called by an absolute path from inside a macro expansion; a bare-name
+`macro_rules!` call resolves at the call site, so it breaks external callers; and a private
+`macro_rules!` is reachable only through textual scope, so a test that uses one has to be
+mounted inside the module that defines it. **Known residue**: six in-module test files
+(25 `#[test]` items) are not wired back yet; the diagnosis and the two candidate fixes live in
+`docs/b3-registration-diagnosis.md`.
+`nichlink-toolchain` 是**一个 crate、七个模块**，每个模块就是原来的一个 crate：
+`build_time`、`runtime`、`call_evidence`、`plugin_host`、`studio`、`mcp`、`cli`。
+`toolchain/src/lib.rs` 用 `#[path = "<module>/src/lib.rs"] pub mod <module>;` 逐个声明，再用
+**cfg 门控的** `pub use self::<module>::*;` 把每个模块重导出，于是各模块自己源码里写成
+`crate::<name>` 的路径在合并之后仍然解析得到。**宿主面两半默认打开**：`default = ["build", "run"]`
+——因为文档承诺的宿主入口就是 `build_time::run()` 与 `runtime::host!()`；可选后端各自留在自己的
+特性后面（`wasm`、`process-tools`、`node-graph`、`authoring`、`prototype-fixtures`、
+`dev-supervisor`），不会有任何可选能力被静默打开。五个 bin 名全部保留（`nichlink`、
+`cargo-nichlink`、`nichlink-mcp`、`nichlink-studio`、`nichlink-dev`），配 `autobins = false`
+与逐 target 的 `required-features`。**代码一搬动，宏的可达性就要单独审计**：`#[macro_export]`
+会把宏提升到 crate 根（写模块路径解析不到）；同 crate 的 `macro_export` 宏**不能在宏展开里经
+绝对路径**调用；裸名 `macro_rules!` 调用在**调用点**解析，因此会弄坏外部调用者；私有
+`macro_rules!` 只能靠文本作用域到达——用它的测试**必须挂载在定义它的模块之内**。**已知遗留**：
+六个模块内测试文件（25 个 `#[test]`）尚未接回；诊断与两条候选修法在
+`docs/b3-registration-diagnosis.md`。
 
 ## Kernel modules (`kernel/src/registry_core/`)
 
