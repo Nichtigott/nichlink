@@ -238,8 +238,25 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 cargo fmt --all
 cargo test --workspace --offline
 cargo clippy --workspace --all-targets --offline -- -D warnings
+cargo clippy --workspace --all-targets --offline --all-features -- -D warnings
 tools/nichlink-publish --check-table
 ```
+
+The clippy line has two faces, and they are two different builds: `-D warnings` under the default
+features and under `--all-features`. Read them as a pair, the same way the test runs above are read
+as a pair. The all-features face is the stricter one — it is where a name carried by two root globs
+(`ambiguous_glob_reexports`) or a module nested under its own name (`clippy::module_inception`)
+shows up — and CI's all-features job already runs it (`ci.yml`). This checkout's own landing set
+used to stop at the default face, which is how both of those lived unseen at
+`toolchain/src/lib.rs` and `toolchain/src/studio/src/lib.rs` until 2026-09-29; run both before
+committing.
+clippy 那一行有**两面**，而它们是**两套不同的构建**：默认特性下的 `-D warnings` 与
+`--all-features` 下的 `-D warnings`。请像读上面那两条测试命令一样**对比着读**。`--all-features`
+那一面更严——被两条根部 glob 同时带上的名字（`ambiguous_glob_reexports`）、以及与所在模块同名的
+嵌套模块（`clippy::module_inception`）都只在这一面现形——CI 的 all-features 作业本来就在跑它
+（`ci.yml`）。本检出自己的落地门禁过去只跑到默认那一面，因此这两种情况在
+`toolchain/src/lib.rs` 与 `toolchain/src/studio/src/lib.rs` 里一直没被看见，直到 2026-09-29；
+提交前两面都要跑。
 
 The last line is the release tables' gate: `tools/nichlink-publish` publishes in a
 hand-maintained dependency order, so it derives the truth from the manifests and

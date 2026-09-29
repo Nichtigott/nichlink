@@ -49,12 +49,40 @@ pub use self::build_time::*;
 pub use self::call_evidence::*;
 #[cfg(feature = "cli")]
 pub use self::cli::*;
-#[cfg(feature = "mcp")]
-pub use self::mcp::*;
+// `mcp` contributes exactly one root-level name (`run`, its stdio entry) and that name is
+// claimed explicitly above, so its glob would re-export nothing — which `unused_imports`
+// reports under `-D warnings`. The module keeps its path: `nichlink_toolchain::mcp::run`
+// is how the bridge entry is addressed, and the module itself is still mounted below.
+// `mcp` 只贡献一个根级名字（`run`，它的 stdio 入口），而那个名字已被上面的显式再导出占用，
+// 于是它的 glob 什么也带不上来——这在 `-D warnings` 下会被 `unused_imports` 报出来。模块路径
+// 保留：桥的入口按 `nichlink_toolchain::mcp::run` 寻址，模块本身仍在上面挂载。
 #[cfg(feature = "plugins")]
 pub use self::plugin_host::*;
 #[cfg(feature = "run")]
 pub use self::runtime::*;
 #[cfg(feature = "studio")]
 pub use self::studio::*;
+
+// Two names are carried by more than one of the globs above, so the paragraph at the top of
+// this block has to be made true rather than merely asserted: `run` arrives from `build_time`,
+// `mcp` and `cli`, and `mir` arrives both from `call_evidence` and from `runtime` (which
+// re-exports the kernel's `mir`). The explicit re-exports below win over the globs and name the
+// host-facing one of each pair — the build-script entry `build_time::run()` and the kernel's
+// `mir` module — while every other name stays reachable through the globs. Nothing else is
+// promised at this level: the module path is still the official address
+// (`nichlink_toolchain::mcp::run`, `nichlink_toolchain::cli::run`, …). Measured by
+// `cargo clippy --all-targets --all-features -- -D warnings`, which reported
+// `ambiguous_glob_reexports` for both names before this pair existed.
+// 上面这些 glob 里有两个名字被多个模块同时带上，因此这一段开头那句话得**做到**而不只是写着：
+// `run` 会从 `build_time`、`mcp`、`cli` 三处来，`mir` 会同时从 `call_evidence` 与 `runtime`
+// （后者重导出了内核的 `mir`）来。下面这两行显式再导出优先于 glob，并各自点名宿主面向的那一个
+// ——构建脚本入口 `build_time::run()` 与内核的 `mir` 模块；其余名字仍可经 glob 取得。
+// 这一层不再承诺别的：官方地址依旧是模块路径（`nichlink_toolchain::mcp::run`、
+// `nichlink_toolchain::cli::run` 等）。判据是
+// `cargo clippy --all-targets --all-features -- -D warnings`：在这一对出现之前，这两个名字都会
+// 报 `ambiguous_glob_reexports`。
+#[cfg(feature = "build")]
+pub use self::build_time::run;
+#[cfg(feature = "run")]
+pub use self::runtime::mir;
 // t115-root-glob: end
