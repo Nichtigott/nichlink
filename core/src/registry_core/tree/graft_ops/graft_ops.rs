@@ -344,7 +344,7 @@ impl Registry {
     pub(super) fn take_entry(&mut self, wanted: NodeId) -> Option<RegisteredEntry> {
         let parent = self.find(wanted)?.parent;
         let registry = self.registry_mut(parent)?;
-        Arc::make_mut(&mut registry.entries).remove(&wanted)
+        Arc::make_mut(&mut registry.entries).remove_entry(&wanted)
     }
 }
 

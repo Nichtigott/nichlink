@@ -17,3 +17,6 @@
 
 需要收集能力的宿主引入本 crate，并用
 `nichlink_debug_method::registrations!(nichlink::RegistrationInfo)` 读取条目。
+
+这个 crate 不安排改名：合并会把它变成 `call_evidence` 模块，crate 名随 crate 一起消失
+（`AMB-07`）。

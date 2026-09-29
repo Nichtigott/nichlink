@@ -17,11 +17,11 @@ pub mod macros;
 #[cfg(feature = "authoring")]
 #[path = "authoring/authoring.rs"]
 pub mod authoring;
-#[path = "call_report/call_report.rs"]
+#[path = "call_report.rs"]
 pub mod call_report;
-#[path = "plugin/plugin.rs"]
+#[path = "plugin.rs"]
 pub mod plugin;
-#[path = "registry/registry.rs"]
+#[path = "registry.rs"]
 pub mod registry;
 #[path = "runtime/runtime.rs"]
 pub mod runtime;
@@ -60,6 +60,15 @@ pub use runtime::*;
 // module path, and this is the short one the design document shows.
 // 写入方交给独立读取方的唯一文档就是 trace artifact，因此它的入口值得一条 crate 根部路径：
 // `runtime::trace::*` 仍是模块路径，这一条是设计文档里写的那条短路径。
+// This line deliberately still names `artifact`: the module is `snapshot` now (`NAM-11`),
+// and the alias in `runtime/trace/trace.rs` is what keeps the published path
+// `nichlink_run_method::runtime::trace::artifact` alive. Naming it here is the pin the
+// shim ratchet cannot express (it only reads `pub use nichlink::…` statements): delete the
+// alias and this line stops compiling.
+// 这一行有意仍写 `artifact`：模块现在是 `snapshot`（`NAM-11`），保住已发布路径
+// `nichlink_run_method::runtime::trace::artifact` 的是 `runtime/trace/trace.rs` 里的别名。
+// 把旧路径写在这里，正是 shim 棘轮表达不了的那根钉子（它只读 `pub use nichlink::…`）：
+// 删掉别名，这一行就编译不过。
 pub use runtime::trace::artifact::{
     TRACE_ARTIFACT_VERSION, TraceArtifact, TraceArtifactError, TraceFrame, read_trace_artifact,
     trace_artifact_path, write_trace_artifact,

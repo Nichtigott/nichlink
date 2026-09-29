@@ -69,17 +69,17 @@ mod apply;
 #[path = "apply_target.rs"]
 mod apply_target;
 
-#[path = "nodes.rs"]
-mod nodes;
+#[path = "resolve.rs"]
+mod resolve;
 
 #[path = "preview.rs"]
 mod preview;
 
-#[path = "index.rs"]
-mod index;
+#[path = "source_index.rs"]
+mod source_index;
 
-#[path = "evidence.rs"]
-mod evidence;
+#[path = "build_evidence.rs"]
+mod build_evidence;
 
 #[path = "trace.rs"]
 mod trace;

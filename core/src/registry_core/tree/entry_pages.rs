@@ -36,7 +36,7 @@ impl EntryPages {
         usize::from(id.into_bytes()[0]) % ENTRY_PAGE_COUNT
     }
 
-    pub(super) fn get(&self, id: &NodeId) -> Option<&RegisteredEntry> {
+    pub(super) fn entry(&self, id: &NodeId) -> Option<&RegisteredEntry> {
         self.pages[Self::page(*id)].get(id)
     }
 
@@ -71,7 +71,7 @@ impl EntryPages {
         previous
     }
 
-    pub(super) fn remove(&mut self, id: &NodeId) -> Option<RegisteredEntry> {
+    pub(super) fn remove_entry(&mut self, id: &NodeId) -> Option<RegisteredEntry> {
         let page = &mut self.pages[Self::page(*id)];
         let removed = Arc::make_mut(page).remove(id);
         if removed.is_some() {

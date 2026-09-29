@@ -1,7 +1,7 @@
-//! App mutations and editor handoff.
-//! App 文件变更与编辑器交接。
+//! App mutations: the write paths, and what each of them does to the session.
+//! App 文件变更：各条写入路径，以及每条对会话做了什么。
 
-use super::support::{package_root, select_project};
+use super::project_context::{package_root, select_project};
 use super::write_guard::{selected_package_root, with_selected_project};
 use super::*;
 use nichlink_run_method::pascal_case;
@@ -75,10 +75,6 @@ impl App {
     ///
     /// Returns the file and the 1-based line to open; `None` when nothing is pending.
     /// 返回要打开的文件与从 1 开始的行号；没有待处理请求时为 `None`。
-    pub fn take_editor_request(&mut self) -> Option<(PathBuf, u32)> {
-        self.editor_request.take()
-    }
-
     pub(super) fn submit_add(&mut self, add: &AddState) {
         let parent = match self.resolve_parent(&add.values[face_field::PARENT]) {
             Ok(parent) => parent,

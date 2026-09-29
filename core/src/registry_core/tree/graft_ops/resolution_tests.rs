@@ -56,18 +56,17 @@ fn an_ambiguous_replacement_selector_is_refused() {
 
 /// The *cut* selector's path arm refuses a path two faces share. A collision stays
 /// reachable after registration (an in-place edit may rename a face: that
-/// validation checks namespace, identity, parent, rule and contract — not the slot
-/// name), so the arm that used to take the first match has to report the ambiguity.
-/// Silently re-selecting a slot is the hidden behaviour this workspace refuses, and
+/// validation checks namespace, identity, parent, rule and contract — not the
+/// `registry_name`), so the arm that used to take the first match has to report the ambiguity.
+/// Silently re-selecting a node is the hidden behaviour this workspace refuses, and
 /// the first-match lookup it used to share with `resolve_record` is pinned right
 /// here next to the strict reading, because that contrast is what makes the debt
 /// decidable instead of prose (audit `LGC-LG-07`).
-/// **切口**选择器的路径那一支拒绝两个面共用的路径。注册之后这种碰撞仍可达（就地编辑可以给面
-/// 改名：那道校验检查命名空间、身份、父级、规则与契约——但不检查 `registry_name`），因此过去取第一个
-/// 匹配
-/// 的那一支必须报出多义。静默改选槽位正是本工作区拒绝的隐性行为；而它过去与 `resolve_record`
-/// 共用的那个"取第一个匹配"查找就在这里与严格读法并列钉住，因为正是这个对照让欠账可判定，而
-/// 不是散文。
+/// **切口**选择器的路径那一支拒绝两个面共用的路径。注册之后这种碰撞仍可达（就地编辑可以给
+/// 面改名：那道校验检查命名空间、身份、父级、规则与契约——但不检查 `registry_name`），
+/// 因此过去取第一个匹配的那一支必须报出多义。静默改选节点正是本工作区拒绝的隐性行为；
+/// 而它过去与 `resolve_record` 共用的那个"取第一个匹配"查找就在这里与严格读法并列钉住，
+/// 因为正是这个对照让欠账可判定，而不是散文。
 #[test]
 fn an_ambiguous_cut_path_is_refused() {
     let namespace = "ambiguous-path";
@@ -108,14 +107,14 @@ fn an_ambiguous_cut_path_is_refused() {
     assert!(rendered.contains("matches 2"), "{rendered}");
     assert!(rendered.contains("root/slot"), "{rendered}");
 
-    // Identity is never ambiguous: the same slot named by its compile-time id
+    // Identity is never ambiguous: the same target named by its compile-time id
     // still resolves, which is the remedy the message points at.
-    // 身份从不含糊：同一个槽位用编译期 id 命名仍然解析——正是消息指向的补救办法。
+    // 身份从不含糊：同一个目标用编译期 id 命名仍然解析——正是消息指向的补救办法。
     use crate::registry_core::release::StaticGraftCut;
     let by_id = [StaticGraftCut::from_ids(a.id, replacement.id, false)];
     assert!(
         root.overlay_static(&by_id, &external).is_ok(),
-        "naming the slot by identity resolves it: {rendered}"
+        "naming the target by identity resolves it: {rendered}"
     );
 }
 

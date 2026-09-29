@@ -1,3 +1,6 @@
+//! covers `app/navigation.rs`, `app/pointer.rs`.
+//! 覆盖 `app/navigation.rs`、`app/pointer.rs`。
+//!
 //! Page routing and divider-drag tests.
 //! 页面路由与分隔条拖拽测试。
 

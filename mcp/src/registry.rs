@@ -25,7 +25,7 @@ use nichlink_build_method::{FaceView, package_name};
 /// 就是这个包自己的名字。
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+    let (faces, unparsable) = crate::resolve::derived_faces(root, &namespace)?;
     Ok(render(&namespace, &faces, &unparsable))
 }
 

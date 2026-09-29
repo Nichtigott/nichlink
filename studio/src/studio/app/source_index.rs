@@ -10,7 +10,7 @@
 // kernel 词法器重导出，Studio 历史路径经由它们保持可用。
 pub use nichlink_run_method::source::{body_calls, function_source_range, function_symbols};
 
-use super::support::{package_namespace, package_root, with_authoring_context};
+use super::project_context::{package_namespace, package_root, with_authoring_context};
 use super::*;
 
 /// Compose compiled, external, and newly authored faces into one snapshot.

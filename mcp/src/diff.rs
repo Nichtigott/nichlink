@@ -16,7 +16,7 @@ use std::path::Path;
 use nichlink_build_method::{GraftPlanRow, declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
-use crate::evidence::build_evidence;
+use crate::build_evidence::build_evidence;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
 use crate::tree_delta::{FaceStatus, TreeDelta};
@@ -36,7 +36,7 @@ use crate::tree_delta::{FaceStatus, TreeDelta};
 /// 共用同一套词汇（added/gone/re-identified）。
 pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+    let (faces, unparsable) = crate::resolve::derived_faces(root, &namespace)?;
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
         return diff_records(root, &faces, &namespace, arguments, &unparsable);
     }

@@ -10,7 +10,7 @@ use crate::registry_core::declaration::{
 use crate::registry_core::identity::NodeId;
 
 use super::parse::{
-    parse_admission_owned, parse_flow_value, parse_registration_rule_owned, split_csv_owned,
+    parse_admission_snapshot, parse_field_list, parse_flow_value, parse_registration_rule_snapshot,
     try_parse_requirements_owned,
 };
 use super::validation::rule_path_for_source;
@@ -73,11 +73,11 @@ pub fn snapshot_from_values(
     } else {
         value("registry_rule_path").to_owned()
     };
-    let exports = split_csv_owned(value("exports"));
-    let handle_traits = split_csv_owned(value("handle_traits"));
-    let part_traits = split_csv_owned(value("part_traits"));
-    let registration_rule = parse_registration_rule_owned(value("registration_rule"))?;
-    let admission = parse_admission_owned(value("admission"))?;
+    let exports = parse_field_list(value("exports"));
+    let handle_traits = parse_field_list(value("handle_traits"));
+    let part_traits = parse_field_list(value("part_traits"));
+    let registration_rule = parse_registration_rule_snapshot(value("registration_rule"))?;
+    let admission = parse_admission_snapshot(value("admission"))?;
     let namespace = if value("namespace").is_empty() {
         default_namespace.to_owned()
     } else {
@@ -125,10 +125,10 @@ pub fn snapshot_from_values(
         admission,
         requires: try_parse_requirements_owned(value("requires"))
             .map_err(|error| error.to_string())?,
-        provides: split_csv_owned(value("provides")),
+        provides: parse_field_list(value("provides")),
         contract: OwnedObjectContract {
-            required_parts: split_csv_owned(value("required_parts")),
-            provided_parts: split_csv_owned(value("provided_parts")),
+            required_parts: parse_field_list(value("required_parts")),
+            provided_parts: parse_field_list(value("provided_parts")),
         },
         flow: parse_flow_value(value("flow"))?.unwrap_or_else(OwnedFlowContract::none),
         flow_provider: (!value("flow_provider").is_empty())

@@ -1,27 +1,26 @@
-//! Discovery/identity cache writing and the active-face predicates it shares.
-//! 发现/身份缓存写入及其复用的活跃注册面判定。
+//! Discovery/identity cache writing: the observation record the build reuses.
+//! 发现/身份缓存写入：构建复用的那份观察记录。
 //!
 //! The cache is only an observation record: generated Rust still comes from the
 //! current source tree, and a corrupt cache is rebuilt instead of trusted. The
-//! activity predicates live beside it because they answer the same question the
-//! cache rows are keyed on.
-//! 缓存只是观察记录：生成的 Rust 仍来自当前源码树，损坏缓存会重建而不会被信任。
-//! 活跃判定与缓存放在一起，因为它回答的正是缓存行所依据的同一个问题。
+//! active-face predicates that used to sit beside it moved to `scope.rs`, whose
+//! question they answer (`NAM-04`); the atomic write helper stays here until the
+//! cross-crate move gets a task of its own.
+//! 缓存只是观察记录：生成的 Rust 仍来自当前源码树，损坏缓存会重建而不会被信任。过去与它放在一起的
+//! 活跃注册面判定已搬去 `scope.rs`——它们回答的是作用域自己的问题（`NAM-04`）；原子写入辅助函数
+//! 暂留此处，跨 crate 搬迁另开一条。
 
-use std::collections::BTreeSet;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink::lexicon;
-
+use super::discovery_node::{Node, relative_display};
+use super::face_syntax_check::parsed_face;
 use super::identity_cache::{source_unit_fingerprint, valid_cached_unit};
-use super::node::{Node, relative_display};
+use super::node_id;
 use super::registry_identity::{self, NodeId};
 use super::registry_syntax::{FaceSyntax, ParentSyntax};
-use super::validation::parsed_face;
-use super::{SourceScope, has_selected_face, node_id};
 
 // Bump this whenever the identity input or generated-plan format changes.
 // 身份输入或生成计划格式变化时必须递增，避免旧缓存混入新构建。
@@ -40,11 +39,11 @@ pub(crate) const CACHE_SCHEMA: &str = "3";
 /// the same way, so a truncated read could be called current. Writing a unique
 /// sibling and renaming it over the target is atomic on one filesystem — the same
 /// pattern the authoring executor uses
-/// (`run_method/src/authoring/filesystem/filesystem.rs`).
+/// (`run_method/src/authoring/filesystem.rs`).
 /// "文件存在"必须等于"文件完整"：`fs::write` 直接写目标时失败（磁盘写满、被中断）会留下它写到一半的
 /// 内容，而"这份产物描述的就是这批源码"那枚凭据也走同一条路，因此被截断的读取可能被当成 current。
 /// 写一个唯一的同级文件再 rename 覆盖目标，在同一文件系统上是原子的——这正是授权执行器在用的同一模式
-/// （`run_method/src/authoring/filesystem/filesystem.rs`）。
+/// （`run_method/src/authoring/filesystem.rs`）。
 pub(crate) fn write_if_changed(path: &Path, content: &str) -> Result<(), String> {
     if fs::read_to_string(path).ok().as_deref() == Some(content) {
         return Ok(());
@@ -70,33 +69,6 @@ fn temporary_sibling(path: &Path) -> PathBuf {
         |name| name.to_string_lossy().into_owned(),
     );
     path.with_file_name(format!("{name}.tmp-{}-{sequence}", std::process::id()))
-}
-
-pub(crate) fn collect_active_ids(
-    src: &Path,
-    nodes: &[Node],
-    scope: &SourceScope,
-    selected_ancestor: bool,
-    active: &mut BTreeSet<NodeId>,
-) {
-    for node in nodes {
-        if !scope.includes(src, node, selected_ancestor) {
-            continue;
-        }
-        let selected_here = selected_ancestor
-            || node_id(src, node).is_some_and(|id| {
-                scope
-                    .roots
-                    .as_ref()
-                    .is_some_and(|roots| roots.contains(&id))
-            });
-        if face_source_is_active(src, node, scope, selected_ancestor)
-            && let Some(id) = node_id(src, node)
-        {
-            active.insert(id);
-        }
-        collect_active_ids(src, &node.children, scope, selected_here, active);
-    }
 }
 
 /// Keep a reusable discovery snapshot outside Cargo's ephemeral OUT_DIR.
@@ -150,9 +122,9 @@ pub(crate) fn update_discovery_cache(
             .is_some_and(|content| valid_cached_unit(content, &path, id));
         if !unit_hit {
             // Parse only a new or corrupt unit. A valid fingerprinted unit is
-            // consumed as-is by registration_check::aggregate.
+            // consumed as-is by registration_phase::aggregate.
             // 只有新 unit 或损坏 unit 才解析；有效 fingerprint unit 直接由
-            // registration_check::aggregate 消费。
+            // registration_phase::aggregate 消费。
             let source = fs::read_to_string(&source_path).ok();
             let face = source
                 .as_deref()
@@ -241,45 +213,5 @@ fn collect_discovery_rows(src: &Path, nodes: &[Node], rows: &mut Vec<(String, No
             rows.push((relative_display(src, file), id));
         }
         collect_discovery_rows(src, &node.children, rows);
-    }
-}
-
-pub(crate) fn source_is_active(
-    src: &Path,
-    node: &Node,
-    scope: &SourceScope,
-    selected_ancestor: bool,
-) -> bool {
-    scope.roots.is_none()
-        || selected_ancestor
-        || (node_id(src, node).is_some() && has_selected_face(src, node, false, scope))
-        || node
-            .file
-            .as_ref()
-            .is_some_and(|file| lexicon::is_registration_path(&relative_display(src, file)))
-        || matches!(
-            node.name.as_str(),
-            "registry" | "rules" | "registry_rule" | "root_registry"
-        )
-}
-
-pub(crate) fn face_source_is_active(
-    src: &Path,
-    node: &Node,
-    scope: &SourceScope,
-    selected_ancestor: bool,
-) -> bool {
-    node_id(src, node).is_some() && source_is_active(src, node, scope, selected_ancestor)
-}
-
-/// Keep development tooling outside the default core dependency graph.
-/// 将开发工具隔离在默认核心依赖图之外。
-pub(crate) fn module_feature(src: &Path, node: &Node) -> Option<&'static str> {
-    let relative = node.file.as_ref().map(|file| relative_display(src, file))?;
-    match relative.as_str() {
-        "registry_core/authoring/authoring.rs" | "registry_core/syntax/syntax.rs" => {
-            Some("authoring")
-        }
-        _ => None,
     }
 }

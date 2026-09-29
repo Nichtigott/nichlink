@@ -28,6 +28,28 @@
 //! 早先的拼法只是别名，列在这里仅为让搜索找得到：*slot*、*slot name*、*branch handle*、
 //! *tree slot*、*selector* 都指那段路径或命名它的切口，*object* / *entry* 都指节点。新写的文本用
 //! face、node 或 `registry_name`；字段保留已发布的旧名。
+//!
+//! The verb a name starts with says what the function does with its input, so a reader can
+//! pick the right call without opening a signature (audit `NAM-33`; the table is the one
+//! `docs/audit-2026-09-28/audit-naming-review.md` settled on): `read_*` reads text or bytes
+//! from a reader or a file; `load_*` turns a file or artifact on disk into a structure and
+//! may fail; `resolve_*` maps an id, path or name to an entity; `find_*` looks something up
+//! in a collection and returns a reference or a set — **`get` is not used when the return is
+//! not an `Option`**; `collect_*` accumulates into a caller-provided collection and belongs
+//! on *public* functions that return that set (a recursive helper behind one is `visit_*` or
+//! `walk_*`); `parse_*` turns text into a structure; `render_*` turns a structure back into
+//! text; `write_*` writes to disk; `validate_*` checks and returns the reason as an error;
+//! `check_*` is for runtime assertions (`RuntimeCheckSpec`). A bare verb is allowed only at
+//! an entry position — a crate root, a CLI command's same-named implementation, a trait
+//! declaration, or `main` (audit `NAM-32`).
+//! 名字开头的动词说明它拿输入做什么，因此读者不必打开签名就能选对调用（审计 `NAM-33`；下表是
+//! `docs/audit-2026-09-28/audit-naming-review.md` 定下的那份）：`read_*` 从 reader 或文件读文本
+//! 或字节；`load_*` 把磁盘上的文件或工件装载成结构、可失败；`resolve_*` 把 id/路径/名字映射到
+//! 实体；`find_*` 在集合里查找并返回引用或集合——**返回值不是 `Option` 时不用 `get`**；
+//! `collect_*` 累积进调用方给的集合，只用在**公开**的"返回集合"函数上（它背后的递归 helper 叫
+//! `visit_*` 或 `walk_*`）；`parse_*` 把文本变成结构；`render_*` 把结构变回文本；`write_*` 写盘；
+//! `validate_*` 检查并把原因作为错误返回；`check_*` 只用于运行期断言（`RuntimeCheckSpec`）。
+//! 裸动词只允许出现在入口位——crate 根、CLI 命令的同名实现、trait 声明、或 `main`（审计 `NAM-32`）。
 
 use std::path::{Path, PathBuf};
 
@@ -292,4 +314,4 @@ pub fn resolve_namespace(configured: Option<&str>) -> &str {
 
 #[cfg(test)]
 #[path = "lexicon_tests.rs"]
-mod tests;
+mod lexicon_tests;

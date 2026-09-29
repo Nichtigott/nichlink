@@ -30,6 +30,9 @@ trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件
 宿主 crate 依赖本 crate 并在 crate 根部调用一次
 `nichlink_run_method::host!();`；构建期另一半是 `nichlink-build-method`。
 
+这里的 `run` 是绑定进程生命周期的运行期那一半——不是 `cargo run`，也不是入口：入口是
+`host!()` 加 `build.rs`（`AMB-03`，保留；合并批次会把**模块**改名为 `runtime`）。
+
 ## trace artifact
 
 宿主记录的 trace 可以作为一个文件离开进程，由另一个进程读回。`write_trace_artifact`
@@ -78,15 +81,15 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 | `children()` | 聚合的子失败，每条失败的子检查一条 | 仅当该 phase 聚合了子失败时非空 |
 
 占位路径有 `<unknown:{node}>`
-（`core/src/registry_core/tree/inspection/inspection.rs:74`）、
+（`core/src/registry_core/tree/inspection.rs:74`）、
 `<missing-parent:…>/…`
-（`core/src/registry_core/tree/transaction/transaction.rs:167`、
+（`core/src/registry_core/tree/transaction.rs:167`、
 `core/src/registry_core/tree/graft_ops/graft_ops.rs:149`）与 `<edited>/…`
 （`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`）；合成的来源位置有
 `<runtime>`（`inspection.rs:76`）、`<registry-connector>`
-（`core/src/registry_core/tree/connector/connector.rs:206`）、
+（`core/src/registry_core/tree/connector.rs:206`）、
 `<owned-snapshot-batch>`
-（`core/src/registry_core/tree/transaction/transaction.rs:84`）、`<migration>`
+（`core/src/registry_core/tree/transaction.rs:84`）、`<migration>`
 （`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`）与 `<graft>`
 （`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`、
 `core/src/registry_core/tree/graft_ops/reconcile.rs:148`）。
@@ -94,11 +97,11 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 读取 `health_check` 失败的两条规则：
 
 1. 顶层 `message()` 是固定的聚合句 `runtime health check failed`
-   （`core/src/registry_core/tree/inspection/inspection.rs:110`），不包含失败检查的名字。
+   （`core/src/registry_core/tree/inspection.rs:110`），不包含失败检查的名字。
    其他聚合 phase 形状相同：`registration connector rejected (N face(s))`
-   （`core/src/registry_core/tree/connector/connector.rs:212`）与 `snapshot batch
+   （`core/src/registry_core/tree/connector.rs:212`）与 `snapshot batch
    rejected (N error(s))`
-   （`core/src/registry_core/tree/transaction/transaction.rs:89`）。
+   （`core/src/registry_core/tree/transaction.rs:89`）。
 2. 失败检查自己的名字与文本在 `children()[0].message()` 中，按
    ``check `<名字>`: <消息>`` 构造（`inspection.rs:95`）。`Display` 渲染聚合句加每条
    子错误，因此下例的 `eprintln!("{error}")` 会同时打印两者。
@@ -120,4 +123,3 @@ fn validate(registry: &Registry, node: nichlink_run_method::NodeId, label: &str)
 可运行的版本在
 [`examples/control-button/examples/health_check.rs`](https://github.com/Nichtigott/nichlink/blob/main/examples/control-button/examples/health_check.rs)：
 `cargo run -p nichlink-example-control-button --example health_check`。
-

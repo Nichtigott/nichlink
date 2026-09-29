@@ -60,3 +60,7 @@ does not happen is exactly what must not leave the build. A declaration whose
 `#[cfg]` is off in this build still counts, so a legitimately gated slot is not an
 error. The record→overlay layer is described in
 [`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md).
+
+The name says *build-time*: this crate is the build-time filesystem and `OUT_DIR`
+half of the model, not a `Method` type and not Cargo's `build` (`AMB-02`, kept;
+the merge batch renames the *module* to `build_time`).

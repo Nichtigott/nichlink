@@ -7,7 +7,7 @@
 //! 与被测代码相当。
 
 use crate::diagnostics::BuildDiagnostics;
-use crate::discovery::discover_root;
+use crate::source_walk::discover_root;
 
 /// The face files the scope proved live, named relative to `src`.
 /// 作用域证明存活的注册面文件，路径相对 `src`。

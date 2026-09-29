@@ -28,14 +28,17 @@ mod mutations;
 #[path = "namespace.rs"]
 mod namespace;
 mod pointer;
-// The three subjects `support` used to carry, now one module each; `support`
-// re-exports them so historical `super::support::…` paths keep resolving.
-// `support` 过去承载的三个主语，现在一个模块一个；`support` 重导出它们，使历史的
-// `super::support::…` 路径继续可解析。
+// The subjects `support` used to carry are one module each now: the project context and
+// the source paths derived from it, the `cargo` probe, the editor handoff, and the hot
+// zones with the interaction helpers that read them. The historical `support` shim is
+// gone — audit `NAM-01` — and every call site names the module it means.
+// `support` 过去承载的几个主语现在一个模块一个：项目上下文与由它推出的源码路径、`cargo` 探测、
+// 编辑器交接，以及热区与读取它们的交互辅助。历史的 `support` shim 已删除——审计 `NAM-01`——
+// 每个调用点都写出它要的那个模块。
 #[path = "cargo_probe.rs"]
 mod cargo_probe;
-#[path = "geometry.rs"]
-mod geometry;
+#[path = "editor_launch.rs"]
+mod editor_launch;
 #[path = "project_context.rs"]
 pub(crate) mod project_context;
 mod search_queries;
@@ -44,11 +47,10 @@ mod source_stamp;
 #[path = "state/state.rs"]
 mod state;
 use source_stamp::*;
-mod support;
 #[path = "write_guard.rs"]
 mod write_guard;
+use project_context::host_manifest;
 pub use state::*;
-use support::host_manifest;
 
 use std::cell::RefCell;
 
@@ -73,7 +75,7 @@ use nichlink_run_method::{
 /// 在接管终端之前调用，因此"没有东西可编辑"的启动会带着消息与非零退出失败，而不是先显示
 /// 一棵空树，再让随后的创作命令写进剩下那个目录。
 pub(super) fn preflight(explicit: Option<&std::path::Path>) -> Result<PathBuf, String> {
-    support::resolve_project(explicit)
+    project_context::resolve_project(explicit)
 }
 
 /// Studio's top-level state: the loaded registry, active page, and UI cursors.

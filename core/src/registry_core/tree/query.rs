@@ -60,7 +60,7 @@ impl Registry {
     }
 
     pub(super) fn entry_at(&self, wanted: NodeId) -> Option<&RegisteredEntry> {
-        if let Some(entry) = self.entries.get(&wanted) {
+        if let Some(entry) = self.entries.entry(&wanted) {
             return Some(entry);
         }
         for entry in self.entries.values() {
@@ -77,14 +77,22 @@ impl Registry {
 
     /// Look up the registration snapshot of one face by identity.
     /// 按身份查找某个注册面的注册快照。
-    pub fn find(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
+    pub fn find_by_id(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
         self.entry_at(id).map(|entry| entry.info.as_ref())
+    }
+
+    /// The historical name of [`Self::find_by_id`], kept because `Registry::find` is on
+    /// the published surface (`NAM-36`). Prefer `find_by_id`.
+    /// [`Self::find_by_id`] 的历史名字，因为 `Registry::find` 在已发布面上所以保留（`NAM-36`）。
+    /// 请优先用 `find_by_id`。
+    pub fn find(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
+        self.find_by_id(id)
     }
 
     /// Return the current logical path of a face, derived from the live tree.
     /// 返回某个注册面的当前逻辑路径，由现存树推导。
     pub fn path_for(&self, id: NodeId) -> Option<String> {
-        if let Some(entry) = self.entries.get(&id) {
+        if let Some(entry) = self.entries.entry(&id) {
             return Some(format!("{}/{}", self.header.path, entry.info.registry_name));
         }
         for entry in self.entries.values() {
@@ -99,17 +107,17 @@ impl Registry {
     /// 返回从本注册机根到某个注册面的身份链。
     pub fn node_path(&self, id: NodeId) -> Option<Vec<NodeId>> {
         let mut path = vec![self.header.id];
-        self.collect_node_path(id, &mut path).then_some(path)
+        self.visit_node_path(id, &mut path).then_some(path)
     }
 
-    fn collect_node_path(&self, wanted: NodeId, path: &mut Vec<NodeId>) -> bool {
+    fn visit_node_path(&self, wanted: NodeId, path: &mut Vec<NodeId>) -> bool {
         for entry in self.entries.values() {
             path.push(entry.info.id);
             if entry.info.id == wanted {
                 return true;
             }
             if let Some(child) = entry.child.as_ref()
-                && child.collect_node_path(wanted, path)
+                && child.visit_node_path(wanted, path)
             {
                 return true;
             }
@@ -145,7 +153,7 @@ impl Registry {
     /// 按深度优先顺序收集某一 kind 的全部注册面。
     pub fn find_kind(&self, kind: &str) -> Vec<&RegistrationSnapshot> {
         let mut found = Vec::new();
-        self.collect_kind(kind, &mut found);
+        self.visit_kinds(kind, &mut found);
         found
     }
 
@@ -161,13 +169,13 @@ impl Registry {
             .collect()
     }
 
-    fn collect_kind<'a>(&'a self, kind: &str, found: &mut Vec<&'a RegistrationSnapshot>) {
+    fn visit_kinds<'a>(&'a self, kind: &str, found: &mut Vec<&'a RegistrationSnapshot>) {
         for entry in self.entries.values() {
             if entry.info.kind == kind {
                 found.push(entry.info.as_ref());
             }
             if let Some(child) = &entry.child {
-                child.collect_kind(kind, found);
+                child.visit_kinds(kind, found);
             }
         }
     }
@@ -176,15 +184,15 @@ impl Registry {
     /// 把子树展平成深度优先的注册快照列表。
     pub fn depth_first(&self) -> Vec<&RegistrationSnapshot> {
         let mut entries = Vec::new();
-        self.collect_depth_first(&mut entries);
+        self.walk_depth_first(&mut entries);
         entries
     }
 
-    fn collect_depth_first<'a>(&'a self, entries: &mut Vec<&'a RegistrationSnapshot>) {
+    fn walk_depth_first<'a>(&'a self, entries: &mut Vec<&'a RegistrationSnapshot>) {
         for entry in self.entries.values() {
             entries.push(entry.info.as_ref());
             if let Some(child) = &entry.child {
-                child.collect_depth_first(entries);
+                child.walk_depth_first(entries);
             }
         }
     }

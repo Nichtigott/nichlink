@@ -2,19 +2,20 @@
 //! paths and namespaces one file-bound authoring operation reads.
 //! 创作执行上下文：`AuthoringContext`，以及一次绑定文件的创作操作所读取的进程级路径与命名空间。
 //!
-//! The file is named `validation` because the kernel's validators are re-exported
-//! here — the validators themselves live in the kernel `authoring` module. What
-//! this file *holds* is the context and its environment fallback chain, so the
-//! name leads a reader looking for validation rules to the wrong file; renaming it
-//! (to `context`) is what audit `NAM-03` asks for, but the historical public path
-//! `nichlink_run_method::authoring::validation` is pinned by the shim ratchet
-//! (`conventions/src/shims.rs`), so the rename is a public-surface change to
-//! schedule rather than a local edit.
-//! 本文件名为 `validation`，是因为内核的校验函数在这里重导出——校验函数本体在 kernel 的
-//! `authoring` 模块。本文件**装**的是上下文及其环境变量回落链，因此这个名字会把找校验规则的读者
-//! 引到错的文件；审计 `NAM-03` 要的正是改名（改为 `context`），但历史公开路径
-//! `nichlink_run_method::authoring::validation` 被 shim 棘轮（`conventions/src/shims.rs`）
-//! 钉住，因此改名是需要排期的公开面变更，而不是一次本地编辑。
+//! The file was named `validation` because the kernel's validators are re-exported
+//! here — the validators themselves live in the kernel `authoring` module. What this
+//! file *holds* is the context and its environment fallback chain, so that name led a
+//! reader looking for validation rules to the wrong file; audit `NAM-03` asked for the
+//! rename to `context`, and this is it. The historical public path
+//! `nichlink_run_method::authoring::validation` is **not** gone: `authoring.rs` keeps it
+//! as an alias (`pub use self::context as validation;`), and that alias is also how the
+//! re-export pinned in `conventions/src/shims.rs` stays reachable at the old address.
+//! 本文件曾名为 `validation`，是因为内核的校验函数在这里重导出——校验函数本体在 kernel 的
+//! `authoring` 模块。本文件**装**的是上下文及其环境变量回落链，因此那个名字会把找校验规则的读者
+//! 引到错的文件；审计 `NAM-03` 要的正是改成 `context`，这就是那次改名。历史公开路径
+//! `nichlink_run_method::authoring::validation` **并没有消失**：`authoring.rs` 用别名
+//! （`pub use self::context as validation;`）保留了它，钉在 `conventions/src/shims.rs` 里的那条
+//! 重导出也正是靠它继续在旧地址上可达。
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

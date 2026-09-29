@@ -21,10 +21,10 @@ use nichlink_build_method::face_views;
 use serde_json::Value;
 
 use crate::apply::load_registry;
-use crate::evidence::{build_evidence, pruning_line, scope_line};
-use crate::nodes::resolve_node;
+use crate::build_evidence::{build_evidence, pruning_line, scope_line};
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::resolve::resolve_node;
 
 /// One `capability=>provider` requirement, and who answers it.
 /// 一条 `capability=>provider` 需求，以及谁来满足它。

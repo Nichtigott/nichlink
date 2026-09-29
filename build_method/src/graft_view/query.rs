@@ -188,8 +188,8 @@ pub(crate) fn declared_graft_view(entry: &GraftSyntax) -> DeclaredGraft {
 mod tests {
     use super::{declared_grafts, host_graft_entries};
     use crate::diagnostics::BuildDiagnostics;
-    use crate::discovery::discover_root;
     use crate::host_entry_source;
+    use crate::source_walk::discover_root;
     use std::fs;
     use std::path::PathBuf;
 

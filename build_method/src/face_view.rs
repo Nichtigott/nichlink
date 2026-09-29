@@ -198,7 +198,7 @@ pub fn face_views_and_unreadable(
         .map(|face| format!("{}:{} {}", face.relative, face.line, face.message))
         .collect::<Vec<_>>();
     unreadable.extend(
-        super::validation::face_syntax_errors(src, &nodes)
+        super::face_syntax_check::face_syntax_errors(src, &nodes)
             .iter()
             .map(|error| format!("{}:{} {}", error.source, error.line, error.message)),
     );

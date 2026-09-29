@@ -31,7 +31,7 @@ what blocks 1.0, not by when they were found.
 - **B3d 修正了一处归因**:F1 的垃圾默认名不是审计指认的"完整 arm"产生,而是由*两个都显式写了的紧凑 arm* 消费 `$crate::NoPreset` 后经 `stringify!` 产生;修法是删掉那条重发 arm,让带 `handle` 的紧凑 arm 自己成为默认化 arm。三个示例面现在实测 `preset == "NoPreset"`、`parts == "NoParts"`。
 - **F2 的责任在计划本身**:B2 要求"四处路径判断合成一个 `path_is_under`",但那四处对"相等"的语义并不一致(准入包含相等,连接器严格在其下),合并把连接器的准入静默放宽了。已加 `path_is_strictly_under` 并把两种含义写在一处。教训:合并重复前逐处比对边界语义,不能只看"看起来一样"。
 - **F5 确立一条原则**:零调用者的删除,在真实调用者出现时反转。`RegistryError` 的 `node/path/source/message/children` 已补回,另三个保持删除,因为文档化的 `health_check` 宿主 API 就是调用者。
-- **trace 接入定为 1.x**(`docs/design-trace-ingest.md`);1.0 只加一条 `LIVE SAMPLE` 标注的回归测试。设计还查明示例 trace 不只是假的,而是选不中的:它的节点与注册树不同域,`Live` 永不点亮;后来某一轮给样本补了一个被观测局部值(该轮起文中的"不记录 locals"不再成立),但那个值同样只对样本自己的节点可见,而注册树里没有那个节点。1.x 的第一片(trace artifact)已开工,见该设计的 §3 与 `run_method/src/runtime/trace/artifact/`。
+- **trace 接入定为 1.x**(`docs/design-trace-ingest.md`);1.0 只加一条 `LIVE SAMPLE` 标注的回归测试。设计还查明示例 trace 不只是假的,而是选不中的:它的节点与注册树不同域,`Live` 永不点亮;后来某一轮给样本补了一个被观测局部值(该轮起文中的"不记录 locals"不再成立),但那个值同样只对样本自己的节点可见,而注册树里没有那个节点。1.x 的第一片(trace artifact)已开工,见该设计的 §3 与 `run_method/src/runtime/trace/snapshot/`。
 - **B4 的"有效树 dump"有真实边界**:CLI 无法为任意宿主重建 `Registry`(基树与外部树只存在于宿主 crate 内)。已提供宿主侧端口 `Registry::dump_effective`,CLI 的 `explain --overlay` 明确标注为 `static-projection`。
 
 **下一批已完成(尺寸回归 + 未接线能力 + 三条定夺项)**
@@ -115,13 +115,13 @@ what blocks 1.0, not by when they were found.
 | --- | --- | --- | --- |
 | 1 | ✅ `face_objects` arm 绑定 `$preset`/`$parts` 却展开成 `NoPreset`/`NoParts`（已复核机制，已修） | `run_method/src/macros/face_objects.rs:92-95` | 已落地：`__face_ty_or!`/`__face_ty_name_or!` 按每个绑定分别判有无，省略者保持默认、写下的原样转发；钉子 `run_method/tests/face_preset_parts.rs`、`run_method/tests/face_arm_defaults.rs` |
 | 2 | ✅ arm 5 不可达（已修：该 arm 已删除） | `run_method/src/macros/face_objects.rs`（无行号：被删的 arm 不再有位置） | 删除后既有宏测试全绿 |
-| 3 | `register_snapshot_batch` 尾部缺父循环不可达，且重复构造同一错误 | `declaration/../../tree/transaction/transaction.rs:58-71` | 删除；transaction 全部测试绿 |
+| 3 | `register_snapshot_batch` 尾部缺父循环不可达，且重复构造同一错误 | `declaration/../../tree/transaction.rs:58-71` | 删除；transaction 全部测试绿 |
 | 4 | `UnknownReplacement`/`UnknownTarget` 用原树根 id 报错，丢掉选择器 | `tree/graft_ops/overlay.rs:151-156`、`resolution.rs:43-51` | 错误携带选择器字符串；新增测试断错文案含 selector |
 | 5 | `same_symbol` 每次比较两次堆分配且在双重循环内 | `mir/merge.rs:53-55` | 改 `strip_suffix` 零分配；既有 merge 测试绿 |
 | 6 | Studio 帮助文字三处错 + 折叠是死代码 | `ui/status.rs:27`、`ui/search.rs:47,137`、`overlay/search.rs:65,282,380`、`app/search_queries.rs:10-16` | 帮助文字与实际键位一致；死折叠的键位与标记删除（不新增行为） |
 | 7 | Studio "live trace" 是硬编码样例，README 却声称权威 | `app/lifecycle.rs:46`、`app/sample.rs`（硬编码样例所在文件，已在本项收口时删除，职责移到 `app/trace.rs`）、`README.md:714` | 面板与图例标注为示例，README 同步；真实 ingest 留到 B4 |
 | 8 | `tools/nichlink-package-audit` 引用不存在的包且不在 CI | `tools/nichlink-package-audit:8` | 改 `nichlink-build-method`，接入 CI；脚本能跑通（core 已发前仍会因版本依赖失败，脚本里注明） |
-| 9 | `README.zh-CN.md` 把 `StaticPlan::find` 写成 O(log n)，实际线性 | `README.zh-CN.md:569` vs `release/release.rs:203-217` | 更正为 O(n)，与英文 README 一致 |
+| 9 | `README.zh-CN.md` 把 `StaticPlan::find`（现名 `find_face`，旧名保留为一行转发器）写成 O(log n)，实际线性 | `README.zh-CN.md:569` vs `release.rs:203-217` | 更正为 O(n)，与英文 README 一致 |
 | 10 | MCP 宣称能查合同，5 个工具只读源码 | `mcp/Cargo.toml:7`、`mcp/README.md:5-6`、`mcp/src/tools.rs:10-38` | 已按"补工具"收口（2026-09-26）：`nichlink.registry` 报告构建推导出的注册树（`face_views`）。contract/admission 数据仍缺——它们在已构建的 `RegistrationSnapshot` 里，不在源码里；宣称已按此收紧 |
 
 ### B1 完成情况（已收口，附两条新增存疑）
@@ -152,9 +152,9 @@ what blocks 1.0, not by when they were found.
    vs `:159-186`）→ 一份；删零调用的 `OwnedFlowContract::matches`。
 4. "路径等于或位于前缀之下"四处（`registration.rs:46-62`、`owned.rs:70-84`、`connector.rs:159,265`、
    `lexicon.rs:90`）→ 一个 `pub(crate) fn path_is_under`。
-5. `render_flow_expression`/`parse_flow_value` 与 `render_admission`/`parse_admission_owned`
+5. `render_flow_expression`/`parse_flow_value` 与 `render_admission`/`parse_admission_owned`（现名 `parse_admission_snapshot`，旧名保留为一行转发器）
    各写两遍（`authoring/parse/flow.rs`、`admission.rs`）→ 解析一份，渲染消费它。
-6. `normalize_kind_name` 与 `pascal_case` 同体（`authoring/validation/validation.rs:31-45` vs
+6. `normalize_kind_name` 与 `pascal_case` 同体（`authoring/validation.rs:31-45` vs
    `field_presentation.rs:317-329`）→ 后者是前者的回退分支。
 
 验收：每项删掉一份后，既有行为测试不变；每项新增一条"两边结果相同"的对照测试。
@@ -190,7 +190,7 @@ what blocks 1.0, not by when they were found.
 | `authoring::parse::try_render_requirements` | 内核 `authoring/parse/rules.rs`（严格，`-> Result<String, FaceParseError>`） | `run_method` 的 manifest 渲染器（旧 `render_requirements` 保留为有损薄包装） | `a_malformed_requires_entry_refuses_the_rewrite`（走真实 `render_source`） |
 | `build_method::face_views_and_unreadable` | `build_method/src/face_view.rs` | 面对外回答（`face_views` 委托它），不可读的面从此可查 | `a_registration_file_that_does_not_parse_is_named_not_dropped` |
 | `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `core/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
-| `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_owned` 签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
+| `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_snapshot`（旧名 `parse_requirements_owned` 保留为一行转发器）签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
 
 - **版本线**：四个入口都随未发布的 `0.1.6` 走——工作区版本不变、无需抬版本；`tools/nichlink-publish
   --check-table` 只按清单比较依赖表，不受影响。

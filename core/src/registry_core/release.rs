@@ -188,8 +188,16 @@ impl StaticGraftCut {
 
     /// Whether the whole subtree rooted at the cut is replaced.
     /// 是否替换切口根节点下的整棵子树。
-    pub const fn full(self) -> bool {
+    pub const fn is_full(self) -> bool {
         self.full
+    }
+
+    /// The historical name of [`Self::is_full`], kept because it is on the published
+    /// surface (`NAM-35`). New code should write `is_full`.
+    /// [`Self::is_full`] 的历史名字，因为它在已发布面上所以保留（`NAM-35`）。新代码请写
+    /// `is_full`。
+    pub const fn full(self) -> bool {
+        self.is_full()
     }
 }
 
@@ -240,8 +248,16 @@ impl StaticPlan {
     /// 生成的表按注册树遍历顺序发射，因为 `registrations()` 以及所有据此注册的代码都
     /// 依赖父级先出现。它因此**不是**按身份排序的，对它做二分会让注册面被静默漏掉——
     /// 示例计划里三个面漏了两个。这里改为线性扫描，表则保持其他消费方需要的顺序。
-    pub fn find(self, id: NodeId) -> Option<&'static StaticFace> {
+    pub fn find_face(self, id: NodeId) -> Option<&'static StaticFace> {
         self.faces.iter().find(|face| face.id == id)
+    }
+
+    /// The historical name of [`Self::find_face`]; it stays on the published surface
+    /// (`NAM-32` asks for a name that carries its object). Prefer `find_face`.
+    /// [`Self::find_face`] 的历史名字；它留在已发布面上（`NAM-32` 要求名字带宾语）。
+    /// 请优先用 `find_face`。
+    pub fn find(self, id: NodeId) -> Option<&'static StaticFace> {
+        self.find_face(id)
     }
 
     /// The faces whose parent is `parent`, in table order.

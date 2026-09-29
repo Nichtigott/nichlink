@@ -71,7 +71,7 @@ impl<'a> GraftCutRef<'a> {
             cut: borrow(cut.cut()),
             graft: borrow(cut.graft()),
             end: cut.cut_end().map(borrow),
-            subtree: cut.full(),
+            subtree: cut.is_full(),
         }
     }
 }

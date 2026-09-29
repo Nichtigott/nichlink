@@ -22,9 +22,9 @@ use nichlink_build_method::declared_grafts;
 use serde_json::Value;
 
 use crate::apply::load_registry;
-use crate::nodes::resolve_node;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::resolve::resolve_node;
 
 /// The traversal depth when the caller names none.
 /// 调用方没有指定时的遍历深度。
@@ -45,7 +45,7 @@ struct Edge {
 /// 报告一个面的传递爆炸半径。
 pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+    let (faces, unparsable) = crate::resolve::derived_faces(root, &namespace)?;
     let target = arguments
         .get("node")
         .and_then(Value::as_str)

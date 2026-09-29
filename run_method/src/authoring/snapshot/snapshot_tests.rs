@@ -2,7 +2,7 @@
 //! 派生出的 `handle` 只有一份，供两个字段：两种输入下注册面都保住它的函数名。
 
 use super::FaceManifest;
-use crate::authoring::validation::AuthoringContext;
+use crate::authoring::context::AuthoringContext;
 use crate::registry_core::identity::NodeId;
 
 /// Both spellings of the input answer `source.function` with the same value the
@@ -14,13 +14,13 @@ use crate::registry_core::identity::NodeId;
 /// `source.function` is what `registered_functions()` (Studio) and the MCP symbol
 /// lists read. The kernel derives `handle` from `kind` and now uses **that value**
 /// for both fields; before `N-4` it filled `source.function` from the *raw* key
-/// (`core/.../authoring/snapshot/snapshot.rs:56` vs `:134`), so a face with no
+/// (`core/.../authoring/snapshot.rs:56` vs `:134`), so a face with no
 /// `handle` came back with `function=""` and Studio's call-tree tests went from
 /// 12 passed to 10 passed / 2 failed. A patch on this side that injected the key
 /// hid the drift; one derivation in the kernel is the fix.
 /// `source.function` 是 `registered_functions()`（Studio）与 MCP 符号清单读取的字段。内核按
 /// `kind` 派生 `handle`，现在把**那个值**同时用于两个字段；`N-4` 之前它用**原始**键填
-/// `source.function`（`core/.../authoring/snapshot/snapshot.rs:56` 对 `:134`），因此不存
+/// `source.function`（`core/.../authoring/snapshot.rs:56` 对 `:134`），因此不存
 /// `handle` 的面回来时 `function=""`，Studio 的调用树测试从 12 通过变成 10 通过 / 2 失败。
 /// 在本地这一侧注入该键的补丁把漂移藏了起来；修法是内核里只有一份推导。
 #[test]

@@ -22,11 +22,6 @@
 //! 边界：`RuntimeCheckFailure` 刻意不实现 `PartialEq`，所以断言按字段进行而非整结构比较。
 //! Pinned by these five tests; `Registry::health_check` aggregates the same
 //! failures in `examples/control-button/tests/health_check.rs`.
-//! 直白写法错在哪：只调用 `run` 再看 `is_err` 会掩盖每条检查各自的多个失败分支
-//! （类型不符、坐标非有限、坐标系不符、边界倒置、越界），而“拒绝一切取值”的实现也
-//! 能通过布尔断言。因此这些测试断言宿主真正消费的 [`RuntimeCheckFailure`] 证据：
-//! `check`、`message` 与 `provenance`。
-//! 边界：`RuntimeCheckFailure` 刻意不实现 `PartialEq`，所以断言按字段进行而非整结构比较。
 //! 由这五条测试钉住；`Registry::health_check` 在
 //! `examples/control-button/tests/health_check.rs` 聚合同样的失败。
 

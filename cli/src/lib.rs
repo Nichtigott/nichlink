@@ -261,13 +261,13 @@ pub(crate) fn build_target(
 /// `cli/` reads it. With that variable set, those two report a different namespace — and therefore
 /// different `NodeId`s — than this command does. Making the surfaces agree is the maintainer's
 /// decision; the variable's documented purpose is a *reader's* override for trace artifacts
-/// (`run_method/src/runtime/trace/artifact/io.rs`), and until that decision is taken a reader who
+/// (`run_method/src/runtime/trace/snapshot/io.rs`), and until that decision is taken a reader who
 /// sets it must know which side they are on (audit `S12`).
 /// 但在所有执行面上**并非**同一个说法，这里把差异说出来而不是暗示：`NICH_LINK_NAMESPACE` 被 MCP 桥与
 /// Studio 尊重、而没有任何构建侧代码读它（声明宏在编译期把 `env!("CARGO_PKG_NAME")` 烤进去），同时
 /// `cli/` 里没有任何地方读它。一旦设置该变量，那两个执行面报告的命名空间——以及由此而来的
 /// `NodeId`——就与本命令不同。让各执行面一致是维护者的决定；该变量文档化的用途是 trace artifact 的
-/// **读取者覆盖**（`run_method/src/runtime/trace/artifact/io.rs`），在这个决定做出之前，设置它的读者
+/// **读取者覆盖**（`run_method/src/runtime/trace/snapshot/io.rs`），在这个决定做出之前，设置它的读者
 /// 必须知道自己站在哪一边（审计 `S12`）。
 pub(crate) fn resolve_package(directory: &str) -> Result<(PathBuf, String), String> {
     let manifest = std::fs::canonicalize(directory)
@@ -303,4 +303,4 @@ fn registration_check(directory: &str) -> Result<String, String> {
 
 #[cfg(test)]
 #[path = "lib_tests.rs"]
-mod tests;
+mod lib_tests;

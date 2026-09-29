@@ -46,3 +46,7 @@ nichlink_run_method::application!(entry = crate::main);
 `static_graft_plan!` 子句：这条记录永远无法生效，而发布一个嫁接静默不发生的二进制，
 正是绝不能离开构建的东西。本次构建里 `#[cfg]` 关掉的声明也算数，因此合法门控的槽位
 不会报错。记录→覆盖层见 [`docs/graft.md`](https://github.com/Nichtigott/nichlink/blob/main/docs/graft.md)。
+
+名字说的是**构建期**：这个 crate 是模型里构建期的文件系统与 `OUT_DIR` 那一半，不是某个
+`Method` 类型，也不是 Cargo 的 `build`（`AMB-02`，保留；合并批次会把**模块**改名为
+`build_time`）。

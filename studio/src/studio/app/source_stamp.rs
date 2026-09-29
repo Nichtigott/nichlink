@@ -14,7 +14,7 @@
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use super::support::package_root;
+use super::project_context::package_root;
 
 /// The file names that make a changed file relevant to the stamp, next to the `.rs`
 /// sources: a manifest or lockfile can change what the host admits without touching

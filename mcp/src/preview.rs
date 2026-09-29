@@ -225,7 +225,7 @@ pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
     // 正斜杠，与本桥报告的每一条树内相对路径一致（`FaceView.source`、diff 头）：把锚点与
     // `nichlink.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
     // 路径保持本机写法，与 `status` 的 root 一致。
-    let relative = crate::index::portable_path(relative);
+    let relative = crate::source_index::portable_path(relative);
     Some(format!("{relative}:{}", line + 1))
 }
 
@@ -426,7 +426,7 @@ fn collect_files(
         if path.is_dir() {
             collect_files(root, &path, files, depth + 1)?;
         } else if let Ok(relative) = path.strip_prefix(root) {
-            files.push(crate::index::portable_path(relative));
+            files.push(crate::source_index::portable_path(relative));
         }
     }
     Ok(())

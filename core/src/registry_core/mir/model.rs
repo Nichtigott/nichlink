@@ -51,7 +51,8 @@ pub struct MirLocal {
     /// 1-based position of this record within the parsed MIR, not a source line: the JSONL
     /// reader fills it with a synthesized record index, while the text reader fills it with
     /// the real MIR line it read. The name says "MIR line" for both spellings, so read the
-    /// parser that produced the value before comparing two of them (audit `KRN-C-10`).
+    /// parser that produced the value before comparing two of them; `CallRelation`'s field of
+    /// the same name inherits this meaning verbatim (audit `KRN-C-10`).
     /// 该记录在已解析 MIR 内以 1 起始的位置，不是源码行号：JSONL 读取器填入的是合成的记录序号，
     /// 文本读取器填入的是它读到的真实 MIR 行。名字对两种拼法都说"MIR line"，因此比较两个值时先看清
     /// 是哪个解析器产出的（审计 `KRN-C-10`；`CallRelation` 的同名字段逐字继承这一含义）。

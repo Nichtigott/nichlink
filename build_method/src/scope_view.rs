@@ -61,8 +61,8 @@ pub fn build_output_is_current(root: &Path, out_dir: &Path) -> bool {
     if !scan.is_dir() {
         return false;
     }
-    let nodes = crate::discovery::discover_root(scan);
-    stored.trim() == crate::discovery::discovery_fingerprint(&layout.identity_base, &nodes)
+    let nodes = crate::source_walk::discover_root(scan);
+    stored.trim() == crate::source_walk::discovery_fingerprint(&layout.identity_base, &nodes)
 }
 
 /// One row of `pruning_manifest.tsv`: a symbol release-time pruning tracks for

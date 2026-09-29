@@ -186,3 +186,19 @@ impl App {
         self.registry.registry(id).is_some()
     }
 }
+
+impl App {
+    pub(crate) fn graph_locals(&self, item: &CallRef) -> Vec<nichlink_run_method::LocalValue> {
+        self.runtime_trace
+            .locals()
+            .iter()
+            .filter(|local| {
+                self.runtime_trace
+                    .path_for_local(nichlink_run_method::LocalId(local.id))
+                    .iter()
+                    .any(|call| call.function == item.function)
+            })
+            .cloned()
+            .collect()
+    }
+}

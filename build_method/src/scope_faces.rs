@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 
 use nichlink::lexicon;
 
-use super::node::{Node, relative_display};
-use super::node_id::{CACHED_NODE_IDS, node_id};
+use super::discovery_node::{Node, relative_display};
+use super::face_syntax_check::parsed_face;
+use super::node_identity::{CACHED_NODE_IDS, node_id};
 use super::registry_identity::{self, NodeId};
 use super::scope::SourceScope;
-use super::validation::parsed_face;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FaceSource {

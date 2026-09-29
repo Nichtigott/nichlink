@@ -19,8 +19,8 @@ use crate::runtime::{LoadedGraft, graft_record_root, load_graft_record, load_gra
 use crate::{GraftPlanDocument, NodeId, Registry};
 use nichlink::lexicon;
 
+use super::super::context::package_root;
 use super::super::filesystem::atomic_write;
-use super::super::validation::package_root;
 
 /// The directory that owns every external graft plan.
 /// 拥有全部外部 graft 计划的目录。

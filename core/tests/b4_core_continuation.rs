@@ -2,7 +2,7 @@
 //! t26 未修的 B4 `core/` 条目的接续钉子。
 //!
 //! `LGC-LG-06` (the overlay's non-`full` branch did not ask `needs_registry`),
-//! `LGC-LG-07` (a sibling slot-name collision was nobody's business, and the graft-cut
+//! `LGC-LG-07` (a sibling `registry_name` collision was nobody's business, and the graft-cut
 //! path arm took the first match), and `LGC-LG-29` (a module-level `cfg` skipped the
 //! whole module even when its feature was on). Each pin is asserted through the crate's
 //! public surface, so it says what a consumer sees rather than what a private helper
@@ -180,10 +180,10 @@ fn a_non_full_overlay_drops_an_empty_child_registry_instead_of_refusing() {
 }
 
 /// `LGC-LG-07` ①: two siblings may not carry one `registry_name`. It is a path
-/// segment, and three consumers used to answer "which face is this slot" by silently
+/// segment, and three consumers used to answer "which face does this path name" by silently
 /// picking one (the by-path index, `path_for`, and the cut selector).
 /// `LGC-LG-07` ①：两个兄弟不得共用一个 `registry_name`。它是路径段，而三个消费方过去各自静默
-/// 挑一个来回答"这个槽位是哪个面"（按路径的索引、`path_for`、以及切口选择器）。
+/// 挑一个来回答"这条路径命名哪个面"（按路径的索引、`path_for`、以及切口选择器）。
 #[test]
 fn two_siblings_may_not_share_one_registry_name() {
     let namespace = "lg07-siblings";
@@ -220,10 +220,10 @@ fn two_siblings_may_not_share_one_registry_name() {
 }
 
 /// `LGC-LG-07` ②: a cut path two faces share is refused instead of the first match
-/// winning, and the remedy the message points at — naming the slot by identity — still
+/// winning, and the remedy the message points at — naming the target by identity — still
 /// works.
 /// `LGC-LG-07` ②：两个面共用的切口路径被拒绝，而不是让第一个匹配胜出；而消息指向的补救办法
-/// ——用身份命名槽位——仍然可用。
+/// ——用身份命名目标——仍然可用。
 ///
 /// A collision stays reachable after registration refuses same-named siblings, because an
 /// in-place edit may rename a face: that path checks namespace, identity, parent, rule
@@ -266,7 +266,7 @@ fn a_cut_path_two_faces_share_is_refused_instead_of_taking_the_first_match() {
         &[StaticGraftCut::from_ids(first.id, replacement.id, false)],
         &external,
     )
-    .expect("naming the slot by identity resolves it");
+    .expect("naming the target by identity resolves it");
 }
 
 /// `LGC-LG-29`: a module-level `cfg` is read, not merely noticed. A gate the build can

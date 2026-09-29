@@ -23,22 +23,22 @@ use std::path::Path;
 
 #[path = "build_input.rs"]
 mod build_input;
-#[path = "cache.rs"]
-mod cache;
 #[path = "contracts.rs"]
 mod contracts;
 #[path = "diagnostics.rs"]
 mod diagnostics;
-#[path = "discovery.rs"]
-mod discovery;
+#[path = "discovery_cache.rs"]
+mod discovery_cache;
+#[path = "discovery_node.rs"]
+mod discovery_node;
 #[path = "entry.rs"]
 mod entry;
 #[path = "entry_default.rs"]
 mod entry_default;
+#[path = "face_syntax_check.rs"]
+mod face_syntax_check;
 #[path = "face_view.rs"]
 pub mod face_view;
-#[path = "faces.rs"]
-mod faces;
 #[path = "graft_plan_check.rs"]
 mod graft_plan_check;
 #[path = "graft_view.rs"]
@@ -47,16 +47,14 @@ mod graft_view;
 mod identity_cache;
 #[path = "manifests.rs"]
 mod manifests;
-#[path = "node.rs"]
-mod node;
-#[path = "node_id.rs"]
-mod node_id;
+#[path = "node_identity.rs"]
+mod node_identity;
 #[path = "package.rs"]
 mod package;
 #[path = "pipeline.rs"]
 mod pipeline;
-#[path = "registration_check.rs"]
-mod registration_check;
+#[path = "registration_phase.rs"]
+mod registration_phase;
 #[path = "identity.rs"]
 mod registry_identity;
 #[path = "syntax.rs"]
@@ -67,12 +65,14 @@ mod renderer;
 pub mod scaffold;
 #[path = "scope.rs"]
 mod scope;
+#[path = "scope_faces.rs"]
+mod scope_faces;
 #[path = "source_layout.rs"]
 mod source_layout;
+#[path = "source_walk.rs"]
+mod source_walk;
 #[path = "static_plan.rs"]
 mod static_plan;
-#[path = "validation.rs"]
-mod validation;
 
 /// The one directory name the build treats as the in-repo compile-failure demo.
 /// 构建视为本仓库编译失败演示目录的、唯一那个目录名。
@@ -131,36 +131,37 @@ pub use static_plan::source_module_path;
 // crate 内部辅助项，重新导出以便同级模块在拆分后保留 `super::…` 路径，
 // 不必互相伸进对方的新家。
 pub(crate) use build_input::BuildInput;
-pub(crate) use cache::{
-    CACHE_SCHEMA, cached_parent_id, collect_active_ids, face_source_is_active, module_feature,
-    source_is_active, update_discovery_cache, write_if_changed,
-};
 pub(crate) use contracts::aggregate_contract_errors;
-pub(crate) use discovery::{discover_root_reporting, discovery_fingerprint, emit_rerun_paths};
+pub(crate) use discovery_cache::{
+    CACHE_SCHEMA, cached_parent_id, update_discovery_cache, write_if_changed,
+};
 pub use source_layout::{SourceLayout, source_layout};
+pub(crate) use source_walk::{discover_root_reporting, discovery_fingerprint, emit_rerun_paths};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone
 // would be an unused import in a non-test build.
 // 这里刻意不导出 `resolve_host_entry`：生产代码只经 `host_entry_from_environment`
 // 到达它，仅为测试而导出会在非测试构建里成为未使用导入。
+pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;
-pub(crate) use faces::{FaceSource, collect_faces, has_selected_face};
+pub(crate) use face_syntax_check::{
+    aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
+    face_syntax_errors, parsed_face, unplaced_face_errors,
+};
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
 pub(crate) use manifests::{
     write_function_manifest, write_graft_manifest, write_pruning_manifest,
     write_source_scope_manifest,
 };
-pub(crate) use node::{Node, relative_display};
-pub(crate) use node_id::{CACHED_NODE_IDS, node_id};
+pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
 pub(crate) use renderer::render_lib;
-pub(crate) use scope::SourceScope;
-pub(crate) use static_plan::static_plan;
-pub(crate) use validation::{
-    aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
-    face_syntax_errors, parsed_face, unplaced_face_errors,
+pub(crate) use scope::{
+    SourceScope, collect_active_ids, face_source_is_active, module_feature, source_is_active,
 };
+pub(crate) use scope_faces::{FaceSource, collect_faces};
+pub(crate) use static_plan::static_plan;
 
 /// Run the build-time discovery and validation pipeline from a Cargo build
 /// script.

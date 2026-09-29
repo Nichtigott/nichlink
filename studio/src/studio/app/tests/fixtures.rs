@@ -1,3 +1,6 @@
+//! covers `app/trace.rs` — the fixture traces the other pages install.
+//! 覆盖 `app/trace.rs`——其他页面装入的夹具追踪。
+//!
 //! Live-trace fixtures for the prototype-fixture tests.
 //! 原型夹具测试使用的实时追踪夹具。
 //!

@@ -6,11 +6,11 @@
 //! keeps the historical path and re-implements the two filesystem-bound entry
 //! points as thin wrappers. The word `shim` used to appear only on the third line,
 //! so a reader who grepped this file's name against
-//! `authoring/manifest/parse/parse.rs` had to read the body to learn which one is
+//! `authoring/manifest/parse.rs` had to read the body to learn which one is
 //! the implementation (audit `NAM-10`).
 //! 注册面创作文件的解析与渲染辅助函数。纯源码文本变换位于 kernel 的 `authoring` 模块；
 //! 本 shim 保留历史路径，并把两个绑定文件系统的入口重新实现为薄包装。`shim` 这个词过去只出现在
-//! 第三行，因此把本文件名与 `authoring/manifest/parse/parse.rs` 对照着 grep 的读者必须先读正文
+//! 第三行，因此把本文件名与 `authoring/manifest/parse.rs` 对照着 grep 的读者必须先读正文
 //! 才知道哪一个是实现（审计 `NAM-10`）。
 
 use std::fs;
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 pub use nichlink::authoring::parse::*;
 
-use super::validation::{normalized_path, source_root};
+use super::context::{normalized_path, source_root};
 
 /// Read the parent's declared `kind` from its attached source file.
 /// 从父注册面的附属源文件读取它声明的 `kind`。

@@ -44,7 +44,7 @@ fn a_commented_out_function_is_not_a_declaration() {
          pub fn after_doc() {}\n\
          pub fn with_string() { let text = \"fn in_a_string() {}\"; let _ = text; }\n",
     );
-    let nodes = crate::discovery::discover_root(&src);
+    let nodes = crate::source_walk::discover_root(&src);
     let out = root.join("out");
     fs::create_dir_all(&out).expect("out directory");
     super::write_function_manifest(&src, &nodes, &out).expect("the manifest writes");
@@ -64,7 +64,7 @@ fn a_commented_out_function_is_not_a_declaration() {
 #[test]
 fn a_method_carries_no_impl_owner_the_scanner_cannot_know() {
     let (root, src) = package("owner", "impl Dial {\n    pub fn method(&self) {}\n}\n");
-    let nodes = crate::discovery::discover_root(&src);
+    let nodes = crate::source_walk::discover_root(&src);
     let out = root.join("out");
     fs::create_dir_all(&out).expect("out directory");
     super::write_function_manifest(&src, &nodes, &out).expect("the manifest writes");
@@ -91,7 +91,7 @@ fn a_pruning_probe_symbol_is_named_after_the_face_kind() {
         "impl Dial {\n    pub fn optional_pruning_probe(&self) {}\n}\n\n\
          pub static PRUNING_TABLE: &[&str] = &[];\n",
     );
-    let nodes = crate::discovery::discover_root(&src);
+    let nodes = crate::source_walk::discover_root(&src);
     let out = root.join("out");
     fs::create_dir_all(&out).expect("out directory");
     super::write_pruning_manifest(&src, &nodes, &out).expect("the manifest writes");

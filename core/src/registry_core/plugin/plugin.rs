@@ -9,11 +9,11 @@ pub mod catalog;
 pub mod contracts;
 #[path = "graft/graft.rs"]
 pub mod graft;
-#[path = "plugin_policy/plugin_policy.rs"]
+#[path = "plugin_policy.rs"]
 pub mod plugin_policy;
-#[path = "slot/slot.rs"]
+#[path = "slot.rs"]
 pub mod slot;
-#[path = "trust/trust.rs"]
+#[path = "trust.rs"]
 pub mod trust;
 
 // A contract type owned by `declaration` is not re-exported here: it would be a

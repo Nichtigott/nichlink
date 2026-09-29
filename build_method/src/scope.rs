@@ -4,10 +4,15 @@
 //! The scope decides which registration faces survive before rustc expands the
 //! generated module tree. It lives in the build step so discovery and identity
 //! share one parser and one node-identity implementation; entry resolution and
-//! face discovery live in sibling modules and are imported here.
+//! face discovery live in sibling modules and are imported here. The active-face
+//! predicates (`source_is_active`, `face_source_is_active`, `module_feature`,
+//! `collect_active_ids`) moved here from the discovery cache module: they answer
+//! the scope's own question, not the cache's (`NAM-04`).
 //! 作用域决定 rustc 展开生成模块树之前哪些注册面得以存活。它位于构建步骤中，
 //! 使发现与身份计算共用同一套解析与 node identity 实现；入口解析与注册面发现位于
-//! 同级模块，在此处导入使用。
+//! 同级模块，在此处导入使用。活跃注册面判定（`source_is_active`、`face_source_is_active`、
+//! `module_feature`、`collect_active_ids`）从发现缓存模块搬到这里：它们回答的是作用域
+//! 自己的问题，而不是缓存的（`NAM-04`）。
 
 use std::collections::BTreeSet;
 use std::env;
@@ -17,13 +22,13 @@ use std::path::Path;
 use nichlink::lexicon;
 
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
+use super::discovery_node::{Node, relative_display};
 use super::entry::{HostEntry, path_mentions_module};
-use super::faces::collect_faces;
 use super::graft_view::{face_declares_plugin, graft_expression_module, string_cut_modules};
-use super::node::{Node, relative_display};
-use super::node_id::{collect_node_ids, node_id, select_module_subtree};
+use super::node_identity::{collect_node_ids, node_id, select_module_subtree};
 use super::registry_identity::{IDENTITY_SCHEMA, NodeId};
 use super::registry_syntax::{graft_entries, source_references};
+use super::scope_faces::{collect_faces, has_selected_face};
 
 /// First-pass source scope. It gates whole registration faces before rustc
 /// expands them; functions inside an enabled face are intentionally untouched.
@@ -380,6 +385,79 @@ impl SourceScope {
                 .children
                 .iter()
                 .any(|child| self.includes(src, child, selected_ancestor || selected_here))
+    }
+}
+
+// The active-face predicates live here rather than beside the cache: they answer the
+// scope's own question (which faces survive), and the cache module only writes the
+// observation record. Moved out of the cache module by `NAM-04`.
+// 活跃注册面判定住在这里而不是缓存旁边：它们回答的是作用域自己的问题（哪些面得以存活），
+// 而缓存模块只负责写观察记录。`NAM-04` 把这几条判定从缓存模块搬到了这里。
+
+pub(crate) fn collect_active_ids(
+    src: &Path,
+    nodes: &[Node],
+    scope: &SourceScope,
+    selected_ancestor: bool,
+    active: &mut BTreeSet<NodeId>,
+) {
+    for node in nodes {
+        if !scope.includes(src, node, selected_ancestor) {
+            continue;
+        }
+        let selected_here = selected_ancestor
+            || node_id(src, node).is_some_and(|id| {
+                scope
+                    .roots
+                    .as_ref()
+                    .is_some_and(|roots| roots.contains(&id))
+            });
+        if face_source_is_active(src, node, scope, selected_ancestor)
+            && let Some(id) = node_id(src, node)
+        {
+            active.insert(id);
+        }
+        collect_active_ids(src, &node.children, scope, selected_here, active);
+    }
+}
+
+pub(crate) fn source_is_active(
+    src: &Path,
+    node: &Node,
+    scope: &SourceScope,
+    selected_ancestor: bool,
+) -> bool {
+    scope.roots.is_none()
+        || selected_ancestor
+        || (node_id(src, node).is_some() && has_selected_face(src, node, false, scope))
+        || node
+            .file
+            .as_ref()
+            .is_some_and(|file| lexicon::is_registration_path(&relative_display(src, file)))
+        || matches!(
+            node.name.as_str(),
+            "registry" | "rules" | "registry_rule" | "root_registry"
+        )
+}
+
+pub(crate) fn face_source_is_active(
+    src: &Path,
+    node: &Node,
+    scope: &SourceScope,
+    selected_ancestor: bool,
+) -> bool {
+    node_id(src, node).is_some() && source_is_active(src, node, scope, selected_ancestor)
+}
+
+/// Keep development tooling outside the default core dependency graph.
+/// 将开发工具隔离在默认核心依赖图之外。
+pub(crate) fn module_feature(src: &Path, node: &Node) -> Option<&'static str> {
+    let relative = node.file.as_ref().map(|file| relative_display(src, file))?;
+    match relative.as_str() {
+        "registry_core/authoring/authoring.rs" | "registry_core/syntax/syntax.rs" => {
+            Some("authoring")
+        }
+        _ => None,
     }
 }
 

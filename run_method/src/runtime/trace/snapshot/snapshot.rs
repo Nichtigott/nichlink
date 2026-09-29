@@ -385,5 +385,5 @@ fn escape(value: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "artifact_tests.rs"]
-mod artifact_tests;
+#[path = "snapshot_tests.rs"]
+mod snapshot_tests;

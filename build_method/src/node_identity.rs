@@ -14,11 +14,11 @@ use std::sync::OnceLock;
 
 use nichlink::lexicon;
 
+use super::discovery_node::{Node, relative_display};
 use super::entry::path_mentions_module;
-use super::faces::FaceSource;
-use super::node::{Node, relative_display};
+use super::face_syntax_check::parsed_face;
 use super::registry_identity::{self, NodeId};
-use super::validation::parsed_face;
+use super::scope_faces::FaceSource;
 
 /// Node identities primed from the discovery cache before scope inference.
 /// 作用域推导前由发现缓存预热的 node 身份缓存。

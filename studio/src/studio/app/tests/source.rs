@@ -1,3 +1,6 @@
+//! covers `app/source_index.rs`, `app/search_queries.rs`.
+//! 覆盖 `app/source_index.rs`、`app/search_queries.rs`。
+//!
 //! Source index, call scanning, symbol search, and MIR evidence tests.
 //! 源码索引、调用扫描、符号搜索与 MIR 证据测试。
 

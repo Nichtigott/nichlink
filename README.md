@@ -899,7 +899,9 @@ cli/          nichlink-cli: unified entry (nichlink new/check/build/snippets/
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          MCP bridge for AI-assisted queries and previewed writes
 plugin-host/  optional Wasm/process adapters and atomic deployment
-examples/     runnable hosts: control-button plus its out-of-project graft
+examples/     two host packages (not cargo example targets): control-button
+              plus its out-of-project graft
+picture/      brand wordmark and Studio screenshots
 conventions/  nichlink-conventions: gates that walk this checkout (kernel
               purity, module mounting, size ratchet, doc blocks); not published
 ```

@@ -161,16 +161,16 @@ pub fn parse_faces(source: &str) -> Result<Vec<FaceSyntax>, FaceSyntaxError> {
 /// Whether `source` declares a registration face.
 /// 源码是否声明了注册面。
 ///
-/// A generated-marker line short-circuits the answer: a snapshot this tooling
-/// wrote is a face by construction, and parsing it again is wasted work. For
-/// every other file the parse decides.
-///
-/// **The shortcut is about trust, not about proof**: a file whose marker line is the
-/// only face-shaped thing in it still answers `true`, so a caller that needs "this file
-/// really declares a face" must parse it (`parse_face`) rather than read this answer as
-/// a parse result (audit `KRN-K-19`).
+/// A generated-marker line short-circuits the answer: a snapshot this tooling wrote is
+/// a face by construction (re-parsing it is wasted work); every other file the parse decides.
 /// 生成标记行会短路答案：本工具写出的快照按构造就是注册面，再解析一遍是白费。其余
 /// 文件一律由解析裁决。
+///
+/// **The shortcut is about trust, not about proof**: a marker line alone still answers
+/// `true` (audit `KRN-K-19`), so "this file really declares a face" must be settled by
+/// parsing (`parse_face`), never by reading this answer.
+/// 这条短路关乎**信任**而非**证明**：只有标记行也会答 `true`（审计 `KRN-K-19`），因此
+/// "这个文件真的声明了注册面"必须由解析（`parse_face`）裁定，而不能把这个答案当成解析结果。
 pub fn is_face_source(source: &str, marker: &str) -> bool {
     source.lines().any(|line| line == marker) || matches!(parse_face(source), Ok(Some(_)))
 }
@@ -318,4 +318,4 @@ pub(super) fn split_typed_range(tokens: Vec<TokenTree>) -> Option<(String, Strin
 }
 #[cfg(test)]
 #[path = "face_tests.rs"]
-mod tests;
+mod face_tests;

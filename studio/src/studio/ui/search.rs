@@ -1,3 +1,6 @@
+//! Search page entry: `draw_search`, with the pieces in the `search/` submodules.
+//! 搜索页入口：`draw_search`，各部分在 `search/` 子模块里。
+//!
 //! Search result and source preview rendering.
 //! 搜索结果与源码预览渲染。
 //!

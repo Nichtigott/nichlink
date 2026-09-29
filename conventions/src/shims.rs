@@ -30,16 +30,10 @@ pub const SHIMS: &[(&str, &str)] = &[
         "run_method/src/lib.rs",
         "pub use nichlink::registry_core::*;",
     ),
+    ("run_method/src/registry.rs", "pub use nichlink::tree;"),
+    ("run_method/src/registry.rs", "pub use nichlink::tree::*;"),
     (
-        "run_method/src/registry/registry.rs",
-        "pub use nichlink::tree;",
-    ),
-    (
-        "run_method/src/registry/registry.rs",
-        "pub use nichlink::tree::*;",
-    ),
-    (
-        "run_method/src/authoring/face_manifest.rs",
+        "run_method/src/authoring/face_file.rs",
         "pub use nichlink::authoring::{FACE_FIELD_COUNT, face_field};",
     ),
     (
@@ -47,7 +41,7 @@ pub const SHIMS: &[(&str, &str)] = &[
         "pub use nichlink::authoring::parse::*;",
     ),
     (
-        "run_method/src/authoring/validation/validation.rs",
+        "run_method/src/authoring/context.rs",
         "pub use nichlink::authoring::validation::*;",
     ),
     (
@@ -71,14 +65,8 @@ pub const SHIMS: &[(&str, &str)] = &[
         "run_method/src/runtime/evidence.rs",
         "pub use nichlink::{CallEdge, EvidenceKind, LogicalCallEdge};",
     ),
-    (
-        "run_method/src/plugin/plugin.rs",
-        "pub use nichlink::plugin;",
-    ),
-    (
-        "run_method/src/plugin/plugin.rs",
-        "pub use nichlink::plugin::*;",
-    ),
+    ("run_method/src/plugin.rs", "pub use nichlink::plugin;"),
+    ("run_method/src/plugin.rs", "pub use nichlink::plugin::*;"),
     (
         "build_method/src/syntax.rs",
         "pub use nichlink::registry_core::syntax::{ FaceSyntax, GraftSyntax, ParentSyntax, \

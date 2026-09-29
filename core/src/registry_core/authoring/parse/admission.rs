@@ -126,8 +126,8 @@ pub fn parse_admission_expression(expression: &str) -> Result<String, FaceParseE
     // `allow_paths(`/`deny_paths(` 会让编辑器写出自己读不回来的声明。
     if let Some((_, rest)) = expression.split_once("Admission::new(") {
         let mut parts = rest.split(']');
-        let allow = parts.next().map(quoted_strings).unwrap_or_default();
-        let deny = parts.next().map(quoted_strings).unwrap_or_default();
+        let allow = parts.next().map(read_string_literals).unwrap_or_default();
+        let deny = parts.next().map(read_string_literals).unwrap_or_default();
         return Ok(policy(allow, deny));
     }
     Err("generated face has an invalid admission expression"
@@ -137,7 +137,7 @@ pub fn parse_admission_expression(expression: &str) -> Result<String, FaceParseE
 
 /// The quoted strings of one bracketed fragment, e.g. `&["a", "b"`.
 /// 一个方括号片段里的字符串，例如 `&["a", "b"`。
-fn quoted_strings(fragment: &str) -> Vec<String> {
+fn read_string_literals(fragment: &str) -> Vec<String> {
     let fragment = fragment.rsplit_once('[').map_or(fragment, |(_, rest)| rest);
     fragment
         .split(',')
@@ -241,7 +241,7 @@ fn parse_compact_admission(value: &str) -> Result<Option<CompactAdmission>, Face
 /// connector read.
 /// 两张列表都会保留：同时点名 allow 与 deny 的值产出一份携带两张列表的
 /// `OwnedAdmission`，注册树与连接器读的正是它。
-pub fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, FaceParseError> {
+pub fn parse_admission_snapshot(value: &str) -> Result<OwnedAdmission, FaceParseError> {
     Ok(match parse_compact_admission(value)? {
         None => OwnedAdmission {
             allowed_paths: Vec::new(),
@@ -252,6 +252,14 @@ pub fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, FaceParseErr
             denied_paths: admission.denied_paths,
         },
     })
+}
+
+/// The historical name of [`parse_admission_snapshot`], kept because it is on the
+/// published surface (`NAM-34`). Prefer `parse_admission_snapshot`.
+/// [`parse_admission_snapshot`] 的历史名字，因为它在已发布面上所以保留（`NAM-34`）。
+/// 请优先用 `parse_admission_snapshot`。
+pub fn parse_admission_owned(value: &str) -> Result<OwnedAdmission, FaceParseError> {
+    parse_admission_snapshot(value)
 }
 
 /// Render a compact admission value as the `Admission` constructor expression.

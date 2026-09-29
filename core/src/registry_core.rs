@@ -16,7 +16,7 @@ pub mod declaration;
 pub mod diagnostic;
 #[path = "registry_core/identity/identity.rs"]
 pub mod identity;
-#[path = "registry_core/json/json.rs"]
+#[path = "registry_core/json.rs"]
 pub mod json;
 #[path = "registry_core/lexicon/lexicon.rs"]
 pub mod lexicon;
@@ -24,9 +24,9 @@ pub mod lexicon;
 pub mod mir;
 #[path = "registry_core/plugin/plugin.rs"]
 pub mod plugin;
-#[path = "registry_core/release/release.rs"]
+#[path = "registry_core/release.rs"]
 pub mod release;
-#[path = "registry_core/requirements/requirements.rs"]
+#[path = "registry_core/requirements.rs"]
 pub mod requirements;
 #[path = "registry_core/source/source.rs"]
 pub mod source;

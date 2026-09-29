@@ -132,7 +132,7 @@ impl PluginPolicy {
         plugin: PluginManifest,
         catalog: Option<&PluginCatalog>,
     ) -> PluginDecision {
-        if !plugin.targets(self.framework) {
+        if !plugin.targets_framework(self.framework) {
             return PluginDecision::Rejected(PluginRejectReason::FrameworkMismatch);
         }
         let source_allowed = match plugin.source {

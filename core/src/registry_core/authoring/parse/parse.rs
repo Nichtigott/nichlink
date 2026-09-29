@@ -287,13 +287,22 @@ pub fn render_optional_source(value: &str) -> Result<String, FaceParseError> {
 
 /// Split a comma-separated list into trimmed, non-empty owned strings.
 /// 把逗号分隔的列表切成去空白、去空项的自有字符串。
-pub fn split_csv_owned(value: &str) -> Vec<String> {
+pub fn parse_field_list(value: &str) -> Vec<String> {
     value
         .split(',')
         .map(str::trim)
         .filter(|item| !item.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+/// The historical name of [`parse_field_list`], kept because it is on the published
+/// surface (`NAM-34`; Studio calls it through `nichlink_run_method`'s re-export).
+/// Prefer `parse_field_list`.
+/// [`parse_field_list`] 的历史名字，因为它在已发布面上所以保留（`NAM-34`；Studio 经
+/// `nichlink_run_method` 的重导出在调它）。请优先用 `parse_field_list`。
+pub fn split_csv_owned(value: &str) -> Vec<String> {
+    parse_field_list(value)
 }
 
 /// Accept or refuse an optional string field's text, which is the same rule

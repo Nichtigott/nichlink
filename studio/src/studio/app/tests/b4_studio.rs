@@ -5,10 +5,13 @@
 //! B4-studio 批次的钉子：与实现相符的模块自述、检视器唯一一份行清单、活过 graft 横幅的
 //! 编辑器启动失败、按行判定的插件入口闸门、快照替换后重新裁决的证据，以及搜索备忘。
 //!
-//! covers `app/write_guard.rs`, `app/search_queries.rs`, `app/support.rs`,
+//! covers `app/write_guard.rs`, `app/search_queries.rs`, `app/hot_zones.rs`,
 //! `app/navigation.rs`, `app/lifecycle.rs`, `app/graft.rs`, `app/trace.rs` and
 //! `app/mutations.rs` — one assertion group per finding (`STU-C-01`…`STU-C-04`,
-//! `STU-S-02/03/05/08`, `LGC-LG-50`).
+//! `STU-S-02/03/05/08`, `LGC-LG-50`). The historical `support.rs` shim this batch used to
+//! pin is gone (audit `NAM-01`); the geometry it carried now lives in `hot_zones.rs`.
+//! 本批过去钉住的历史 `support.rs` shim 已删除（审计 `NAM-01`）；它承载的几何现在住在
+//! `hot_zones.rs`。
 //! 覆盖上列生产模块——每个 finding 一组断言（`STU-C-01`…`STU-C-04`、
 //! `STU-S-02/03/05/08`、`LGC-LG-50`）。
 
@@ -74,9 +77,9 @@ fn module_docs_describe_what_the_module_does() {
             ["Flat, deduplicated rows", "扁平、已去重结果行"],
         ),
         (
-            "support.rs",
-            include_str!("../support.rs"),
-            ["the `cargo` probe", "`cargo` 探测"],
+            "hot_zones.rs",
+            include_str!("../hot_zones.rs"),
+            ["the divider maths", "分隔条算术"],
             [
                 "Shared interaction geometry and editor helpers",
                 "交互几何与编辑器辅助",
@@ -275,4 +278,26 @@ fn search_rows_is_memoised_per_query_and_snapshot() {
     let first = app.search_rows("no-such-symbol");
     let second = app.search_rows("no-such-symbol");
     assert_eq!(first, second, "the memo must not change the answer");
+}
+
+/// The editor handoff explains its contract once (audit `NAM-01`: the move found the same
+/// block written twice, so the reader had to decide which copy was the promise).
+/// 编辑器交接只讲一遍它的契约（审计 `NAM-01`：搬迁时发现同一段写了两遍，读者得自己判断哪份是
+/// 承诺）。
+#[test]
+fn the_editor_handoff_documents_its_contract_once() {
+    let source = include_str!("../editor_launch.rs");
+    assert_eq!(
+        source
+            .matches("The failure is returned as well as written to `event`")
+            .count(),
+        1,
+        "one copy of the contract"
+    );
+    assert!(source.contains("fn take_editor_request("));
+    assert_eq!(
+        source.matches("fn open_editor_file(").count(),
+        1,
+        "and one definition of each entry point"
+    );
 }

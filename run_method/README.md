@@ -33,6 +33,10 @@ What stays here:
 A host crate depends on this crate and calls `nichlink_run_method::host!();`
 once at the crate root; the build-time half is `nichlink-build-method`.
 
+The `run` here is the runtime half bound to the process lifetime — not
+`cargo run`, and not an entry point: the entry is `host!()` plus `build.rs`
+(`AMB-03`, kept; the merge batch renames the *module* to `runtime`).
+
 ## Trace artifacts
 
 A trace a host recorded can leave the process as one file that another process
@@ -88,15 +92,15 @@ constructor was given (`core/src/registry_core/diagnostic/error.rs`):
 | `children()` | The aggregated child failures, one per failed sub-check | empty unless the phase aggregated sub-failures |
 
 Placeholder paths are `<unknown:{node}>`
-(`core/src/registry_core/tree/inspection/inspection.rs:74`),
+(`core/src/registry_core/tree/inspection.rs:74`),
 `<missing-parent:…>/…`
-(`core/src/registry_core/tree/transaction/transaction.rs:167`,
+(`core/src/registry_core/tree/transaction.rs:167`,
 `core/src/registry_core/tree/graft_ops/graft_ops.rs:149`), and `<edited>/…`
 (`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`); synthesized sources
 are `<runtime>` (`inspection.rs:76`), `<registry-connector>`
-(`core/src/registry_core/tree/connector/connector.rs:206`),
+(`core/src/registry_core/tree/connector.rs:206`),
 `<owned-snapshot-batch>`
-(`core/src/registry_core/tree/transaction/transaction.rs:84`), `<migration>`
+(`core/src/registry_core/tree/transaction.rs:84`), `<migration>`
 (`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`), and `<graft>`
 (`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`,
 `core/src/registry_core/tree/graft_ops/reconcile.rs:148`).
@@ -105,12 +109,12 @@ Two rules for reading a `health_check` failure:
 
 1. The top-level `message()` is the fixed aggregate sentence `runtime health
    check failed`
-   (`core/src/registry_core/tree/inspection/inspection.rs:110`); it does not
+   (`core/src/registry_core/tree/inspection.rs:110`); it does not
    name the failing check. Other aggregating phases keep the same shape:
    `registration connector rejected (N face(s))`
-   (`core/src/registry_core/tree/connector/connector.rs:212`) and `snapshot
+   (`core/src/registry_core/tree/connector.rs:212`) and `snapshot
    batch rejected (N error(s))`
-   (`core/src/registry_core/tree/transaction/transaction.rs:89`).
+   (`core/src/registry_core/tree/transaction.rs:89`).
 2. The failing check's own name and text are in `children()[0].message()`, built
    as ``check `<name>`: <message>`` (`inspection.rs:95`). `Display` renders the
    aggregate plus every child, which is why `eprintln!("{error}")` in the
@@ -133,4 +137,3 @@ fn validate(registry: &Registry, node: nichlink_run_method::NodeId, label: &str)
 A runnable version lives at
 [`examples/control-button/examples/health_check.rs`](https://github.com/Nichtigott/nichlink/blob/main/examples/control-button/examples/health_check.rs):
 `cargo run -p nichlink-example-control-button --example health_check`.
-

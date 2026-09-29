@@ -565,4 +565,4 @@ fn starts_a_known_field(line: &str) -> bool {
 }
 #[cfg(test)]
 #[path = "source_tests.rs"]
-mod tests;
+mod source_tests;

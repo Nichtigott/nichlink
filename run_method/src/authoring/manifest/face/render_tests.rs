@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod field_truth_tests {
-    use super::super::{NON_FIELD_KEYS, RENDERED_FIELDS};
+    use super::super::{OFF_DISK_KEYS, ON_DISK_FIELDS};
     use crate::authoring::manifest::parse;
     use std::path::PathBuf;
 
@@ -47,9 +47,9 @@ mod field_truth_tests {
         // `edit` 接受的每个字段，取值都能活过往返。`runtime_checks` 是唯一的规范化：紧凑的
         // `NON_EMPTY_TEXT` 被写成表达式 `crate::NON_EMPTY_TEXT`，再解析回来得到的是表达式形式。
         // The count is deliberately not written here: the field *set* comes from
-        // `RENDERED_FIELDS` and the assertion below compares the two, so a number in
+        // `ON_DISK_FIELDS` and the assertion below compares the two, so a number in
         // this line would be a third declaration of the set.
-        // 这里有意不写数量：字段**集合**来自 `RENDERED_FIELDS`，下面的断言会比对两者，因此在这一行
+        // 这里有意不写数量：字段**集合**来自 `ON_DISK_FIELDS`，下面的断言会比对两者，因此在这一行
         // 写数字就等于对同一个集合的第三次声明。
         let table: &[(&str, &str, &str)] = &[
             ("kind", "Gadget", "Gadget"),
@@ -89,22 +89,22 @@ mod field_truth_tests {
         ];
 
         // The rows are samples; the *set* of fields is not this table's to
-        // declare. It comes from `RENDERED_FIELDS`, and the two have to match, or
+        // declare. It comes from `ON_DISK_FIELDS`, and the two have to match, or
         // the renderer and its evidence are two half-lists again (audit
         // `LGC-LG-38`).
-        // 这些行是样本；字段**集合**不是本表该声明的东西。它来自 `RENDERED_FIELDS`，两者必须一致，
+        // 这些行是样本；字段**集合**不是本表该声明的东西。它来自 `ON_DISK_FIELDS`，两者必须一致，
         // 否则渲染器与它的证据又是一份半的清单（审计 `LGC-LG-38`）。
         let mut sampled = table.iter().map(|(field, _, _)| *field).collect::<Vec<_>>();
         sampled.sort_unstable();
-        let mut declared = RENDERED_FIELDS.to_vec();
+        let mut declared = ON_DISK_FIELDS.to_vec();
         declared.sort_unstable();
         assert_eq!(
             sampled, declared,
             "the sample table must cover exactly the rendered field set"
         );
-        for key in NON_FIELD_KEYS {
+        for key in OFF_DISK_KEYS {
             assert!(
-                !RENDERED_FIELDS.contains(key),
+                !ON_DISK_FIELDS.contains(key),
                 "`{key}` is an input or metadata key, not an on-disk field"
             );
             assert!(
@@ -280,5 +280,36 @@ mod plugin_preservation_tests {
             .to_owned();
         assert!(error.contains("plugin:"), "{error}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// The two key lists and their partition: on-disk fields against everything else.
+/// 两份键清单及其划分：落盘字段与其余键。
+#[cfg(test)]
+mod key_partition_tests {
+    use super::super::{OFF_DISK_KEYS, ON_DISK_FIELDS};
+
+    /// Neither list carries a key twice. A duplicate is invisible to `contains`, which is
+    /// exactly why it survived until the audit: the partition read as if it had one entry where
+    /// it had two, and a reader comparing lengths would have been misled. `OFF_DISK_KEYS` held
+    /// ten such pairs (27 entries, 17 distinct) before this pin existed (audit `LGC-LG-38`).
+    /// 两份清单都不重复携带同一个键。重复项对 `contains` 不可见，这正是它能活到审计的原因：那份
+    /// 划分读起来像只有一个条目、而实际有两个，比较长度的读者也会被误导。这条钉子出现之前，
+    /// `OFF_DISK_KEYS` 里有十对这种成对的重复（27 个元素、17 个不同）。
+    #[test]
+    fn neither_key_list_repeats_a_key() {
+        for (label, keys) in [("on-disk", ON_DISK_FIELDS), ("off-disk", OFF_DISK_KEYS)] {
+            let mut sorted = keys.to_vec();
+            sorted.sort_unstable();
+            let mut deduped = sorted.clone();
+            deduped.dedup();
+            assert_eq!(
+                sorted,
+                deduped,
+                "the {label} list must not repeat a key: {} entries, {} distinct",
+                keys.len(),
+                deduped.len()
+            );
+        }
     }
 }

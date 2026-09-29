@@ -268,7 +268,7 @@ fn load(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> {
             .any(|component| matches!(component, std::path::Component::ParentDir));
     let contained = lexically_inside
         && (if path.exists() {
-            crate::index::is_safe_child(root, &path)
+            crate::source_index::is_safe_child(root, &path)
         } else {
             true
         });

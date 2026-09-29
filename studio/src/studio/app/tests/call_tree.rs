@@ -1,3 +1,6 @@
+//! covers `app/call_tree_queries.rs`, `app/graph_queries.rs`.
+//! 覆盖 `app/call_tree_queries.rs`、`app/graph_queries.rs`。
+//!
 //! Spatial call-tree regression tests.
 //! 空间调用树回归测试。
 //!

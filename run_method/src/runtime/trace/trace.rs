@@ -1,13 +1,19 @@
 //! Runtime call frames, observed data edges, and locals.
 //! 运行时调用帧、已观测数据边与局部值。
 
-#[path = "artifact/artifact.rs"]
-pub mod artifact;
+#[path = "snapshot/snapshot.rs"]
+pub mod snapshot;
+// The trace document's module was `artifact`; hosts that write
+// `nichlink_run_method::runtime::trace::artifact::…` keep compiling through this alias
+// (audit `NAM-11`). It is pinned in `conventions/src/shims.rs`.
+// trace 文档的模块曾叫 `artifact`；写着 `nichlink_run_method::runtime::trace::artifact::…`
+// 的宿主通过这条别名继续编译（审计 `NAM-11`）。它钉在 `conventions/src/shims.rs` 里。
+pub use self::snapshot as artifact;
 #[path = "call_trace.rs"]
 mod call_trace;
-#[path = "edges/edges.rs"]
+#[path = "edges.rs"]
 pub mod edges;
-#[path = "frames/frames.rs"]
+#[path = "frames.rs"]
 pub mod frames;
 #[path = "locals/locals.rs"]
 pub mod locals;
@@ -19,7 +25,7 @@ pub use frames::FramePath;
 pub use nichlink::CallSite;
 pub use nichlink::declaration::source_file_matches;
 
-pub use self::artifact::*;
 pub use self::call_trace::*;
+pub use self::snapshot::*;
 
 pub use nichlink::TraceMode;

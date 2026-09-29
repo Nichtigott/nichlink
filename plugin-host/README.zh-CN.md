@@ -4,6 +4,12 @@
 
 `nichlink-plugin-host` 在插件进入 Registry 前校验并部署 artifact。默认的 `wasm` 能力提供带 fuel 计量的执行，并受线性内存、**表元素**、工件字节数以及引擎自身的严格编译限制约束——表是一块独立的、即时实例化的数组，因此单靠内存上限约束不了它。启用 `process-tools` 后可使用带超时的进程适配器，其子进程的环境与工作目录由宿主选择：`ProcessLimits::inherit_env = false` 清空环境，`ProcessProgram::environment` 指明子进程能看到哪些变量，`ProcessProgram::current_dir` 决定它在哪里运行。默认仍然继承，因此在宿主显式选择之前行为不变；而文件系统与网络访问仍须在本工作区之外加以约束。`HotDeployment` 会先验证 graft，再一次性发布；失败时保留最后一个健康快照。
 
+`plugin-host` 保留，而且这个名字是准的而不是窄的：验签与准入占这个 crate 的一半
+（`admission.rs`、`verifier.rs`），因此像 `plugin-runtime` 那样的名字会把它们丢掉
+（`AMB-04`）。合并批次要改的是流水线里那个 `plugins` 模块——它与用户插件锁目录
+`.nichlink/plugins` 撞名。`lazy_wasm.rs` 里的历史别名 `ValidationChannel` 指的是
+`PluginChannel`，它的首行文档写明了这一点。
+
 ## 准入：从宿主的锁到可加载工件
 
 `PluginAdmission` 是宿主侧那条从"宿主写下的锁"到"可安装工件"的路。它读

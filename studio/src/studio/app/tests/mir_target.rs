@@ -1,3 +1,6 @@
+//! covers `app/cargo_probe.rs`, `app/project_context.rs`.
+//! 覆盖 `app/cargo_probe.rs`、`app/project_context.rs`。
+//!
 //! Project-resolution fallbacks and MIR target selection tests.
 //! 项目解析回落与 MIR target 选择测试（covers `app/project_context.rs`、`app/cargo_probe.rs`）。
 

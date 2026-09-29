@@ -1,7 +1,10 @@
+//! covers `app/mutations.rs`, `app/project_context.rs`.
+//! 覆盖 `app/mutations.rs`、`app/project_context.rs`。
+//!
 //! Regression tests for the plugin-lock write path (audit `LGC-LG-03`).
 //! 插件锁写入路径的回归测试（审计 `LGC-LG-03`）。
 
-use super::super::support::select_project;
+use super::super::project_context::select_project;
 use super::*;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};

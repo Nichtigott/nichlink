@@ -30,7 +30,7 @@
 //! **记录**是本界面写下的 `graft.plan` 文件，**入口行**是插件选择追加到宿主入口的那条
 //! `use <crate> as _;` 导入（`super::mutations`）。把三者都叫“声明”，正是读者改错文件的原因。
 
-use super::support::package_root;
+use super::project_context::package_root;
 use super::write_guard::{selected_read_root, with_selected_project, with_selected_project_read};
 use super::*;
 use nichlink_build_method::{DeclaredGraft, DeclaredGrafts};

@@ -30,9 +30,9 @@ use std::path::Path;
 use nichlink_build_method::FaceView;
 use serde_json::Value;
 
-use crate::index::load_sources;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::source_index::load_sources;
 use crate::tree_delta::{FaceStatus, TreeDelta};
 
 /// Find registration faces, source files, and Rust function declarations by name.
@@ -57,7 +57,7 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // 树排在前面：面是其它每个工具命名的单位，而点名了某个面的查询不能被提到它的那些文件吃掉。
     match namespace(root) {
         Ok(namespace) => {
-            let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+            let (faces, unparsable) = crate::resolve::derived_faces(root, &namespace)?;
             let built = TreeDelta::read(root);
             let mut tree = Vec::new();
             for face in &faces {

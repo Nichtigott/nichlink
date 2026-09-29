@@ -18,3 +18,6 @@ and `source` modules). This crate binds it to the toolchain and the process:
 
 A host that needs collection adds this crate and reads entries with
 `nichlink_debug_method::registrations!(nichlink::RegistrationInfo)`.
+
+No rename is scheduled for this crate: the merge turns it into the `call_evidence`
+module, and the crate name disappears with the crate (`AMB-07`).

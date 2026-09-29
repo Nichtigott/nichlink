@@ -6,8 +6,8 @@ use std::path::Path;
 
 use crate::NodeId;
 
+use super::context::{authoring_namespace, rule_path_for_source};
 use super::manifest::FaceManifest;
-use super::validation::{authoring_namespace, rule_path_for_source};
 
 /// A source-tree mutation that needs one rebuild before it becomes executable.
 /// 一次源码树变更；它需要经过一次重建才会成为可执行注册面。
@@ -42,7 +42,7 @@ impl FaceManifest {
     /// 它们已被删除（审计 `LG-38`）；派生的 `registry_name` 就是 `module`、派生的 `handle` 就是
     /// `kind`，两者都在声明点由声明宏算出，而不是存在文件里。文件形式的面不存 `handle`，但
     /// `to_snapshot` 会把同一个派生值补给内核——内核用原始 `handle` 填 `source.function`。见
-    /// `authoring/snapshot/snapshot.rs`。
+    /// `authoring/snapshot.rs`。
     pub(crate) fn new(
         name: &str,
         kind: &str,
@@ -99,6 +99,7 @@ impl FaceManifest {
     }
 }
 
+pub use super::context::AuthoringContext;
 pub use super::external_graft::{
     ExternalGraftPlanEntry, ExternalGraftPlanFile, create_external_graft, external_graft_root,
     list_external_grafts, read_external_graft, remove_external_graft, rewrite_external_graft,
@@ -108,7 +109,6 @@ pub use super::operations::{
     add_module_from_face, add_module_with_registration, authored_face, delete_module,
     edit_module_face, generated_snapshots, generated_snapshots_from,
 };
-pub use super::validation::AuthoringContext;
 
 // Field dictionary and slot names shared by the Studio form and the file
 // authoring API. The definitions live in the kernel `authoring` module.

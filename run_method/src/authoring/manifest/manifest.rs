@@ -5,7 +5,7 @@
 pub mod face;
 #[path = "face_manifest.rs"]
 mod face_manifest;
-#[path = "parse/parse.rs"]
+#[path = "parse.rs"]
 pub mod parse;
 
 /// The parsed registration-face metadata shared by authoring and Studio.

@@ -249,6 +249,20 @@ new modules, and the release order stays core first.
 - `explain --overlay`'s projection now comes from
   `nichlink_build_method::overlay_projection`, so the CLI and the bridge cannot disagree about
   which slot a cut replaces; its JSON and text output are unchanged.
+- **The naming batch (B7+B8): modules say what they mean, published names stay
+  put.** Files that were named after their folder are named after their subject
+  instead: `run_method`'s trace-snapshot directory, `authoring/context` and
+  `authoring/face_file`; `mcp`'s `build_evidence`, `resolve` and `source_index`;
+  `build_method`'s `discovery_cache`, `source_walk`, `registration_phase`,
+  `face_syntax_check`, `discovery_node`, `node_identity` and `scope_faces`; the
+  kernel's single-file modules `json`, `release` and `requirements` (the redundant
+  `<dir>/<dir>.rs` nesting collapsed); `studio`'s `hot_zones` and `editor_launch`.
+  The public *symbol* surface only grew: nine kernel names gained their real name
+  and kept the historical one as a one-line forwarder, so nothing that compiled
+  stops compiling and no shim re-export had to be dropped. The old→new mapping, the
+  four mount-name families and the retained-name decisions are recorded in
+  `docs/audit-2026-09-28/audit-naming-batch-plan.md` (with `AGENTS.md` carrying the
+  rules and the retention table).
 
 ## [0.1.5] — 2026-09-27
 
@@ -1464,6 +1478,16 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   输出逐字节相同（由它自己的测试钉住），而"这条计划的槽位是否被声明"这条规则从此只有一个家。
 - `explain --overlay` 的投影现在来自 `nichlink_build_method::overlay_projection`，因此 CLI 与桥不可能
   就"哪个槽位被切口替换"产生分歧；它的 JSON 与文本输出不变。
+- **命名批次（B7+B8）：模块按它意味的东西命名，公开名一个不动。** 原先按所在目录取名的文件
+  改成按它的主语取名：`run_method` 的 trace 快照目录、`authoring/context` 与
+  `authoring/face_file`；`mcp` 的 `build_evidence`、`resolve` 与 `source_index`；
+  `build_method` 的 `discovery_cache`、`source_walk`、`registration_phase`、
+  `face_syntax_check`、`discovery_node`、`node_identity` 与 `scope_faces`；内核的单文件模块
+  `json`、`release` 与 `requirements`（多余的 `<dir>/<dir>.rs` 嵌套被收平）；`studio` 的
+  `hot_zones` 与 `editor_launch`。公开**符号**面只增不减：九个内核名拿到了真身名，同时把
+  历史名保留为一行转发器——因此原本编译得过的东西不会编译不过，也没有一条 shim 重导出需要删除。
+  新旧对照、四族挂载名与保留名裁定记在 `docs/audit-2026-09-28/audit-naming-batch-plan.md`
+  （规则与保留表在 `AGENTS.md`）。
 
 ### [0.1.5] 2026-09-27
 

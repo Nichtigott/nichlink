@@ -19,7 +19,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::evidence::out_dir;
+use crate::build_evidence::out_dir;
 
 /// The most diagnostic lines one reply carries before it says it truncated.
 /// 一条回复在声明被截断之前最多携带的诊断行数。

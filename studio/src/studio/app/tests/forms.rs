@@ -1,3 +1,6 @@
+//! covers `app/keyboard.rs`, `app/state/forms.rs`, `app/state/plugin_field.rs`.
+//! 覆盖 `app/keyboard.rs`、`app/state/forms.rs`、`app/state/plugin_field.rs`。
+//!
 //! Add/edit form and registration-face field tests.
 //! 新增/编辑表单与注册面字段测试。
 

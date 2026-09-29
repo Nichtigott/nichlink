@@ -24,15 +24,15 @@ use nichlink::identity::NodeId;
 use serde_json::Value;
 
 use crate::apply::load_registry;
-use crate::nodes::resolve_node;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::resolve::resolve_node;
 
 /// Report the neighbourhood of one face.
 /// 报告一个面的邻域。
 pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
     let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::nodes::derived_faces(root, &namespace)?;
+    let (faces, unparsable) = crate::resolve::derived_faces(root, &namespace)?;
     let target = arguments
         .get("node")
         .and_then(Value::as_str)

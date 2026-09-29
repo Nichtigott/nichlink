@@ -16,6 +16,13 @@ network access still need confinement outside this workspace.
 `HotDeployment` stages a validated graft and publishes it
 atomically, leaving the last healthy snapshot visible after a failure.
 
+`plugin-host` is kept, and the name is accurate rather than narrow: signing and
+admission are half of what this crate does (`admission.rs`, `verifier.rs`), so a
+name like `plugin-runtime` would drop them (`AMB-04`). The module the merge batch
+renames is the pipeline's `plugins`, which collides with the user plugin lock
+directory `.nichlink/plugins`. The historical alias `ValidationChannel` in
+`lazy_wasm.rs` names `PluginChannel`, and its first doc line says so.
+
 ## Admission: from the host's lock to a loadable artifact
 
 `PluginAdmission` is the host-side path from the lock a host writes to an artifact that

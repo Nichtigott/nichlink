@@ -240,7 +240,7 @@ mod edit_form_tests {
     //! The Edit form's admission prefill and its write-back (audit `LGC-LG-02`).
     //! Edit 表单的 admission 预填与写回（审计 `LGC-LG-02`）。
 
-    use super::super::support::select_project;
+    use super::super::project_context::select_project;
     use super::*;
     use nichlink_run_method::authoring::parse::parse_admission_owned;
     use std::path::PathBuf;

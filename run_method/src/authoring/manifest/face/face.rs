@@ -8,10 +8,10 @@ use std::path::{Path, PathBuf};
 
 use super::super::FaceManifest;
 use crate::RuntimeCheckSpec;
-use crate::authoring::parse::*;
-use crate::authoring::validation::{
+use crate::authoring::context::{
     legacy_rule_path_for_source, rule_path_for_source, source_root, validate_kind_name,
 };
+use crate::authoring::parse::*;
 
 #[path = "render.rs"]
 mod render;

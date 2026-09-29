@@ -48,6 +48,22 @@ fixture——`studio/tests/fixtures/node-editor/` 下仅源码的宿主包——
 `publish = false` 等价物——正是它让 `cargo install nichlink-studio` 不会带出一个没有东西可
 重建的工具。
 
+A feature that shares a name with a module gates that module, so the sameness is
+the point rather than a collision: `core`'s `syntax` gates the registration-face
+parser, `run_method`'s `authoring` gates the authoring executor, and
+`plugin-host`'s `wasm` / `process-tools` name execution backends. The two that are
+not capabilities say so in their own names: `prototype-fixtures` gates the
+checkout-only fixture package under `studio/tests/fixtures/node-editor/`, and
+`dev-supervisor` gates the `nichlink-dev` binary that rebuilds this checkout (the
+table above is the whole set — no crate outside `core`, `run_method`, `studio` and
+`plugin-host` declares features).
+与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`core` 的 `syntax` 门控注册面
+解析器，`run_method` 的 `authoring` 门控 authoring 执行器，`plugin-host` 的 `wasm` /
+`process-tools` 点名的是执行后端。另外两个不是能力，名字里就写明了：
+`prototype-fixtures` 门控 `studio/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
+`dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`core`、
+`run_method`、`studio`、`plugin-host` 之外没有 crate 声明特性）。
+
 Host usage: `[dependencies] nichlink-run-method` +
 `[build-dependencies] nichlink-build-method`; the crate root calls
 `nichlink_run_method::host!();` and the thin `build.rs` calls
@@ -110,6 +126,67 @@ are promised as bare ones.
 会以裸名书写它们。内核各模块也会平铺 glob 到根部，因此其余名词同样**可以**在那里取得——
 那是便利，不是第二份契约：官方地址是模块路径（`nichlink::identity::NodeId`），只有精选
 清单上的名字被承诺为裸名可用。
+
+## Naming and mounting
+
+A mount name and a file stem are allowed to differ, and every place where they do
+is one of four families: historical shim re-exports (2), CLI command modules (5,
+e.g. `build_command` for `commands/build.rs`), `explain`'s sub-modules (3, e.g.
+`json` for `explain_json.rs`), and test modules (4, e.g. `mod tests;` for
+`lib_tests.rs`). What the four families share is the reading rule: the mount name
+says what the module *means*, the file name keeps the *subject*. The counts are
+not restated here — every rename moves them — so the rule is what a reviewer
+checks, not the number. Renaming a mount is not free: it changes the module
+prefix of that module's test leaf names.
+挂载名与文件 stem 允许不同，而全仓所有不同的地方就是四族：历史 shim 重导出（2 处）、CLI 命令
+模块（5 处，如 `commands/build.rs` 的 `build_command`）、`explain` 的子模块（3 处，如
+`explain_json.rs` 的 `json`）、测试模块（4 处，如 `lib_tests.rs` 挂成 `mod tests;`）。四族
+共享的读法是：挂载名说这个模块**意味**什么，文件名保留它**是什么**。数字不在此复述——每次
+改名都会移动它们——所以评审要查的是规则而不是数字。改挂载名不是免费的：它会改变该模块测试
+叶子名里的模块前缀。
+
+`pub use … as …` is an alias, and an alias needs a reason it can point at: either
+the two names are the same name for the same thing, or the alias's first doc line
+names the historical path it keeps alive. All four of the workspace's aliases carry
+one — `ValidationChannel`, `context` as `validation`, `graft_document`, and the two
+`__`-prefixed macro re-exports (the last pair is one reason written twice).
+`pub use … as …` 是别名，而别名需要一个可指出的理由：要么两个名字是同名同物，要么别名的首行
+文档点名它在保住哪条历史路径。工作区现有的四个别名都带理由——`ValidationChannel`、`context`
+别名成 `validation`、`graft_document`，以及两个 `__` 前缀的宏重导出（最后一对是同一个理由
+写了两遍）。
+
+A test-only sibling is mounted under its own name: `<name>_tests.rs` is declared as
+`mod <name>_tests;` inside `#[cfg(test)]`. The `size` ratchet keys on that attribute
+rather than on the module name, so the name is a reading aid and not something a
+gate enforces.
+测试专用兄弟文件按它自己的名字挂载：`<name>_tests.rs` 在 `#[cfg(test)]` 里声明为
+`mod <name>_tests;`。`size` 棘轮认的是那个属性而不是模块名，因此名字是给读者的便利，而不是
+门禁强制的规则。
+
+**Retained names (B8).** This is where the ambiguity findings' decisions land. The
+decisions are the per-row review in
+`docs/audit-2026-09-28/audit-naming-ambiguity-verify.md` (§2 MAJOR table, §3 MINOR
+sample) and the 9→3 decision table in
+`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md`; the `fix_hint` field in
+the findings JSON is one template sentence for all twenty and is **not** a decision.
+Below, `verify.md` and `merge-plan.md` abbreviate those two files.
+**保留的名字（B8）。** 歧义发现的裁定落在这里。裁定本体是
+`docs/audit-2026-09-28/audit-naming-ambiguity-verify.md` 的逐条复核（§2 MAJOR 表、§3 MINOR
+抽样）与 `docs/audit-2026-09-28/audit-publish-surface-merge-plan.md` 的 9→3 决策表；发现
+JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。下文用 `verify.md` 与
+`merge-plan.md` 指代这两份文件。
+
+| kept | why it is kept, and what is scheduled | source |
+| --- | --- | --- |
+| `core/` + lib `nichlink` | The kernel keeps its directory name; `kernel/` + `nichlink-kernel` is the merge batch's rename, and the first paragraph of `core/README.md` says `kernel` here means protocol vocabulary plus pure methods. | `verify.md:62`, `merge-plan.md:38/:53` |
+| `build_method/`, `run_method/`, `plugin-host/` | Each crate name is kept and its README says what the word means in this repository; the *module* names `build_time`, `runtime`, `plugin_host` belong to the merge batch. | `verify.md:63-65`, `merge-plan.md:17/:19` |
+| `Registry`, `examples/`, `picture/` | Kept. The public type is the registration-tree root and its doc line limits it to that; `examples/` holds two host packages rather than cargo example targets; `picture/` holds the brand wordmark and Studio screenshots. | `verify.md:66/:67/:79` |
+| `debug_method/` | Kept with no extra action; the crate becomes the `call_evidence` module, so the name disappears in the merge. | `verify.md:77`, `merge-plan.md:42` |
+| bin `nichlink-dev`, feature `dev-supervisor` | Kept; `required-features` is per-target `publish = false`, and both names are already the contract scripts and CI write. | `verify.md:78`, `merge-plan.md:24` |
+| `docs/ROADMAP.md` vs `docs/roadmap-1.0.md` | Kept, and neither may be renamed or exported into one directory on a case-insensitive filesystem: the two names would overwrite each other there. | `verify.md:80` |
+| kernel modules `syntax`, `json`, `release`, `requirements`, `source`, `index`, `host` | Kept and registered here rather than renamed; each one's module doc says which sense it means. | `verify.md:81-83` |
+| feature names | Kept; the table in the Crates section says which module each one gates. | `verify.md:84`, `merge-plan.md:23` |
+| the bare verbs (`cli`'s `main`, build's `run`, …) | The rule is that a bare verb is only allowed at an entry position (D-5); the verb table itself lives in the kernel's `lexicon` module so the vocabulary has one home. | `verify.md:85` |
 
 ## Change rules
 

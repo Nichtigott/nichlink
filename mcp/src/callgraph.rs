@@ -18,7 +18,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::index::{display_list, load_sources};
+use crate::source_index::{display_list, load_sources};
 
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     // Two bounds, because this answer is the one that grows without limit: the

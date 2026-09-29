@@ -1,3 +1,6 @@
+//! covers `app/mutations.rs`, `app/state/new_project_field.rs`.
+//! 覆盖 `app/mutations.rs`、`app/state/new_project_field.rs`。
+//!
 //! New-project wizard tests, including the one that compiles the generated host.
 //! 新项目向导测试，含那条真的去编译生成宿主的用例（covers `app/mutations.rs`）。
 

@@ -1,3 +1,6 @@
+//! covers `app/graph_queries.rs`, `app/call_tree_queries.rs`, `app/pointer.rs`.
+//! 覆盖 `app/graph_queries.rs`、`app/call_tree_queries.rs`、`app/pointer.rs`。
+//!
 //! Call-graph navigation and panel focus tests.
 //! 调用图导航与面板焦点测试。
 

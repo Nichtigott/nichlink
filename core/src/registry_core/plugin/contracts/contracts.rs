@@ -7,7 +7,7 @@
 //! 这些是纯协议名词。它们住在 plugin 模块，因为描述的正是插件；`declaration`
 //! 再导出它们，让声明继续以原名引用，而不在树里出现第二份副本。
 
-#[path = "signing/signing.rs"]
+#[path = "signing.rs"]
 mod signing;
 
 use std::fmt;
@@ -465,8 +465,16 @@ pub struct PluginManifest {
 impl PluginManifest {
     /// Whether the manifest names exactly this framework.
     /// manifest 指明的框架是否就是这一个。
-    pub fn targets(self, framework: FrameworkId) -> bool {
+    pub fn targets_framework(self, framework: FrameworkId) -> bool {
         self.framework.0 == framework.0
+    }
+
+    /// The historical name of [`Self::targets_framework`], kept for hosts that already
+    /// call it (`NAM-35`). Prefer `targets_framework`.
+    /// [`Self::targets_framework`] 的历史名字，为已经在调它的宿主保留（`NAM-35`）。
+    /// 请优先用 `targets_framework`。
+    pub fn targets(self, framework: FrameworkId) -> bool {
+        self.targets_framework(framework)
     }
 
     /// Verify the manifest digest against plugin bytes before native loading.

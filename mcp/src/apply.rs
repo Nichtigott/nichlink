@@ -28,9 +28,9 @@ use nichlink_run_method::{AuthoringContext, NewModuleFace};
 use serde_json::Value;
 
 use crate::apply_target::Target;
-use crate::nodes::{parent_id, resolve_node};
 use crate::preview::{copy_package, declaration_line, diff_package};
 use crate::registry::namespace;
+use crate::resolve::{parent_id, resolve_node};
 
 /// One `nichlink.apply` request.
 /// 一次 `nichlink.apply` 请求。

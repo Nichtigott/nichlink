@@ -20,7 +20,7 @@ use nichlink_run_method::{
 };
 
 use super::App;
-use super::support::{package_namespace, package_root};
+use super::project_context::{package_namespace, package_root};
 
 /// What became of the trace artifact a session looked for.
 /// 会话查找 trace artifact 的结果。

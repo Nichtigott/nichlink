@@ -5,12 +5,14 @@ use std::path::Path;
 
 use super::super::FaceManifest;
 use crate::authoring::GENERATED_MARKER;
+use crate::authoring::context::{normalized_path, rule_path_for_source, rust_string};
 use crate::authoring::parse::*;
-use crate::authoring::validation::{normalized_path, rule_path_for_source, rust_string};
 
-/// The fields this renderer writes back into a face file — the whole on-disk
-/// field set, listed once.
-/// 本渲染器会写回注册面文件的字段——全部落盘字段，只列一次。
+/// On-disk keys: the fields this renderer writes back into a face file — the whole
+/// on-disk field set, listed once. The name says which of the two classes this list is,
+/// so a maintainer can tell the writable set from the rest without reading the body.
+/// 落盘键：本渲染器会写回注册面文件的字段——全部落盘字段，只列一次。名字本身说明了这份清单属于
+/// 两类里的哪一类，因此维护者不必读正文就能把"会落盘的集合"与其余键分开。
 ///
 /// `FaceManifest::values` carries three classes of key and marks none of them
 /// (audit `LGC-LG-38`), so this list is the one place a maintainer can read what
@@ -37,7 +39,7 @@ use crate::authoring::validation::{normalized_path, rule_path_for_source, rust_s
 ///
 /// 下面的往返钉子把这份清单当作它必须覆盖的行集合，并断言两者相等，因此渲染器与它的证据不可能各自
 /// 漂成半份清单。
-const RENDERED_FIELDS: &[&str] = &[
+const ON_DISK_FIELDS: &[&str] = &[
     "kind",
     "preset",
     "parts",
@@ -62,33 +64,28 @@ const RENDERED_FIELDS: &[&str] = &[
     "admission",
 ];
 
-/// The keys `values` carries that are not on-disk fields: inputs and metadata.
-/// `values` 里并非落盘字段的键：输入与元数据。
+/// Off-disk keys: the keys `values` carries that are not on-disk fields — inputs, derived
+/// metadata, and the keys no template emits. The name states the class, mirroring
+/// [`ON_DISK_FIELDS`]; nothing here lands on a file, and a key that no template emits is
+/// refused by name instead of being stored.
+/// 非落盘键：`values` 里并非落盘字段的键——输入、派生元数据，以及任何模板都不发射的键。名字写出
+/// 了类别，与 [`ON_DISK_FIELDS`] 相对；这里没有任何东西会落盘，而任何模板都不发射的键会被按名
+/// 拒绝，而不是被存下来。
 ///
-/// They are listed beside [`RENDERED_FIELDS`] so the partition is stated in one
+/// They are listed beside [`ON_DISK_FIELDS`] so the partition is stated in one
 /// place, and the pin checks that none of them slipped into the rendered set.
-/// 它们与 [`RENDERED_FIELDS`] 并列，好让这份划分只在一处陈述；钉子会核对它们没有混进渲染集合。
-const NON_FIELD_KEYS: &[&str] = &[
-    "source",
-    "parent_source",
-    "registry_rule_path",
-    "namespace",
-    "parent_node",
-    "parent_kind",
-    "provided_parts",
-    "required_parts",
-    "registry_name",
-    "handle",
+/// 它们与 [`ON_DISK_FIELDS`] 并列，好让这份划分只在一处陈述；钉子会核对它们没有混进渲染集合。
+const OFF_DISK_KEYS: &[&str] = &[
     "admission_line",
     "declaration_line",
     "handle",
     "module",
     "namespace",
+    "params",
     "parent_kind",
     "parent_node",
     "parent_registry_name",
     "parent_source",
-    "params",
     "plugin",
     "provided_parts",
     "registry_name",
@@ -119,7 +116,7 @@ impl FaceManifest {
         // 输入/元数据键。第三种键是这里无法复现的字段，而本文件对 `plugin:` 已经做出的那次拒绝，正是
         // 让这样的键不会被忽略的同一道拒绝——编辑器只应重写自己能完整复现的声明。
         if let Some(unknown) = self.values.keys().find(|key| {
-            !RENDERED_FIELDS.contains(&key.as_str()) && !NON_FIELD_KEYS.contains(&key.as_str())
+            !ON_DISK_FIELDS.contains(&key.as_str()) && !OFF_DISK_KEYS.contains(&key.as_str())
         }) {
             return Err(format!(
                 "this face carries `{unknown}`, which no template emits and the editor cannot \

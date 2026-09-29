@@ -231,5 +231,5 @@ pub(crate) fn display_list(items: &[String]) -> String {
 }
 
 #[cfg(test)]
-#[path = "index_tests.rs"]
-mod index_tests;
+#[path = "source_index_tests.rs"]
+mod source_index_tests;

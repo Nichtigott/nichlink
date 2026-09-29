@@ -7,9 +7,9 @@ use std::path::Path;
 
 use super::Node;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
-use super::discovery::UnplacedFace;
-use super::registration_check;
+use super::registration_phase;
 use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
+use super::source_walk::UnplacedFace;
 use super::{SourceScope, collect_active_ids, relative_display};
 
 pub(crate) fn aggregate_requirements(
@@ -24,7 +24,7 @@ pub(crate) fn aggregate_requirements(
         collect_active_ids(src, nodes, scope, false, &mut active);
         active
     });
-    registration_check::aggregate(src, include_demo, active.as_ref(), cache_units)
+    registration_phase::aggregate(src, include_demo, active.as_ref(), cache_units)
 }
 
 pub(crate) fn aggregate_stable_name_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {

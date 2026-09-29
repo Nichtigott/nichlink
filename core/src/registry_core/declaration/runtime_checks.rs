@@ -342,7 +342,7 @@ impl RuntimeCheckSpec {
 
     /// Evaluate the check against one value, reporting failure as evidence.
     /// 对单个取值执行检查，失败时以证据形式报告。
-    pub fn run(self, value: &RuntimeValue) -> Result<(), RuntimeCheckFailure> {
+    pub fn evaluate(self, value: &RuntimeValue) -> Result<(), RuntimeCheckFailure> {
         match self {
             Self::CoordinatesInViewport => check_coordinates(value),
             Self::FiniteNumber => check_finite_number(value),
@@ -350,6 +350,15 @@ impl RuntimeCheckSpec {
             Self::NonEmptyText => check_non_empty_text(value),
             Self::TextLength { min, max } => check_text_length(value, min, max),
         }
+    }
+
+    /// The historical name of [`Self::evaluate`], kept because `RuntimeCheckSpec::run` is
+    /// on the published surface (`NAM-32` asks for a verb that carries the action).
+    /// Prefer `evaluate`.
+    /// [`Self::evaluate`] 的历史名字，因为 `RuntimeCheckSpec::run` 在已发布面上所以保留
+    /// （`NAM-32` 要求动词自带动作）。请优先用 `evaluate`。
+    pub fn run(self, value: &RuntimeValue) -> Result<(), RuntimeCheckFailure> {
+        self.evaluate(value)
     }
 }
 

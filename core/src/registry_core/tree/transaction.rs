@@ -179,8 +179,9 @@ impl Registry {
         // them: two siblings may not carry the same `registry_name`. A path is not a
         // display string in this workspace — connector admission classifies a provider as
         // inside or outside its owner with `path_is_strictly_under`, and the graft cut
-        // selector resolves a slot *by path* — so two faces sharing one path made "which
-        // face is this slot" unanswerable while three consumers silently picked one: the
+        // selector resolves its target *by path* — so two faces sharing one path made
+        // "which face does this path name" unanswerable while three consumers silently
+        // picked one: the
         // by-path index (last insert wins), `path_for` (two identical strings), and the
         // path arm of the cut selector (first match wins). A duplicate `stable_name` was
         // already refused; a duplicate `registry_name` was not, and the two are the same
@@ -189,8 +190,8 @@ impl Registry {
         // admitted (audit `LGC-LG-07`).
         // 批次图的身份键在这里检查，而节点的**路径**就是身份键之一：两个兄弟不得携带相同的
         // `registry_name`。在本工作区里路径不是显示串——连接器准入用 `path_is_strictly_under`
-        // 判定提供者在所有者之内还是之外，graft 切口选择器**按路径**解析槽位——因此两个面共用一条
-        // 路径会让"这个槽位是哪个面"无法回答，而三个消费方各自静默地选了一个：按路径的索引
+        // 判定提供者在所有者之内还是之外，graft 切口选择器**按路径**解析它的目标——因此两个面共用一条
+        // 路径会让"这条路径命名哪个面"无法回答，而三个消费方各自静默地选了一个：按路径的索引
         // （后插入者赢）、`path_for`（两段完全相同的字符串）、以及切口选择器的路径那一支（取第一个
         // 匹配）。重复的 `stable_name` 本来就被拒绝，重复的 `registry_name` 却没有，而两者是同一种
         // 碰撞。

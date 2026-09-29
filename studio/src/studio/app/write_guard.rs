@@ -30,7 +30,7 @@
 
 use std::path::PathBuf;
 
-use super::support::{package_namespace, selected_root};
+use super::project_context::{package_namespace, selected_root};
 
 /// The selected project's root, or a named refusal.
 /// 已选中项目的根目录，或一条具名拒绝。

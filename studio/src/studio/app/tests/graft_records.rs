@@ -1,3 +1,6 @@
+//! covers `app/graft.rs`.
+//! 覆盖 `app/graft.rs`。
+//!
 //! External-graft record and screen tests, moved out of `app/graft.rs` so the module under test stays inside the size ratchet.
 //! 外部 graft 记录与界面测试；从 `app/graft.rs` 移出，使被测模块留在尺寸棘轮之内。
 

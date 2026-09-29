@@ -30,7 +30,7 @@ use nichlink::lexicon;
 
 use super::default_entry_source;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
-use super::node::{Node, relative_display};
+use super::discovery_node::{Node, relative_display};
 use super::registry_syntax::application_entries;
 use super::{SourceLayout, source_layout};
 
@@ -388,7 +388,7 @@ pub fn host_entry_source(root: &Path) -> Result<PathBuf, String> {
 /// 只被上报，不会 panic。
 fn declaring_application_entry(src: &Path) -> Result<Option<PathBuf>, String> {
     let mut files = Vec::new();
-    super::discovery::collect_rust_sources(src, &mut files)?;
+    super::source_walk::collect_rust_sources(src, &mut files)?;
     files.sort();
     let mut declarations = Vec::new();
     for file in files {

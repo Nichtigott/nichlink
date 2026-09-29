@@ -19,7 +19,7 @@ use std::path::Path;
 use nichlink::identity::NodeId;
 use nichlink_build_method::{FaceView, PruningRow, build_output_is_current, read_pruning_manifest};
 
-use crate::evidence::out_dir;
+use crate::build_evidence::out_dir;
 
 /// What the build says about one face the sources declare right now.
 /// 构建对源码此刻声明的某个面给出的说法。

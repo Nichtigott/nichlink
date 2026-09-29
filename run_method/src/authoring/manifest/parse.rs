@@ -4,12 +4,12 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::authoring::context::authoring_namespace;
 use crate::authoring::parse::{
     kind_from_source_path, module_name_from_path, module_source_from_node_path,
     parse_admission_expression, parse_flow_expression, rule_syntax_for_source,
     source_path_from_file,
 };
-use crate::authoring::validation::authoring_namespace;
 use crate::{
     NodeId, ParentSyntax, RuntimeCheckSpec, parse_face as parse_face_syntax, root_node_id,
 };

@@ -51,7 +51,7 @@ impl SourceWalk {
         skip_compile_error_demo: false,
     };
 
-    fn skips(&self, path: &Path) -> bool {
+    fn skips_path(&self, path: &Path) -> bool {
         let named = |name: &str| path.file_name().and_then(|value| value.to_str()) == Some(name);
         let within = |name: &str| path.components().any(|part| part.as_os_str() == name);
         (self.skip_target && named("target"))
@@ -118,7 +118,7 @@ pub fn collect_rust_sources(
             ));
         }
         for path in tree.entries(directory)? {
-            if walk.skips(&path) {
+            if walk.skips_path(&path) {
                 continue;
             }
             if tree.is_directory(&path) {

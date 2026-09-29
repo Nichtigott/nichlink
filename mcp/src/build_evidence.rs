@@ -27,9 +27,9 @@ use nichlink_build_method::{
 };
 use serde_json::Value;
 
-use crate::nodes::resolve_node;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
+use crate::resolve::resolve_node;
 
 /// The directory the build publishes its evidence into.
 /// 构建发布其证据的目录。
@@ -261,5 +261,5 @@ fn tree_report(
 }
 
 #[cfg(test)]
-#[path = "evidence_tests.rs"]
-mod evidence_tests;
+#[path = "build_evidence_tests.rs"]
+mod build_evidence_tests;

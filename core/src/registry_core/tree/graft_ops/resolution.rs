@@ -62,13 +62,13 @@ impl Registry {
     /// [`Registry::resolve_record`], which reads the path a record stored as a *hint*
     /// and compares it against that record's durable identity — a hint that disagrees
     /// is refused, and a hint that stands in for a missing identity is reported as
-    /// drift. No slot is chosen silently there. The graft-cut selector used to be its
+    /// drift. No node is chosen silently there. The graft-cut selector used to be its
     /// second caller and no longer is: that arm goes through
     /// [`Registry::resolve_path_strict`] (audit `LGC-LG-07`).
     /// 这是树里仅存的一处"取第一个匹配"，而它的边界正是让它可判定、而不是第二条规则的东西：它
     /// 唯一的调用方是 [`Registry::resolve_record`]，那里只把记录存下的路径当作**提示**，并与该
     /// 记录里耐久的身份对比——答得不一样的提示被拒绝，而顶替缺失身份的提示会被报成漂移。那里不
-    /// 存在静默选槽。移植切口选择器过去是它的第二个调用方，现在不再是：那一支走
+    /// 存在静默选节点。移植切口选择器过去是它的第二个调用方，现在不再是：那一支走
     /// [`Registry::resolve_path_strict`]（审计 `LGC-LG-07`）。
     pub(super) fn resolve_path(&self, path: &str) -> Option<NodeId> {
         self.depth_first().into_iter().find_map(|info| {

@@ -6,8 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::Node;
-use super::discovery::collect_source_files;
 use super::registry_identity::NodeId;
+use super::source_walk::collect_source_files;
 
 /// Prime the process-wide identity cache from the per-unit cache files.
 /// 从逐单元缓存文件预热进程级身份缓存。
@@ -17,14 +17,14 @@ use super::registry_identity::NodeId;
 /// [`super::registry_identity::run_as_package`] — together with the relative
 /// source path. The static itself stays first-write-wins: a second package in
 /// the same process caches nothing here, so its lookups miss and
-/// [`super::node_id::node_id`] falls back to parsing the face and computing the
+/// [`super::node_identity::node_id`] falls back to parsing the face and computing the
 /// identity under its own namespace. That miss is the intended outcome — the
 /// cache is an optimization, and a miss is right where a hit on another
 /// package's entry was wrong.
 /// 每条记录都以**预热当时生效的命名空间**（`check_for`/`run_for` 的包，因为两者都在
 /// [`super::registry_identity::run_as_package`] 里跑管线）与相对源码路径共同为键。这个 static
 /// 本身仍是先到先得：同进程的第二个包在这里什么都缓存不到，于是它的查询落空，
-/// [`super::node_id::node_id`] 退回解析注册面并在自己的命名空间下现算身份。落空正是预期结果——
+/// [`super::node_identity::node_id`] 退回解析注册面并在自己的命名空间下现算身份。落空正是预期结果——
 /// 缓存只是优化，而"落空"在"命中别的包的条目"出错的地方是对的。
 pub(crate) fn prime_node_id_cache(manifest: &Path, src: &Path, nodes: &[Node]) {
     let target = env::var_os("CARGO_TARGET_DIR")
@@ -41,7 +41,7 @@ pub(crate) fn prime_node_id_cache(manifest: &Path, src: &Path, nodes: &[Node]) {
         );
     let units = target.join("nichlink/cache/units");
     let namespace = super::registry_identity::package_namespace();
-    let mut values = super::node_id::NodeIdCache::default();
+    let mut values = super::node_identity::NodeIdCache::default();
     let mut files = Vec::new();
     collect_source_files(nodes, &mut files);
     for file in files {
@@ -120,7 +120,7 @@ pub(crate) fn cache_directory(manifest: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::{cache_directory, prime_node_id_cache, source_unit_fingerprint};
-    use crate::node::{Node, relative_display};
+    use crate::discovery_node::{Node, relative_display};
     use crate::registry_identity::{NodeId, package_node_id, run_as_package};
     use std::path::{Path, PathBuf};
 
@@ -212,14 +212,14 @@ mod tests {
         run_as_package("pkg-b", || build(&manifest_b, &src_b, &node_b, true));
         run_as_package("pkg-a", || {
             assert_eq!(
-                crate::node_id::node_id(&src_a, &node_a),
+                crate::node_identity::node_id(&src_a, &node_a),
                 Some(package_node_id(RELATIVE, "Button")),
                 "the first package must read back its own identity",
             );
         });
         run_as_package("pkg-b", || {
             assert_eq!(
-                crate::node_id::node_id(&src_b, &node_b),
+                crate::node_identity::node_id(&src_b, &node_b),
                 Some(package_node_id(RELATIVE, "Button")),
                 "the second package must read back its own identity, not the first package's",
             );
@@ -254,7 +254,7 @@ mod tests {
                 for (_, src, node, name) in packages {
                     run_as_package(name, || {
                         assert_eq!(
-                            crate::node_id::node_id(src, node),
+                            crate::node_identity::node_id(src, node),
                             Some(package_node_id(RELATIVE, "Button")),
                             "warm={warm} first_b={first_b} package={name}",
                         );
@@ -270,7 +270,7 @@ mod tests {
     /// 缓存自身的命名空间轴：为某个包预热的条目对别的包不可读，即便相对路径完全相同。
     #[test]
     fn an_entry_is_readable_only_in_the_namespace_it_was_primed_for() {
-        let mut cache = crate::node_id::NodeIdCache::default();
+        let mut cache = crate::node_identity::NodeIdCache::default();
         let id_a = NodeId::from_namespaced_path("pkg-a", RELATIVE, "Button");
         let id_b = NodeId::from_namespaced_path("pkg-b", RELATIVE, "Button");
         assert_ne!(id_a, id_b);
@@ -286,7 +286,7 @@ mod tests {
     /// 读取侧复核：在当前命名空间下存着、但身份与其 kind 不符的条目会被拒绝。
     #[test]
     fn an_entry_that_does_not_match_its_own_identity_is_refused() {
-        let mut cache = crate::node_id::NodeIdCache::default();
+        let mut cache = crate::node_identity::NodeIdCache::default();
         let namespace = crate::registry_identity::package_namespace();
         let foreign = NodeId::from_namespaced_path("some-other-package", RELATIVE, "Button");
         cache.insert(&namespace, RELATIVE, foreign, "Button");

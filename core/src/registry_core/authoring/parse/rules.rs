@@ -410,11 +410,23 @@ fn rendered_requirement(requirement: OwnedRequirementSpec) -> String {
 /// `-> Vec<…>`，因此畸形条目会被跳过、合规的其余条目照常返回——它不会报错，调用方也不得把
 /// 一份更短的列表当作"源文件合规"的证明。需要**拒绝**错误 `requires` 列表的代码请调用
 /// [`try_parse_requirements_owned`]——内核自己用的就是它（审计 `LGC-LG-28`）。
-pub fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec> {
+pub fn parse_requirements_snapshot(value: &str) -> Vec<OwnedRequirementSpec> {
     value
         .split(',')
         .filter_map(|item| requirement_item(item).ok())
         .collect()
+}
+
+/// The historical name of [`parse_requirements_snapshot`], kept because it is on the
+/// published surface (`NAM-34`). It is **lossy for the same reason** the paragraph above
+/// gives: malformed entries are skipped, a shorter list is not a clean bill of health,
+/// and code that needs to reject a bad `requires` list calls
+/// [`try_parse_requirements_owned`].
+/// [`parse_requirements_snapshot`] 的历史名字，因为它在已发布面上所以保留（`NAM-34`）。它
+/// **同样是有损的**，理由见上一段：畸形条目会被跳过，更短的列表不是"源文件合规"的证明，
+/// 需要拒绝错误 `requires` 列表的代码请调用 [`try_parse_requirements_owned`]。
+pub fn parse_requirements_owned(value: &str) -> Vec<OwnedRequirementSpec> {
+    parse_requirements_snapshot(value)
 }
 
 /// Read a `requires` list strictly: every entry has to be well-formed, or the read fails.
@@ -473,7 +485,9 @@ pub fn parse_requirements(value: &str) -> Result<(), FaceParseError> {
 
 /// Parse the compact registration-rule value into an owned rule.
 /// 将紧凑注册规范值解析为拥有型规则。
-pub fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRule, FaceParseError> {
+pub fn parse_registration_rule_snapshot(
+    value: &str,
+) -> Result<OwnedRegistrationRule, FaceParseError> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("any") {
         return Ok(rule_requiring_nothing());
@@ -508,6 +522,14 @@ pub fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRul
         }
     }
     Ok(rule)
+}
+
+/// The historical name of [`parse_registration_rule_snapshot`], kept because it is on the
+/// published surface (`NAM-34`). Prefer `parse_registration_rule_snapshot`.
+/// [`parse_registration_rule_snapshot`] 的历史名字，因为它在已发布面上所以保留（`NAM-34`）。
+/// 请优先用 `parse_registration_rule_snapshot`。
+pub fn parse_registration_rule_owned(value: &str) -> Result<OwnedRegistrationRule, FaceParseError> {
+    parse_registration_rule_snapshot(value)
 }
 
 #[cfg(test)]

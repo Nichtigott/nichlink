@@ -1,3 +1,6 @@
+//! covers `app/graft.rs`, `app/mutations.rs`.
+//! 覆盖 `app/graft.rs`、`app/mutations.rs`。
+//!
 //! External graft composition regression tests.
 //! 外部 graft 组合回归测试。
 

@@ -1,7 +1,8 @@
 //! App construction, reload, and registry lifecycle.
 //! App 构造、重载与注册表生命周期。
 
-use super::support::{cargo_rustc_mir, package_root};
+use super::cargo_probe::cargo_rustc_mir;
+use super::project_context::package_root;
 use super::*;
 
 impl App {

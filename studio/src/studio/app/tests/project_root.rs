@@ -1,3 +1,6 @@
+//! covers `app/project_context.rs`, `app/write_guard.rs`.
+//! 覆盖 `app/project_context.rs`、`app/write_guard.rs`。
+//!
 //! Project-root, manifest, namespace and write-scope tests.
 //! 项目根、清单、命名空间与写作用域测试（covers `app/project_context.rs`）。
 

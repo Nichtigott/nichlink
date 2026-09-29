@@ -1,3 +1,6 @@
+//! covers `app/mutations.rs`, `app/keyboard.rs`, `app/state/forms.rs`.
+//! 覆盖 `app/mutations.rs`、`app/keyboard.rs`、`app/state/forms.rs`。
+//!
 //! Editing round-trip regression tests.
 //! 编辑往返回归测试。
 

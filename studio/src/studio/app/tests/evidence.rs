@@ -1,3 +1,6 @@
+//! covers `app/trace.rs`, `app/graph_queries.rs`.
+//! 覆盖 `app/trace.rs`、`app/graph_queries.rs`。
+//!
 //! What a Studio session's trace can confirm, observed instead of argued.
 //! Studio 会话的追踪实际能确认什么：观察，而不是论证。
 

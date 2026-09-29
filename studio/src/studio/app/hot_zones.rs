@@ -1,7 +1,12 @@
-//! Click hot-zone caches refreshed by every Studio draw.
-//! 每次 Studio 绘制时刷新的点击热区缓存。
+//! Click hot-zone caches refreshed by every Studio draw, and the pure interaction
+//! helpers that read them: the divider maths and the tree selection the pointer and the
+//! keys move.
+//! 每次 Studio 绘制时刷新的点击热区缓存，以及读取它们的纯交互辅助：分隔条算术，与指针和按键
+//! 移动的那份树选中。
 
 use ratatui::layout::Rect;
+
+use super::*;
 
 /// The rectangles Studio hit-tests pointer events against.
 /// Studio 用于命中测试指针事件的矩形集合。
@@ -61,4 +66,72 @@ pub struct HotZones {
     /// Click area of the data-flow pane.
     /// 数据流面板的点击区域。
     pub graph_data_area: Rect,
+}
+
+impl App {
+    pub(super) fn near_divider(&self, column: u16, row: u16) -> bool {
+        self.hot.workspace_area.contains((column, row).into())
+            && column.abs_diff(self.hot.tree_area.right()) <= 1
+    }
+
+    pub(super) fn near_graph_divider(&self, column: u16, row: u16) -> bool {
+        self.hot.graph_area.contains((column, row).into())
+            && column.abs_diff(self.hot.graph_tree_area.right()) <= 1
+    }
+
+    pub(super) fn resize_graph_split(&mut self, column: u16) {
+        if self.hot.graph_area.width == 0 {
+            return;
+        }
+        let relative = column.saturating_sub(self.hot.graph_area.x) as u32;
+        self.graph_split_percent =
+            ((relative * 100) / u32::from(self.hot.graph_area.width)).clamp(35, 65) as u16;
+    }
+
+    pub(super) fn resize_split(&mut self, column: u16) {
+        if self.hot.workspace_area.width == 0 {
+            return;
+        }
+        let relative = column.saturating_sub(self.hot.workspace_area.x) as u32;
+        self.split_percent =
+            ((relative * 100) / u32::from(self.hot.workspace_area.width)).clamp(25, 70) as u16;
+    }
+
+    pub(super) fn move_selection(&mut self, delta: isize) {
+        let nodes = self.visible_nodes();
+        let current = nodes
+            .iter()
+            .position(|(id, _)| *id == self.selected)
+            .unwrap_or_default();
+        let last = nodes.len().saturating_sub(1) as isize;
+        let next = (current as isize + delta).clamp(0, last) as usize;
+        if let Some((id, _)) = nodes.get(next)
+            && self.selected != *id
+        {
+            self.selected = *id;
+            self.details_selected = 0;
+        }
+    }
+
+    pub(super) fn toggle_selected(&mut self) {
+        if !self.owns_registry(self.selected) {
+            return;
+        }
+        if !self.collapsed.insert(self.selected) {
+            self.collapsed.remove(&self.selected);
+        }
+    }
+
+    pub(super) fn selected_parent(&self) -> NodeId {
+        self.selected_info()
+            .filter(|info| info.needs_registry)
+            .map(|info| info.id)
+            .or_else(|| {
+                self.selected_info()
+                    .and_then(|info| self.registry.find(info.parent))
+                    .filter(|info| info.needs_registry)
+                    .map(|info| info.id)
+            })
+            .unwrap_or(self.registry.id())
+    }
 }

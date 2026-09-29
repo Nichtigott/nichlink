@@ -67,7 +67,7 @@ fn collect(
         if path.is_dir() {
             let named = path.file_name().and_then(|name| name.to_str());
             if named != Some(nichlink::lexicon::SCOPE_REGISTRATION_MODULE)
-                && named.is_some_and(crate::discovery::valid_name)
+                && named.is_some_and(crate::source_walk::valid_name)
             {
                 collect(
                     root,
@@ -102,9 +102,9 @@ fn collect(
         };
         let relative = relative_display(root, &path);
         // A face that does not parse is reported once by
-        // `validation::face_syntax_errors`, before this pass runs; skipping it
+        // `face_syntax_check::face_syntax_errors`, before this pass runs; skipping it
         // here is what keeps the diagnostic the only outcome instead of a panic.
-        // 解析不了的注册面由 `validation::face_syntax_errors` 在本轮之前报告一次；此处跳过
+        // 解析不了的注册面由 `face_syntax_check::face_syntax_errors` 在本轮之前报告一次；此处跳过
         // 它，正是让诊断成为唯一结果、而不是 panic 的原因。
         let Ok(Some(face)) = parse_face(&source) else {
             continue;

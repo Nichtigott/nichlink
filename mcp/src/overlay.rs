@@ -27,7 +27,7 @@ use nichlink_build_method::{
 };
 use serde_json::Value;
 
-use crate::evidence::build_evidence;
+use crate::build_evidence::build_evidence;
 use crate::protocol::DEFAULT_LIMIT;
 use crate::registry::namespace;
 
@@ -95,10 +95,10 @@ fn render(
     }
     // The state word comes from the one place that spells it, `BuildEvidence::freshness()`,
     // and is passed in: this report used to spell the freshness word itself, which left two
-    // more copies to drift from the one in `evidence.rs` — nothing coupled them, as an
+    // more copies to drift from the one in `build_evidence.rs` — nothing coupled them, as an
     // independent check found with mutation `E`.
     // 状态词来自唯一拼它的地方 `BuildEvidence::freshness()`，由调用方传进来：本报告过去自己拼这个
-    // 新鲜度词，于是相对 `evidence.rs` 里的那一份又多了两处可能漂移的副本——没有任何钉子把三者耦合
+    // 新鲜度词，于是相对 `build_evidence.rs` 里的那一份又多了两处可能漂移的副本——没有任何钉子把三者耦合
     // 起来，这正是独立复核用变异 `E` 发现的。
     output.push_str(&format!("build {freshness}\n"));
     match scope {

@@ -1,3 +1,6 @@
+//! covers `app/trace.rs`, `app/source_index.rs`.
+//! 覆盖 `app/trace.rs`、`app/source_index.rs`。
+//!
 //! End-to-end trace ingest: a host's artifact reaches the DATA panel or is refused.
 //! 端到端 trace ingest：宿主的 artifact 到达 DATA 面板，否则被拒绝。
 //!
