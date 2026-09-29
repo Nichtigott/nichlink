@@ -238,7 +238,7 @@ fn reused_line(verified: &Verified) -> String {
 /// clock silently followed the environment would be a different token on two machines.
 /// 用 UTC 而不是本地时间，因为本桥不读时区，而一个悄悄跟着环境走的时刻会让两台机器上的报告印出
 /// 不同的凭据。
-fn wall_clock() -> String {
+pub(crate) fn wall_clock() -> String {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())

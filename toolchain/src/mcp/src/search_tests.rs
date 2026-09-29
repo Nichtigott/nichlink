@@ -232,3 +232,27 @@ fn an_unparsable_file_is_reported_even_when_no_face_matches() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The convergence entry answers in layers and says what it did not look at: the tree's own
+/// verdicts, the chain the name leads into (composed from the call-graph tool rather than
+/// re-derived), the next step, and the bounds. One call localizes where three used to.
+/// 收敛入口分层作答，并说出它**没有**看什么：树自己的裁决、这个名字引向的链（由调用图工具**组合**而来，
+/// 不是重新推导）、下一步，以及边界。过去要三次调用才能定位的事，现在一次就够。
+#[test]
+fn the_convergence_layer_labels_each_layer_and_its_bounds() {
+    let (root, _name) = package("converge");
+    let text = search(&root, &json!({"query": "Button", "converge": true})).expect("an answer");
+    assert!(text.contains("chain:"), "{text}");
+    assert!(text.contains("next: pass `path`"), "{text}");
+    assert!(text.contains("bounds: static only"), "{text}");
+    assert!(
+        text.contains("no static function match") || text.contains("callers ("),
+        "the chain layer is the call graph's own answer: {text}"
+    );
+    // Without the flag the answer is exactly what it was: layers are opt-in, so no existing
+    // caller's shape moves.
+    // 不带这个开关时答案与从前完全一样：分层是显式请求的，因此既有调用方的形状不变。
+    let plain = search(&root, &json!({"query": "Button"})).expect("an answer");
+    assert!(!plain.contains("chain:"), "{plain}");
+    let _ = std::fs::remove_dir_all(&root);
+}

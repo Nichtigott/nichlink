@@ -1,0 +1,193 @@
+//! The adoption ledger: routes this tree trusts **provisionally**, and the rule that a decision
+//! is only as good as the bytes it was taken on.
+//! 采信台账：这棵树**暂时**采信的路线，以及"决定只在它据以做出的那些字节上成立"这条规则。
+//!
+//! The maintainer's own words for what this is: 「采信是可以改的松动的，但是要强制人去确认可修改，
+//! 因为肯定是稳步发展的，只是暂时采信」. So an entry is a **lease** and never a certificate: it
+//! names the bytes it was taken on, this module answers whether those bytes still are what they
+//! were, and *nothing here* renews or revokes anything by itself. A lapsed entry is a fact to be
+//! confirmed by a person, which is why the thing this module refuses to provide is the word
+//! "verified".
+//! 维护者对这件事的原话：「采信是可以改的松动的，但是要强制人去确认可修改，因为肯定是稳步发展的，只是暂时
+//! 采信」。因此条目是**租约**、绝不是证书：它点名自己据以做出的那些字节，本模块回答那些字节是否还是原来的
+//! 样子，而**这里没有任何东西**会自行续期或撤销。失效的条目是一个要由人来确认的事实——这也正是本模块拒绝
+//! 提供"已验证"这个词的原因。
+
+use std::collections::BTreeMap;
+
+use crate::identity::sha256_hex;
+
+/// One adopted route, as one ledger line spells it.
+/// 一条被采信的路线，按台账里的一行书写。
+///
+/// The line is `anchor|certifies|evidence|verifier|at|files|fingerprint|reason`: what was
+/// adopted, what that covers, what it was judged on, who confirmed it, when, the files whose
+/// bytes the decision rests on, the fingerprint of those bytes at that moment, and **why** this
+/// confirmation was given — the field a reader needs to tell a re-confirmation from a first one.
+/// 行格式是 `anchor|certifies|evidence|verifier|at|files|fingerprint`：采信了什么、覆盖什么、据什么
+/// 判断、谁确认的、何时、决定依托哪些文件的字节，以及那一刻那些字节的指纹。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdoptionEntry {
+    /// The route's anchor: a face identity, a logical path, or any name this tree uses.
+    /// 路线的锚点：面身份、逻辑路径，或这棵树使用的任何名字。
+    pub anchor: String,
+    /// What the decision covers, in the adopter's own words.
+    /// 这次决定覆盖什么，用采信者自己的话。
+    pub certifies: String,
+    /// What it was judged on (a trace run, a converge answer, a record state).
+    /// 据什么判断（一次 trace 运行、一份 converge 答案、一种记录状态）。
+    pub evidence: String,
+    /// Who confirmed it. A person, or the channel a person spoke through.
+    /// 谁确认的。一个人，或一个人发话所经的渠道。
+    pub verifier: String,
+    /// When, as the ledger wrote it.
+    /// 何时，按台账写下的样子。
+    pub at: String,
+    /// The files the decision rests on, relative to the package root.
+    /// 决定依托的文件，相对包根。
+    pub files: Vec<String>,
+    /// The fingerprint of those files' bytes at the moment of adoption.
+    /// 采信那一刻那些文件字节的指纹。
+    pub fingerprint: String,
+    /// Why this confirmation was given, in the confirmer's own words.
+    /// 这次确认的理由，用确认者自己的话。
+    pub reason: String,
+}
+
+/// What is wrong with one ledger line.
+/// 台账某一行出了什么问题。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdoptionError {
+    /// One-based line number.
+    /// 从 1 开始的行号。
+    pub line: usize,
+    /// What is wrong.
+    /// 出了什么问题。
+    pub message: String,
+}
+
+/// Parse a ledger: one entry per line, `#` comments and blank lines skipped.
+/// 解析一份台账：每行一条条目，跳过 `#` 注释与空行。
+pub fn parse_adoption(ledger: &str) -> Result<Vec<AdoptionEntry>, AdoptionError> {
+    let mut entries = Vec::new();
+    for (index, line) in ledger.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields = line.split('|').collect::<Vec<_>>();
+        if fields.len() != 8 {
+            return Err(AdoptionError {
+                line: index + 1,
+                message: format!("must contain 8 fields, found {}", fields.len()),
+            });
+        }
+        if fields.iter().any(|field| field.trim().is_empty()) {
+            return Err(AdoptionError {
+                line: index + 1,
+                message: "contains an empty field".to_owned(),
+            });
+        }
+        let files = fields[5]
+            .split(',')
+            .map(str::trim)
+            .filter(|file| !file.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if files.is_empty() {
+            return Err(AdoptionError {
+                line: index + 1,
+                message: "names no file, so the decision rests on nothing".to_owned(),
+            });
+        }
+        entries.push(AdoptionEntry {
+            anchor: fields[0].to_owned(),
+            certifies: fields[1].to_owned(),
+            evidence: fields[2].to_owned(),
+            verifier: fields[3].to_owned(),
+            at: fields[4].to_owned(),
+            files,
+            fingerprint: fields[6].to_owned(),
+            reason: fields[7].to_owned(),
+        });
+    }
+    Ok(entries)
+}
+
+/// The fingerprint of the bytes a decision was taken on.
+/// 一次决定据以做出的那些字节的指纹。
+///
+/// Sorted by path, so two callers that read the same files in different orders agree; length
+/// delimited, so two different file sets cannot concatenate into the same input.
+/// 按路径排序，因此以不同顺序读同样的两个调用方会得到同一个值；带长度分隔，因此两组不同的文件无法拼接
+/// 成同一个输入。
+pub fn adoption_fingerprint(files: &[(String, String)]) -> String {
+    let mut ordered = files.to_vec();
+    ordered.sort();
+    let mut input = Vec::new();
+    for (path, contents) in ordered {
+        input.extend_from_slice(path.as_bytes());
+        input.push(0);
+        input.extend_from_slice(contents.len().to_string().as_bytes());
+        input.push(0);
+        input.extend_from_slice(contents.as_bytes());
+        input.push(0);
+    }
+    sha256_hex(&input)
+}
+
+/// Whether an entry still holds, and which file moved if it does not.
+/// 条目是否仍然成立；不成立时是哪个文件动了。
+///
+/// `Lapsed` is not a revocation and carries no instruction to revert anything: it says the bytes
+/// the decision was taken on are not the bytes here now, and the file it names is where to look.
+/// `Lapsed` 不是撤销，也不含"回退什么"的指令：它说的是"当时据以决定的字节不是现在这些"，而它点名的
+/// 文件就是该去看的地方。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AdoptionVerdict {
+    /// The bytes are the ones the decision was taken on.
+    /// 字节仍是决定据以做出的那些。
+    Provisional,
+    /// A file the decision rests on is missing or no longer has those bytes.
+    /// 决定依托的某个文件不见了，或不再是那些字节。
+    Lapsed {
+        /// The file that moved, or the first one missing.
+        /// 动了的那个文件，或第一个缺失的文件。
+        file: String,
+    },
+}
+
+/// Decide whether one entry still describes these bytes.
+/// 判定一条条目是否仍在描述这些字节。
+pub fn verdict_of(entry: &AdoptionEntry, current: &[(String, String)]) -> AdoptionVerdict {
+    let held: BTreeMap<&str, &str> = current
+        .iter()
+        .map(|(path, contents)| (path.as_str(), contents.as_str()))
+        .collect();
+    let named = entry
+        .files
+        .iter()
+        .map(|file| {
+            let contents = held.get(file.as_str()).copied().unwrap_or_default();
+            (file.clone(), contents.to_owned())
+        })
+        .collect::<Vec<_>>();
+    let missing = entry
+        .files
+        .iter()
+        .find(|file| !held.contains_key(file.as_str()));
+    if let Some(file) = missing {
+        return AdoptionVerdict::Lapsed { file: file.clone() };
+    }
+    if adoption_fingerprint(&named) == entry.fingerprint {
+        AdoptionVerdict::Provisional
+    } else {
+        AdoptionVerdict::Lapsed {
+            file: entry.files[0].clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "adoption_tests.rs"]
+mod adoption_tests;

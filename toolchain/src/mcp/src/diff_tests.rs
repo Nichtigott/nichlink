@@ -316,3 +316,64 @@ fn the_tree_diff_counts_unparsable_registration_files() {
     assert!(reply.contains("unparsable faces 1"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// One directory of published records with exactly the given scope and pruning rows.
+/// 一个只含给定作用域与剪枝行的已发布记录目录。
+fn write_record_set(out: &Path, token: &str, id: &str, source: &str, symbol: &str) {
+    std::fs::create_dir_all(out).expect("record directory");
+    std::fs::write(out.join("discovery.fingerprint"), format!("{token}\n")).expect("token");
+    std::fs::write(
+        out.join("source_scope.tsv"),
+        format!("# mode\tauto\n# selected\t1\n# node\tsource\tmodule\n{id}\t{source}\tcontrol\n"),
+    )
+    .expect("scope record");
+    std::fs::write(
+        out.join("pruning_manifest.tsv"),
+        format!("# node\tsource\tsymbol\n{id}\t{source}\t{symbol}\n"),
+    )
+    .expect("pruning record");
+}
+
+#[test]
+fn two_record_sets_are_compared_as_data() {
+    let (root, _name) = package("records-against");
+    let id = "bdb4427ce81c9bc51e56bee7667fd2be";
+    write_record_set(
+        &root.join("target/nichlink/out"),
+        "aaaa",
+        id,
+        "control/control.rs",
+        "-",
+    );
+    write_record_set(
+        &root.join("baseline"),
+        "bbbb",
+        id,
+        "control/control.rs",
+        "paint",
+    );
+    let report = diff(&root, &json!({"against": "baseline"})).expect("a comparison");
+    assert!(report.contains("records there"), "{report}");
+    assert!(
+        report.contains("fingerprint here aaaa  there bbbb  -> different"),
+        "{report}"
+    );
+    assert!(
+        report.contains("pruning rows added 0  gone 0  changed 1"),
+        "{report}"
+    );
+    assert!(report.contains("`-` -> `paint`"), "{report}");
+    assert!(
+        report.contains("not compared"),
+        "the sections without a reader are named: {report}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_record_directory_outside_the_root_is_refused() {
+    let (root, _name) = package("records-outside");
+    let error = diff(&root, &json!({"against": "../elsewhere"})).expect_err("a refusal");
+    assert!(error.contains("must stay inside"), "{error}");
+    let _ = std::fs::remove_dir_all(&root);
+}

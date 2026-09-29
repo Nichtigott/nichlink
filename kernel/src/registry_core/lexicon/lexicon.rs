@@ -124,6 +124,14 @@ pub const NICHLINK_DIR: &str = ".nichlink";
 /// `NICHLINK_DIR` 下存放外部 graft 计划的目录名。
 pub const EXTERNAL_GRAFT_DIR: &str = "external-grafts";
 
+/// Directory name, under `NICHLINK_DIR`, holding the adoption ledger.
+/// `NICHLINK_DIR` 下存放采信台账的目录名。
+pub const ADOPTION_DIR: &str = "adopted";
+
+/// File name, under `ADOPTION_DIR`, holding the ledger's lines.
+/// `ADOPTION_DIR` 下承载台账各行的文件名。
+pub const ADOPTION_FILE: &str = "entries";
+
 /// File name of one external graft plan.
 /// 单个外部 graft 计划的文件名。
 pub const GRAFT_PLAN_FILE: &str = "graft.plan";

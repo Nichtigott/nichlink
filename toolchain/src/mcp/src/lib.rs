@@ -114,6 +114,9 @@ mod ownership;
 #[path = "affected.rs"]
 mod affected;
 
+#[path = "adopted.rs"]
+mod adopted;
+
 #[path = "preview.rs"]
 mod preview;
 

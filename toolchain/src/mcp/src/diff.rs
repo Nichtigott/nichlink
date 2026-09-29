@@ -10,10 +10,15 @@
 //! 它把源码推导出的树与构建自己的清单对照，因此两侧都是这个桥其它部分报告的同一批推导；没有构建过的
 //! 项目会被要求先构建，而不是拿到一份空 diff。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::Path;
 
-use crate::build_time::{GraftPlanRow, declared_grafts, graft_plan_rows};
+use crate::build_time::{
+    GraftPlanRow, PruningRow, declared_grafts, graft_plan_rows, read_build_scope,
+    read_pruning_manifest,
+};
+use nichlink_kernel::NodeId;
 use serde_json::Value;
 
 use crate::mcp::build_evidence::build_evidence;
@@ -75,6 +80,16 @@ pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, St
     let (faces, unparsable) = member.derived_tree()?;
     let faces = faces.as_slice();
     let unparsable = unparsable.as_str();
+    // Two sets of published records, compared as data: what this package's build wrote against
+    // what another directory holds (a saved build, another checkout, a CI artifact). This is the
+    // one comparison here whose *both* sides are records, so it needs no derivation and says
+    // nothing about identity drift against the sources — `records: true` answers that question.
+    // 两份已发布的记录作为**数据**比较：本包的构建写下的，与另一个目录持有的（保存下来的构建、另一个
+    // 检出、CI 产物）。这是这里唯一两侧**都是记录**的比较，因此它不需要推导，也不说身份相对源码的漂移
+    // ——那是 `records: true` 回答的问题。
+    if let Some(against) = arguments.get("against").and_then(Value::as_str) {
+        return diff_published(member, arguments, against);
+    }
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
         return diff_records(root, faces, namespace, arguments, unparsable, member);
     }
@@ -208,6 +223,167 @@ pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, St
         ));
     }
     Ok(output)
+}
+
+/// Compare two sets of published records, as data.
+/// 把两份已发布的记录作为数据比较。
+///
+/// Only the sections that have a reader are compared, and the reply names the ones that do not:
+/// `function_manifest` and the graft plan rows are written by the pipeline and read by nobody in
+/// this tree, so a "no differences" line about them would be a claim nothing can check.
+/// 只比较**有读取器**的那几节，而回复点名没有读取器的那些：`function_manifest` 与 graft 计划行由管线
+/// 写出、本树里没有任何读取方，因此对它们印一句"没有差异"是无人能核对的声称。
+fn diff_published(member: &Member, arguments: &Value, against: &str) -> Result<String, String> {
+    let here = crate::mcp::build_evidence::out_dir(&member.dir);
+    // The same rule `load_mir` applies to a path it is handed: any `..` is refused outright, and
+    // an absolute path is caught by the prefix check below. A lexical `starts_with` alone answers
+    // "inside" for `<root>/../elsewhere`, which is the one shape a reader would use by accident.
+    // 与 `load_mir` 对它收到的路径用的同一条规则：出现任何 `..` 直接拒绝，而绝对路径由下面的前缀检查
+    // 拦下。只看字面的 `starts_with` 会把 `<root>/../elsewhere` 判成"在里面"，而那正是读者可能随手
+    // 写出的形状。
+    if Path::new(against)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err("`against` must stay inside the configured source root".to_owned());
+    }
+    let there = member.dir.join(against);
+    if !there.starts_with(&member.dir) {
+        return Err("`against` must stay inside the configured source root".to_owned());
+    }
+    if !there.is_dir() {
+        return Err(format!(
+            "`against` names {} — not a directory of published records (the build writes them \
+             under `target/nichlink/out`)",
+            there.display()
+        ));
+    }
+    let mut output = format!(
+        "records here {}\nrecords there {}\n",
+        here.display(),
+        there.display()
+    );
+    let here_scope = read_build_scope(&here);
+    let there_scope = read_build_scope(&there);
+    match (&here_scope, &there_scope) {
+        (Ok(mine), Ok(theirs)) => {
+            output.push_str(&format!(
+                "scope here mode={} all={} selected={}  there mode={} all={} selected={}\n",
+                mine.mode,
+                mine.all,
+                mine.selected_ids.len(),
+                theirs.mode,
+                theirs.all,
+                theirs.selected_ids.len(),
+            ));
+            let added = theirs.selected_ids.difference(&mine.selected_ids).count();
+            let gone = mine.selected_ids.difference(&theirs.selected_ids).count();
+            output.push_str(&format!("scope identities added {added}  gone {gone}\n"));
+        }
+        _ => {
+            output.push_str(&format!(
+                "scope not compared: here {}, there {}\n",
+                readable(&here_scope),
+                readable(&there_scope)
+            ));
+        }
+    }
+    let here_pruning = read_pruning_manifest(&here);
+    let there_pruning = read_pruning_manifest(&there);
+    match (&here_pruning, &there_pruning) {
+        (Ok(mine), Ok(theirs)) => {
+            let mine_rows = row_map(mine);
+            let theirs_rows = row_map(theirs);
+            let added = theirs_rows
+                .iter()
+                .filter(|(id, _)| !mine_rows.contains_key(*id))
+                .collect::<Vec<_>>();
+            let gone = mine_rows
+                .iter()
+                .filter(|(id, _)| !theirs_rows.contains_key(*id))
+                .collect::<Vec<_>>();
+            let changed = mine_rows
+                .iter()
+                .filter_map(|(id, row)| {
+                    let other = theirs_rows.get(id)?;
+                    (other != row).then_some((id, row, other))
+                })
+                .collect::<Vec<_>>();
+            output.push_str(&format!(
+                "pruning rows added {}  gone {}  changed {}\n",
+                added.len(),
+                gone.len(),
+                changed.len()
+            ));
+            let limit = limit_of(arguments);
+            for (id, row) in added.iter().take(limit) {
+                output.push_str(&format!("  added   {id} {} {}\n", row.0, row.1));
+            }
+            for (id, row) in gone.iter().take(limit) {
+                output.push_str(&format!("  gone    {id} {} {}\n", row.0, row.1));
+            }
+            for (id, row, other) in changed.iter().take(limit) {
+                output.push_str(&format!(
+                    "  changed {id} {}: `{}` -> `{}`\n",
+                    row.0, row.1, other.1
+                ));
+            }
+        }
+        _ => {
+            output.push_str(&format!(
+                "pruning not compared: here {}, there {}\n",
+                readable(&here_pruning),
+                readable(&there_pruning)
+            ));
+        }
+    }
+    let here_token = fs::read_to_string(here.join("discovery.fingerprint"))
+        .ok()
+        .map(|text| text.trim().to_owned());
+    let there_token = fs::read_to_string(there.join("discovery.fingerprint"))
+        .ok()
+        .map(|text| text.trim().to_owned());
+    let verdict = match (&here_token, &there_token) {
+        (Some(mine), Some(theirs)) if mine == theirs => "same".to_owned(),
+        (Some(_), Some(_)) => "different".to_owned(),
+        _ => "absent on one side".to_owned(),
+    };
+    output.push_str(&format!(
+        "fingerprint here {}  there {}  -> {verdict}\n",
+        here_token.as_deref().unwrap_or("absent"),
+        there_token.as_deref().unwrap_or("absent"),
+    ));
+    output.push_str(
+        "not compared: `function_manifest.tsv` and `graft_plan.tsv` (this tree has writers for \
+         them and no reader)\n",
+    );
+    Ok(output)
+}
+
+/// The row cap this tool's answers use.
+/// 本工具答案使用的行上限。
+fn limit_of(arguments: &Value) -> usize {
+    arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize)
+}
+
+/// A record reader's verdict as one word.
+/// 记录读取方的结论，一个词。
+fn readable<T>(result: &Result<T, String>) -> String {
+    match result {
+        Ok(_) => "readable".to_owned(),
+        Err(reason) => format!("unreadable ({reason})"),
+    }
+}
+
+/// The pruning rows keyed by identity, which is the unit both sides agree on.
+/// 按身份做键的剪枝行，也就是两侧都认可的单位。
+fn row_map(rows: &[PruningRow]) -> BTreeMap<NodeId, (String, String)> {
+    rows.iter()
+        .map(|row| (row.id, (row.source.clone(), row.symbol.clone())))
+        .collect()
 }
 
 /// Report how the external graft records stand against the source tree.

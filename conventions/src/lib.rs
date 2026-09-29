@@ -30,6 +30,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "adoption.rs"]
+pub mod adoption;
 #[path = "bilingual.rs"]
 pub mod bilingual;
 #[path = "doc_anchors.rs"]

@@ -8,6 +8,8 @@
 //! 这里的每个模块都被平铺重导出，方便执行面 glob 一个命名空间；但没有任何名字被导出
 //! 两次：`declaration` 拥有的类型只从那里重导出，插件模块只在各自页面内重导出它。
 
+#[path = "registry_core/adoption/adoption.rs"]
+pub mod adoption;
 #[path = "registry_core/authoring/authoring.rs"]
 pub mod authoring;
 #[path = "registry_core/declaration/declaration.rs"]
@@ -36,6 +38,7 @@ pub mod syntax;
 #[path = "registry_core/tree/tree.rs"]
 pub mod tree;
 
+pub use adoption::*;
 pub use authoring::*;
 pub use declaration::*;
 pub use diagnostic::*;

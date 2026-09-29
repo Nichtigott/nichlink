@@ -46,12 +46,16 @@ use crate::mcp::workspace::{self, Scope};
 /// Find registration faces, source files, and Rust function declarations by name.
 /// 按名字查找注册面、源码文件与 Rust 函数声明。
 pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
-    let query = arguments
+    // The convergence layer asks the call graph about the name as it was written: a function name
+    // is case-sensitive, and the face matcher below is not.
+    // 收敛层按写下的原名去问调用图：函数名区分大小写，而下面的面匹配不区分。
+    let written = arguments
         .get("query")
         .and_then(Value::as_str)
         .ok_or_else(|| "nichlink.search requires query".to_owned())?
         .trim()
-        .to_ascii_lowercase();
+        .to_owned();
+    let query = written.to_ascii_lowercase();
     if query.is_empty() {
         return Err("query must not be empty".to_owned());
     }
@@ -190,6 +194,34 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
             "results",
             "raise `limit` or narrow the query",
         ));
+    }
+    // One entry that converges: the tree layer above, then the chain this name leads into, then
+    // what to do next and what was **not** looked at. The chain half is the call-graph tool's own
+    // answer, composed rather than re-derived — a layer that repeated the matching rule would be
+    // the second implementation this repository keeps deleting.
+    // 一个收敛的入口：上面那层是树，接着是这个名字引向的链，然后是下一步该做什么、以及**没有**看什么。
+    // 链那一半是调用图工具自己的答案，是**组合**而非重新推导——重复匹配规则的一层，正是本仓一直在删的
+    // 第二份实现。
+    if arguments.get("converge").and_then(Value::as_bool) == Some(true) {
+        results.push("chain:".to_owned());
+        let chain = crate::mcp::callgraph::callgraph(
+            root,
+            &serde_json::json!({"function": written, "limit": limit}),
+        )?;
+        for line in chain.lines() {
+            results.push(format!("  {line}"));
+        }
+        results.push(
+            "next: pass `path` to select one definition when several match, and `nichlink.affected` \
+             with the files you change to see which tests to run"
+                .to_owned(),
+        );
+        results.push(
+            "bounds: static only — dynamic dispatch, function pointers, FFI and runtime branches \
+             need a recorded trace (`nichlink.trace`), and the index covers the files under this \
+             root"
+                .to_owned(),
+        );
     }
     Ok(results.join("\n"))
 }

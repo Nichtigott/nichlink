@@ -32,7 +32,7 @@ pub mod registry_core;
 #[cfg(feature = "syntax")]
 pub use registry_core::syntax;
 pub use registry_core::{
-    authoring, declaration, diagnostic, identity, json, lexicon, mir, plugin, release,
+    adoption, authoring, declaration, diagnostic, identity, json, lexicon, mir, plugin, release,
     requirements, source, tree,
 };
 

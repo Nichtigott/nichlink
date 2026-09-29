@@ -412,3 +412,73 @@ fn a_text_file_with_no_mir_in_it_is_not_stamped_into_a_snapshot() {
     assert!(reply.contains("functions 0"), "{reply}");
     let _ = std::fs::remove_dir_all(&directory);
 }
+
+/// Two chains compared at the evidence level: the relation only the second build makes, the one
+/// only the first makes, and the pair both carry with a **different** evidence label — which is
+/// the bucket `mir --against` cannot express, because it compares edges rather than what
+/// supports them.
+/// 两条链在证据层面上的比较：只有第二次构建才有的关系、只有第一次才有的关系，以及两边都有**证据标签
+/// 不同**的那一对——正是 `mir --against` 表达不了的那个桶，因为它比的是边、而不是支持边的东西。
+#[test]
+fn a_chain_comparison_names_both_sides_and_the_evidence_that_differs() {
+    let (directory, _) = root("chain");
+    std::fs::write(directory.join("dump.mir"), MIR_TEXT).expect("first dump");
+    std::fs::write(directory.join("after.mir"), AFTER_TEXT).expect("second dump");
+    // The package's own trace confirms `outer -> inner`; a second artifact confirms
+    // `outer -> new` instead, so the two sides disagree about both of those pairs.
+    // 本包自己的 trace 确认 `outer -> inner`；第二份 artifact 改为确认 `outer -> new`，于是两边对这两对
+    // 的判断都不同。
+    record_trace(&directory);
+    let mut second = CallTrace::full();
+    let outer = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        "mcp-mir",
+        "outer/outer.rs",
+        "Outer",
+    );
+    let new =
+        nichlink_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "new/new.rs", "New");
+    second.with(outer, "crate::outer", |trace| {
+        trace.with(new, "crate::new", |_| {});
+    });
+    write_trace_artifact(&second, &directory.join("second.jsonl"), "mcp-mir")
+        .expect("the second trace writes");
+
+    let report = unified(
+        &directory,
+        &json!({"path": "after.mir", "against": "dump.mir", "against_trace": "second.jsonl"}),
+    )
+    .expect("the comparison answers");
+    // `only here` is empty, and that is the honest answer rather than a missing row: the second
+    // side's trace *ran* `outer -> new`, and a live call is evidence of a relation the compiler's
+    // dump never mentioned — so both sides carry it and the difference shows up as a label, not
+    // as an extra edge. Only `outer -> other` is one-sided, because nothing but the MIR dump
+    // ever claims it.
+    // `only here` 为空，而这是诚实的答案而不是缺行：第二侧的 trace **实跑过** `outer -> new`，而实跑
+    // 就是关系的证据——编译器转储从没提过它——因此两边都有它，差别表现在标签上而不是多出一条边。
+    // 只有 `outer -> other` 是单侧的，因为除了 MIR 转储没有东西声称它。
+    assert!(report.contains("only here 0"), "{report}");
+    assert!(report.contains("only there 1"), "{report}");
+    assert!(report.contains("crate::outer -> crate::other"), "{report}");
+    assert!(report.contains("evidence differs 2"), "{report}");
+    assert!(
+        report.contains("crate::outer -> crate::inner  here=Live there=Mir"),
+        "{report}"
+    );
+    assert!(
+        report.contains("crate::outer -> crate::new  here=Mir there=Live"),
+        "{report}"
+    );
+    // Sharing one trace leaves a single bucket empty and says so rather than inventing a row.
+    // 共用一份 trace 会让某个桶为空，而报告如实说空，而不是编出一行。
+    let shared = unified(
+        &directory,
+        &json!({"path": "after.mir", "against": "dump.mir"}),
+    )
+    .expect("the comparison answers");
+    assert!(shared.contains("evidence differs 0"), "{shared}");
+    assert!(
+        shared.contains("shared: this side's trace"),
+        "the report says which trace it used: {shared}"
+    );
+    let _ = std::fs::remove_dir_all(&directory);
+}

@@ -45,6 +45,7 @@
 use serde_json::{Value, json};
 use std::path::Path;
 
+use crate::mcp::adopted::adopted;
 use crate::mcp::affected::affected;
 use crate::mcp::apply::apply;
 use crate::mcp::build_evidence::explain;
@@ -89,8 +90,8 @@ pub(crate) fn tools() -> Vec<Value> {
              with a line naming which tree those rows came from — a face is matched on facts the \
              published record does not carry, so a member's own records are read first and the \
              sources are derived when they cannot answer — and a member whose tree cannot be \
-             derived is named rather than hidden behind the file hits.",
-            json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
+             derived is named rather than hidden behind the file hits. With `converge: true` the answer is layered — the tree's verdicts, then the call chain the name leads into, then the next step and the bounds of what was **not** looked at — so one call localizes instead of three.",
+            json!({"type":"object","properties":{"query":{"type":"string"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
         ),
         tool(
             "nichlink.inspect",
@@ -306,8 +307,8 @@ pub(crate) fn tools() -> Vec<Value> {
              path it looked for rather than guessing. A **virtual workspace root** is answered as \
              the workspace: a census of every member with its status, then each member's own \
              comparison, so a member with no build evidence and a member that cannot be resolved \
-             are told apart rather than merged into one empty diff.",
-            json!({"type":"object","properties":{"records":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+             are told apart rather than merged into one empty diff. With `against`, the other side is a **second directory of published records** rather than the sources: the reply compares the two sets as data (scope identities, pruning rows, the discovery token) and names the sections it cannot compare because this tree has no reader for them.",
+            json!({"type":"object","properties":{"records":{"type":"boolean"},"against":{"type":"string","description":"a second directory of published records: the reply compares the two sets of records as data instead of comparing this one against the sources"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.trace",
@@ -365,8 +366,8 @@ pub(crate) fn tools() -> Vec<Value> {
              compiler candidate rather than failing, because an absent trace is a weaker answer and \
              not a broken one. A **virtual workspace root** is answered as the workspace: the \
              member whose root contains the artifact path answers it, from that member's own root, \
-             or the reply says no member owns the path.",
-            json!({"type":"object","properties":{"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
+             or the reply says no member owns the path. With `against`, the two artifacts are compared rather than merged: the reply lists the relations only one side has and the ones **both** carry under **different** evidence (`Live` against a compiler candidate), which is the difference an edge-level delta cannot express. `against_trace` gives the baseline side its own trace artifact; without it both sides share this package's.",
+            json!({"type":"object","properties":{"path":{"type":"string"},"against":{"type":"string","description":"a second MIR artifact: the reply compares the two chains at the evidence level instead of merging one"},"against_trace":{"type":"string","description":"a trace artifact for the baseline side; omit it to compare both chains under this package's own trace"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["path"]}),
         ),
         tool(
             "nichlink.grafts",
@@ -443,6 +444,20 @@ pub(crate) fn tools() -> Vec<Value> {
              with its status, then each member's own converged point under it, with `tree \
              unavailable (reason)` where a member could not answer the named face.",
             json!({"type":"object","properties":{"node":{"type":"string"},"trace":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
+        ),
+        tool(
+            "nichlink.adopted",
+            "Report this package's adoption ledger at `.nichlink/adopted/entries`: which routes \
+             were adopted **provisionally**, and whether the bytes each decision was taken on are \
+             still here. An entry reads `adopted since <at> at <fingerprint> (provisional)` while \
+             its files are unchanged, and `adoption lapsed at <file>; needs confirmation` once one \
+             of them moved or went missing — the file is named because that is where to look. \
+             Reading never renews anything, and the word `verified` is deliberately absent: an \
+             adoption is a lease whose honest level is `provisional`, and re-earning it takes a \
+             person. With `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` the \
+             same tool **appends** one line — a preview unless the request also says `apply: true` \
+             and `confirm: true` — so a confirmation is one more line rather than a rewrite.",
+            json!({"type":"object","properties":{"anchor":{"type":"string"},"certifies":{"type":"string"},"evidence":{"type":"string"},"verifier":{"type":"string"},"reason":{"type":"string"},"files":{"type":"array","items":{"type":"string"}},"apply":{"type":"boolean"},"confirm":{"type":"boolean"},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.affected",
@@ -523,6 +538,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.impact", impact),
     ("nichlink.usages", usages),
     ("nichlink.converge", converge),
+    ("nichlink.adopted", adopted),
     ("nichlink.affected", affected),
     ("nichlink.verify", verify),
 ];

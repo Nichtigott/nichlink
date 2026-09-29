@@ -28,6 +28,7 @@
 //! 都点名了自己的树时才有意义——外来快照会被按名字拒绝，未标识的则让 delta 说出它无法排除什么。
 //! 这与 trace artifact 携带的是同一种约定。
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::runtime::{CallTrace, read_trace_artifact, trace_artifact_path};
@@ -231,6 +232,66 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
             ),
         )
     };
+    // Two chains compared at the **evidence** level (`against`, plus an optional
+    // `against_trace`). `mir --against` already reports which relations were added or gone; what it
+    // cannot say is whether a relation both sides carry is confirmed by a run on one side and only
+    // a compiler candidate on the other — which is the difference a reader deciding what to trust
+    // needs, and the dimension an index without evidence grades cannot express at all.
+    // 两条链在**证据层面**上比较（`against`，外加可选的 `against_trace`）。`mir --against` 已经报出
+    // 哪些关系被加入或消失；它说不出的是：两边**都有**的关系是否在一边被实跑确认、另一边只是编译器候选
+    // ——而这正是判断"该信什么"的读者需要的差别，也是没有证据等级的索引根本表达不了的维度。
+    if let Some(against) = arguments.get("against").and_then(Value::as_str) {
+        let (baseline_path, baseline) =
+            load_mir(root, against).map_err(|error| format!("baseline {error}"))?;
+        if let (Some(now), Some(then)) = (&graph.snapshot, &baseline.snapshot)
+            && (now.namespace != then.namespace || now.root != then.root)
+        {
+            return Ok(format!(
+                "REFUSED: the two artifacts describe different trees, so their chains are not two \
+                 states of one chain\n  {} names namespace `{}` root {}\n  {} names namespace \
+                 `{}` root {}\n",
+                path.display(),
+                now.namespace,
+                now.root,
+                baseline_path.display(),
+                then.namespace,
+                then.root
+            ));
+        }
+        let (baseline_trace, baseline_note) =
+            match arguments.get("against_trace").and_then(Value::as_str) {
+                Some(relative) => {
+                    let candidate = root.join(relative);
+                    if !candidate.starts_with(root) {
+                        return Err(
+                            "`against_trace` must stay inside the configured source root"
+                                .to_owned(),
+                        );
+                    }
+                    let (_, other) = read_trace_artifact(&candidate)?;
+                    (other, format!("trace {}", candidate.display()))
+                }
+                None => (
+                    trace.clone(),
+                    format!("{trace_note} (shared: this side's trace)"),
+                ),
+            };
+        return Ok(chain_report(
+            ChainSide {
+                path: &path,
+                graph: &graph,
+                trace: &trace,
+                note: &trace_note,
+            },
+            ChainSide {
+                path: &baseline_path,
+                graph: &baseline,
+                trace: &baseline_trace,
+                note: &baseline_note,
+            },
+            limit(arguments),
+        ));
+    }
     let merged = crate::call_evidence::UnifiedCallGraph::new(&graph, &trace);
     let relations = merged.relations();
     let live = relations
@@ -401,6 +462,139 @@ fn confirmed_snapshot(
 /// 方向就是主张：`added` 是第二份 artifact 有而基线没有的东西，因此读取方无论按什么顺序交进"之前"
 /// 与"之后"，都知道计数指向哪边。快照证实的身份不符会被拒绝而不是被渲染，而没有点名自己那棵树的
 /// artifact 会让 delta 说出它无法排除什么——`-Zunpretty=mir` 转储说不出自己的树，而那是常态，不是坏掉。
+/// The evidence-level comparison of two chains, and the three buckets it prints.
+/// 两条链在证据层面上的比较，以及它打印的三个桶。
+///
+/// A relation is one `(caller, callee)` pair, which is the unit both artifacts agree on; the
+/// comparison is about the *label* each side gives it, so a pair present on both sides with the
+/// same evidence is not reported — silence there means "the two chains agree about this edge".
+/// 一条关系是一个 `(caller, callee)` 对，也就是两份 artifact 都认可的单位；比较的是两边给它的**标签**，
+/// 因此两边都有、证据也相同的关系不会被报出来——那里的沉默意味着"两条链对这条边看法一致"。
+/// One side of a chain comparison: the artifact, the trace that labels it, and what the reply
+/// says about each. Grouped rather than passed as four arguments twice, so the two sides cannot be
+/// swapped by position.
+/// 链比较的一侧：artifact、给它打标签的 trace，以及回复对这两者各自的说明。收成一个结构体而不是把四个
+/// 参数传两遍，因此两侧不会被位置换错。
+struct ChainSide<'a> {
+    path: &'a Path,
+    graph: &'a MirGraph,
+    trace: &'a CallTrace,
+    note: &'a str,
+}
+
+fn chain_report(here_side: ChainSide<'_>, there_side: ChainSide<'_>, limit: usize) -> String {
+    let ChainSide {
+        path,
+        graph: after,
+        trace: after_trace,
+        note: after_note,
+    } = here_side;
+    let ChainSide {
+        path: baseline_path,
+        graph: baseline,
+        trace: baseline_trace,
+        note: baseline_note,
+    } = there_side;
+    let here = relation_evidence(after, after_trace);
+    let there = relation_evidence(baseline, baseline_trace);
+    let only_here = here
+        .iter()
+        .filter(|(edge, _)| !there.contains_key(*edge))
+        .collect::<Vec<_>>();
+    let only_there = there
+        .iter()
+        .filter(|(edge, _)| !here.contains_key(*edge))
+        .collect::<Vec<_>>();
+    let differing = here
+        .iter()
+        .filter_map(|(edge, mine)| {
+            let theirs = there.get(edge)?;
+            (*theirs != *mine).then_some((edge, mine, theirs))
+        })
+        .collect::<Vec<_>>();
+    let mut output = format!(
+        "chain {}\n  {after_note}\nbaseline {}\n  {baseline_note}\n",
+        path.display(),
+        baseline_path.display()
+    );
+    let header = |name: &str, count: usize| format!("{name} {count}\n");
+    output.push_str(&header("only here", only_here.len()));
+    for (edge, evidence) in only_here.iter().take(limit) {
+        output.push_str(&format!(
+            "  {} -> {}  evidence={evidence:?}\n",
+            edge.0, edge.1
+        ));
+    }
+    if only_here.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                only_here.len() - limit,
+                only_here.len(),
+                limit,
+                "relations",
+                "raise `limit`"
+            )
+        ));
+    }
+    output.push_str(&header("only there", only_there.len()));
+    for (edge, evidence) in only_there.iter().take(limit) {
+        output.push_str(&format!(
+            "  {} -> {}  evidence={evidence:?}\n",
+            edge.0, edge.1
+        ));
+    }
+    if only_there.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                only_there.len() - limit,
+                only_there.len(),
+                limit,
+                "relations",
+                "raise `limit`"
+            )
+        ));
+    }
+    output.push_str(&header("evidence differs", differing.len()));
+    for (edge, mine, theirs) in differing.iter().take(limit) {
+        output.push_str(&format!(
+            "  {} -> {}  here={mine:?} there={theirs:?}\n",
+            edge.0, edge.1
+        ));
+    }
+    if differing.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                differing.len() - limit,
+                differing.len(),
+                limit,
+                "relations",
+                "raise `limit`"
+            )
+        ));
+    }
+    output.push_str(
+        "note: a pair both sides carry with the same evidence is omitted — that is agreement, \
+         not a missing row.\n",
+    );
+    output
+}
+
+/// One side of the comparison: every relation's strongest evidence, keyed by the edge.
+/// 比较的一侧：每条关系的最强证据，按边做键。
+fn relation_evidence(
+    graph: &MirGraph,
+    trace: &CallTrace,
+) -> BTreeMap<(String, String), EvidenceKind> {
+    crate::call_evidence::UnifiedCallGraph::new(graph, trace)
+        .relations()
+        .into_iter()
+        .map(|relation| ((relation.caller, relation.callee), relation.evidence))
+        .collect()
+}
+
 fn delta_report(
     baseline_path: &Path,
     baseline: &MirGraph,
