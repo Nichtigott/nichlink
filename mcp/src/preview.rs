@@ -136,7 +136,7 @@ fn copy_into(root: &Path, destination: PathBuf) -> Result<PathBuf, String> {
 /// 只有一份清单，因为两处遍历回答的是同一个问题：副本跳过而 diff 没跳过的目录会被报成删除，反过来
 /// 的目录则从一开始就看不见——两种都会让报告描述一次编辑根本没做过的改动（审计 `BR-C2`、`BR-4`）。
 fn skipped_directory(name: &std::ffi::OsStr) -> bool {
-    name == "target" || name == ".git" || name == nichlink::lexicon::NICHLINK_DIR
+    name == "target" || name == ".git" || name == nichlink_kernel::lexicon::NICHLINK_DIR
 }
 
 /// How deep either walk follows directories before refusing to go further.

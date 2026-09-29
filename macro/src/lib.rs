@@ -45,10 +45,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Delimiter, Group, Ident, Spacing, Span, TokenStream as Tokens, TokenTree};
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
-use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
-use nichlink::registry_core::syntax::split_face_fields;
+use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
+use nichlink_kernel::registry_core::syntax::split_face_fields;
 
 use crate::front_end::{error_at, render, splice, split_mirror_fields, split_semicolons};
 use crate::mirror::{Field, mirror_item, punct};

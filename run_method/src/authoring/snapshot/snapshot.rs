@@ -24,7 +24,10 @@ impl FaceManifest {
         // 字段与 `source.function`（`core/.../authoring/snapshot.rs`），因此不存
         // `handle` 的创作面仍带着自己的函数名。过去在这里给内核补上该键，正是两侧漂移的来路
         // （审计 `N-4`）；推导只有一份、在内核，下面的钉子钉的就是这件事。
-        nichlink::authoring::snapshot::snapshot_from_values(&self.values, &authoring_namespace())
+        nichlink_kernel::authoring::snapshot::snapshot_from_values(
+            &self.values,
+            &authoring_namespace(),
+        )
     }
 }
 

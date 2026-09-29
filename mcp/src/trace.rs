@@ -76,7 +76,7 @@ pub(crate) fn read_verified(root: &Path) -> Result<RecordedTrace, String> {
     }
     let (artifact, call_trace) = read_trace_artifact(&path)?;
     let namespace = namespace(root)?;
-    let expected_root = nichlink::root_node_id(&namespace);
+    let expected_root = nichlink_kernel::root_node_id(&namespace);
     let header = format!(
         "artifact {}\nnamespace {} (recorded {})\nroot {} (recorded {})\nmode {:?}\nframes {} locals {} edges {}\n",
         path.display(),

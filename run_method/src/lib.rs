@@ -26,16 +26,16 @@ pub mod registry;
 #[path = "runtime/runtime.rs"]
 pub mod runtime;
 
-pub use nichlink::registry_core;
-// This glob names the same kernel items the historical `nichlink::*` glob did,
+pub use nichlink_kernel::registry_core;
+// This glob names the same kernel items the historical `nichlink_kernel::*` glob did,
 // and it overlaps this crate's own `authoring` shim (`parse`, `snapshot`,
 // `validation`). Both paths are the same surface, so the overlap is allowed
 // here rather than resolved.
-// 本 glob 命名的内核条目与历史上的 `nichlink::*` 完全相同，并与本 crate 自己的
+// 本 glob 命名的内核条目与历史上的 `nichlink_kernel::*` 完全相同，并与本 crate 自己的
 // `authoring` shim（`parse`、`snapshot`、`validation`）重叠。两条路径同属一个执行面，
 // 因此这里允许重叠而不做消解。
 #[allow(ambiguous_glob_reexports)]
-pub use nichlink::registry_core::*;
+pub use nichlink_kernel::registry_core::*;
 /// The face field front end, re-exported so a host does not have to depend on
 /// the proc-macro crate itself.
 /// 注册面字段前端；再导出后宿主无需自己依赖 proc-macro crate。
@@ -63,11 +63,11 @@ pub use runtime::*;
 // This line deliberately still names `artifact`: the module is `snapshot` now (`NAM-11`),
 // and the alias in `runtime/trace/trace.rs` is what keeps the published path
 // `nichlink_run_method::runtime::trace::artifact` alive. Naming it here is the pin the
-// shim ratchet cannot express (it only reads `pub use nichlink::…` statements): delete the
+// shim ratchet cannot express (it only reads `pub use nichlink_kernel::…` statements): delete the
 // alias and this line stops compiling.
 // 这一行有意仍写 `artifact`：模块现在是 `snapshot`（`NAM-11`），保住已发布路径
 // `nichlink_run_method::runtime::trace::artifact` 的是 `runtime/trace/trace.rs` 里的别名。
-// 把旧路径写在这里，正是 shim 棘轮表达不了的那根钉子（它只读 `pub use nichlink::…`）：
+// 把旧路径写在这里，正是 shim 棘轮表达不了的那根钉子（它只读 `pub use nichlink_kernel::…`）：
 // 删掉别名，这一行就编译不过。
 pub use runtime::trace::artifact::{
     TRACE_ARTIFACT_VERSION, TraceArtifact, TraceArtifactError, TraceFrame, read_trace_artifact,

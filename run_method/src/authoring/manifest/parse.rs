@@ -113,8 +113,11 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
     // 这里过去有一个 `handle` 键，用 `kind` 播种，因为内核的字段词表里没有 `handle`，因此它的值
     // 永远是 kind。也没有任何东西渲染它（模板发射的是 kind），这让它成了一个调用方"能编辑"却毫无
     // 效果的字段（审计 `LG-38`）。句柄由声明宏在声明点派生。
-    if let Some(plugin) = face.field(nichlink::lexicon::FACE_FIELD_PLUGIN) {
-        values.insert(nichlink::lexicon::FACE_FIELD_PLUGIN.to_owned(), plugin);
+    if let Some(plugin) = face.field(nichlink_kernel::lexicon::FACE_FIELD_PLUGIN) {
+        values.insert(
+            nichlink_kernel::lexicon::FACE_FIELD_PLUGIN.to_owned(),
+            plugin,
+        );
     }
     values.insert(
         "getting_from_other_registry".to_owned(),

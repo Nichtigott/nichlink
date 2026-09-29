@@ -155,21 +155,24 @@ fn the_shipped_kernel_mounts_every_module_file() {
 #[test]
 fn a_kernel_module_that_nothing_declares_is_reported() {
     let root = synthetic(&[
-        ("core/src/lib.rs", "pub mod registry_core;\n"),
+        ("kernel/src/lib.rs", "pub mod registry_core;\n"),
         (
-            "core/src/registry_core.rs",
+            "kernel/src/registry_core.rs",
             "#[path = \"registry_core/tree/tree.rs\"]\npub mod tree;\n",
         ),
-        ("core/src/registry_core/tree/tree.rs", "pub struct Tree;\n"),
         (
-            "core/src/registry_core/tree/forgotten/forgotten.rs",
+            "kernel/src/registry_core/tree/tree.rs",
+            "pub struct Tree;\n",
+        ),
+        (
+            "kernel/src/registry_core/tree/forgotten/forgotten.rs",
             "pub struct Forgotten;\n",
         ),
     ]);
     let found = mounts(&root);
     assert_eq!(
         found.unmounted,
-        vec!["core/src/registry_core/tree/forgotten/forgotten.rs".to_owned()],
+        vec!["kernel/src/registry_core/tree/forgotten/forgotten.rs".to_owned()],
         "an unregistered kernel module must be named: {found:#?}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -181,12 +184,12 @@ fn a_kernel_module_that_nothing_declares_is_reported() {
 #[test]
 fn a_path_attribute_that_names_no_file_is_reported() {
     let root = synthetic(&[
-        ("core/src/lib.rs", "pub mod registry_core;\n"),
+        ("kernel/src/lib.rs", "pub mod registry_core;\n"),
         (
-            "core/src/registry_core.rs",
+            "kernel/src/registry_core.rs",
             "#[path = \"registry_core/tree/missing.rs\"]\npub mod tree;\n",
         ),
-        ("core/src/registry_core/tree.rs", "pub struct Tree;\n"),
+        ("kernel/src/registry_core/tree.rs", "pub struct Tree;\n"),
     ]);
     let found = mounts(&root);
     assert_eq!(found.dangling.len(), 1, "{found:#?}");
@@ -203,18 +206,18 @@ fn a_path_attribute_that_names_no_file_is_reported() {
 #[test]
 fn a_path_attribute_is_found_among_other_attributes() {
     let root = synthetic(&[
-        ("core/src/lib.rs", "pub mod registry_core;\n"),
+        ("kernel/src/lib.rs", "pub mod registry_core;\n"),
         (
-            "core/src/registry_core.rs",
+            "kernel/src/registry_core.rs",
             "#[path = \"registry_core/tree/tree.rs\"]\npub mod tree;\n",
         ),
         (
-            "core/src/registry_core/tree/tree.rs",
+            "kernel/src/registry_core/tree/tree.rs",
             "#[cfg(test)]\n#[path = \"leaf/leaf.rs\"]\nmod leaf;\nmod nested;\n",
         ),
-        ("core/src/registry_core/tree/leaf/leaf.rs", "fn x() {}\n"),
+        ("kernel/src/registry_core/tree/leaf/leaf.rs", "fn x() {}\n"),
         (
-            "core/src/registry_core/tree/nested/nested.rs",
+            "kernel/src/registry_core/tree/nested/nested.rs",
             "fn y() {}\n",
         ),
     ]);
@@ -232,9 +235,9 @@ fn a_path_attribute_is_found_among_other_attributes() {
 #[test]
 fn a_nested_lib_rs_is_a_module_like_any_other() {
     let root = synthetic(&[
-        ("core/src/lib.rs", "pub mod registry_core;\n"),
-        ("core/src/registry_core.rs", "pub mod zz;\n"),
-        ("core/src/registry_core/zz/lib.rs", "fn hidden() {}\n"),
+        ("kernel/src/lib.rs", "pub mod registry_core;\n"),
+        ("kernel/src/registry_core.rs", "pub mod zz;\n"),
+        ("kernel/src/registry_core/zz/lib.rs", "fn hidden() {}\n"),
     ]);
     let found = mounts(&root);
     assert!(
@@ -318,7 +321,7 @@ fn a_deleted_shim_is_reported() {
     // Drop the last statement of one file and re-check.
     let (file, contents) = files.last().expect("at least one pinned shim");
     let shortened = contents
-        .rsplit_once("pub use nichlink::")
+        .rsplit_once("pub use nichlink_kernel::")
         .map(|(head, _)| head.to_owned())
         .expect("a pinned statement to remove");
     let path = root.join(file);
@@ -334,6 +337,9 @@ fn a_deleted_shim_is_reported() {
 /// 提取会规范化空白，因此花括号列表被 `rustfmt` 重新折行不会被读成删掉的 shim。
 #[test]
 fn a_reexport_is_recognised_across_line_breaks() {
-    let found = nichlink_reexports("pub use nichlink::{\n    A,\n    B,\n};\n");
-    assert_eq!(found, vec!["pub use nichlink::{ A, B, };".to_owned()]);
+    let found = nichlink_reexports("pub use nichlink_kernel::{\n    A,\n    B,\n};\n");
+    assert_eq!(
+        found,
+        vec!["pub use nichlink_kernel::{ A, B, };".to_owned()]
+    );
 }

@@ -61,7 +61,7 @@ fn faces_carry_their_logical_path_and_default_registry_name() {
     assert!(button.parent_resolved);
     assert!(
         button.id
-            == nichlink::identity::NodeId::from_namespaced_path(
+            == nichlink_kernel::identity::NodeId::from_namespaced_path(
                 "host",
                 "control/object/button/button.rs",
                 "Button"

@@ -72,7 +72,7 @@ struct StdSourceTree {
     root: PathBuf,
 }
 
-impl nichlink::source::SourceTree for StdSourceTree {
+impl nichlink_kernel::source::SourceTree for StdSourceTree {
     fn is_directory(&self, path: &Path) -> bool {
         path.is_dir() && is_safe_child(&self.root, path)
     }
@@ -103,14 +103,14 @@ fn collect_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> 
     let tree = StdSourceTree {
         root: fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf()),
     };
-    nichlink::source::collect_rust_sources(
+    nichlink_kernel::source::collect_rust_sources(
         &tree,
         directory,
-        nichlink::source::SourceWalk {
+        nichlink_kernel::source::SourceWalk {
             skip_target: true,
-            ..nichlink::source::SourceWalk::EVERYTHING
+            ..nichlink_kernel::source::SourceWalk::EVERYTHING
         },
-        |_, _| nichlink::source::Keep::Yes,
+        |_, _| nichlink_kernel::source::Keep::Yes,
         paths,
     )?;
     // The write path's own recoverable trash lives under `.nichlink/` and holds
@@ -121,7 +121,7 @@ fn collect_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> 
     paths.retain(|path| {
         !path
             .components()
-            .any(|component| component.as_os_str() == nichlink::lexicon::NICHLINK_DIR)
+            .any(|component| component.as_os_str() == nichlink_kernel::lexicon::NICHLINK_DIR)
     });
     Ok(())
 }
@@ -176,7 +176,7 @@ fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
 /// 和报告同一个文件的调用方（`preview` 的声明锚点、`converge_trace` 的记录路径）拼成两种样子。
 /// 内核做折叠的理由与显示时相同：身份用的是原始字节，只有**展示**出来的东西才可以归一化。
 pub(crate) fn portable_path(path: &Path) -> String {
-    nichlink::declaration::portable_path(&path.to_string_lossy())
+    nichlink_kernel::declaration::portable_path(&path.to_string_lossy())
 }
 
 pub(crate) fn is_safe_child(root: &Path, path: &Path) -> bool {
@@ -211,10 +211,10 @@ pub(crate) fn resolve_root(base: &Path, requested: Option<&str>) -> Result<PathB
 }
 
 fn parse_functions(source: &str) -> Vec<Function> {
-    nichlink::source::function_symbols(source)
+    nichlink_kernel::source::function_symbols(source)
         .into_iter()
         .map(|function| Function {
-            calls: nichlink::source::direct_calls(&function.body, &function.name),
+            calls: nichlink_kernel::source::direct_calls(&function.body, &function.name),
             name: function.name,
             line: function.line as usize,
             end_line: function.end_line as usize,

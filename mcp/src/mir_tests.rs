@@ -61,10 +61,16 @@ fn emit(directory: &Path, source: &str, target: &str) -> String {
 /// 记录一份唯一调用边是 `crate::outer -> crate::inner` 的 trace。
 fn record_trace(directory: &Path) {
     let mut trace = CallTrace::full();
-    let outer =
-        nichlink::identity::NodeId::from_namespaced_path("mcp-mir", "outer/outer.rs", "Outer");
-    let inner =
-        nichlink::identity::NodeId::from_namespaced_path("mcp-mir", "inner/inner.rs", "Inner");
+    let outer = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        "mcp-mir",
+        "outer/outer.rs",
+        "Outer",
+    );
+    let inner = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        "mcp-mir",
+        "inner/inner.rs",
+        "Inner",
+    );
     trace.with(outer, "crate::outer", |trace| {
         trace.with(inner, "crate::inner", |_| {});
     });
@@ -260,7 +266,7 @@ fn asking_to_emit_and_compare_at_once_is_refused() {
 fn foreign_snapshot() -> String {
     format!(
         "{{\"kind\":\"snapshot\",\"namespace\":\"somewhere-else\",\"root\":\"{}\"}}\n{{\"kind\":\"call\",\"caller\":\"a\",\"callee\":\"b\",\"mir_line\":1}}\n",
-        nichlink::root_node_id("somewhere-else")
+        nichlink_kernel::root_node_id("somewhere-else")
     )
 }
 

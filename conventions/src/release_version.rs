@@ -296,10 +296,10 @@ fn requirement_findings(
         }
         // The package the requirement is really on: the key itself, or the name in a
         // `package = "…"` field when the dependency is renamed. Reading only keys that
-        // start with `nichlink-` let `kernel = { package = "nichlink-core", version =
+        // start with `nichlink-` let `kernel = { package = "nichlink-kernel", version =
         // "0.0.9" }` name an internal dependency with a version nobody checked.
         // 这条要求真正指向的包：键本身，或依赖被重命名时 `package = "…"` 里的名字。只读以
-        // `nichlink-` 开头的键，会让 `kernel = { package = "nichlink-core", version = "0.0.9" }`
+        // `nichlink-` 开头的键，会让 `kernel = { package = "nichlink-kernel", version = "0.0.9" }`
         // 以没人检查过的版本点名一个内部依赖。
         let target = if name.starts_with("nichlink-") {
             name.to_owned()

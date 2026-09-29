@@ -11,4 +11,4 @@ pub use super::trace::{
     CallSite, CallTrace, DataEdge, DataHop, FramePath, LocalId, LocalKind, LocalValue, Observation,
     TraceMode,
 };
-pub use nichlink::{CallEdge, EvidenceKind, LogicalCallEdge};
+pub use nichlink_kernel::{CallEdge, EvidenceKind, LogicalCallEdge};

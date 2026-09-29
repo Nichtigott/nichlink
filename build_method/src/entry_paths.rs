@@ -82,7 +82,7 @@ pub(crate) fn entry_path_exists(src: &Path, path: &str) -> bool {
 pub(crate) fn path_mentions_module(path: &str, module: &str) -> bool {
     let path = path
         .strip_prefix("crate::")
-        .or_else(|| path.strip_prefix("nichlink::"))
+        .or_else(|| path.strip_prefix("nichlink_kernel::"))
         .unwrap_or(path);
     path == module || path.starts_with(&format!("{module}::"))
 }

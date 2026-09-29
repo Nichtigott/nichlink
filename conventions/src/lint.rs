@@ -141,7 +141,7 @@ pub fn allow_workarounds(root: &Path) -> Vec<String> {
             // 属性。搜索裸名字正是下面那道左边界重要的原因：`disallow(…)` 是另一个函数。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            let masked = nichlink::source::mask_non_code(&text);
+            let masked = nichlink_kernel::source::mask_non_code(&text);
             let mut from = 0usize;
             while let Some(offset) = masked[from..].find(&head) {
                 let at = from + offset;

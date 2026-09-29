@@ -28,8 +28,8 @@
 //! crate 不能替所有写入方做这个决定。记录让工件仍然可读，同时把空列变成信任规则会遵守的**声明**，
 //! 而不是一个没人看得见的值。
 
-use nichlink::declaration::{FrameworkId, PluginManifest, PluginMode, PluginSource};
-use nichlink::plugin::PluginCatalog;
+use nichlink_kernel::declaration::{FrameworkId, PluginManifest, PluginMode, PluginSource};
+use nichlink_kernel::plugin::PluginCatalog;
 
 /// The seven-field official record a host's own plugin UI writes.
 /// 宿主自己的插件界面写下的七字段官方记录。

@@ -131,7 +131,7 @@ fn main() {
             "{size}\t{register_ms}\t{register_budget_ms}\t{index_ms}\t{index_budget_ms}\t{}\t{}\t{}",
             index.len(),
             stats.pages,
-            size * std::mem::size_of::<nichlink::StaticFace>()
+            size * std::mem::size_of::<nichlink_kernel::StaticFace>()
         );
         assert!(
             register_ms <= register_budget_ms,

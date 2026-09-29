@@ -47,7 +47,7 @@ fn parser_indexes_functions_and_direct_calls() {
 
 #[test]
 fn registration_kinds_are_compact_and_deduplicated() {
-    let kinds = nichlink::source::registration_kinds(
+    let kinds = nichlink_kernel::source::registration_kinds(
         "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
     );
     assert_eq!(kinds, ["Button"]);

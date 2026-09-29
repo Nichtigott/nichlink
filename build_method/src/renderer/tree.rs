@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::ide::{IdeShadow, emit_face_declaration, ide_shadow};
 use crate::{Node, SourceScope, module_feature, node_id, relative_display, source_is_active};
@@ -111,7 +111,7 @@ fn render_node(
     let absolute = node
         .file
         .as_ref()
-        .map(|file| nichlink::declaration::portable_path(&file.to_string_lossy()));
+        .map(|file| nichlink_kernel::declaration::portable_path(&file.to_string_lossy()));
     let chain = if parent_chain.is_empty() {
         node.name.clone()
     } else {

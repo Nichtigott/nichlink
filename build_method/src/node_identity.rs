@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::OnceLock;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::discovery_node::{Node, relative_display};
 use super::entry::path_mentions_module;

@@ -52,14 +52,14 @@ pub fn has_cjk(text: &str) -> bool {
 /// 一段连续的 `///` 或 `//!` 行，元素为（行号，文本）。
 ///
 /// A doc-shaped line *inside* a string literal is not a doc comment: the check
-/// runs the raw lines against [`nichlink::source::mask_literals`], which blanks
+/// runs the raw lines against [`nichlink_kernel::source::mask_literals`], which blanks
 /// literals and keeps comments. Reading the raw lines alone reported a workspace
 /// test fixture whose string carried a `///` line.
 /// 字符串字面量**内部**看起来像文档注释的行不是文档注释：判断把原始行与
-/// [`nichlink::source::mask_literals`] 的结果对照，后者抹掉字面量、保留注释。只读原始行曾把
+/// [`nichlink_kernel::source::mask_literals`] 的结果对照，后者抹掉字面量、保留注释。只读原始行曾把
 /// 一个工作区测试夹具报成违规——那个夹具的字符串里带着一行 `///`。
 pub fn blocks(text: &str) -> Vec<Vec<(usize, String)>> {
-    let masked = nichlink::source::mask_literals(text);
+    let masked = nichlink_kernel::source::mask_literals(text);
     let masked_lines: Vec<&str> = masked.lines().collect();
     let mut found = Vec::new();
     let mut current: Vec<(usize, String)> = Vec::new();

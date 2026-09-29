@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use nichlink::identity::NodeId;
+use nichlink_kernel::identity::NodeId;
 
 use super::*;
 

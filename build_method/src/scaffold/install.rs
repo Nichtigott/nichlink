@@ -237,7 +237,7 @@ mod tests {
                     format!(
                         "{} {}",
                         target.editor.name(),
-                        nichlink::declaration::portable_path(
+                        nichlink_kernel::declaration::portable_path(
                             &target
                                 .path
                                 .strip_prefix(&root)

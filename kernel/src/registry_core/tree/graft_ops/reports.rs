@@ -12,8 +12,8 @@
 //! 的 `graft` 不一致。词表单独成页，因此新增一个报告变体只改这一页，而不会碰到仅仅
 //! 携带它的对账或应用循环。
 
-// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
-// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
+// Split rationale: see kernel/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 kernel/src/registry_core/tree/graft_ops/record.rs。
 
 use std::fmt;
 

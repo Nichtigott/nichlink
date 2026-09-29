@@ -12,11 +12,11 @@
 //! 每条钉子都经 crate 的公开面断言，因此它说的是消费方看到的东西，而不是某个私有助手凑巧做了什么
 //! ——只有 `cfg` 那条本质上是解析器夹具。
 
-use nichlink::declaration::{
+use nichlink_kernel::declaration::{
     OwnedLocalizedText, OwnedObjectContract, OwnedSourceLocation, RegistrationSnapshot,
 };
-use nichlink::release::StaticGraftCut;
-use nichlink::{
+use nichlink_kernel::release::StaticGraftCut;
+use nichlink_kernel::{
     Admission, FrameworkId, NodeId, OwnedFlowContract, RegistrationRule, Registry, root_node_id,
 };
 
@@ -277,10 +277,10 @@ fn a_cut_path_two_faces_share_is_refused_instead_of_taking_the_first_match() {
 #[cfg(feature = "syntax")]
 #[test]
 fn a_module_gate_is_read_not_merely_noticed() {
-    let plan = "nichlink::static_graft_plan!(FRAMEWORK, cut \"root/a\" graft \"fast\");";
+    let plan = "nichlink_kernel::static_graft_plan!(FRAMEWORK, cut \"root/a\" graft \"fast\");";
 
     let gated = format!("#[cfg(feature = \"fast\")]\nmod fast {{\n    {plan}\n}}\n");
-    let entries = nichlink::syntax::graft_entries(&gated).expect("a gated module parses");
+    let entries = nichlink_kernel::syntax::graft_entries(&gated).expect("a gated module parses");
     assert_eq!(
         entries.len(),
         1,
@@ -294,7 +294,7 @@ fn a_module_gate_is_read_not_merely_noticed() {
 
     let negated = format!("#[cfg(not(test))]\nmod real {{\n    {plan}\n}}\n");
     assert_eq!(
-        nichlink::syntax::graft_entries(&negated)
+        nichlink_kernel::syntax::graft_entries(&negated)
             .expect("a not(test) module parses")
             .len(),
         1,
@@ -303,7 +303,7 @@ fn a_module_gate_is_read_not_merely_noticed() {
 
     let tests = format!("#[cfg(test)]\nmod tests {{\n    {plan}\n}}\n");
     assert!(
-        nichlink::syntax::graft_entries(&tests)
+        nichlink_kernel::syntax::graft_entries(&tests)
             .expect("a test module parses")
             .is_empty(),
         "a test-only module still contributes nothing to a build plan"
@@ -312,7 +312,7 @@ fn a_module_gate_is_read_not_merely_noticed() {
     let both = format!(
         "#[cfg(feature = \"fast\")]\nmod fast {{\n    #[cfg(feature = \"extra\")]\n    {plan}\n}}\n"
     );
-    let entries = nichlink::syntax::graft_entries(&both).expect("both gates parse");
+    let entries = nichlink_kernel::syntax::graft_entries(&both).expect("both gates parse");
     assert_eq!(
         entries[0].cfg.as_deref(),
         Some("all(feature = \"fast\", feature = \"extra\")"),

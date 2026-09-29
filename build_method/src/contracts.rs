@@ -89,7 +89,7 @@ fn collect_contract_errors(
             });
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !nichlink::lexicon::is_registration_path(&relative)
+            if !nichlink_kernel::lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
             {

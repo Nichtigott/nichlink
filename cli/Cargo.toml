@@ -31,7 +31,7 @@ nichlink-studio = { path = "../studio", version = "0.1.6" }
 # `BuildDiagnostics`、`grafts` 复用（以免新增 run_method 依赖）的
 # `GraftPlanDocument` 解析器，以及用于解析节点身份、定位宿主数据的
 # `NodeId`/`lexicon`。
-nichlink-core = { path = "../core", version = "0.1.6" }
+nichlink-kernel = { path = "../kernel", version = "0.1.6" }
 # The package name decides the NodeId namespace, so it is read from
 # `cargo metadata` instead of a hand-rolled manifest scan.
 # 包名决定 NodeId 命名空间，因此改从 `cargo metadata` 读取，而不是手写扫描 manifest。

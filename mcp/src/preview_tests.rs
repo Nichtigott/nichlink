@@ -22,9 +22,11 @@ fn tree(label: &str) -> PathBuf {
     std::fs::write(root.join("target/artifact"), "built\n").expect("build artifact");
     std::fs::create_dir_all(root.join(".git")).expect("version-control directory");
     std::fs::write(root.join(".git/config"), "[core]\n").expect("version-control file");
-    std::fs::create_dir_all(root.join(nichlink::lexicon::NICHLINK_DIR)).expect("runtime directory");
+    std::fs::create_dir_all(root.join(nichlink_kernel::lexicon::NICHLINK_DIR))
+        .expect("runtime directory");
     std::fs::write(
-        root.join(nichlink::lexicon::NICHLINK_DIR).join("state"),
+        root.join(nichlink_kernel::lexicon::NICHLINK_DIR)
+            .join("state"),
         "runtime\n",
     )
     .expect("runtime file");
@@ -49,7 +51,7 @@ fn tree(label: &str) -> PathBuf {
 fn a_preview_skips_the_build_output_and_both_stores() {
     let root = tree("skip");
     let copy = super::copy_package(&root).expect("the copy succeeds");
-    for skipped in ["target", ".git", nichlink::lexicon::NICHLINK_DIR] {
+    for skipped in ["target", ".git", nichlink_kernel::lexicon::NICHLINK_DIR] {
         assert!(
             !copy.join(skipped).exists(),
             "the preview copy must skip `{skipped}`: {}",
@@ -64,7 +66,7 @@ fn a_preview_skips_the_build_output_and_both_stores() {
     // under them can be reported as added, changed, or removed.
     // 同一条规则的另一半：diff 遍历也跳过它们，因此它们下面的任何东西都不会被报成新增、改动或删除。
     let diff = super::diff_package(&root, &copy).expect("the diff renders");
-    for skipped in ["target", ".git", nichlink::lexicon::NICHLINK_DIR] {
+    for skipped in ["target", ".git", nichlink_kernel::lexicon::NICHLINK_DIR] {
         assert!(
             !diff.contains(skipped),
             "the diff walk must skip `{skipped}` too: {diff}"

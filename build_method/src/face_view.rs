@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::registry_identity::NodeId;
 use super::registry_syntax::{FaceSyntax, ParentSyntax};

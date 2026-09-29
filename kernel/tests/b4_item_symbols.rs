@@ -4,13 +4,13 @@
 //! Studio used to carry a thirteen-prefix word list of its own, which missed
 //! qualified declarations and turned `let` bindings into symbols (audit `STU-S-06`).
 //! This file is the outside-of-the-crate pin for the one implementation that
-//! replaced it: it reaches `item_symbols` through `nichlink::source`, the path a
+//! replaced it: it reaches `item_symbols` through `nichlink_kernel::source`, the path a
 //! surface has.
 //! Studio 曾自己带一份 13 条前缀的词表，它漏掉带可见性的声明、又把 `let` 绑定当成符号（审计
-//! `STU-S-06`）。本文件是取代它的那份唯一实现的 crate 外钉子：它经 `nichlink::source` 取
+//! `STU-S-06`）。本文件是取代它的那份唯一实现的 crate 外钉子：它经 `nichlink_kernel::source` 取
 //! `item_symbols`，也就是执行面拥有的那条路径。
 
-use nichlink::source::item_symbols;
+use nichlink_kernel::source::item_symbols;
 
 /// The shapes the old word list got wrong, each written the way a host writes it.
 /// 旧词表弄错的那些形状，各按宿主真实写法书写。

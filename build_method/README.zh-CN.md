@@ -5,7 +5,7 @@
 `nichlink-build-method` 是 build_method 执行面：文件系统与 `OUT_DIR`
 编排。它从宿主 crate 的目录布局发现注册面，喂给 kernel 校验器（父拓扑、
 能力需求、合同、稳定标识），维护增量身份缓存，并渲染发布构建消费的被动
-`StaticPlan`。校验规则与诊断模型本体在 `nichlink-core`；本 crate 只读
+`StaticPlan`。校验规则与诊断模型本体在 `nichlink-kernel`；本 crate 只读
 文件、写产物。
 
 在宿主 crate 的 `build.rs` 里调用 `nichlink_build_method::run()`。构建

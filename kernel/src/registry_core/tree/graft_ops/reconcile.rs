@@ -8,8 +8,8 @@
 //! 本页拥有"这条记录指向哪个槽位"的那一半：它从耐久身份重新推导当前逻辑路径，并判定
 //! 记录是否存活。存活记录是否赢得槽位则是 `apply` 中的应用那一半。
 
-// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
-// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
+// Split rationale: see kernel/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 kernel/src/registry_core/tree/graft_ops/record.rs。
 
 use crate::registry_core::declaration::SourceLocation;
 use crate::registry_core::diagnostic::{RegistryError, RegistryResult};

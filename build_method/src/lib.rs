@@ -195,10 +195,10 @@ pub fn run_for(manifest: &Path, out_dir: &Path, package: &str) -> Result<(), Str
 }
 
 /// Run the same discovery and validation pipeline as [`run_for`], but hand the
-/// caller the structured [`nichlink::BuildDiagnostics`] instead of the text a
+/// caller the structured [`nichlink_kernel::BuildDiagnostics`] instead of the text a
 /// terminal or `compile_error!` reads.
 /// 运行与 [`run_for`] 相同的发现与校验管线，但把结构化的
-/// [`nichlink::BuildDiagnostics`] 交给调用方，而不是终端或 `compile_error!` 读的文本。
+/// [`nichlink_kernel::BuildDiagnostics`] 交给调用方，而不是终端或 `compile_error!` 读的文本。
 ///
 /// This is the machine-readable twin of `run_for`: a CI job or `nichlink check
 /// --json` needs to count and serialize individual failures, and re-parsing the
@@ -212,10 +212,10 @@ pub fn check_for(
     manifest: &Path,
     out_dir: &Path,
     package: &str,
-) -> Result<(), nichlink::BuildDiagnostics> {
+) -> Result<(), nichlink_kernel::BuildDiagnostics> {
     std::fs::create_dir_all(out_dir).map_err(|error| {
-        let mut diagnostics = nichlink::BuildDiagnostics::default();
-        diagnostics.push(nichlink::BuildDiagnostic::new(
+        let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
+        diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
             "out-dir",
             format!("create {}: {error}", out_dir.display()),
         ));

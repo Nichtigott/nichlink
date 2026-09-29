@@ -14,8 +14,8 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink::identity::NodeId;
-use nichlink::plugin::graft_document::GraftPlanDocument;
+use nichlink_kernel::identity::NodeId;
+use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 use serde_json::json;
 
 use super::overlay;

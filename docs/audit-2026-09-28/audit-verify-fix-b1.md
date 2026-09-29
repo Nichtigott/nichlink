@@ -44,7 +44,7 @@ PROBE_ADMISSION=PASS
 rendered_source=crate::Admission::new(&["ui", "ui/controls"], &["ui/experimental"])
 round_trip=Ok("allow:ui,ui/controls;deny:ui/experimental") stable=true
 ```
-关键点：构造形式 `Admission::new(&["ui","ui/controls"], &["ui/experimental"])` 读回的紧凑值**同时带两张列表**，再经 `parse_admission_owned` 解析后 `denied_paths=["ui/experimental"]` 未丢；`render_admission` → `parse_admission_expression` 往返稳定。调用链是真实的：`core/src/registry_core/authoring/snapshot.rs:80` 用 `parse_admission_owned` 读注册面。
+关键点：构造形式 `Admission::new(&["ui","ui/controls"], &["ui/experimental"])` 读回的紧凑值**同时带两张列表**，再经 `parse_admission_owned` 解析后 `denied_paths=["ui/experimental"]` 未丢；`render_admission` → `parse_admission_expression` 往返稳定。调用链是真实的：`kernel/src/registry_core/authoring/snapshot.rs:80` 用 `parse_admission_owned` 读注册面。
 
 **变异测试（旧行为）**：备份 `admission.rs`（sha256 `c14af278…`）后，把构造函数那一支改回旧的三分支（`(false, _) => allow:…`，即 deny 被丢）。
 ```text

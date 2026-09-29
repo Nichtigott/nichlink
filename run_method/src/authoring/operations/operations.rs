@@ -258,7 +258,7 @@ pub fn generated_snapshots_from(root: &Path) -> Result<Vec<RegistrationSnapshot>
 /// 内核源码遍历向本执行面索取的文件系统事实。
 struct StdSourceTree;
 
-impl nichlink::source::SourceTree for StdSourceTree {
+impl nichlink_kernel::source::SourceTree for StdSourceTree {
     fn is_directory(&self, path: &Path) -> bool {
         path.is_dir()
     }
@@ -280,20 +280,20 @@ impl nichlink::source::SourceTree for StdSourceTree {
 }
 
 fn collect_face_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<(), String> {
-    nichlink::source::collect_rust_sources(
+    nichlink_kernel::source::collect_rust_sources(
         &StdSourceTree,
         directory,
-        nichlink::source::SourceWalk {
+        nichlink_kernel::source::SourceWalk {
             skip_target: false,
             skip_registry_core: true,
             skip_compile_error_demo: true,
         },
         |_, source| match source {
-            None => nichlink::source::Keep::NeedSource,
+            None => nichlink_kernel::source::Keep::NeedSource,
             Some(text) if crate::syntax::is_face_source(text, GENERATED_MARKER) => {
-                nichlink::source::Keep::Yes
+                nichlink_kernel::source::Keep::Yes
             }
-            Some(_) => nichlink::source::Keep::No,
+            Some(_) => nichlink_kernel::source::Keep::No,
         },
         sources,
     )

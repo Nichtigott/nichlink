@@ -13,10 +13,10 @@ readme = "README.md"
 documentation = "https://docs.rs/nichlink-run-method"
 
 [features]
-authoring = ["nichlink-core/syntax", "dep:syn"]
+authoring = ["nichlink-kernel/syntax", "dep:syn"]
 
 [dependencies]
-nichlink-core = { path = "../core", version = "0.1.6" }
+nichlink-kernel = { path = "../kernel", version = "0.1.6" }
 nichlink-macro = { path = "../macro", version = "0.1.6" }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true }
 

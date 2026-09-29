@@ -70,9 +70,9 @@ COMMANDS:
 
 OPTIONS:
     --lib             Create a library project instead of a binary
-    --path <dir>      Source nichlink-core/build from a local checkout; for
+    --path <dir>      Source nichlink-kernel/build from a local checkout; for
                       explain, the host project to inspect (default: .)
-    --git <url>       Source nichlink-core/build from a Git repository
+    --git <url>       Source nichlink-kernel/build from a Git repository
     --json            Emit one JSON document on stdout instead of human text
                       (check, explain, grafts); check still exits non-zero on a
                       failed validation

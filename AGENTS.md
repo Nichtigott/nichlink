@@ -12,7 +12,7 @@ surface that binds kernel methods to its own context.
 
 | Crate | Directory | One-line responsibility |
 | --- | --- | --- |
-| `nichlink-core` (lib `nichlink`) | `core/` | Kernel: protocol nouns and pure methods |
+| `nichlink-kernel` (lib `nichlink_kernel`) | `kernel/` | Kernel: protocol nouns and pure methods |
 | `nichlink-build-method` | `build_method/` | Build-time filesystem / `OUT_DIR` orchestration |
 | `nichlink-run-method` | `run_method/` | Runtime state instance + trace binding |
 | `nichlink-debug-method` | `debug_method/` | Observation evidence surface |
@@ -24,7 +24,7 @@ surface that binds kernel methods to its own context.
 | `nichlink-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
 
 Feature names intentionally follow each crate's own vocabulary instead of one
-workspace-wide scheme: `core` gates the parser as `syntax`, `run_method` gates
+workspace-wide scheme: `kernel` gates the parser as `syntax`, `run_method` gates
 the authoring executor as `authoring`, `studio` gates test-only fixtures as
 `prototype-fixtures`, and `plugin-host` uses `wasm` / `process-tools`. Do not
 rename a feature to match another crate: they are public API. `prototype-fixtures`
@@ -37,7 +37,7 @@ non-default `dev-supervisor` feature: that binary rebuilds Studio from this
 checkout, so an installed copy could never work, and `required-features` is the
 per-target equivalent of `publish = false` — it is what keeps
 `cargo install nichlink-studio` from shipping a tool with nothing to rebuild.
-特性名有意遵循各 crate 自己的词汇，而不是全工作区统一命名：`core` 把解析器门控为
+特性名有意遵循各 crate 自己的词汇，而不是全工作区统一命名：`kernel` 把解析器门控为
 `syntax`，`run_method` 把 authoring 执行器门控为 `authoring`，`studio` 把仅测试用的
 fixture 门控为 `prototype-fixtures`，`plugin-host` 使用 `wasm` / `process-tools`。
 不要为对齐其他 crate 而重命名特性：它们是公开 API。`prototype-fixtures` 只门控测试用
@@ -49,19 +49,19 @@ fixture——`studio/tests/fixtures/node-editor/` 下仅源码的宿主包——
 重建的工具。
 
 A feature that shares a name with a module gates that module, so the sameness is
-the point rather than a collision: `core`'s `syntax` gates the registration-face
+the point rather than a collision: `kernel`'s `syntax` gates the registration-face
 parser, `run_method`'s `authoring` gates the authoring executor, and
 `plugin-host`'s `wasm` / `process-tools` name execution backends. The two that are
 not capabilities say so in their own names: `prototype-fixtures` gates the
 checkout-only fixture package under `studio/tests/fixtures/node-editor/`, and
 `dev-supervisor` gates the `nichlink-dev` binary that rebuilds this checkout (the
-table above is the whole set — no crate outside `core`, `run_method`, `studio` and
+table above is the whole set — no crate outside `kernel`, `run_method`, `studio` and
 `plugin-host` declares features).
-与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`core` 的 `syntax` 门控注册面
+与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`kernel` 的 `syntax` 门控注册面
 解析器，`run_method` 的 `authoring` 门控 authoring 执行器，`plugin-host` 的 `wasm` /
 `process-tools` 点名的是执行后端。另外两个不是能力，名字里就写明了：
 `prototype-fixtures` 门控 `studio/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
-`dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`core`、
+`dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`kernel`、
 `run_method`、`studio`、`plugin-host` 之外没有 crate 声明特性）。
 
 Host usage: `[dependencies] nichlink-run-method` +
@@ -76,7 +76,7 @@ remains only as the optional source-scope discovery hint.
 `nichlink_build_method::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
 `host!()` 加 `build.rs`，`application!(entry = …)` 仅作为可选的源码范围发现提示保留。
 
-## Kernel modules (`core/src/registry_core/`)
+## Kernel modules (`kernel/src/registry_core/`)
 
 - `identity` — stable ids, hashing (SHA-256), namespaces
 - `declaration` — face/object vocabulary
@@ -116,15 +116,15 @@ gates both rules.
 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，它引入的是生成的计划而不是源码
 模块。两条规则都由 `conventions` crate 门控。
 
-`core`'s crate root re-exports the module hierarchy plus a curated vocabulary that
+`kernel`'s crate root re-exports the module hierarchy plus a curated vocabulary that
 host code, the build step, and the runtime-check surfaces write as a bare name.
 The kernel's modules also glob into the root, so every other noun is *reachable*
 there as well — that is convenience, not a second contract: the module path
-(`nichlink::identity::NodeId`) is the official address, and only the curated names
+(`nichlink_kernel::identity::NodeId`) is the official address, and only the curated names
 are promised as bare ones.
-`core` 的 crate 根部重导出模块层级，外加一份精选词汇——宿主代码、构建步骤与运行期校验面
+`kernel` 的 crate 根部重导出模块层级，外加一份精选词汇——宿主代码、构建步骤与运行期校验面
 会以裸名书写它们。内核各模块也会平铺 glob 到根部，因此其余名词同样**可以**在那里取得——
-那是便利，不是第二份契约：官方地址是模块路径（`nichlink::identity::NodeId`），只有精选
+那是便利，不是第二份契约：官方地址是模块路径（`nichlink_kernel::identity::NodeId`），只有精选
 清单上的名字被承诺为裸名可用。
 
 ## Naming and mounting
@@ -178,7 +178,7 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 
 | kept | why it is kept, and what is scheduled | source |
 | --- | --- | --- |
-| `core/` + lib `nichlink` | The kernel keeps its directory name; `kernel/` + `nichlink-kernel` is the merge batch's rename, and the first paragraph of `core/README.md` says `kernel` here means protocol vocabulary plus pure methods. | `verify.md:62`, `merge-plan.md:38/:53` |
+| `kernel/` + `nichlink-kernel` + lib `nichlink_kernel` | **Landed in batch 1**: the old `core/` directory, the `nichlink-core` package and the `nichlink` library are gone (the ambiguity this row registered is why `kernel/` was chosen). The *crate* merge into `nichlink-toolchain` is batch 2, and the published 0.1.x names stay frozen. | `verify.md:62`, `merge-plan.md:38/:53` |
 | `build_method/`, `run_method/`, `plugin-host/` | Each crate name is kept and its README says what the word means in this repository; the *module* names `build_time`, `runtime`, `plugin_host` belong to the merge batch. | `verify.md:63-65`, `merge-plan.md:17/:19` |
 | `Registry`, `examples/`, `picture/` | Kept. The public type is the registration-tree root and its doc line limits it to that; `examples/` holds two host packages rather than cargo example targets; `picture/` holds the brand wordmark and Studio screenshots. | `verify.md:66/:67/:79` |
 | `debug_method/` | Kept with no extra action; the crate becomes the `call_evidence` module, so the name disappears in the merge. | `verify.md:77`, `merge-plan.md:42` |
@@ -190,10 +190,10 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 
 ## Change rules
 
-1. New pure logic goes into a kernel module under `core/src/registry_core/<name>/`
-   and is registered in `core/src/registry_core.rs`.
+1. New pure logic goes into a kernel module under `kernel/src/registry_core/<name>/`
+   and is registered in `kernel/src/registry_core.rs`.
 2. Execution surfaces keep historical paths through shim re-exports
-   (`pub use nichlink::tree; pub use nichlink::tree::*;`) — do not move public
+   (`pub use nichlink_kernel::tree; pub use nichlink_kernel::tree::*;`) — do not move public
    API paths without updating the shims.
 3. Kernel code must not do I/O, read `std::env`, or depend on process lifetime.
    If it needs such a value, take it as a parameter.
@@ -233,7 +233,7 @@ gated behind `authoring` in `run_method/src/lib.rs`, so
 `cargo test -p nichlink-run-method --offline -- manifest::face` prints `0 passed; 0 failed`
 while the same command with `--features authoring` prints that module's pins (`8 passed` when
 this was measured; the count grows with every pin, so treat it as an illustration rather than a
-contract). `core` has the same shape, with its parser behind `syntax` (`core/src/lib.rs` gates
+contract). `kernel` has the same shape, with its parser behind `syntax` (`kernel/src/lib.rs` gates
 it), and every other non-default feature holds modules back the same way — so read the two runs
 against each other, never a quoted total: `0 passed` is the half that stays true, and it means
 nothing ran. The workspace command above and CI's `--all-features` job merge features and do
@@ -247,8 +247,8 @@ on its own means naming the feature:
 那两条嵌套守卫钉子就在其中)门控在 `run_method/src/lib.rs` 的 `authoring` 之后,因此
 `cargo test -p nichlink-run-method --offline -- manifest::face` 打印 `0 passed; 0 failed`,
 而同一条命令加 `--features authoring` 会打印出那个模块的钉子(写下这段时是 `8 passed`;
-这个数每加一条钉子就变,所以只当示意,不当契约)。`core` 是同一种形状:解析器门控在 `syntax`
-之后(`core/src/lib.rs` 就是那道门),其它非默认特性也以同样的方式把模块挡住——所以请把两次
+这个数每加一条钉子就变,所以只当示意,不当契约)。`kernel` 是同一种形状:解析器门控在 `syntax`
+之后(`kernel/src/lib.rs` 就是那道门),其它非默认特性也以同样的方式把模块挡住——所以请把两次
 运行**对比着读**,不要去引某个总数:`0 passed` 才是恒真的那一半,它只意味着什么都没跑。
 上面的工作区命令与 CI 的 `--all-features` 作业会合并特性,因此覆盖得到它们——这也是工作区
 那条仍是默认门禁的原因;单独验证一个 crate 时请点名特性:
@@ -256,7 +256,7 @@ on its own means naming the feature:
 "什么都没跑",而不是"什么都没失败"。
 
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
-default gate already fails on: I/O in `core/src`, a `mod.rs`, a second `include!`,
+default gate already fails on: I/O in `kernel/src`, a `mod.rs`, a second `include!`,
 a kernel module file no `mod` declaration names, a deleted execution-surface shim
 re-export, a doc block with only one language (`bilingual`), a crate whose name,
 directory and library name disagree, or a crate name referenced by a scaffold
@@ -277,13 +277,13 @@ features turn on, a file pushed past the
 parses. Add a new repository-wide rule there rather than to a prose document. The
 kernel's parse entries carry a nesting guard for the same reason — a stack
 overflow is not a `Result`, so a pathological source would take the whole surface
-down — and `core/tests/nesting_budget.rs` is the other half of it: the guard must
+down — and `kernel/tests/nesting_budget.rs` is the other half of it: the guard must
 refuse nothing this repository ships. Adding a shape to the guard means adding a
 case to `deep_input_tests.rs` and re-running that gate. CI additionally runs `cargo test --workspace --all-features --doc`: `--all-targets`
 skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `--all-features`.
 `cargo test --workspace` 也会跑 `conventions` crate 里的门禁,因此默认门禁已经会在下列情形
-失败:`core/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、没有任何 `mod` 声明指名的
+失败:`kernel/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、没有任何 `mod` 声明指名的
 内核模块文件、被删掉的执行面 shim 重导出、只有一种语言的文档块(`bilingual`)、crate 名/目录名/
 库名三者不一致或脚手架模板或 CI `-p` 指名而清单里不存在的 crate 名(`naming`)、内部
 `nichlink-*` 版本要求写着的版本不是当前工作区版本(`release_version`)、上传步骤能在非 tag ref 上
@@ -295,7 +295,7 @@ skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `prototype-fixtures` 被默认特性打开、文件越过 600 行棘轮、缺少
 `#![warn(missing_docs)]`、出现 `#[allow(missing_docs)]`、或 README 里有不再能解析的 Rust
 围栏。新增全仓规则请加到那里,而不是加到散文文档里。内核的解析入口同样带一道嵌套守卫——
-栈溢出不是 `Result`,畸形源码会带走整个执行面——而 `core/tests/nesting_budget.rs` 是它的
+栈溢出不是 `Result`,畸形源码会带走整个执行面——而 `kernel/tests/nesting_budget.rs` 是它的
 另一半:守卫不得拒绝本仓库出厂的任何东西。给守卫加一种形状,就要在 `deep_input_tests.rs` 里
 加一条用例,并重跑那道门禁。CI 另跑
 `cargo test --workspace --all-features --doc`:`--all-targets` 会跳过 doctest,而门控在

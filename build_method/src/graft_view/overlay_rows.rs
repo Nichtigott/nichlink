@@ -22,7 +22,7 @@
 
 use std::path::Path;
 
-use nichlink::identity::NodeId;
+use nichlink_kernel::identity::NodeId;
 
 use crate::face_view::{BuildScopeView, FaceView};
 use crate::graft_view::{DeclaredGraft, DeclaredGrafts, GraftPlanRow, graft_plan_rows};

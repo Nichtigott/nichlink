@@ -751,7 +751,7 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 要读文件系统、起进程或驱动终端的能力，都留在执行面里，由执行面把 kernel
 方法绑定到各自的上下文。
 
-`nichlink-core`（lib 名 `nichlink`）是 kernel：协议名词加纯方法全集——身份、
+`nichlink-kernel`（lib 名 `nichlink_kernel`）是 kernel：协议名词加纯方法全集——身份、
 声明、解析、树操作、策略、渲染。kernel 内不做任何 I/O，也不绑定环境，因此
 每个工具复用的都是同一套方法。
 
@@ -772,7 +772,7 @@ crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像
 ## 工作区结构
 
 ```text
-core/         nichlink-core（kernel）：协议名词 + 纯方法全集——identity、
+kernel/       nichlink-kernel（lib 名 nichlink_kernel）：协议名词 + 纯方法全集——identity、
               declaration、diagnostic、tree、plugin、mir、requirements、
               release、source、authoring、syntax、json、lexicon
 macro/        nichlink-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span

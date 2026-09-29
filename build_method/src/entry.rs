@@ -26,7 +26,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::default_entry_source;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};

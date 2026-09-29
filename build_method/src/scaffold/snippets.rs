@@ -12,8 +12,8 @@
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
-use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
+use nichlink_kernel::lexicon;
+use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
 
 /// The shape each face field is written in, as a snippet template.
 /// 每个注册面字段的书写形状，用 snippet 模板表示。
@@ -232,7 +232,7 @@ fn vscode_snippets() -> String {
             // `json_string` emits the quotes itself, so the template must not
             // add a second pair around the body.
             // `json_string` 自带引号，因此模板不得再给 body 加一对。
-            body = nichlink::json::json_string(&field_shape(field))
+            body = nichlink_kernel::json::json_string(&field_shape(field))
         ));
     }
     output.push_str("\n}\n");
@@ -339,7 +339,7 @@ mod tests {
             assert!(
                 snippets.contains(&format!(
                     "\"body\": [{}],",
-                    nichlink::json::json_string(&field_shape(field))
+                    nichlink_kernel::json::json_string(&field_shape(field))
                 )),
                 "{field}"
             );

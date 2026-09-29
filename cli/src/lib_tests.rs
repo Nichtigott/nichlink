@@ -10,8 +10,8 @@
 //! 文件预算。
 
 use super::{run, run_to, split_build_args};
-use nichlink::identity::NodeId;
-use nichlink::plugin::graft_document::GraftPlanDocument;
+use nichlink_kernel::identity::NodeId;
+use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
@@ -995,7 +995,7 @@ fn snippets_injects_the_editor_file() {
     let snippets = parsed.as_object().expect("an object of snippets");
     assert_eq!(
         snippets.len(),
-        nichlink::registry_core::declaration::FACE_FIELD_ORDER.len()
+        nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER.len()
     );
     let kind = snippets.get("kind: ").expect("the kind snippet");
     assert_eq!(kind["prefix"][0], "kind: ");

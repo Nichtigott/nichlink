@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 `nichlink-run-method` 是 NichLink 的 run_method 执行面：运行期状态实例 +
 trace 绑定。协议本体——`Registry` 树、事务、graft 校验、插件策略与解析器
-——都在 kernel（`nichlink-core`）；本 crate 把它们绑定到进程生命周期。
+——都在 kernel（`nichlink-kernel`）；本 crate 把它们绑定到进程生命周期。
 
 留在这里的部分：
 
@@ -70,7 +70,7 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 `NodeId` 调用 `Registry::health_check`。没有活动 trace 时 `call_path` 传
 `Vec::new()`（有 trace 时传 `CallTrace::current_path()`）。失败时错误按每条失败的
 检查聚合子错误。五个读取器暴露构造函数收到的事实
-（`core/src/registry_core/diagnostic/error.rs`）：
+（`kernel/src/registry_core/diagnostic/error.rs`）：
 
 | 读取器 | 返回 | 取值情况 |
 | --- | --- | --- |
@@ -81,27 +81,27 @@ fn record(trace: &CallTrace, package_root: &Path) -> Result<(), String> {
 | `children()` | 聚合的子失败，每条失败的子检查一条 | 仅当该 phase 聚合了子失败时非空 |
 
 占位路径有 `<unknown:{node}>`
-（`core/src/registry_core/tree/inspection.rs:74`）、
+（`kernel/src/registry_core/tree/inspection.rs:74`）、
 `<missing-parent:…>/…`
-（`core/src/registry_core/tree/transaction.rs:167`、
-`core/src/registry_core/tree/graft_ops/graft_ops.rs:149`）与 `<edited>/…`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`）；合成的来源位置有
+（`kernel/src/registry_core/tree/transaction.rs:167`、
+`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:149`）与 `<edited>/…`
+（`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:189`）；合成的来源位置有
 `<runtime>`（`inspection.rs:76`）、`<registry-connector>`
-（`core/src/registry_core/tree/connector.rs:206`）、
+（`kernel/src/registry_core/tree/connector.rs:206`）、
 `<owned-snapshot-batch>`
-（`core/src/registry_core/tree/transaction.rs:84`）、`<migration>`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`）与 `<graft>`
-（`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`、
-`core/src/registry_core/tree/graft_ops/reconcile.rs:148`）。
+（`kernel/src/registry_core/tree/transaction.rs:84`）、`<migration>`
+（`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:55`）与 `<graft>`
+（`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:309`、
+`kernel/src/registry_core/tree/graft_ops/reconcile.rs:148`）。
 
 读取 `health_check` 失败的两条规则：
 
 1. 顶层 `message()` 是固定的聚合句 `runtime health check failed`
-   （`core/src/registry_core/tree/inspection.rs:110`），不包含失败检查的名字。
+   （`kernel/src/registry_core/tree/inspection.rs:110`），不包含失败检查的名字。
    其他聚合 phase 形状相同：`registration connector rejected (N face(s))`
-   （`core/src/registry_core/tree/connector.rs:212`）与 `snapshot batch
+   （`kernel/src/registry_core/tree/connector.rs:212`）与 `snapshot batch
    rejected (N error(s))`
-   （`core/src/registry_core/tree/transaction.rs:89`）。
+   （`kernel/src/registry_core/tree/transaction.rs:89`）。
 2. 失败检查自己的名字与文本在 `children()[0].message()` 中，按
    ``check `<名字>`: <消息>`` 构造（`inspection.rs:95`）。`Display` 渲染聚合句加每条
    子错误，因此下例的 `eprintln!("{error}")` 会同时打印两者。

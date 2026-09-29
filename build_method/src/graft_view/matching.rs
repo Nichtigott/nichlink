@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use crate::face_syntax_check::parsed_face;
 use crate::{FaceSource, relative_display};

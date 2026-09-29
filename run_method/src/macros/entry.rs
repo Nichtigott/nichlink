@@ -34,8 +34,8 @@ macro_rules! application {
 /// `include!` 只接受字面量路径，因此这里无法从内核 lexicon 读取生成入口的文件名。
 /// 把两份文本钉在一起，漂移会变成编译错误，而不是去 include 一个构建步骤已不再写的
 /// 文件。
-const _: () = assert!(::nichlink::lexicon::same_text(
-    ::nichlink::lexicon::GENERATED_LIB_FILE,
+const _: () = assert!(::nichlink_kernel::lexicon::same_text(
+    ::nichlink_kernel::lexicon::GENERATED_LIB_FILE,
     "generated_lib.rs"
 ));
 

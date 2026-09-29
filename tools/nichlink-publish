@@ -7,12 +7,12 @@ set -eu
 # Why a script and not nine hand-typed commands: every dependent writes its
 # internal requirement as a caret requirement on the current version line
 # (`docs/roadmap-1.0.md` decision 1), so publishing `run_method` before the index
-# serves `nichlink-core` at that version fails resolution. The order below is that
+# serves `nichlink-kernel` at that version fails resolution. The order below is that
 # dependency chain, and the script waits for
 # each level to appear in the index before starting the next one — the wait is
 # the part a human forgets.
 # 为什么要脚本而不是手敲九条命令：每个依赖方都把内部依赖写成对**当前版本线**的 caret 要求
-# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供那一版的 `nichlink-core` 之前发布
+# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供那一版的 `nichlink-kernel` 之前发布
 # `run_method` 会解析失败。下面的顺序就是那条依赖链，脚本会在开始下一层之前等待上一层出现
 # 在 index 里——这个等待正是人容易忘掉的部分。
 #
@@ -25,11 +25,11 @@ set -eu
 # Dry-run behaviour before the first release: a crate whose versioned
 # `nichlink-*` dependency is not on the index yet is *skipped with a warning*
 # instead of failing, exactly like `tools/nichlink-package-audit`. So today the
-# dry run verifies `nichlink-core` in full and reports the other eight as
+# dry run verifies `nichlink-kernel` in full and reports the other eight as
 # waiting; after core is published it verifies the next level, and so on.
 # 首次发布之前的 dry-run 行为：带版本号的 `nichlink-*` 依赖尚未出现在 index 上的 crate
 # 会被**跳过并警告**，而不是失败，与 `tools/nichlink-package-audit` 一致。因此今天 dry-run
-# 会完整校验 `nichlink-core`、把其余八个报成"等待中"；core 发布之后就会校验下一层，依此类推。
+# 会完整校验 `nichlink-kernel`、把其余八个报成"等待中"；core 发布之后就会校验下一层，依此类推。
 #
 # Real publish:
 #   CARGO_REGISTRY_TOKEN=... tools/nichlink-publish --publish --yes
@@ -88,7 +88,7 @@ wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
 # independent of each other.
 # 每行一层，按依赖顺序。同一行内的 crate 互不依赖。
 levels='
-nichlink-core
+nichlink-kernel
 nichlink-macro nichlink-build-method
 nichlink-run-method
 nichlink-debug-method nichlink-plugin-host
@@ -350,15 +350,15 @@ resolved_version() {
 # "<crate>:<space-separated versioned nichlink-* dependencies>"
 # "<crate>:<以空格分隔的带版本号 nichlink-* 依赖>"
 dependencies='
-nichlink-core:
-nichlink-macro:nichlink-core
-nichlink-build-method:nichlink-core
-nichlink-mcp:nichlink-build-method nichlink-core nichlink-debug-method nichlink-run-method
-nichlink-run-method:nichlink-core nichlink-macro
+nichlink-kernel:
+nichlink-macro:nichlink-kernel
+nichlink-build-method:nichlink-kernel
+nichlink-mcp:nichlink-build-method nichlink-kernel nichlink-debug-method nichlink-run-method
+nichlink-run-method:nichlink-kernel nichlink-macro
 nichlink-debug-method:nichlink-run-method
 nichlink-plugin-host:nichlink-run-method
 nichlink-studio:nichlink-run-method nichlink-debug-method nichlink-build-method
-nichlink-cli:nichlink-build-method nichlink-core nichlink-mcp nichlink-studio
+nichlink-cli:nichlink-build-method nichlink-kernel nichlink-mcp nichlink-studio
 '
 
 # The internal dependencies of one crate, read from the table above.
@@ -480,13 +480,13 @@ version_problems() {
 # Every internal requirement must be the caret requirement on the current version line.
 # Read from `cargo metadata --no-deps` rather than from manifest text: the text readers
 # tested a dependency key and its `version` on the *same line*, so a multi-line inline
-# table — `nichlink-core = {`, then `path = …`, then `version = "0.9.9",`, then `}` —
+# table — `nichlink-kernel = {`, then `path = …`, then `version = "0.9.9",`, then `}` —
 # hid a wrong requirement while `--check-table` stayed green (audit RC1a, recorded
 # earlier as R2). Cargo answers the question for every spelling at once: the plain line,
 # the dotted table, the target-specific table, and the multi-line inline table.
 # 每条内部要求都必须是对当前版本线的 caret 要求。它从 `cargo metadata --no-deps` 读，而不是
 # 读清单文本：文本读取器把依赖键与它的 `version` 放在**同一行**上测，于是多行内联表——
-# `nichlink-core = {`、`path = …`、`version = "0.9.9",`、`}`——能藏住一条错误要求而
+# `nichlink-kernel = {`、`path = …`、`version = "0.9.9",`、`}`——能藏住一条错误要求而
 # `--check-table` 保持绿色（审计 RC1a，更早记为 R2）。cargo 一次就回答了所有拼写：普通行、
 # 点表、按目标限定的表，以及多行内联表。
 metadata_requirement_problems() {

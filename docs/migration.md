@@ -4,7 +4,7 @@
 
 ## From the pre-five-crate layout
 
-The registration protocol stays in `nichlink-core`. Build-time discovery,
+The registration protocol stays in `nichlink-kernel`. Build-time discovery,
 identity caching, scope calculation, and `StaticPlan` generation are now in
 `nichlink-build-method`; MIR and data-flow evidence are in `nichlink-debug-method`; the TUI
 is in `nichlink-studio`; isolated plugin execution is in `nichlink-plugin-host`.

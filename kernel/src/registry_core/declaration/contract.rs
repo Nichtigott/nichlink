@@ -54,7 +54,7 @@ impl PartsContract for NoParts {
 /// 在宏展开时强制 preset 与 parts 的输出类型相同。
 ///
 /// ```compile_fail
-/// use nichlink::{assert_contract, PartsContract, PresetContract};
+/// use nichlink_kernel::{assert_contract, PartsContract, PresetContract};
 ///
 /// struct Expected;
 /// struct Supplied;

@@ -46,10 +46,10 @@ pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 /// 为当前目录：stdio 桥是在代理正在处理的项目里启动的，而本 crate 自己的清单路径是编译它的
 /// 那台机器上的路径——对已安装的二进制来说是错的。
 fn package_root() -> PathBuf {
-    let configured = env::var_os(nichlink::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let configured = env::var_os(nichlink_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = env::current_dir().ok();
     let fallback = current.clone().unwrap_or_else(|| PathBuf::from("."));
-    nichlink::lexicon::resolve_package_root(
+    nichlink_kernel::lexicon::resolve_package_root(
         configured.as_deref(),
         current.as_deref(),
         current

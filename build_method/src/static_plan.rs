@@ -10,7 +10,7 @@ use super::registry_identity;
 use super::{
     SourceScope, cached_parent_id, face_source_is_active, node_id, parsed_face, relative_display,
 };
-use nichlink::{TopologyRecord, lexicon, validate_face_topology};
+use nichlink_kernel::{TopologyRecord, lexicon, validate_face_topology};
 
 #[derive(Clone, Debug)]
 pub(crate) struct StaticFaceRecord {

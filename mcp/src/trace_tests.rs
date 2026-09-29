@@ -12,7 +12,7 @@ use super::trace;
 
 /// A throwaway package with one hand-written root face, plus that face's identity.
 /// 一个含一个手写根面的一次性包，外加该面的身份。
-fn package(label: &str) -> (PathBuf, String, nichlink::identity::NodeId) {
+fn package(label: &str) -> (PathBuf, String, nichlink_kernel::identity::NodeId) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let name = format!("mcp-trace-{label}");
@@ -36,7 +36,7 @@ fn package(label: &str) -> (PathBuf, String, nichlink::identity::NodeId) {
 
 /// Record one frame into an artifact, the way a host would.
 /// 像宿主那样把一个帧记进 artifact。
-fn record(root: &Path, namespace: &str, node: nichlink::identity::NodeId) {
+fn record(root: &Path, namespace: &str, node: nichlink_kernel::identity::NodeId) {
     let mut recorded = CallTrace::full();
     recorded.with(node, "button", |recorded| {
         recorded.local("input", "u32", 1, LocalKind::Input);
@@ -48,7 +48,7 @@ fn record(root: &Path, namespace: &str, node: nichlink::identity::NodeId) {
 /// Record a run that captured values inside its frame, connected two of them, and
 /// captured one before any traced call.
 /// 记录一次运行：在帧内捕获了值、把其中两个连了起来，并在任何被追踪调用之前捕获了一个。
-fn record_values(root: &Path, namespace: &str, node: nichlink::identity::NodeId) {
+fn record_values(root: &Path, namespace: &str, node: nichlink_kernel::identity::NodeId) {
     let mut recorded = CallTrace::full();
     recorded.local("seed", "u8", 7, LocalKind::Binding);
     recorded.with(node, "button", |recorded| {
@@ -189,7 +189,8 @@ fn a_foreign_artifact_is_refused_by_name() {
 #[test]
 fn a_frame_from_another_tree_is_refused_with_its_count() {
     let (root, name, _) = package("ghost-frame");
-    let ghost = nichlink::identity::NodeId::from_namespaced_path(&name, "ghost/ghost.rs", "Ghost");
+    let ghost =
+        nichlink_kernel::identity::NodeId::from_namespaced_path(&name, "ghost/ghost.rs", "Ghost");
     record(&root, &name, ghost);
     let reply = trace(&root, &json!({})).expect("the refusal renders");
     assert!(reply.contains("REFUSED"), "{reply}");

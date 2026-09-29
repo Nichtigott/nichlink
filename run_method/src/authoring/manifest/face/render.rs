@@ -123,7 +123,7 @@ impl FaceManifest {
                  rewrite; edit that line in the file by hand"
             ));
         }
-        if !value(nichlink::lexicon::FACE_FIELD_PLUGIN).is_empty() {
+        if !value(nichlink_kernel::lexicon::FACE_FIELD_PLUGIN).is_empty() {
             return Err(
                 "this face declares `plugin:`, which the editor cannot rewrite yet; \
                  edit that line in the file by hand"

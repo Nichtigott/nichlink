@@ -41,7 +41,7 @@ crates.io）。可用 `--path` 或 `--git` 显式覆盖。
   `registration check failed (N diagnostic(s); JSON on stdout)` 后退出 1）。
 
 文档形状由 `BuildDiagnostics::to_json` 给出
-（`core/src/registry_core/diagnostic/build.rs`）：
+（`kernel/src/registry_core/diagnostic/build.rs`）：
 
 ```json
 {"schema":"nichlink.build-diagnostics/1","count":N,"diagnostics":[...]}
@@ -63,11 +63,11 @@ crates.io）。可用 `--path` 或 `--git` 显式覆盖。
 
 | `phase` | 构造符号 | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `requirements` | `core` `requirements::missing` | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 从不 | 仅当某祖先以不同的 kind 提供该能力时 | 总是 |
+| `requirements` | `kernel` `requirements::missing` | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 从不 | 仅当某祖先以不同的 kind 提供该能力时 | 总是 |
 | `contract` | `build_method` `contracts::check_parent_rule` | 从不 | 总是 | 总是 | 总是 | 总是 | 总是 | 总是 | 仅输出合同不匹配时 | 从不 | 总是 |
 | `stable-identity` | `build_method` `validation::collect_stable_names` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
 | `parent-macro` | `build_method` `validation::collect_parent_macro_errors` | 从不 | 从不 | 总是 | 总是 | 从不 | 总是 | 总是 | 总是 | 从不 | 总是 |
-| `static-plan` | `build_method` `static_plan::collect_static_faces`、`graft_plan_check::undeclared_plan_errors`；`core` `topology::validate_face_topology` | 从不 | 从不 | 总是 | 总是 `0` | 从不 | 仅三项拓扑检查 | 仅 missing-parent 与 no-registry 两项 | 仅三项拓扑检查 | 从不 | 总是 |
+| `static-plan` | `build_method` `static_plan::collect_static_faces`、`graft_plan_check::undeclared_plan_errors`；`kernel` `topology::validate_face_topology` | 从不 | 从不 | 总是 | 总是 `0` | 从不 | 仅三项拓扑检查 | 仅 missing-parent 与 no-registry 两项 | 仅三项拓扑检查 | 从不 | 总是 |
 | `face-cfg` | `build_method` `static_plan::collect_static_faces` | 从不 | 从不 | 总是 | 总是 | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
 | `out-dir` | `build_method` `check_for` | 从不 | 从不 | 从不 | 总是 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |
 | `face-layout` | `build_method` `validation::unplaced_face_errors`（phase 由 `discovery::record_unplaced` 选定） | 从不 | 从不 | 总是 | 文件内无位置时为 `0` | 从不 | 从不 | 从不 | 从不 | 从不 | 总是 |

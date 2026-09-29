@@ -8,7 +8,7 @@ mod graft_record;
 #[path = "trace/trace.rs"]
 pub mod trace;
 
-pub use nichlink::{
+pub use nichlink_kernel::{
     COORDINATES_IN_VIEWPORT, Coordinates, FINITE_NUMBER, NON_EMPTY_TEXT, Provenance,
     ProvenanceStep, RuntimeCheckFailure, RuntimeCheckSpec, RuntimeValue,
 };

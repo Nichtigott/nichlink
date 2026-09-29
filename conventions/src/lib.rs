@@ -215,11 +215,11 @@ pub(crate) fn is_skipped_directory(path: &Path) -> bool {
 /// `path` 是否是一个真实存在的目录，而不是指向某个目录的符号链接。
 ///
 /// [`rust_sources`] promises not to follow symlinks, and `Path::is_dir` breaks
-/// that promise: a link such as `core/src/zz -> /tmp/elsewhere` used to pull files
+/// that promise: a link such as `kernel/src/zz -> /tmp/elsewhere` used to pull files
 /// from outside the checkout into every gate that walks a crate, and the purity
 /// gate reported `/tmp/elsewhere/evil.rs` as kernel I/O.
 /// [`rust_sources`] 承诺不跟随符号链接，而 `Path::is_dir` 会破坏这个承诺：像
-/// `core/src/zz -> /tmp/elsewhere` 这样的链接过去会把检出之外的文件拉进每一个遍历 crate 的
+/// `kernel/src/zz -> /tmp/elsewhere` 这样的链接过去会把检出之外的文件拉进每一个遍历 crate 的
 /// 门禁，纯净性门禁曾把 `/tmp/elsewhere/evil.rs` 报成内核 I/O。
 ///
 /// `symlink_metadata` describes the link itself, so a linked directory is not a
@@ -349,12 +349,14 @@ pub fn lines(path: &Path) -> Vec<String> {
 /// 以工作区根为基准渲染路径，使用 `/` 分隔符。
 ///
 /// The fold is not written here: it forwards to the kernel's
-/// [`nichlink::declaration::portable_path`], the one implementation, so a gate
+/// [`nichlink_kernel::declaration::portable_path`], the one implementation, so a gate
 /// report and the surface it describes cannot spell the same file two ways.
-/// 这份折叠不在这里写：它转发到内核的 [`nichlink::declaration::portable_path`]，那是唯一的
+/// 这份折叠不在这里写：它转发到内核的 [`nichlink_kernel::declaration::portable_path`]，那是唯一的
 /// 实现，因此门禁报告与它所描述的执行面不会把同一个文件拼成两种样子。
 pub fn relative(root: &Path, path: &Path) -> String {
-    nichlink::declaration::portable_path(&path.strip_prefix(root).unwrap_or(path).to_string_lossy())
+    nichlink_kernel::declaration::portable_path(
+        &path.strip_prefix(root).unwrap_or(path).to_string_lossy(),
+    )
 }
 
 /// Write the workspace manifest a fixture root needs.
@@ -409,7 +411,7 @@ fn collect_fixture_members(root: &Path, directory: &Path, members: &mut Vec<Stri
         if path.file_name().and_then(|name| name.to_str()) == Some("src") {
             let owner = path.parent().unwrap_or(root).strip_prefix(root);
             let text = owner
-                .map(|owner| nichlink::declaration::portable_path(&owner.to_string_lossy()))
+                .map(|owner| nichlink_kernel::declaration::portable_path(&owner.to_string_lossy()))
                 .unwrap_or_default();
             members.push(if text.is_empty() {
                 ".".to_owned()
@@ -550,9 +552,9 @@ mod tests {
     #[test]
     fn a_doc_comment_between_an_attribute_and_its_item_is_governed_too() {
         let root = synthetic("governed");
-        fs::create_dir_all(root.join("core/src")).expect("fixture src");
+        fs::create_dir_all(root.join("kernel/src")).expect("fixture src");
         fs::write(
-            root.join("core/src/lib.rs"),
+            root.join("kernel/src/lib.rs"),
             "#[cfg(any())]\n/// documented\npub fn skipped() { let _ = std::fs::read(\"x\"); }\n",
         )
         .expect("fixture file");

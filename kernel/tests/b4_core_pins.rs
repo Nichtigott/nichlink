@@ -9,10 +9,10 @@
 use std::collections::BTreeMap;
 
 #[cfg(feature = "syntax")]
-use nichlink::authoring::snapshot::snapshot_from_values;
+use nichlink_kernel::authoring::snapshot::snapshot_from_values;
 #[cfg(feature = "syntax")]
-use nichlink::declaration::RuntimeCheckSpec;
-use nichlink::plugin::PluginCatalog;
+use nichlink_kernel::declaration::RuntimeCheckSpec;
+use nichlink_kernel::plugin::PluginCatalog;
 
 /// The value map `snapshot_from_values` reads, with the fields a face always carries.
 /// `snapshot_from_values` 读取的取值表，含注册面总会带着的那些字段。
@@ -129,7 +129,7 @@ fn a_malformed_requires_entry_is_refused_not_dropped() {
 #[cfg(feature = "syntax")]
 #[test]
 fn the_strict_requires_entry_refuses_a_malformed_entry() {
-    use nichlink::authoring::parse::try_parse_requirements_owned;
+    use nichlink_kernel::authoring::parse::try_parse_requirements_owned;
     let error = try_parse_requirements_owned("a=>b,broken")
         .expect_err("the strict entry refuses a `requires` entry without `=>`");
     assert!(
@@ -152,7 +152,7 @@ fn the_strict_requires_entry_refuses_a_malformed_entry() {
 #[cfg(feature = "syntax")]
 #[test]
 fn the_published_requires_entry_keeps_its_lossy_released_shape() {
-    use nichlink::authoring::parse::parse_requirements_owned;
+    use nichlink_kernel::authoring::parse::parse_requirements_owned;
     let requirements: Vec<_> = parse_requirements_owned("a=>b,broken,c=>d");
     assert_eq!(
         requirements.len(),
@@ -211,7 +211,7 @@ fn the_requires_entries_document_which_one_is_lossy() {
 #[cfg(feature = "syntax")]
 #[test]
 fn a_generic_argument_with_a_comma_still_derives_trait_labels() {
-    let labels = nichlink::authoring::parse::trait_names_from_paths(
+    let labels = nichlink_kernel::authoring::parse::trait_names_from_paths(
         "crate::ui::ControlHandle<u8, u16>, crate::parts::ActionParts",
     )
     .expect("a type path with generic arguments derives its labels");

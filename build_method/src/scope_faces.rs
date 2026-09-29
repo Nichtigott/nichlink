@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::discovery_node::{Node, relative_display};
 use super::face_syntax_check::parsed_face;

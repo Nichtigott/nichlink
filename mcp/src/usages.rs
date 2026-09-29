@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use nichlink::identity::NodeId;
+use nichlink_kernel::identity::NodeId;
 
 use serde_json::Value;
 

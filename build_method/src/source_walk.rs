@@ -235,7 +235,7 @@ pub(crate) fn collect_source_files(nodes: &[Node], files: &mut Vec<std::path::Pa
 /// 内核源码遍历向本执行面索取的文件系统事实。
 struct StdSourceTree;
 
-impl nichlink::source::SourceTree for StdSourceTree {
+impl nichlink_kernel::source::SourceTree for StdSourceTree {
     fn is_directory(&self, path: &Path) -> bool {
         path.is_dir()
     }
@@ -262,11 +262,11 @@ pub(crate) fn collect_rust_sources(
     directory: &Path,
     files: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
-    nichlink::source::collect_rust_sources(
+    nichlink_kernel::source::collect_rust_sources(
         &StdSourceTree,
         directory,
-        nichlink::source::SourceWalk::EVERYTHING,
-        |_, _| nichlink::source::Keep::Yes,
+        nichlink_kernel::source::SourceWalk::EVERYTHING,
+        |_, _| nichlink_kernel::source::Keep::Yes,
         files,
     )
 }

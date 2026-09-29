@@ -2,7 +2,7 @@
 //! 构建审计清单。
 //!
 //! The function column is a *declaration* list: it comes from the kernel's lexical
-//! scanner (`nichlink::source::function_symbols`), which masks comments, strings and
+//! scanner (`nichlink_kernel::source::function_symbols`), which masks comments, strings and
 //! macro text before it looks for `fn`. A symbol is therefore `module::name` — the
 //! scanner reports declarations without ownership, so a method carries no `impl`
 //! type prefix. This file used to hold a second, line-based scanner that matched
@@ -13,7 +13,7 @@
 //! function_manifest` finds only the writers — so the change is visible to whoever
 //! starts trusting it, which is exactly why its format is stated here.
 //! 函数列的语义是**声明**清单：它来自内核词法扫描器
-//! （`nichlink::source::function_symbols`），该扫描器在寻找 `fn` 之前会屏蔽注释、字符串与宏文本。
+//! （`nichlink_kernel::source::function_symbols`），该扫描器在寻找 `fn` 之前会屏蔽注释、字符串与宏文本。
 //! 因此符号是 `module::name`——扫描器报告的是不带归属的声明，方法因此不带 `impl` 类型前缀。
 //! 本文件过去带第二套按行的扫描器，它在行的任意位置匹配 `fn `，并用上一个 `impl ` 行猜归属；
 //! 嵌套 impl 与闭包都会污染它。那一列问的正是内核已回答的同一个问题，删掉它正是收掉这份重复。
@@ -149,7 +149,7 @@ fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, 
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink::lexicon::is_registration_path(&relative)
+                && !nichlink_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let id = super::registry_identity::package_node_id(
@@ -157,7 +157,7 @@ fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, 
                     &face.path("kind").unwrap_or_else(|| node.name.clone()),
                 );
                 let module = source_module_path(&relative);
-                for function in nichlink::source::function_symbols(&source) {
+                for function in nichlink_kernel::source::function_symbols(&source) {
                     rows.push((id, relative.clone(), format!("{module}::{}", function.name)));
                 }
             }
@@ -171,7 +171,7 @@ fn collect_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, S
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink::lexicon::is_registration_path(&relative)
+                && !nichlink_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());

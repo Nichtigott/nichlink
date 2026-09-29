@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use crate::{Node, relative_display};
 

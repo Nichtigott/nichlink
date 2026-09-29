@@ -56,9 +56,12 @@ fn recorded_run(root: &Path, namespace: &str, recorded_as: &str) {
         &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
     )
     .expect("the face is added");
-    let root_id = nichlink::root_node_id(namespace);
-    let label =
-        nichlink::identity::NodeId::from_namespaced_path(namespace, "label/label.rs", "Label");
+    let root_id = nichlink_kernel::root_node_id(namespace);
+    let label = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        namespace,
+        "label/label.rs",
+        "Label",
+    );
     let mut trace = CallTrace::full();
     trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
         // A value captured in a frame whose file declares no face: it belongs to the

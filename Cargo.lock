@@ -656,7 +656,7 @@ dependencies = [
 name = "nichlink-build-method"
 version = "0.1.6"
 dependencies = [
- "nichlink-core",
+ "nichlink-kernel",
  "proc-macro2",
  "serde_json",
  "syn 2.0.119",
@@ -667,7 +667,7 @@ name = "nichlink-cli"
 version = "0.1.6"
 dependencies = [
  "nichlink-build-method",
- "nichlink-core",
+ "nichlink-kernel",
  "nichlink-mcp",
  "nichlink-studio",
  "serde_json",
@@ -677,18 +677,9 @@ dependencies = [
 name = "nichlink-conventions"
 version = "0.1.6"
 dependencies = [
- "nichlink-core",
+ "nichlink-kernel",
  "syn 2.0.119",
  "tempfile",
-]
-
-[[package]]
-name = "nichlink-core"
-version = "0.1.6"
-dependencies = [
- "proc-macro2",
- "sha2",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -718,10 +709,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nichlink-kernel"
+version = "0.1.6"
+dependencies = [
+ "proc-macro2",
+ "sha2",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "nichlink-macro"
 version = "0.1.6"
 dependencies = [
- "nichlink-core",
+ "nichlink-kernel",
  "proc-macro2",
  "syn 2.0.119",
 ]
@@ -731,8 +731,8 @@ name = "nichlink-mcp"
 version = "0.1.6"
 dependencies = [
  "nichlink-build-method",
- "nichlink-core",
  "nichlink-debug-method",
+ "nichlink-kernel",
  "nichlink-run-method",
  "serde_json",
 ]
@@ -753,7 +753,7 @@ dependencies = [
 name = "nichlink-run-method"
 version = "0.1.6"
 dependencies = [
- "nichlink-core",
+ "nichlink-kernel",
  "nichlink-macro",
  "syn 2.0.119",
 ]

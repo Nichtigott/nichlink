@@ -30,9 +30,9 @@ fn synthetic(documents: &[(&str, &str)], sources: &[(&str, &str)]) -> PathBuf {
 /// 钉住——漂移的引用被报出，token 正好在它点名那一行的引用不被报。
 #[test]
 fn a_paired_token_that_is_not_on_the_named_line_is_reported() {
-    let sources = [("core/src/probe.rs", "fn first() {}\nfn second() {}\n")];
+    let sources = [("kernel/src/probe.rs", "fn first() {}\nfn second() {}\n")];
     let drifted = synthetic(
-        &[("docs/note.md", "`second` (`core/src/probe.rs:1`)\n")],
+        &[("docs/note.md", "`second` (`kernel/src/probe.rs:1`)\n")],
         &sources,
     );
     let found = findings(&drifted);
@@ -45,7 +45,7 @@ fn a_paired_token_that_is_not_on_the_named_line_is_reported() {
     let _ = fs::remove_dir_all(&drifted);
 
     let honest = synthetic(
-        &[("docs/note.md", "`second` (`core/src/probe.rs:2`)\n")],
+        &[("docs/note.md", "`second` (`kernel/src/probe.rs:2`)\n")],
         &sources,
     );
     let found = findings(&honest);
@@ -67,7 +67,7 @@ fn a_paired_token_that_is_not_on_the_named_line_is_reported() {
 fn a_crate_relative_path_and_a_zero_line_are_reported() {
     let crate_relative = synthetic(
         &[("docs/note.md", "see `src/definitely-gone.rs:99`\n")],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&crate_relative);
     assert!(
@@ -77,8 +77,8 @@ fn a_crate_relative_path_and_a_zero_line_are_reported() {
     let _ = fs::remove_dir_all(&crate_relative);
 
     let zero = synthetic(
-        &[("docs/note.md", "see `core/src/probe.rs:0`\n")],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("docs/note.md", "see `kernel/src/probe.rs:0`\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&zero);
     assert!(
@@ -104,7 +104,7 @@ fn a_workflow_anchor_past_the_end_is_reported() {
             "the guard is `.github/workflows/release.yml:9`\n",
         )],
         &[
-            ("core/src/probe.rs", "fn probe() {}\n"),
+            ("kernel/src/probe.rs", "fn probe() {}\n"),
             (".github/workflows/release.yml", "on:\n  push:\n"),
         ],
     );
@@ -128,7 +128,7 @@ fn a_manifest_anchor_resolves_and_other_kinds_stay_out() {
             "the members list is `Cargo.toml:2`, prose is `docs/note.md:9`, \
              the tool is `tools/nichlink-publish:88`\n",
         )],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&root);
     assert!(found.is_empty(), "{found:#?}");
@@ -136,19 +136,19 @@ fn a_manifest_anchor_resolves_and_other_kinds_stay_out() {
 }
 
 /// A path that climbs with `..` is the path it resolves to, not a string that matches
-/// nothing: `declaration/../../tree/probe.rs` names `core/src/probe.rs`, and calling that
+/// nothing: `declaration/../../tree/probe.rs` names `kernel/src/probe.rs`, and calling that
 /// "no such file" is the false positive that gets a gate switched off.
 /// 用 `..` 向上爬的路径就是它解析到的那个路径，而不是一个什么都匹配不到的字符串：
-/// `declaration/../../tree/probe.rs` 命名的就是 `core/src/probe.rs`，说它 "no such file"
+/// `declaration/../../tree/probe.rs` 命名的就是 `kernel/src/probe.rs`，说它 "no such file"
 /// 正是那种让人把门禁关掉的假阳性。
 #[test]
 fn a_climbing_path_resolves_to_the_file_it_names() {
     let root = synthetic(
         &[
             ("docs/note.md", "see `declaration/../../src/probe.rs:1`\n"),
-            ("core/src/registry_core/declaration/marker.rs", "// x\n"),
+            ("kernel/src/registry_core/declaration/marker.rs", "// x\n"),
         ],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&root);
     assert!(
@@ -165,14 +165,14 @@ fn a_reference_past_the_end_of_a_file_is_reported() {
     let root = synthetic(
         &[(
             "docs/probe.md",
-            "see `core/src/probe.rs:99` for the check\n",
+            "see `kernel/src/probe.rs:99` for the check\n",
         )],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:#?}");
     assert_eq!(found[0].document, "docs/probe.md");
-    assert_eq!(found[0].anchor, "core/src/probe.rs:99");
+    assert_eq!(found[0].anchor, "kernel/src/probe.rs:99");
     assert!(found[0].reason.contains("1 lines"), "{found:#?}");
     let _ = fs::remove_dir_all(&root);
 }
@@ -183,8 +183,8 @@ fn a_reference_past_the_end_of_a_file_is_reported() {
 #[test]
 fn a_reference_to_a_missing_file_is_reported() {
     let root = synthetic(
-        &[("docs/probe.md", "moved to `core/src/gone.rs:1`\n")],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("docs/probe.md", "moved to `kernel/src/gone.rs:1`\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:#?}");
@@ -203,7 +203,7 @@ fn an_ambiguous_or_unknown_bare_name_is_left_alone() {
             "`same.rs:99` is ambiguous, `elsewhere.rs:99` is not ours\n",
         )],
         &[
-            ("core/src/same.rs", "fn a() {}\n"),
+            ("kernel/src/same.rs", "fn a() {}\n"),
             ("cli/src/same.rs", "fn b() {}\n"),
         ],
     );
@@ -218,7 +218,7 @@ fn an_ambiguous_or_unknown_bare_name_is_left_alone() {
 fn a_unique_bare_name_is_checked() {
     let root = synthetic(
         &[("docs/probe.md", "the arm is in `probe.rs:99`\n")],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:#?}");
@@ -234,9 +234,9 @@ fn an_anchor_inside_a_record_is_exempt() {
     let root = synthetic(
         &[(
             "docs/audit-probe.md",
-            "it used to be `core/src/probe.rs:99`\n",
+            "it used to be `kernel/src/probe.rs:99`\n",
         )],
-        &[("core/src/probe.rs", "fn probe() {}\n")],
+        &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);

@@ -7,7 +7,7 @@
 folder layout, feeds them to the kernel validators (parent topology, capability
 requirements, contracts, stable identities), maintains incremental identity
 caches, and renders the passive `StaticPlan` consumed by release builds. The
-validation rules and diagnostic models themselves live in `nichlink-core`; this
+validation rules and diagnostic models themselves live in `nichlink-kernel`; this
 crate only reads files and writes artifacts.
 
 Call `nichlink_build_method::run()` from the host crate's `build.rs`. The build

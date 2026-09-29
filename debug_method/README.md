@@ -4,7 +4,7 @@
 
 `nichlink-debug-method` is the observation evidence surface. Static analysis
 itself — MIR text/JSONL parsing, source lexing, and evidence merging (live
-edges win over MIR candidates) — lives in the kernel (`nichlink-core` `mir`
+edges win over MIR candidates) — lives in the kernel (`nichlink-kernel` `mir`
 and `source` modules). This crate binds it to the toolchain and the process:
 
 - `collector`: the inventory linker-section collection for declarations that
@@ -17,7 +17,7 @@ and `source` modules). This crate binds it to the toolchain and the process:
   topology view (DOT export).
 
 A host that needs collection adds this crate and reads entries with
-`nichlink_debug_method::registrations!(nichlink::RegistrationInfo)`.
+`nichlink_debug_method::registrations!(nichlink_kernel::RegistrationInfo)`.
 
 No rename is scheduled for this crate: the merge turns it into the `call_evidence`
 module, and the crate name disappears with the crate (`AMB-07`).

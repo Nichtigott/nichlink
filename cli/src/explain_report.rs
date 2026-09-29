@@ -11,10 +11,10 @@
 
 use std::path::Path;
 
-use nichlink::identity::NodeId;
 use nichlink_build_method::{
     DeclaredGraft, FaceView, declared_grafts, read_build_scope, read_pruning_manifest,
 };
+use nichlink_kernel::identity::NodeId;
 use serde_json::{Value, json};
 
 /// Report whether the build's published scope keeps the face, and why.

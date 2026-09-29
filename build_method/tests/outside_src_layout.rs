@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink::NodeId;
 use nichlink_build_method::{check_for, face_views};
+use nichlink_kernel::NodeId;
 
 /// The package name every fixture uses. `check_for` pins the identity namespace
 /// in a process-global first-write-wins cell, so a test that ran under a different

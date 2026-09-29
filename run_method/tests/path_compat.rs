@@ -13,8 +13,8 @@
 
 use std::marker::PhantomData;
 
-use nichlink::identity::NodeId as OfficialNodeId;
-use nichlink::registry_core::identity::NodeId as KernelNodeId;
+use nichlink_kernel::identity::NodeId as OfficialNodeId;
+use nichlink_kernel::registry_core::identity::NodeId as KernelNodeId;
 use nichlink_run_method::NodeId as SurfaceNodeId;
 use nichlink_run_method::registry_core::identity::NodeId as SurfaceKernelNodeId;
 
@@ -43,14 +43,17 @@ fn one_identity_resolves_through_every_historical_path() {
 /// 根部白名单保留宿主代码以裸名书写的名词；类型仍由所属模块页拥有。
 #[test]
 fn the_whitelist_and_the_module_pages_both_hold() {
-    let _: PhantomData<nichlink::NodeId> = PhantomData;
-    let _: PhantomData<nichlink::Registry> = PhantomData;
-    let _: PhantomData<nichlink::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink::declaration::RegistrationInfo> = PhantomData;
-    let _: PhantomData<nichlink::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink::plugin::graft_document::GraftPlanDocument> = PhantomData;
-    let _: PhantomData<nichlink::plugin::graft::GraftCut> = PhantomData;
-    assert_eq!(nichlink::lexicon::GENERATED_LIB_FILE, "generated_lib.rs");
+    let _: PhantomData<nichlink_kernel::NodeId> = PhantomData;
+    let _: PhantomData<nichlink_kernel::Registry> = PhantomData;
+    let _: PhantomData<nichlink_kernel::identity::NodeId> = PhantomData;
+    let _: PhantomData<nichlink_kernel::declaration::RegistrationInfo> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::catalog::PluginCatalog> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::graft_document::GraftPlanDocument> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::graft::GraftCut> = PhantomData;
+    assert_eq!(
+        nichlink_kernel::lexicon::GENERATED_LIB_FILE,
+        "generated_lib.rs"
+    );
 }
 
 /// The surfaces keep every kernel name they had: a host that writes
@@ -73,21 +76,24 @@ fn the_surface_keeps_its_flat_kernel_names() {
 /// 每个模块取一个有代表性的 item，钉住该页本身仍然存在。
 #[test]
 fn every_kernel_module_page_still_resolves() {
-    let _: PhantomData<nichlink::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink::declaration::RegistrationInfo> = PhantomData;
-    let _: PhantomData<nichlink::diagnostic::RegistryError> = PhantomData;
-    let _: PhantomData<nichlink::mir::MirGraph> = PhantomData;
-    let _: PhantomData<nichlink::release::StaticPlan> = PhantomData;
-    let _: PhantomData<nichlink::requirements::CapabilityDeclaration> = PhantomData;
-    let _: PhantomData<nichlink::source::SourceFunction> = PhantomData;
-    let _: PhantomData<nichlink::tree::Registry> = PhantomData;
-    let _: PhantomData<nichlink::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink::registry_core::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink::registry_core::tree::Registry> = PhantomData;
-    assert_eq!(nichlink::lexicon::GENERATED_LIB_FILE, "generated_lib.rs");
+    let _: PhantomData<nichlink_kernel::identity::NodeId> = PhantomData;
+    let _: PhantomData<nichlink_kernel::declaration::RegistrationInfo> = PhantomData;
+    let _: PhantomData<nichlink_kernel::diagnostic::RegistryError> = PhantomData;
+    let _: PhantomData<nichlink_kernel::mir::MirGraph> = PhantomData;
+    let _: PhantomData<nichlink_kernel::release::StaticPlan> = PhantomData;
+    let _: PhantomData<nichlink_kernel::requirements::CapabilityDeclaration> = PhantomData;
+    let _: PhantomData<nichlink_kernel::source::SourceFunction> = PhantomData;
+    let _: PhantomData<nichlink_kernel::tree::Registry> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::catalog::PluginCatalog> = PhantomData;
+    let _: PhantomData<nichlink_kernel::registry_core::identity::NodeId> = PhantomData;
+    let _: PhantomData<nichlink_kernel::registry_core::tree::Registry> = PhantomData;
     assert_eq!(
-        nichlink::authoring::FACE_FIELD_COUNT,
-        nichlink::authoring::face_field::FACE_FIELD_COUNT
+        nichlink_kernel::lexicon::GENERATED_LIB_FILE,
+        "generated_lib.rs"
+    );
+    assert_eq!(
+        nichlink_kernel::authoring::FACE_FIELD_COUNT,
+        nichlink_kernel::authoring::face_field::FACE_FIELD_COUNT
     );
 }
 
@@ -98,12 +104,12 @@ fn every_kernel_module_page_still_resolves() {
 /// `nichlink_run_method::plugin::trust::…` 的宿主不该察觉 shim 变窄。
 #[test]
 fn the_plugin_module_pages_still_resolve() {
-    let _: PhantomData<nichlink::plugin::artifact::PluginArtifact> = PhantomData;
-    let _: PhantomData<nichlink::plugin::contracts::FlowContract> = PhantomData;
-    let _: PhantomData<nichlink::plugin::graft::GraftCut> = PhantomData;
-    let _: PhantomData<nichlink::plugin::plugin_policy::PluginPolicy> = PhantomData;
-    let _: PhantomData<nichlink::plugin::slot::PluginChannel> = PhantomData;
-    let _: PhantomData<nichlink::plugin::trust::PluginTrustPolicy> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::artifact::PluginArtifact> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::contracts::FlowContract> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::graft::GraftCut> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::plugin_policy::PluginPolicy> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::slot::PluginChannel> = PhantomData;
+    let _: PhantomData<nichlink_kernel::plugin::trust::PluginTrustPolicy> = PhantomData;
     let _: PhantomData<nichlink_run_method::plugin::catalog::PluginCatalog> = PhantomData;
     let _: PhantomData<nichlink_run_method::plugin::graft_document::GraftPlanDocument> =
         PhantomData;

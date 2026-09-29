@@ -13,7 +13,7 @@ This roadmap covers NichLink itself. NichUI product work, funding, and community
 - [x] Studio search/inspect/data views and source navigation.
 - [x] MCP bridge — queries plus a previewed authoring write path — and verified Wasm/process plugin adapters.
 - [x] Cross-platform CI, scale audits, symbol audits, and package checks.
-- [x] Kernel/execution-surface split: one pure kernel (`nichlink-core`) holding
+- [x] Kernel/execution-surface split: one pure kernel (`nichlink-kernel`) holding
   protocol vocabulary and pure methods, with thin surfaces
   (`nichlink-build-method`, `nichlink-run-method`, `nichlink-debug-method`,
   `nichlink-studio`, `nichlink-mcp`, `nichlink-cli`, `nichlink-plugin-host`)

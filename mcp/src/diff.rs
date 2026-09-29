@@ -162,7 +162,7 @@ fn diff_records(
     let mut undeclared: Vec<(
         &GraftPlanRow,
         Option<bool>,
-        Option<nichlink::identity::NodeId>,
+        Option<nichlink_kernel::identity::NodeId>,
     )> = Vec::new();
     let mut unreadable = 0usize;
     for row in &rows {

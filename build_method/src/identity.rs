@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
-pub use nichlink::registry_core::identity::NodeId;
+pub use nichlink_kernel::registry_core::identity::NodeId;
 
 /// Version of the identity input and persisted catalog formats.
 /// 身份输入与持久化目录格式的版本。
@@ -14,7 +14,7 @@ pub use nichlink::registry_core::identity::NodeId;
 /// round, with no compiler noticing.
 /// 该值由内核拥有：构建若自带一份副本，就可能接受内核拒绝的 `NICH_LINK_SCOPE`
 /// 或插件锁（反之亦然），而编译器不会察觉。
-pub use nichlink::registry_core::identity::IDENTITY_SCHEMA;
+pub use nichlink_kernel::registry_core::identity::IDENTITY_SCHEMA;
 
 /// Explicit namespace for standalone runs (CLI, tests). Cargo build scripts
 /// read `CARGO_PKG_NAME` from the environment instead.

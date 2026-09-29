@@ -17,7 +17,7 @@
 | **应用** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | 运行期宿主 | 校验并返回一棵新的有效树，不改动原树与外部树。 |
 
 声明宏由 `nichlink-run-method` 导出（`nichlink_run_method::static_graft_plan!`）；
-kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nichlink::Registry`）。
+kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nichlink_kernel::Registry`）。
 
 ## 哪个文件是宿主入口
 

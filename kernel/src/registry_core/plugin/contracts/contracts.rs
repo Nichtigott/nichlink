@@ -37,11 +37,11 @@ impl fmt::Display for FrameworkId {
 /// 逻辑替换插槽。具体实现保留各自 node identity；嫁接针对的是稳定插槽名。
 ///
 /// "Slot" is the alias the vocabulary lists for a node's `registry_name`
-/// (`core/src/registry_core/lexicon/lexicon.rs`, audit `KRN-C-11`): what a graft cut addresses
+/// (`kernel/src/registry_core/lexicon/lexicon.rs`, audit `KRN-C-11`): what a graft cut addresses
 /// is the last component of a node's path, and that component is written `registry_name`
 /// wherever it is recorded.
 /// 这里的"插槽"是词表为节点的 `registry_name` 列出的别名
-/// （`core/src/registry_core/lexicon/lexicon.rs`，审计 `KRN-C-11`）：graft 切口寻址的是节点路径
+/// （`kernel/src/registry_core/lexicon/lexicon.rs`，审计 `KRN-C-11`）：graft 切口寻址的是节点路径
 /// 的最后一段，而那段在落盘处一律写作 `registry_name`。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ContractId(pub &'static str);

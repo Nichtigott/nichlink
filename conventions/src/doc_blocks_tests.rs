@@ -268,11 +268,11 @@ fn a_fence_is_paired_by_its_own_character_and_length() {
 
 /// A module the tree mounts behind `#[cfg(test)]` is not documentation a reader is shown, whatever
 /// its name says. Location and name are hints, and a hint misses a real case: the tree ships
-/// `core/src/registry_core/tree/graft_ops/fixtures.rs`, mounted behind `#[cfg(test)]`, whose name
+/// `kernel/src/registry_core/tree/graft_ops/fixtures.rs`, mounted behind `#[cfg(test)]`, whose name
 /// is not test-shaped — so this gate checked its comments as reader-facing documentation while the
 /// size gate (which asks the same identity question, audit `G-05`) had already stopped doing so.
 /// 树以 `#[cfg(test)]` 挂载的模块不是给读者看的文档，无论它叫什么。位置与名字都是提示，而提示会漏
-/// 掉真实情形：树里出厂了 `core/src/registry_core/tree/graft_ops/fixtures.rs`，它挂在 `#[cfg(test)]`
+/// 掉真实情形：树里出厂了 `kernel/src/registry_core/tree/graft_ops/fixtures.rs`，它挂在 `#[cfg(test)]`
 /// 之后、名字又不是测试形状——于是这道门禁把它的注释当读者文档检查，而尺寸门禁（问的是同一个身份
 /// 问题，审计 `G-05`）早就不这么做了。
 #[test]

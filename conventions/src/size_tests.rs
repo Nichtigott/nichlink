@@ -129,13 +129,13 @@ fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
 }
 
 /// The recursion bound is a cycle stop with headroom, not a description of this tree's depth.
-/// The deepest chain the tree ships is six files (five mount edges): `core/src/lib.rs` →
+/// The deepest chain the tree ships is six files (five mount edges): `kernel/src/lib.rs` →
 /// `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs` →
 /// `authoring/parse/flow.rs` → `authoring/parse/flow_tests.rs`. An eleven-file chain below one
 /// `#[cfg(test)]` mount must still be exempt, because a bound that merely fits today's tree
 /// reclassifies a test file as measured source the next time someone nests two more modules.
 /// 递归上限是带余量的防环，而不是对本树深度的描述。本树出厂的最深链有 6 个文件（5 条挂载边）：
-/// `core/src/lib.rs` → `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs`
+/// `kernel/src/lib.rs` → `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs`
 /// → `authoring/parse/flow.rs` → `authoring/parse/flow_tests.rs`。一条挂在单个 `#[cfg(test)]`
 /// 之下的十一个文件的链必须仍然豁免，因为"刚好装下今天的树"的上限会在下次有人再嵌两层模块时，
 /// 把一个测试文件重新归类成被测源码。
@@ -176,11 +176,11 @@ fn a_deep_mount_chain_is_still_test_only() {
 fn test_only_files_are_recognised() {
     assert!(is_test_shaped(Path::new("cli/src/lib_tests.rs")));
     assert!(is_test_shaped(Path::new(
-        "core/src/registry_core/syntax/face_tests.rs"
+        "kernel/src/registry_core/syntax/face_tests.rs"
     )));
     assert!(is_test_shaped(Path::new("studio/src/studio/app/tests.rs")));
     assert!(!is_test_shaped(Path::new(
-        "core/src/registry_core/syntax/face.rs"
+        "kernel/src/registry_core/syntax/face.rs"
     )));
     assert!(is_test_by_location(Path::new("studio/tests/graph.rs")));
     assert!(!is_test_by_location(Path::new(

@@ -37,7 +37,7 @@ what blocks 1.0, not by when they were found.
 **下一批已完成(尺寸回归 + 未接线能力 + 三条定夺项)**
 
 1. ✅ 尺寸回归第一轮(当时的样本均 ≤450):`record.rs` 900 → 85 父 + `reconcile.rs` 192 / `reports.rs` 136 / `apply.rs` 263;`cli/src/lib.rs` 944 → 243 + `commands/*`;`explain.rs` 598 → 197 + `explain_report/overlay/json.rs`;`face_view.rs` 561 → 435 + `scope_view.rs` 165。公开路径全部逐字兼容。
-   ⚠️ **第四轮更正:这条当时写成"非测试文件均 ≤450"并不成立。** 实测有 15 个非测试文件超过它(最大 `core/src/registry_core/declaration/runtime_checks.rs` 751)。现在不再是口头约定:`conventions` crate 的 `size` 门禁把它变成**只能变短的棘轮**——把超标文件连实测行数一起钉在 `BASELINE` 里,新增超标文件会失败,已缩回上限之内的过期项也会失败(防止清单悄悄变成许可)。清单从 15 项开始,第四轮的第 8 条把 `diagnostic/build.rs` 缩回 429 行后,棘轮**强制**删掉了那一项。条目数不在散文里复述——它就是 `BASELINE.len()`,而 `size.rs` 的模块文档已写明复述数字的散文终会与它漂移(本条此前复述的那个数字正是一例,已删)。
+   ⚠️ **第四轮更正:这条当时写成"非测试文件均 ≤450"并不成立。** 实测有 15 个非测试文件超过它(最大 `kernel/src/registry_core/declaration/runtime_checks.rs` 751)。现在不再是口头约定:`conventions` crate 的 `size` 门禁把它变成**只能变短的棘轮**——把超标文件连实测行数一起钉在 `BASELINE` 里,新增超标文件会失败,已缩回上限之内的过期项也会失败(防止清单悄悄变成许可)。清单从 15 项开始,第四轮的第 8 条把 `diagnostic/build.rs` 缩回 429 行后,棘轮**强制**删掉了那一项。条目数不在散文里复述——它就是 `BASELINE.len()`,而 `size.rs` 的模块文档已写明复述数字的散文终会与它漂移(本条此前复述的那个数字正是一例,已删)。
 2. ✅ Feature 2 落地:`health_check` 的宿主 API 文档(含 `no_run` 示例,用补回的 `node()/path()/source()/message()/children()`)、五个检查单测、`examples/control-button` 的 `health_check` example + 端到端测试、`run_method/README*.md` 的宿主调用段。
 3. ✅ trace 1.0 回归测试:`trace_legend_reads_live_sample_and_never_claims_live_data`(断言图例为 `LIVE SAMPLE`,剥掉后不残留裸 `LIVE`),注释指向 `docs/design-trace-ingest.md`。
 4. ✅ 记录路径有了真实宿主:`examples/control-button/examples/graft_record.rs`,把包根重定向到带 `Drop` 清理的临时目录,同时证明类型化声明 `TypedDeclarationKept` 与字符串声明 `DeclarationOverridden`,且基树与 `builtin_static_plan()` 不变。
@@ -55,7 +55,7 @@ what blocks 1.0, not by when they were found.
 **仍待你定**
 
 - **首次发布**:需要你的 crates.io token 与授权(我不能代按)。驱动脚本
-  `tools/nichlink-publish` 已就绪并实测(dry-run 完整校验 `nichlink-core`、其余八个报"等待中",
+  `tools/nichlink-publish` 已就绪并实测(dry-run 完整校验 `nichlink-kernel`、其余八个报"等待中",
   退出 0),发布动作留给你一行命令。
 - **`missing_docs` 递增白名单**(B4-7):1.0 最后一块能靠代码本身完成的质量门,正按模块推进,
   进度见下。
@@ -74,7 +74,7 @@ what blocks 1.0, not by when they were found.
 1. **包形状:九个 crate 保持不动,九个全部发布。** 合并方案否决,理由记录在案:user
    只 `cargo add` 一个库、`cargo install` 一个 bin 包,因此发布面本可收窄;但选择保留
    编译隔离(每个 crate 单独成包、单独带自己的 README/LICENSE),改为把发布卫生做全(见 B4)。
-   发布顺序以 `tools/nichlink-publish` 的 `levels` 表为准(`core` → `macro`/`build_method`
+   发布顺序以 `tools/nichlink-publish` 的 `levels` 表为准(`kernel` → `macro`/`build_method`
    → `run_method` → `debug_method`/`plugin-host` → `mcp` → `studio` → `cli`;`--check-table`
    在每次 push 与每次发布前把那张表与清单核对),本文不另立一份顺序。依赖版本下界**随发布线
    一起抬**(写 `^<工作区版本>`):`release_version` 与 `--check-table` 两道门禁都强制它等于
@@ -140,7 +140,7 @@ what blocks 1.0, not by when they were found.
   与 `pipeline.rs` 四处），与早先 macOS 上的同类修复一致。
 - CI 里 `tools/nichlink-package-audit` 曾用 `continue-on-error: true`，因为 core 发布前
   它必然在 `nichlink-build-method` 那步失败。**该开关已去掉**（2026-09-25 首次发布之后）：
-  这一步现在与 `cargo package -p nichlink-core` 并列，打包回归会让它失败，而不再被容忍掩盖。
+  这一步现在与 `cargo package -p nichlink-kernel` 并列，打包回归会让它失败，而不再被容忍掩盖。
 
 ### B2 单一事实来源（去重复，改一份就够）
 
@@ -189,13 +189,13 @@ what blocks 1.0, not by when they were found.
 | --- | --- | --- | --- |
 | `authoring::parse::try_render_requirements` | 内核 `authoring/parse/rules.rs`（严格，`-> Result<String, FaceParseError>`） | `run_method` 的 manifest 渲染器（旧 `render_requirements` 保留为有损薄包装） | `a_malformed_requires_entry_refuses_the_rewrite`（走真实 `render_source`） |
 | `build_method::face_views_and_unreadable` | `build_method/src/face_view.rs` | 面对外回答（`face_views` 委托它），不可读的面从此可查 | `a_registration_file_that_does_not_parse_is_named_not_dropped` |
-| `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `core/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
+| `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `kernel/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
 | `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_snapshot`（旧名 `parse_requirements_owned` 保留为一行转发器）签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
 
 - **版本线**：四个入口都随未发布的 `0.1.6` 走——工作区版本不变、无需抬版本；`tools/nichlink-publish
   --check-table` 只按清单比较依赖表，不受影响。
 - **隔离打包**：`tools/nichlink-package-audit` 的**内容**半边已含新模块（实测 `cargo package -p
-  nichlink-core --list --offline` 列出 `src/registry_core/source/items.rs`）；**打包**半边要等带版本号的
+  nichlink-kernel --list --offline` 列出 `src/registry_core/source/items.rs`）；**打包**半边要等带版本号的
   `nichlink-*` 依赖进入 index，未发布期间 warn + 跳过（**skip ≠ 失败**）——这批把等待态加深了一层
   （Studio 已调用未发布的内核符号），发布顺序仍是 core 在前，发布后重跑 `--verify-consumers`。
 - **不动的**：本批没有删改任何已发布签名，四个入口都是加法式新增；`render_requirements` 之所以留着，
@@ -231,7 +231,7 @@ what blocks 1.0, not by when they were found.
   `source()`、`message()`、`children()` 五项;`source_chain()`、`call_path()`、
   `registration_chain()` 仍保持删除。原则:**零调用者删除在真实调用者出现时撤销**,
   "当时没人用"不是永久移除的充分理由。由
-  `core/src/registry_core/diagnostic/error.rs` 的
+  `kernel/src/registry_core/diagnostic/error.rs` 的
   `an_error_still_exposes_the_facts_a_host_must_report` 钉住。
 - `edit_module` **删除**而非委托:委托要用磁盘上的面反推出 28 字段 `ModuleFacePatch`,会静默
   窄化字符串形式支持的任意字段名并重算字段,是行为变化。用 `compile_fail,E0433` doctest 钉住
@@ -261,7 +261,7 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
 `NodeId::from_namespaced_path(env!("CARGO_PKG_NAME"), $source, stringify!($kind))`
 (`run_method/src/macros/face_registration.rs:45-49`),第三个参数是 **kind**,而
 `from_namespaced_path` 只把 namespace + 相对路径 + 该名字卷进哈希
-(`core/src/registry_core/identity/node_id.rs:47-58`);构建侧同理用
+(`kernel/src/registry_core/identity/node_id.rs:47-58`);构建侧同理用
 `package_node_id(&relative, &kind)`。因此这次变化只影响**逻辑路径**(它由槽位/注册名拼出)、
 由此而来的排序、剪枝清单行与 Studio 显示,不影响任何身份。CHANGELOG 的 Unreleased 段已记录
 该变化。
@@ -288,7 +288,7 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    `--no-default-features` 两个 job。那 10 条 `prototype-fixtures` 测试原先是死的（连编译都
    没过），现在有夹具、全绿——见"下一批"第 10 条。
 5. 九个 manifest：`repository`/`homepage`（全部缺失）、`[package.metadata.docs.rs]
-   all-features = true`（`core` 的 `syntax`、`run_method` 的 `authoring`、`plugin-host`
+   all-features = true`（`kernel` 的 `syntax`、`run_method` 的 `authoring`、`plugin-host`
    的 `process-tools` 现在根本不会上 docs.rs）；每个 crate 目录放一份 LICENSE（根的
    LICENSE 不会被复制进包，cargo 只自动包含 crate 目录下的 `LICENSE*`）；每个 crate 一份
    README（`macro` 缺）；补 `macro`/`run_method` 的 `documentation`；加一份根 CHANGELOG，
@@ -300,7 +300,7 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    只有 `--publish --yes` 才真的上传（版本不可变，只能 yank）；真实发布前拒绝脏工作区，除非
    显式 `--allow-dirty`。dry-run 对"依赖版本尚未上 index"的 crate 跳过并警告，与
    `tools/nichlink-package-audit` 行为一致，因此无需等首次发布即可用：当时实测完整校验了
-   `nichlink-core` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
+   `nichlink-kernel` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
    `cargo workspaces publish`**：那个配置我无法在离线环境里跑起来验证，交一份没验证过的配置
    正是这个仓库拒绝的东西；脚本的顺序与轮询逻辑可以在本地实测（已实测）。
    **仍然只剩你需要做的一步**：打 tag 并给发布工作流 `CARGO_REGISTRY_TOKEN` secret
@@ -310,7 +310,7 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    在同一批里修掉了两张表的既存缺陷：`deps_of` 原先只返回多依赖 crate 的第一个依赖
    （`nichlink-cli` 因此绕过"依赖未上 index 就不许发布"的守卫），并且边行的被依赖者被当成
    独立 crate；现在按整行读取，并由 `--check-table` 在每次 push 与每次发布前核对
-   （`nichlink-cli` 缺的 `nichlink-core` 这条真实漂移已修正）。发布工作流见
+   （`nichlink-cli` 缺的 `nichlink-kernel` 这条真实漂移已修正）。发布工作流见
    `.github/workflows/release.yml`；`docs/performance-baseline.md` 记录 R4 的性能基线与预算。
 7. ✅ **`#![warn(missing_docs)]` 已在九个 crate 上全部开启**（比原计划的 `lexicon`/`identity`/
    `declaration`/`graft` 递增白名单更进一步：债一次还清，lint 覆盖整个 crate，因此不会再
@@ -391,8 +391,8 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
 
 4. **四条只有散文、没有任何可执行门禁的规则变成会失败的门禁**（新 `conventions` crate，
    `publish = false`）：
-   - 内核纯净性：`core/src` 禁 `std::fs`/`env`/`process`/`net`/`time`（注释除外；内联
-     `#[cfg(test)]` 也覆盖，因为目录本身就是承诺，需要 I/O 的测试放 `core/tests/`）。
+   - 内核纯净性：`kernel/src` 禁 `std::fs`/`env`/`process`/`net`/`time`（注释除外；内联
+     `#[cfg(test)]` 也覆盖，因为目录本身就是承诺，需要 I/O 的测试放 `kernel/tests/`）。
    - 模块挂载：无 `mod.rs`；全仓**只有一个** `include!`。后者的理由不是风格而是隐性行为：
      `include!` 是文本拼接，被拼入文件里的 `file!()` 报告的是引入方文件，会静默改变注册面的
      `NodeId`。这条门禁只查有隐性故障模式的两条，不查风格：裸 `mod x;` 在 crate 根或
@@ -426,7 +426,7 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
    `\` 与 `"`，而 RFC 8259 还要求转义 U+0000–U+001F；一个含制表符的函数名会让每一行对严格
    读取器非法，而本 crate 自己的宽松解析器仍然接受它，所以往返测试永远绿。修前用独立复现器
    证明（python `json.loads` 报 `Invalid control character`），修后同一复现器报 **VALID**。
-   内核新增唯一的编码器 `nichlink::json`，`diagnostic/build.rs`（原先唯一正确的那份）、
+   内核新增唯一的编码器 `nichlink_kernel::json`，`diagnostic/build.rs`（原先唯一正确的那份）、
    `mir/render.rs` 与 `build_method` 的脚手架片段共用它；钉子测试断言"不存在原样控制字符"
    而不是做往返。顺带把 `diagnostic/build.rs` 缩回 429 行，尺寸棘轮因此强制删掉它的欠账项
    （15 → 14）。
@@ -442,14 +442,14 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
 10. **包内容检查覆盖九个 crate（此前只覆盖 core）。** `cargo package --list` 不需要 registry，
     因此"每个 `src/**/*.rs` 模块与清单声明的 README 都在包里"这一半对九个 crate 全部
     生效——而本工作区用 `#[path]` 挂载模块，cargo 没收进去的文件等于一个对任何人都编译不过的
-    crate。已实测：给 `core` 加一条 `exclude`，门禁只报 `core` 并点名那个文件。
+    crate。已实测：给 `kernel` 加一条 `exclude`，门禁只报 `kernel` 并点名那个文件。
     顺带修掉该脚本一个**先前就存在**的 bug：依赖表用空白分隔，而 `for entry in $crates` 也按
     空白切分，于是 `studio`/`cli` 只按第一个依赖被评估、摘要里出现并不存在的 crate。改为逗号
     分隔并据此解析。
 
 11. **外部路径预演（离线可做的部分已做）。** 把真实的示例宿主连同它的 graft crate 复制到工作区
     之外、作为独立 workspace 构建：`build.rs`、`OUT_DIR` 生成、`host!()` 展开、`#[path]` 面挂载、
-    静态 graft 全部成立，**26 条测试全绿**。另：`cargo package -p nichlink-core` 的隔离校验构建
+    静态 graft 全部成立，**26 条测试全绿**。另：`cargo package -p nichlink-kernel` 的隔离校验构建
     通过；九个 crate 的包内容全部核对（250 个源码模块 + README + LICENSE，零缺失）。
     **仍无法离线做的一件事**：从 tarball 构建那八个 crate。它们的带版本号 `nichlink-*` 依赖还
     不在 index 上，`cargo package`（含 `--no-verify`）都要向 registry 解析，因此这一步被首次

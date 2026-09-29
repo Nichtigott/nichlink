@@ -67,7 +67,7 @@ fn a_matching_build_reports_no_delta() {
 #[test]
 fn an_addition_and_a_removal_are_both_named() {
     let (root, name) = package("delta");
-    let old = nichlink::identity::NodeId::from_namespaced_path(&name, "old/old.rs", "Old");
+    let old = nichlink_kernel::identity::NodeId::from_namespaced_path(&name, "old/old.rs", "Old");
     publish(&root, &[format!("{old}\told/old.rs\t-")]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
     assert!(reply.contains("added since build 1  gone 1"), "{reply}");
@@ -83,7 +83,8 @@ fn an_addition_and_a_removal_are_both_named() {
 fn a_changed_identity_under_an_unmoved_file_is_reported() {
     let (root, name) = package("reidentified");
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
-    let renamed = nichlink::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+    let renamed =
+        nichlink_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
     publish(&root, &[format!("{renamed}\t{}\t-", face.source)]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
     assert!(reply.contains("re-identified 1"), "{reply}");
@@ -104,7 +105,7 @@ fn a_missing_build_asks_for_one_instead_of_diffing_nothing() {
 
 /// Write one external graft record under `.nichlink/external-grafts/<selector>/graft.plan`.
 /// 在 `.nichlink/external-grafts/<selector>/graft.plan` 下写一条外部 graft 记录。
-fn record(root: &Path, selector: &str, target: nichlink::identity::NodeId, path: &str) {
+fn record(root: &Path, selector: &str, target: nichlink_kernel::identity::NodeId, path: &str) {
     let directory = root.join(".nichlink/external-grafts").join(selector);
     std::fs::create_dir_all(&directory).expect("record directory");
     std::fs::write(
@@ -149,7 +150,7 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
     let (root, name) = package("records");
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
     let stale_identity =
-        nichlink::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+        nichlink_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
     // `kept_fast`'s slot is named by the host entry, which is what makes it `ok` rather than
     // `undeclared`: a record no cut names is pruned by the release.
     // `kept_fast` 的槽位由宿主入口点名，这正是它成为 `ok` 而不是 `undeclared` 的原因：没有任何切口

@@ -22,10 +22,10 @@ use crate::registry_core::declaration::SourceLocation;
 use crate::registry_core::identity::NodeId;
 
 pub use frames::FramePath;
-pub use nichlink::CallSite;
-pub use nichlink::declaration::source_file_matches;
+pub use nichlink_kernel::CallSite;
+pub use nichlink_kernel::declaration::source_file_matches;
 
 pub use self::call_trace::*;
 pub use self::snapshot::*;
 
-pub use nichlink::TraceMode;
+pub use nichlink_kernel::TraceMode;

@@ -25,65 +25,80 @@ use std::path::Path;
 /// 宿主仍在书写的路径。这份清单就是那一半，以棘轮形式钉住：清单上的重导出必须还在，清单可以增长，
 /// 但不会因疏忽而缩短。条目按空白规范化后存放，见 [`nichlink_reexports`]。
 pub const SHIMS: &[(&str, &str)] = &[
-    ("run_method/src/lib.rs", "pub use nichlink::registry_core;"),
     (
         "run_method/src/lib.rs",
-        "pub use nichlink::registry_core::*;",
+        "pub use nichlink_kernel::registry_core;",
     ),
-    ("run_method/src/registry.rs", "pub use nichlink::tree;"),
-    ("run_method/src/registry.rs", "pub use nichlink::tree::*;"),
+    (
+        "run_method/src/lib.rs",
+        "pub use nichlink_kernel::registry_core::*;",
+    ),
+    (
+        "run_method/src/registry.rs",
+        "pub use nichlink_kernel::tree;",
+    ),
+    (
+        "run_method/src/registry.rs",
+        "pub use nichlink_kernel::tree::*;",
+    ),
     (
         "run_method/src/authoring/face_file.rs",
-        "pub use nichlink::authoring::{FACE_FIELD_COUNT, face_field};",
+        "pub use nichlink_kernel::authoring::{FACE_FIELD_COUNT, face_field};",
     ),
     (
         "run_method/src/authoring/parse/parse.rs",
-        "pub use nichlink::authoring::parse::*;",
+        "pub use nichlink_kernel::authoring::parse::*;",
     ),
     (
         "run_method/src/authoring/context.rs",
-        "pub use nichlink::authoring::validation::*;",
+        "pub use nichlink_kernel::authoring::validation::*;",
     ),
     (
         "run_method/src/runtime/runtime.rs",
-        "pub use nichlink::{ COORDINATES_IN_VIEWPORT, Coordinates, FINITE_NUMBER, NON_EMPTY_TEXT, \
+        "pub use nichlink_kernel::{ COORDINATES_IN_VIEWPORT, Coordinates, FINITE_NUMBER, NON_EMPTY_TEXT, \
          Provenance, ProvenanceStep, RuntimeCheckFailure, RuntimeCheckSpec, RuntimeValue, };",
     ),
     (
         "run_method/src/runtime/trace/trace.rs",
-        "pub use nichlink::CallSite;",
+        "pub use nichlink_kernel::CallSite;",
     ),
     (
         "run_method/src/runtime/trace/trace.rs",
-        "pub use nichlink::declaration::source_file_matches;",
+        "pub use nichlink_kernel::declaration::source_file_matches;",
     ),
     (
         "run_method/src/runtime/trace/trace.rs",
-        "pub use nichlink::TraceMode;",
+        "pub use nichlink_kernel::TraceMode;",
     ),
     (
         "run_method/src/runtime/evidence.rs",
-        "pub use nichlink::{CallEdge, EvidenceKind, LogicalCallEdge};",
+        "pub use nichlink_kernel::{CallEdge, EvidenceKind, LogicalCallEdge};",
     ),
-    ("run_method/src/plugin.rs", "pub use nichlink::plugin;"),
-    ("run_method/src/plugin.rs", "pub use nichlink::plugin::*;"),
+    (
+        "run_method/src/plugin.rs",
+        "pub use nichlink_kernel::plugin;",
+    ),
+    (
+        "run_method/src/plugin.rs",
+        "pub use nichlink_kernel::plugin::*;",
+    ),
     (
         "build_method/src/syntax.rs",
-        "pub use nichlink::registry_core::syntax::{ FaceSyntax, GraftSyntax, ParentSyntax, \
+        "pub use nichlink_kernel::registry_core::syntax::{ FaceSyntax, GraftSyntax, ParentSyntax, \
          application_entries, graft_entries, parse_face, source_references, };",
     ),
     (
         "build_method/src/identity.rs",
-        "pub use nichlink::registry_core::identity::NodeId;",
+        "pub use nichlink_kernel::registry_core::identity::NodeId;",
     ),
     (
         "build_method/src/identity.rs",
-        "pub use nichlink::registry_core::identity::IDENTITY_SCHEMA;",
+        "pub use nichlink_kernel::registry_core::identity::IDENTITY_SCHEMA;",
     ),
 ];
 
-/// Every `pub use nichlink::…;` in `text`, whitespace-normalised.
-/// `text` 中每个 `pub use nichlink::…;`，已按空白规范化。
+/// Every `pub use nichlink_kernel::…;` in `text`, whitespace-normalised.
+/// `text` 中每个 `pub use nichlink_kernel::…;`，已按空白规范化。
 ///
 /// Normalising is what makes the pinned statements comparable: a braced list may
 /// be re-wrapped by `rustfmt`, and a gate that failed on the wrapping would be
@@ -93,7 +108,7 @@ pub const SHIMS: &[(&str, &str)] = &[
 pub fn nichlink_reexports(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut from = 0usize;
-    while let Some(offset) = text[from..].find("pub use nichlink::") {
+    while let Some(offset) = text[from..].find("pub use nichlink_kernel::") {
         let at = from + offset;
         let rest = &text[at..];
         let end = rest.find(';').map_or(rest.len(), |end| end + 1);
@@ -111,7 +126,7 @@ pub fn missing_shims(root: &Path) -> Vec<String> {
         let path = root.join(file);
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-        let masked = nichlink::source::mask_non_code(&text);
+        let masked = nichlink_kernel::source::mask_non_code(&text);
         // A pinned re-export behind `#[cfg(any())]` (never compiled) or `#[cfg(test)]` (not
         // part of the public surface) exists in the file but not in the crate a host
         // compiles against, so the ratchet reads the text that is actually built. The

@@ -32,11 +32,11 @@ use crate::{crate_directories, is_real_directory, relative, rust_sources};
 ///
 /// One entry, measured rather than assumed: the kernel's library is `nichlink`, not
 /// `nichlink_core`, and every host, README and doctest writes that name. The crate
-/// table in `AGENTS.md` records it as `nichlink-core (lib nichlink)`.
+/// table in `AGENTS.md` records it as `nichlink-kernel (lib nichlink)`.
 /// 只有一项，且是实测而非假设：内核的 library 是 `nichlink` 而不是 `nichlink_core`，每个宿主、
 /// README 与 doctest 都写这个名字。`AGENTS.md` 的 crate 表把它记为
-/// `nichlink-core (lib nichlink)`。
-pub const LIB_NAME_EXCEPTIONS: &[(&str, &str)] = &[("core", "nichlink")];
+/// `nichlink-kernel (lib nichlink)`。
+pub const LIB_NAME_EXCEPTIONS: &[(&str, &str)] = &[];
 
 /// One crate directory whose names disagree.
 /// 一个名字互相不一致的 crate 目录。
@@ -376,12 +376,12 @@ fn requirement_names(text: &str) -> Vec<String> {
 ///
 /// The whitespace around `=` is optional, and the opening quote may carry a backslash: a
 /// template is Rust source, so the manifest line it generates is written inside a string
-/// literal, where every quote is escaped (`package = \"nichlink-core\"`). Reading only the
+/// literal, where every quote is escaped (`package = \"nichlink-kernel\"`). Reading only the
 /// unescaped needle found nothing there, and the loss was invisible while a dependency key and
 /// its package name agreed — the key half found the name anyway. A *renamed* dependency has
 /// only this field, so a template that renamed one stayed silent (audit `G-07`, finding `F-3`).
 /// `=` 两侧的空白可有可无，开引号还可以带反斜杠：模板是 Rust 源码，它生成的清单行写在字符串
-/// 字面量里，因此每个引号都是转义的（`package = \"nichlink-core\"`）。只认未转义的针在那里什么
+/// 字面量里，因此每个引号都是转义的（`package = \"nichlink-kernel\"`）。只认未转义的针在那里什么
 /// 也找不到，而只要依赖键与包名一致，这个损失就不可见——键那半边反正能找到那个名字。**被重命名**
 /// 的依赖只有这个字段，于是一条重命名的模板会保持沉默（审计 `G-07`，发现 `F-3`）。
 fn package_field_value(text: &str, from: usize) -> Option<String> {

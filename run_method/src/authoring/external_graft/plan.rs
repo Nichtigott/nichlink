@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime::{LoadedGraft, graft_record_root, load_graft_record, load_graft_records};
 use crate::{GraftPlanDocument, NodeId, Registry};
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::super::context::package_root;
 use super::super::filesystem::atomic_write;

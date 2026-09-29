@@ -22,8 +22,8 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink::Registry;
 use nichlink_build_method::{face_views, source_layout};
+use nichlink_kernel::Registry;
 use nichlink_run_method::{AuthoringContext, NewModuleFace};
 use serde_json::Value;
 
@@ -509,7 +509,7 @@ fn text<'a>(fields: &'a Value, key: &str) -> &'a str {
 /// 构建执行器据以校验的注册树：该包自己的注册面，位于 Cargo 报告的命名空间之下。
 pub(crate) fn load_registry(root: &Path, namespace: &str) -> Result<Registry, String> {
     let mut registry =
-        Registry::root_for_namespace(nichlink::FrameworkId::new("nichlink.mcp"), namespace);
+        Registry::root_for_namespace(nichlink_kernel::FrameworkId::new("nichlink.mcp"), namespace);
     let source_root = source_layout(root)?.scan_root;
     let snapshots = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
         .scope(|| nichlink_run_method::generated_snapshots_from(&source_root))?;

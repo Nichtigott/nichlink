@@ -15,8 +15,8 @@
 
 use std::io::Write;
 
-use nichlink::identity::NodeId;
 use nichlink_build_method::{FaceView, face_views};
+use nichlink_kernel::identity::NodeId;
 use serde_json::{Value, json};
 
 use super::{build_out_dir, resolve_package};

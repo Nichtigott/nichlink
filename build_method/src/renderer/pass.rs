@@ -183,7 +183,7 @@ mod tests {
     use crate::diagnostics::BuildDiagnostics;
     use crate::registry_syntax::GraftSyntax;
     use crate::renderer::test_support::{temporary_directory, write_registry};
-    use nichlink::registry_core::syntax::SyntaxLocation;
+    use nichlink_kernel::registry_core::syntax::SyntaxLocation;
     use std::fs;
 
     #[test]
@@ -227,7 +227,7 @@ mod tests {
     fn a_path_containing_the_range_word_is_rendered_as_one_cut() {
         let root = temporary_directory("string-cut-to-word");
         let entries = crate::registry_syntax::graft_entries(
-            r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#,
+            r#"nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#,
         )
         .expect("declaration parses");
         let output = render_lib(
@@ -300,8 +300,8 @@ mod tests {
             &[],
         );
 
-        let control_path = nichlink::declaration::portable_path(&control.to_string_lossy());
-        let button_path = nichlink::declaration::portable_path(&button.to_string_lossy());
+        let control_path = nichlink_kernel::declaration::portable_path(&control.to_string_lossy());
+        let button_path = nichlink_kernel::declaration::portable_path(&button.to_string_lossy());
         assert!(
             output.contains(&format!("#[path = {control_path:?}]")),
             "folder face must load its real file: {output}"
@@ -432,7 +432,7 @@ mod tests {
             &[],
         );
 
-        let folded = nichlink::declaration::portable_path(&face.to_string_lossy());
+        let folded = nichlink_kernel::declaration::portable_path(&face.to_string_lossy());
         assert!(
             folded.ends_with("control/control.rs"),
             "the fixture has to exercise a fold: {folded}"

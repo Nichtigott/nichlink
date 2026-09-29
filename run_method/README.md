@@ -5,7 +5,7 @@
 `nichlink-run-method` is the run_method execution surface of NichLink: runtime
 state instances plus trace bindings. The protocol itself — the `Registry`
 tree, transactions, graft validation, plugin policy, and parsers — lives in
-the kernel (`nichlink-core`); this crate binds it to the process lifetime.
+the kernel (`nichlink-kernel`); this crate binds it to the process lifetime.
 
 What stays here:
 
@@ -81,7 +81,7 @@ kernel never observes a value, so the host owns the boundary. Build the
 the value crosses into a plugin or consumer. Pass `Vec::new()` as `call_path`
 when no trace is active (`CallTrace::current_path()` when one is). On failure the
 error aggregates one child per failed check. Five readers expose the facts the
-constructor was given (`core/src/registry_core/diagnostic/error.rs`):
+constructor was given (`kernel/src/registry_core/diagnostic/error.rs`):
 
 | Reader | Returns | Population |
 | --- | --- | --- |
@@ -92,29 +92,29 @@ constructor was given (`core/src/registry_core/diagnostic/error.rs`):
 | `children()` | The aggregated child failures, one per failed sub-check | empty unless the phase aggregated sub-failures |
 
 Placeholder paths are `<unknown:{node}>`
-(`core/src/registry_core/tree/inspection.rs:74`),
+(`kernel/src/registry_core/tree/inspection.rs:74`),
 `<missing-parent:…>/…`
-(`core/src/registry_core/tree/transaction.rs:167`,
-`core/src/registry_core/tree/graft_ops/graft_ops.rs:149`), and `<edited>/…`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:189`); synthesized sources
+(`kernel/src/registry_core/tree/transaction.rs:167`,
+`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:149`), and `<edited>/…`
+(`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:189`); synthesized sources
 are `<runtime>` (`inspection.rs:76`), `<registry-connector>`
-(`core/src/registry_core/tree/connector.rs:206`),
+(`kernel/src/registry_core/tree/connector.rs:206`),
 `<owned-snapshot-batch>`
-(`core/src/registry_core/tree/transaction.rs:84`), `<migration>`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:55`), and `<graft>`
-(`core/src/registry_core/tree/graft_ops/graft_ops.rs:309`,
-`core/src/registry_core/tree/graft_ops/reconcile.rs:148`).
+(`kernel/src/registry_core/tree/transaction.rs:84`), `<migration>`
+(`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:55`), and `<graft>`
+(`kernel/src/registry_core/tree/graft_ops/graft_ops.rs:309`,
+`kernel/src/registry_core/tree/graft_ops/reconcile.rs:148`).
 
 Two rules for reading a `health_check` failure:
 
 1. The top-level `message()` is the fixed aggregate sentence `runtime health
    check failed`
-   (`core/src/registry_core/tree/inspection.rs:110`); it does not
+   (`kernel/src/registry_core/tree/inspection.rs:110`); it does not
    name the failing check. Other aggregating phases keep the same shape:
    `registration connector rejected (N face(s))`
-   (`core/src/registry_core/tree/connector.rs:212`) and `snapshot
+   (`kernel/src/registry_core/tree/connector.rs:212`) and `snapshot
    batch rejected (N error(s))`
-   (`core/src/registry_core/tree/transaction.rs:89`).
+   (`kernel/src/registry_core/tree/transaction.rs:89`).
 2. The failing check's own name and text are in `children()[0].message()`, built
    as ``check `<name>`: <message>`` (`inspection.rs:95`). `Display` renders the
    aggregate plus every child, which is why `eprintln!("{error}")` in the

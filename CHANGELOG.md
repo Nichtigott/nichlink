@@ -64,6 +64,20 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 （run `36297635525`），`--verify-consumers` 在同一次运行里通过：检出之外的一次性 crate 按版本解析并
 构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
+## [0.2.0] — unreleased
+
+### Changed
+
+- **Batch 1 of the publish-surface merge: the kernel is `kernel/` and its library is
+  `nichlink_kernel`.** The directory `core/` became `kernel/`, the package `nichlink-core`
+  became `nichlink-kernel`, and the library `nichlink` became `nichlink_kernel`, so the
+  historical three-role name (`nichlink` was the project, one binary and the kernel library)
+  is down to two. Every code reference, manifest requirement, gate site, publishing table,
+  CI line and live-document anchor moved with it in one commit; the seven execution surfaces
+  are still separate crates (that is batch 2), and the published 0.1.x names stay frozen.
+  The old→new mapping and the discriminative predicates are in
+  `docs/audit-2026-09-28/audit-merge-batch1-spec.md`.
+
 ## [0.1.6] — unreleased
 
 ### Added
@@ -1339,8 +1353,18 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 ### [Unreleased] 未发布
 
-暂无；下一次发布的内容会落在这里。本工作区不按 crate 分维护 changelog，
-因此这一节在下次发布前保持为空。
+### [0.2.0] 未发布
+
+变更：
+
+- **发布面合并的批次 1：内核是 `kernel/`，它的库是 `nichlink_kernel`。** 目录 `core/` 改为
+  `kernel/`，包名 `nichlink-core` 改为 `nichlink-kernel`，库名 `nichlink` 改为
+  `nichlink_kernel`，于是那个一身三职的历史名字（`nichlink` 既是项目、又曾是一个二进制、还是内核
+  库名）只剩两职。代码引用、清单依赖、门禁落点、发布工具表、CI 行与活文档锚点都在同一次提交里
+  一起跟上；七个执行面仍是各自独立的 crate（那是批次 2），已发布的 0.1.x 名字保持冻结。
+  新旧对照与判别性谓词见 `docs/audit-2026-09-28/audit-merge-batch1-spec.md`。
+
+本工作区不按 crate 分维护 changelog，因此九条 crate 的同一处改动在这里只描述一次。
 
 ### [0.1.6] 未发布
 

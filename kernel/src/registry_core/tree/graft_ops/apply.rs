@@ -9,8 +9,8 @@
 //! 私有覆盖路径，因此硬失败保持逐字节相同。它拥有优先级（记录对声明形式）与
 //! “未受影响的声明按类型化切口原样传入”的规则。
 
-// Split rationale: see core/src/registry_core/tree/graft_ops/record.rs.
-// 拆分理由见 core/src/registry_core/tree/graft_ops/record.rs。
+// Split rationale: see kernel/src/registry_core/tree/graft_ops/record.rs.
+// 拆分理由见 kernel/src/registry_core/tree/graft_ops/record.rs。
 
 use std::collections::{BTreeMap, BTreeSet};
 

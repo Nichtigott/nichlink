@@ -73,7 +73,7 @@ pub enum DependencySource {
 pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> DependencySource {
     let workspace = tool_manifest_dir.parent().unwrap_or_else(|| Path::new("."));
     let runs_from_workspace = current_exe.starts_with(workspace.join("target"))
-        && workspace.join("core").is_dir()
+        && workspace.join("kernel").is_dir()
         && workspace.join("build_method").is_dir();
     if runs_from_workspace {
         DependencySource::Local {

@@ -6,7 +6,7 @@ use super::graft_entries;
 #[test]
 fn graft_parser_collects_single_and_full_cuts() {
     let source = r#"
-nichlink::static_graft_plan!(FRAMEWORK,
+nichlink_kernel::static_graft_plan!(FRAMEWORK,
 cut ["root/a1/b2"] graft "canvas_fast",
 cut ["root/a"] full graft "a_fast",
 );
@@ -21,8 +21,7 @@ cut ["root/a"] full graft "a_fast",
 
 #[test]
 fn graft_parser_keeps_range_endpoints() {
-    let source =
-        r#"nichlink::graft_plan!(framework, cut ["root/a1" to "root/a3"] graft "replacement");"#;
+    let source = r#"nichlink_kernel::graft_plan!(framework, cut ["root/a1" to "root/a3"] graft "replacement");"#;
     let entries = graft_entries(source).unwrap();
     // Both endpoints survive as separate data; the start is `cut`, the far
     // endpoint is `cut_end`.
@@ -39,7 +38,7 @@ fn graft_parser_keeps_range_endpoints() {
 /// 截断。
 #[test]
 fn a_path_containing_the_range_word_is_a_single_cut() {
-    let source = r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#;
+    let source = r#"nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#;
     let entries = graft_entries(source).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cut, "root/a to b");
@@ -52,7 +51,7 @@ fn graft_parser_accepts_unbracketed_single_cut() {
     // tests below cover plans that sit somewhere else.
     // 声明应当写在入口处，因此夹具写成条目；位置不当的计划由下面的测试覆盖。
     let source =
-        r#"nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" full graft "replacement");"#;
+        r#"nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a" full graft "replacement");"#;
     let entries = graft_entries(source).unwrap();
     assert_eq!(entries[0].cut, "root/a");
     assert!(entries[0].full);
@@ -60,7 +59,7 @@ fn graft_parser_accepts_unbracketed_single_cut() {
 
 #[test]
 fn graft_parser_collects_declaration_only_static_plans() {
-    let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    let source = r#"nichlink_kernel::static_graft_plan!(FRAMEWORK,
 cut "root/a" graft "replacement",
 );"#;
     let entries = graft_entries(source).unwrap();
@@ -75,7 +74,7 @@ cut "root/a" graft "replacement",
 fn graft_parser_ignores_declarations_that_are_not_items() {
     let in_function = r#"
 fn plan() {
-let _ = nichlink::graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+let _ = nichlink_kernel::graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
 }
 "#;
     assert!(graft_entries(in_function).unwrap().is_empty());
@@ -83,14 +82,14 @@ let _ = nichlink::graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
     let in_test_module = r#"
 #[cfg(test)]
 mod tests {
-nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
 }
 "#;
     assert!(graft_entries(in_test_module).unwrap().is_empty());
 
     let at_entry = r#"
 #[cfg(feature = "optional-graft")]
-nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
+nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
 "#;
     let entries = graft_entries(at_entry).unwrap();
     assert_eq!(entries.len(), 1);
@@ -102,7 +101,8 @@ nichlink::static_graft_plan!(FRAMEWORK, cut "root/a" graft "replacement");
 
 #[test]
 fn graft_parser_ignores_removed_macro_names() {
-    let source = r#"fn plan() { nichlink::graft!(framework, cut "root/a" graft "replacement"); }"#;
+    let source =
+        r#"fn plan() { nichlink_kernel::graft!(framework, cut "root/a" graft "replacement"); }"#;
     assert!(graft_entries(source).unwrap().is_empty());
 }
 
@@ -112,7 +112,7 @@ fn graft_parser_ignores_removed_macro_names() {
 /// 因此都能看到真实目标。
 #[test]
 fn graft_parser_keeps_typed_expressions() {
-    let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    let source = r#"nichlink_kernel::static_graft_plan!(FRAMEWORK,
         cut(crate::control::object::button::NODE_ID)
             graft(graft_crate::button_fast::NODE_ID),
     );"#;
@@ -129,7 +129,7 @@ fn graft_parser_keeps_typed_expressions() {
 
 #[test]
 fn graft_parser_keeps_a_typed_sibling_range() {
-    let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    let source = r#"nichlink_kernel::static_graft_plan!(FRAMEWORK,
         cut(crate::control::object::button::NODE_ID to crate::control::object::slider::NODE_ID)
             graft(graft_crate::fast::NODE_ID),
     );"#;
@@ -155,7 +155,7 @@ fn graft_parser_keeps_a_typed_sibling_range() {
 /// 一条切口不允许混合"已解析身份"与"未解析名称"。
 #[test]
 fn graft_parser_rejects_mixed_typed_and_string_sides() {
-    let source = r#"nichlink::static_graft_plan!(FRAMEWORK,
+    let source = r#"nichlink_kernel::static_graft_plan!(FRAMEWORK,
         cut(crate::control::NODE_ID) graft "button_fast",
     );"#;
     let error = graft_entries(source).unwrap_err();

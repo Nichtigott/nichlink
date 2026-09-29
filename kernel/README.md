@@ -1,4 +1,4 @@
-# nichlink-core
+# nichlink-kernel
 
 [简体中文](README.zh-CN.md) | English
 

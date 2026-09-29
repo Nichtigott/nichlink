@@ -30,8 +30,8 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink::EvidenceKind;
-use nichlink::mir::{MirGraph, MirSnapshot};
+use nichlink_kernel::EvidenceKind;
+use nichlink_kernel::mir::{MirGraph, MirSnapshot};
 use nichlink_run_method::{CallTrace, read_trace_artifact, trace_artifact_path};
 use serde_json::Value;
 
@@ -298,7 +298,7 @@ fn load(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> {
 fn snapshot_for(root: &Path) -> Result<MirSnapshot, String> {
     let namespace = crate::registry::namespace(root)?;
     Ok(MirSnapshot {
-        root: nichlink::root_node_id(&namespace),
+        root: nichlink_kernel::root_node_id(&namespace),
         namespace,
     })
 }

@@ -243,7 +243,7 @@ struct RanFile {
 /// 前会先被重写到它**最后一个完整的 `src/` 段**之后。没有 `src/` 段的路径原样比较，那正是身份保留其
 /// 前导目录的 `[lib] path` 情形。
 fn matches_file(recorded: &str, identity: &str) -> bool {
-    let normalized = nichlink::declaration::portable_path(recorded);
+    let normalized = nichlink_kernel::declaration::portable_path(recorded);
     let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
     if normalized == identity {
         return true;

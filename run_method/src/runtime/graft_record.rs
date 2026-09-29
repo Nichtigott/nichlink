@@ -2,12 +2,12 @@
 //! 磁盘上的嫁接记录：读取 `.nichlink/external-grafts/` 并应用。
 //!
 //! The kernel owns reconciliation
-//! ([`Registry::overlay_recorded`](nichlink::Registry::overlay_recorded)); this
+//! ([`Registry::overlay_recorded`](nichlink_kernel::Registry::overlay_recorded)); this
 //! page owns the filesystem boundary. It is deliberately **not**
 //! feature-gated: a runtime host must not need the `authoring` feature (and its
 //! `syn` dependency) merely to read a plan file, so the loader takes an explicit
 //! `package_root` instead of the authoring thread-local context.
-//! 内核拥有对账（[`Registry::overlay_recorded`](nichlink::Registry::overlay_recorded)）；
+//! 内核拥有对账（[`Registry::overlay_recorded`](nichlink_kernel::Registry::overlay_recorded)）；
 //! 本页拥有文件系统边界。它刻意**不**受特性门控：运行期宿主读取计划文件不该需要
 //! `authoring` 特性（及其 `syn` 依赖），因此加载器接收显式的 `package_root`，而不是
 //! 创作期的线程局部上下文。
@@ -22,7 +22,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use crate::{GraftPlanDocument, Registry, StaticGraftCut};
 

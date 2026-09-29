@@ -37,7 +37,7 @@ nichlink-run-method = { path = "../run_method", version = "0.1.6", features = ["
 # 统一调用图是静态编译器候选与真实记录调用唯一合并的地方，它在 `debug_method` 里；
 # 引入这个依赖，正是让桥不必自己再实现一遍那次合并。
 nichlink-debug-method = { path = "../debug_method", version = "0.1.6" }
-nichlink-core = { path = "../core", version = "0.1.6" }
+nichlink-kernel = { path = "../kernel", version = "0.1.6" }
 serde_json = "1"
 
 [[bin]]

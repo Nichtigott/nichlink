@@ -37,7 +37,7 @@ NodeEditor -> Canvas2D -> WGPU
 
 当前仓库包含：
 
-- `nichlink-core`：Registry、合同、admission、graft 和事务；
+- `nichlink-kernel`：Registry、合同、admission、graft 和事务；
 - `nichlink-macro`：编译期注册面字段前端（宽容的分隔符与顺序、带 span 的诊断、编辑器镜像）；
 - `nichlink-build-method`：目录发现、粗修和静态计划；
 - `nichlink-run-method`：运行期 trace 状态与 `host!`/`trace_call!` 宏；

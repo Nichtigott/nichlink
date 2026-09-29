@@ -9,7 +9,7 @@ use super::diagnostics::BuildDiagnostics;
 use super::registry_identity::NodeId;
 use super::registry_syntax::parse_face;
 use super::{CACHE_SCHEMA, cached_parent_id, relative_display};
-use nichlink::{CapabilityDeclaration, CapabilityRequirement, missing_capabilities};
+use nichlink_kernel::{CapabilityDeclaration, CapabilityRequirement, missing_capabilities};
 
 #[derive(Clone, Debug)]
 struct CachedFace {
@@ -66,7 +66,7 @@ fn collect(
         let path = entry.path();
         if path.is_dir() {
             let named = path.file_name().and_then(|name| name.to_str());
-            if named != Some(nichlink::lexicon::SCOPE_REGISTRATION_MODULE)
+            if named != Some(nichlink_kernel::lexicon::SCOPE_REGISTRATION_MODULE)
                 && named.is_some_and(crate::source_walk::valid_name)
             {
                 collect(

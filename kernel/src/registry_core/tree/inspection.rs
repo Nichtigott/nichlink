@@ -50,8 +50,8 @@ impl Registry {
     /// `Display`。
     ///
     /// ```no_run
-    /// # use nichlink::{Provenance, Registry, RuntimeValue};
-    /// # fn demo(registry: &Registry, node: nichlink::NodeId) {
+    /// # use nichlink_kernel::{Provenance, Registry, RuntimeValue};
+    /// # fn demo(registry: &Registry, node: nichlink_kernel::NodeId) {
     /// let value = RuntimeValue::number(0.5, Provenance::default().push(node, "Slider", "measure", "0.5"));
     /// if let Err(error) = registry.health_check(node, &value, Vec::new()) {
     ///     // The aggregate names the face and path; each child names the failed check.

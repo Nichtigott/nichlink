@@ -288,7 +288,7 @@ pub struct Finding {
 /// `<root>/core/src` 下的每一处纯净性违规。
 pub fn findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
-    for path in rust_sources(&root.join("core").join("src")) {
+    for path in rust_sources(&root.join("kernel").join("src")) {
         // What counts as code is the kernel's own rule rather than a second one
         // kept here: `mask_non_code` blanks string literals and both comment
         // forms while keeping every line break, so `/* std::fs */` and
@@ -314,7 +314,7 @@ pub fn findings(root: &Path) -> Vec<Finding> {
         // （`std::` ↵ `fs::metadata`）、以及 `use std as s;` 之后的 `s::fs::…`。去掉空白关闭前
         // 三种——路径是 token 流而不是行——别名表关闭第四种。`expand_imports` 随后看到的每个树形
         // 导入都在同一行上，因为折叠已经把其中的换行去掉了。
-        let masked = nichlink::source::mask_non_code(&text);
+        let masked = nichlink_kernel::source::mask_non_code(&text);
         // `#[cfg(any())]` is the workspace's idiom for code that is never compiled, so a
         // line carrying it is not a capability the kernel has. Reporting it was a false
         // positive that made the gate look wrong about a file it had read correctly.

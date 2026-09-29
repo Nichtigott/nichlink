@@ -3,10 +3,10 @@
 //!
 //! Split out of `lib.rs` because scaffolding is a self-contained execution
 //! surface: it reads the current directory and the running executable to decide
-//! where the `nichlink-core`/`nichlink-build-method` dependency comes from, and
+//! where the `nichlink-kernel`/`nichlink-build-method` dependency comes from, and
 //! touches no other command's state.
 //! 从 `lib.rs` 拆出，因为脚手架是一块自包含的执行面：它读当前目录与正在运行的可执行
-//! 文件来决定 `nichlink-core`/`nichlink-build-method` 依赖来自哪里，不触碰其他命令的
+//! 文件来决定 `nichlink-kernel`/`nichlink-build-method` 依赖来自哪里，不触碰其他命令的
 //! 状态。
 
 use std::io::Write;

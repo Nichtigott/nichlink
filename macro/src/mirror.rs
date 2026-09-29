@@ -14,8 +14,8 @@ use proc_macro2::{
     Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream as Tokens, TokenTree,
 };
 
-use nichlink::lexicon;
-use nichlink::registry_core::declaration::FACE_FIELD_ORDER;
+use nichlink_kernel::lexicon;
+use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
 
 /// How the mirror carries one face field.
 /// 镜像如何承载一个注册面字段。

@@ -100,7 +100,7 @@ mod tests {
         let source = r#"
 // application!(entry = crate::wrong)
 const TEXT: &str = "application!(entry = crate::also_wrong)";
-nichlink::application!(entry = crate::app::run);
+nichlink_kernel::application!(entry = crate::app::run);
 "#;
         let entries = application_entries(source).unwrap();
         assert_eq!(entries.len(), 1);

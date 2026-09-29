@@ -64,13 +64,16 @@ fn a_hyphenated_directory_maps_to_an_underscored_lib_name() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// The kernel's lib name is the one exception, and it stays accepted.
-/// 内核的 library 名是唯一的例外，且保持被接受。
+/// The kernel needs no lib-name carve-out: `kernel/` + `nichlink-kernel` +
+/// `nichlink_kernel` is the rule itself, so the exception table is empty and the
+/// kernel is checked like every other crate (batch 1 of the publish-surface merge).
+/// 内核不需要 lib 名特例：`kernel/` + `nichlink-kernel` + `nichlink_kernel` 就是规则本身，
+/// 因此例外表为空，内核与其它 crate 一样受检（发布面合并的批次 1）。
 #[test]
-fn the_kernel_lib_name_is_the_documented_exception() {
+fn the_kernel_needs_no_lib_name_carve_out() {
     let root = synthetic(&[(
-        "core",
-        "[package]\nname = \"nichlink-core\"\n\n[lib]\nname = \"nichlink\"\n",
+        "kernel",
+        "[package]\nname = \"nichlink-kernel\"\n\n[lib]\nname = \"nichlink_kernel\"\n",
     )]);
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);

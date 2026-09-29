@@ -3,19 +3,19 @@
 //!
 //! The slot names and the presentation metadata carry no `syn` dependency, so
 //! they must be reachable in a build without the `syntax` feature. Run this
-//! file on its own (`cargo test -p nichlink-core --offline`) to check that:
+//! file on its own (`cargo test -p nichlink-kernel --offline`) to check that:
 //! a whole-workspace build enables `syntax` through the other members.
 //! 槽位名字与展示元数据不依赖 `syn`，因此在没有 `syntax` 特性的构建里也必须可用。单独
-//! 运行本文件（`cargo test -p nichlink-core --offline`）才能验证这一点：整个 workspace
+//! 运行本文件（`cargo test -p nichlink-kernel --offline`）才能验证这一点：整个 workspace
 //! 一起构建时，其他成员会把 `syntax` 打开。
 
 #[test]
 fn the_field_dictionary_is_reachable_without_the_syntax_feature() {
-    use nichlink::authoring::face_field;
-    assert_eq!(nichlink::authoring::FACE_FIELD_COUNT, 26);
+    use nichlink_kernel::authoring::face_field;
+    assert_eq!(nichlink_kernel::authoring::FACE_FIELD_COUNT, 26);
     assert_eq!(face_field::FACE_FIELD_COUNT, face_field::PART_CONTRACTS + 1);
-    for slot in 0..nichlink::authoring::FACE_FIELD_COUNT {
-        let row = nichlink::authoring::face_field_presentation(slot);
+    for slot in 0..nichlink_kernel::authoring::FACE_FIELD_COUNT {
+        let row = nichlink_kernel::authoring::face_field_presentation(slot);
         assert!(!row.group.is_empty(), "slot {slot}: {row:?}");
         assert!(!row.label.is_empty(), "slot {slot}: {row:?}");
         assert!(!row.help.is_empty(), "slot {slot}: {row:?}");
@@ -26,6 +26,6 @@ fn the_field_dictionary_is_reachable_without_the_syntax_feature() {
 /// 纯校验同样属于这个表面：它只用到 `std::path`。
 #[test]
 fn pure_validation_is_reachable_without_the_syntax_feature() {
-    assert!(nichlink::authoring::validation::validate_name("control").is_ok());
-    assert!(nichlink::authoring::validation::validate_name("Control").is_err());
+    assert!(nichlink_kernel::authoring::validation::validate_name("control").is_ok());
+    assert!(nichlink_kernel::authoring::validation::validate_name("Control").is_err());
 }

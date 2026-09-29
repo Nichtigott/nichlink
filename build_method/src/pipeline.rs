@@ -6,7 +6,7 @@ use super::{
     static_plan, unplaced_face_errors, update_discovery_cache, write_function_manifest,
     write_graft_manifest, write_if_changed, write_pruning_manifest, write_source_scope_manifest,
 };
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let manifest = &input.manifest;

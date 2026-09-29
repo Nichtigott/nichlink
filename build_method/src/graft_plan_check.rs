@@ -24,9 +24,9 @@
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
-use nichlink::registry_core::plugin::graft_document::GraftPlanDocument;
-use nichlink::{BuildDiagnostic, BuildDiagnostics};
+use nichlink_kernel::lexicon;
+use nichlink_kernel::registry_core::plugin::graft_document::GraftPlanDocument;
+use nichlink_kernel::{BuildDiagnostic, BuildDiagnostics};
 
 use super::Node;
 use super::registry_identity::NodeId;
@@ -90,7 +90,9 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
             target_path: document.target_path.clone(),
             graft: document.graft.clone(),
             full: document.full,
-            plan_file: nichlink::declaration::portable_path(&relative_plan.to_string_lossy()),
+            plan_file: nichlink_kernel::declaration::portable_path(
+                &relative_plan.to_string_lossy(),
+            ),
         });
     }
     slots.sort_by(|left, right| left.selector.cmp(&right.selector));

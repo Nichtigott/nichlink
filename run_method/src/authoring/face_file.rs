@@ -114,4 +114,4 @@ pub use super::operations::{
 // authoring API. The definitions live in the kernel `authoring` module.
 // Studio 表单与文件创作 API 共用的字段词典与槽位名；定义位于 kernel 的
 // `authoring` 模块。
-pub use nichlink::authoring::{FACE_FIELD_COUNT, face_field};
+pub use nichlink_kernel::authoring::{FACE_FIELD_COUNT, face_field};

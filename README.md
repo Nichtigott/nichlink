@@ -860,7 +860,7 @@ execution surfaces. The sinking rule is simple: **logic with no I/O, no
 that reads the filesystem, spawns processes, or drives a terminal stays in an
 execution surface that binds kernel methods to its own context.
 
-`nichlink-core` (library name `nichlink`) is the kernel. It holds the
+`nichlink-kernel` (library name `nichlink_kernel`) is the kernel. It holds the
 protocol vocabulary and the complete set of pure operations: identity,
 declaration, parsing, tree operations, policy, and rendering. Nothing in the
 kernel performs I/O or binds to the environment, so every tool can reuse the
@@ -884,7 +884,7 @@ execution surface, so it has no row above.
 ## Workspace layout
 
 ```text
-core/         nichlink-core (kernel): protocol vocabulary and pure methods — identity,
+kernel/       nichlink-kernel (lib nichlink_kernel): protocol vocabulary and pure methods — identity,
               declaration, diagnostic, tree, plugin, mir, requirements, release,
               source, authoring, syntax, json, lexicon
 macro/        nichlink-macro: compile-time face-field front end (tolerant

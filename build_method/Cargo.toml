@@ -13,7 +13,7 @@ readme = "README.md"
 documentation = "https://docs.rs/nichlink-build-method"
 
 [dependencies]
-nichlink-core = { path = "../core", version = "0.1.6", features = ["syntax"] }
+nichlink-kernel = { path = "../kernel", version = "0.1.6", features = ["syntax"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 # `package_name` parses `cargo metadata` output. It is the only JSON this crate
 # reads, and the function is called by standalone surfaces only — the build

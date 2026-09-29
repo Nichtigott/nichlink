@@ -403,7 +403,7 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
             function.calls.join(", ")
         ));
     }
-    let registrations = nichlink::source::registration_kinds(&file.source);
+    let registrations = nichlink_kernel::source::registration_kinds(&file.source);
     if !registrations.is_empty() {
         output.push_str("registrations: ");
         output.push_str(&registrations.join(", "));

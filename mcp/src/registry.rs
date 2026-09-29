@@ -12,8 +12,8 @@
 
 use std::path::Path;
 
-use nichlink::lexicon;
 use nichlink_build_method::{FaceView, package_name};
+use nichlink_kernel::lexicon;
 
 /// Report every registration face declared under the package root `root`.
 /// 报告 `root` 这个包根下声明的每个注册面。

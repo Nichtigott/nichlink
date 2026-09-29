@@ -2,12 +2,12 @@
 //! NichLink 的注册协议与运行期内核。
 //!
 //! The official address of a protocol noun is its module path
-//! (`nichlink::identity::NodeId`). The crate root re-exports the module hierarchy
+//! (`nichlink_kernel::identity::NodeId`). The crate root re-exports the module hierarchy
 //! plus a curated vocabulary that host code, the build step and the runtime-check
 //! surfaces write as a bare name. The kernel's modules also glob into the root, so
 //! every other noun is *reachable* there as well; that is convenience, not a second
 //! contract, and only the curated names are promised as bare ones.
-//! 协议名词的官方地址就是它的模块路径（`nichlink::identity::NodeId`）。crate 根部重导出模块
+//! 协议名词的官方地址就是它的模块路径（`nichlink_kernel::identity::NodeId`）。crate 根部重导出模块
 //! 层级，外加一份精选词汇——宿主代码、构建步骤与运行期校验面会以裸名书写它们。内核各模块也会
 //! 平铺 glob 到根部，因此其余名词同样**可以**在那里取得；那是便利，不是第二份契约，只有精选
 //! 清单上的名字被承诺为裸名可用。

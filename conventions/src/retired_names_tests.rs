@@ -94,7 +94,7 @@ fn the_other_concepts_records_and_the_changelog_are_not_reported() {
                 "//! run\n// Field dictionary and slot names shared by the Studio form and the file authoring API\n// Studio 表单与文件创作 API 共用的字段词典与槽位名\npub fn run() {}\n",
             ),
             (
-                "core/src/lib.rs",
+                "kernel/src/lib.rs",
                 "//! kernel\n/// The replacement check does not consult the slot name.\npub fn kernel() {}\n",
             ),
             (

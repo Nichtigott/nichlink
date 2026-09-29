@@ -20,7 +20,7 @@ Three different artifacts meet at a graft, and none of them copies source:
 The declaration macro is exported by `nichlink-run-method`
 (`nichlink_run_method::static_graft_plan!`); the kernel only parses the text the
 macro stringifies. The application methods live in the kernel
-(`nichlink::Registry`).
+(`nichlink_kernel::Registry`).
 
 ## Which file is the host entry
 

@@ -90,7 +90,7 @@ fn inspect(files: &[PathBuf]) -> (Vec<String>, Vec<String>) {
         // reject a file this repository ships.
         // 不是注册面源码的文件允许解析失败：绝不允许发生的是**嵌套**拒绝，因为那意味着守卫会
         // 拒绝一个本仓库出厂的文件的。
-        if let Err(error) = nichlink::registry_core::syntax::parse_faces(&text) {
+        if let Err(error) = nichlink_kernel::registry_core::syntax::parse_faces(&text) {
             let message = error.to_string();
             if message.contains(REFUSAL) {
                 refused.push(format!("{}: {message}", path.display()));

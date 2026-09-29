@@ -52,13 +52,13 @@ pub struct Findings {
 /// 把内核自己的模块树当作树来遍历时看到的样子。
 ///
 /// `AGENTS.md` change rule 1 says new pure logic is registered in
-/// `core/src/registry_core.rs`, and nothing checked it: a module file that no
+/// `kernel/src/registry_core.rs`, and nothing checked it: a module file that no
 /// declaration names is still in the package, still passes `cargo package
 /// --list` (the package audit's content half), and is simply never compiled.
 /// The kernel is the scope because it mounts every module by hand; the example
 /// hosts mount faces from `host!()`'s generated plan, which no declaration in
 /// the tree names, so the same walk would report their faces as unmounted.
-/// `AGENTS.md` 改动规则 1 说新的纯逻辑注册在 `core/src/registry_core.rs`，而此前无人检查：
+/// `AGENTS.md` 改动规则 1 说新的纯逻辑注册在 `kernel/src/registry_core.rs`，而此前无人检查：
 /// 没有任何声明指名的模块文件仍在包里、仍能通过 `cargo package --list`（包审计的内容那一半），
 /// 只是从未被编译。范围限于内核，因为内核的每个模块都靠手写声明挂载；示例宿主从 `host!()` 的
 /// 生成计划挂载注册面，树里没有任何声明为它们命名，同样的遍历会把那些注册面报成未挂载。
@@ -133,10 +133,10 @@ fn declarations(raw: &str, masked: &str) -> Vec<Declaration> {
 /// The walk crosses whatever sits between the attribute and the `mod` keyword: a
 /// visibility qualifier (`pub`, `pub(crate)`), other attributes (`#[cfg(test)]`),
 /// and whitespace. Stopping at the first of those was measured to hide every
-/// `#[path]` in `core/src/registry_core.rs`, whose declarations are all spelled
+/// `#[path]` in `kernel/src/registry_core.rs`, whose declarations are all spelled
 /// `#[path = …]` newline `pub mod …;`.
 /// 遍历会穿过属性与 `mod` 关键字之间的任何东西：可见性限定（`pub`、`pub(crate)`）、其他属性
-/// （`#[cfg(test)]`）与空白。停在其中任何一个之前，实测会漏掉 `core/src/registry_core.rs` 里的
+/// （`#[cfg(test)]`）与空白。停在其中任何一个之前，实测会漏掉 `kernel/src/registry_core.rs` 里的
 /// 每一个 `#[path]`——那里的声明全都写成 `#[path = …]` 换行 `pub mod …;`。
 fn path_attribute_before(raw: &str, masked: &str, at: usize) -> Option<String> {
     let bytes = masked.as_bytes();
@@ -255,7 +255,7 @@ fn target_of(declaration: &Declaration, directory: &Path) -> PathBuf {
 /// 遍历内核的模块树，报告对不上的地方。
 pub fn mounts(root: &Path) -> Mounts {
     let mut found = Mounts::default();
-    let kernel = root.join("core/src");
+    let kernel = root.join("kernel/src");
     if !is_real_directory(&kernel) {
         return found;
     }
@@ -264,7 +264,7 @@ pub fn mounts(root: &Path) -> Mounts {
     for path in &files {
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-        let masked = nichlink::source::mask_non_code(&text);
+        let masked = nichlink_kernel::source::mask_non_code(&text);
         let directory = path.parent().unwrap_or(&kernel);
         for declaration in declarations(&text, &masked) {
             mounted
@@ -277,11 +277,11 @@ pub fn mounts(root: &Path) -> Mounts {
     for path in &files {
         // Only the kernel's own crate root is an entry point. Skipping every file *named*
         // `lib.rs` (or `build.rs`) hid a nested module nobody declares:
-        // `core/src/registry_core/zz/lib.rs` was invisible to this gate, and a `build.rs`
+        // `kernel/src/registry_core/zz/lib.rs` was invisible to this gate, and a `build.rs`
         // under `src/` is an ordinary module file — cargo's build script lives at the
         // package root, not there.
         // 只有内核自己的 crate 根是入口点。按**名字**跳过每个 `lib.rs`（或 `build.rs`）会让一个
-        // 无人声明的嵌套模块不可见：`core/src/registry_core/zz/lib.rs` 对本门禁是隐形的；而
+        // 无人声明的嵌套模块不可见：`kernel/src/registry_core/zz/lib.rs` 对本门禁是隐形的；而
         // `src/` 下的 `build.rs` 就是普通模块文件——cargo 的构建脚本在包根，不在那里。
         if path == &crate_root {
             continue;
@@ -332,7 +332,7 @@ pub fn findings(root: &Path) -> Findings {
             // 拼法。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            let masked = nichlink::source::mask_non_code(&text);
+            let masked = nichlink_kernel::source::mask_non_code(&text);
             let mut from = 0usize;
             while let Some(offset) = masked[from..].find("include") {
                 let at = from + offset;

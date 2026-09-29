@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use nichlink::NodeId;
+use nichlink_kernel::NodeId;
 
 use super::{namespace_from, registry};
 

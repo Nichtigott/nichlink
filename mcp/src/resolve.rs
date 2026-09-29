@@ -12,8 +12,8 @@
 
 use std::path::Path;
 
-use nichlink::NodeId;
 use nichlink_build_method::FaceView;
+use nichlink_kernel::NodeId;
 use serde_json::Value;
 
 /// The parent identity a request names, by identity or by logical path.
@@ -45,7 +45,7 @@ pub(crate) fn parent_id(
         // of `root/...` while living in no tree the host compiled.
         // 默认值是**带命名空间的**根：裸的 `ROOT_NODE_ID` 是另一个身份，挂在它下面的面会报告
         // `root/...` 的逻辑路径，却不住在宿主编译过的任何树里。
-        None | Some("") => Ok(nichlink::root_node_id(namespace)),
+        None | Some("") => Ok(nichlink_kernel::root_node_id(namespace)),
         Some(value) => match value.parse::<NodeId>() {
             Ok(id) => Ok(id),
             Err(_) => resolve_node(root, namespace, value),
@@ -65,7 +65,7 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
     // so `root` is answered from the namespace directly.
     // 注册树根没有自己的面行（除非有东西声明了它），因此 `root` 直接由命名空间作答。
     if wanted == "root" {
-        return Ok(nichlink::root_node_id(namespace));
+        return Ok(nichlink_kernel::root_node_id(namespace));
     }
     faces.retain(|face| face.path == wanted);
     match faces.len() {

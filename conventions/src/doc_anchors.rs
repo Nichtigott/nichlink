@@ -1,13 +1,13 @@
 //! Documentation anchors that must still resolve.
 //! 必须仍然可解析的文档锚点。
 //!
-//! A document that says "the check lives in `core/src/…/inspection.rs:74`" makes a
+//! A document that says "the check lives in `kernel/src/…/inspection.rs:74`" makes a
 //! promise a reader can check in one step. Nothing checked it, so the promise
 //! decayed: `docs/roadmap-1.0.md` cited `run_method/src/macros/face_objects.rs:242-243`
 //! for the arm that expands `$preset`/`$parts`, in a file that is now 172 lines
 //! long. [`crate::doc_blocks`] already refuses a fenced Rust block that no longer
 //! parses; this gate refuses a reference that no longer points anywhere.
-//! 一份写着"检查在 `core/src/…/inspection.rs:74`"的文档，给读者留下一步就能核实的承诺。没有
+//! 一份写着"检查在 `kernel/src/…/inspection.rs:74`"的文档，给读者留下一步就能核实的承诺。没有
 //! 任何东西核实它，于是承诺腐化了：`docs/roadmap-1.0.md` 为展开 `$preset`/`$parts` 的宏臂引用了
 //! `run_method/src/macros/face_objects.rs:242-243`，而那个文件现在只有 172 行。
 //! [`crate::doc_blocks`] 已经会拒绝不再能解析的 Rust 围栏；本门禁拒绝不再指向任何地方的引用。

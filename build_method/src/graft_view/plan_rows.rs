@@ -16,9 +16,9 @@
 
 use std::path::Path;
 
-use nichlink::identity::NodeId;
-use nichlink::lexicon;
-use nichlink::plugin::graft_document::GraftPlanDocument;
+use nichlink_kernel::identity::NodeId;
+use nichlink_kernel::lexicon;
+use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 
 use crate::face_view::FaceView;
 use crate::graft_view::{DeclaredGraft, DeclaredGrafts};

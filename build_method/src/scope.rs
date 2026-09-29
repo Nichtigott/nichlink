@@ -19,7 +19,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-use nichlink::lexicon;
+use nichlink_kernel::lexicon;
 
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::discovery_node::{Node, relative_display};

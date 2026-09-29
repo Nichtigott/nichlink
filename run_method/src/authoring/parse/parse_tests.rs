@@ -103,7 +103,7 @@ fn every_shipped_rule_source_still_reads_through_the_production_entry() {
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         assert_eq!(
             read,
-            nichlink::authoring::parse::rule_syntax_from_text(&text),
+            nichlink_kernel::authoring::parse::rule_syntax_from_text(&text),
             "{}: the production entry and the shipped bytes disagree",
             path.display()
         );
@@ -144,7 +144,7 @@ fn a_malformed_rule_source_is_refused_with_its_context() {
         "the const's own initializer decides the rule"
     );
     assert_eq!(
-        nichlink::authoring::parse::rule_syntax_from_text(commented),
+        nichlink_kernel::authoring::parse::rule_syntax_from_text(commented),
         "exports:wrong",
         "the tolerant entry still reads the commented clause, which is why this path left it"
     );
@@ -242,9 +242,10 @@ fn the_rule_path_field_names_the_location_the_production_reader_reads() {
     }
     values.insert(
         "parent_node".to_owned(),
-        nichlink::identity::NodeId::from_namespaced_path("probe", "root.rs", "root").to_string(),
+        nichlink_kernel::identity::NodeId::from_namespaced_path("probe", "root.rs", "root")
+            .to_string(),
     );
-    let snapshot = nichlink::authoring::snapshot::snapshot_from_values(&values, "probe")
+    let snapshot = nichlink_kernel::authoring::snapshot::snapshot_from_values(&values, "probe")
         .expect("a readable face");
     assert_eq!(
         snapshot.registry_rule_path, "src/control/registry_rule/registry_rule.rs",

@@ -37,7 +37,7 @@ fn synthetic(files: &[(&str, &str)]) -> PathBuf {
 #[test]
 fn a_brace_import_and_std_io_are_violations() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "use std::{env, fs};\n\npub fn probe() -> String {\n    \
          let _ = fs::read_to_string(\"/etc/hostname\");\n    \
          let _ = env::var(\"HOME\");\n    \
@@ -65,7 +65,7 @@ fn a_brace_import_and_std_io_are_violations() {
 #[test]
 fn comments_and_strings_are_not_the_code_that_is_scanned() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "/* std::fs is banned here, and this block comment says so */\n\
          /// `let probe = \"std::env\";` is prose too.\n\
          pub fn probe() -> usize {\n    \
@@ -91,7 +91,7 @@ fn comments_and_strings_are_not_the_code_that_is_scanned() {
 #[test]
 fn the_ways_a_path_can_hide_from_a_line_scan_are_violations() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "use std::{\n    env,\n    fs,\n};\n\n\
          pub fn probe() {\n    \
          let _ = std :: fs :: metadata(\"/tmp\");\n    \
@@ -124,7 +124,7 @@ fn the_ways_a_path_can_hide_from_a_line_scan_are_violations() {
 #[test]
 fn an_aliased_std_is_still_std() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "use std as s;\n\npub fn probe() {\n    let _ = s::fs::metadata(\"/tmp\");\n}\n",
     )]);
     let found = findings(&root);
@@ -139,10 +139,10 @@ fn an_aliased_std_is_still_std() {
 /// 遍历有一个下限，因此内核目录一旦改名就不会读作"干净"。
 #[test]
 fn the_walk_covers_the_kernel_tree() {
-    let sources = rust_sources(&workspace_root().join("core").join("src"));
+    let sources = rust_sources(&workspace_root().join("kernel").join("src"));
     assert!(
         sources.len() > 40,
-        "the purity walk found only {} files; it is supposed to cover core/src",
+        "the purity walk found only {} files; it is supposed to cover kernel/src",
         sources.len()
     );
 }
@@ -167,7 +167,7 @@ fn the_kernel_does_no_io_and_reads_no_environment() {
 #[test]
 fn a_plain_import_is_a_violation() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "use std::fs;\n\npub fn probe() {\n    let _ = fs::read(\"/etc/hostname\");\n}\n",
     )]);
     let found = findings(&root);
@@ -208,7 +208,7 @@ fn alias_glob_and_nested_brace_spellings_are_violations() {
         ),
     ];
     for (name, source) in cases {
-        let root = synthetic(&[("core/src/probe.rs", source)]);
+        let root = synthetic(&[("kernel/src/probe.rs", source)]);
         let found = findings(&root);
         assert!(!found.is_empty(), "`{name}` is a violation: {found:#?}");
         let _ = fs::remove_dir_all(&root);
@@ -221,7 +221,7 @@ fn alias_glob_and_nested_brace_spellings_are_violations() {
 #[test]
 fn lookalike_names_are_not_violations() {
     let root = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "pub fn probe() {\n    \
          let _ = my_env!(\"HOME\");\n    \
          let _ = reth::fs::read(\"x\");\n    \
@@ -244,7 +244,7 @@ fn lookalike_names_are_not_violations() {
 #[test]
 fn a_never_compiled_item_at_the_same_indentation_is_exempt() {
     let exempt = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "#[cfg(any())]\nfn never() {\n    let _ = std::fs::read(\"/etc/hostname\");\n}\n",
     )]);
     assert!(
@@ -257,7 +257,7 @@ fn a_never_compiled_item_at_the_same_indentation_is_exempt() {
     // follows it is still read.
     // 豁免针对的是属性下面那个条目，而不是整个文件：它之后的代码仍会被读。
     let live = synthetic(&[(
-        "core/src/probe.rs",
+        "kernel/src/probe.rs",
         "#[cfg(any())]\nfn never() {}\n\nfn live() {\n    let _ = std::fs::read(\"x\");\n}\n",
     )]);
     assert!(

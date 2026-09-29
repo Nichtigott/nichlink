@@ -46,7 +46,7 @@ binaries can reuse it.
   and exits 1).
 
 The document shape comes from `BuildDiagnostics::to_json`
-(`core/src/registry_core/diagnostic/build.rs`):
+(`kernel/src/registry_core/diagnostic/build.rs`):
 
 ```json
 {"schema":"nichlink.build-diagnostics/1","count":N,"diagnostics":[...]}
@@ -71,11 +71,11 @@ deduplicated count. `phase` is a stable machine string. The human renderer maps
 
 | `phase` | Constructed by | `branch` | `node` | `source` | `line` | `function` | `field` | `expected` | `actual` | `provider` | `message` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `requirements` | `core` `requirements::missing` | always | always | always | always | always | always | always | never | only when an ancestor provides the capability under a different kind | always |
+| `requirements` | `kernel` `requirements::missing` | always | always | always | always | always | always | always | never | only when an ancestor provides the capability under a different kind | always |
 | `contract` | `build_method` `contracts::check_parent_rule` | never | always | always | always | always | always | always | only for the output-contract mismatch | never | always |
 | `stable-identity` | `build_method` `validation::collect_stable_names` | never | never | always | always | never | always | always | always | never | always |
 | `parent-macro` | `build_method` `validation::collect_parent_macro_errors` | never | never | always | always | never | always | always | always | never | always |
-| `static-plan` | `build_method` `static_plan::collect_static_faces`, `graft_plan_check::undeclared_plan_errors`; `core` `topology::validate_face_topology` | never | never | always | always `0` | never | topology checks only | missing-parent and no-registry only | topology checks only | never | always |
+| `static-plan` | `build_method` `static_plan::collect_static_faces`, `graft_plan_check::undeclared_plan_errors`; `kernel` `topology::validate_face_topology` | never | never | always | always `0` | never | topology checks only | missing-parent and no-registry only | topology checks only | never | always |
 | `face-cfg` | `build_method` `static_plan::collect_static_faces` | never | never | always | always | never | never | never | never | never | always |
 | `out-dir` | `build_method` `check_for` | never | never | never | always `0` | never | never | never | never | never | always |
 | `face-layout` | `build_method` `validation::unplaced_face_errors` (the phase is chosen by `discovery::record_unplaced`) | never | never | always | `0` when the file has no position | never | never | never | never | never | always |

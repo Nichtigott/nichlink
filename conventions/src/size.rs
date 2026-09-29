@@ -137,7 +137,7 @@ pub fn looks_test_only(path: &Path) -> bool {
 /// 该属性沿链继承：`app.rs` 把 `tests` 挂在 `#[cfg(test)]` 之后，`tests.rs` 再挂
 /// `call_tree.rs` 时不必重复它。因此只要**链**上有一处，文件就是仅测试的——这正是递归的原因。
 /// 有界，是因为手工写的声明列表若成环，不值得让门禁挂住。上限是**带余量的防环，不是对树深度的
-/// 描述**：2026-09-28 实测本树出厂的最深挂载链有 **6 个文件**（也就是 5 条挂载边）：`core/src/lib.rs`
+/// 描述**：2026-09-28 实测本树出厂的最深挂载链有 **6 个文件**（也就是 5 条挂载边）：`kernel/src/lib.rs`
 /// → `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs` →
 /// `authoring/parse/flow.rs` → `authoring/parse/flow_tests.rs`。这里说的"层"是**链上的文件数**，
 /// 边数比它少一——旧文只列了链尾的四个文件却声称 6 层，读者无法判断该以哪个为准。当时取的是 8

@@ -53,8 +53,11 @@ pub(crate) fn check(
             // `--json` 契约是"stdout 是一个 JSON 文档"；解析失败此前在写出任何东西之前
             // 就返回，机器读者拿到的是空流，而不是点名失败的文档。该文档保持成功时的形状。
             if json_output {
-                let mut diagnostics = nichlink::BuildDiagnostics::default();
-                diagnostics.push(nichlink::BuildDiagnostic::new("resolve", error.clone()));
+                let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
+                diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
+                    "resolve",
+                    error.clone(),
+                ));
                 writeln!(out, "{}", diagnostics.to_json())
                     .map_err(|error| format!("cannot write output: {error}"))?;
             }
@@ -65,8 +68,12 @@ pub(crate) fn check(
     if json_output {
         return match nichlink_build_method::check_for(&manifest, &out_dir, &package) {
             Ok(()) => {
-                writeln!(out, "{}", nichlink::BuildDiagnostics::default().to_json())
-                    .map_err(|error| format!("cannot write output: {error}"))?;
+                writeln!(
+                    out,
+                    "{}",
+                    nichlink_kernel::BuildDiagnostics::default().to_json()
+                )
+                .map_err(|error| format!("cannot write output: {error}"))?;
                 Ok(())
             }
             Err(diagnostics) => {
