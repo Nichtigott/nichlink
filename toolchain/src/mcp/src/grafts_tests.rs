@@ -190,7 +190,10 @@ fn the_report_is_bounded_by_limit() {
     }
     let reply = grafts(&root, &json!({"limit": 2})).expect("the report renders");
     assert!(reply.contains("plans 4"), "{reply}");
-    assert!(reply.contains("… +2 more"), "{reply}");
+    assert!(
+        reply.contains("… truncated: 2 of 4 plan rows withheld at the limit of 2"),
+        "{reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

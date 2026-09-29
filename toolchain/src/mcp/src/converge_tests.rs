@@ -128,6 +128,75 @@ fn a_recorded_run_collapses_the_tree_to_the_faces_that_ran() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A run that touched two faces, so both file bounds have something to withhold.
+/// 一次碰了两个面的运行，使那两处按文件的截断都有东西可扣。
+fn two_face_run(root: &Path, namespace: &str) {
+    for (module, kind) in [("label", "Label"), ("gauge", "Gauge")] {
+        apply(
+            root,
+            &json!({"action": "add", "apply": true, "fields": {"module": module, "kind": kind}}),
+        )
+        .expect("the face is added");
+    }
+    let root_id = nichlink_kernel::root_node_id(namespace);
+    let mut trace = CallTrace::full();
+    trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
+        let label = nichlink_kernel::identity::NodeId::from_namespaced_path(
+            namespace,
+            "label/label.rs",
+            "Label",
+        );
+        trace.with_at(
+            label,
+            "Label::render",
+            at("src/label/label.rs", 12, "Label::render"),
+            |_| {},
+        );
+        let gauge = nichlink_kernel::identity::NodeId::from_namespaced_path(
+            namespace,
+            "gauge/gauge.rs",
+            "Gauge",
+        );
+        trace.with_at(
+            gauge,
+            "Gauge::render",
+            at("src/gauge/gauge.rs", 5, "Gauge::render"),
+            |_| {},
+        );
+    });
+    write_trace_artifact(&trace, &trace_artifact_path(root), namespace)
+        .expect("the artifact writes");
+}
+
+/// Both file bounds of this report — the list of faces that ran and the read plan —
+/// say how many files they withheld. They used to stop at `limit` silently, while the
+/// `faces that ran` and `read plan` headline counts left the reader to notice the
+/// difference.
+/// 本报告的两处按文件的截断——跑过的面的清单与读计划——都会说出扣下了多少个文件。它们过去在
+/// `limit` 处默默停下，只有 `faces that ran` 与 `read plan` 的头条计数留给读者自己去发现差别。
+#[test]
+fn a_run_cut_by_the_limit_says_how_many_files_it_withheld() {
+    let (root, name) = package("trace-bounded");
+    two_face_run(&root, &name);
+    let reply = converge(&root, &json!({"trace": true, "limit": 1})).expect("the report renders");
+    assert!(
+        reply.contains("faces that ran (2 of 2 declared, matched by source file)"),
+        "{reply}"
+    );
+    assert_eq!(
+        reply
+            .matches("… truncated: 1 of 2 files withheld at the limit of 1")
+            .count(),
+        2,
+        "the ran-file list and the read plan each declare theirs: {reply}"
+    );
+    assert!(
+        reply.contains("read plan (2 files)"),
+        "the headline still counts every file: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// The values a run captured are attached to the face whose file the capturing frame
 /// belongs to — and a value captured in a frame that belongs to no face is not.
 /// 一次运行捕获的值会被挂到"捕获它的帧所属的文件"的那个面上——而属于任何面的帧里捕获的值不会被挂。

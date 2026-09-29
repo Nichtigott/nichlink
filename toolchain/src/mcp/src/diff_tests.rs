@@ -267,6 +267,30 @@ fn an_unreadable_record_is_counted_and_no_records_is_not_a_verdict() {
     let _ = std::fs::remove_dir_all(&bare);
 }
 
+/// Every list this report prints is bounded **and says so**: the four record buckets used
+/// to be cut at `limit` with only their headline counts left to imply it, which is a
+/// reader's inference rather than the answer's own declaration.
+/// 本报告打印的每个清单都有上限**而且自己说出来**：记录侧的四个桶过去在 `limit` 处被切短，只留下
+/// 头条计数让人去推断——那是读者的推理，而不是答案自己的声明。
+#[test]
+fn a_record_list_cut_by_the_limit_says_how_many_it_withheld() {
+    let (root, name) = package("record-bound");
+    let face = face_views(&root, &name).expect("faces derive")[0].clone();
+    for selector in ["orphan_fast", "orphan_slow"] {
+        record(&root, selector, face.id, "root/button");
+    }
+    let reply = diff(&root, &json!({"records": true, "limit": 1})).expect("the diff renders");
+    assert!(
+        reply.contains("ok 0  undeclared 2  stale 0  re-identified 0  unreadable 0"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("… truncated: 1 of 2 undeclared records withheld at the limit of 1"),
+        "{reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A registration file the derivation cannot parse is counted in the reply instead of vanishing:
 /// a read-only tree query used to report a smaller tree as if it were the whole one, which is what
 /// `LGC-LG-11` recorded on the producer side and what the consumer half now says out loud.

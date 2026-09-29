@@ -181,6 +181,132 @@ fn the_usages_description_names_every_field_it_prints() {
     }
 }
 
+/// The description of `nichlink.verify` names **both** verdicts it prints.
+/// `nichlink.verify` 的描述点名它打印的**两个**判断。
+///
+/// The second line (`connector verdict: ok|rejected`) was added because a tree can pass
+/// the static verdict and be refused by the authoring connector (audit `F1`), and the
+/// description kept promising one verdict — so an agent read a green light on a tree the
+/// other surface refuses.
+/// 第二行（`connector verdict: ok|rejected`）之所以存在，是因为一棵树可以通过静态判断而被创作
+/// 连接器拒绝（审计 `F1`），而描述一直只承诺一个判断——于是代理在一棵被另一个面拒绝的树上读到了
+/// 绿灯。
+#[test]
+fn the_verify_description_names_the_connector_verdict() {
+    let listed = super::tools();
+    let verify = listed
+        .iter()
+        .find(|tool| tool["name"] == "nichlink.verify")
+        .expect("nichlink.verify is advertised");
+    let description = verify["description"]
+        .as_str()
+        .unwrap_or_else(|| panic!("nichlink.verify has no description: {verify}"));
+    for expected in [
+        "connector verdict: ok",
+        "connector verdict: rejected",
+        "authoring connector",
+        "isError",
+    ] {
+        assert!(
+            description.contains(expected),
+            "`{expected}` is part of what verify prints and must be named in its description: {description}"
+        );
+    }
+}
+
+/// `nichlink.mir` refuses a snapshot it cannot print whole, and its description says so.
+/// `nichlink.mir` 拒绝它无法整体打印的快照，而它的描述把这一点说出来。
+///
+/// The writer's promise is "what it prints reads back here" (audit `X2`), so the one case
+/// where it prints nothing has to be declared rather than discovered by a parse error.
+/// 写入方的承诺是"它打印出来的东西能在这里读回来"（审计 `X2`），因此它唯一什么都不打印的那种情形
+/// 必须被声明出来，而不是靠一条解析错误去发现。
+#[test]
+fn the_mir_description_declares_the_refusal_above_the_reply_cap() {
+    let listed = super::tools();
+    let mir = listed
+        .iter()
+        .find(|tool| tool["name"] == "nichlink.mir")
+        .expect("nichlink.mir is advertised");
+    let description = mir["description"]
+        .as_str()
+        .unwrap_or_else(|| panic!("nichlink.mir has no description: {mir}"));
+    assert!(
+        description.contains("reads back here"),
+        "the promise is what makes the refusal necessary: {description}"
+    );
+    assert!(
+        description.contains("reply cap") && description.contains("refused by name"),
+        "the one case that prints nothing must be declared: {description}"
+    );
+}
+
+/// A package whose own faces the connector refuses: a provider, and a consumer whose
+/// requirement no face answers. `face_views` still derives both — that divergence is the
+/// whole point (audit `F1`) — so a read tool has a node to name.
+/// 一个连接器拒绝其自身面的包：一个提供者，以及一个需求无人满足的消费者。`face_views` 仍然把两者
+/// 都推导出来——这处分歧正是要点（审计 `F1`）——因此读工具有节点可点名。
+fn rejected_package(label: &str) -> PathBuf {
+    let root = package(label);
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub fn wire() {\n    crate::label::Label;\n}\n",
+    )
+    .expect("the entry references one face");
+    std::fs::create_dir_all(root.join("src/label")).expect("label module");
+    std::fs::write(
+        root.join("src/label/label.rs"),
+        "crate::root_object! { kind: Label, \
+         parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")), provides: [\"cap.render\"], }\n",
+    )
+    .expect("the provider face");
+    std::fs::create_dir_all(root.join("src/widget")).expect("widget module");
+    std::fs::write(
+        root.join("src/widget/widget.rs"),
+        "crate::root_object! { kind: Widget, \
+         parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")), \
+         requires: [\"cap.theme\" => \"Theme\"], }\n",
+    )
+    .expect("the face whose requirement nothing answers");
+    root
+}
+
+/// The connector's rejection of a package's own faces is one fact about that tree, so
+/// both read tools answer it the same way: the verdict spelled once, in the body, with
+/// `isError` false. `usages` used to return it as an error while `converge` printed it, so
+/// an agent routing on `isError` read the same rejection as a failure and as an ordinary
+/// answer (audit `A2`).
+/// 连接器对一个包自身面的拒绝是关于那棵树的同一个事实，因此两个读工具以同一种方式作答：那句话只
+/// 拼一次、出现在正文里，`isError` 为 false。`usages` 过去把它当错误返回，而 `converge` 把它打印
+/// 出来，于是按 `isError` 分流的代理把同一次拒绝读成了失败、也读成了普通答案（审计 `A2`）。
+#[test]
+fn a_connector_rejection_is_the_same_answer_from_usages_and_converge() {
+    let root = rejected_package("a2");
+    for tool in ["nichlink.usages", "nichlink.converge"] {
+        let reply = super::tool_call(
+            &root,
+            json!(1),
+            &json!({"name": tool, "arguments": {"node": "root/label"}}),
+        );
+        let text = reply["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{tool} returned no text: {reply}"));
+        assert_eq!(
+            reply["result"]["isError"], false,
+            "{tool} answers about the tree instead of failing: {reply}"
+        );
+        assert!(
+            text.contains(crate::mcp::apply::REJECTED_VERDICT),
+            "{tool} must print the one verdict spelling: {text}"
+        );
+        assert!(
+            text.contains("input `cap.theme` has no provider"),
+            "{tool} must carry the diagnostic that names the cause: {text}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Every new name is wired to its implementation, not only to the catalog.
 /// 每个新名字都接到了实现上，而不只是接进目录。
 #[test]

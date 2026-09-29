@@ -110,17 +110,18 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
 
 /// Keep one reply inside a size an agent can read, and say when it did not.
 /// 把一条回复限制在代理读得下的规模里，并在截断时说出来。
+///
+/// The cap cannot be raised from here — it is this bridge's, not the kernel's — so the
+/// way to the whole list is the command that prints it without one: the CLI.
+/// 这道理上限不能从这里提高——它是本桥的，不是内核的——因此拿到完整清单的出路是那条不加限制就
+/// 把它全打印出来的命令：CLI。
 fn bounded(text: &str) -> String {
-    let lines = text.lines().count();
-    if lines <= MAX_DIAGNOSTIC_LINES {
-        return text.to_owned();
-    }
-    let head = text
-        .lines()
-        .take(MAX_DIAGNOSTIC_LINES)
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("{head}\n… truncated: {lines} diagnostic lines total, {MAX_DIAGNOSTIC_LINES} shown.\n")
+    crate::mcp::truncation::bounded(
+        text,
+        MAX_DIAGNOSTIC_LINES,
+        "diagnostic lines",
+        "run `nichlink check` for the whole list",
+    )
 }
 
 #[cfg(test)]

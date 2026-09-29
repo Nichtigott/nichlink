@@ -504,6 +504,20 @@ fn text<'a>(fields: &'a Value, key: &str) -> &'a str {
     fields.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
+/// The verdict line every read tool prints when the connector refuses this package's
+/// own faces.
+/// 连接器拒绝本包自己的面时，每个读工具都会打印的那句判断。
+///
+/// One fact, one spelling: `converge` prints it in its verdict block and `usages`
+/// prints it instead of returning an error, so an agent routing on `isError` — or
+/// reading the body — gets the same answer from either. The write path is the one
+/// place it stays an error, because a request it cannot carry out is a tool failure
+/// rather than a fact about the tree.
+/// 一个事实一种拼法：`converge` 在它的判断块里打印它，`usages` 打印它而不是返回一个错误，因此
+/// 无论代理按 `isError` 分流还是读正文，从哪一个工具得到的都是同一个答案。写入路径是它仍作为错误
+/// 的唯一地方，因为一次它无法执行的请求是工具故障，而不是关于这棵树的事实。
+pub(crate) const REJECTED_VERDICT: &str = "kernel verdict: this package's own faces are rejected";
+
 /// Build the registry the executor validates against: the package's own faces,
 /// under the namespace Cargo reports.
 /// 构建执行器据以校验的注册树：该包自己的注册面，位于 Cargo 报告的命名空间之下。

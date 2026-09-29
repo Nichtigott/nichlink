@@ -145,6 +145,27 @@ fn the_source_half_still_answers_file_and_function_names() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The result bound is a bound **and says so**: the scan used to stop at `limit` with
+/// nothing in the reply saying rows were left out, so a caller could not tell a complete
+/// answer from a full one. The count is taken over the whole scan, so the sentence can say
+/// `of N` rather than a lower bound.
+/// 结果上限是上限**而且自己说出来**：扫描过去在 `limit` 处停下，而回复里没有任何东西说还有行被
+/// 落下，因此调用方分不出完整答案与塞满的答案。计数取自整次扫描，因此那句话说的是「N 中的 M」，
+/// 而不是一个下界。
+#[test]
+fn a_result_list_cut_by_the_limit_says_how_many_it_withheld() {
+    let (root, _) = package("bounded");
+    let reply = search(&root, &json!({"query": "gauge", "limit": 1})).expect("the search answers");
+    // `gauge` matches the face, the file and the function: three rows, one shown.
+    // `gauge` 匹配面、文件与函数：三行，显示一行。
+    assert!(
+        reply.contains("… truncated: 2 of 3 results withheld at the limit of 1"),
+        "{reply}"
+    );
+    assert!(reply.contains("face  root/gauge"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A root whose identity namespace cannot be learned still answers the source
 /// half, and says the tree half is unavailable instead of pretending it is empty.
 /// 身份命名空间无从得知的根仍然回答源码那一半，并说明树那一半不可用，而不是假装它是空的。

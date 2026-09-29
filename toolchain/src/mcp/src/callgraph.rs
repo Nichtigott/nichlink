@@ -19,6 +19,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::mcp::source_index::{display_list, load_sources};
+use crate::mcp::truncation::withheld;
 
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     // Two bounds, because this answer is the one that grows without limit: the
@@ -86,29 +87,44 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         callers.sort();
         callers.dedup();
         let callers_total = callers.len();
-        let callers_text = if callers_total > CALLERS {
-            format!(
-                "{} … +{} more",
-                callers[..CALLERS].join(", "),
-                callers_total - CALLERS
-            )
-        } else {
-            display_list(&callers)
-        };
         output.push_str(&format!(
-            "{}:{} fn {}\n  callers ({}): {}\n  callees: {}\n",
-            file.relative,
-            function.line,
-            function.name,
-            callers_total,
-            callers_text,
-            display_list(&function.calls),
+            "{}:{} fn {}\n",
+            file.relative, function.line, function.name
         ));
+        output.push_str(&format!(
+            "  callers ({}): {}\n",
+            callers_total,
+            display_list(&callers[..callers_total.min(CALLERS)])
+        ));
+        if callers_total > CALLERS {
+            // The caller cap is this tool's own constant, not `limit`: no argument
+            // raises it, so the sentence has to name the absence rather than advice a
+            // caller cannot act on.
+            // 调用者上限是本工具自己的常数、不是 `limit`：没有任何参数能提高它，因此那句话必须
+            // 点名这个"没有"，而不是给出调用方无法执行的建议。
+            output.push_str(&format!(
+                "  {}\n",
+                withheld(
+                    callers_total - CALLERS,
+                    callers_total,
+                    CALLERS,
+                    "callers",
+                    "pass `path` to list one definition's callers; no argument raises this cap"
+                )
+            ));
+        }
+        output.push_str(&format!("  callees: {}\n", display_list(&function.calls)));
     }
     if total > limit {
         output.push_str(&format!(
-            "… +{} more definitions (raise `limit` or pass `path`)\n",
-            total - limit
+            "{}\n",
+            withheld(
+                total - limit,
+                total,
+                limit,
+                "definitions",
+                "raise `limit` or pass `path`"
+            )
         ));
     }
     output.push_str("dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.\n");

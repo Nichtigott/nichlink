@@ -18,6 +18,7 @@ use std::path::Path;
 use crate::build_time::FaceView;
 
 use crate::mcp::trace::{RecordedTrace, local_line, read_verified};
+use crate::mcp::truncation::{withheld, withheld_uncounted};
 
 /// How many frames of one face, and how many files outside any face, are shown.
 /// 一个面最多展示几个帧、以及多少个不在任何面里的文件。
@@ -30,6 +31,16 @@ const VALUES_PER_FACE: usize = 8;
 /// The most lines a trace-driven report carries before it stops adding detail.
 /// trace 驱动的报告在停止追加细节之前最多携带的行数。
 const MAX_CONVERGE_LINES: usize = 200;
+
+/// How a reader reaches the per-face detail this report's **own** caps withhold.
+/// 读取方怎么拿到本报告**自身**那几道上限扣下的逐面细节。
+///
+/// These caps are constants, not `limit`: no argument raises them, so the sentence has
+/// to name the absence and point at the tool that prints the run itself. Advice a caller
+/// cannot act on is what audit `LGC-LG-43` recorded against `raise \`limit\``.
+/// 这几道上限是常数而不是 `limit`：没有参数能提高它们，因此那句话必须点名这个"没有"，并指向那个
+/// 打印整次运行的工具。调用方无法执行的建议，正是审计 `LGC-LG-43` 记在 `raise \`limit\`` 上的问题。
+const MORE_DETAIL: &str = "no argument raises this per-face cap; `nichlink.trace values: true` prints the run's values and edges";
 
 /// Converge from the run that happened rather than from a face name.
 /// 从真正发生过的那次运行收敛，而不是从一个面名收敛。
@@ -97,6 +108,12 @@ pub(crate) fn converge_from_trace(
 
     let mut lines = header.lines().count();
     let mut output = header;
+    // Whether the per-face line cap below silently swallowed any detail: it is a cap
+    // on the reply's size, so the values and edges it kept out were never counted, and
+    // leaving that unsaid is how a shorter answer reads as a whole one.
+    // 下面那个逐面行数上限是否默默吞掉了细节：它是回复规模的上限，因此它挡在门外的值与边从未被
+    // 计数，而对此不作声正是一个更短的答案被读成完整答案的方式。
+    let mut detail_stopped = false;
     output.push_str(&format!(
         "faces that ran ({} of {} declared, matched by source file)\n",
         ran.len(),
@@ -107,7 +124,16 @@ pub(crate) fn converge_from_trace(
     }
     for (index, (source, entry)) in ran.iter().enumerate() {
         if index >= limit {
-            output.push_str(&format!("  … +{} more files\n", ran.len() - limit));
+            output.push_str(&format!(
+                "  {}\n",
+                withheld(
+                    ran.len() - limit,
+                    ran.len(),
+                    limit,
+                    "files",
+                    "raise `limit`"
+                )
+            ));
             break;
         }
         output.push_str(&format!(
@@ -122,7 +148,16 @@ pub(crate) fn converge_from_trace(
         }
         let omitted = entry.frames.saturating_sub(entry.samples.len());
         if omitted > 0 {
-            output.push_str(&format!("    … +{omitted} more frame(s)\n"));
+            output.push_str(&format!(
+                "    {}\n",
+                withheld(
+                    omitted,
+                    entry.frames,
+                    FRAMES_PER_FACE,
+                    "frame(s)",
+                    MORE_DETAIL
+                )
+            ));
         }
         // What those frames *saw*, not only that they ran: the recorded locals of
         // this file's frames, and the observed edges between them. This is the half
@@ -149,11 +184,19 @@ pub(crate) fn converge_from_trace(
             }
             if locals.len() > VALUES_PER_FACE {
                 output.push_str(&format!(
-                    "      … +{} more value(s)\n",
-                    locals.len() - VALUES_PER_FACE
+                    "      {}\n",
+                    withheld(
+                        locals.len() - VALUES_PER_FACE,
+                        locals.len(),
+                        VALUES_PER_FACE,
+                        "value(s)",
+                        MORE_DETAIL
+                    )
                 ));
                 lines += 1;
             }
+        } else if !locals.is_empty() {
+            detail_stopped = true;
         }
         let ids: BTreeSet<u64> = locals.iter().map(|local| local.id).collect();
         let edges: Vec<_> = artifact
@@ -183,11 +226,19 @@ pub(crate) fn converge_from_trace(
             }
             if edges.len() > VALUES_PER_FACE {
                 output.push_str(&format!(
-                    "      … +{} more edge(s)\n",
-                    edges.len() - VALUES_PER_FACE
+                    "      {}\n",
+                    withheld(
+                        edges.len() - VALUES_PER_FACE,
+                        edges.len(),
+                        VALUES_PER_FACE,
+                        "edge(s)",
+                        MORE_DETAIL
+                    )
                 ));
                 lines += 1;
             }
+        } else if !edges.is_empty() {
+            detail_stopped = true;
         }
     }
     output.push_str(&format!(
@@ -197,7 +248,16 @@ pub(crate) fn converge_from_trace(
         output.push_str(&format!("  {file} ({count})\n"));
     }
     if outside.len() > limit {
-        output.push_str(&format!("  … +{} more files\n", outside.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                outside.len() - limit,
+                outside.len(),
+                limit,
+                "files",
+                "raise `limit`"
+            )
+        ));
     }
     if no_callsite > 0 {
         output.push_str(&format!("frames with no recorded callsite {no_callsite}\n"));
@@ -205,9 +265,35 @@ pub(crate) fn converge_from_trace(
     output.push_str(&format!("read plan ({} files)\n", ran.len()));
     for (index, source) in ran.keys().enumerate() {
         if index >= limit {
+            output.push_str(&format!(
+                "  {}\n",
+                withheld(
+                    ran.len() - limit,
+                    ran.len(),
+                    limit,
+                    "files",
+                    "raise `limit`"
+                )
+            ));
             break;
         }
         output.push_str(&format!("  {source:<44} (this face)\n"));
+    }
+    if detail_stopped {
+        // The per-face cap stopped adding detail, and the values it never printed were
+        // never counted — the one fact this site cannot give, said out loud rather than
+        // left as a shorter-looking answer.
+        // 逐面上限停止了追加细节，而它从未打印的那些值也从未被计数——这是本站点给不出的那一个事实，
+        // 说出来，而不是留下一个看起来更短的答案。
+        output.push_str(&format!(
+            "{}\n",
+            withheld_uncounted(
+                MAX_CONVERGE_LINES,
+                "lines of per-face detail",
+                "lower `limit` so fewer files take the detail, or read the whole run with \
+                 `nichlink.trace values: true`"
+            )
+        ));
     }
     output.push_str(&format!(
         "detail: nichlink.converge node=<path> (one face's constraints) · nichlink.trace ({}) · \

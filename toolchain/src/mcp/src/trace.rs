@@ -327,18 +327,16 @@ fn render_values(artifact: &TraceArtifact, query: Option<&str>) -> String {
 
 /// Keep one reply inside a size an agent can read, and say when it did not.
 /// 把一条回复限制在代理读得下的规模里，并在截断时说出来。
+///
+/// The header this module prepends is not part of the bound — it says which artifact
+/// the report came from, and a reader needs it whether or not the body was cut — so
+/// the cut itself is the shared outlet's, `crate::mcp::truncation::bounded`.
+/// 本模块前置的表头不计入上限——它说明这份报告来自哪份 artifact，而无论正文是否被切，读取方都
+/// 需要它——因此切分本身由共享出口 `crate::mcp::truncation::bounded` 完成。
 fn bounded(header: String, report: &str) -> String {
-    let lines = report.lines().count();
-    if lines <= MAX_REPORT_LINES {
-        return format!("{header}{report}");
-    }
-    let head = report
-        .lines()
-        .take(MAX_REPORT_LINES)
-        .collect::<Vec<_>>()
-        .join("\n");
     format!(
-        "{header}{head}\n… truncated: {lines} lines total, {MAX_REPORT_LINES} shown. Narrow with `query`.\n"
+        "{header}{}",
+        crate::mcp::truncation::bounded(report, MAX_REPORT_LINES, "lines", "narrow with `query`")
     )
 }
 

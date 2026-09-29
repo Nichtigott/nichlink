@@ -59,11 +59,17 @@ fn a_common_name_is_bounded_and_its_ambiguity_is_named() {
     assert!(reply.contains("pass `path` to select one"), "{reply}");
     // One definition shown, two withheld, both stated.
     // 显示一个定义、扣下两个，两件事都写出来。
-    assert!(reply.contains("… +2 more definitions"), "{reply}");
+    assert!(
+        reply.contains("… truncated: 2 of 3 definitions withheld at the limit of 1"),
+        "{reply}"
+    );
     // The caller list is capped: 25 callers, 20 shown.
     // 调用者清单有上限：25 个调用者，显示 20 个。
     assert!(reply.contains("callers (25):"), "{reply}");
-    assert!(reply.contains("… +5 more"), "{reply}");
+    assert!(
+        reply.contains("… truncated: 5 of 25 callers withheld at the limit of 20"),
+        "{reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -97,19 +103,19 @@ fn the_limit_contract_is_the_one_the_catalog_declares() {
     let default = callgraph(&root, &json!({"function": "new"})).expect("the answer renders");
     assert!(default.contains("matches 60"), "{default}");
     assert!(
-        default.contains("… +55 more definitions"),
+        default.contains("… truncated: 55 of 60 definitions withheld at the limit of 5"),
         "the default shows 5 of 60 definitions: {default}"
     );
     let clamped =
         callgraph(&root, &json!({"function": "new", "limit": 999})).expect("the answer renders");
     assert!(
-        clamped.contains("… +10 more definitions"),
+        clamped.contains("… truncated: 10 of 60 definitions withheld at the limit of 50"),
         "a limit past the declared maximum is clamped to 50, not refused: {clamped}"
     );
     let zero =
         callgraph(&root, &json!({"function": "new", "limit": 0})).expect("the answer renders");
     assert!(
-        zero.contains("… +59 more definitions"),
+        zero.contains("… truncated: 59 of 60 definitions withheld at the limit of 1"),
         "a limit below the declared minimum behaves as 1: {zero}"
     );
     let _ = std::fs::remove_dir_all(&root);

@@ -20,6 +20,7 @@ use crate::mcp::build_evidence::build_evidence;
 use crate::mcp::protocol::DEFAULT_LIMIT;
 use crate::mcp::registry::namespace;
 use crate::mcp::tree_delta::{FaceStatus, TreeDelta};
+use crate::mcp::truncation::withheld;
 
 /// Report the face-level delta between two sides of this package.
 /// 报告本包两侧之间的面级差异。
@@ -124,13 +125,49 @@ pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
     for face in added.iter().take(limit) {
         output.push_str(&format!("  + {} {} {}\n", face.path, face.kind, face.id));
     }
+    if added.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                added.len() - limit,
+                added.len(),
+                limit,
+                "added faces",
+                "raise `limit`"
+            )
+        ));
+    }
     output.push_str("gone:\n");
     for row in gone.iter().take(limit) {
         output.push_str(&format!("  - {} ({})\n", row.source, row.id));
     }
+    if gone.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                gone.len() - limit,
+                gone.len(),
+                limit,
+                "gone faces",
+                "raise `limit`"
+            )
+        ));
+    }
     output.push_str(&format!("{}:\n", FaceStatus::REIDENTIFIED));
     for (face, previous) in reidentified.iter().take(limit) {
         output.push_str(&format!("  ~ {} {} -> {}\n", face.path, previous, face.id));
+    }
+    if reidentified.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                reidentified.len() - limit,
+                reidentified.len(),
+                limit,
+                "re-identified faces",
+                "raise `limit`"
+            )
+        ));
     }
     Ok(output)
 }
@@ -260,6 +297,18 @@ fn diff_records(
                 .unwrap_or_default()
         ));
     }
+    if ok.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                ok.len() - limit,
+                ok.len(),
+                limit,
+                "ok records",
+                "raise `limit`"
+            )
+        ));
+    }
     if !undeclared.is_empty() {
         output.push_str(
             "undeclared (the release prunes these slots, so the record can never take effect):\n",
@@ -276,6 +325,18 @@ fn diff_records(
                 row.target_path.as_deref().unwrap_or("-"),
             ));
         }
+        if undeclared.len() > limit {
+            output.push_str(&format!(
+                "  {}\n",
+                withheld(
+                    undeclared.len() - limit,
+                    undeclared.len(),
+                    limit,
+                    "undeclared records",
+                    "raise `limit`"
+                )
+            ));
+        }
     }
     output.push_str("stale:\n");
     for row in stale.iter().take(limit) {
@@ -283,6 +344,18 @@ fn diff_records(
             "  - {} -> {} (no face in this tree has that identity or that path)\n",
             row.selector,
             row.target_path.as_deref().unwrap_or("-")
+        ));
+    }
+    if stale.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                stale.len() - limit,
+                stale.len(),
+                limit,
+                "stale records",
+                "raise `limit`"
+            )
         ));
     }
     output.push_str("re-identified:\n");
@@ -294,6 +367,18 @@ fn diff_records(
                 .map(|target| target.to_string())
                 .unwrap_or_default(),
             row.target_path.as_deref().unwrap_or("-")
+        ));
+    }
+    if reidentified.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                reidentified.len() - limit,
+                reidentified.len(),
+                limit,
+                "re-identified records",
+                "raise `limit`"
+            )
         ));
     }
     output.push_str(

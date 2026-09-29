@@ -139,7 +139,7 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
     output.push_str(&format!("children {}\n", children.len()));
     match (&rejected, &authored) {
         (Some(rejection), _) => {
-            output.push_str("kernel verdict: this package's own faces are rejected\n");
+            output.push_str(&format!("{}\n", crate::mcp::apply::REJECTED_VERDICT));
             for line in rejection.lines() {
                 output.push_str(&format!("  {}\n", line.trim_end()));
             }
@@ -174,7 +174,16 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         output.push_str(&format!("  {source:<44} ({why})\n"));
     }
     if plan.len() > limit {
-        output.push_str(&format!("  … +{} more\n", plan.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                plan.len() - limit,
+                plan.len(),
+                limit,
+                "files",
+                "raise `limit`"
+            )
+        ));
     }
     if unreadable > 0 {
         output.push_str(&format!(

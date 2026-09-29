@@ -77,7 +77,16 @@ pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
         .count();
     for (index, row) in rows.iter().enumerate() {
         if index >= limit {
-            output.push_str(&format!("  … +{} more\n", rows.len() - limit));
+            output.push_str(&format!(
+                "  {}\n",
+                crate::mcp::truncation::withheld(
+                    rows.len() - limit,
+                    rows.len(),
+                    limit,
+                    "plan rows",
+                    "raise `limit`"
+                )
+            ));
             break;
         }
         match &row.error {

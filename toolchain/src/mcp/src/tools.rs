@@ -199,7 +199,11 @@ pub(crate) fn tools() -> Vec<Value> {
              text dump never fails because a line that is not a call is simply not a call. The JSONL \
              form is the portable channel Studio could already render and parse and nothing in this \
              workspace ever wrote — `jsonl: true` makes this tool that writer, and what it prints \
-             reads back here. What it writes is a *snapshot*: a header naming the identity namespace \
+             reads back here. It prints only a snapshot it can print **whole**: a graph whose JSONL \
+             would run past this bridge's reply cap is refused by name — the line count, the cap, and \
+             the narrower dump that would fit are all named — instead of being printed short, because \
+             a payload cut at the cap would read back here as a complete snapshot of a smaller graph. \
+             What it writes is a *snapshot*: a header naming the identity namespace \
              and registry root of the tree the artifact came from, which is what makes two artifacts \
              comparable — a snapshot of another tree is refused by name, and an unidentified one (a \
              text dump can't name its tree) makes the delta say what it cannot rule out. With \
@@ -260,6 +264,11 @@ pub(crate) fn tools() -> Vec<Value> {
              capability tokens. Capability matches are on declared tokens rather than a resolved graph, \
              and the reply says so. A hand-written module has no generated field list and the executor \
              refuses to invent one, so those faces are counted as unreadable rather than shown empty. \
+             A package whose own faces the authoring connector refuses still gets its tree half — the \
+             parent, the children and this face's identity come from the source derivation — with the \
+             verdict printed and the field and capability halves named unavailable rather than shown \
+             empty; that is the same verdict `nichlink.verify` prints on its connector line, and it is \
+             an answer about the tree rather than a tool failure, so `isError` stays false. \
              Declared graft cuts are not reported here; the CLI's `explain --json` carries them.",
             json!({"type":"object","properties":{"node":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}},"required":["node"]}),
         ),
@@ -283,9 +292,17 @@ pub(crate) fn tools() -> Vec<Value> {
              run just published. It drives the same entry the CLI's `check` drives, so a verdict here \
              cannot drift from `nichlink check`, and it refreshes the build evidence as a side effect — \
              which is why the delta below it describes the tree that was just verified rather than the \
-             last build. A failed verdict is the answer and not a tool failure: the reply says `verdict \
-             failed` with the diagnostics (each naming its phase, node, source and line) and `isError` \
-             stays false, because the verification itself succeeded.",
+             last build. **Two verdicts are printed, because this package is judged on two surfaces.** \
+             The first is the static one: it judges the faces the build ships, and a failure there is \
+             the answer and not a tool failure — the reply says `verdict failed` with the diagnostics \
+             (each naming its phase, node, source and line) while `isError` stays false, because the \
+             verification itself succeeded. The second is a line of its own, `connector verdict: ok` or \
+             `connector verdict: rejected`, from the authoring connector every face tool validates \
+             through (`apply`, `usages`, `converge`): it registers the faces on disk rather than the \
+             ones the build scoped, so a tree can pass the static line and be refused here. A rejection \
+             is rendered the same way — the diagnostic names the field and the line — and `isError` \
+             stays false for it too, because `rejected` is what this surface says about the tree rather \
+             than a failure to ask.",
             json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
     ]

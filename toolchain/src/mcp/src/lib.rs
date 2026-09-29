@@ -118,3 +118,6 @@ mod search;
 
 #[path = "tree_delta.rs"]
 mod tree_delta;
+
+#[path = "truncation.rs"]
+mod truncation;

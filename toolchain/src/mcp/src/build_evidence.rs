@@ -241,8 +241,14 @@ fn tree_report(
     }
     if faces.len() > limit {
         output.push_str(&format!(
-            "  … +{} more (raise `limit`)\n",
-            faces.len() - limit
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                faces.len() - limit,
+                faces.len(),
+                limit,
+                "faces",
+                "raise `limit`"
+            )
         ));
     }
     match evidence.pruning.as_deref() {
@@ -252,7 +258,16 @@ fn tree_report(
                 output.push_str(&format!("  {} {} {}\n", row.id, row.source, row.symbol));
             }
             if rows.len() > limit {
-                output.push_str(&format!("  … +{} more\n", rows.len() - limit));
+                output.push_str(&format!(
+                    "  {}\n",
+                    crate::mcp::truncation::withheld(
+                        rows.len() - limit,
+                        rows.len(),
+                        limit,
+                        "pruned rows",
+                        "raise `limit`"
+                    )
+                ));
             }
         }
         None => output.push_str("pruned unknown (no pruning_manifest.tsv; run `nichlink check`)\n"),

@@ -52,6 +52,16 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         .and_then(Value::as_u64)
         .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
     let mut results = Vec::new();
+    // The limit used to cut the scan short with nothing said, so a caller that got
+    // `limit` rows could not tell a complete answer from a full one. The rows the limit
+    // governs are counted over the **whole** scan now — the text is already loaded, so
+    // counting costs no I/O — because a count taken while breaking early is a lower
+    // bound, and the sentence below says `of N`.
+    // 上限过去把扫描提前切断而一言不发，因此拿到 `limit` 行的调用方分不出这是完整答案还是一个被塞满
+    // 的答案。现在受上限约束的那些行在**整次**扫描里计数——文本本来就已经载入，计数不花 I/O——因为
+    // 在提前 break 处取到的计数只是一个下界，而下面那句话说的是「N 中的 M」。
+    let mut hits = 0usize;
+    let mut withheld_hits = 0usize;
     // The tree comes first: the face is the unit every other tool names, and a
     // query that names a face must not be consumed by the files that mention it.
     // 树排在前面：面是其它每个工具命名的单位，而点名了某个面的查询不能被提到它的那些文件吃掉。
@@ -62,10 +72,12 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
             let mut tree = Vec::new();
             for face in &faces {
                 if matches_face(face, &query) {
-                    tree.push(face_line(face, &built));
-                }
-                if tree.len() >= limit {
-                    break;
+                    if hits < limit {
+                        tree.push(face_line(face, &built));
+                        hits += 1;
+                    } else {
+                        withheld_hits += 1;
+                    }
                 }
             }
             // A registration file the derivation could not parse is a fact about the *tree
@@ -112,27 +124,41 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // The source half is unchanged: file paths and function declarations by name.
     // 源码那一半不变：按名字匹配的文件路径与函数声明。
     let files = load_sources(root)?;
-    'files: for file in &files {
-        if results.len() >= limit {
-            break;
-        }
+    for file in &files {
         if file.relative.to_ascii_lowercase().contains(&query) {
-            results.push(format!("file  {}", file.relative));
+            if results.len() < limit {
+                results.push(format!("file  {}", file.relative));
+                hits += 1;
+            } else {
+                withheld_hits += 1;
+            }
         }
         for function in &file.functions {
-            if results.len() >= limit {
-                break 'files;
+            if !function.name.to_ascii_lowercase().contains(&query) {
+                continue;
             }
-            if function.name.to_ascii_lowercase().contains(&query) {
+            if results.len() < limit {
                 results.push(format!(
                     "fn    {} -> {}:{}",
                     function.name, file.relative, function.line
                 ));
+                hits += 1;
+            } else {
+                withheld_hits += 1;
             }
         }
     }
     if results.is_empty() {
         return Ok("no matches".to_owned());
+    }
+    if withheld_hits > 0 {
+        results.push(crate::mcp::truncation::withheld(
+            withheld_hits,
+            hits + withheld_hits,
+            limit,
+            "results",
+            "raise `limit` or narrow the query",
+        ));
     }
     Ok(results.join("\n"))
 }

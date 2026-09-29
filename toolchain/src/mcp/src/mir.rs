@@ -36,10 +36,15 @@ use nichlink_kernel::mir::{MirGraph, MirSnapshot};
 use serde_json::Value;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
+use crate::mcp::truncation::withheld;
 
 /// The most rows or lines one reply carries before it says it truncated.
 /// 一条回复在声明被截断之前最多携带的行数。
 const MAX_ROWS: usize = 400;
+
+/// How a reader reaches the rows this tool's `limit` withheld.
+/// 读取方怎么拿到本工具的 `limit` 扣下的那些行。
+const RAISE_LIMIT: &str = "raise `limit`";
 
 /// Read a MIR artifact and report the graph, emit it as canonical JSONL, or
 /// report the call-graph delta against another artifact.
@@ -98,11 +103,33 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
             ));
         }
         confirmed_snapshot(&mut graph, &snapshot_for(root)?, &path)?;
-        return Ok(bounded(
-            &graph.to_jsonl(),
-            "lines",
-            "pass what this prints to a JSONL-suffixed file and `nichlink.mir` reads it back",
-        ));
+        // A JSONL payload is the one answer here that must read back, so it is either
+        // printed whole or not printed at all: a payload cut at the reply cap would
+        // read back here as a *complete* snapshot of a smaller graph, and `delta` and
+        // `unified` trust what they read — the plausible, wrong answer this module
+        // refuses everywhere else (audit `X2`). The truncation sentence cannot ride the
+        // payload either: JSONL has no legal way to mark itself short, so the notice
+        // would have to be prose inside the stream, which is the defect being fixed.
+        // JSONL 载荷是这里唯一必须能读回来的答案，因此它要么整体打印、要么完全不打印：在回复上限处
+        // 被切开的载荷会在这里读回来成一份**较小的图的完整快照**，而 `delta` 与 `unified` 会采信它们
+        // 读到的——正是本模块在别处一律拒绝的"看似合理却错误"的答案（审计 `X2`）。截断说明也不能搭
+        // 载荷的便车：JSONL 没有任何合法方式标记自己不完整，那句说明就只能作为散文出现在流里，而那正是
+        // 要修的缺陷。
+        let payload = graph.to_jsonl();
+        let lines = payload.lines().count();
+        if lines > MAX_ROWS {
+            return Err(format!(
+                "{} renders {lines} JSONL lines, above the {MAX_ROWS}-line reply cap this bridge \
+                 answers within, so the snapshot cannot be printed whole. A payload cut at the cap \
+                 would read back here as a complete snapshot of a smaller graph, and `delta`/\
+                 `unified` trust what they read, so this refuses instead of printing one. Emit a \
+                 smaller artifact — `cargo rustc -Zunpretty=mir` runs per target, so dump the crate \
+                 that matters (`--lib` or `--bin <name>`) — and this writer will stamp whatever dump \
+                 it is handed",
+                path.display()
+            ));
+        }
+        return Ok(payload);
     }
     let limit = limit(arguments);
     let mut output = format!(
@@ -124,7 +151,16 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
         ));
     }
     if graph.calls.len() > limit {
-        output.push_str(&format!("  … +{} more\n", graph.calls.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                graph.calls.len() - limit,
+                graph.calls.len(),
+                limit,
+                "calls",
+                RAISE_LIMIT
+            )
+        ));
     }
     output.push_str("locals:\n");
     for local in graph.locals.iter().take(limit) {
@@ -134,7 +170,16 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
         ));
     }
     if graph.locals.len() > limit {
-        output.push_str(&format!("  … +{} more\n", graph.locals.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                graph.locals.len() - limit,
+                graph.locals.len(),
+                limit,
+                "locals",
+                RAISE_LIMIT
+            )
+        ));
     }
     Ok(output)
 }
@@ -213,7 +258,16 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
         ));
     }
     if relations.len() > limit {
-        output.push_str(&format!("  … +{} more\n", relations.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                relations.len() - limit,
+                relations.len(),
+                limit,
+                "relations",
+                RAISE_LIMIT
+            )
+        ));
     }
     Ok(output)
 }
@@ -396,14 +450,32 @@ fn delta_report(
         output.push_str(&format!("  {} -> {}\n", call.caller, call.callee));
     }
     if delta.added.len() > limit {
-        output.push_str(&format!("  … +{} more\n", delta.added.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                delta.added.len() - limit,
+                delta.added.len(),
+                limit,
+                "added relations",
+                RAISE_LIMIT
+            )
+        ));
     }
     output.push_str("gone:\n");
     for call in delta.gone.iter().take(limit) {
         output.push_str(&format!("  {} -> {}\n", call.caller, call.callee));
     }
     if delta.gone.len() > limit {
-        output.push_str(&format!("  … +{} more\n", delta.gone.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            withheld(
+                delta.gone.len() - limit,
+                delta.gone.len(),
+                limit,
+                "gone relations",
+                RAISE_LIMIT
+            )
+        ));
     }
     output.push_str("functions added:\n");
     for name in delta.functions_added.iter().take(limit) {
@@ -411,8 +483,14 @@ fn delta_report(
     }
     if delta.functions_added.len() > limit {
         output.push_str(&format!(
-            "  … +{} more\n",
-            delta.functions_added.len() - limit
+            "  {}\n",
+            withheld(
+                delta.functions_added.len() - limit,
+                delta.functions_added.len(),
+                limit,
+                "added functions",
+                RAISE_LIMIT
+            )
         ));
     }
     output.push_str("functions gone:\n");
@@ -421,8 +499,14 @@ fn delta_report(
     }
     if delta.functions_gone.len() > limit {
         output.push_str(&format!(
-            "  … +{} more\n",
-            delta.functions_gone.len() - limit
+            "  {}\n",
+            withheld(
+                delta.functions_gone.len() - limit,
+                delta.functions_gone.len(),
+                limit,
+                "gone functions",
+                RAISE_LIMIT
+            )
         ));
     }
     output
@@ -454,17 +538,6 @@ fn limit(arguments: &Value) -> usize {
         .get("limit")
         .and_then(Value::as_u64)
         .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize)
-}
-
-/// Keep one reply inside a size an agent can read, and say when it did not.
-/// 把一条回复限制在代理读得下的规模里，并在截断时说出来。
-fn bounded(text: &str, unit: &str, hint: &str) -> String {
-    let lines = text.lines().count();
-    if lines <= MAX_ROWS {
-        return text.to_owned();
-    }
-    let head = text.lines().take(MAX_ROWS).collect::<Vec<_>>().join("\n");
-    format!("{head}\n… truncated: {lines} {unit} total, {MAX_ROWS} shown. {hint}.\n")
 }
 
 #[cfg(test)]

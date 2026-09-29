@@ -46,7 +46,74 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("limit")
         .and_then(Value::as_u64)
         .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
-    let registry = load_registry(root, &namespace)?;
+    // The tree edges above need no registry — they come from the source derivation — so
+    // they are answered before the connector is consulted. What needs the registry is
+    // the field read-back and the capability tokens, and a package whose own faces the
+    // kernel refuses has neither.
+    // 上面那些树的边不需要注册机——它们来自源码推导——因此在询问连接器之前就作答了。需要注册机的是
+    // 字段读回与能力记号，而一个内核拒绝其自身面的包，两样都没有。
+    let mut output = format!(
+        "namespace {namespace}\n{unparsable}node {}\n  path {}\n  kind {}\n  parent {}{}\n",
+        face.id,
+        face.path,
+        face.kind,
+        face.parent,
+        faces
+            .iter()
+            .find(|candidate| candidate.id == face.parent)
+            .map_or_else(
+                || " (no face declares it)".to_owned(),
+                |parent| format!(" {}", parent.path)
+            ),
+    );
+    let children = faces
+        .iter()
+        .filter(|candidate| candidate.parent == id)
+        .collect::<Vec<_>>();
+    output.push_str(&format!("children ({})\n", children.len()));
+    for child in children.iter().take(limit) {
+        output.push_str(&format!("  {} {}\n", child.path, child.kind));
+    }
+    if children.len() > limit {
+        output.push_str(&format!(
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                children.len() - limit,
+                children.len(),
+                limit,
+                "children",
+                "raise `limit`"
+            )
+        ));
+    }
+    // The connector's refusal of this package's own faces is a *verdict about the tree*,
+    // not a tool failure — `verify` prints the same judgement on its connector line and
+    // `converge` prints it in its verdict block, while this tool used to return it as an
+    // error. An agent routing on `isError` therefore read the same rejection as a failure
+    // here and as an ordinary answer there (audit `A2`). The tree half above is still
+    // answered, because it never needed the registry; the half that did is named as
+    // unavailable rather than shown empty — an empty field list would be a claim this
+    // tree has no fields, which would be a different and wrong answer.
+    // 连接器对本包自身面的拒绝是关于**这棵树的判断**，而不是工具故障——`verify` 在它的连接器行上
+    // 打印同一个判断，`converge` 在它的判断块里打印它，而本工具过去把它当错误返回。于是按 `isError`
+    // 分流的代理，把同一次拒绝在这里读成失败、在那里读成普通答案（审计 `A2`）。上面的树那一半仍然
+    // 作答，因为它从不需要注册机；需要它的那一半被点名为不可用，而不是显示成空的——空的字段清单会
+    // 断言这棵树没有字段，那是另一个、而且是错误的答案。
+    let registry = match load_registry(root, &namespace) {
+        Ok(registry) => registry,
+        Err(rejection) => {
+            output.push_str(&format!("{}\n", crate::mcp::apply::REJECTED_VERDICT));
+            for line in rejection.lines() {
+                output.push_str(&format!("  {}\n", line.trim_end()));
+            }
+            output.push_str(
+                "fields and capability refs unavailable: both are read back through a registry the \
+                 kernel admits, and this tree's own faces are refused; `nichlink.verify` reports \
+                 both judging surfaces, and `nichlink.apply` previews a fix on a copy\n",
+            );
+            return Ok(output);
+        }
+    };
     // The read-back resolves the face's generated path, and that resolution is
     // relative to the package root the context carries — not to the directory the
     // process happens to sit in. Calling it outside the context is what once made
@@ -74,31 +141,6 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
             }
             Err(_) => unreadable += 1,
         }
-    }
-    let mut output = format!(
-        "namespace {namespace}\n{unparsable}node {}\n  path {}\n  kind {}\n  parent {}{}\n",
-        face.id,
-        face.path,
-        face.kind,
-        face.parent,
-        faces
-            .iter()
-            .find(|candidate| candidate.id == face.parent)
-            .map_or_else(
-                || " (no face declares it)".to_owned(),
-                |parent| format!(" {}", parent.path)
-            ),
-    );
-    let children = faces
-        .iter()
-        .filter(|candidate| candidate.parent == id)
-        .collect::<Vec<_>>();
-    output.push_str(&format!("children ({})\n", children.len()));
-    for child in children.iter().take(limit) {
-        output.push_str(&format!("  {} {}\n", child.path, child.kind));
-    }
-    if children.len() > limit {
-        output.push_str(&format!("  … +{} more\n", children.len() - limit));
     }
     match read_back(id) {
         Ok(authored) => {

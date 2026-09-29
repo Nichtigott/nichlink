@@ -106,6 +106,46 @@ fn the_jsonl_channel_round_trips_through_this_tool() {
     let _ = std::fs::remove_dir_all(&directory);
 }
 
+/// X2 pin: a snapshot too large for one reply is refused, not printed short. The
+/// artifact this tool prints is the one answer that must read back, and the sentence
+/// a truncation carries cannot ride the payload — JSONL has no legal way to mark
+/// itself incomplete — so a payload cut at the reply cap read back here as a
+/// *complete* snapshot of a smaller graph (audit `X2`).
+/// X2 钉子：一份对一条回复而言过大的快照会被拒绝，而不是被打印成残缺的。本工具打印的 artifact
+/// 是唯一必须能读回来的答案，而截断要带的那句话搭不上载荷的便车——JSONL 没有合法方式标记自己不
+/// 完整——因此在回复上限处被切开的载荷会在这里读回来成一份**较小的图的完整快照**（审计 `X2`）。
+#[test]
+fn a_snapshot_larger_than_one_reply_is_refused_rather_than_printed_short() {
+    let (directory, _) = root("too-big");
+    // 250 functions, each making one call, render as 501 JSONL lines: one past the cap.
+    // 250 个函数、每个一次调用，渲染成 501 行 JSONL：恰好越过上限。
+    let mut big = String::new();
+    for index in 0..250 {
+        big.push_str(&format!(
+            "fn crate::f{index}(_1: f32) -> f32 {{\n    _2 = crate::g{index}(move _1);\n    return;\n}}\n"
+        ));
+    }
+    std::fs::write(directory.join("big.mir"), &big).expect("the big dump");
+    let error = mir(&directory, &json!({"path": "big.mir", "jsonl": true}))
+        .expect_err("a snapshot that does not fit one reply is refused");
+    assert!(error.contains("501 JSONL lines"), "{error}");
+    assert!(error.contains("400-line reply cap"), "{error}");
+    assert!(
+        error.contains("`--lib` or `--bin <name>`"),
+        "the way to a smaller artifact must be named: {error}"
+    );
+
+    // The ordinary path is untouched: what it prints still reads back.
+    // 普通路径不受影响：它打印出来的东西仍然能读回来。
+    let small = mir(&directory, &json!({"path": "dump.mir", "jsonl": true}))
+        .expect("a snapshot inside the cap still prints");
+    assert!(small.starts_with("{\"kind\":\"snapshot\""), "{small}");
+    std::fs::write(directory.join("small.jsonl"), &small).expect("the emitted artifact");
+    let reread = mir(&directory, &json!({"path": "small.jsonl"})).expect("it reads back");
+    assert!(reread.contains("crate::outer -> crate::inner"), "{reread}");
+    let _ = std::fs::remove_dir_all(&directory);
+}
+
 /// Two snapshots of one tree diff into the relations and functions that moved,
 /// and the counts point from the baseline forward.
 /// 同一棵树的两份快照作差，得到移动过的关系与函数，而计数从基线指向后一份。

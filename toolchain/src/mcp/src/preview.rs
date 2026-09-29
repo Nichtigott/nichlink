@@ -346,9 +346,21 @@ pub(crate) fn diff_package(original: &Path, work: &Path) -> Result<String, Strin
         // could not read (audit `LGC-LG-23`).
         // 本桥其它每个答案都有上限并说明被截断；预览曾是唯一没有上限的那个，于是一次真实检出能产出
         // 代理读不下的回复（审计 `LGC-LG-23`）。
+        //
+        // The count is the one fact this site cannot give: the walk stops *at* the cap, so
+        // the lines past it were never produced, and counting them would walk the whole
+        // change the cap exists to avoid. The sentence says so rather than naming no
+        // number at all.
+        // 数量是本站点唯一给不出的事实：遍历在到达上限处停下，因此上限之外的行从未被产出，而要数出
+        // 它们就得走完整份改动——那正是上限要避免的。那句话把这一点说出来，而不是一个数字都不给。
+        let byte_cap = format!("a preview also stops at {MAX_DIFF_BYTES} bytes");
         output.push_str(&format!(
-            "… truncated: a preview reports at most {MAX_DIFF_LINES} diff lines or {MAX_DIFF_BYTES} \
-             bytes; read the written files for the rest\n"
+            "{}\n",
+            crate::mcp::truncation::withheld_uncounted(
+                MAX_DIFF_LINES,
+                "diff lines",
+                &format!("{byte_cap}; read the written files for the rest")
+            )
         ));
     }
     Ok(output)

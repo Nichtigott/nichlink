@@ -168,7 +168,16 @@ pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
     ));
     for (index, (path, reached)) in ordered.iter().enumerate() {
         if index >= limit {
-            output.push_str(&format!("  … +{} more\n", ordered.len() - limit));
+            output.push_str(&format!(
+                "  {}\n",
+                crate::mcp::truncation::withheld(
+                    ordered.len() - limit,
+                    ordered.len(),
+                    limit,
+                    "reached faces",
+                    "raise `limit`, or lower `depth` to narrow the radius"
+                )
+            ));
             break;
         }
         let kind = faces

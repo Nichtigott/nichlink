@@ -182,6 +182,9 @@ fn the_projection_is_bounded_by_limit() {
     }
     let reply = overlay(&root, &json!({"limit": 1})).expect("the projection renders");
     assert!(reply.contains("plan records 3:"), "{reply}");
-    assert!(reply.contains("… +2 more"), "{reply}");
+    assert!(
+        reply.contains("… truncated: 2 of 3 plan records withheld at the limit of 1"),
+        "{reply}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -128,14 +128,32 @@ fn render_overlay(
         ));
     }
     if projection.slots.len() > limit {
-        output.push_str(&format!("  … +{} more\n", projection.slots.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                projection.slots.len() - limit,
+                projection.slots.len(),
+                limit,
+                "slots",
+                "raise `limit`"
+            )
+        ));
     }
     output.push_str(&format!("pruned {}:\n", projection.pruned.len()));
     for slot in projection.pruned.iter().take(limit) {
         output.push_str(&format!("  {:<40} kind={}\n", slot.path, slot.kind));
     }
     if projection.pruned.len() > limit {
-        output.push_str(&format!("  … +{} more\n", projection.pruned.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                projection.pruned.len() - limit,
+                projection.pruned.len(),
+                limit,
+                "pruned slots",
+                "raise `limit`"
+            )
+        ));
     }
     output.push_str(&format!("plan records {}:\n", projection.plans.len()));
     for row in projection.plans.iter().take(limit) {
@@ -166,7 +184,16 @@ fn render_overlay(
         }
     }
     if projection.plans.len() > limit {
-        output.push_str(&format!("  … +{} more\n", projection.plans.len() - limit));
+        output.push_str(&format!(
+            "  {}\n",
+            crate::mcp::truncation::withheld(
+                projection.plans.len() - limit,
+                projection.plans.len(),
+                limit,
+                "plan records",
+                "raise `limit`"
+            )
+        ));
     }
     output.push_str(&format!("note: {OVERLAY_NOTE}\n"));
     output
