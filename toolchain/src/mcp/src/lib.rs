@@ -46,6 +46,14 @@
 //! project. Naming a package runs `cargo metadata` (through
 //! `crate::build_time::package_name`), because the package name is the
 //! `NodeId` namespace and Cargo is its authority.
+//! Three writes exist: `nichlink.apply` (faces, through the authoring executor), and
+//! the two Studio actions the bridge was missing — `nichlink.new_project`
+//! (`build_time::scaffold::create_project`, the same scaffold `nichlink new` and
+//! Studio's wizard run) and `nichlink.plugin` (the plugin lock record
+//! `submit_plugin` writes, through the kernel's `PluginCatalog` gate). All three
+//! preview by default, and the two whose effect is not recoverable by reading the
+//! source — a plugin lock record and a project written into an existing directory —
+//! also require the request to say `confirm: true`.
 //! JSON-RPC 帧从 stdin 进入、响应从 stdout 输出。读取仍在配置的
 //! `NICH_LINK_PACKAGE_ROOT` 之下。写入是存在的——`nichlink.apply`——而且它走**与 Studio
 //! 相同的 authoring 执行器**，运行在由已解析包根与 Cargo 报告的命名空间构成的
@@ -54,6 +62,11 @@
 //! `apply: true` 才会碰真实项目。为包命名会运行 `cargo metadata`（经
 //! `crate::build_time::package_name`），因为包名就是 `NodeId` 命名空间，而 Cargo 是它
 //! 的权威。
+//! 写入一共有三个：`nichlink.apply`（注册面，走 authoring 执行器），以及桥此前缺的那两个 Studio
+//! 动作——`nichlink.new_project`（`build_time::scaffold::create_project`，即 `nichlink new` 与
+//! Studio 向导运行的同一份脚手架）与 `nichlink.plugin`（`submit_plugin` 写下的插件锁记录，经内核的
+//! `PluginCatalog` 闸门）。三者默认都只预览；其中两个的效果无法靠读源码复原——插件锁记录，以及写进
+//! 已存在目录的项目——因此它们还要求请求自己说出 `confirm: true`。
 
 // The published surface must be readable on docs.rs without leaving the page,
 // so the lint is on for the whole crate; `clippy -D warnings` makes a new
@@ -76,6 +89,12 @@ mod apply;
 
 #[path = "apply_target.rs"]
 mod apply_target;
+
+#[path = "new_project.rs"]
+mod new_project;
+
+#[path = "plugin.rs"]
+mod plugin;
 
 #[path = "resolve.rs"]
 mod resolve;

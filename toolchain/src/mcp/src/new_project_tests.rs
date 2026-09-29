@@ -1,0 +1,346 @@
+//! Tests for the scaffold write: what a preview promises, and what an apply creates.
+//! 脚手架写入的测试：预览承诺了什么，落盘创建了什么。
+//!
+//! The default these are aimed at is "preview, never write": the first test asserts that a
+//! request without `apply` leaves the destination absent, and it does that **before** it
+//! reads the reply, so the mutation that flips the default to a write fails on the
+//! assertion that names the directory a preview must not create.
+//! 这些测试瞄准的默认是"只预览、绝不写"：第一条测试断言不带 `apply` 的请求不会让目的地出现，而且它
+//! 是在读回复**之前**做的，因此把默认翻成"写"的变异会失败在那条点名"预览不得创建的目录"的断言上。
+
+use std::path::PathBuf;
+
+use serde_json::json;
+
+use super::new_project;
+
+/// A throwaway root: a directory that exists, which is all the scaffold's own root
+/// question needs (`cargo metadata` is not consulted, because no member's identity is).
+/// 一个一次性根：一个存在的目录，而脚手架自己的根问题需要的就这些（不查 `cargo metadata`，因为不涉及
+/// 任何成员的身份）。
+struct Root {
+    path: PathBuf,
+}
+
+impl Drop for Root {
+    /// Remove the fixture tree once the test that built it is done.
+    /// 构建它的测试结束后删除夹具树。
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// A fresh root under a label that keeps concurrent tests apart.
+/// 一个把并发测试彼此分开的新根，带标签。
+fn root(label: &str) -> Root {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!(
+        "nichlink-mcp-new-project-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&path);
+    std::fs::create_dir_all(&path).expect("fixture root");
+    Root { path }
+}
+
+/// A throwaway virtual workspace root with one member, so the entrance resolves it the
+/// way Cargo does.
+/// 一个带单个成员的一次性虚拟工作区根，好让入口按 Cargo 的方式解析它。
+fn workspace_root(label: &str) -> Root {
+    let fixture = root(label);
+    std::fs::create_dir_all(fixture.path.join("host/src")).expect("member directory");
+    std::fs::write(
+        fixture.path.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"host\"]\nresolver = \"2\"\n",
+    )
+    .expect("workspace manifest");
+    std::fs::write(
+        fixture.path.join("host/Cargo.toml"),
+        "[package]\nname = \"mcp-new-project-host\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("member manifest");
+    std::fs::write(fixture.path.join("host/src/lib.rs"), "// host entry\n").expect("member entry");
+    fixture
+}
+
+/// One tool call, as the protocol would deliver it.
+/// 一次工具调用，按协议交付的样子。
+fn call(fixture: &Root, arguments: serde_json::Value) -> (String, bool) {
+    let reply = crate::mcp::tools::tool_call(
+        &fixture.path,
+        json!(1),
+        &json!({"name": "nichlink.new_project", "arguments": arguments}),
+    );
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the scaffold returned no text: {reply}"))
+        .to_owned();
+    let failed = reply["result"]["isError"].as_bool().unwrap_or(false);
+    (text, failed)
+}
+
+/// A request without `apply` writes nothing and says every path and byte it would write.
+/// 不带 `apply` 的请求什么都不写，并说出它会写的每个路径与字节。
+///
+/// This is the zero-write pin, and it asserts the absence first: the mutation it is aimed
+/// at is "preview means write", and the failure has to name the directory that appeared.
+/// 这是"零写入"钉子，而且它先断言"不存在"：它瞄准的变异是"预览即写入"，而失败必须点名那个出现的目录。
+#[test]
+fn a_preview_writes_nothing_and_names_every_path_it_would_write() {
+    let fixture = root("preview");
+    let target = fixture.path.join("app");
+    let reply = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "binary"}),
+    )
+    .expect("the preview answers");
+
+    assert!(
+        !target.exists(),
+        "a request without `apply` must not create {} — the default is a preview, not a write. \
+         reply was:\n{reply}",
+        target.display()
+    );
+    assert!(
+        std::fs::read_dir(&fixture.path)
+            .expect("the root reads")
+            .next()
+            .is_none(),
+        "the preview left something in {}:\n{reply}",
+        fixture.path.display()
+    );
+    for expected in [
+        "preview: nichlink.new_project would create the binary project `probe-host`",
+        &target.display().to_string(),
+        "nothing was written",
+        "+ Cargo.toml",
+        "+ build.rs",
+        "+ src/main.rs",
+        "+ .vscode/nichlink-face.code-snippets",
+        "+[workspace]",
+    ] {
+        assert!(
+            reply.contains(expected),
+            "`{expected}` is part of the preview's contract:\n{reply}"
+        );
+    }
+    // The destination line is what a reader checks against the root, so the preview has to
+    // say the root too.
+    // 目的地那一行是读者拿去与根核对的东西，因此预览也必须说出根。
+    assert!(
+        reply.contains(&format!(
+            "root {}: the destination is inside it",
+            fixture.path.display()
+        )),
+        "{reply}"
+    );
+}
+
+/// An apply creates every file the preview showed, with the executor's own bytes.
+/// 落盘会创建预览展示的每个文件，字节来自执行器自己。
+#[test]
+fn an_apply_writes_every_file_the_preview_showed() {
+    let fixture = root("apply");
+    let target = fixture.path.join("app");
+    let reply = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "library", "apply": true}),
+    )
+    .expect("the apply answers");
+
+    assert!(
+        reply.contains("applied: created the library project `probe-host`"),
+        "{reply}"
+    );
+    assert!(reply.contains("wrote 4 file(s) under"), "{reply}");
+    for relative in [
+        "Cargo.toml",
+        "build.rs",
+        "src/lib.rs",
+        ".vscode/nichlink-face.code-snippets",
+    ] {
+        assert!(
+            target.join(relative).is_file(),
+            "{relative} was reported but is not there:\n{reply}"
+        );
+    }
+    let manifest = std::fs::read_to_string(target.join("Cargo.toml")).expect("manifest reads");
+    assert!(manifest.contains("name = \"probe-host\""), "{manifest}");
+    // The executor's own `[workspace]` table is preserved, which is what keeps the new
+    // project out of the workspace root it was written under.
+    // 执行器自己的 `[workspace]` 表被保留，正是它让新项目不属于写下它的那个工作区根。
+    assert!(manifest.starts_with("[workspace]\n"), "{manifest}");
+    assert!(
+        reply.contains("not a\nmember of the root above") || reply.contains("not a member"),
+        "{reply}"
+    );
+}
+
+/// A destination that already exists needs the request to say `confirm`, and the refusal
+/// comes before anything is written into it.
+/// 已经存在的目的地需要请求自己说出 `confirm`，而拒绝发生在往其中写入任何东西之前。
+#[test]
+fn an_existing_destination_without_confirm_is_refused() {
+    let fixture = root("confirm");
+    let target = fixture.path.join("app");
+    std::fs::create_dir_all(&target).expect("pre-made destination");
+
+    let error = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "binary", "apply": true}),
+    )
+    .expect_err("an existing destination without `confirm` is refused");
+    assert!(error.contains("confirm: true"), "{error}");
+    assert!(error.contains("already exists"), "{error}");
+    assert!(
+        std::fs::read_dir(&target)
+            .expect("the destination reads")
+            .next()
+            .is_none(),
+        "the refusal wrote into {}:\n{error}",
+        target.display()
+    );
+
+    // The same request with `confirm` writes, so the gate is the flag and not the shape of
+    // the destination.
+    // 同一个请求带上 `confirm` 就能写，因此这道闸门就是那个标志，而不是目的地本身的形状。
+    let applied = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "binary", "apply": true,
+                "confirm": true}),
+    )
+    .expect("a confirmed apply into an existing, empty destination answers");
+    assert!(applied.contains("applied:"), "{applied}");
+    assert!(target.join("Cargo.toml").is_file(), "{applied}");
+}
+
+/// A non-empty destination is refused, and nothing in it is touched.
+/// 非空目的地被拒绝，其中的东西一点没被碰。
+#[test]
+fn a_non_empty_destination_is_refused() {
+    let fixture = root("non-empty");
+    let target = fixture.path.join("app");
+    std::fs::create_dir_all(&target).expect("pre-made destination");
+    std::fs::write(target.join("keep.txt"), "mine\n").expect("existing file");
+
+    let error = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "binary", "apply": true,
+                "confirm": true}),
+    )
+    .expect_err("a non-empty destination is refused");
+    assert!(error.contains("is not empty"), "{error}");
+    assert_eq!(
+        std::fs::read_to_string(target.join("keep.txt")).expect("the file survives"),
+        "mine\n"
+    );
+}
+
+/// A destination outside the root this call runs in is refused, by name, for both the
+/// relative-escape and the absolute spellings.
+/// 落在这个调用所运行之根以外的目的地被点名拒绝——相对逃逸与绝对路径两种拼法都是。
+#[test]
+fn a_destination_outside_the_root_is_refused() {
+    let fixture = root("outside");
+    let sibling = fixture
+        .path
+        .parent()
+        .expect("a parent")
+        .join("mcp-new-project-escape");
+
+    let escape = new_project(
+        &fixture.path,
+        &json!({"directory": "../mcp-new-project-escape", "package": "probe-host",
+                "kind": "binary", "apply": true, "confirm": true}),
+    )
+    .expect_err("a destination that steps out with `..` is refused");
+    assert!(escape.contains("REFUSED"), "{escape}");
+    assert!(escape.contains("`..`"), "{escape}");
+    assert!(
+        escape.contains(&fixture.path.display().to_string()),
+        "the refusal names the root it protects:\n{escape}"
+    );
+
+    let absolute = new_project(
+        &fixture.path,
+        &json!({"directory": sibling.display().to_string(), "package": "probe-host",
+                "kind": "binary", "apply": true, "confirm": true}),
+    )
+    .expect_err("an absolute destination outside the root is refused");
+    assert!(absolute.contains("REFUSED"), "{absolute}");
+    assert!(absolute.contains("outside the root"), "{absolute}");
+    assert!(
+        absolute.contains(&sibling.display().to_string()),
+        "the refusal names where it would have written:\n{absolute}"
+    );
+    assert!(
+        !sibling.exists(),
+        "a refused destination must not exist: {}",
+        sibling.display()
+    );
+}
+
+/// On a virtual workspace root the scaffold answers against *that* root: a relative
+/// destination is its child, and one that leaves the workspace is refused there too.
+/// 在虚拟工作区根上，脚手架以**那个**根作答：相对目的地是它的子目录，而离开工作区的目的地在那里同样
+/// 被拒绝。
+#[test]
+fn a_virtual_workspace_root_answers_the_scaffold_inside_itself() {
+    let fixture = workspace_root("virtual");
+    let target = fixture.path.join("app");
+
+    let (text, failed) = call(
+        &fixture,
+        json!({"directory": "app", "package": "probe-host", "kind": "binary"}),
+    );
+    assert!(!failed, "{text}");
+    assert!(
+        text.contains(&format!(
+            "root {}: the destination is inside it",
+            fixture.path.display()
+        )),
+        "{text}"
+    );
+    assert!(
+        !target.exists(),
+        "the workspace root answered a write it never made:\n{text}"
+    );
+
+    let (escaped, failed) = call(
+        &fixture,
+        json!({"directory": "../elsewhere", "package": "probe-host", "kind": "binary",
+                "apply": true, "confirm": true}),
+    );
+    assert!(failed, "{escaped}");
+    assert!(escaped.contains("REFUSED"), "{escaped}");
+    assert!(
+        escaped.contains(&fixture.path.display().to_string()),
+        "{escaped}"
+    );
+}
+
+/// A request missing one of the three required arguments is refused by name.
+/// 缺少三个必填参数之一的请求会被点名拒绝。
+#[test]
+fn a_request_missing_an_argument_is_refused_by_name() {
+    let fixture = root("arguments");
+    for (arguments, key) in [
+        (
+            json!({"package": "probe-host", "kind": "binary"}),
+            "directory",
+        ),
+        (json!({"directory": "app", "kind": "binary"}), "package"),
+        (json!({"directory": "app", "package": "probe-host"}), "kind"),
+    ] {
+        let error = new_project(&fixture.path, &arguments)
+            .expect_err("a request without every required argument is refused");
+        assert!(error.contains(key), "{key} is not named in: {error}");
+    }
+    let wrong = new_project(
+        &fixture.path,
+        &json!({"directory": "app", "package": "probe-host", "kind": "tool"}),
+    )
+    .expect_err("an unknown kind is refused");
+    assert!(wrong.contains("`binary` or `library`"), "{wrong}");
+}

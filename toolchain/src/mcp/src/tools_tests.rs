@@ -347,3 +347,87 @@ fn tools_list_is_mcp_shaped() {
             .all(|tool| tool["inputSchema"]["type"] == "object")
     );
 }
+
+/// The two Studio write actions the bridge was missing are advertised, and their
+/// descriptions carry the two disciplines every write here keeps: a request is previewed
+/// unless `apply` is true, and the irreversible half needs the request to say `confirm`.
+/// 桥此前缺的那两个 Studio 写入动作已被声明，而它们的描述带有这里每次写入都守的两条纪律：除非
+/// `apply` 为真否则只预览，以及不可逆的那一半需要请求自己说出 `confirm`。
+///
+/// The description is the contract: an agent can only aim at what `tools/list` names, so a
+/// tool whose schema omits `apply` or `confirm` is a tool no agent will ever use safely.
+/// 描述就是契约：代理只能瞄准 `tools/list` 点名过的东西，因此 schema 里没有 `apply` 或 `confirm`
+/// 的工具，是任何代理都不会安全使用的工具。
+#[test]
+fn the_two_studio_writes_are_advertised_with_their_flags() {
+    let listed = super::tools();
+    for (name, keys) in [
+        (
+            "nichlink.new_project",
+            &["directory", "package", "kind", "apply", "confirm", "root"][..],
+        ),
+        (
+            "nichlink.plugin",
+            &[
+                "source",
+                "framework",
+                "package",
+                "version",
+                "crate",
+                "checksum",
+                "mode",
+                "apply",
+                "confirm",
+                "root",
+            ][..],
+        ),
+    ] {
+        let tool = listed
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is not advertised"));
+        let description = tool["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} has no description: {tool}"));
+        assert!(
+            description.contains("previewed unless `apply` is true"),
+            "{name} must state the preview default: {description}"
+        );
+        assert!(
+            description.contains("`confirm: true`"),
+            "{name} must state its confirmation rule: {description}"
+        );
+        for key in keys {
+            assert!(
+                tool["inputSchema"]["properties"].get(*key).is_some(),
+                "{name} does not advertise `{key}`: {tool}"
+            );
+        }
+    }
+}
+
+/// Both new writes name the two halves of the executor they reuse, so a reader can check
+/// that this is not a second implementation: the scaffold is `create_project`, and the
+/// plugin record goes through the kernel's `contains_record` gate.
+/// 两个新写入都点名了它们复用的执行器的两半，好让读者能核对这不是第二份实现：脚手架是
+/// `create_project`，而插件记录经内核的 `contains_record` 闸门。
+#[test]
+fn the_new_writes_name_the_executor_they_reuse() {
+    let listed = super::tools();
+    for (name, expected) in [
+        ("nichlink.new_project", "create_project"),
+        ("nichlink.plugin", "contains_record"),
+    ] {
+        let tool = listed
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is not advertised"));
+        let description = tool["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} has no description: {tool}"));
+        assert!(
+            description.contains(expected),
+            "{name} must name `{expected}`, the executor it shares: {description}"
+        );
+    }
+}

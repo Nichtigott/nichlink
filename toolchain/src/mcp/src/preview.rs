@@ -206,6 +206,32 @@ pub(crate) fn remove_copy(root: &Path, work: &Path) {
     }
 }
 
+/// A fresh throwaway directory under the temp directory, for a preview whose work is
+/// not a copy of an existing tree.
+/// 临时目录下一个新建的一次性目录，供"工作内容不是既有树的副本"的预览使用。
+///
+/// `copy_package` serves a preview of an *edit*: the work is the project, copied. A
+/// scaffold has no project to copy — it creates one — so its preview needs a directory
+/// of its own to run the same executor in, and gets it here. The name carries the
+/// process id and an OS-seeded value for the same reason the copy's does
+/// (unpredictable, so nothing can pre-place a directory there), and the directory is
+/// created exclusively: an existing path is a failure rather than a directory this
+/// call would reuse or delete.
+/// `copy_package` 服务的是**编辑**的预览：工作内容是被复制过来的项目。脚手架没有项目可复制
+/// ——它就是去创建一个——因此它的预览需要一个自己的目录来运行同一个执行器，就由这里给出。名字里带
+/// 进程号与一个由操作系统播种的值，理由与副本相同（不可预测，因此没有东西能预先在那里放一个目录），
+/// 而目录是**独占**创建的：已存在的路径是一次失败，而不是本次调用会复用或删掉的目录。
+pub(crate) fn work_directory(label: &str) -> Result<PathBuf, String> {
+    let destination = std::env::temp_dir().join(format!(
+        "nichlink-toolchain-{label}-{}-{:016x}",
+        std::process::id(),
+        entropy()
+    ));
+    std::fs::create_dir(&destination)
+        .map_err(|error| format!("cannot create {}: {error}", destination.display()))?;
+    Ok(destination)
+}
+
 /// Where a written face's declaration sits, as `<path>:<line>`.
 /// 被写入的面的声明位置，写作 `<path>:<line>`。
 ///

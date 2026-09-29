@@ -31,11 +31,11 @@
 //! - 请求点名**面**的工具（`explain`、`trace`、`impact`、`usages`、`converge`、`verify`）会问
 //!   **每一个**成员并按成员分组给出答案，附一份"哪些成员答了、哪些没答"的普查；答不了的成员在它本该有
 //!   正文的位置带上 `tree unavailable (原因)`。没有任何成员的结果被当成全局答案。
-//! - the **write path** (`apply`) must resolve a unique owner before anything runs, and
-//!   refuses with the candidate members when it cannot: writing into the wrong package is
+//! - the **write path** (`apply`, `plugin`) must resolve a unique owner before anything runs,
+//!   and refuses with the candidate members when it cannot: writing into the wrong package is
 //!   the worst outcome this bridge can produce, so it is never guessed.
-//! - **写入路径**（`apply`）必须在运行任何东西之前解析出唯一拥有者；解析不出时就带着候选成员拒绝：写进
-//!   错误的包是本桥能造成的最坏结果，因此绝不猜。
+//! - **写入路径**（`apply`、`plugin`）必须在运行任何东西之前解析出唯一拥有者；解析不出时就带着候选
+//!   成员拒绝：写进错误的包是本桥能造成的最坏结果，因此绝不猜。
 //!
 //! The per-package body is always the tool's **own single-package implementation**, handed a
 //! member's directory — so a merged answer and a single-package answer cannot disagree,
@@ -110,7 +110,15 @@ pub(crate) fn subject(tool: &str) -> Subject {
     match tool {
         "nichlink.read" | "nichlink.inspect" | "nichlink.mir" | "nichlink.unified" => Subject::Path,
         "nichlink.callgraph" => Subject::PathOrEveryMember,
-        "nichlink.apply" => Subject::Write,
+        "nichlink.apply" | "nichlink.plugin" => Subject::Write,
+        // The scaffold names its own destination and writes a directory that does not exist
+        // yet, so the root answers it directly: the ownership question is whether the
+        // destination is inside this root, which is a fact about paths rather than about a
+        // member's tree, and the tool's own body names both paths when it is not.
+        // 脚手架自己点名目的地，而且写的是一个尚不存在的目录，因此由根直接作答：归属问题是目的地是否
+        // 落在这个根之内，而这是关于路径的事实而不是关于某个成员的树的事实；不在根内时，该工具自己的
+        // 主体会点名两条路径。
+        "nichlink.new_project" => Subject::SelfAnswering,
         "nichlink.explain" | "nichlink.impact" | "nichlink.usages" | "nichlink.converge" => {
             Subject::EveryMember(NODE_KEYS)
         }
@@ -145,7 +153,7 @@ pub(crate) fn dispatch(
         Subject::Path => resolve_owner(root, arguments, handler, false),
         Subject::PathOrEveryMember => resolve_owner(root, arguments, handler, true),
         Subject::EveryMember(keys) => resolve_every_member(root, arguments, handler, keys),
-        Subject::Write => resolve_write(root, arguments, handler),
+        Subject::Write => resolve_write(root, tool, arguments, handler),
     }
 }
 
@@ -466,7 +474,12 @@ fn every_member(
 
 /// Answer the write path, which runs only against a member it is the unique owner of.
 /// 回答写入路径；它只会对它唯一拥有的那个成员运行。
-fn resolve_write(root: &Path, arguments: &Value, handler: Handler) -> Result<String, String> {
+fn resolve_write(
+    root: &Path,
+    tool: &str,
+    arguments: &Value,
+    handler: Handler,
+) -> Result<String, String> {
     // A root Cargo cannot name is refused where it always was, with that tool's own
     // message: the write path has nothing to add to it.
     // Cargo 说不出名字的根仍在它一贯被拒绝的地方被拒绝，用的是那个工具自己的消息：写入路径对它没有
@@ -499,18 +512,24 @@ fn resolve_write(root: &Path, arguments: &Value, handler: Handler) -> Result<Str
             output.push_str(&handler(&member.dir, arguments)?);
             Ok(output)
         }
-        _ => Ok(refused_write(root, &members, target, owners.len())),
+        _ => Ok(refused_write(root, tool, &members, target, owners.len())),
     }
 }
 
 /// The refusal the write path gives on a virtual root, with the members it could name.
 /// 写入路径在虚拟根上给出的拒绝，连同它可以点名的那些成员。
-fn refused_write(root: &Path, members: &[Member], target: Option<&str>, owners: usize) -> String {
+fn refused_write(
+    root: &Path,
+    tool: &str,
+    members: &[Member],
+    target: Option<&str>,
+    owners: usize,
+) -> String {
     let mut output = workspace::roster(root, members);
-    output.push_str(
-        "\nREFUSED: nichlink.apply needs one package, and this root is a virtual manifest that \
-         names none; nothing was copied and nothing was written.\n",
-    );
+    output.push_str(&format!(
+        "\nREFUSED: {tool} needs one package, and this root is a virtual manifest that names \
+         none; nothing was copied and nothing was written.\n"
+    ));
     match (target, owners) {
         (Some(target), 0) => output.push_str(&format!(
             "no member's tree declares `{target}`, so no member owns this write.\n"

@@ -20,8 +20,12 @@
 //! another tree; `nichlink.mir` reads a `-Zunpretty=mir` dump or a JSONL artifact
 //! and can emit that JSONL, which nothing in the workspace ever wrote; and
 //! `nichlink.unified` merges the two, where a live call confirms a compiler
-//! candidate. `nichlink.apply` is the write path and previews before it writes
-//! (`apply.rs` explains the contract). What none of them reports is contract,
+//! candidate. Three tools write, and all three preview before they do:
+//! `nichlink.apply` edits faces through the authoring executor, `nichlink.new_project`
+//! scaffolds a host with `build_time::scaffold::create_project`, and `nichlink.plugin`
+//! stores one plugin lock record through the kernel's `PluginCatalog` gate
+//! (`apply.rs`, `new_project.rs` and `plugin.rs` explain each contract). What none of
+//! them reports is contract,
 //! admission, or registration-rule data: those live in the built
 //! `RegistrationSnapshot`s, which need the compiled registrations rather than a
 //! scan or a manifest.
@@ -31,8 +35,11 @@
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
 //! `-Zunpretty=mir` 转储或 JSONL artifact，并能输出那份无人写过的 JSONL；`nichlink.unified` 把两者
-//! 合并，真实调用在其中确认编译器候选。`nichlink.apply` 是写入路径，落盘前先预览（契约见 `apply.rs`）。
-//! 它们都没有报告的是 contract、admission 与 registration rule 数据：那些住在已构建的
+//! 合并，真实调用在其中确认编译器候选。三个工具会写入，而三者都先预览再写：`nichlink.apply`
+//! 经 authoring 执行器编辑注册面，`nichlink.new_project` 用
+//! `build_time::scaffold::create_project` 脚手架出一个宿主，`nichlink.plugin` 经内核的
+//! `PluginCatalog` 闸门存下一条插件锁记录（三份契约分别见 `apply.rs`、`new_project.rs` 与
+//! `plugin.rs`）。它们都没有报告的是 contract、admission 与 registration rule 数据：那些住在已构建的
 //! `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
 
 use serde_json::{Value, json};
@@ -46,7 +53,9 @@ use crate::mcp::diff::diff;
 use crate::mcp::grafts::grafts;
 use crate::mcp::impact::impact;
 use crate::mcp::mir::{mir, unified};
+use crate::mcp::new_project::new_project;
 use crate::mcp::overlay::overlay;
+use crate::mcp::plugin::plugin;
 use crate::mcp::protocol::{error_response, success};
 use crate::mcp::read::read_source;
 use crate::mcp::registry::registry;
@@ -158,6 +167,67 @@ pub(crate) fn tools() -> Vec<Value> {
                 "confirm":{"type":"boolean","description":"delete: must be true. A delete is the one operation whose preview a caller can step past by accident, so the request says it rather than the bridge adding it"},
                 "root":{"type":"string"}
             },"required":["action"]}),
+        ),
+        tool(
+            "nichlink.new_project",
+            "Create a host project with the same scaffold `nichlink new` (the CLI) and Studio's \
+             new-project wizard run — `crate::build_time::scaffold::create_project` — so the \
+             manifest, build script, source entry, editor snippets, and detected dependency \
+             source are the ones this workspace ships rather than a second renderer written here. \
+             `directory` is where the project goes: a relative one is taken against `root` (the \
+             package or workspace root this call resolved), and a destination outside that root, \
+             or one that steps out with `..`, is refused by name before anything is created. A \
+             **virtual workspace root** is answered against that root's own directory — the \
+             destination is explicit, so containment in the root is the whole ownership question \
+             and no member has to be picked. \
+             `package` is the crate name and `kind` is `binary` or `library`. **A request is \
+             previewed unless `apply` is true**: the preview runs that executor in a throwaway \
+             directory and prints every path it would write, with the bytes, under the real \
+             destination and the root it is inside; `apply: true` writes them. A destination that \
+             already exists must be empty, and then the request itself has to say \
+             `confirm: true`, because the write lands in a directory the caller already has. The \
+             scaffolded manifest declares its own `[workspace]`, so the project is not a member of \
+             the root this call ran in.",
+            json!({"type":"object","properties":{
+                "directory":{"type":"string","description":"where the project is written; relative paths are taken against `root` and a destination outside it is refused"},
+                "package":{"type":"string","description":"the new crate's name (letters, digits, `_` or `-`)"},
+                "kind":{"type":"string","enum":["binary","library"],"description":"the entry the scaffold writes: `src/main.rs` or `src/lib.rs`"},
+                "apply":{"type":"boolean","description":"false (the default) previews in a throwaway directory; true writes the project"},
+                "confirm":{"type":"boolean","description":"must be true when the destination directory already exists: the write lands in a directory the caller already has, so the request says it rather than the bridge assuming it"},
+                "root":{"type":"string"}
+            },"required":["directory","package","kind"]}),
+        ),
+        tool(
+            "nichlink.plugin",
+            "Write one plugin record into this package's lock — the same path Studio's plugin \
+             form takes (`submit_plugin`). `source` is `official` or `user` and selects \
+             `official.lock` or `user.lock` under `.nichlink/plugins/`; `framework`, `package`, \
+             `version`, `crate`, and `checksum` are the record's identity fields and `mode` is \
+             `extension` or `replacement`. An `official` record is admitted only when the kernel's \
+             `PluginCatalog::contains_record` says the lock already accounts for that package \
+             identity — the trust rule the runtime reads — and the lock's own parser decides \
+             whether the append is legal, both before anything is written. The entry file that \
+             imports the crate (`official.rs` or `user.rs`) carries the other half of the same \
+             decision, so a failed lock write restores it. A record the lock already carries is \
+             reported as already selected and nothing is written. **A request is previewed unless \
+             `apply` is true**: the preview computes the exact bytes with the same kernel calls \
+             and prints what each file would gain, so it cannot drift from the write; `apply: \
+             true` stores them. A plugin write requires the request to say `confirm: true` itself, \
+             because the lock is the artifact the host admits plugins from. A **virtual workspace \
+             root** names no package, so a plugin write there is refused with the candidate member \
+             directories.",
+            json!({"type":"object","properties":{
+                "source":{"type":"string","enum":["official","user"],"description":"which lock the record goes into: `official.lock` or `user.lock`"},
+                "framework":{"type":"string","description":"the target framework the record was written for"},
+                "package":{"type":"string","description":"the plugin's package name (its identity)"},
+                "version":{"type":"string","description":"the plugin version, exactly as the lock should spell it"},
+                "crate":{"type":"string","description":"the Rust crate that carries the plugin implementation; must be an identifier"},
+                "checksum":{"type":"string","description":"the digest the plugin bytes must match, with or without a `sha256:` prefix"},
+                "mode":{"type":"string","enum":["extension","replacement"],"description":"whether the plugin extends a slot or replaces the face in it"},
+                "apply":{"type":"boolean","description":"false (the default) previews the exact bytes; true stores them"},
+                "confirm":{"type":"boolean","description":"must be true to write: the lock is the artifact the host admits plugins from, so the request says it rather than the bridge assuming it"},
+                "root":{"type":"string"}
+            },"required":["source","framework","package","version","crate","checksum","mode"]}),
         ),
         tool(
             "nichlink.registry",
@@ -418,6 +488,8 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.read", read_source),
     ("nichlink.status", status_tool),
     ("nichlink.apply", apply),
+    ("nichlink.new_project", new_project),
+    ("nichlink.plugin", plugin),
     ("nichlink.registry", registry_tool),
     ("nichlink.explain", explain_tool),
     ("nichlink.diff", diff),

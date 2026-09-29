@@ -492,6 +492,8 @@ fn the_resolved_tools_say_a_virtual_root_answers() {
         "nichlink.converge",
         "nichlink.verify",
         "nichlink.apply",
+        "nichlink.new_project",
+        "nichlink.plugin",
     ] {
         let tool = listed
             .iter()
