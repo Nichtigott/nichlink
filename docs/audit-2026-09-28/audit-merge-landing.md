@@ -114,9 +114,11 @@
      `docs/merge-batch3-publish.md` 的收尾清单：不阻塞发布，但必须在发布清单里被看见）；
      **F-13-3 / F-14-2（LOW）→ 已按复核更正**（本记录 25/49 → 20/54；"`0.1.6` 残留 0" 实测 2 处，
      皆为测试夹具里的字符串 ⇒ 判据改成清单行谓词）。
-4. 两条已记账的小残留：`examples/**` 仍写旧名 `cut.full()` 两处（转发器保证可用）；
-   根 glob 让 `nichlink-toolchain` 的根部"glob 一切"，因此 README/AGENTS 已按"模块路径是官方地址、
-   只有精选清单承诺裸名"的口径写明策略。
+4. 两条已记账的小残留：① `examples/**` 仍写旧名 `cut.full()` 两处（转发器保证可用 ✓）——**已闭合**
+   （2026-09-29：两处改成 `is_full()`，即 `kernel/src/registry_core/release.rs` 的文档本来就要求新代码
+   写的那一个名字（`NAM-35` 把 `full()` 保留为历史名 ✓）；只改内容、不动文件/路径，红线安全 ✓）；
+   ② 根 glob 让 `nichlink-toolchain` 的根部"glob 一切"，因此 README/AGENTS 已按"模块路径是官方地址、
+   只有精选清单承诺裸名"的口径写明策略 ✓（并在后来把两处撞名显式消歧，见 §⑦e）✓。
 5. **NAM-33 动词表门禁已落地**（`conventions/src/verb_table.rs` + 同级 `verb_table_tests.rs`）：
    判定落在**语法位置**（只解析 `fn` 声明，文档里"提及"不算）、`get_` 必须返回 `Option`、表中裸动词
    只许入口位、`collect_` 只许 `pub`；**七条反证钉子全绿**（改坏应红 4 + 豁免应绿 5，含单词**名词**

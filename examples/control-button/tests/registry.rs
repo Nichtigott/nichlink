@@ -297,7 +297,7 @@ fn static_plan_carries_faces_and_the_declared_graft() {
         Some(control_button_graft::button_fast::NODE_ID),
         "the typed graft names the external face by compile-time identity"
     );
-    assert!(!cut.full(), "a plain cut keeps the target's children");
+    assert!(!cut.is_full(), "a plain cut keeps the target's children");
     assert_eq!(
         plan.grafts()[1].cut().id(),
         Some(control_button::control::object::slider::NODE_ID),

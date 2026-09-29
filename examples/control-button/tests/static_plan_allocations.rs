@@ -136,7 +136,7 @@ fn assert_the_static_read_path_allocates_nothing() {
         }
         for cut in plan.grafts() {
             let _ = cut.cut();
-            let _ = cut.full();
+            let _ = cut.is_full();
         }
         let hit = plan.find(first).is_some();
         let miss = plan.find(missing).is_none();
