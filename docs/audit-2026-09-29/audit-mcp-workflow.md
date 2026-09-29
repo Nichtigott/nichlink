@@ -244,3 +244,24 @@ t1 已自曝的装置差异（两个客户端、一次调用、`maxFiles=3`、�
 `the package's own faces were rejected: …`），把它的成败作为**独立的第二行**印出（用同一个 `MAX_DIAGNOSTIC_LINES` 截断），
 `verdict ok` 的字面**保持不变**——因为"静态面通过"仍然为真，`verify.rs:5-11` 与 CLI `check` 的不漂移不变量必须守住。
 验收命令就是我复现 X1 的那一对调用：一个会话里先 `apply`（预览，被拒）再 `verify`，`verify` 的回复必须同时含两面。
+
+## ⑦ 队长补记（2026-09-29）：§④ 第 1 条的"不可复现"是读错了参数
+
+§④ 第 1 条据"同一句两次得到 9 与 20 个符号"判"单次转录不是可复现的测量"。**这句不成立**，更正如下。维护者提示 codegraph 的 CLI 装在 `~/.local/bin`（默认不在 PATH），加进 PATH 后实测：
+
+- `codegraph explore` 对**同一句查询 + 同一个 `--max-files`** 是**逐字节可复现**的：同一句连跑两次，21913 字节、sha256 相同；换 `--max-files 1` 再连跑两次，同样逐字节相同。
+- 那个 `Found N symbols across M files` **是被 `--max-files` 卡住的**，不是"索引里有多少"：同一句查询，`--max-files 1` → `9 symbols across 1 file`（**正是队长那次 maxFiles=1 的读数**），`--max-files 2/3/5` → `20 symbols across 2 files`（**正是本审计复核者那次的读数**）。
+- ⇒ 9 与 20 的差别来自**参数**，不是随机性；原判据里的"文件集合也不同"同理（队长那次只许 1 个文件）。
+
+**结论保留，但理由要换**：这份输出仍然**不能当完整性依据**，因为那个计数由显示旋钮决定，而输出里没有任何一处说明这件事——它长得像"我找到了 N 个符号"，实际是"我在这 M 个文件里放了 N 个"。拿它做影响面判断前必须自己指定 `--max-files`，并知道它截掉了什么。
+
+复现命令（本机实测 2026-09-29）：
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"   # codegraph 1.5.0，装在 ~/.local/bin，默认不在 PATH
+Q='List the intermediate functions on the path from Registry::register_snapshot_batch in transaction.rs to connector_error in connector.rs, as a call path with each hop named'
+codegraph explore --max-files 1 "$Q" | head -3
+codegraph explore --max-files 3 "$Q" | head -3
+```
+
+另：措辞确实会改变**拿回哪些文件**（带 "in transaction.rs" 的那句给 `diagnostic/error.rs` + `connector.rs`；第一臂那句给 5 个源块，含真正的起点 `transaction.rs` 与终点 `connector.rs`）⇒ §④ 第 1 条"写死反而更差"的观察成立，但它与"不可复现"是两件事。
