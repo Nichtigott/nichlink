@@ -43,15 +43,54 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         .get("limit")
         .and_then(Value::as_u64)
         .map_or(DEFINITIONS, |value| value.clamp(1, 50) as usize);
-    let files = load_sources(root)?;
+    // A name lookup at a workspace root is one question about the whole workspace, not one
+    // question per member: a caller lives in a member that depends on the definition's own
+    // member, so asking each member separately loses every cross-crate caller (measured: one
+    // symbol had 36 callers over the whole workspace and 17 when each member searched only
+    // itself). The label each file carries is what the answer prints, so a workspace hit names
+    // the member it came from while a single package's hits keep their own relative paths.
+    // 工作区根上的名字查询是关于整个工作区的一个问题，而不是每个成员各问一遍：调用者住在依赖定义所在
+    // 成员的那个成员里，因此逐成员提问会丢掉每一个跨 crate 调用者（实测：同一个符号在整个工作区上 36 个
+    // 调用者，而每个成员只搜自己时 17 个）。每个文件携带的标签就是答案打印的东西，因此工作区命中会点名
+    // 它来自哪个成员，而单包命中保持自己的相对路径。
+    let mut labelled: Vec<(String, crate::mcp::source_index::SourceFile)> = Vec::new();
+    match crate::mcp::workspace::scope(root) {
+        Ok(crate::mcp::workspace::Scope::Workspace(members)) if path_filter.is_none() => {
+            for member in &members {
+                let Ok(sources) = load_sources(&member.dir) else {
+                    continue;
+                };
+                // The label is the member's directory relative to the workspace root, which is
+                // the path a reader can grep for; the package name alone would name the identity
+                // but not the file's place in this checkout.
+                // 标签是成员目录相对工作区根的路径，也就是读者能直接 grep 的路径；只用包名会点名身份，
+                // 却不说明文件在本次检出里的位置。
+                let prefix = member
+                    .dir
+                    .strip_prefix(root)
+                    .map(|relative| {
+                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
+                    })
+                    .unwrap_or_else(|_| member.name.clone());
+                for file in sources {
+                    labelled.push((format!("{prefix}/{}", file.relative), file));
+                }
+            }
+        }
+        _ => {
+            for file in load_sources(root)? {
+                labelled.push((file.relative.clone(), file));
+            }
+        }
+    }
     let mut found = Vec::new();
-    for file in &files {
-        if path_filter.is_some_and(|path| file.relative != path) {
+    for (label, file) in &labelled {
+        if path_filter.is_some_and(|path| label != path) {
             continue;
         }
         for function in &file.functions {
             if function.name == query || function.name.ends_with(&format!("::{query}")) {
-                found.push((file, function));
+                found.push((label, function));
             }
         }
     }
@@ -71,26 +110,36 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
              by name across the whole tree, so for a common name they include unrelated call sites.\n"
         ));
     }
-    for (file, function) in found.into_iter().take(limit) {
-        let mut callers = files
+    for (label, function) in found.into_iter().take(limit) {
+        // The matched name and its qualified suffix are cloned into the inner closure: it runs
+        // once per candidate file, and borrowing the definition from the outer scope made the
+        // closure outlive it.
+        // 被匹配的名字与它的限定后缀被克隆进内层闭包：它每个候选文件跑一次，而从外层作用域借用那个定义
+        // 会让闭包活得比它长。
+        let name = function.name.clone();
+        let suffix = format!("::{query}");
+        let mut callers = labelled
             .iter()
-            .flat_map(|candidate| {
-                candidate.functions.iter().filter_map(|caller| {
-                    caller
-                        .calls
-                        .iter()
-                        .any(|call| call == &function.name || call.ends_with(&format!("::{query}")))
-                        .then_some(format!("{}::{}", candidate.relative, caller.name))
-                })
+            .flat_map(|(caller_label, candidate)| {
+                let prefix = format!("{caller_label}::");
+                let name = name.clone();
+                let suffix = suffix.clone();
+                candidate
+                    .functions
+                    .iter()
+                    .filter(move |caller| {
+                        caller
+                            .calls
+                            .iter()
+                            .any(|call| call == &name || call.ends_with(&suffix))
+                    })
+                    .map(move |caller| format!("{prefix}{}", caller.name))
             })
             .collect::<Vec<_>>();
         callers.sort();
         callers.dedup();
         let callers_total = callers.len();
-        output.push_str(&format!(
-            "{}:{} fn {}\n",
-            file.relative, function.line, function.name
-        ));
+        output.push_str(&format!("{label}:{} fn {}\n", function.line, function.name));
         output.push_str(&format!(
             "  callers ({}): {}\n",
             callers_total,

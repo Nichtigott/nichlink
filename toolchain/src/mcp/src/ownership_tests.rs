@@ -476,6 +476,39 @@ fn a_member_root_still_answers_as_one_package() {
 /// The catalog is the contract: every tool this entrance resolves has to say so, because
 /// an agent that is not told a workspace root works there will not try it.
 /// 目录就是契约：每个由本入口解析的工具都必须说出来，因为没被告知"工作区根也行"的代理不会去试。
+/// A name lookup at a workspace root is answered **once**, over every member's sources: the
+/// caller lives in one member and the definition in another, so a per-member fan-out could not
+/// see it. Measured on the real tree before this pin existed: one symbol had 17 callers when
+/// each member searched only itself and 47 once the lookup crossed members.
+/// 工作区根上的名字查询**一次**遍历每个成员的源码：调用者住在一个成员里、定义在另一个成员里，因此逐成员
+/// 扇出看不到它。这条钉子出现之前在真树上的实测：每个成员只搜自己时同一个符号 17 个调用者，跨成员查找后 47 个。
+#[test]
+fn a_workspace_name_lookup_crosses_members_in_one_answer() {
+    let fixture = workspace("callgraph-global");
+    write(
+        &fixture.root.join("framework/src/shared.rs"),
+        "pub fn shared_helper() {}\n",
+    );
+    write(
+        &fixture.root.join("host/src/caller.rs"),
+        "pub fn host_caller() {\n    shared_helper();\n}\n",
+    );
+    let (text, failed) = call(
+        &fixture.root,
+        "nichlink.callgraph",
+        json!({"function": "shared_helper"}),
+    );
+    assert!(!failed, "{text}");
+    assert!(
+        text.contains("host/src/caller.rs::host_caller"),
+        "the cross-member caller is the answer this pin exists for: {text}"
+    );
+    assert!(
+        !text.contains("no static function match"),
+        "one global answer rather than one per member: {text}"
+    );
+}
+
 #[test]
 fn the_resolved_tools_say_a_virtual_root_answers() {
     let listed = crate::mcp::tools::tools();

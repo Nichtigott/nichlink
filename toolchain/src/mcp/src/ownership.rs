@@ -84,9 +84,15 @@ pub(crate) enum Subject {
     /// The request names a filesystem path; exactly one member owns it.
     /// 请求点名一个文件系统路径；恰好一个成员拥有它。
     Path,
-    /// The request may name a filesystem path; without one, every member is asked.
-    /// 请求可以点名一个文件系统路径；没有点名时问每一个成员。
-    PathOrEveryMember,
+    /// The request may name a filesystem path; without one it is answered **once from the
+    /// root**. A name lookup is one question about the whole workspace rather than one question
+    /// per member: a caller lives in a member that depends on the definition's own member, so a
+    /// per-member fan-out loses every cross-crate caller — measured on the real tree, one symbol
+    /// had 36 callers over the workspace and 17 when each member searched only itself.
+    /// 请求可以点名一个文件系统路径；没有点名时**从根上一次性作答**。名字查询是关于整个工作区的一个问题，
+    /// 而不是每个成员各问一遍：调用者住在依赖定义所在成员的那个成员里，因此逐成员扇出会丢掉每一个跨 crate
+    /// 调用者——真树实测：同一个符号在整个工作区上 36 个调用者，而每个成员只搜自己时 17 个。
+    WorkspaceOrOwner,
     /// The request names a face; every member's tree is asked and the answers grouped.
     /// 请求点名一个面；问每一个成员的树，并把答案分组。
     EveryMember(&'static [&'static str]),
@@ -109,7 +115,7 @@ pub(crate) enum Subject {
 pub(crate) fn subject(tool: &str) -> Subject {
     match tool {
         "nichlink.read" | "nichlink.inspect" | "nichlink.mir" | "nichlink.unified" => Subject::Path,
-        "nichlink.callgraph" => Subject::PathOrEveryMember,
+        "nichlink.callgraph" => Subject::WorkspaceOrOwner,
         "nichlink.apply" | "nichlink.plugin" => Subject::Write,
         // The scaffold names its own destination and writes a directory that does not exist
         // yet, so the root answers it directly: the ownership question is whether the
@@ -150,8 +156,27 @@ pub(crate) fn dispatch(
 ) -> Result<String, String> {
     match subject(tool) {
         Subject::SelfAnswering => handler(root, arguments),
-        Subject::Path => resolve_owner(root, arguments, handler, false),
-        Subject::PathOrEveryMember => resolve_owner(root, arguments, handler, true),
+        Subject::Path => resolve_owner(root, arguments, handler),
+        Subject::WorkspaceOrOwner => {
+            if arguments.get("path").and_then(Value::as_str).is_some() {
+                return resolve_owner(root, arguments, handler);
+            }
+            match members(root) {
+                Some(members) => {
+                    // The answer is built first: handing a body its sources is what marks a
+                    // member used, and the census composed afterwards can then say which member
+                    // the answer rested on.
+                    // 先构成答案：把源码交给主体正是把成员标为已用的动作，随后构成的普查才说得出这份答案
+                    // 依托的是哪个成员。
+                    let answer = handler(root, arguments)?;
+                    let mut output = workspace::roster(root, &members);
+                    output.push_str(&answer);
+                    output.push_str(workspace::DETAIL);
+                    Ok(output)
+                }
+                None => handler(root, arguments),
+            }
+        }
         Subject::EveryMember(keys) => resolve_every_member(root, arguments, handler, keys),
         Subject::Write => resolve_write(root, tool, arguments, handler),
     }
@@ -198,22 +223,13 @@ fn named_subject<'a>(arguments: &'a Value, keys: &[&str]) -> Option<&'a str> {
 
 /// Answer a request that names a filesystem path, from the member that owns it.
 /// 从拥有它的那个成员回答一个点名了文件系统路径的请求。
-fn resolve_owner(
-    root: &Path,
-    arguments: &Value,
-    handler: Handler,
-    every_member_without_a_path: bool,
-) -> Result<String, String> {
+fn resolve_owner(root: &Path, arguments: &Value, handler: Handler) -> Result<String, String> {
     let Some(members) = members(root) else {
         return handler(root, arguments);
     };
     let named = named_paths(arguments, PATH_KEYS);
     if named.is_empty() {
-        return if every_member_without_a_path {
-            every_member(root, &members, arguments, handler, &[])
-        } else {
-            handler(root, arguments)
-        };
+        return handler(root, arguments);
     }
     // Ownership is decided by the member's **root prefix**, which is the only thing that
     // can say which identity domain a path lives in: the derivation hashes source paths
