@@ -56,6 +56,9 @@ pub mod release_workflow;
 pub mod retired_names;
 #[path = "shims.rs"]
 pub mod shims;
+#[path = "verb_table.rs"]
+pub mod verb_table;
+
 #[path = "size.rs"]
 pub mod size;
 
@@ -566,3 +569,7 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 }
+
+#[cfg(test)]
+#[path = "verb_table_tests.rs"]
+mod verb_table_tests;
