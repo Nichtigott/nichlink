@@ -242,7 +242,7 @@ pub fn generated_snapshots() -> Result<Vec<RegistrationSnapshot>, String> {
 /// 从显式的项目根加载生成的注册面。
 pub fn generated_snapshots_from(root: &Path) -> Result<Vec<RegistrationSnapshot>, String> {
     let mut sources = Vec::new();
-    collect_face_sources(root, &mut sources)?;
+    visit_face_sources(root, &mut sources)?;
     sources.sort();
     sources
         .into_iter()
@@ -279,7 +279,7 @@ impl nichlink_kernel::source::SourceTree for StdSourceTree {
     }
 }
 
-fn collect_face_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<(), String> {
+fn visit_face_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<(), String> {
     nichlink_kernel::source::collect_rust_sources(
         &StdSourceTree,
         directory,
@@ -347,7 +347,7 @@ pub fn edit_module_face(
     // 在修改任一文件前先解析完整注册面，保证错误编辑不会落盘。
     let authored = face.to_snapshot()?;
     let existing = registry
-        .find(id)
+        .find_registry(id)
         .ok_or_else(|| format!("node `{id}` is not registered"))?;
     let merged = existing.clone().merge_authored(authored);
     registry

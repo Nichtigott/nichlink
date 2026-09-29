@@ -147,7 +147,7 @@ impl Registry {
                         ));
                     }
                 },
-                GraftTargetRef::Id(id) => external.find(id).map(|_| id),
+                GraftTargetRef::Id(id) => external.find_registry(id).map(|_| id),
             }
             .ok_or_else(|| {
                 // The selector is what identifies the failure; the base root id
@@ -165,7 +165,7 @@ impl Registry {
                 )
             })?;
             let replacement = external
-                .find(replacement)
+                .find_registry(replacement)
                 .expect("resolve_node returned a registered external face");
             for target in staged.resolve_cut_targets(cut)? {
                 if !seen.insert(target) {
@@ -190,7 +190,7 @@ impl Registry {
         external: &Registry,
     ) -> RegistryResult<()> {
         let target_info = self
-            .find(target)
+            .find_registry(target)
             .cloned()
             .ok_or_else(|| self.graft_error(target, GraftError::UnknownTarget(target)))?;
         if !replacement.flow.is_declared() || !target_info.flow.is_declared() {
@@ -216,7 +216,10 @@ impl Registry {
         candidate.id = target_info.id;
         candidate.parent = target_info.parent;
         candidate.registry_name = target_info.registry_name.clone();
-        let failures = parent.header.registration_rule.validate(&candidate);
+        let failures = parent
+            .header
+            .registration_rule
+            .validate_owned_registration_rule(&candidate);
         if !failures.is_empty() {
             let mut error = self.graft_error(
                 target,
@@ -459,9 +462,14 @@ mod tests {
         assert_eq!(effective.find_kind("Original").len(), 1);
         assert_eq!(effective_static.find_kind("Original").len(), 1);
         assert_eq!(effective.path_for(a2.id).as_deref(), Some("root/a/a2"));
-        assert_eq!(root.find(a1.id).map(|item| item.kind.as_str()), Some("A1"));
         assert_eq!(
-            external.find(original.id).map(|item| item.kind.as_str()),
+            root.find_registry(a1.id).map(|item| item.kind.as_str()),
+            Some("A1")
+        );
+        assert_eq!(
+            external
+                .find_registry(original.id)
+                .map(|item| item.kind.as_str()),
             Some("Original")
         );
         assert_eq!(effective.path_for(a1.id).as_deref(), Some("root/a/a1"));

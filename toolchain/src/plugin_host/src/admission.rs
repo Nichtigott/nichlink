@@ -73,7 +73,7 @@ pub fn plugin_catalog(package_root: &Path) -> Result<PluginCatalog, HostError> {
             }
         }
     }
-    PluginCatalog::parse(&lock).map_err(|error| {
+    PluginCatalog::parse_plugin_catalog(&lock).map_err(|error| {
         HostError::Policy(format!(
             "invalid plugin lock under {}: {error}",
             directory.display()
@@ -218,6 +218,6 @@ impl<V: PluginSignatureVerifier> PluginAdmission<V> {
         artifact: PluginArtifact,
     ) -> Result<crate::plugin_host::ProcessInstance, HostError> {
         let verified = self.admit(artifact)?;
-        backend.load(verified, program)
+        backend.load_process_backend(verified, program)
     }
 }

@@ -47,7 +47,7 @@ impl Registry {
         current: NodeId,
         replacements: Vec<RegistrationSnapshot>,
     ) -> RegistryResult<()> {
-        let existing = self.find(current).ok_or_else(|| {
+        let existing = self.find_registry(current).ok_or_else(|| {
             Box::new(RegistryError::new(
                 current,
                 self.header.path.clone(),
@@ -102,7 +102,7 @@ impl Registry {
         current: NodeId,
         info: RegistrationSnapshot,
     ) -> RegistryResult<()> {
-        let existing = self.find(current).ok_or_else(|| {
+        let existing = self.find_registry(current).ok_or_else(|| {
             Box::new(RegistryError::new(
                 current,
                 self.header.path.clone(),
@@ -151,7 +151,10 @@ impl Registry {
                 format!("parent registry `{}` was not found", info.parent),
             ))
         })?;
-        let rule_failures = target.header.registration_rule.validate(&info);
+        let rule_failures = target
+            .header
+            .registration_rule
+            .validate_owned_registration_rule(&info);
         if !rule_failures.is_empty() {
             return Err(Box::new(RegistryError::new(
                 info.id,
@@ -163,7 +166,7 @@ impl Registry {
                 ),
             )));
         }
-        let contract_failures = info.contract.validate(&info.kind);
+        let contract_failures = info.contract.validate_owned_object_contract(&info.kind);
         if !contract_failures.is_empty() {
             return Err(Box::new(RegistryError::new(
                 info.id,
@@ -239,7 +242,7 @@ impl Registry {
         wanted: NodeId,
         info: RegistrationSnapshot,
     ) -> Result<(), ReplaceRefusal> {
-        let Some(parent) = self.find(wanted).map(|entry| entry.parent) else {
+        let Some(parent) = self.find_registry(wanted).map(|entry| entry.parent) else {
             return Err(ReplaceRefusal::TargetGone);
         };
         let Some(registry) = self.registry_mut(parent) else {
@@ -295,7 +298,7 @@ impl Registry {
             .iter()
             .filter(|child| child.parent == parent)
             .find_map(|child| {
-                let failures = rule.validate(child);
+                let failures = rule.validate_owned_registration_rule(child);
                 (!failures.is_empty()).then(|| format!("`{}`: {}", child.kind, failures.join("; ")))
             })
     }
@@ -342,7 +345,7 @@ impl Registry {
     }
 
     pub(super) fn take_entry(&mut self, wanted: NodeId) -> Option<RegisteredEntry> {
-        let parent = self.find(wanted)?.parent;
+        let parent = self.find_registry(wanted)?.parent;
         let registry = self.registry_mut(parent)?;
         Arc::make_mut(&mut registry.entries).remove_entry(&wanted)
     }
@@ -479,10 +482,12 @@ mod tests {
 
     #[test]
     fn cut_command_supports_single_node_and_full_subtree_forms() {
-        let single = CutGraftCommand::parse("cut [root/a1] graft replacement").unwrap();
+        let single =
+            CutGraftCommand::parse_cut_graft_command("cut [root/a1] graft replacement").unwrap();
         assert_eq!(single.cut, "root/a1");
         assert!(!single.full);
-        let full = CutGraftCommand::parse("cut [root/a] full graft replacement").unwrap();
+        let full = CutGraftCommand::parse_cut_graft_command("cut [root/a] full graft replacement")
+            .unwrap();
         assert_eq!(full.cut, "root/a");
         assert!(full.full);
     }
@@ -492,14 +497,18 @@ mod tests {
     /// 命令语法的分隔符是独立的词 `to`，两个端点以独立字段返回。
     #[test]
     fn cut_command_reads_a_range_as_two_endpoints() {
-        let range = CutGraftCommand::parse("cut [root/a to root/b] graft replacement").unwrap();
+        let range =
+            CutGraftCommand::parse_cut_graft_command("cut [root/a to root/b] graft replacement")
+                .unwrap();
         assert_eq!(range.cut, "root/a");
         assert_eq!(range.end.as_deref(), Some("root/b"));
         // The far endpoint is the rest of the text, spaces and all, exactly as
         // the previous substring split treated it.
         // 远端是余下的整段文本（含空格），与过去的子串拆分完全一致。
-        let chained =
-            CutGraftCommand::parse("cut [root/a to root/b to root/c] graft replacement").unwrap();
+        let chained = CutGraftCommand::parse_cut_graft_command(
+            "cut [root/a to root/b to root/c] graft replacement",
+        )
+        .unwrap();
         assert_eq!(chained.cut, "root/a");
         assert_eq!(chained.end.as_deref(), Some("root/b to root/c"));
     }
@@ -510,10 +519,11 @@ mod tests {
     /// `split_once(" to ")` 同样不处理的边界。
     #[test]
     fn cut_command_keeps_a_word_boundary_to_as_path_text() {
-        let lone = CutGraftCommand::parse("cut [to] graft replacement").unwrap();
+        let lone = CutGraftCommand::parse_cut_graft_command("cut [to] graft replacement").unwrap();
         assert_eq!(lone.cut, "to");
         assert_eq!(lone.end, None);
-        let trailing = CutGraftCommand::parse("cut [root/a to] graft replacement").unwrap();
+        let trailing =
+            CutGraftCommand::parse_cut_graft_command("cut [root/a to] graft replacement").unwrap();
         assert_eq!(trailing.cut, "root/a to");
         assert_eq!(trailing.end, None);
     }

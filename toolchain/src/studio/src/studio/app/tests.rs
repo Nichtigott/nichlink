@@ -64,7 +64,7 @@ pub(super) fn fixture_project() -> Option<std::path::PathBuf> {
 #[cfg(feature = "prototype-fixtures")]
 pub(super) fn fixture_app() -> Option<App> {
     fixture_project()?;
-    Some(App::load())
+    Some(App::load_app())
 }
 
 #[cfg(feature = "prototype-fixtures")]

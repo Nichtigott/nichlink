@@ -46,7 +46,7 @@ impl<I: PluginInstance> HotDeployment<I> {
 
     /// Return the current snapshot; readers never block a writer.
     /// 返回当前快照；读者不会阻塞写者。
-    pub fn load(&self) -> Arc<Deployment<I>> {
+    pub fn load_hot_deployment(&self) -> Arc<Deployment<I>> {
         self.current.load_full()
     }
 

@@ -104,8 +104,11 @@ fn main() {
         selector,
         false,
     );
-    std::fs::write(directory.join(lexicon::GRAFT_PLAN_FILE), document.render())
-        .expect("write the record");
+    std::fs::write(
+        directory.join(lexicon::GRAFT_PLAN_FILE),
+        document.render_graft_plan_document(),
+    )
+    .expect("write the record");
     println!(
         "wrote {} under {}",
         lexicon::GRAFT_PLAN_FILE,

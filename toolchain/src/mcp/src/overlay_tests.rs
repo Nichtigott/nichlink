@@ -66,7 +66,8 @@ fn a_declared_cut_is_rendered_as_the_slots_replacement() {
     plan(
         &root,
         "button_fast",
-        &GraftPlanDocument::new(id, "root/button", "button_fast", false).render(),
+        &GraftPlanDocument::new(id, "root/button", "button_fast", false)
+            .render_graft_plan_document(),
     );
     let reply = overlay(&root, &json!({})).expect("the projection renders");
     assert!(
@@ -175,7 +176,8 @@ fn the_projection_is_bounded_by_limit() {
         plan(
             &root,
             &format!("graft_{index}"),
-            &GraftPlanDocument::new(id, "root/button", format!("graft_{index}"), false).render(),
+            &GraftPlanDocument::new(id, "root/button", format!("graft_{index}"), false)
+                .render_graft_plan_document(),
         );
     }
     let reply = overlay(&root, &json!({"limit": 1})).expect("the projection renders");

@@ -146,7 +146,10 @@ impl WasmBackend {
     /// 本方法**不做槽位策略**：通道、框架、模式与 flow 由
     /// [`WasmPluginTable::install`](crate::plugin_host::WasmPluginTable::install) 与 `validate_artifact`
     /// 检查。直接调用后端的宿主只得到 wasm 上限，别的什么都没有。
-    pub fn load(&self, artifact: VerifiedPluginArtifact) -> Result<WasmInstance, HostError> {
+    pub fn load_wasm_backend(
+        &self,
+        artifact: VerifiedPluginArtifact,
+    ) -> Result<WasmInstance, HostError> {
         let (_, bytes) = artifact.into_parts();
         if bytes.len() > self.limits.max_module_bytes {
             return Err(HostError::Limit(format!(

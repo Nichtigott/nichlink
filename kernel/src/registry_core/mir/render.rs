@@ -11,7 +11,7 @@ impl MirGraph {
     /// Render the human-readable candidate report, with one line per call and
     /// per local.
     /// 渲染人类可读的候选报告，每条调用与每个局部变量各一行。
-    pub fn render(&self) -> String {
+    pub fn render_mir_graph(&self) -> String {
         let mut output = String::new();
         writeln!(output, "MIR CANDIDATES").unwrap();
         for call in &self.calls {

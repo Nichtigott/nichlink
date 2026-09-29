@@ -8,7 +8,7 @@ pub(super) fn generated_paths(
     id: NodeId,
 ) -> Result<(String, PathBuf), String> {
     let face = registry
-        .find(id)
+        .find_registry(id)
         .ok_or_else(|| format!("node `{id}` is not registered"))?;
     let declared = Path::new(&face.source.file);
     let root = source_root();

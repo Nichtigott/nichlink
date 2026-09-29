@@ -26,7 +26,7 @@ use nichlink_kernel::lexicon;
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
     let namespace = namespace(root)?;
     let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-    Ok(render(&namespace, &faces, &unparsable))
+    Ok(render_registry(&namespace, &faces, &unparsable))
 }
 
 /// The identity namespace this package's faces were stamped with.
@@ -99,7 +99,7 @@ fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, Strin
 /// which identity domain they are in.
 /// 命名空间写在报告开头，因为下面的每个 id 离开它都没有意义：把这些行与已构建的树对照的读取方
 /// 必须知道它们处在哪个身份域。
-fn render(namespace: &str, faces: &[FaceView], unparsable: &str) -> String {
+fn render_registry(namespace: &str, faces: &[FaceView], unparsable: &str) -> String {
     let mut output = format!("namespace {namespace}\n{unparsable}faces {}\n", faces.len());
     for face in faces {
         // An unresolved parent is named rather than hidden: the face is real,

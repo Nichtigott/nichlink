@@ -121,7 +121,7 @@ impl OwnedAdmission {
 impl OwnedRegistrationRule {
     /// Validate all structural requirements and return every failure.
     /// 校验全部结构要求，并一次返回所有失败项。
-    pub fn validate(&self, snapshot: &RegistrationSnapshot) -> Vec<String> {
+    pub fn validate_owned_registration_rule(&self, snapshot: &RegistrationSnapshot) -> Vec<String> {
         validate_registration_requirements(RegistrationRequirementCheck {
             required_preset: self.required_preset.as_deref(),
             required_parts: &self.required_parts,
@@ -142,7 +142,7 @@ impl OwnedRegistrationRule {
 impl OwnedObjectContract {
     /// Validate the relationship between required and supplied parts.
     /// 校验所需 parts、实际提供 parts 以及返回值合同。
-    pub fn validate(&self, object: &str) -> Vec<String> {
+    pub fn validate_owned_object_contract(&self, object: &str) -> Vec<String> {
         validate_object_contract(&self.required_parts, &self.provided_parts, object)
     }
 }

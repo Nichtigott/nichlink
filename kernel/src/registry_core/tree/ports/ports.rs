@@ -197,7 +197,7 @@ impl PortIndex {
 
     /// Resolve `Branch::port` to exactly one face, or say precisely why not.
     /// 把 `Branch::port` 解析到恰好一个注册面，或者精确说明为何不能。
-    pub fn resolve(&self, branch: &str, port: &str) -> Resolution {
+    pub fn resolve_port_index(&self, branch: &str, port: &str) -> Resolution {
         let carriers = self.nodes_named(branch);
         if carriers.is_empty() {
             return Resolution::UnknownBranch;
@@ -291,14 +291,14 @@ impl Registry {
     /// 组装索引（构建步骤就是这样），不必遍历。
     pub fn port_index(&self) -> PortIndex {
         let mut entries = Vec::new();
-        collect_declared_ports(self, &mut entries);
+        visit_declared_ports(self, &mut entries);
         PortIndex::new(entries)
     }
 }
 
 /// Walk one registry and its child registries, collecting declared ports.
 /// 遍历一个注册机及其子注册机，收集声明的端口。
-fn collect_declared_ports(registry: &Registry, entries: &mut Vec<DeclaredPort>) {
+fn visit_declared_ports(registry: &Registry, entries: &mut Vec<DeclaredPort>) {
     for entry in registry.entries.values() {
         let info = &entry.info;
         // A node that owns a child registry has its authoritative path in that
@@ -318,7 +318,7 @@ fn collect_declared_ports(registry: &Registry, entries: &mut Vec<DeclaredPort>) 
             provides: info.provides.clone(),
         });
         if let Some(child) = &entry.child {
-            collect_declared_ports(child, entries);
+            visit_declared_ports(child, entries);
         }
     }
 }

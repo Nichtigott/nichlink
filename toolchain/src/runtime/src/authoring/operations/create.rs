@@ -23,7 +23,7 @@ pub(super) fn create_module(
         None
     } else {
         let face = registry
-            .find(parent)
+            .find_registry(parent)
             .ok_or_else(|| format!("parent `{parent}` is not registered"))?;
         if !face.needs_registry {
             return Err(format!("parent `{parent}` does not own a Registry"));

@@ -89,7 +89,7 @@ impl SlotState {
     /// `install` 现在可能落在加载**期间**，标志改为在锁下从队列自身状态发布，而不是盲目清零：
     /// 本次编译期间排队的代际必须保持待定，而不是被误当成已处理的代际。
     pub(super) fn activate(&self, backend: WasmBackend) -> Result<(), HostError> {
-        self.activate_with(|artifact| backend.load(artifact))
+        self.activate_with(|artifact| backend.load_wasm_backend(artifact))
     }
 
     /// The same activation with the load itself injected.

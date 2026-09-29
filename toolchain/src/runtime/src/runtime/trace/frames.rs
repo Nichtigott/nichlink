@@ -444,9 +444,12 @@ mod tests {
 
     #[test]
     fn trace_mode_accepts_human_facing_names() {
-        assert_eq!(TraceMode::parse("off"), Some(TraceMode::Off));
-        assert_eq!(TraceMode::parse("errors_only"), Some(TraceMode::ErrorsOnly));
-        assert_eq!(TraceMode::parse("FULL"), Some(TraceMode::Full));
-        assert_eq!(TraceMode::parse("verbose"), None);
+        assert_eq!(TraceMode::parse_trace_mode("off"), Some(TraceMode::Off));
+        assert_eq!(
+            TraceMode::parse_trace_mode("errors_only"),
+            Some(TraceMode::ErrorsOnly)
+        );
+        assert_eq!(TraceMode::parse_trace_mode("FULL"), Some(TraceMode::Full));
+        assert_eq!(TraceMode::parse_trace_mode("verbose"), None);
     }
 }

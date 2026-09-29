@@ -30,7 +30,7 @@ pub const fn application_default_trace_mode() -> TraceMode {
 pub fn trace_mode_from_env() -> TraceMode {
     std::env::var(crate::runtime::registry_core::lexicon::TRACE_MODE_ENV)
         .ok()
-        .and_then(|value| TraceMode::parse(&value))
+        .and_then(|value| TraceMode::parse_trace_mode(&value))
         .unwrap_or_else(application_default_trace_mode)
 }
 

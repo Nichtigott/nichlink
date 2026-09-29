@@ -51,7 +51,7 @@ fn worked_example() -> PortIndex {
 fn a_branch_exposes_its_whole_subtree_by_its_own_name() {
     let index = worked_example();
     assert_eq!(
-        index.resolve("B2", "layout"),
+        index.resolve_port_index("B2", "layout"),
         Resolution::One {
             node: face("root/A2/B2/C4", "C4", &[]).node,
             path: "root/A2/B2/C4".to_owned(),
@@ -60,11 +60,14 @@ fn a_branch_exposes_its_whole_subtree_by_its_own_name() {
     // The branch's own declaration counts too, and equality-inclusive
     // matching is what makes that true.
     // 分支自身的声明也算，而"包含相等"的匹配正是这一点的前提。
-    assert!(matches!(index.resolve("B2", "own"), Resolution::One { .. }));
+    assert!(matches!(
+        index.resolve_port_index("B2", "own"),
+        Resolution::One { .. }
+    ));
     // A branch does not see through its siblings.
     // 分支看不穿它的兄弟。
     assert_eq!(
-        index.resolve("B1", "layout"),
+        index.resolve_port_index("B1", "layout"),
         Resolution::UnknownPort {
             branch: "B1".to_owned()
         }
@@ -72,7 +75,7 @@ fn a_branch_exposes_its_whole_subtree_by_its_own_name() {
     // And a top-level branch is addressable the same way as a nested one.
     // 顶层分支的寻址方式与嵌套分支完全相同。
     assert!(matches!(
-        index.resolve("A1", "render"),
+        index.resolve_port_index("A1", "render"),
         Resolution::One { .. }
     ));
 }
@@ -89,7 +92,7 @@ fn ambiguity_is_reported_rather_than_resolved() {
     ];
     let index = PortIndex::new(entries.clone());
     assert_eq!(
-        index.resolve("B2", "render"),
+        index.resolve_port_index("B2", "render"),
         Resolution::AmbiguousPort {
             paths: vec!["root/A2/B2/C3".to_owned(), "root/A2/B2/C4".to_owned()],
         }
@@ -101,7 +104,7 @@ fn ambiguity_is_reported_rather_than_resolved() {
     entries.push(face("root/A3/B2", "B2", &["render"]));
     let index = PortIndex::new(entries);
     assert!(matches!(
-        index.resolve("B2", "render"),
+        index.resolve_port_index("B2", "render"),
         Resolution::AmbiguousBranch { .. }
     ));
     assert_eq!(
@@ -203,11 +206,11 @@ fn the_walker_reads_the_retained_declarations() {
 
     let index = registry.port_index();
     assert!(matches!(
-        index.resolve("button", "paint"),
+        index.resolve_port_index("button", "paint"),
         Resolution::One { .. }
     ));
     assert_eq!(
-        index.resolve("button", "absent"),
+        index.resolve_port_index("button", "absent"),
         Resolution::UnknownPort {
             branch: "button".to_owned()
         }

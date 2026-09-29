@@ -291,7 +291,7 @@ fn read_graft_state(registry: &Registry, state: &mut GraftState) {
     }
 
     let module = registry
-        .find(state.target)
+        .find_registry(state.target)
         .map(|info| crate::build_time::source_module_path(&info.source.file));
     // The declaration is read from the selected project for the same reason: the screen
     // says what the opened project declares, and a refused selection is said out loud in

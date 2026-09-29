@@ -31,7 +31,7 @@ pub fn aggregate(
 ) -> BuildDiagnostics {
     let mut requirements = Vec::new();
     let mut declarations = Vec::new();
-    collect(
+    visit_registration_phase(
         src,
         src,
         include_demo,
@@ -51,7 +51,7 @@ pub fn aggregate(
     diagnostics
 }
 
-fn collect(
+fn visit_registration_phase(
     root: &Path,
     dir: &Path,
     include_demo: bool,
@@ -69,7 +69,7 @@ fn collect(
             if named != Some(nichlink_kernel::lexicon::SCOPE_REGISTRATION_MODULE)
                 && named.is_some_and(crate::build_time::source_walk::valid_name)
             {
-                collect(
+                visit_registration_phase(
                     root,
                     &path,
                     include_demo,
@@ -90,7 +90,7 @@ fn collect(
             continue;
         }
         if let Some(face) = cache_units.and_then(|directory| cached_face(root, &path, directory)) {
-            collect_cached_face(
+            visit_cached_face(
                 &relative_display(root, &path),
                 face,
                 requirements,
@@ -110,11 +110,11 @@ fn collect(
         let Ok(Some(face)) = parse_face(&source) else {
             continue;
         };
-        collect_face(root, &relative, face, requirements, declarations);
+        visit_face(root, &relative, face, requirements, declarations);
     }
 }
 
-fn collect_cached_face(
+fn visit_cached_face(
     relative: &str,
     face: CachedFace,
     requirements: &mut Vec<CapabilityRequirement>,
@@ -217,7 +217,7 @@ fn cached_face(root: &Path, path: &Path, directory: &Path) -> Option<CachedFace>
     })
 }
 
-fn collect_face(
+fn visit_face(
     root: &Path,
     relative: &str,
     face: super::registry_syntax::FaceSyntax,

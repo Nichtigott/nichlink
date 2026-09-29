@@ -29,7 +29,7 @@ impl TraceArtifact {
     /// 记录可以任意顺序出现；两处看起来需要顺序的引用——局部值的来源函数取自它的帧，边的取自它的
     /// 目标局部值——在整份文档读完后补全，因此前向引用会解析出来，而不是静默变成
     /// `<local>` / `<runtime>`。规范渲染按帧、局部值、边的顺序写出。
-    pub fn parse(source: &str) -> Result<Self, TraceArtifactError> {
+    pub fn parse_trace_artifact(source: &str) -> Result<Self, TraceArtifactError> {
         let mut version = None;
         let mut namespace = None;
         let mut root = None;
@@ -82,7 +82,7 @@ impl TraceArtifact {
                     if mode.is_some() {
                         return Err(malformed(at, "duplicate key `mode`"));
                     }
-                    mode = Some(TraceMode::parse(value.trim()).ok_or_else(|| {
+                    mode = Some(TraceMode::parse_trace_mode(value.trim()).ok_or_else(|| {
                         malformed(at, format!("mode `{}` is not a trace mode", value.trim()))
                     })?);
                 }

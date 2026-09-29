@@ -84,13 +84,13 @@ fn the_shipped_workspace_verb_table_holds() {
     for item in &found {
         println!("  {}:{} {}", item.file, item.line, item.name);
     }
-    // PINNED is the measured workspace count at the time this gate landed; it may fall
-    // but must not grow.
-    // PINNED 是本门禁落地时实测的工作区数量；它只许下降，不许上升。
-    const PINNED: usize = 77;
+    // The ratchet reached zero on 2026-09-29: the table is now a **must-be-empty** gate rather
+    // than a ceiling, so a new bare verb (or a private `collect_`) fails here outright.
+    // 棘轮在 2026-09-29 收到 0：这张表现在是**必须为空**的门禁，而不是上限——新增一个裸动词
+    // （或一个私有 `collect_`）会直接在这里失败。
     assert!(
-        found.len() <= PINNED,
-        "the verb table grew {} violations (pinned {PINNED}); see the list above",
+        found.is_empty(),
+        "the verb table has {} violations (it must be empty); see the list above",
         found.len()
     );
 }

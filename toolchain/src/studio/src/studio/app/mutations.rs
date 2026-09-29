@@ -264,7 +264,7 @@ impl App {
             self.overlay = None;
             return;
         }
-        let catalog = match PluginCatalog::parse(&existing) {
+        let catalog = match PluginCatalog::parse_plugin_catalog(&existing) {
             Ok(catalog) => catalog,
             Err(error) => {
                 self.alert(format!("Plugin failed: invalid lock: {error}"));

@@ -92,7 +92,7 @@ impl App {
     }
 
     pub(super) fn source_function_line(&self, node: NodeId, function: &str) -> Option<u32> {
-        let info = self.registry.find(node)?;
+        let info = self.registry.find_registry(node)?;
         function_line(&info.source.file, function)
     }
 }

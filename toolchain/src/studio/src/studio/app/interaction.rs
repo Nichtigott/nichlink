@@ -9,7 +9,7 @@ impl App {
     ///
     /// The caller reads events; quit intent is recorded in `should_quit` for the loop.
     /// 调用方负责读取事件；退出意图记入 `should_quit`，由事件循环检查。
-    pub fn handle(&mut self, event: Event) {
+    pub fn handle_app(&mut self, event: Event) {
         match event {
             Event::Key(key) if key.kind == crossterm::event::KeyEventKind::Press => {
                 self.handle_key(key)

@@ -318,7 +318,7 @@ fn every_shipped_rule_source_passes_the_strict_reader() {
         .to_path_buf();
     let mut checked = 0;
     let mut files = Vec::new();
-    collect_rule_files(&root, &mut files);
+    visit_rule_files(&root, &mut files);
     files.sort();
     for path in files {
         let text = std::fs::read_to_string(&path).expect("a shipped rule source");
@@ -340,7 +340,7 @@ fn every_shipped_rule_source_passes_the_strict_reader() {
 
 /// Every `registry_rule.rs` under `directory`, skipping build output and VCS state.
 /// `directory` 下的每个 `registry_rule.rs`，跳过构建产物与版本库状态。
-fn collect_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+fn visit_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
         return;
     };
@@ -354,7 +354,7 @@ fn collect_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::Pa
             if name == "target" || name == ".git" || name == ".dsh-meow" {
                 continue;
             }
-            collect_rule_files(&path, files);
+            visit_rule_files(&path, files);
         } else if path
             .file_name()
             .is_some_and(|name| name == "registry_rule.rs")

@@ -65,12 +65,14 @@ fn a_declared_plan_names_its_declaration_and_an_undeclared_one_is_unkept() {
     plan(
         &root,
         "button_fast",
-        &GraftPlanDocument::new(id, "root/button", "button_fast", false).render(),
+        &GraftPlanDocument::new(id, "root/button", "button_fast", false)
+            .render_graft_plan_document(),
     );
     plan(
         &root,
         "orphan_fast",
-        &GraftPlanDocument::new(id, "root/elsewhere", "orphan_fast", true).render(),
+        &GraftPlanDocument::new(id, "root/elsewhere", "orphan_fast", true)
+            .render_graft_plan_document(),
     );
     let reply = grafts(&root, &json!({})).expect("the report renders");
     assert!(reply.contains("plans 2"), "{reply}");
@@ -134,7 +136,8 @@ fn a_readable_entry_that_declares_nothing_makes_the_plan_unkept() {
     plan(
         &root,
         "button_fast",
-        &GraftPlanDocument::new(id, "root/button", "button_fast", false).render(),
+        &GraftPlanDocument::new(id, "root/button", "button_fast", false)
+            .render_graft_plan_document(),
     );
     let reply = grafts(&root, &json!({})).expect("the report renders");
     assert!(
@@ -158,7 +161,8 @@ fn an_unreadable_entry_leaves_the_declaration_state_unknown() {
     plan(
         &root,
         "button_fast",
-        &GraftPlanDocument::new(id, "root/button", "button_fast", false).render(),
+        &GraftPlanDocument::new(id, "root/button", "button_fast", false)
+            .render_graft_plan_document(),
     );
     let reply = grafts(&root, &json!({})).expect("the report renders");
     assert!(reply.contains("host entry unreadable"), "{reply}");
@@ -180,7 +184,8 @@ fn the_report_is_bounded_by_limit() {
         plan(
             &root,
             &format!("graft_{index}"),
-            &GraftPlanDocument::new(id, "root/button", format!("graft_{index}"), false).render(),
+            &GraftPlanDocument::new(id, "root/button", format!("graft_{index}"), false)
+                .render_graft_plan_document(),
         );
     }
     let reply = grafts(&root, &json!({"limit": 2})).expect("the report renders");
@@ -201,7 +206,8 @@ fn unkept_plans_are_counted_past_the_limit() {
         plan(
             &root,
             selector,
-            &GraftPlanDocument::new(id, "root/button", selector, false).render(),
+            &GraftPlanDocument::new(id, "root/button", selector, false)
+                .render_graft_plan_document(),
         );
     }
     let reply = grafts(&root, &json!({"limit": 1})).expect("the report renders");

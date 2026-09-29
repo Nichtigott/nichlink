@@ -170,7 +170,7 @@ impl RegistrationRule {
     /// Return one message per unmet structural requirement for `info`; an empty
     /// result means the declaration may enter the registry.
     /// 针对 `info` 的每项未满足结构要求各返回一条消息；结果为空表示该声明可进入注册机。
-    pub fn validate(&self, info: &RegistrationInfo) -> Vec<String> {
+    pub fn validate_registration_rule(&self, info: &RegistrationInfo) -> Vec<String> {
         validate_registration_requirements(RegistrationRequirementCheck {
             required_preset: self.required_preset,
             required_parts: self.required_parts,

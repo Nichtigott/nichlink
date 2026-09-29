@@ -190,7 +190,8 @@ pub fn run_for(manifest: &Path, out_dir: &Path, package: &str) -> Result<(), Str
     // `create <dir>: <reason>`。
     std::fs::create_dir_all(out_dir)
         .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
-    check_for(manifest, out_dir, package).map_err(|diagnostics| diagnostics.render())
+    check_for(manifest, out_dir, package)
+        .map_err(|diagnostics| diagnostics.render_build_diagnostics())
 }
 
 /// Run the same discovery and validation pipeline as [`run_for`], but hand the

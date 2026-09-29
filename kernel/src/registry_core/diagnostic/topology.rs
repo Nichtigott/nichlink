@@ -131,7 +131,13 @@ mod topology_tests {
     fn missing_parent_is_reported() {
         let mut records = vec![record(2, 9, true)];
         let errors = validate_face_topology(&mut records, ROOT_NODE_ID);
-        assert_eq!(errors.render().matches("parent node is missing").count(), 1);
+        assert_eq!(
+            errors
+                .render_build_diagnostics()
+                .matches("parent node is missing")
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -140,7 +146,7 @@ mod topology_tests {
         let errors = validate_face_topology(&mut records, ROOT_NODE_ID);
         assert_eq!(
             errors
-                .render()
+                .render_build_diagnostics()
                 .matches("parent does not own a registry")
                 .count(),
             1
@@ -151,7 +157,13 @@ mod topology_tests {
     fn parent_cycle_is_reported() {
         let mut records = vec![record(1, 2, true), record(2, 1, true)];
         let errors = validate_face_topology(&mut records, ROOT_NODE_ID);
-        assert_eq!(errors.render().matches("parent cycle detected").count(), 2);
+        assert_eq!(
+            errors
+                .render_build_diagnostics()
+                .matches("parent cycle detected")
+                .count(),
+            2
+        );
     }
 
     #[test]
@@ -187,7 +199,7 @@ mod topology_tests {
     fn duplicate_identity_is_reported() {
         let mut records = vec![record(1, 0, true), record(1, 0, false)];
         let errors = validate_face_topology(&mut records, ROOT_NODE_ID);
-        let rendered = errors.render();
+        let rendered = errors.render_build_diagnostics();
         assert_eq!(
             rendered
                 .matches("duplicate registration node identity")

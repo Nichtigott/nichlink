@@ -90,7 +90,7 @@ OPTIONS:
 /// Reads the real process arguments, writes the command's report to stdout, and
 /// returns a failure as `Err` so the binary decides the exit code.
 /// 读取真实进程参数，把命令报告写到 stdout，失败以 `Err` 返回，由二进制决定退出码。
-pub fn main() -> Result<(), String> {
+pub fn main_entry() -> Result<(), String> {
     run(argv_strings(std::env::args_os())?)
 }
 

@@ -49,7 +49,7 @@ pub(crate) fn snippets(
                     .map(|editor| editor.name())
                     .collect::<Vec<_>>()
                     .join(", ");
-                editor = scaffold::Editor::parse(&name).ok_or_else(|| {
+                editor = scaffold::Editor::parse_editor(&name).ok_or_else(|| {
                     format!("unknown editor '{name}' (accepted: {accepted}, auto)")
                 })?;
             }

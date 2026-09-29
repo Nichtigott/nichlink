@@ -153,7 +153,7 @@ impl Registry {
             )));
         }
 
-        let by_id = self.find(document.target).map(|info| info.id);
+        let by_id = self.find_registry(document.target).map(|info| info.id);
         let by_path = self.resolve_path(&document.target_path);
         match (by_id, by_path) {
             (Some(a), Some(b)) if a == b => Ok(ResolvedRecord::Slot {

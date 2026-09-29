@@ -58,7 +58,7 @@ impl UnifiedCallGraph {
     /// Render the merged relations as human-readable lines, one per relation,
     /// each carrying its evidence marker, source location, and frame ids.
     /// 将合并后的关系渲染为人类可读的行，每行一条，带证据标记、源码位置与帧 id。
-    pub fn render(&self) -> String {
+    pub fn render_unified_call_graph(&self) -> String {
         let mut output = String::new();
         let relations = self.relations();
         output.push_str("CALL RELATIONS\n");
@@ -132,7 +132,11 @@ mod tests {
         let unified = UnifiedCallGraph::new(&graph, &trace);
         assert_eq!(unified.static_calls.len(), 1);
         assert_eq!(unified.runtime_calls.len(), 1);
-        assert!(unified.render().contains("CALL RELATIONS"));
+        assert!(
+            unified
+                .render_unified_call_graph()
+                .contains("CALL RELATIONS")
+        );
         assert_eq!(unified.relations()[0].evidence, CallEvidence::Live);
         assert_eq!(unified.relations().len(), 1);
         assert_eq!(unified.topology().edge_count(), 1);

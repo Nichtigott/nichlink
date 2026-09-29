@@ -229,7 +229,7 @@ impl App {
             "root"
         } else {
             self.registry
-                .find(id)
+                .find_registry(id)
                 .map_or("<missing>", |info| info.registry_name.as_str())
         }
     }
@@ -243,7 +243,7 @@ impl App {
         let name = self.node_name(id);
         let owner = self
             .registry
-            .find(id)
+            .find_registry(id)
             .and_then(|info| self.registry.path_for(info.parent))
             .unwrap_or_else(|| "root".to_owned());
         format!("{name}  <- {owner}")
@@ -251,7 +251,7 @@ impl App {
 
     pub(super) fn graph_item(&self, search: &SearchState) -> Option<CallRef> {
         let node = search.center?;
-        let info = self.registry.find(node)?;
+        let info = self.registry.find_registry(node)?;
         Some(CallRef {
             node,
             function: search

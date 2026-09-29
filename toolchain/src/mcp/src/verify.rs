@@ -59,7 +59,7 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
         Err(diagnostics) => format!(
             "verdict failed ({} diagnostic(s))\n{}",
             diagnostics.len(),
-            bounded(&diagnostics.render())
+            bounded(&diagnostics.render_build_diagnostics())
         ),
     };
     // The delta is the same report `nichlink.diff` gives, and it is meaningful here

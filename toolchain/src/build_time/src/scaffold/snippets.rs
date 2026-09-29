@@ -147,7 +147,7 @@ impl Editor {
 
     /// The CLI spelling of an editor name.
     /// 编辑器名在命令行里的写法。
-    pub fn parse(name: &str) -> Option<Self> {
+    pub fn parse_editor(name: &str) -> Option<Self> {
         match name {
             "vscode" | "code" => Some(Editor::Vscode),
             "nvim" | "neovim" => Some(Editor::Nvim),
@@ -401,11 +401,20 @@ mod tests {
     fn the_nvim_file_is_rust_only_and_the_names_round_trip() {
         assert!(NVIM_SNIPPET_FILE.starts_with("luasnippets/rust/"));
         assert!(NVIM_SNIPPET_FILE.ends_with(Editor::Nvim.file_name()));
-        assert_eq!(Editor::parse("vscode").map(Editor::name), Some("vscode"));
-        assert_eq!(Editor::parse("code").map(Editor::name), Some("vscode"));
-        assert_eq!(Editor::parse("nvim").map(Editor::name), Some("nvim"));
-        assert_eq!(Editor::parse("neovim").map(Editor::name), Some("nvim"));
-        assert_eq!(Editor::parse("emacs"), None);
+        assert_eq!(
+            Editor::parse_editor("vscode").map(Editor::name),
+            Some("vscode")
+        );
+        assert_eq!(
+            Editor::parse_editor("code").map(Editor::name),
+            Some("vscode")
+        );
+        assert_eq!(Editor::parse_editor("nvim").map(Editor::name), Some("nvim"));
+        assert_eq!(
+            Editor::parse_editor("neovim").map(Editor::name),
+            Some("nvim")
+        );
+        assert_eq!(Editor::parse_editor("emacs"), None);
     }
 
     /// Injecting twice leaves the second call with nothing to write.

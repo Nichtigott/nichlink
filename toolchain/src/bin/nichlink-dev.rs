@@ -57,7 +57,7 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
 
     rebuild(&studio_root)?;
     watcher.drain();
-    let mut child = spawn(&executable, query)?;
+    let mut child = spawn_child(&executable, query)?;
 
     loop {
         match child.try_wait() {
@@ -71,8 +71,8 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
                 while watcher.changed().unwrap_or(false) {}
                 match rebuild(&studio_root) {
                     Ok(()) => {
-                        stop(&mut child).map_err(|error| error.to_string())?;
-                        child = spawn(&executable, query)?;
+                        stop_child(&mut child).map_err(|error| error.to_string())?;
+                        child = spawn_child(&executable, query)?;
                     }
                     Err(error) => eprintln!(
                         "NichLink Studio: build failed; keeping the last good process\n{error}"
@@ -149,7 +149,7 @@ fn rebuild(studio_root: &Path) -> Result<(), String> {
     }
 }
 
-fn spawn(executable: &Path, query: Option<&str>) -> Result<Child, String> {
+fn spawn_child(executable: &Path, query: Option<&str>) -> Result<Child, String> {
     let mut command = Command::new(executable);
     command
         .stdin(Stdio::inherit())
@@ -166,7 +166,7 @@ fn spawn(executable: &Path, query: Option<&str>) -> Result<Child, String> {
     })
 }
 
-fn stop(child: &mut Child) -> io::Result<()> {
+fn stop_child(child: &mut Child) -> io::Result<()> {
     request_stop(child)?;
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {

@@ -37,7 +37,7 @@ impl App {
                     .registry
                     .path_for(parent)
                     .unwrap_or_else(|| "root".to_owned());
-                if let Some(parent_face) = self.registry.find(parent) {
+                if let Some(parent_face) = self.registry.find_registry(parent) {
                     add.apply_parent_rule(&parent_face.registry_rule);
                 }
                 self.overlay = Some(Overlay::Add(add));
@@ -177,7 +177,7 @@ impl App {
         edit.values[face_field::FLOW_PROVIDER] =
             info.flow_provider.as_deref().unwrap_or_default().to_owned();
         edit.values[face_field::PART_CONTRACTS] = part_contracts;
-        if let Some(parent_face) = self.registry.find(info.parent) {
+        if let Some(parent_face) = self.registry.find_registry(info.parent) {
             edit.apply_parent_rule(&parent_face.registry_rule);
         }
         self.overlay = Some(Overlay::Edit(info.id, edit));
@@ -285,7 +285,7 @@ mod edit_form_tests {
     #[test]
     fn the_edit_form_prefill_keeps_both_admission_lists() {
         let (root, _face) = temp_project("prefill");
-        let mut app = App::load();
+        let mut app = App::load_app();
         let admission = app
             .registry
             .depth_first()
@@ -319,7 +319,7 @@ mod edit_form_tests {
     #[test]
     fn saving_an_untouched_edit_form_keeps_the_source_deny_list() {
         let (root, face) = temp_project("write-back");
-        let mut app = App::load();
+        let mut app = App::load_app();
         app.handle_key(KeyEvent::from(KeyCode::Char('e')));
         let Some(Overlay::Edit(id, form)) = app.overlay.as_ref() else {
             panic!("e must open the Edit form: {}", app.event);

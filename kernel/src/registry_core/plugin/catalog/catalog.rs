@@ -140,7 +140,7 @@ impl PluginCatalog {
     /// 十字段行写明了来源扩展，因此它多出的三列按原样读取：空列成为 `Some("")`（声明为空），而
     /// 不是被塌缩成七字段形式的 `None`（没提到）。没有任何东西被静默丢掉——审计 `X-1` /
     /// `LGC-LG-40`。
-    pub fn parse(lock: &str) -> Result<Self, PluginLockError> {
+    pub fn parse_plugin_catalog(lock: &str) -> Result<Self, PluginLockError> {
         let mut records = Vec::new();
         let mut identities = BTreeSet::new();
         // The gate belongs to the whole file, not to the line the parser reached: per-record
@@ -195,13 +195,13 @@ impl PluginCatalog {
                     "must contain 7 or 10 fields",
                 ));
             }
-            let source = PluginSource::parse(fields[0]).ok_or_else(|| {
+            let source = PluginSource::parse_plugin_source(fields[0]).ok_or_else(|| {
                 PluginLockError::new(
                     line_number + 1,
                     format!("unknown plugin source `{}`", fields[0]),
                 )
             })?;
-            let mode = PluginMode::parse(fields[6]).ok_or_else(|| {
+            let mode = PluginMode::parse_plugin_mode(fields[6]).ok_or_else(|| {
                 PluginLockError::new(
                     line_number + 1,
                     format!("unknown plugin mode `{}`", fields[6]),
@@ -278,7 +278,7 @@ impl PluginCatalog {
         if !candidate.ends_with('\n') {
             candidate.push('\n');
         }
-        Self::parse(&candidate)?;
+        Self::parse_plugin_catalog(&candidate)?;
         Ok(candidate)
     }
 

@@ -98,7 +98,7 @@ pub(crate) fn push_call_ref(
         node,
         function,
         file: registry
-            .find(node)
+            .find_registry(node)
             .map(|info| info.source.file.as_str())
             .unwrap_or("")
             .to_owned(),

@@ -141,7 +141,7 @@ pub enum TraceMode {
 impl TraceMode {
     /// Parses the value accepted by `NICH_LINK_TRACE`.
     /// 解析 `NICH_LINK_TRACE` 支持的值。
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse_trace_mode(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "off" | "0" | "disabled" => Some(Self::Off),
             "errors-only" | "errors_only" | "errors" => Some(Self::ErrorsOnly),
@@ -157,9 +157,12 @@ mod trace_mode_tests {
 
     #[test]
     fn parse_accepts_documented_spellings() {
-        assert_eq!(TraceMode::parse("off"), Some(TraceMode::Off));
-        assert_eq!(TraceMode::parse("ERRORS-ONLY"), Some(TraceMode::ErrorsOnly));
-        assert_eq!(TraceMode::parse(" full "), Some(TraceMode::Full));
-        assert_eq!(TraceMode::parse("sometimes"), None);
+        assert_eq!(TraceMode::parse_trace_mode("off"), Some(TraceMode::Off));
+        assert_eq!(
+            TraceMode::parse_trace_mode("ERRORS-ONLY"),
+            Some(TraceMode::ErrorsOnly)
+        );
+        assert_eq!(TraceMode::parse_trace_mode(" full "), Some(TraceMode::Full));
+        assert_eq!(TraceMode::parse_trace_mode("sometimes"), None);
     }
 }

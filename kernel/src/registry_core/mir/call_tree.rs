@@ -220,7 +220,7 @@ pub fn call_tree(focus: &str, relations: &[CallRelation], depth: usize, limit: u
         }
     }
     count_cuts(&mut nodes, relations);
-    let edges = collect_edges(&nodes, relations);
+    let edges = visit_edges(&nodes, relations);
     assign_lanes(&mut nodes);
     CallTree {
         nodes,
@@ -301,7 +301,7 @@ fn count_cuts(nodes: &mut [CallTreeNode], relations: &[CallRelation]) {
 
 /// Keep one edge per caller/callee pair, with the strongest evidence seen.
 /// 每对调用者/被调用者只保留一条边，证据取见过的最强者。
-fn collect_edges(nodes: &[CallTreeNode], relations: &[CallRelation]) -> Vec<CallTreeEdge> {
+fn visit_edges(nodes: &[CallTreeNode], relations: &[CallRelation]) -> Vec<CallTreeEdge> {
     let mut edges: Vec<CallTreeEdge> = Vec::new();
     for relation in relations {
         let Some(caller) = nodes

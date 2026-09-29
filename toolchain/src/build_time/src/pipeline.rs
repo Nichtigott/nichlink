@@ -292,7 +292,7 @@ fn layout_diagnostic(input: &BuildInput, message: String) -> Option<BuildDiagnos
     let mut diagnostics = BuildDiagnostics::default();
     diagnostics.push(BuildDiagnostic::new("face-layout", message));
     if input.emit_cargo_directives {
-        panic!("{}", diagnostics.render());
+        panic!("{}", diagnostics.render_build_diagnostics());
     }
     Some(diagnostics)
 }

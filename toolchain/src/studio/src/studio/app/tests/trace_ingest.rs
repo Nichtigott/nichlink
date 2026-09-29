@@ -72,12 +72,12 @@ impl Fixture {
 
     /// Write an artifact at the convention path, exactly as the reader finds it.
     /// 在约定路径写出 artifact，与读取方找到它的方式完全一致。
-    fn write(&self, artifact: &TraceArtifact) {
+    fn write_fixture(&self, artifact: &TraceArtifact) {
         let path = self.artifact_path();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("create the trace directory");
         }
-        std::fs::write(&path, artifact.render()).expect("write the artifact");
+        std::fs::write(&path, artifact.render_trace_artifact()).expect("write the artifact");
     }
 }
 
@@ -113,7 +113,7 @@ fn fixture(label: &str) -> Fixture {
     let name =
         crate::build_time::package_name(&manifest).expect("the fixture manifest names its package");
     select_project(root.clone(), manifest, name.clone());
-    let app = App::load();
+    let app = App::load_app();
     let face = app
         .registry
         .depth_first()
@@ -171,7 +171,7 @@ fn center(fixture: &Fixture) -> CallRef {
 
 /// Render the current page as the flat text a reader sees.
 /// 把当前页面渲染成读者所见的平铺文本。
-fn render(app: &mut App) -> String {
+fn render_fixture(app: &mut App) -> String {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 48)).expect("terminal");
     crate::studio::studio::ui::draw_once(&mut terminal, app).expect("draw one frame");
@@ -188,7 +188,7 @@ fn render(app: &mut App) -> String {
 /// 渲染基础工作区；在那里标题图例不会被浮层遮住。
 fn render_base(app: &mut App) -> String {
     app.overlay = None;
-    render(app)
+    render_fixture(app)
 }
 
 /// Render the provenance graph page for the fixture's face.
@@ -200,15 +200,15 @@ fn render_graph(app: &mut App, fixture: &Fixture) -> String {
         center_function: Some(FUNCTION.to_owned()),
         ..SearchState::default()
     }));
-    render(app)
+    render_fixture(app)
 }
 
 /// Precondition for every refusal test: a matching artifact *would* load.
 /// 每条拒绝测试的前提：匹配的 artifact **本会**装入。
 fn matching_artifact_loads(fixture: &Fixture) -> App {
     let trace = recorded_trace(fixture);
-    fixture.write(&matching_artifact(fixture, &trace));
-    let app = App::load();
+    fixture.write_fixture(&matching_artifact(fixture, &trace));
+    let app = App::load_app();
     assert_eq!(
         app.trace_status,
         TraceStatus::Loaded,
@@ -270,7 +270,7 @@ fn the_three_trace_states_render_their_own_legend_and_panel_title() {
 
     // Absent: nothing was found.
     // Absent：什么都没找到。
-    let mut absent = App::load();
+    let mut absent = App::load_app();
     assert_eq!(absent.trace_status, TraceStatus::Absent);
     let legend = render_base(&mut absent);
     assert!(legend.contains("TRACE: none"), "{legend}");
@@ -281,8 +281,8 @@ fn the_three_trace_states_render_their_own_legend_and_panel_title() {
     // Loaded: the recorded values are drawn under a plain LIVE.
     // Loaded：已记录数值在朴素的 LIVE 之下被画出。
     let trace = recorded_trace(&fixture);
-    fixture.write(&matching_artifact(&fixture, &trace));
-    let mut loaded = App::load();
+    fixture.write_fixture(&matching_artifact(&fixture, &trace));
+    let mut loaded = App::load_app();
     assert_eq!(loaded.trace_status, TraceStatus::Loaded);
     let legend = render_base(&mut loaded);
     assert!(legend.contains("LIVE"), "{legend}");
@@ -297,8 +297,8 @@ fn the_three_trace_states_render_their_own_legend_and_panel_title() {
     let mut foreign = matching_artifact(&fixture, &trace);
     foreign.namespace = "someone.elses.app".to_owned();
     foreign.root = root_node_id("someone.elses.app");
-    fixture.write(&foreign);
-    let mut refused = App::load();
+    fixture.write_fixture(&foreign);
+    let mut refused = App::load_app();
     assert!(matches!(refused.trace_status, TraceStatus::Mismatch { .. }));
     let legend = render_base(&mut refused);
     assert!(legend.contains("TRACE mismatch"), "{legend}");
@@ -321,9 +321,9 @@ fn a_foreign_namespace_is_refused_and_installs_nothing() {
     let mut artifact = matching_artifact(&fixture, &trace);
     artifact.namespace = "someone.elses.app".to_owned();
     artifact.root = root_node_id("someone.elses.app");
-    fixture.write(&artifact);
+    fixture.write_fixture(&artifact);
 
-    let app = App::load();
+    let app = App::load_app();
     let TraceStatus::Mismatch { reason } = &app.trace_status else {
         panic!(
             "a foreign namespace must be refused: {:?}",
@@ -341,7 +341,7 @@ fn a_foreign_namespace_is_refused_and_installs_nothing() {
         "no values may be installed"
     );
     assert!(
-        app.registry.find(fixture.node).is_some(),
+        app.registry.find_registry(fixture.node).is_some(),
         "the registry stays visible through a trace refusal"
     );
     assert!(app.event.contains("refused"), "{}", app.event);
@@ -355,9 +355,9 @@ fn a_foreign_root_is_refused_and_installs_nothing() {
     let trace = recorded_trace(&fixture);
     let mut artifact = matching_artifact(&fixture, &trace);
     artifact.root = root_node_id("some-other-package");
-    fixture.write(&artifact);
+    fixture.write_fixture(&artifact);
 
-    let app = App::load();
+    let app = App::load_app();
     let TraceStatus::Mismatch { reason } = &app.trace_status else {
         panic!("a foreign root must be refused: {:?}", app.trace_status);
     };
@@ -367,7 +367,7 @@ fn a_foreign_root_is_refused_and_installs_nothing() {
         "the reason names the foreign root: {reason}"
     );
     assert!(!app.runtime_trace.is_collecting());
-    assert!(app.registry.find(fixture.node).is_some());
+    assert!(app.registry.find_registry(fixture.node).is_some());
 }
 
 /// A recorded node this snapshot cannot resolve is refused, and the reason names
@@ -380,9 +380,9 @@ fn an_unresolved_recorded_node_is_refused_and_the_reason_names_it() {
     let mut artifact = matching_artifact(&fixture, &trace);
     let ghost = NodeId::from_namespaced_path(&fixture.name, "control/ghost.rs", "Ghost");
     artifact.frames[0].node = ghost;
-    fixture.write(&artifact);
+    fixture.write_fixture(&artifact);
 
-    let app = App::load();
+    let app = App::load_app();
     let TraceStatus::Mismatch { reason } = &app.trace_status else {
         panic!(
             "a node this snapshot lacks must be refused: {:?}",
@@ -393,7 +393,7 @@ fn an_unresolved_recorded_node_is_refused_and_the_reason_names_it() {
     assert!(reason.contains(&ghost.to_string()), "{reason}");
     assert!(!app.runtime_trace.is_collecting());
     assert!(
-        app.registry.find(fixture.node).is_some(),
+        app.registry.find_registry(fixture.node).is_some(),
         "the registry stays visible through a stale trace"
     );
 }
@@ -408,14 +408,14 @@ fn an_unsupported_version_is_refused_with_the_parsers_reason() {
     std::fs::create_dir_all(path.parent().expect("artifact parent")).expect("trace directory");
     std::fs::write(&path, "version=2\nnamespace=x\nroot=y\nmode=full\n").expect("write artifact");
 
-    let app = App::load();
+    let app = App::load_app();
     let TraceStatus::Mismatch { reason } = &app.trace_status else {
         panic!("version 2 must be refused: {:?}", app.trace_status);
     };
     assert!(reason.contains("version `2`"), "{reason}");
     assert!(reason.contains("not supported"), "{reason}");
     assert!(!app.runtime_trace.is_collecting());
-    assert!(app.registry.find(fixture.node).is_some());
+    assert!(app.registry.find_registry(fixture.node).is_some());
 }
 
 /// The convention path is the one the host writes and Studio reads; the override
@@ -427,7 +427,7 @@ fn an_unsupported_version_is_refused_with_the_parsers_reason() {
 fn the_loader_reads_the_convention_path() {
     let fixture = fixture("path");
     let trace = recorded_trace(&fixture);
-    fixture.write(&matching_artifact(&fixture, &trace));
+    fixture.write_fixture(&matching_artifact(&fixture, &trace));
     let expected = fixture
         .root
         .join(crate::runtime::lexicon::NICHLINK_DIR)
@@ -435,5 +435,5 @@ fn the_loader_reads_the_convention_path() {
         .join(crate::runtime::lexicon::TRACE_FILE);
     assert_eq!(fixture.artifact_path(), expected);
     assert!(fixture.artifact_path().is_file());
-    assert_eq!(App::load().trace_status, TraceStatus::Loaded);
+    assert_eq!(App::load_app().trace_status, TraceStatus::Loaded);
 }

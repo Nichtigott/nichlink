@@ -52,7 +52,11 @@ pub trait PluginRuntime {
 
     /// Load one manifest's bytes, surfacing the adapter's own failure type.
     /// 加载某个 manifest 的字节，失败时给出适配器自己的错误类型。
-    fn load(&self, manifest: PluginManifest, bytes: &[u8]) -> Result<Self::Instance, Self::Error>;
+    fn load_plugin_policy(
+        &self,
+        manifest: PluginManifest,
+        bytes: &[u8],
+    ) -> Result<Self::Instance, Self::Error>;
 }
 
 /// Host policy for selecting which linked plugin manifests may participate.
@@ -229,7 +233,7 @@ mod tests {
             public_key_fingerprint: None,
             revocation_list: None,
         };
-        let elsewhere = PluginCatalog::parse(
+        let elsewhere = PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|official.other|1.0.0|official_other|sha256:aa|replacement",
         )
         .expect("a lock with another package parses");

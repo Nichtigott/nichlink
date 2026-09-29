@@ -98,7 +98,7 @@ impl App {
     ///
     /// A failed load keeps an empty root registry and reports the error in `event`.
     /// 加载失败时保留一个空根注册表，并把错误写入 `event`。
-    pub fn load() -> Self {
+    pub fn load_app() -> Self {
         let mut app = match load_registry() {
             Ok(registry) => Self::new(
                 registry,
@@ -149,9 +149,9 @@ impl App {
             Ok(registry) => {
                 self.registry = registry;
                 self.reload_error = None;
-                if before != self.registry.id() && self.registry.find(before).is_some() {
+                if before != self.registry.id() && self.registry.find_registry(before).is_some() {
                     self.selected = before;
-                } else if self.registry.find(self.selected).is_none() {
+                } else if self.registry.find_registry(self.selected).is_none() {
                     self.selected = self.registry.id();
                 }
                 self.details_selected = self
@@ -189,7 +189,7 @@ impl App {
     /// Registration snapshot of the currently selected node, if it still exists.
     /// 当前选中节点的注册快照（若仍存在）。
     pub fn selected_info(&self) -> Option<&RegistrationSnapshot> {
-        self.registry.find(self.selected)
+        self.registry.find_registry(self.selected)
     }
 
     /// The inspector's rows for the current selection, as `(name, value)` pairs.
@@ -275,7 +275,7 @@ impl App {
                 self.registry = registry;
                 self.reload_error = None;
                 if self.selected != self.registry.id()
-                    && self.registry.find(self.selected).is_none()
+                    && self.registry.find_registry(self.selected).is_none()
                 {
                     self.selected = self.registry.id();
                 }

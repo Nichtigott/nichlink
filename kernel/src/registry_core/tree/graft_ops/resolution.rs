@@ -85,7 +85,7 @@ impl Registry {
         match target {
             GraftTargetRef::Path(path) => self.resolve_path_strict(path),
             GraftTargetRef::Id(id) => {
-                if self.find(id).is_some() {
+                if self.find_registry(id).is_some() {
                     Resolution::One(id)
                 } else {
                     Resolution::Missing
@@ -183,8 +183,8 @@ impl Registry {
                 ));
             }
         };
-        let start_info = self.find(start).expect("resolved cut start");
-        let end_info = self.find(end).expect("resolved cut end");
+        let start_info = self.find_registry(start).expect("resolved cut start");
+        let end_info = self.find_registry(end).expect("resolved cut end");
         if start_info.parent != end_info.parent {
             return Err(self.graft_error(
                 start,
@@ -240,7 +240,7 @@ impl Registry {
     /// 第一个 registry 名、kind 或路径等于 `value` 的兄弟节点。
     pub(super) fn resolve_node(&self, value: &str) -> Resolution {
         if let Ok(id) = value.parse::<NodeId>() {
-            return if self.find(id).is_some() {
+            return if self.find_registry(id).is_some() {
                 Resolution::One(id)
             } else {
                 Resolution::Missing

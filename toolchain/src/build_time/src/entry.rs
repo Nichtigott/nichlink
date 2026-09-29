@@ -53,7 +53,7 @@ pub(crate) fn application_entry_source(
     nodes: &[Node],
     errors: &mut BuildDiagnostics,
 ) -> Option<PathBuf> {
-    fn visit(
+    fn visit_entry(
         src: &Path,
         nodes: &[Node],
         errors: &mut BuildDiagnostics,
@@ -96,11 +96,11 @@ pub(crate) fn application_entry_source(
                     ),
                 }
             }
-            visit(src, &node.children, errors, declarations);
+            visit_entry(src, &node.children, errors, declarations);
         }
     }
     let mut declarations = Vec::new();
-    visit(src, nodes, errors, &mut declarations);
+    visit_entry(src, nodes, errors, &mut declarations);
     match declarations.as_slice() {
         [] => None,
         [(file, path, line, _)] => {

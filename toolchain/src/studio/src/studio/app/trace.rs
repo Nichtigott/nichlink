@@ -238,7 +238,7 @@ fn unresolved_nodes(artifact: &TraceArtifact, registry: &Registry) -> Vec<NodeId
     }
     nodes
         .into_iter()
-        .filter(|node| registry.find(*node).is_none())
+        .filter(|node| registry.find_registry(*node).is_none())
         .collect()
 }
 

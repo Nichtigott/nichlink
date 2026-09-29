@@ -93,7 +93,7 @@ impl Drop for TerminalGuard {
 /// Draw only after input or a terminal event; idle Studio has no redraw loop.
 /// 仅在输入或终端事件后绘制；Studio 空闲时没有重绘循环。
 fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut redraw = true;
     loop {
         if redraw {
@@ -104,7 +104,7 @@ fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result
             return Ok(());
         }
         if event::poll(std::time::Duration::from_millis(250))? {
-            app.handle(event::read()?);
+            app.handle_app(event::read()?);
             redraw = true;
         }
         // The method is internally throttled, so checking after input keeps

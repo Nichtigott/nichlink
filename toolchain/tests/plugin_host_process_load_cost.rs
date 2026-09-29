@@ -194,7 +194,7 @@ fn a_wrong_length_executable_is_refused_without_reading_it() {
     // 把高水位重置为此刻的存活量，使读数只覆盖加载这一步：产物与文件都在上面构造完毕。
     let baseline = LIVE_BYTES.load(Ordering::SeqCst);
     PEAK_BYTES.store(baseline, Ordering::SeqCst);
-    let outcome = backend.load(artifact, ProcessProgram::new(&path));
+    let outcome = backend.load_process_backend(artifact, ProcessProgram::new(&path));
     let peak = PEAK_BYTES.load(Ordering::SeqCst).saturating_sub(baseline);
 
     let error = match outcome {

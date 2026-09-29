@@ -8,7 +8,7 @@ use super::*;
 
 #[test]
 fn workspace_page_shortcuts_route_to_the_expected_mode() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('1')));
     assert_eq!(app.page, StudioPage::Search);
     assert!(matches!(app.overlay, Some(Overlay::Search(_))));
@@ -35,7 +35,7 @@ fn workspace_page_shortcuts_route_to_the_expected_mode() {
 
 #[test]
 fn divider_drag_is_clamped_and_stops_on_release() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.hot.workspace_area = Rect::new(10, 5, 100, 20);
     app.hot.tree_area = Rect::new(10, 5, 45, 20);
 

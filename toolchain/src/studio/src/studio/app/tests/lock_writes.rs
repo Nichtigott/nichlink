@@ -34,7 +34,7 @@ fn submit(source: &str, fields: [&str; 5], mode: &str) -> String {
     plugin.values[plugin_field::CRATE] = fields[3].to_owned();
     plugin.values[plugin_field::CHECKSUM] = fields[4].to_owned();
     plugin.values[plugin_field::MODE] = mode.to_owned();
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.submit_plugin(&plugin);
     app.event
 }
@@ -46,7 +46,7 @@ fn assert_never_succeeds_over_an_unparseable_lock(lock: &Path, event: &str) {
     let text = std::fs::read_to_string(lock).unwrap_or_default();
     match (
         event.contains("Plugin selected"),
-        PluginCatalog::parse(&text),
+        PluginCatalog::parse_plugin_catalog(&text),
     ) {
         (true, Err(error)) => {
             panic!("success over a lock the host refuses: {error}\nevent = {event}\n{text:?}")
@@ -153,7 +153,7 @@ fn a_lock_without_a_trailing_newline_is_never_glued_to_the_next_record() {
     assert_never_succeeds_over_an_unparseable_lock(&lock, &event);
     let text = std::fs::read_to_string(&lock).expect("lock readable");
     assert_eq!(
-        PluginCatalog::parse(&text)
+        PluginCatalog::parse_plugin_catalog(&text)
             .expect("the pair of records parses")
             .records()
             .len(),
@@ -201,7 +201,7 @@ fn an_official_append_that_would_duplicate_an_identity_is_refused_not_written() 
     assert_never_succeeds_over_an_unparseable_lock(&lock, &event);
     let text = std::fs::read_to_string(&lock).expect("lock readable");
     assert_eq!(
-        PluginCatalog::parse(&text)
+        PluginCatalog::parse_plugin_catalog(&text)
             .expect("the seeded lock still parses")
             .records()
             .len(),

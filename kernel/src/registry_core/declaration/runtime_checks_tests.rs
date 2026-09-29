@@ -37,7 +37,7 @@ fn provenance(value: &str) -> Provenance {
 /// assertion.
 /// 运行一条必须失败的检查，使“检查通过”不会伪装成断言通过。
 fn check_failure(check: RuntimeCheckSpec, value: &RuntimeValue) -> RuntimeCheckFailure {
-    check.run(value).expect_err("the check must fail")
+    check.evaluate(value).expect_err("the check must fail")
 }
 
 /// Inside the viewport passes; overflow and a coordinate-space mismatch
@@ -59,7 +59,7 @@ fn coordinates_in_viewport_accepts_inside_and_rejects_overflow_and_space_mismatc
         provenance("10,10,90,40"),
     ));
     assert!(
-        check.run(&inside).is_ok(),
+        check.evaluate(&inside).is_ok(),
         "a rect that fits the viewport passes"
     );
 
@@ -115,7 +115,7 @@ fn finite_number_accepts_finite_and_rejects_nan_and_infinity() {
     let check = RuntimeCheckSpec::FiniteNumber;
     assert!(
         check
-            .run(&RuntimeValue::number(1.0, provenance("1.0")))
+            .evaluate(&RuntimeValue::number(1.0, provenance("1.0")))
             .is_ok(),
         "1.0 is finite"
     );
@@ -144,13 +144,13 @@ fn number_in_range_is_inclusive_and_reports_inverted_bounds() {
     let check = RuntimeCheckSpec::NumberInRange { min: 0, max: 10 };
     assert!(
         check
-            .run(&RuntimeValue::number(0.0, provenance("0.0")))
+            .evaluate(&RuntimeValue::number(0.0, provenance("0.0")))
             .is_ok(),
         "the lower bound is inclusive"
     );
     assert!(
         check
-            .run(&RuntimeValue::number(10.0, provenance("10.0")))
+            .evaluate(&RuntimeValue::number(10.0, provenance("10.0")))
             .is_ok(),
         "the upper bound is inclusive"
     );
@@ -184,7 +184,9 @@ fn number_in_range_is_inclusive_and_reports_inverted_bounds() {
 fn non_empty_text_rejects_empty_and_whitespace_only() {
     let check = RuntimeCheckSpec::NonEmptyText;
     assert!(
-        check.run(&RuntimeValue::text("x", provenance("x"))).is_ok(),
+        check
+            .evaluate(&RuntimeValue::text("x", provenance("x")))
+            .is_ok(),
         "one visible character is not empty"
     );
 
@@ -206,13 +208,13 @@ fn text_length_counts_characters_not_bytes() {
     let check = RuntimeCheckSpec::TextLength { min: 1, max: 3 };
     assert!(
         check
-            .run(&RuntimeValue::text("abc", provenance("abc")))
+            .evaluate(&RuntimeValue::text("abc", provenance("abc")))
             .is_ok(),
         "three ASCII characters"
     );
     assert!(
         check
-            .run(&RuntimeValue::text("日本語", provenance("日本語")))
+            .evaluate(&RuntimeValue::text("日本語", provenance("日本語")))
             .is_ok(),
         "three characters even though they are nine bytes"
     );
@@ -259,7 +261,7 @@ fn number_in_range_refuses_a_bound_it_cannot_state_exactly() {
     };
     assert!(
         exact
-            .run(&RuntimeValue::number(
+            .evaluate(&RuntimeValue::number(
                 9_007_199_254_740_992.0,
                 provenance("x")
             ))
@@ -267,7 +269,7 @@ fn number_in_range_refuses_a_bound_it_cannot_state_exactly() {
     );
     assert!(
         exact
-            .run(&RuntimeValue::number(
+            .evaluate(&RuntimeValue::number(
                 9_007_199_254_740_994.0,
                 provenance("y")
             ))

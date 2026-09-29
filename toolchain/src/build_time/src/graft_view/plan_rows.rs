@@ -145,7 +145,7 @@ fn entry_rows(
             )];
         }
     };
-    let document = match GraftPlanDocument::parse(&text) {
+    let document = match GraftPlanDocument::parse_graft_plan_document(&text) {
         Ok(document) => document,
         Err(error) => return vec![GraftPlanRow::unreadable(selector, error.to_string())],
     };

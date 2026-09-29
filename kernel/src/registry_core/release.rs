@@ -256,7 +256,7 @@ impl StaticPlan {
     /// (`NAM-32` asks for a name that carries its object). Prefer `find_face`.
     /// [`Self::find_face`] 的历史名字；它留在已发布面上（`NAM-32` 要求名字带宾语）。
     /// 请优先用 `find_face`。
-    pub fn find(self, id: NodeId) -> Option<&'static StaticFace> {
+    pub fn find_static_face(self, id: NodeId) -> Option<&'static StaticFace> {
         self.find_face(id)
     }
 
@@ -392,9 +392,12 @@ mod static_plan_find_tests {
         ];
         let plan = StaticPlan::with_grafts(FACES, &[]);
         for face in FACES {
-            assert_eq!(plan.find(face.id).map(|found| found.id), Some(face.id));
+            assert_eq!(
+                plan.find_static_face(face.id).map(|found| found.id),
+                Some(face.id)
+            );
         }
-        assert!(plan.find(NodeId::from_raw([7; 16])).is_none());
+        assert!(plan.find_static_face(NodeId::from_raw([7; 16])).is_none());
     }
 }
 

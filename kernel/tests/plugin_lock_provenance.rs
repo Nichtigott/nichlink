@@ -66,8 +66,10 @@ fn manifest(
 /// 空的来源列保留自己的值，而不是塌缩成七字段形式的"没提过"。
 #[test]
 fn an_empty_provenance_column_is_not_the_seven_field_form() {
-    let seven = PluginCatalog::parse(SEVEN_FIELD).expect("the seven-field lock parses");
-    let ten = PluginCatalog::parse(TEN_FIELD_EMPTY_PROVENANCE).expect("the ten-field lock parses");
+    let seven =
+        PluginCatalog::parse_plugin_catalog(SEVEN_FIELD).expect("the seven-field lock parses");
+    let ten = PluginCatalog::parse_plugin_catalog(TEN_FIELD_EMPTY_PROVENANCE)
+        .expect("the ten-field lock parses");
     let (seven, ten) = (&seven.records()[0], &ten.records()[0]);
 
     for unnamed in [
@@ -98,7 +100,7 @@ fn an_empty_provenance_column_is_not_the_seven_field_form() {
 
     // A partly filled ten-field line keeps each column separate.
     // 部分填写的十字段行把每一列分开保留。
-    let partial = PluginCatalog::parse(
+    let partial = PluginCatalog::parse_plugin_catalog(
         "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension||key-v1|official-2026\n",
     )
     .expect("a partly filled ten-field lock parses");
@@ -113,8 +115,10 @@ fn an_empty_provenance_column_is_not_the_seven_field_form() {
 /// 记录下来的空列是信任规则会遵守的声明：说"没有签名"的锁不再放行一份点了签名的 manifest。
 #[test]
 fn an_explicitly_empty_provenance_column_pins_absence() {
-    let seven = PluginCatalog::parse(SEVEN_FIELD).expect("the seven-field lock parses");
-    let ten = PluginCatalog::parse(TEN_FIELD_EMPTY_PROVENANCE).expect("the ten-field lock parses");
+    let seven =
+        PluginCatalog::parse_plugin_catalog(SEVEN_FIELD).expect("the seven-field lock parses");
+    let ten = PluginCatalog::parse_plugin_catalog(TEN_FIELD_EMPTY_PROVENANCE)
+        .expect("the ten-field lock parses");
     let unsigned = manifest(None, None, None);
     let signed = manifest(Some("sig-v1"), Some("key-v1"), Some("official-2026"));
 
@@ -132,7 +136,7 @@ fn an_explicitly_empty_provenance_column_pins_absence() {
         "an empty signature column is a declaration that there is no signature"
     );
 
-    let partial = PluginCatalog::parse(
+    let partial = PluginCatalog::parse_plugin_catalog(
         "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension||key-v1|official-2026\n",
     )
     .expect("a partly filled ten-field lock parses");
@@ -148,18 +152,20 @@ fn an_explicitly_empty_provenance_column_pins_absence() {
 /// 相邻的空列仍然被拒绝——正是这一对比说明十字段的读法是一个缺陷，而不是本仓的风格。
 #[test]
 fn the_other_empty_columns_are_still_refused() {
-    let empty_source =
-        PluginCatalog::parse("|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n")
-            .expect_err("an empty source names no trust lane")
-            .to_string();
+    let empty_source = PluginCatalog::parse_plugin_catalog(
+        "|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
+    )
+    .expect_err("an empty source names no trust lane")
+    .to_string();
     assert!(
         empty_source.contains("unknown plugin source"),
         "{empty_source}"
     );
 
-    let empty_identity = PluginCatalog::parse("official||canvas|1.0.0|canvas|sha256:a|extension\n")
-        .expect_err("an empty identity field names nothing")
-        .to_string();
+    let empty_identity =
+        PluginCatalog::parse_plugin_catalog("official||canvas|1.0.0|canvas|sha256:a|extension\n")
+            .expect_err("an empty identity field names nothing")
+            .to_string();
     assert!(
         empty_identity.contains("contains an empty field"),
         "{empty_identity}"

@@ -103,7 +103,7 @@ pub fn collect_rust_sources(
     mut keep: impl FnMut(&Path, Option<&str>) -> Keep,
     collected: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
-    fn visit(
+    fn visit_source_tree(
         tree: &impl SourceTree,
         directory: &Path,
         depth: usize,
@@ -122,7 +122,7 @@ pub fn collect_rust_sources(
                 continue;
             }
             if tree.is_directory(&path) {
-                visit(tree, &path, depth + 1, walk, keep, collected)?;
+                visit_source_tree(tree, &path, depth + 1, walk, keep, collected)?;
                 continue;
             }
             if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
@@ -143,7 +143,7 @@ pub fn collect_rust_sources(
         }
         Ok(())
     }
-    visit(tree, root, 0, walk, &mut keep, collected)
+    visit_source_tree(tree, root, 0, walk, &mut keep, collected)
 }
 
 #[cfg(test)]

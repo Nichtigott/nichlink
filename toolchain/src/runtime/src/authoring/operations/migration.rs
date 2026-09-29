@@ -171,7 +171,7 @@ fn rewrite_migrated_sources(
     let rust_old = format!("crate::{}", paths.old_module_path);
     let rust_new = format!("crate::{}", paths.new_module_path);
     let mut files = Vec::new();
-    collect_rust_files(new_dir, &mut files)?;
+    visit_rust_files(new_dir, &mut files)?;
     for path in files {
         let original = fs::read_to_string(&path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -284,7 +284,7 @@ fn is_path_byte(byte: u8) -> bool {
 #[path = "migration_tests.rs"]
 mod migration_tests;
 
-fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+fn visit_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
     for entry in fs::read_dir(directory)
         .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
     {
@@ -292,7 +292,7 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), 
             .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
             .path();
         if path.is_dir() {
-            collect_rust_files(&path, files)?;
+            visit_rust_files(&path, files)?;
         } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
             files.push(path);
         }

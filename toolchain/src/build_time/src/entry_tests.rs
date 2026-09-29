@@ -57,7 +57,7 @@ fn a_host_mention_in_a_comment_or_string_is_not_a_call() {
         src.join("main.rs"),
         "// host!() in a line comment\n\
              /* host!() in a block comment */\n\
-             fn main() { let _ = \"host!()\"; }\n",
+             fn main_entry_tests() { let _ = \"host!()\"; }\n",
     )
     .expect("prose-only main");
     assert!(

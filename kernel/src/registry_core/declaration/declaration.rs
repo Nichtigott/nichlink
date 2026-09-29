@@ -293,8 +293,10 @@ mod tests {
         let mut reloaded = owned_snapshot(namespace, "Button");
         reloaded.registry_rule = rule.into_owned();
 
-        let compiled = rule.validate(&compiled_info);
-        let owned = reloaded.registry_rule.validate(&reloaded);
+        let compiled = rule.validate_registration_rule(&compiled_info);
+        let owned = reloaded
+            .registry_rule
+            .validate_owned_registration_rule(&reloaded);
         assert_eq!(compiled, owned, "compiled and reloaded disagree");
         for message in [
             "preset `ActionParts` is required, received `NoPreset`",
@@ -328,8 +330,8 @@ mod tests {
             provided_parts: vec!["layout".to_owned()],
         };
 
-        let compiled = compiled_contract.validate("Button");
-        let owned = owned_contract.validate("Button");
+        let compiled = compiled_contract.validate_object_contract("Button");
+        let owned = owned_contract.validate_owned_object_contract("Button");
         assert_eq!(compiled, owned, "compiled and owned disagree");
         assert_eq!(
             compiled,

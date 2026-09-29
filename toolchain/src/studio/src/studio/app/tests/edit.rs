@@ -30,7 +30,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
     .expect("write legacy rule");
     select_project(root.clone(), root.join("Cargo.toml"), "legacy-app");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.selected = app.registry.depth_first()[0].id;
     app.handle_key(KeyEvent::from(KeyCode::Char('e')));
     let Some(Overlay::Edit(id, mut edit)) = app.overlay.take() else {
@@ -72,7 +72,7 @@ fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
     .expect("write old generated face");
     select_project(root.clone(), root.join("Cargo.toml"), "old-face-test");
 
-    let app = App::load();
+    let app = App::load_app();
 
     assert!(app.reload_error.is_none(), "{}", app.event);
     assert_eq!(app.registry.depth_first().len(), 1);
@@ -89,7 +89,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(root.clone(), root.join("Cargo.toml"), "rename-test");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let root_id = app.registry.id();
     let mut add = AddState::new(root_id);
     add.values[face_field::MODULE] = "test".to_owned();
@@ -254,7 +254,7 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
     .expect("write legacy rule");
     select_project(root.clone(), root.join("Cargo.toml"), "trash-app");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.selected = app.registry.depth_first()[0].id;
     app.handle_key(KeyEvent::from(KeyCode::Char('e')));
     let Some(Overlay::Edit(id, mut edit)) = app.overlay.take() else {
@@ -341,7 +341,7 @@ fn delete_moves_the_module_of_the_open_project() {
     .expect("write legacy rule");
     select_project(root.clone(), root.join("Cargo.toml"), "delete-app");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.selected = app.registry.depth_first()[0].id;
     app.handle_key(KeyEvent::from(KeyCode::Char('d')));
     assert!(
@@ -392,7 +392,7 @@ fn delete_refuses_a_face_outside_its_own_directory() {
     // Create a standard module through the authoring path, then flatten it: the file
     // keeps its generated marker and moves out of its own directory.
     // 经创作路径建一个标准模块，然后把它拍平：文件保留生成标记，同时离开它自己的目录。
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.registry.id());
     add.values[face_field::MODULE] = "widget".to_owned();
     add.values[face_field::KIND] = "Widget".to_owned();
@@ -405,7 +405,7 @@ fn delete_refuses_a_face_outside_its_own_directory() {
     std::fs::rename(&generated, root.join("src/widget.rs")).expect("flatten the module");
     std::fs::remove_dir_all(root.join("src/widget")).expect("remove the emptied directory");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let flattened = app
         .registry
         .depth_first()

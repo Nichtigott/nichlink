@@ -351,15 +351,6 @@ impl RuntimeCheckSpec {
             Self::TextLength { min, max } => check_text_length(value, min, max),
         }
     }
-
-    /// The historical name of [`Self::evaluate`], kept because `RuntimeCheckSpec::run` is
-    /// on the published surface (`NAM-32` asks for a verb that carries the action).
-    /// Prefer `evaluate`.
-    /// [`Self::evaluate`] 的历史名字，因为 `RuntimeCheckSpec::run` 在已发布面上所以保留
-    /// （`NAM-32` 要求动词自带动作）。请优先用 `evaluate`。
-    pub fn run(self, value: &RuntimeValue) -> Result<(), RuntimeCheckFailure> {
-        self.evaluate(value)
-    }
 }
 
 /// The viewport-fitting check, for authoring code to name directly.

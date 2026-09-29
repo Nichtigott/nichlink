@@ -87,7 +87,7 @@ impl Registry {
             .expect("a registered entry always has a display path");
         let mut failures = Vec::new();
         for check in &entry.info.runtime_checks {
-            if let Err(failure) = check.run(value) {
+            if let Err(failure) = check.evaluate(value) {
                 let mut child = RegistryError::new(
                     node,
                     path.clone(),

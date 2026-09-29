@@ -154,14 +154,14 @@ test result: FAILED. 2 passed; 2 failed
 | 位置 | 形态 | 是否需要命名空间键 | 判据 |
 | --- | --- | --- | --- |
 | `toolchain/src/build_time/src/node_identity.rs:37` | `static CACHED_NODE_IDS: OnceLock<NodeIdCache>` | **需要（已修）** | 唯一存 `NodeId` 的进程级表；`get` 现在 (namespace, relative) + 复核 |
-| `toolchain/src/build_time/src/identity.rs:22` | `static PACKAGE_NAMESPACE_OVERRIDE: OnceLock<String>` | 不需要（它就是命名空间来源） | 先到先得是设计；每次管线运行由 `run_as_package` 的线程局部位（`toolchain/src/build_time/src/identity.rs:45`）压过它，且每一条生产路径都从 `toolchain/src/build_time/src/lib.rs:233` 进作用域 |
+| `toolchain/src/build_time/src/identity.rs:22` | `static PACKAGE_NAMESPACE_OVERRIDE: OnceLock<String>` | 不需要（它就是命名空间来源） | 先到先得是设计；每次管线运行由 `run_as_package` 的线程局部位（`toolchain/src/build_time/src/identity.rs:45`）压过它，且每一条生产路径都从 `toolchain/src/build_time/src/lib.rs:234` 进作用域 |
 | `toolchain/src/runtime/src/authoring/context.rs:33` | `thread_local! ACTIVE_CONTEXT: RefCell<Option<AuthoringContext>>` | 不需要 | 线程局部 + 作用域安装，且 `AuthoringContext{package_root, namespace}` **自带命名空间** |
 | `toolchain/src/studio/src/studio/app/project_context.rs:24` | `thread_local! PROJECT_CONTEXT` | 不需要 | 同上：`select_project` 把 `{root, manifest, namespace}` 一起装进本线程 |
 | `toolchain/src/runtime/src/runtime/trace/snapshot/parse.rs:295` | `Mutex<BTreeSet<&'static str>>`（字符串 interner） | 不需要 | 去重的是 artifact 文本里的字符串，不是身份 |
 | `toolchain/src/build_time/src/scope_view.rs:203`、`toolchain/src/build_time/src/graft_plan_check.rs:450`、`toolchain/src/build_time/src/face_view.rs:309`、`toolchain/src/build_time/src/package.rs:116`、`toolchain/src/runtime/src/authoring/filesystem.rs:29`、`:57`、`toolchain/src/runtime/src/runtime/trace/snapshot/io.rs:119`、`toolchain/src/mcp/src/preview.rs:33`、`toolchain/src/mcp/src/source_index.rs:229`、`toolchain/src/bin/nichlink-dev.rs:289` | `AtomicU64` 序号 | 不需要 | 只发临时文件名，不带身份 |
 
 - 没有发现 `LazyLock` / `OnceCell` / `lazy_static!` / `Mutex<HashMap<…>>` 形态的缓存；`core/` 里**没有**任何进程级 `static` 缓存。
-- 一处**值得记的邻近风险**（不是缺陷）：`package_namespace()` 在**没有**运行作用域时会读那个进程级 pin，因此任何"直接调 `package_namespace()` 的旁路代码"都会粘在第一个包上；当前的每一条生产路径都经过 `run_as_package`（`toolchain/src/build_time/src/lib.rs:233`）或线程局部上下文，所以现在成立——这条不变量没有门禁钉住，建议后续加一条断言或注释。
+- 一处**值得记的邻近风险**（不是缺陷）：`package_namespace()` 在**没有**运行作用域时会读那个进程级 pin，因此任何"直接调 `package_namespace()` 的旁路代码"都会粘在第一个包上；当前的每一条生产路径都经过 `run_as_package`（`toolchain/src/build_time/src/lib.rs:234`）或线程局部上下文，所以现在成立——这条不变量没有门禁钉住，建议后续加一条断言或注释。
 
 **结论：证实。**
 

@@ -51,7 +51,7 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
         .ok_or_else(|| {
             "nichlink.mir requires path (a MIR text dump or a JSONL artifact)".to_owned()
         })?;
-    let (path, mut graph) = load(root, relative)?;
+    let (path, mut graph) = load_mir(root, relative)?;
     if let Some(against) = arguments.get("against").and_then(Value::as_str) {
         if arguments.get("jsonl").and_then(Value::as_bool) == Some(true) {
             return Err(
@@ -61,7 +61,7 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
             );
         }
         let (baseline_path, baseline) =
-            load(root, against).map_err(|error| format!("baseline {error}"))?;
+            load_mir(root, against).map_err(|error| format!("baseline {error}"))?;
         return Ok(delta_report(
             &baseline_path,
             &baseline,
@@ -148,7 +148,7 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
         .ok_or_else(|| {
             "nichlink.unified requires path (a MIR text dump or a JSONL artifact)".to_owned()
         })?;
-    let (path, graph) = load(root, relative)?;
+    let (path, graph) = load_mir(root, relative)?;
     // The trace belongs to this package's tree, so a MIR snapshot naming a
     // *different* tree must not be merged with it: the merge would look like a
     // confirmation of something the compiler never saw. An unidentified artifact
@@ -254,7 +254,7 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
 /// 名字；而在把 UNC 前缀读成绝对的平台上，同一个字符串会走边界分支。这是有意的：本检查拒绝的是
 /// **本平台**会解析到根外的东西，而不是去猜另一个平台的规则。写在这里，是因为这个差异从回复里就能
 /// 观察到。
-fn load(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> {
+fn load_mir(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> {
     let path = root.join(relative);
     // Lexical containment first, so a missing path can still be judged: a
     // canonicalizing check answers `false` for anything that does not exist, which
@@ -488,12 +488,12 @@ mod boundary_reply_tests {
         let outside = root.join("outside.txt");
         fs::write(&outside, "not mir").expect("fixture file");
 
-        let existing = super::load(&root.join("src"), "../outside.txt").expect_err("outside");
-        let missing = super::load(&root.join("src"), "../gone.txt").expect_err("outside");
+        let existing = super::load_mir(&root.join("src"), "../outside.txt").expect_err("outside");
+        let missing = super::load_mir(&root.join("src"), "../gone.txt").expect_err("outside");
         assert_eq!(existing, missing, "the reply must not vary with existence");
 
         // A path inside the root that is missing still gets the "produce one" reply.
-        let inside = super::load(&root.join("src"), "missing.mir").expect_err("missing");
+        let inside = super::load_mir(&root.join("src"), "missing.mir").expect_err("missing");
         assert!(inside.contains("is not a readable file"), "{inside}");
         assert!(!inside.contains("must stay inside"), "{inside}");
         let _ = fs::remove_dir_all(&root);

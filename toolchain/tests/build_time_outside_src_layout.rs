@@ -108,7 +108,7 @@ fn a_library_target_that_is_not_a_file_is_refused_by_name() {
     let out_dir = root.join("target/nichlink/out");
     let diagnostics =
         check_for(&root, &out_dir, NAME).expect_err("a target that is not a file is refused");
-    let rendered = diagnostics.render();
+    let rendered = diagnostics.render_build_diagnostics();
     assert!(rendered.contains("face-layout"), "{rendered}");
     assert!(rendered.contains("host/lib.rs"), "{rendered}");
     assert!(rendered.contains("is not a file"), "{rendered}");

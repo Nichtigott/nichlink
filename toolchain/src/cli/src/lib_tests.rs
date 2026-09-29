@@ -511,7 +511,11 @@ fn grafts_json_lists_plans_and_declared_state() {
         NodeId::from_namespaced_path("cli-grafts", "control/object/button/button.rs", "Button");
     let document =
         GraftPlanDocument::new(target, "root/control/object/button", "button_fast", false);
-    fs::write(plan_dir.join("graft.plan"), document.render()).expect("plan file");
+    fs::write(
+        plan_dir.join("graft.plan"),
+        document.render_graft_plan_document(),
+    )
+    .expect("plan file");
     let broken = root.join(".nichlink/external-grafts/broken_graft");
     fs::create_dir_all(&broken).expect("broken directory");
     fs::write(broken.join("graft.plan"), "version=9\n").expect("broken plan");
@@ -607,7 +611,11 @@ fn explain_overlay_renders_the_static_projection() {
         NodeId::from_namespaced_path("cli-overlay", "control/object/button/button.rs", "Button");
     let document =
         GraftPlanDocument::new(target, "root/control/object/button", "button_fast", false);
-    fs::write(plan_dir.join("graft.plan"), document.render()).expect("plan file");
+    fs::write(
+        plan_dir.join("graft.plan"),
+        document.render_graft_plan_document(),
+    )
+    .expect("plan file");
 
     let path = root.display().to_string();
     let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);

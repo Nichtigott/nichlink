@@ -63,7 +63,7 @@ pub(super) fn run_method_path() -> String {
 /// 使用的形式。rustc 接受这个工具属性且不报警告，因此这条提示不花构建期代价。
 pub(super) fn render_object_aliases(output: &mut String, src: &Path, nodes: &[Node]) {
     let mut names = BTreeSet::from(["root".to_owned()]);
-    collect_object_aliases(src, nodes, &mut names);
+    visit_object_aliases(src, nodes, &mut names);
     let vocabulary = "/// `kind` is the marker type this file declares (`pub struct <Kind>;`), so\n/// write that type first and reference it here: an editor cannot complete a name\n/// the author has not written yet, and `kind` is captured as an identifier\n/// rather than an expression, which is also why value completion does not fire\n/// there. Every other field completes normally.\n/// `kind` 就是本文件声明的那个标记类型（`pub struct <Kind>;`）：先写出该类型，\n/// 再在这里引用它。编辑器无法补全一个作者还没写下的名字，而且 `kind` 是以标识符而非\n/// 表达式捕获的——这也是它的值位不会弹候选的原因。其余字段的值都能正常补全。\n/// Declare a registration face: `kind` first, then any of `preset`, `parts`,\n/// `name`, `summary`, `exports`, `stable_name`,\n/// `needs_registry`, `parent`, `getting_from_other_registry`,\n/// `registry_rule_path`, `registry_rule`, `admission`, `handle_traits`,\n/// `handle_contracts`, `part_traits`, `part_contracts`, `requires`,\n/// `provides`, `flow`, `flow_provider`,\n/// `plugin`, `runtime_checks` — in that order, each one optional.\n/// 声明一个注册面：先写 `kind`，其后可依次使用 `preset`、`parts`、`name`、\n/// `summary`、`exports`、`stable_name`、`needs_registry`、\n/// `parent`、`getting_from_other_registry`、\n/// `registry_rule_path`、`registry_rule`、`admission`、`handle_traits`、\n/// `handle_contracts`、`part_traits`、`part_contracts`、`requires`、\n/// `provides`、`flow`、`flow_provider`、\n/// `plugin`、`runtime_checks`——顺序如上，每一项都可省略。";
     let run_method = run_method_path();
     for name in names {
@@ -75,7 +75,7 @@ pub(super) fn render_object_aliases(output: &mut String, src: &Path, nodes: &[No
     }
 }
 
-fn collect_object_aliases(src: &Path, nodes: &[Node], names: &mut BTreeSet<String>) {
+fn visit_object_aliases(src: &Path, nodes: &[Node], names: &mut BTreeSet<String>) {
     for node in nodes {
         let owns_registry = node.file.as_ref().is_some_and(|file| {
             fs::read_to_string(file)
@@ -89,7 +89,7 @@ fn collect_object_aliases(src: &Path, nodes: &[Node], names: &mut BTreeSet<Strin
         if owns_registry {
             names.insert(node.name.clone());
         }
-        collect_object_aliases(src, &node.children, names);
+        visit_object_aliases(src, &node.children, names);
     }
 }
 

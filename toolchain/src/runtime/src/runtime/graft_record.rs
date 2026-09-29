@@ -104,7 +104,10 @@ pub fn load_graft_records(package_root: &Path) -> Result<Vec<LoadedGraft>, Strin
         let path = entry.path().join(lexicon::GRAFT_PLAN_FILE);
         let document = fs::read_to_string(&path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))
-            .and_then(|text| GraftPlanDocument::parse(&text).map_err(|error| format!("{error}")));
+            .and_then(|text| {
+                GraftPlanDocument::parse_graft_plan_document(&text)
+                    .map_err(|error| format!("{error}"))
+            });
         match document {
             Ok(document) => {
                 loaded.push(LoadedGraft::Record(RecordedGraft::new(selector, document)))
@@ -130,7 +133,8 @@ pub fn load_graft_record(package_root: &Path, selector: &str) -> Result<GraftPla
         .join(lexicon::GRAFT_PLAN_FILE);
     let text = fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    GraftPlanDocument::parse(&text).map_err(|error| format!("{}: {error}", path.display()))
+    GraftPlanDocument::parse_graft_plan_document(&text)
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The effective tree record files produced, with their evidence.

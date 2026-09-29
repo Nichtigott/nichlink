@@ -178,7 +178,7 @@ mod tests {
     /// Prime the process-wide cache as a build of `namespace` would, with or
     /// without the warm unit file on disk.
     /// 像一次以 `namespace` 身份的构建那样预热进程级缓存，磁盘上可有或没有那份已预热的 unit 文件。
-    fn build(manifest: &Path, src: &Path, node: &Node, warm: bool) {
+    fn build_identity_cache(manifest: &Path, src: &Path, node: &Node, warm: bool) {
         if warm {
             warm_unit(manifest, src, package_node_id(RELATIVE, "Button"));
         }
@@ -208,8 +208,12 @@ mod tests {
             relative_display(&src_a, node_a.file.as_ref().expect("a")),
             relative_display(&src_b, node_b.file.as_ref().expect("b")),
         );
-        run_as_package("pkg-a", || build(&manifest_a, &src_a, &node_a, true));
-        run_as_package("pkg-b", || build(&manifest_b, &src_b, &node_b, true));
+        run_as_package("pkg-a", || {
+            build_identity_cache(&manifest_a, &src_a, &node_a, true)
+        });
+        run_as_package("pkg-b", || {
+            build_identity_cache(&manifest_b, &src_b, &node_b, true)
+        });
         run_as_package("pkg-a", || {
             assert_eq!(
                 crate::build_time::node_identity::node_id(&src_a, &node_a),
@@ -245,7 +249,7 @@ mod tests {
                         "a" => (manifest_a, src_a, node_a),
                         _ => (manifest_b, src_b, node_b),
                     };
-                    run_as_package(name, || build(manifest, src, node, warm));
+                    run_as_package(name, || build_identity_cache(manifest, src, node, warm));
                 }
                 let packages: [(&PathBuf, &PathBuf, &Node, &str); 2] = [
                     (manifest_a, src_a, node_a, "a"),

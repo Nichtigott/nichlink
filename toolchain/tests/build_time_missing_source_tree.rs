@@ -30,7 +30,7 @@ fn a_package_without_a_source_tree_is_reported_as_a_layout_problem() {
     let out_dir = root.join("target/nichlink/out");
     let diagnostics = nichlink_toolchain::build_time::check_for(&root, &out_dir, "probe")
         .expect_err("a package without a source tree must be refused");
-    let rendered = diagnostics.render();
+    let rendered = diagnostics.render_build_diagnostics();
     assert!(rendered.contains("face-layout"), "{rendered}");
     assert!(
         rendered.contains(&root.join("src").display().to_string()),
@@ -56,7 +56,7 @@ fn an_empty_source_tree_is_not_a_layout_problem() {
     std::fs::write(root.join("src/lib.rs"), "\n").expect("library root");
     let out_dir = root.join("target/nichlink/out");
     if let Err(diagnostics) = nichlink_toolchain::build_time::check_for(&root, &out_dir, "probe") {
-        let rendered = diagnostics.render();
+        let rendered = diagnostics.render_build_diagnostics();
         assert!(
             !rendered.contains("face-layout"),
             "an empty tree is not a missing one: {rendered}"

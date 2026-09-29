@@ -216,7 +216,7 @@ impl TraceArtifact {
 
     /// Render the canonical document, one `key=value` line per record.
     /// 渲染规范文档，每条记录一行 `key=value`。
-    pub fn render(&self) -> String {
+    pub fn render_trace_artifact(&self) -> String {
         let mut output = format!(
             "version={}\nnamespace={}\nroot={}\nmode={}\n",
             self.version,

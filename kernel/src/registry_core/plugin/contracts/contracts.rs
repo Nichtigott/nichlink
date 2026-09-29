@@ -406,7 +406,7 @@ pub enum PluginSource {
 
 impl PluginSource {
     #[doc(hidden)]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse_plugin_source(value: &str) -> Option<Self> {
         match value {
             "official" => Some(Self::Official),
             "user" => Some(Self::User),
@@ -417,7 +417,7 @@ impl PluginSource {
 
 impl PluginMode {
     #[doc(hidden)]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse_plugin_mode(value: &str) -> Option<Self> {
         match value {
             "extension" => Some(Self::Extension),
             "replacement" => Some(Self::Replacement),

@@ -303,7 +303,9 @@ mod wasm_faults {
           (func (export "nichlink_abi_version") (result i32) (i32.const 99))
           (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
-        let error = match WasmBackend::default().load(artifact(bytes, PluginMode::Extension)) {
+        let error = match WasmBackend::default()
+            .load_wasm_backend(artifact(bytes, PluginMode::Extension))
+        {
             Ok(_) => panic!("ABI mismatch must reject the instance"),
             Err(error) => error,
         };
@@ -669,7 +671,7 @@ mod process_faults {
             timeout: Duration::from_millis(250),
             ..ProcessLimits::default()
         })
-        .load(
+        .load_process_backend(
             artifact(bytes, PluginMode::Extension),
             ProcessProgram::new(&path),
         )
@@ -687,7 +689,7 @@ mod process_faults {
         let (dir, path) = executable("#!/bin/sh\nexit 7\n");
         let bytes = std::fs::read(&path).unwrap();
         let plugin = ProcessBackend::default()
-            .load(
+            .load_process_backend(
                 artifact(bytes, PluginMode::Extension),
                 ProcessProgram::new(&path),
             )
@@ -723,10 +725,10 @@ mod process_faults {
 
     /// Stage `bytes` as a plugin executable and load it with `limits`.
     /// 把 `bytes` 暂存为插件可执行文件，并以 `limits` 加载它。
-    fn load(path: &Path, limits: ProcessLimits) -> impl PluginInstance {
+    fn load_plugin_host_fault_matrix(path: &Path, limits: ProcessLimits) -> impl PluginInstance {
         let bytes = std::fs::read(path).unwrap();
         ProcessBackend::new(limits)
-            .load(
+            .load_process_backend(
                 artifact(bytes, PluginMode::Extension),
                 ProcessProgram::new(path),
             )
@@ -758,7 +760,7 @@ mod process_faults {
             let directory = tempfile::tempdir().unwrap();
             let payload = vec![b'x'; body];
             let plugin = emitter(directory.path(), "emit", &framed(&payload));
-            let loaded = load(&plugin, ProcessLimits::default());
+            let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
             assert_eq!(
                 loaded.call("run", &[]).unwrap().len(),
                 body,
@@ -788,7 +790,7 @@ mod process_faults {
                 frame.display()
             ),
         );
-        let loaded = load(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
         assert_eq!(loaded.call("run", &[]).unwrap(), payload);
     }
 
@@ -816,7 +818,7 @@ mod process_faults {
             "truncated",
             &format!("#!/bin/sh\nhead -c 5 {}\nexit 0\n", frame.display()),
         );
-        let loaded = load(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
         let error = loaded
             .call("run", &[])
             .expect_err("a cut-off frame is not an answer");
@@ -856,7 +858,7 @@ mod process_faults {
             "never-started",
             &format!("#!/bin/sh\nhead -c 4 {}\nexit 0\n", frame.display()),
         );
-        let loaded = load(&never_started, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&never_started, ProcessLimits::default());
         let error = loaded
             .call("run", &[])
             .expect_err("a declared frame that never started is not an answer");
@@ -897,7 +899,7 @@ mod process_faults {
             "answers-then-lingers",
             &format!("#!/bin/sh\ncat {}\nexec sleep 30\n", frame.display()),
         );
-        let loaded = load(
+        let loaded = load_plugin_host_fault_matrix(
             &plugin,
             ProcessLimits {
                 timeout: Duration::from_millis(600),
@@ -928,7 +930,7 @@ mod process_faults {
     fn a_child_that_never_writes_a_frame_still_times_out() {
         let directory = tempfile::tempdir().unwrap();
         let plugin = script(directory.path(), "silent", "#!/bin/sh\nsleep 30\n");
-        let loaded = load(
+        let loaded = load_plugin_host_fault_matrix(
             &plugin,
             ProcessLimits {
                 timeout: Duration::from_millis(250),
@@ -952,7 +954,7 @@ mod process_faults {
     fn output_over_the_declared_limit_is_a_limit_failure() {
         let directory = tempfile::tempdir().unwrap();
         let plugin = emitter(directory.path(), "emit", &framed(&vec![b'x'; 4096]));
-        let loaded = load(
+        let loaded = load_plugin_host_fault_matrix(
             &plugin,
             ProcessLimits {
                 max_output_bytes: 1024,
@@ -977,7 +979,7 @@ mod process_faults {
     fn a_child_that_never_reads_stdin_still_hits_the_deadline() {
         let directory = tempfile::tempdir().unwrap();
         let plugin = script(directory.path(), "sleepy", "#!/bin/sh\nsleep 5\n");
-        let loaded = load(
+        let loaded = load_plugin_host_fault_matrix(
             &plugin,
             ProcessLimits {
                 timeout: Duration::from_millis(200),
@@ -1015,7 +1017,7 @@ mod process_faults {
                 payload.display()
             ),
         );
-        let loaded = load(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
         assert_eq!(loaded.call("run", &vec![7_u8; 1024 * 1024]).unwrap(), b"ok");
     }
 
@@ -1031,7 +1033,7 @@ mod process_faults {
             "noisy",
             &format!("#!/bin/sh\ncat {} >&2\nexit 7\n", noise.display()),
         );
-        let loaded = load(
+        let loaded = load_plugin_host_fault_matrix(
             &plugin,
             ProcessLimits {
                 timeout: Duration::from_secs(3),
@@ -1096,7 +1098,7 @@ mod process_faults {
             inherit_env: false,
             ..ProcessLimits::default()
         })
-        .load(
+        .load_process_backend(
             artifact(&probe),
             ProcessProgram::new(&probe)
                 .environment("NICHLINK_TEST_MARKER", "set-by-host")
@@ -1116,7 +1118,7 @@ mod process_faults {
             inherit_env: false,
             ..ProcessLimits::default()
         })
-        .load(artifact(&probe), ProcessProgram::new(&probe))
+        .load_process_backend(artifact(&probe), ProcessProgram::new(&probe))
         .unwrap();
         assert_eq!(empty.call("run", &[]).unwrap(), b"000");
 
@@ -1128,7 +1130,7 @@ mod process_faults {
             b"000"
         };
         let inherited = ProcessBackend::default()
-            .load(artifact(&probe), ProcessProgram::new(&probe))
+            .load_process_backend(artifact(&probe), ProcessProgram::new(&probe))
             .unwrap();
         assert_eq!(inherited.call("run", &[]).unwrap(), expected);
     }

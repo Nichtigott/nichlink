@@ -155,7 +155,7 @@ fn a_write_without_a_selected_project_is_refused() {
 #[test]
 fn a_delete_without_a_selected_project_is_refused() {
     clear_project_context();
-    let mut app = App::load();
+    let mut app = App::load_app();
     let target = app.selected;
     app.overlay = Some(Overlay::Delete(target));
     app.handle_key(KeyEvent::from(KeyCode::Char('y')));

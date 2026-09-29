@@ -160,7 +160,7 @@ mod tests {
 
     fn rendered_text(width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        let mut app = App::load();
+        let mut app = App::load_app();
         draw_once(&mut terminal, &mut app).unwrap();
         terminal
             .backend()
@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn a_frame_observes_the_session_without_changing_it() {
         let mut terminal = Terminal::new(TestBackend::new(140, 48)).unwrap();
-        let mut app = App::load();
+        let mut app = App::load_app();
         app.overlay = Some(Overlay::Search(SearchState {
             query: "canvas".to_owned(),
             ..SearchState::default()
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn add_form_explains_required_and_derived_values() {
         let mut terminal = Terminal::new(TestBackend::new(140, 48)).unwrap();
-        let mut app = App::load();
+        let mut app = App::load_app();
         app.overlay = Some(Overlay::Add(AddState::new(app.registry.id())));
         draw_once(&mut terminal, &mut app).unwrap();
         let output = terminal
@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn graft_screen_shows_the_entry_line_the_slot_and_the_plans() {
         let mut terminal = Terminal::new(TestBackend::new(160, 48)).unwrap();
-        let mut app = App::load();
+        let mut app = App::load_app();
         app.overlay = Some(Overlay::Graft(super::super::app::GraftState {
             target: crate::runtime::NodeId::from_path("control/object/button/button.rs", "Button"),
             target_path: "root/control/button".to_owned(),

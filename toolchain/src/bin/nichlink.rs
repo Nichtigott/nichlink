@@ -8,7 +8,7 @@
 //! 失败时打印到 stderr 并以非零码退出，因此 shell 管线能看见命令失败。
 
 fn main() {
-    if let Err(error) = nichlink_toolchain::cli::main() {
+    if let Err(error) = nichlink_toolchain::cli::main_entry() {
         eprintln!("nichlink: {error}");
         std::process::exit(1);
     }

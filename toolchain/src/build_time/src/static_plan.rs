@@ -45,7 +45,7 @@ pub(crate) fn static_plan(
 ) -> (Vec<StaticFaceRecord>, BuildDiagnostics) {
     let mut records = Vec::new();
     let mut errors = BuildDiagnostics::default();
-    collect_static_faces(src, nodes, scope, false, &mut records, &mut errors);
+    visit_static_faces(src, nodes, scope, false, &mut records, &mut errors);
 
     let mut topology = records
         .iter()
@@ -62,7 +62,7 @@ pub(crate) fn static_plan(
     (records, errors)
 }
 
-fn collect_static_faces(
+fn visit_static_faces(
     src: &Path,
     nodes: &[Node],
     scope: &SourceScope,
@@ -139,7 +139,7 @@ fn collect_static_faces(
                 }
             }
         }
-        collect_static_faces(
+        visit_static_faces(
             src,
             &node.children,
             scope,

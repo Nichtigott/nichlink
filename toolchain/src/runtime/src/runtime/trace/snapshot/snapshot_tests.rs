@@ -88,8 +88,8 @@ fn fixture(label: &str) -> PathBuf {
 fn a_recorded_trace_round_trips_through_the_document() {
     let trace = recorded_trace();
     let artifact = TraceArtifact::from_trace(&trace);
-    let text = artifact.render();
-    let parsed = TraceArtifact::parse(&text).expect("the canonical document parses");
+    let text = artifact.render_trace_artifact();
+    let parsed = TraceArtifact::parse_trace_artifact(&text).expect("the canonical document parses");
     assert_eq!(parsed, artifact);
     assert_eq!(parsed.mode, TraceMode::Full);
     assert_eq!(parsed.frames.len(), 2);
@@ -118,13 +118,13 @@ fn every_enum_spelling_and_escaped_value_survives() {
         trace.inferred_local("spellings", "inferred", "u8", 7);
     });
     let artifact = TraceArtifact::from_trace(&trace);
-    let text = artifact.render();
+    let text = artifact.render_trace_artifact();
     for spelling in ["\tlet\t", "\treturn\t", "\tconsumer\t", "\tunobserved\t"] {
         assert!(text.contains(spelling), "missing `{spelling}` in\n{text}");
     }
     assert!(text.contains("a\\tb\\nc\\\\d|e"), "{text}");
 
-    let parsed = TraceArtifact::parse(&text).expect("escaped values parse");
+    let parsed = TraceArtifact::parse_trace_artifact(&text).expect("escaped values parse");
     assert_eq!(parsed.frames, artifact.frames);
     assert_eq!(parsed.locals.len(), artifact.locals.len());
     for (before, after) in artifact.locals.iter().zip(&parsed.locals) {
@@ -174,7 +174,7 @@ fn the_values_that_break_naive_escaping_round_trip_exactly() {
             trace.local(format!("v{index}"), "String", *value, LocalKind::Binding);
         }
     });
-    let text = TraceArtifact::from_trace(&trace).render();
+    let text = TraceArtifact::from_trace(&trace).render_trace_artifact();
     // No raw control character may reach the file. A carriage return is the one
     // that bites: it survives the round trip *inside* a field (Rust's `lines()`
     // only strips a CR that ends a line), so a round-trip assertion alone does not
@@ -191,7 +191,7 @@ fn the_values_that_break_naive_escaping_round_trip_exactly() {
         !text.contains('\r'),
         "a raw carriage return reached the artifact:\n{text}"
     );
-    let parsed = TraceArtifact::parse(&text).expect("every escaped value parses");
+    let parsed = TraceArtifact::parse_trace_artifact(&text).expect("every escaped value parses");
     for (index, value) in cases.iter().enumerate() {
         assert_eq!(
             parsed.locals[index].value, *value,
@@ -202,31 +202,31 @@ fn the_values_that_break_naive_escaping_round_trip_exactly() {
 
 #[test]
 fn parse_refuses_another_version_and_unknown_keys() {
-    let text = TraceArtifact::from_trace(&recorded_trace()).render();
+    let text = TraceArtifact::from_trace(&recorded_trace()).render_trace_artifact();
     let version_two = text.replace("version=1", "version=2");
     assert_eq!(
-        TraceArtifact::parse(&version_two).expect_err("version 2 is refused"),
+        TraceArtifact::parse_trace_artifact(&version_two).expect_err("version 2 is refused"),
         TraceArtifactError::UnsupportedVersion(2)
     );
     let unknown = format!("{text}editor=vscode\n");
     assert_eq!(
-        TraceArtifact::parse(&unknown).expect_err("an unknown key is refused"),
+        TraceArtifact::parse_trace_artifact(&unknown).expect_err("an unknown key is refused"),
         TraceArtifactError::UnknownKey("editor".to_owned())
     );
 }
 
 #[test]
 fn parse_refuses_missing_and_repeated_scalar_keys() {
-    let text = TraceArtifact::from_trace(&recorded_trace()).render();
+    let text = TraceArtifact::from_trace(&recorded_trace()).render_trace_artifact();
     let missing = text.replace("mode=full\n", "");
     assert_eq!(
-        TraceArtifact::parse(&missing).expect_err("a missing key is refused"),
+        TraceArtifact::parse_trace_artifact(&missing).expect_err("a missing key is refused"),
         TraceArtifactError::MissingKey("mode")
     );
     let repeated = text.replace("mode=full\n", "mode=full\nmode=full\n");
     assert!(
         matches!(
-            TraceArtifact::parse(&repeated).expect_err("a repeated key is refused"),
+            TraceArtifact::parse_trace_artifact(&repeated).expect_err("a repeated key is refused"),
             TraceArtifactError::Malformed { line: 5, .. }
         ),
         "a repeated scalar key is malformed"
@@ -235,11 +235,12 @@ fn parse_refuses_missing_and_repeated_scalar_keys() {
 
 #[test]
 fn parse_refuses_malformed_records() {
-    let text = TraceArtifact::from_trace(&recorded_trace()).render();
+    let text = TraceArtifact::from_trace(&recorded_trace()).render_trace_artifact();
     let short_frame = text.replace("frame=0\t-\t", "frame=0\t");
     assert!(
         matches!(
-            TraceArtifact::parse(&short_frame).expect_err("a short record is refused"),
+            TraceArtifact::parse_trace_artifact(&short_frame)
+                .expect_err("a short record is refused"),
             TraceArtifactError::Malformed { .. }
         ),
         "a record with the wrong field count is malformed"
@@ -247,17 +248,18 @@ fn parse_refuses_malformed_records() {
     let bad_kind = text.replace("\tinput\t", "\tmystery\t");
     assert!(
         matches!(
-            TraceArtifact::parse(&bad_kind).expect_err("an unknown kind is refused"),
+            TraceArtifact::parse_trace_artifact(&bad_kind).expect_err("an unknown kind is refused"),
             TraceArtifactError::Malformed { .. }
         ),
         "a local kind outside the vocabulary is malformed"
     );
     let bad_escape = artifact_with(vec![frame(0, None)], Vec::new(), Vec::new())
-        .render()
+        .render_trace_artifact()
         .replace("namespace=test", "namespace=te\\qst");
     assert!(
         matches!(
-            TraceArtifact::parse(&bad_escape).expect_err("an unknown escape is refused"),
+            TraceArtifact::parse_trace_artifact(&bad_escape)
+                .expect_err("an unknown escape is refused"),
             TraceArtifactError::Malformed { .. }
         ),
         "an escape the format does not define is malformed"
@@ -332,10 +334,13 @@ fn into_trace_rebuilds_the_local_function_index() {
 #[test]
 fn from_trace_renders_the_same_document_twice() {
     let trace = recorded_trace();
-    let first = TraceArtifact::from_trace(&trace).render();
-    let parsed = TraceArtifact::parse(&first).expect("parses");
+    let first = TraceArtifact::from_trace(&trace).render_trace_artifact();
+    let parsed = TraceArtifact::parse_trace_artifact(&first).expect("parses");
     let rebuilt = parsed.into_trace().expect("rebuilds");
-    assert_eq!(TraceArtifact::from_trace(&rebuilt).render(), first);
+    assert_eq!(
+        TraceArtifact::from_trace(&rebuilt).render_trace_artifact(),
+        first
+    );
 }
 
 /// The override wins when it names a path, and the shared lexicon supplies the

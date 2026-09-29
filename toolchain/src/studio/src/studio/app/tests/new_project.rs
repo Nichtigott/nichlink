@@ -16,7 +16,7 @@ fn new_project_and_explicit_root_face_compile() {
         .as_nanos();
     let root = std::env::temp_dir().join(format!("nichlink-toolchain-new-{suffix}"));
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('n')));
     let Some(Overlay::NewProject(mut project)) = app.overlay.take() else {
         panic!("n should open the New Project wizard");
@@ -163,7 +163,7 @@ fn new_project_and_explicit_root_face_compile() {
 
 #[test]
 fn new_project_wizard_toggles_library_kind() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('n')));
     app.handle_key(KeyEvent::from(KeyCode::Down));
     app.handle_key(KeyEvent::from(KeyCode::Down));
@@ -180,7 +180,7 @@ fn new_project_wizard_creates_library_entrypoint() {
         .as_nanos();
     let root = std::env::temp_dir().join(format!("nichlink-toolchain-lib-{suffix}"));
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('n')));
     let Some(Overlay::NewProject(mut project)) = app.overlay.take() else {
         panic!("n should open the New Project wizard");
@@ -206,7 +206,7 @@ fn new_project_starts_with_an_empty_registration_tree() {
         .as_nanos();
     let root = std::env::temp_dir().join(format!("nichlink-toolchain-empty-{suffix}"));
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut project = super::super::NewProjectState::new();
     project.values[new_project_field::DIRECTORY] = root.display().to_string();
     project.values[new_project_field::PACKAGE] = "empty-app".to_owned();

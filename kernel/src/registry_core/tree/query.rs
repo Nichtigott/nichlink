@@ -16,19 +16,19 @@ impl Registry {
             return Some(self);
         }
         let mut path = Vec::new();
-        if !self.collect_registry_path(wanted, &mut path) {
+        if !self.visit_registry_path(wanted, &mut path) {
             return None;
         }
         self.registry_mut_at_path(&path)
     }
 
-    fn collect_registry_path(&self, wanted: NodeId, path: &mut Vec<NodeId>) -> bool {
+    fn visit_registry_path(&self, wanted: NodeId, path: &mut Vec<NodeId>) -> bool {
         for entry in self.entries.values() {
             let Some(child) = entry.child.as_ref() else {
                 continue;
             };
             path.push(entry.info.id);
-            if child.header.id == wanted || child.collect_registry_path(wanted, path) {
+            if child.header.id == wanted || child.visit_registry_path(wanted, path) {
                 return true;
             }
             path.pop();
@@ -85,7 +85,7 @@ impl Registry {
     /// the published surface (`NAM-36`). Prefer `find_by_id`.
     /// [`Self::find_by_id`] 的历史名字，因为 `Registry::find` 在已发布面上所以保留（`NAM-36`）。
     /// 请优先用 `find_by_id`。
-    pub fn find(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
+    pub fn find_registry(&self, id: NodeId) -> Option<&RegistrationSnapshot> {
         self.find_by_id(id)
     }
 

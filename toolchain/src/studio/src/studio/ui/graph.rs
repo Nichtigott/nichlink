@@ -90,7 +90,7 @@ pub(super) fn draw_search_graph(
 /// 按下 Enter 的那一刻本页就可用。
 fn search_center_ref(app: &App, search: &SearchState) -> Option<CallRef> {
     if let Some(node) = search.center {
-        return app.registry.find(node).map(|info| CallRef {
+        return app.registry.find_registry(node).map(|info| CallRef {
             node,
             function: search
                 .center_function
@@ -104,7 +104,7 @@ fn search_center_ref(app: &App, search: &SearchState) -> Option<CallRef> {
     let rows = app.search_rows(&search.query);
     let row = rows.get(search.selected)?;
     let node = row.node?;
-    let info = app.registry.find(node)?;
+    let info = app.registry.find_registry(node)?;
     Some(CallRef {
         node,
         function: if row.function.is_empty() {

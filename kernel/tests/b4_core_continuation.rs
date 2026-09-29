@@ -117,7 +117,7 @@ fn a_non_full_overlay_refuses_a_leaf_that_would_keep_a_live_child_registry() {
     let (base, owner, child) = base_with_a_live_child(namespace);
     assert!(
         base.registry(owner.id)
-            .is_some_and(|registry| registry.find(child.id).is_some()),
+            .is_some_and(|registry| registry.find_registry(child.id).is_some()),
         "the fixture's owner really does own a live child registry"
     );
 
@@ -139,7 +139,7 @@ fn a_non_full_overlay_refuses_a_leaf_that_would_keep_a_live_child_registry() {
     );
     assert!(
         base.registry(owner.id)
-            .is_some_and(|registry| registry.find(child.id).is_some()),
+            .is_some_and(|registry| registry.find_registry(child.id).is_some()),
         "the refusal leaves the base tree untouched"
     );
 }

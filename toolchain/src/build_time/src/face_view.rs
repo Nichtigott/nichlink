@@ -204,7 +204,7 @@ pub fn face_views_and_unreadable(
     );
     let identity = &layout.identity_base;
     let mut raw = Vec::new();
-    collect(identity, &nodes, package, &mut raw);
+    visit_face_view(identity, &nodes, package, &mut raw);
     let modules = raw
         .iter()
         .map(|face| (face.module.clone(), face.id))
@@ -276,7 +276,7 @@ fn root_node_id(package: &str) -> NodeId {
     NodeId::from_namespaced_path(package, "<root>", "root")
 }
 
-fn collect(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<RawFace>) {
+fn visit_face_view(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<RawFace>) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -310,7 +310,7 @@ fn collect(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<RawFace>) 
                 });
             }
         }
-        collect(src, &node.children, package, faces);
+        visit_face_view(src, &node.children, package, faces);
     }
 }
 

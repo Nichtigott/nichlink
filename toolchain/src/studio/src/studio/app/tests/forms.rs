@@ -10,7 +10,7 @@ use crate::runtime::face_field;
 
 #[test]
 fn add_overlay_click_selects_a_field_and_toggles_the_checkbox() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.overlay = Some(Overlay::Add(AddState::new(app.selected_parent())));
     app.hot.overlay_area = Rect::new(5, 5, 70, 18);
     app.hot.overlay_list_area = Rect::new(7, 7, 66, 10);
@@ -27,7 +27,7 @@ fn add_overlay_click_selects_a_field_and_toggles_the_checkbox() {
 
 #[test]
 fn add_overlay_keyboard_navigation_reaches_kind_field() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.overlay = Some(Overlay::Add(AddState::new(app.selected_parent())));
     for _ in 0..2 {
         app.handle_overlay_key(crossterm::event::KeyEvent::from(
@@ -49,7 +49,7 @@ fn add_navigation_walks_one_fixed_field_order() {
     // next entry of that one order, and no slot is skipped or repeated.
     // 布局过去会按聚焦字段重建，这正是本测试当初盯住可见集合变化的原因。现在它是常量，
     // 因此值得钉住的是另一个方向：每次 Down 落在该顺序的下一个条目上，没有槽位被跳过或重复。
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.overlay = Some(Overlay::Add(AddState::new(app.selected_parent())));
     let order = super::super::face_field_indices();
     let mut visited = Vec::new();
@@ -155,7 +155,7 @@ fn an_unreadable_source_is_loud_where_an_empty_one_is_quiet() {
 
 #[test]
 fn stable_identity_is_editable_from_the_form() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.selected_parent());
     add.field = face_field::STABLE_NAME;
     app.overlay = Some(Overlay::Add(add));
@@ -167,7 +167,7 @@ fn stable_identity_is_editable_from_the_form() {
 
 #[test]
 fn derived_storage_fields_do_not_open_a_fake_editor() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.selected_parent());
     add.field = face_field::REGISTRY_RULE_PATH;
     app.overlay = Some(Overlay::Add(add));
@@ -195,7 +195,7 @@ fn a_plugin_selection_takes_two_presses_and_rolls_back_a_half_write() {
     let lock = plugins.join("user.lock");
     select_project(root.clone(), root.join("Cargo.toml"), "plugin-app");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('p')));
     let Some(Overlay::Plugin(mut plugin)) = app.overlay.take() else {
         panic!("p should open the Plugin form");
@@ -255,8 +255,8 @@ fn a_paste_types_into_the_open_form_and_is_ignored_without_one() {
     // No overlay: a pasted `ab` must not be replayed as the base key map (`a` opens the
     // add form, `b` starts a build).
     // 没有浮层：粘进来的 `ab` 不得被当作基础键位回放（`a` 打开添加表单、`b` 触发构建）。
-    let mut app = App::load();
-    app.handle(Event::Paste("ab".to_owned()));
+    let mut app = App::load_app();
+    app.handle_app(Event::Paste("ab".to_owned()));
     assert!(
         app.overlay.is_none(),
         "a paste with no form open must not open one: {:?}",
@@ -270,7 +270,7 @@ fn a_paste_types_into_the_open_form_and_is_ignored_without_one() {
     add.field = face_field::NAME_EN;
     add.editing = true;
     app.overlay = Some(Overlay::Add(add));
-    app.handle(Event::Paste("Button".to_owned()));
+    app.handle_app(Event::Paste("Button".to_owned()));
     let Some(Overlay::Add(add)) = app.overlay else {
         panic!("the form stays open across a paste")
     };

@@ -30,7 +30,7 @@ pub(crate) fn aggregate_requirements(
 pub(crate) fn aggregate_stable_name_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
     let mut names = BTreeMap::<String, (String, usize)>::new();
     let mut errors = BuildDiagnostics::default();
-    collect_stable_names(src, nodes, &mut names, &mut errors);
+    visit_stable_names(src, nodes, &mut names, &mut errors);
     errors
 }
 
@@ -38,11 +38,11 @@ pub(crate) fn aggregate_stable_name_errors(src: &Path, nodes: &[Node]) -> BuildD
 /// 校验父级专属宏名与声明的 parent 一致。
 pub(crate) fn aggregate_parent_macro_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
     let mut errors = BuildDiagnostics::default();
-    collect_parent_macro_errors(src, nodes, &mut errors);
+    visit_parent_macro_errors(src, nodes, &mut errors);
     errors
 }
 
-fn collect_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
+fn visit_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -70,7 +70,7 @@ fn collect_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDia
                             })
                             .actual("missing"),
                         );
-                        collect_parent_macro_errors(src, &node.children, errors);
+                        visit_parent_macro_errors(src, &node.children, errors);
                         continue;
                     };
                     // `NodeId::from_path` is a plain identity: it is not
@@ -124,11 +124,11 @@ fn collect_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDia
                 }
             }
         }
-        collect_parent_macro_errors(src, &node.children, errors);
+        visit_parent_macro_errors(src, &node.children, errors);
     }
 }
 
-fn collect_stable_names(
+fn visit_stable_names(
     src: &Path,
     nodes: &[Node],
     names: &mut BTreeMap<String, (String, usize)>,
@@ -163,7 +163,7 @@ fn collect_stable_names(
                 }
             }
         }
-        collect_stable_names(src, &node.children, names, errors);
+        visit_stable_names(src, &node.children, names, errors);
     }
 }
 
@@ -190,11 +190,11 @@ pub(crate) fn parsed_face(source: &str, _display_path: &str) -> Option<FaceSynta
 /// 打死进程。
 pub(crate) fn face_syntax_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
     let mut errors = BuildDiagnostics::default();
-    collect_face_syntax_errors(src, nodes, &mut errors);
+    visit_face_syntax_errors(src, nodes, &mut errors);
     errors
 }
 
-fn collect_face_syntax_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
+fn visit_face_syntax_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
     for node in nodes {
         if let Some(file) = &node.file
             && let Ok(source) = fs::read_to_string(file)
@@ -205,7 +205,7 @@ fn collect_face_syntax_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiag
                 error.location.as_ref().map_or(0, |location| location.line),
             ));
         }
-        collect_face_syntax_errors(src, &node.children, errors);
+        visit_face_syntax_errors(src, &node.children, errors);
     }
 }
 
@@ -278,7 +278,7 @@ mod tests {
             file: Some(child),
             children: Vec::new(),
         }];
-        let rendered = aggregate_parent_macro_errors(&root, &nodes).render();
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
         assert!(rendered.contains("phase=parent-macro"));
         assert!(rendered.contains("expected=crate::panel_object!"));
         assert!(rendered.contains("actual=crate::wrong_object!"));
@@ -303,7 +303,7 @@ mod tests {
             file: Some(child),
             children: Vec::new(),
         }];
-        let rendered = aggregate_parent_macro_errors(&root, &nodes).render();
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
         assert!(
             rendered.contains("carries no namespace"),
             "unexpected diagnostics: {rendered}"
@@ -322,7 +322,7 @@ mod tests {
             file: Some(child),
             children: Vec::new(),
         }];
-        let rendered = aggregate_parent_macro_errors(&root, &nodes).render();
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
         assert!(
             rendered.contains("parent-specific registration macro requires an explicit parent")
         );

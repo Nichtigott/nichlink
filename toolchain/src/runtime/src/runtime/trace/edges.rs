@@ -220,7 +220,7 @@ impl CallTrace {
     /// `id` 传递依赖的全部局部值（含自身），生产者在前。
     pub fn provenance(&self, id: LocalId) -> Vec<&LocalValue> {
         let mut result = Vec::new();
-        self.collect_upstream(id.0, &mut BTreeSet::new(), &mut result);
+        self.visit_upstream(id.0, &mut BTreeSet::new(), &mut result);
         result
     }
 
@@ -366,7 +366,7 @@ impl CallTrace {
         }
     }
 
-    fn collect_upstream<'a>(
+    fn visit_upstream<'a>(
         &'a self,
         id: u64,
         visited: &mut BTreeSet<u64>,
@@ -377,7 +377,7 @@ impl CallTrace {
         }
         for index in self.incoming_index.get(&id).into_iter().flatten() {
             if let Some(edge) = self.edges.get(*index) {
-                self.collect_upstream(edge.from, visited, result);
+                self.visit_upstream(edge.from, visited, result);
             }
         }
         if let Some(local) = self.find_local(LocalId(id)) {

@@ -128,7 +128,7 @@ impl App {
             .map(|info| info.id)
             .or_else(|| {
                 self.selected_info()
-                    .and_then(|info| self.registry.find(info.parent))
+                    .and_then(|info| self.registry.find_registry(info.parent))
                     .filter(|info| info.needs_registry)
                     .map(|info| info.id)
             })

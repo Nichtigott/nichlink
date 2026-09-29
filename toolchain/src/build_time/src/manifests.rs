@@ -40,7 +40,7 @@ pub(crate) fn write_pruning_manifest(
     out_dir: &Path,
 ) -> Result<(), String> {
     let mut rows = Vec::new();
-    collect_pruning_symbols(src, nodes, &mut rows);
+    visit_pruning_symbols(src, nodes, &mut rows);
     write_rows(out_dir.join("pruning_manifest.tsv"), rows)
 }
 
@@ -50,7 +50,7 @@ pub(crate) fn write_function_manifest(
     out_dir: &Path,
 ) -> Result<(), String> {
     let mut rows = Vec::new();
-    collect_function_symbols(src, nodes, &mut rows);
+    visit_function_symbols(src, nodes, &mut rows);
     write_rows(out_dir.join("function_manifest.tsv"), rows)
 }
 
@@ -144,7 +144,7 @@ fn write_rows(
 /// 它替换掉的按行扫描器在行的任意位置匹配 `fn `，因此被注释掉的函数或文档示例都成了声明；它还用
 /// "上一个 `impl ` 行没有右花括号"猜 impl 归属，嵌套 impl 与闭包都会污染它。内核扫描器在寻找之前
 /// 先屏蔽非 Rust 文本，且不报告归属——因此符号是 `module::name`，不发布任何编造出来的东西。
-fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {
+fn visit_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -162,11 +162,11 @@ fn collect_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, 
                 }
             }
         }
-        collect_function_symbols(src, &node.children, rows);
+        visit_function_symbols(src, &node.children, rows);
     }
 }
 
-fn collect_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {
+fn visit_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -187,7 +187,7 @@ fn collect_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, S
                 }
             }
         }
-        collect_pruning_symbols(src, &node.children, rows);
+        visit_pruning_symbols(src, &node.children, rows);
     }
 }
 

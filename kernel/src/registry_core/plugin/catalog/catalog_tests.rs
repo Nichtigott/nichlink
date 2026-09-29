@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn plugin_lock_parser_keeps_official_and_user_records_typed() {
-    let catalog = PluginCatalog::parse(
+    let catalog = PluginCatalog::parse_plugin_catalog(
             "# source|framework|package|version|crate|checksum|mode|signature|key|revocations\n\
              official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|replacement|sig-v1|key-v1|official-2026\n\
              user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
@@ -26,7 +26,9 @@ fn plugin_lock_parser_keeps_official_and_user_records_typed() {
 fn plugin_lock_parser_rejects_ambiguous_duplicate_identity() {
     let lock = "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n\
                     official|com.nichui.editor|canvas|1.0.0|canvas|sha256:b|extension\n";
-    let error = PluginCatalog::parse(lock).unwrap_err().to_string();
+    let error = PluginCatalog::parse_plugin_catalog(lock)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("line 2"));
     assert!(error.contains("duplicates package identity"));
 }
@@ -50,7 +52,7 @@ fn appending_a_duplicate_identity_is_refused_by_the_parser() {
     let fresh = "user|com.nichui.editor|panel|1.0.0|panel|sha256:b|extension";
     let text = PluginCatalog::with_appended_line(seed, fresh).expect("a fresh record appends");
     assert_eq!(
-        PluginCatalog::parse(&text)
+        PluginCatalog::parse_plugin_catalog(&text)
             .expect("the text handed back parses")
             .records()
             .len(),
@@ -70,7 +72,7 @@ fn appending_completes_a_missing_line_terminator() {
     let text = PluginCatalog::with_appended_line(seed, line).expect("the text parses");
     assert!(text.ends_with('\n'), "{text:?}");
     assert_eq!(
-        PluginCatalog::parse(&text)
+        PluginCatalog::parse_plugin_catalog(&text)
             .expect("two records")
             .records()
             .len(),
@@ -98,10 +100,11 @@ fn manifest() -> PluginManifest {
 
 #[test]
 fn a_ten_field_record_accounts_for_a_seven_field_lock() {
-    let bare =
-        PluginCatalog::parse("official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n")
-            .expect("a seven-field lock parses");
-    let pinned = PluginCatalog::parse(
+    let bare = PluginCatalog::parse_plugin_catalog(
+        "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
+    )
+    .expect("a seven-field lock parses");
+    let pinned = PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
         )
         .expect("a ten-field lock parses");
@@ -123,7 +126,7 @@ fn a_ten_field_record_accounts_for_a_seven_field_lock() {
     // The expectation still binds in the other direction: a lock that pins a signature does
     // not account for a record written without it.
     // 期望在另一个方向上仍然生效：钉住了签名的锁，不覆盖一条没写签名的记录。
-    let other = PluginCatalog::parse(
+    let other = PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
         )
         .expect("a ten-field lock parses");
@@ -135,21 +138,22 @@ fn a_ten_field_record_accounts_for_a_seven_field_lock() {
 
 #[test]
 fn a_record_without_provenance_fields_does_not_pin_them() {
-    let bare =
-        PluginCatalog::parse("official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n")
-            .expect("a seven-field lock parses");
+    let bare = PluginCatalog::parse_plugin_catalog(
+        "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n",
+    )
+    .expect("a seven-field lock parses");
     assert!(
         bare.contains_manifest(manifest()),
         "a record the host's own UI wrote must match a signed official manifest"
     );
 
-    let pinned = PluginCatalog::parse(
+    let pinned = PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v1|key-v1|official-2026\n",
         )
         .expect("a ten-field lock parses");
     assert!(pinned.contains_manifest(manifest()));
 
-    let other = PluginCatalog::parse(
+    let other = PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension|sig-v2|key-v1|official-2026\n",
         )
         .expect("a ten-field lock parses");
@@ -161,7 +165,7 @@ fn a_record_without_provenance_fields_does_not_pin_them() {
 
 #[test]
 fn plugin_lock_parser_rejects_unknown_identity_schema() {
-    let error = PluginCatalog::parse(
+    let error = PluginCatalog::parse_plugin_catalog(
         "# nichlink-schema=2\n\
              user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
     )
@@ -182,7 +186,7 @@ fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
                  user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
         );
         assert!(
-            PluginCatalog::parse(&lock).is_ok(),
+            PluginCatalog::parse_plugin_catalog(&lock).is_ok(),
             "schema `{schema}` must stay readable"
         );
     }
@@ -192,7 +196,7 @@ fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
                  user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
         );
         assert!(
-            PluginCatalog::parse(&lock).is_err(),
+            PluginCatalog::parse_plugin_catalog(&lock).is_err(),
             "schema `{schema}` must be refused"
         );
     }
@@ -212,7 +216,7 @@ fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
 #[test]
 fn a_checksum_is_compared_by_its_digest_not_its_spelling() {
     let lock = |checksum: &str| {
-        PluginCatalog::parse(&format!(
+        PluginCatalog::parse_plugin_catalog(&format!(
             "official|com.nichui.editor|canvas|1.0.0|canvas|{checksum}|extension\n"
         ))
         .expect("a lock parses")
@@ -221,28 +225,34 @@ fn a_checksum_is_compared_by_its_digest_not_its_spelling() {
     };
     let bare = lock("a");
     assert!(
-        PluginCatalog::parse("official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n")
-            .expect("a prefixed lock parses")
-            .contains_record(&bare),
+        PluginCatalog::parse_plugin_catalog(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n"
+        )
+        .expect("a prefixed lock parses")
+        .contains_record(&bare),
         "the coverage rule reads the `sha256:` prefix either way"
     );
     assert!(
-        PluginCatalog::parse("official|com.nichui.editor|canvas|1.0.0|canvas|A|extension\n")
-            .expect("an upper-case lock parses")
-            .contains_record(&bare),
+        PluginCatalog::parse_plugin_catalog(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|A|extension\n"
+        )
+        .expect("an upper-case lock parses")
+        .contains_record(&bare),
         "the coverage rule reads the hex case-insensitively, like `is_sha256`"
     );
     assert!(
-        !PluginCatalog::parse("official|com.nichui.editor|canvas|1.0.0|canvas|b|extension\n")
-            .expect("another digest parses")
-            .contains_record(&bare),
+        !PluginCatalog::parse_plugin_catalog(
+            "official|com.nichui.editor|canvas|1.0.0|canvas|b|extension\n"
+        )
+        .expect("another digest parses")
+        .contains_record(&bare),
         "a different digest is still a mismatch"
     );
     // The identical-record rule is deliberately stricter — it is how a duplicate line is
     // refused — so it keeps comparing the recorded spelling verbatim.
     // 同记录规则有意更严——重复行就是靠它拒绝的——因此它继续逐字比较记录的拼法。
     assert!(
-        !PluginCatalog::parse(
+        !PluginCatalog::parse_plugin_catalog(
             "official|com.nichui.editor|canvas|1.0.0|canvas|sha256:a|extension\n"
         )
         .expect("a prefixed lock parses")

@@ -77,7 +77,7 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
         let Ok(text) = fs::read_to_string(&plan_file) else {
             continue;
         };
-        let Ok(document) = GraftPlanDocument::parse(&text) else {
+        let Ok(document) = GraftPlanDocument::parse_graft_plan_document(&text) else {
             continue;
         };
         // `/` on every platform through the kernel's portable-path rule: the
@@ -102,7 +102,7 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
 /// The source module of the face holding `id`, if the current tree has one.
 /// 当前树中持有 `id` 的那个注册面的源码模块（若有）。
 pub(crate) fn slot_module(src: &Path, nodes: &[Node], id: NodeId) -> Option<String> {
-    fn walk(src: &Path, nodes: &[Node], id: NodeId) -> Option<String> {
+    fn walk_graft_plan_check(src: &Path, nodes: &[Node], id: NodeId) -> Option<String> {
         for node in nodes {
             if node_id(src, node) == Some(id) {
                 return node
@@ -110,13 +110,13 @@ pub(crate) fn slot_module(src: &Path, nodes: &[Node], id: NodeId) -> Option<Stri
                     .as_ref()
                     .map(|file| source_module_path(&relative_display(src, file)));
             }
-            if let Some(module) = walk(src, &node.children, id) {
+            if let Some(module) = walk_graft_plan_check(src, &node.children, id) {
                 return Some(module);
             }
         }
         None
     }
-    walk(src, nodes, id)
+    walk_graft_plan_check(src, nodes, id)
 }
 
 /// One build error per plan whose target slot no declaration can name.
@@ -335,7 +335,11 @@ mod tests {
             "canvas_fast",
             true,
         );
-        fs::write(plan.join(lexicon::GRAFT_PLAN_FILE), document.render()).expect("plan file");
+        fs::write(
+            plan.join(lexicon::GRAFT_PLAN_FILE),
+            document.render_graft_plan_document(),
+        )
+        .expect("plan file");
 
         let slots = planned_slots(&root);
         assert_eq!(slots.len(), 1);
@@ -394,7 +398,11 @@ mod tests {
         fs::create_dir_all(&plan).expect("plan directory");
         let target = first_face_id(&src, &nodes).expect("face identity");
         let document = GraftPlanDocument::new(target, "control", "canvas_fast", true);
-        fs::write(plan.join(lexicon::GRAFT_PLAN_FILE), document.render()).expect("plan file");
+        fs::write(
+            plan.join(lexicon::GRAFT_PLAN_FILE),
+            document.render_graft_plan_document(),
+        )
+        .expect("plan file");
 
         let errors = undeclared_plan_errors(&planned_slots(&root), &declared, |id| {
             slot_module(&src, &nodes, id)
@@ -421,7 +429,11 @@ mod tests {
             "canvas_fast",
             true,
         );
-        fs::write(plan.join(lexicon::GRAFT_PLAN_FILE), document.render()).expect("plan file");
+        fs::write(
+            plan.join(lexicon::GRAFT_PLAN_FILE),
+            document.render_graft_plan_document(),
+        )
+        .expect("plan file");
 
         let errors = undeclared_plan_errors(
             &planned_slots(&root),

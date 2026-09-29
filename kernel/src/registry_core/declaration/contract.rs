@@ -106,7 +106,7 @@ impl ObjectContract {
     /// 本检查的输出那一半随它比较的那两个名字一起删除：同一件事由编译期
     /// `assert_contract` 按面证明、由嫁接切口跨两个面证明。本方法现在只报告 trait 常量
     /// 说了算的东西——那是编译器看不到的部分。
-    pub fn validate(&self, object: &str) -> Vec<String> {
+    pub fn validate_object_contract(&self, object: &str) -> Vec<String> {
         validate_object_contract(self.required_parts, self.provided_parts, object)
     }
 }

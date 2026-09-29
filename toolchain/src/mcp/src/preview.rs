@@ -244,7 +244,7 @@ pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
 /// 本报告会给出它的准确路径。
 pub(crate) fn diff_package(original: &Path, work: &Path) -> Result<String, String> {
     let mut files = Vec::new();
-    collect_files(work, work, &mut files, 0)?;
+    visit_files(work, work, &mut files, 0)?;
     files.sort();
     let mut output = String::new();
     let mut printed = 0usize;
@@ -322,7 +322,7 @@ pub(crate) fn diff_package(original: &Path, work: &Path) -> Result<String, Strin
     // A file the edit *removed* is part of the answer too.
     // 被编辑**删除**的文件同样是答案的一部分。
     let mut before = Vec::new();
-    collect_files(original, original, &mut before, 0)?;
+    visit_files(original, original, &mut before, 0)?;
     before.sort();
     for relative in before {
         if truncated {
@@ -399,7 +399,7 @@ fn push_diff(output: &mut String, chunk: &str, printed: &mut usize, truncated: &
     }
 }
 
-fn collect_files(
+fn visit_files(
     root: &Path,
     directory: &Path,
     files: &mut Vec<String>,
@@ -424,7 +424,7 @@ fn collect_files(
             continue;
         }
         if path.is_dir() {
-            collect_files(root, &path, files, depth + 1)?;
+            visit_files(root, &path, files, depth + 1)?;
         } else if let Ok(relative) = path.strip_prefix(root) {
             files.push(crate::mcp::source_index::portable_path(relative));
         }

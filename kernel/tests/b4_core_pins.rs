@@ -44,28 +44,31 @@ fn values(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 #[test]
 fn a_plugin_lock_schema_gate_is_not_line_order_dependent() {
     assert!(
-        PluginCatalog::parse("# nichlink-schema=v999\n").is_err(),
+        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v999\n").is_err(),
         "an empty lock that declares an unknown schema must be refused"
     );
     assert!(
-        PluginCatalog::parse("official|f|p|1.0.0|c|sha256:00|extension\n# nichlink-schema=v999\n")
-            .is_err(),
+        PluginCatalog::parse_plugin_catalog(
+            "official|f|p|1.0.0|c|sha256:00|extension\n# nichlink-schema=v999\n"
+        )
+        .is_err(),
         "a header written after the records still gates them"
     );
     assert!(
-        PluginCatalog::parse("# nichlink-schema v999\n").is_err(),
+        PluginCatalog::parse_plugin_catalog("# nichlink-schema v999\n").is_err(),
         "a misspelled header must not silently disable the gate"
     );
     assert!(
-        PluginCatalog::parse("# nichlink-schema=v3\n# nichlink-schema=v3\n").is_err(),
+        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v3\n# nichlink-schema=v3\n")
+            .is_err(),
         "a second header is a duplicate, not a silent overwrite"
     );
     assert!(
-        PluginCatalog::parse("# nichlink-schema=v3\n").is_ok(),
+        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v3\n").is_ok(),
         "the canonical header parses"
     );
     assert!(
-        PluginCatalog::parse("official|f|p|1.0.0|c|sha256:00|extension\n").is_ok(),
+        PluginCatalog::parse_plugin_catalog("official|f|p|1.0.0|c|sha256:00|extension\n").is_ok(),
         "a lock that declares no schema keeps parsing"
     );
 }

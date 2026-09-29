@@ -140,7 +140,7 @@ fn base_slot() -> NodeId {
 }
 
 fn kind_at(registry: &Registry, id: NodeId) -> Option<String> {
-    registry.find(id).map(|info| info.kind.clone())
+    registry.find_registry(id).map(|info| info.kind.clone())
 }
 
 /// Write one `graft.plan` under its directory selector.
@@ -148,8 +148,11 @@ fn kind_at(registry: &Registry, id: NodeId) -> Option<String> {
 fn write_plan(root: &Path, selector: &str, document: &GraftPlanDocument) {
     let directory = graft_record_root(root).join(selector);
     std::fs::create_dir_all(&directory).expect("create record directory");
-    std::fs::write(directory.join(lexicon::GRAFT_PLAN_FILE), document.render())
-        .expect("write the record");
+    std::fs::write(
+        directory.join(lexicon::GRAFT_PLAN_FILE),
+        document.render_graft_plan_document(),
+    )
+    .expect("write the record");
 }
 
 /// The one declaration that hands `root/a` over, written in string form.

@@ -90,7 +90,7 @@ pub fn write_trace_artifact(trace: &CallTrace, path: &Path, namespace: &str) -> 
     let mut artifact = TraceArtifact::from_trace(trace);
     artifact.namespace = namespace.to_owned();
     artifact.root = root_node_id(namespace);
-    atomic_write(path, &artifact.render())
+    atomic_write(path, &artifact.render_trace_artifact())
 }
 
 /// Read an artifact and rebuild the trace it records.
@@ -98,7 +98,8 @@ pub fn write_trace_artifact(trace: &CallTrace, path: &Path, namespace: &str) -> 
 pub fn read_trace_artifact(path: &Path) -> Result<(TraceArtifact, CallTrace), String> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let artifact = TraceArtifact::parse(&source).map_err(|error| error.to_string())?;
+    let artifact =
+        TraceArtifact::parse_trace_artifact(&source).map_err(|error| error.to_string())?;
     let trace = artifact
         .clone()
         .into_trace()

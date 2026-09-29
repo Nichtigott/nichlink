@@ -20,15 +20,11 @@ impl Registry {
             }),
             state: format!("entries={}", self.len()),
         }];
-        self.collect_registration_chain(wanted, &mut chain);
+        self.visit_registration_chain(wanted, &mut chain);
         chain
     }
 
-    fn collect_registration_chain(
-        &self,
-        wanted: NodeId,
-        chain: &mut Vec<RegistrationState>,
-    ) -> bool {
+    fn visit_registration_chain(&self, wanted: NodeId, chain: &mut Vec<RegistrationState>) -> bool {
         for entry in self.entries.values() {
             let is_target = entry.info.id == wanted;
             let contains_target = entry
@@ -54,7 +50,7 @@ impl Registry {
                     .child
                     .as_ref()
                     .expect("contains_target requires a child registry")
-                    .collect_registration_chain(wanted, chain);
+                    .visit_registration_chain(wanted, chain);
             }
             return true;
         }

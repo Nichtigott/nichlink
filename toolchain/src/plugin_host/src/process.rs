@@ -143,7 +143,7 @@ impl ProcessBackend {
     /// cannot change what executes.
     /// 把二进制暂存到私有位置并要求它与工件字节相等。返回的实例运行该暂存副本，
     /// 因此之后改动原路径不会改变实际执行的内容。
-    pub fn load(
+    pub fn load_process_backend(
         &self,
         artifact: VerifiedPluginArtifact,
         program: ProcessProgram,

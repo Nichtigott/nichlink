@@ -106,7 +106,7 @@ pub(crate) fn update_discovery_cache(
     let mut content =
         format!("# schema\t{CACHE_SCHEMA}\n# fingerprint\t{fingerprint}\n# path\tnode\tunit\n");
     let mut rows = Vec::new();
-    collect_discovery_rows(src, nodes, &mut rows);
+    visit_discovery_rows(src, nodes, &mut rows);
     rows.sort();
     rows.dedup();
     let mut all_units_hit = true;
@@ -205,13 +205,13 @@ pub(crate) fn cached_parent_id(src: &Path, face: &FaceSyntax) -> Option<NodeId> 
     }
 }
 
-fn collect_discovery_rows(src: &Path, nodes: &[Node], rows: &mut Vec<(String, NodeId)>) {
+fn visit_discovery_rows(src: &Path, nodes: &[Node], rows: &mut Vec<(String, NodeId)>) {
     for node in nodes {
         if let Some(file) = &node.file
             && let Some(id) = node_id(src, node)
         {
             rows.push((relative_display(src, file), id));
         }
-        collect_discovery_rows(src, &node.children, rows);
+        visit_discovery_rows(src, &node.children, rows);
     }
 }

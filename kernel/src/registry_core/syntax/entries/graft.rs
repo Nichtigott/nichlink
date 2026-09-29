@@ -110,7 +110,7 @@ impl<'ast> Visit<'ast> for GraftVisitor<'_> {
     /// `#[cfg(test)] mod tests` 里的计划描述的是测试。两者过去都会被收集，把测试
     /// 切口带进发布表，并让注册面躲过剪枝。
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
-        self.collect(item);
+        self.visit_macro_entry(item);
     }
 
     /// Walk a module unless the compiler can only drop it, and carry its gate onto
@@ -220,7 +220,7 @@ fn combined_cfg(module_cfgs: &[String], own: Option<&str>) -> Option<String> {
 }
 
 impl<'a> GraftVisitor<'a> {
-    fn collect(&mut self, item: &syn::ItemMacro) {
+    fn visit_macro_entry(&mut self, item: &syn::ItemMacro) {
         let cfg = item.attrs.iter().find_map(|attribute| {
             attribute
                 .path()

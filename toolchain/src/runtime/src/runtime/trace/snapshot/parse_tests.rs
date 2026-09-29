@@ -100,7 +100,8 @@ fn the_budget_refuses_a_new_string_instead_of_growing() {
 fn a_parse_interns_its_vocabulary_and_a_repeat_costs_nothing() {
     let before = interned_len();
     let names: Vec<String> = (0..3).map(|_| fresh("parsed")).collect();
-    let artifact = TraceArtifact::parse(&document(&names)).expect("a well-formed document");
+    let artifact =
+        TraceArtifact::parse_trace_artifact(&document(&names)).expect("a well-formed document");
     assert_eq!(artifact.frames.len(), 3);
     assert!(
         interned_len() >= before + 3,
@@ -186,8 +187,8 @@ fn a_record_may_reference_what_follows_it() {
          local=0\t7\tlet\tobserved\tvar\tu32\t7\tprobe.rs\t10\t4\n\
          edge=0\t0\tlabel\tprobe.rs\t10\t4\n"
     );
-    let shuffled = TraceArtifact::parse(&shuffled).expect("order is free");
-    let canonical = TraceArtifact::parse(&canonical).expect("the canonical order");
+    let shuffled = TraceArtifact::parse_trace_artifact(&shuffled).expect("order is free");
+    let canonical = TraceArtifact::parse_trace_artifact(&canonical).expect("the canonical order");
 
     let local = shuffled.locals.first().expect("the local was read");
     assert_eq!(

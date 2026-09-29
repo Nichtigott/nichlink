@@ -20,8 +20,8 @@ pub(crate) fn aggregate_contract_errors(
 ) -> BuildDiagnostics {
     let mut errors = BuildDiagnostics::default();
     let mut parent_rules = ParentRules::new();
-    collect_parent_rules(src, nodes, &mut parent_rules);
-    collect_contract_errors(
+    visit_parent_rules(src, nodes, &mut parent_rules);
+    visit_contract_errors(
         src,
         nodes,
         include_demo,
@@ -33,7 +33,7 @@ pub(crate) fn aggregate_contract_errors(
     errors
 }
 
-fn collect_parent_rules(src: &Path, nodes: &[Node], rules: &mut ParentRules) {
+fn visit_parent_rules(src: &Path, nodes: &[Node], rules: &mut ParentRules) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -46,7 +46,7 @@ fn collect_parent_rules(src: &Path, nodes: &[Node], rules: &mut ParentRules) {
                 rules.insert(id, rule);
             }
         }
-        collect_parent_rules(src, &node.children, rules);
+        visit_parent_rules(src, &node.children, rules);
     }
 }
 
@@ -65,7 +65,7 @@ fn declared_rule_source(src: &Path, relative: &str, face: &FaceSyntax) -> Option
         .or_else(|| face.field("registry_rule"))
 }
 
-fn collect_contract_errors(
+fn visit_contract_errors(
     src: &Path,
     nodes: &[Node],
     include_demo: bool,
@@ -96,7 +96,7 @@ fn collect_contract_errors(
                 check_parent_rule(&face, &relative, src, node, parent_rules, errors);
             }
         }
-        collect_contract_errors(
+        visit_contract_errors(
             src,
             &node.children,
             include_demo,
@@ -467,7 +467,7 @@ mod tests {
         let control = src.join("control/control.rs");
         let button = src.join("control/object/button/button.rs");
         let rule = src.join("control/registry_rule/registry_rule.rs");
-        write(
+        write_contracts(
             &control,
             r#"crate::root_object! {
     kind: Control,
@@ -477,7 +477,7 @@ mod tests {
     registry_rule: crate::control::registry_rule::REGISTRATION_RULE,
 }"#,
         );
-        write(
+        write_contracts(
             &button,
             r#"crate::control_object! {
     kind: BrokenButton,
@@ -487,7 +487,7 @@ mod tests {
     exports: ["control.preview"],
 }"#,
         );
-        write(
+        write_contracts(
             &rule,
             r#"RegistrationRule::new()
     .require_preset("ActionParts")
@@ -513,7 +513,7 @@ mod tests {
                 reason: "test",
             },
         )
-        .render();
+        .render_build_diagnostics();
         for expected in [
             "required preset is missing",
             "required export is missing",
@@ -525,7 +525,7 @@ mod tests {
         fs::remove_dir_all(src).expect("temporary fixture cleanup");
     }
 
-    fn write(path: &Path, source: &str) {
+    fn write_contracts(path: &Path, source: &str) {
         fs::create_dir_all(path.parent().expect("fixture parent"))
             .expect("temporary fixture directory");
         fs::write(path, source).expect("temporary fixture source");

@@ -209,7 +209,7 @@ impl BuildDiagnostics {
     /// Render all distinct diagnostics as one human-readable report, or the
     /// empty string when there are none.
     /// 把所有去重后的诊断渲染为一份人类可读报告；没有诊断时返回空字符串。
-    pub fn render(&self) -> String {
+    pub fn render_build_diagnostics(&self) -> String {
         if self.items.is_empty() {
             return String::new();
         }
@@ -349,7 +349,7 @@ mod build_diagnostic_tests {
             .provider("CanvasProvider");
         diagnostics.push(diagnostic.clone());
         diagnostics.push(diagnostic);
-        let rendered = diagnostics.render();
+        let rendered = diagnostics.render_build_diagnostics();
         assert!(rendered.contains("phase=contract / 注册合同"));
         assert!(rendered.contains("source=control/button.rs:12"));
         assert!(rendered.contains("expected=Canvas"));
@@ -382,7 +382,7 @@ mod build_diagnostic_tests {
         assert!(!diagnostics.is_empty());
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics.iter().count(), 2);
-        let rendered = diagnostics.render();
+        let rendered = diagnostics.render_build_diagnostics();
         assert_eq!(rendered.matches("first message").count(), 1);
         assert_eq!(rendered.matches("second message").count(), 1);
 

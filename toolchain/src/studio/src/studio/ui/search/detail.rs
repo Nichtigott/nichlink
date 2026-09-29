@@ -27,7 +27,7 @@ pub(super) fn draw_search_preview(
         );
         return;
     };
-    let Some(info) = app.registry.find(node) else {
+    let Some(info) = app.registry.find_registry(node) else {
         return;
     };
     let source = source_path_for(&info.source.file);
@@ -173,7 +173,7 @@ pub(super) fn draw_search_lane(frame: &mut Frame<'_>, area: Rect, app: &App, sea
     };
     let function = if row.function.is_empty() {
         app.registry
-            .find(node)
+            .find_registry(node)
             .map(|info| info.source.function.as_str())
             .unwrap_or("")
     } else {

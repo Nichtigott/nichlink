@@ -67,7 +67,7 @@ pub(crate) fn overlay(root: &Path, arguments: &Value) -> Result<String, String> 
         .map_or(DEFAULT_LIMIT, |value| {
             value.clamp(1, MAX_ROWS as u64) as usize
         });
-    Ok(render(
+    Ok(render_overlay(
         &namespace,
         evidence.freshness(),
         evidence.scope.as_ref(),
@@ -79,7 +79,7 @@ pub(crate) fn overlay(root: &Path, arguments: &Value) -> Result<String, String> 
 
 /// Render one projection as the lines an agent reads.
 /// 把一份投影渲染成代理阅读的行。
-fn render(
+fn render_overlay(
     namespace: &str,
     freshness: &str,
     scope: Option<&BuildScopeView>,

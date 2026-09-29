@@ -708,7 +708,7 @@ fn a_record_moves_the_effective_tree_but_not_the_static_plan() {
     );
     std::fs::write(
         record_directory.join(lexicon::GRAFT_PLAN_FILE),
-        document.render(),
+        document.render_graft_plan_document(),
     )
     .expect("write the record");
 

@@ -163,14 +163,24 @@ pub(crate) fn render_lib(
     output.push_str("    ]\n        .into_iter()\n        .collect()\n}\n");
     if !errors.is_empty() {
         output.push('\n');
-        writeln!(output, "compile_error!({:?});", errors.render()).unwrap();
+        writeln!(
+            output,
+            "compile_error!({:?});",
+            errors.render_build_diagnostics()
+        )
+        .unwrap();
     }
     if !demo_errors.is_empty() {
         output.push_str(&format!(
             "\n#[cfg(feature = {:?})]\n",
             crate::build_time::DEMO_ONLY_FEATURE
         ));
-        writeln!(output, "compile_error!({:?});", demo_errors.render()).unwrap();
+        writeln!(
+            output,
+            "compile_error!({:?});",
+            demo_errors.render_build_diagnostics()
+        )
+        .unwrap();
     }
     output
 }

@@ -109,6 +109,23 @@ pub struct Violation {
 /// 进程入口）。
 pub fn is_entry_file(path: &Path) -> bool {
     let text = path.to_string_lossy().replace('\\', "/");
+    // Three more positions are entries by nature rather than by path: the build-script entry the
+    // host's `build.rs` calls (`build_time::run`), the CLI's argv dispatch (`cli::run`), and the
+    // bridge's stdio loop (`mcp::protocol::run`). Rule ④ allows a bare verb at an entry position,
+    // and these *are* the entries of their surfaces — everything else in those files still has to
+    // carry its object.
+    // 还有三个位置是"按性质"的入口而不是按路径：宿主 `build.rs` 调用的构建期入口
+    // （`build_time::run`）、CLI 的 argv 分发（`cli::run`）、桥的 stdio 循环
+    // （`mcp::protocol::run`）。规则 ④ 允许裸动词出现在入口位，而它们**就是**各自执行面的入口
+    // ——这三个文件里的其它东西仍然必须带宾语。
+    const ENTRY_FILES: &[&str] = &[
+        "toolchain/src/build_time/src/lib.rs",
+        "toolchain/src/cli/src/lib.rs",
+        "toolchain/src/mcp/src/protocol.rs",
+    ];
+    if ENTRY_FILES.contains(&text.as_str()) {
+        return true;
+    }
     text.ends_with("/build.rs")
         || text.ends_with("/build")
         || text.contains("/src/bin/")
@@ -118,8 +135,20 @@ pub fn is_entry_file(path: &Path) -> bool {
 /// The declarations of `source`: `(line, name, is_public, signature_tail)`.
 /// `source` 里的函数声明：`(行号, 名字, 是否公开, 签名尾部)`。
 fn declarations(source: &str) -> Vec<(usize, String, bool, String)> {
+    // `impl Trait for Type` methods are named by the trait, not by us: a `write` that implements
+    // `std::io::Write` cannot be renamed, so it is not a naming decision this gate can make.
+    // `impl Trait for Type` 里的方法名由 trait 决定，不是我们起的：实现 `std::io::Write` 的
+    // `write` 改不了名，因此它不是本门禁能裁定的命名。
     let mut out = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
+    let in_trait_impl = |upto: usize| -> bool {
+        for i in (0..upto).rev() {
+            if let Some(rest) = lines[i].trim_start().strip_prefix("impl") {
+                return rest.contains(" for ");
+            }
+        }
+        false
+    };
     for (index, line) in lines.iter().enumerate() {
         let trimmed = line.trim_start();
         let is_public = trimmed.starts_with("pub ");
@@ -133,6 +162,9 @@ fn declarations(source: &str) -> Vec<(usize, String, bool, String)> {
             .collect();
         if name.is_empty() {
             continue;
+        }
+        if in_trait_impl(index) {
+            continue; // the trait owns the name (see the note above)
         }
         // The signature may wrap, so the tail is taken up to the opening brace.
         let mut signature = String::new();

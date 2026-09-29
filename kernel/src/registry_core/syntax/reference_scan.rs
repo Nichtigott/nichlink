@@ -82,7 +82,7 @@ fn is_build_macro(name: &str) -> bool {
 /// 里没有写出路径，本扫描看不到它。反过来"凡有标识符就放宽"会让任何在注册面里写 `format!`
 /// 或 `println!` 的宿主失去自动作用域，而那正是这个功能的意义；诚实的读法是：本扫描跟随**路径
 /// 形状**的引用，而裸标识符不是——无论宏内宏外，匹配器都用不上它。
-fn collect_macro_paths(tokens: &proc_macro2::TokenStream, paths: &mut BTreeSet<String>) {
+fn visit_macro_paths(tokens: &proc_macro2::TokenStream, paths: &mut BTreeSet<String>) {
     let mut segment = String::new();
     let mut colons = 0usize;
     fn flush(segment: &mut String, paths: &mut BTreeSet<String>) {
@@ -112,7 +112,7 @@ fn collect_macro_paths(tokens: &proc_macro2::TokenStream, paths: &mut BTreeSet<S
             proc_macro2::TokenTree::Group(group) => {
                 flush(&mut segment, paths);
                 colons = 0;
-                collect_macro_paths(&group.stream(), paths);
+                visit_macro_paths(&group.stream(), paths);
             }
         }
     }
@@ -165,7 +165,7 @@ impl<'ast> Visit<'ast> for ReferenceVisitor {
         // 而不是丢掉。过去不收曾让构建剪掉一个宏仍引用着的面，而损害只在宿主的 `cargo check` 里
         // 以 `error[E0433]: cannot find \`dial\` in \`object\`` 出现，`nichlink check` 却报 ok。
         if !name.as_deref().is_some_and(is_build_macro) {
-            collect_macro_paths(&item.tokens, &mut self.references.paths);
+            visit_macro_paths(&item.tokens, &mut self.references.paths);
         }
     }
 }

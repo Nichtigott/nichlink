@@ -198,7 +198,7 @@ fn a_created_plan_round_trips_is_listed_and_moves_to_trash() {
 
         let text = fs::read_to_string(created.plan_path()).expect("plan text");
         assert_eq!(
-            GraftPlanDocument::parse(&text).expect("plan parses"),
+            GraftPlanDocument::parse_graft_plan_document(&text).expect("plan parses"),
             created.document
         );
         assert!(text.contains("target_path=root/button\n"), "{text}");

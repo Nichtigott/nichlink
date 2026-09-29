@@ -148,7 +148,7 @@ fn a_string_declaration_yields_to_the_record() {
     assert_eq!(
         outcome
             .effective
-            .find(target)
+            .find_registry(target)
             .map(|info| info.kind.as_str()),
         Some("Fast")
     );
@@ -173,7 +173,7 @@ fn a_typed_declaration_stays_final() {
     assert_eq!(
         outcome
             .effective
-            .find(target)
+            .find_registry(target)
             .map(|info| info.kind.as_str()),
         Some("Slow")
     );
@@ -197,7 +197,7 @@ fn an_unresolved_record_selector_falls_back_to_the_declaration() {
     assert_eq!(
         outcome
             .effective
-            .find(target)
+            .find_registry(target)
             .map(|info| info.kind.as_str()),
         Some("Slow")
     );
@@ -314,7 +314,7 @@ fn a_stale_target_path_uses_the_current_path_for() {
     assert_eq!(
         outcome
             .effective
-            .find(target)
+            .find_registry(target)
             .map(|info| info.kind.as_str()),
         Some("Fast")
     );
@@ -355,10 +355,10 @@ fn no_records_reproduces_overlay_static() {
     assert_eq!(
         recorded
             .effective
-            .find(node("a.rs", "A"))
+            .find_registry(node("a.rs", "A"))
             .map(|info| info.kind.as_str()),
         statically
-            .find(node("a.rs", "A"))
+            .find_registry(node("a.rs", "A"))
             .map(|info| info.kind.as_str()),
     );
     assert!(recorded.reports.is_empty());

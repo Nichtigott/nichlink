@@ -102,7 +102,7 @@ impl GraftPlan {
     /// Parse one `cut … graft …` command into a single-cut plan.
     /// 把一条 `cut … graft …` 命令解析成含单条切口的计划。
     pub fn command(framework: FrameworkId, command: &str) -> Result<Self, String> {
-        let parsed = CutGraftCommand::parse(command)?;
+        let parsed = CutGraftCommand::parse_cut_graft_command(command)?;
         let mut plan = Self::new(framework);
         if let Some(end) = parsed.end {
             let mut cut = GraftCut::range(parsed.cut, end, parsed.graft);
@@ -188,7 +188,7 @@ fn split_command_range(raw_cut: &str) -> (&str, Option<&str>) {
 impl CutGraftCommand {
     /// Parse the text grammar, including the optional `full` word and `to` range word.
     /// 解析文本语法，包括可选的 `full` 词与区间词 `to`。
-    pub fn parse(command: &str) -> Result<Self, String> {
+    pub fn parse_cut_graft_command(command: &str) -> Result<Self, String> {
         let command = command.trim();
         let body = command
             .strip_prefix("cut ")

@@ -45,7 +45,7 @@ fn submit_plugin(source: &str, fields: [&str; 5], mode: &str) -> String {
     plugin.values[plugin_field::CRATE] = fields[3].to_owned();
     plugin.values[plugin_field::CHECKSUM] = fields[4].to_owned();
     plugin.values[plugin_field::MODE] = mode.to_owned();
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.submit_plugin(&plugin);
     app.event
 }
@@ -203,7 +203,7 @@ fn the_inspector_draws_every_row_it_lists() {
 /// 文件缺失会让编辑器交接可见地失败，而失败作为返回值交回，因此成功横幅无法覆盖它。
 #[test]
 fn a_failed_editor_launch_is_returned_not_only_shown() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     let missing = std::env::temp_dir().join("nichlink-b4-studio-missing-source.rs");
     let _ = std::fs::remove_file(&missing);
     let failure = app
@@ -339,7 +339,7 @@ fn search_rows_is_memoised_per_query_and_snapshot() {
     );
     // The behaviour the memo must not change: the same query answers the same rows.
     // 备忘不得改变的行为：同一查询给出同样的行。
-    let app = App::load();
+    let app = App::load_app();
     let first = app.search_rows("no-such-symbol");
     let second = app.search_rows("no-such-symbol");
     assert_eq!(first, second, "the memo must not change the answer");

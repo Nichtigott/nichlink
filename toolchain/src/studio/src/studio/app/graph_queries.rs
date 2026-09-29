@@ -19,7 +19,7 @@ impl App {
     /// 游标行。
     #[cfg(feature = "node-graph")]
     pub(crate) fn call_tree_transforms(&self, item: &CallRef) -> Vec<String> {
-        let Some(info) = self.registry.find(item.node) else {
+        let Some(info) = self.registry.find_registry(item.node) else {
             return Vec::new();
         };
         let source = source_path_for(&info.source.file);
@@ -60,7 +60,7 @@ impl App {
         }
         let target_name = if function.is_empty() {
             self.registry
-                .find(center)
+                .find_registry(center)
                 .map(|info| info.source.function.as_str())
                 .unwrap_or("")
         } else {
@@ -74,7 +74,7 @@ impl App {
             if calls_target {
                 let file = self
                     .registry
-                    .find(node)
+                    .find_registry(node)
                     .map(|info| info.source.file.as_str())
                     .unwrap_or("");
                 let reference = CallRef {
@@ -99,7 +99,7 @@ impl App {
                     {
                         let file = self
                             .registry
-                            .find(*callee_node)
+                            .find_registry(*callee_node)
                             .map(|info| info.source.file.as_str())
                             .unwrap_or("");
                         callees.push(CallRef {

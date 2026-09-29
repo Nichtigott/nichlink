@@ -167,7 +167,10 @@ pub fn create_external_graft(
     let document = GraftPlanDocument::new(target, target_path, selector.clone(), full);
     fs::create_dir_all(&root)
         .map_err(|error| format!("cannot create external graft directory: {error}"))?;
-    if let Err(error) = atomic_write(&root.join(lexicon::GRAFT_PLAN_FILE), &document.render()) {
+    if let Err(error) = atomic_write(
+        &root.join(lexicon::GRAFT_PLAN_FILE),
+        &document.render_graft_plan_document(),
+    ) {
         let _ = fs::remove_dir_all(&root);
         return Err(format!("cannot write external graft plan: {error}"));
     }
@@ -226,7 +229,7 @@ pub fn rewrite_external_graft(selector: &str, full: bool) -> Result<ExternalGraf
     }
     plan.document.full = full;
     let path = plan.plan_path();
-    atomic_write(&path, &plan.document.render())?;
+    atomic_write(&path, &plan.document.render_graft_plan_document())?;
     Ok(plan)
 }
 

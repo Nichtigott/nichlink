@@ -8,7 +8,7 @@ use super::*;
 
 impl App {
     pub(super) fn open_editor_at(&mut self, node: NodeId, line: Option<u32>) {
-        let Some(info) = self.registry.find(node) else {
+        let Some(info) = self.registry.find_registry(node) else {
             return;
         };
         let path = source_path_for(&info.source.file);

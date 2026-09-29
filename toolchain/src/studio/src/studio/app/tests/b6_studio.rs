@@ -19,7 +19,7 @@ use super::*;
 #[test]
 fn the_root_only_keys_say_why() {
     for key in ['d', 'e', 'g'] {
-        let mut app = App::load();
+        let mut app = App::load_app();
         assert_eq!(
             app.selected,
             app.registry.id(),
@@ -146,8 +146,8 @@ fn the_graft_reader_is_named_for_reading() {
 /// 添加与编辑浮层跑同一套转移：等价输入让两份表单落在同一状态。
 #[test]
 fn add_and_edit_forms_reach_the_same_state() {
-    let mut add_app = App::load();
-    let mut edit_app = App::load();
+    let mut add_app = App::load_app();
+    let mut edit_app = App::load_app();
     let root = add_app.registry.id();
     add_app.overlay = Some(Overlay::Add(AddState::new(root)));
     edit_app.overlay = Some(Overlay::Edit(root, AddState::new(root)));
@@ -229,7 +229,7 @@ fn the_form_pages_share_one_button_row() {
 /// （审计 `STU-S-18`）。
 #[test]
 fn severity_is_set_where_the_line_is_written() {
-    let mut app = App::load();
+    let mut app = App::load_app();
     assert!(!app.event_is_alert, "a fresh session's line is ordinary");
     app.note("Selected nothing in particular");
     assert!(!app.event_is_alert, "`note` is the ordinary channel");
@@ -334,7 +334,7 @@ fn a_project_write_is_applied_in_one_place() {
     // holds, so the hot-reload watcher cannot read our own write as someone else's change.
     // 行为上：这次写入产生的文件已经计入会话持有的源码戳，因此热重载监听器不会把我们自己的写入
     // 读成别人的变更。
-    let mut app = App::load();
+    let mut app = App::load_app();
     app.last_source_stamp = 0;
     let _ = app.after_project_write(None);
     assert_eq!(

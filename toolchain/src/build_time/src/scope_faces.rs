@@ -27,11 +27,11 @@ pub(crate) struct FaceSource {
 
 pub(crate) fn collect_faces(src: &Path, nodes: &[Node]) -> Vec<FaceSource> {
     let mut faces = Vec::new();
-    collect_faces_inner(src, nodes, &mut faces);
+    visit_faces_inner(src, nodes, &mut faces);
     faces
 }
 
-fn collect_faces_inner(src: &Path, nodes: &[Node], faces: &mut Vec<FaceSource>) {
+fn visit_faces_inner(src: &Path, nodes: &[Node], faces: &mut Vec<FaceSource>) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -69,7 +69,7 @@ fn collect_faces_inner(src: &Path, nodes: &[Node], faces: &mut Vec<FaceSource>) 
                 }
             }
         }
-        collect_faces_inner(src, &node.children, faces);
+        visit_faces_inner(src, &node.children, faces);
     }
 }
 

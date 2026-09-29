@@ -37,7 +37,7 @@ pub(crate) fn load_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
         return Err(format!("source root does not exist: {}", root.display()));
     }
     let mut paths = Vec::new();
-    collect_rs(root, &mut paths)?;
+    visit_rs(root, &mut paths)?;
     paths.sort();
     // A link that resolves outside the root is not part of the index: the root is
     // the declared scope of every answer this bridge gives, and a file outside it
@@ -99,7 +99,7 @@ impl nichlink_kernel::source::SourceTree for StdSourceTree {
     }
 }
 
-fn collect_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
+fn visit_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     let tree = StdSourceTree {
         root: fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf()),
     };

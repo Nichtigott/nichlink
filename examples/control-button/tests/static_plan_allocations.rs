@@ -138,8 +138,8 @@ fn assert_the_static_read_path_allocates_nothing() {
             let _ = cut.cut();
             let _ = cut.is_full();
         }
-        let hit = plan.find(first).is_some();
-        let miss = plan.find(missing).is_none();
+        let hit = plan.find_static_face(first).is_some();
+        let miss = plan.find_static_face(missing).is_none();
         let children = plan.children_of(first).count();
         (plan.len(), plan.is_empty(), seen, hit, miss, children)
     });

@@ -66,7 +66,7 @@ impl GraftPlanDocument {
 
     /// Parse a plan document, refusing anything this version cannot read.
     /// 解析计划文档；读不懂的内容一律拒绝，而不是猜。
-    pub fn parse(source: &str) -> Result<Self, GraftPlanDocumentError> {
+    pub fn parse_graft_plan_document(source: &str) -> Result<Self, GraftPlanDocumentError> {
         let mut version = None;
         let mut target = None;
         let mut target_path = None;
@@ -152,7 +152,7 @@ impl GraftPlanDocument {
 
     /// Render the canonical document, one `key=value` per line.
     /// 渲染规范文档，每行一个 `key=value`。
-    pub fn render(&self) -> String {
+    pub fn render_graft_plan_document(&self) -> String {
         format!(
             "version={}\ntarget={}\ntarget_path={}\ngraft={}\nfull={}\n",
             self.version,
@@ -312,7 +312,8 @@ mod tests {
         let text = format!(
             "version=1\ntarget={target}\ntarget_path=root/control/button\ngraft=first\ngraft=second\n"
         );
-        let error = GraftPlanDocument::parse(&text).expect_err("a repeated key must be refused");
+        let error = GraftPlanDocument::parse_graft_plan_document(&text)
+            .expect_err("a repeated key must be refused");
         let message = error.to_string();
         assert!(message.contains("duplicate"), "{message}");
         assert!(message.contains("graft"), "{message}");
@@ -348,7 +349,7 @@ mod tests {
     #[test]
     fn a_document_round_trips_through_its_text_form() {
         let document = document();
-        let text = document.render();
+        let text = document.render_graft_plan_document();
         assert_eq!(
             text,
             format!(
@@ -356,7 +357,10 @@ mod tests {
                 document.target
             )
         );
-        assert_eq!(GraftPlanDocument::parse(&text).expect("parses"), document);
+        assert_eq!(
+            GraftPlanDocument::parse_graft_plan_document(&text).expect("parses"),
+            document
+        );
     }
 
     #[test]
@@ -364,7 +368,8 @@ mod tests {
         let mut document = document();
         document.full = true;
         assert_eq!(
-            GraftPlanDocument::parse(&document.render()).expect("parses"),
+            GraftPlanDocument::parse_graft_plan_document(&document.render_graft_plan_document())
+                .expect("parses"),
             document
         );
         assert_eq!(
@@ -399,50 +404,56 @@ mod tests {
             document.target
         );
         assert_eq!(
-            GraftPlanDocument::parse(&reordered).expect("parses"),
+            GraftPlanDocument::parse_graft_plan_document(&reordered).expect("parses"),
             document
         );
     }
 
     #[test]
     fn an_unknown_version_is_refused_instead_of_guessed() {
-        let text = document().render().replace("version=1", "version=2");
+        let text = document()
+            .render_graft_plan_document()
+            .replace("version=1", "version=2");
         assert_eq!(
-            GraftPlanDocument::parse(&text),
+            GraftPlanDocument::parse_graft_plan_document(&text),
             Err(GraftPlanDocumentError::UnsupportedVersion(2))
         );
     }
 
     #[test]
     fn missing_unknown_and_malformed_keys_are_reported() {
-        let missing = document().render().replace("full=false\n", "");
+        let missing = document()
+            .render_graft_plan_document()
+            .replace("full=false\n", "");
         assert_eq!(
-            GraftPlanDocument::parse(&missing),
+            GraftPlanDocument::parse_graft_plan_document(&missing),
             Err(GraftPlanDocumentError::MissingKey("full"))
         );
-        let unknown = format!("{}editor=vscode\n", document().render());
+        let unknown = format!("{}editor=vscode\n", document().render_graft_plan_document());
         assert_eq!(
-            GraftPlanDocument::parse(&unknown),
+            GraftPlanDocument::parse_graft_plan_document(&unknown),
             Err(GraftPlanDocumentError::UnknownKey("editor".to_owned()))
         );
-        let malformed = document().render().replace("full=false", "full=yes");
+        let malformed = document()
+            .render_graft_plan_document()
+            .replace("full=false", "full=yes");
         assert!(matches!(
-            GraftPlanDocument::parse(&malformed),
+            GraftPlanDocument::parse_graft_plan_document(&malformed),
             Err(GraftPlanDocumentError::Malformed { line: 5, .. })
         ));
         let selector = document()
-            .render()
+            .render_graft_plan_document()
             .replace("graft=button_fast", "graft=a/b");
         assert!(matches!(
-            GraftPlanDocument::parse(&selector),
+            GraftPlanDocument::parse_graft_plan_document(&selector),
             Err(GraftPlanDocumentError::Malformed { line: 4, .. })
         ));
-        let path = document().render().replace(
+        let path = document().render_graft_plan_document().replace(
             "target_path=root/control/button",
             "target_path=control//button",
         );
         assert!(matches!(
-            GraftPlanDocument::parse(&path),
+            GraftPlanDocument::parse_graft_plan_document(&path),
             Err(GraftPlanDocumentError::Malformed { line: 3, .. })
         ));
     }

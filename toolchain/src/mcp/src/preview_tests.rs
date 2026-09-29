@@ -83,18 +83,22 @@ fn a_preview_skips_the_build_output_and_both_stores() {
 /// Every file under `root`, as tree-relative POSIX paths.
 /// `root` 下的每个文件，写成树内相对 POSIX 路径。
 fn all_files(root: &std::path::Path) -> Vec<String> {
-    fn walk(root: &std::path::Path, directory: &std::path::Path, files: &mut Vec<String>) {
+    fn walk_preview_tests(
+        root: &std::path::Path,
+        directory: &std::path::Path,
+        files: &mut Vec<String>,
+    ) {
         for entry in std::fs::read_dir(directory).expect("a readable directory") {
             let path = entry.expect("an entry").path();
             if path.is_dir() {
-                walk(root, &path, files);
+                walk_preview_tests(root, &path, files);
             } else if let Ok(relative) = path.strip_prefix(root) {
                 files.push(relative.to_string_lossy().replace('\\', "/"));
             }
         }
     }
     let mut files = Vec::new();
-    walk(root, root, &mut files);
+    walk_preview_tests(root, root, &mut files);
     files.sort();
     files
 }

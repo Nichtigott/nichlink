@@ -22,7 +22,7 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(root.clone(), root.join("Cargo.toml"), "external-graft-test");
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.registry.id());
     add.values[face_field::MODULE] = "canvas".to_owned();
     add.values[face_field::KIND] = "Canvas".to_owned();
@@ -37,7 +37,7 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
     app.selected = target;
     let source = root.join("src").join(
         app.registry
-            .find(target)
+            .find_registry(target)
             .expect("target metadata")
             .source
             .file
@@ -147,7 +147,7 @@ fn graft_refuses_a_selector_that_already_exists() {
         "external-graft-collision",
     );
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.registry.id());
     add.values[face_field::MODULE] = "canvas".to_owned();
     add.values[face_field::KIND] = "Canvas".to_owned();
@@ -199,7 +199,7 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
         "external-graft-undeclared",
     );
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.registry.id());
     add.values[face_field::MODULE] = "canvas".to_owned();
     add.values[face_field::KIND] = "Canvas".to_owned();
@@ -274,7 +274,7 @@ fn graft_reads_the_declared_slot_from_the_host_entry() {
         "external-graft-declared",
     );
 
-    let mut app = App::load();
+    let mut app = App::load_app();
     let mut add = AddState::new(app.registry.id());
     add.values[face_field::MODULE] = "canvas".to_owned();
     add.values[face_field::KIND] = "Canvas".to_owned();

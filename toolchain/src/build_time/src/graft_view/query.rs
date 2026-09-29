@@ -374,8 +374,8 @@ mod tests {
         let captured = host_graft_entries(&entry, &mut errors);
         assert!(captured.declared.is_empty(), "{:?}", captured.declared);
         assert!(captured.enabled.is_empty());
-        assert_eq!(errors.len(), 1, "{}", errors.render());
-        let rendered = errors.render();
+        assert_eq!(errors.len(), 1, "{}", errors.render_build_diagnostics());
+        let rendered = errors.render_build_diagnostics();
         assert!(rendered.contains("phase=graft-entry"), "{rendered}");
         assert!(rendered.contains("invalid graft declaration"), "{rendered}");
 
@@ -405,8 +405,8 @@ mod tests {
         // A refused gate keeps nothing enabled and reports why.
         // 被拒的门控不启用任何东西，并说明原因。
         assert!(captured.enabled.is_empty());
-        assert_eq!(errors.len(), 1, "{}", errors.render());
-        let rendered = errors.render();
+        assert_eq!(errors.len(), 1, "{}", errors.render_build_diagnostics());
+        let rendered = errors.render_build_diagnostics();
         assert!(rendered.contains("phase=graft-entry"), "{rendered}");
         assert!(rendered.contains("cfg"), "{rendered}");
 

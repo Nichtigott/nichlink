@@ -89,7 +89,7 @@ fn every_shipped_rule_source_still_reads_through_the_production_entry() {
         .expect("the workspace root")
         .to_path_buf();
     let mut files = Vec::new();
-    collect_rule_files(&workspace, &mut files);
+    visit_rule_files(&workspace, &mut files);
     files.sort();
     assert!(!files.is_empty(), "the walk found no shipped rule source");
     for path in files {
@@ -188,7 +188,7 @@ fn unique_root(label: &str) -> PathBuf {
     root
 }
 
-fn collect_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+fn visit_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
         return;
     };
@@ -202,7 +202,7 @@ fn collect_rule_files(directory: &std::path::Path, files: &mut Vec<std::path::Pa
             if name == "target" || name == ".git" || name == ".dsh-meow" {
                 continue;
             }
-            collect_rule_files(&path, files);
+            visit_rule_files(&path, files);
         } else if path
             .file_name()
             .is_some_and(|name| name == "registry_rule.rs")

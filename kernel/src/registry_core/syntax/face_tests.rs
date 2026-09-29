@@ -130,7 +130,7 @@ crate::control_object! {
 fn source_references_ignore_imports_strings_comments_and_registration_data() {
     let source = r#"
 use crate::unused::Thing;
-fn run() {
+fn run_button() {
     crate::control::object::button::dispatch_action("unused::fake()", true);
     // crate::comment::fake();
     crate::control_object! { kind: Fake, parent: crate::hidden::NODE_ID }

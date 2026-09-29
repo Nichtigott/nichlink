@@ -259,7 +259,10 @@ impl Registry {
         let registry = self
             .registry_mut(target)
             .expect("the caller resolved the parent registry");
-        let rule_failures = registry.header.registration_rule.validate(&snapshot);
+        let rule_failures = registry
+            .header
+            .registration_rule
+            .validate_owned_registration_rule(&snapshot);
         if !rule_failures.is_empty() {
             return Err(RegistryError::new(
                 snapshot.id,
@@ -274,7 +277,9 @@ impl Registry {
             )
             .into());
         }
-        let contract_failures = snapshot.contract.validate(&snapshot.kind);
+        let contract_failures = snapshot
+            .contract
+            .validate_owned_object_contract(&snapshot.kind);
         if !contract_failures.is_empty() {
             let mut error = RegistryError::new(
                 snapshot.id,

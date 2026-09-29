@@ -110,7 +110,7 @@ pub fn render_call_report_for_trace(
                 "|--"
             };
             let details = registry
-                .find(call.node)
+                .find_registry(call.node)
                 .map(|info| {
                     let path = registry
                         .path_for(call.node)
@@ -211,7 +211,7 @@ fn matching_call_paths(
                             .source
                             .is_some_and(|source| source_file_matches(source.file, &query))
                         || registry
-                            .find(call.node)
+                            .find_registry(call.node)
                             .is_some_and(|info| registration_matches(registry, info, &query))
                 })
             })
