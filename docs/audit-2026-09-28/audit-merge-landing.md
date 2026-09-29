@@ -125,3 +125,13 @@
    收拾这 81 个名字（例：`conventions/src/doc_anchors.rs` 的 `resolve`、`kernel/src/registry_core/declaration/owned.rs`
    的 `validate`、`kernel/src/registry_core/mir/call_tree.rs` 的 `collect_edges`）——那是**独立的新命名批次**，
    不阻塞合并阶梯。
+6. **留置项口径校正（2026-09-29）**：我先前口头列的"三处留置"里**有一处是错的** ✗ ——
+   ③ `LGC-LG-40` 那一族（official **十字段空来源**读取语义）**不是未修**：第二批（t7）已把读取语义改成
+   "声明为空"（空列 = `Some("")`，`None` 只留给七字段形式），并由 **t11 §4 独立证实** ✓（自造十字段空列
+   夹具 + 删掉 filter 即翻红的变异反证）。台账 `audit-report.md` 里三处原文可查：`:1770`、`:1790`、`:1803`
+   ——我引的是**更早的 t51 记录**（"仍未修"）而**没往下读到 t11 的补证** ✗ ⇒ 该条**已闭环** ✓。
+   **真正还开着的**：① `render_requirements` 的**破坏性半**（0.1.x 约束下按裁定 (b) 留的薄包装 + 严格兄弟
+   `try_render_requirements`；**0.2.0 这条破坏性版本线已开** ⇒ 可用 `#[deprecated]` 收掉那半，作 0.2.1 落地）；
+   ② `LGC-LG-27` 的**验证厚度**（修复已由源码阅读确认，但无夹具无变异 ⇒ 补上即闭环）；④ `N-6`（studio 6 条
+   作者钉子里 4 条是 `include_str!` 文本断言）；⑤ `N-7`（缺"渲染出 12 行"这条**行为**钉子）；⑥ `N-8`
+   （**已闭环** ✓：判据已成文进 `AGENTS.md` §Verify，台账 §14.3 那行已按惯例标注关闭 ✓）。
