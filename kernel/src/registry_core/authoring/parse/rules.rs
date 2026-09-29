@@ -347,15 +347,21 @@ pub fn render_registration_rule(value: &str) -> Result<String, FaceParseError> {
 /// not have that shape.
 /// 把 `capability=>provider` 对渲染成 Rust 的 `requires:` 列表，形状不符的条目一律丢掉。
 ///
-/// **This entry is lossy, and it stays that way because it is published API**: it is
-/// `-> String` in the released `0.1.x` line, so a malformed entry disappears from the rendered
-/// list instead of failing the rewrite, and a caller that writes the result back into a file
-/// would delete a field the author wrote. Code that has to *refuse* a wrong `requires` list calls
-/// [`try_render_requirements`], which is what the manifest renderer uses (audit `LGC-LG-28`).
-/// **本入口是有损的，而且因为它是已发布的 API 而保持这样**：在已发布的 `0.1.x` 线上它是
-/// `-> String`，因此畸形条目会从渲染结果里消失，而不是让重写失败；把结果写回文件的调用方会就此删掉
-/// 作者写下的一个字段。需要**拒绝**错误 `requires` 列表的代码请调用 [`try_render_requirements`]——
-/// manifest 渲染器用的就是它（审计 `LGC-LG-28`）。
+/// **This entry is lossy and is deprecated on the `0.2` line**: it is `-> String` in the released
+/// `0.1.x` line, so a malformed entry disappears from the rendered list instead of failing the
+/// rewrite, and a caller that writes the result back into a file would delete a field the author
+/// wrote. It stays available so code compiled against the old shape keeps working, but new code
+/// must call [`try_render_requirements`] — the entry that *refuses* a wrong `requires` list, and
+/// the one the manifest renderer uses (audit `LGC-LG-28`; the `0.2.0` merge opened a breaking
+/// version line, which is why the deprecation could finally be attached).
+/// **本入口是有损的，并且在 `0.2` 线上已弃用**：在已发布的 `0.1.x` 线上它是 `-> String`，因此畸形
+/// 条目会从渲染结果里消失，而不是让重写失败；把结果写回文件的调用方会就此删掉作者写下的一个字段。
+/// 它仍然可用，是为了让按旧形状编译的调用方继续工作，但新代码必须调用 [`try_render_requirements`]
+/// ——那是**拒绝**错误 `requires` 列表的入口，也是 manifest 渲染器用的那个（审计 `LGC-LG-28`；
+/// `0.2.0` 的合并开启了破坏性版本线，这正是这次弃用终于能挂上去的原因）。
+#[deprecated(
+    note = "lossy: malformed `requires` entries are dropped silently; use `try_render_requirements`"
+)]
 pub fn render_requirements(value: &str) -> String {
     value
         .split(',')

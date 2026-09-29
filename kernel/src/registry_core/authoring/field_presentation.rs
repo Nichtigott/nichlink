@@ -346,6 +346,12 @@ fn auto_value(value: &str) -> String {
     }
 }
 
+// `paths` is read only by the `syntax`-gated arm below. The feature-less build still needs this
+// function — the presentation layer is deliberately not gated — so the unused parameter is
+// silenced there rather than feeding it to a second derivation just to consume it.
+// `paths` 只被下面那道 `syntax` 门控的分支读取。无该特性的构建仍然需要这个函数（展示层有意不受
+// 门控），因此就地静默这个未用参数，而不是为了"用掉它"再造一份推导。
+#[cfg_attr(not(feature = "syntax"), allow(unused_variables))]
 fn derived_trait_names(paths: &str) -> String {
     // The one derivation of a trait label, shared with the data side: a label is the last
     // segment of a *type path*, so generics are not part of it. Splitting on `,` and taking
