@@ -105,7 +105,9 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     output.push_str(&format!("provisional {provisional}  lapsed {lapsed}\n"));
     output.push_str(
         "note: nothing here renews or revokes an adoption — a lapsed one needs a person to \
-         confirm the new state, and a confirmation is one more line.\n",
+         confirm the new state, and a confirmation is one more line. A later line for the same \
+         anchor is the one in force; an earlier line stays as its history, which is why a lapsed \
+         line can sit above a provisional one and still be the truth about the bytes it named.\n",
     );
     Ok(output)
 }
