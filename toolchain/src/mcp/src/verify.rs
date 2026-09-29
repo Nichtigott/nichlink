@@ -62,6 +62,31 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
             bounded(&diagnostics.render_build_diagnostics())
         ),
     };
+    // The static verdict above is one of the two faces this package is judged on, and
+    // the other one is the authoring connector: `apply`, `usages` and `converge` all
+    // validate through `load_registry`, which reads every face file rather than the
+    // build's active scope. A tree can therefore pass above and be refused there — the
+    // build checks the requirements of the faces it ships, the connector checks the
+    // ones on disk — and an agent that reads only the first line carries a green light
+    // into a rejection (audit `F1`). Both lines are true of the same tree, so both are
+    // printed, and the static wording above is left exactly as it was.
+    // The label reports whether that surface accepts this tree, which is the
+    // precondition of every connector-face tool; a tree it refuses is the answer rather
+    // than a tool failure, so the rejection is rendered instead of returned.
+    // 上面那条静态判断只是本包会被评判的两个面之一，另一个面是创作连接器：`apply`、`usages` 与
+    // `converge` 都经 `load_registry` 校验，而它读的是每个面文件，而不是构建的活跃作用域。因此一棵树
+    // 可以在上面通过、在那里被拒——构建检查的是它会发布的面，连接器检查的是磁盘上的面——而只读第一行的
+    // 代理会把绿灯带进拒绝里（审计 `F1`）。两行对同一棵树都成立，所以两行都打印，而上面那条静态措辞
+    // 保持原样。
+    // 这个标签报告的是那个面是否接受这棵树——它是每个连接器面工具的前置条件；而它拒绝的树是答案而不是
+    // 工具故障，所以拒绝被渲染出来，而不是当作错误返回。
+    let connector = match crate::mcp::apply::load_registry(root, &package) {
+        Ok(_) => "connector verdict: ok (the package's own faces were admitted)\n".to_owned(),
+        Err(rejection) => format!(
+            "connector verdict: rejected\n{}",
+            bounded(&rejection).trim_end()
+        ),
+    };
     // The delta is the same report `nichlink.diff` gives, and it is meaningful here
     // precisely because the call above just refreshed the build's side of it.
     // 这份差异就是 `nichlink.diff` 给出的同一份报告，而它在这里有意义，正是因为上面那次调用刚刚刷新
@@ -80,7 +105,7 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
         }
     }
     let delta = crate::mcp::diff::diff(root, &Value::Object(declared))?;
-    Ok(format!("{verdict}\n{delta}"))
+    Ok(format!("{verdict}{connector}\n{delta}"))
 }
 
 /// Keep one reply inside a size an agent can read, and say when it did not.

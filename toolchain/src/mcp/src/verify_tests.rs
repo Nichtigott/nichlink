@@ -136,6 +136,58 @@ fn a_broken_tree_fails_the_verdict_and_names_the_node() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The tree the two judging surfaces disagree on, and why the reply carries both.
+/// 两个判断面会给出不同结论的那一棵树，以及回复为何两行都带。
+///
+/// The static verdict judges the faces the build ships, and the authoring
+/// connector judges the faces on disk. An entry that names one face narrows the
+/// build's scope to it, so the widget below is left out of the static
+/// requirements pass while `load_registry` still registers it — the same
+/// divergence that made `verify` report `verdict ok` on a tree `apply`, `usages`
+/// and `converge` refused (audit `F1`). The reply has to carry both lines,
+/// because both are true of this tree and only one of them says "green light".
+/// 静态判断评的是构建会发布的面，创作连接器评的是磁盘上的面。点名了一个面的入口会把构建
+/// 作用域收窄到它，于是下面的 widget 被排除在静态需求检查之外，而 `load_registry` 仍会注册
+/// 它——正是这处分歧让 `verify` 在一棵被 `apply`、`usages` 与 `converge` 拒绝的树上报
+/// `verdict ok`（审计 `F1`）。回复必须两行都带，因为两行对这棵树都成立，而只有其中一行说的是
+/// "绿灯"。
+#[test]
+fn a_connector_rejection_is_reported_next_to_the_static_verdict() {
+    let (root, _) = package("connector");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub fn wire() {\n    crate::label::Label;\n}\n",
+    )
+    .expect("the entry references one face");
+    std::fs::create_dir_all(root.join("src/label")).expect("label module");
+    std::fs::write(
+        root.join("src/label/label.rs"),
+        "crate::root_object! { kind: Label, \
+         parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")), provides: [\"cap.render\"], }\n",
+    )
+    .expect("the provider face");
+    std::fs::create_dir_all(root.join("src/widget")).expect("widget module");
+    std::fs::write(
+        root.join("src/widget/widget.rs"),
+        "crate::root_object! { kind: Widget, \
+         parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")), \
+         requires: [\"cap.theme\" => \"Theme\"], }\n",
+    )
+    .expect("the face whose requirement nothing answers");
+    let reply = verify(&root, &json!({})).expect("the verdict renders");
+    assert!(reply.contains("verdict ok"), "{reply}");
+    assert!(reply.contains("connector verdict: rejected"), "{reply}");
+    assert!(
+        reply.contains("the package's own faces were rejected"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("input `cap.theme` has no provider"),
+        "{reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A directory that is not a package is refused by name before anything runs.
 /// 不是包的目录会在任何东西运行之前被按名拒绝。
 #[test]

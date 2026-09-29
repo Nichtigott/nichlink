@@ -106,6 +106,23 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 - **Wired back (2026-09-29).** Batch 2's six target-less test files (**20** `#[test]` functions, the `(b)` class) are targets again: nineteen as integration tests under `toolchain/tests/` (an external caller reaches the tolerant arm of `__control_object!` — the in-crate ban is on absolute-path calls from inside an expansion), and one mounted in-crate because it collects *this* crate's opted-in declarations. Wiring them back exposed the branch only they reached: a `collector: debug` declaration could not compile (`$crate::submit!`, not `$crate::call_evidence::submit!`), and the merged crate gained `extern crate self as nichlink_toolchain;` for the expansions that carry `::nichlink_toolchain::…` paths. The earlier probe evidence — both build faces' `--list` matching none of them, and a `compile_error!` in each file leaving `cargo check --all-targets` at exit 0 — is kept as the record of what the gap was.
   **已接回（2026-09-29）**：批 2 的六个没有 target 的测试文件（**20** 个 `#[test]`，即 `(b)` 类）重新有了 target：十九个是 `toolchain/tests/` 下的集成测试（外部调用者能到达 `__control_object!` 的宽容 arm——crate 内的禁令针对的是「展开里经绝对路径调用」），一个留在 crate 内挂载，因为它采集的是**本 crate** 已选择加入的声明。接回它们才暴露出「只有它们才会走到」的那一支：`collector: debug` 声明根本编译不过（应是 `$crate::submit!`，不是 `$crate::call_evidence::submit!`），而合并后的 crate 也补上了 `extern crate self as nichlink_toolchain;`，供那些带 `::nichlink_toolchain::…` 路径的展开解析。此前的探针证据（两个构建面 `--list` 命中 0、给每个文件插 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0）作为「当时的洞长什么样」的记录保留。
 
+### Fixed
+
+- **`nichlink.verify` no longer reports half a verdict (2026-09-29).** It printed
+  `verdict ok (the kernel accepted the tree)` from the static face alone, while `apply`, `usages`
+  and `converge` judge the same tree through `load_registry`, which reads every face file rather
+  than the build's active scope. A tree could pass the first and be refused by the second, so an
+  agent reading only the first line carried a green light into a rejection. `verify` now prints a
+  second line — `connector verdict: ok` or `connector verdict: rejected` followed by the same
+  connector error tree — reusing `load_registry` and the existing reply bound. The `verdict ok`
+  wording is unchanged.
+  **`nichlink.verify` 不再只报一半裁决（2026-09-29）。** 它原先只凭静态面打印
+  `verdict ok (the kernel accepted the tree)`，而 `apply`、`usages`、`converge` 经
+  `load_registry` 评判同一棵树，读的是每个面文件而不是构建的活跃作用域。一棵树因此可以通过
+  前者、被后者拒绝，只读第一行的代理会把绿灯带进拒绝里。现在 `verify` 多印第二行
+  `connector verdict: ok` 或 `connector verdict: rejected`（其后是同一份连接器错误树），
+  复用 `load_registry` 与既有的回复尺寸上限；`verdict ok` 的措辞一字未动。
+
 ## [0.1.6] — never released (its content shipped in 0.2.0)
 
 ### Added
