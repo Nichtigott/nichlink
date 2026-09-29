@@ -80,6 +80,24 @@ pub struct PruningRow {
     /// The tracked symbol, or `-` when the face has none.
     /// 被跟踪的符号；该面没有时是 `-`。
     pub symbol: String,
+    /// The logical path the face declared, when the record carried one.
+    /// 该面声明的逻辑路径；记录携带它时才有。
+    ///
+    /// `None` means the record did not carry the column (the three-column form an older build
+    /// wrote) or the declaration named none. Either way the answer is the same for a reader:
+    /// derive it from the sources rather than trust a published value.
+    /// `None` 意为记录没有携带该列（较早构建写下的三列形式），或声明里没有它。对读者而言两种情形答案
+    /// 相同：从源码推导，而不是采信一个已发布的值。
+    pub path: Option<String>,
+    /// The declared `kind`, when published.
+    /// 已发布时，声明的 `kind`。
+    pub kind: Option<String>,
+    /// The declared `registry_name`, when published.
+    /// 已发布时，声明的 `registry_name`。
+    pub registry_name: Option<String>,
+    /// The parent the declaration spelled, as a Rust path, when published.
+    /// 已发布时，声明拼出的父级（Rust 路径）。
+    pub parent: Option<String>,
 }
 
 /// The build scope the last pipeline run published in `out_dir`.
@@ -201,10 +219,25 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
         let Some(symbol) = fields.next() else {
             continue;
         };
+        // Every column after the symbol is optional: the three-column form an older build wrote
+        // parses to four `None`s, and `-` is how the writer spells "the declaration named none".
+        // 符号之后的每一列都是可选的：较早构建写下的三列形式解析出四个 `None`，而 `-` 是写入方拼写
+        // "声明里没有它"的方式。
+        let mut column = || {
+            fields
+                .next()
+                .map(str::trim)
+                .filter(|value| !value.is_empty() && *value != "-")
+                .map(str::to_owned)
+        };
         rows.push(PruningRow {
             id,
             source: source.to_owned(),
             symbol: symbol.to_owned(),
+            path: column(),
+            kind: column(),
+            registry_name: column(),
+            parent: column(),
         });
     }
     Ok(rows)
@@ -214,6 +247,49 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// Both forms of the face manifest read: the three-column one an older build wrote leaves the
+    /// four published facts absent, and the seven-column one fills them, with `-` still meaning
+    /// "the declaration named none".
+    /// 两种面清单形式都能读：较早构建写下的三列形式让四项已发布事实缺席，七列形式填上它们，而 `-` 仍
+    /// 意为"声明里没有它"。
+    #[test]
+    fn the_pruning_reader_accepts_the_three_and_the_seven_column_forms() {
+        let out = std::env::temp_dir().join(format!(
+            "nichlink-pruning-forms-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&out).expect("out dir");
+        let id = "bdb4427ce81c9bc51e56bee7667fd2be";
+        let text = format!(
+            "# node\tsource\tsymbol\n\
+             {id}\tcontrol/control.rs\t-\n\
+             # node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\n\
+             {id}\tcontrol/control.rs\t-\tcontrol::object::button\tButton\tbutton\tcrate::root_node_id(env!(\"CARGO_PKG_NAME\"))\n"
+        );
+        std::fs::write(out.join("pruning_manifest.tsv"), text).expect("manifest");
+        let rows = read_pruning_manifest(&out).expect("both forms read");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].path, None);
+        assert_eq!(rows[0].kind, None);
+        assert_eq!(rows[1].path.as_deref(), Some("control::object::button"));
+        assert_eq!(rows[1].kind.as_deref(), Some("Button"));
+        assert_eq!(rows[1].registry_name.as_deref(), Some("button"));
+        assert!(
+            rows[1]
+                .parent
+                .as_deref()
+                .unwrap_or_default()
+                .contains("root_node_id"),
+            "{:?}",
+            rows[1].parent
+        );
+        let _ = std::fs::remove_dir_all(&out);
+    }
 
     /// A minimal host: one valid root face and the conventional entry.
     /// 最小宿主：一个合法的根面与约定入口。

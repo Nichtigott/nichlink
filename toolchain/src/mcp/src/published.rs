@@ -15,16 +15,19 @@
 //! 自己的词汇交出答案：`pruning_manifest.tsv` 携带的面行（`node`、`source`、`symbol`）、
 //! `source_scope.tsv` 携带的作用域结论，以及新鲜度规则所读的 `discovery.fingerprint`。
 //!
-//! What the record does **not** carry is as load-bearing as what it does: `path`,
-//! `kind`, `registry_name`, `parent` and `parent_resolved` are derived facts, not
-//! published ones, so any answer that names a face by logical path still has to
-//! read the sources. That is why [`Publication`] is a reading of a *tree* rather
-//! than a replacement for the derivation, and why every answer built on it says
-//! which of the two it used.
-//! 记录**没有**什么与它有什么同样承重：`path`、`kind`、`registry_name`、`parent` 与
-//! `parent_resolved` 是推导出来的事实而不是发布出来的事实，因此任何按逻辑路径点名一个面的答案
-//! 仍然必须读源码。这就是为什么 [`Publication`] 是对**一棵树**的读数而不是推导的替代品，也是
-//! 为什么每一份由它构成的答案都会说出自己用的是哪一种。
+//! What the record carries changed on 2026-09-29: the pruning rows now publish the
+//! four facts the **declaration** spelled — `path`, `kind`, `registry_name` and
+//! `parent` (`-` where it named none) — so a face can be matched by logical path
+//! without re-reading its source. What is still derived is everything that needs
+//! resolution rather than spelling: the parent's `NodeId` (`parent_resolved`), the
+//! module, and the identity cross-check. That is why [`Publication`] is a reading of
+//! a *tree* rather than a replacement for the derivation, and why every answer built
+//! on it says which of the two it used.
+//! 记录携带什么，在 2026-09-29 变了：剪枝行现在发布**声明**拼出的四项事实——`path`、`kind`、
+//! `registry_name`、`parent`（未声明处为 `-`）——因此一个面可以不重读自己的源码就按逻辑路径匹配。
+//! 仍然推导的是需要**解析**而不是拼写的东西：父级的 `NodeId`（`parent_resolved`）、模块，以及身份
+//! 交叉核对。这就是为什么 [`Publication`] 是对**一棵树**的读数而不是推导的替代品，也是为什么每一份
+//! 由它构成的答案都会说出自己用的是哪一种。
 //!
 //! Never glob `target/debug/build/<pkg>-<hash>/out/`: one package measured 134
 //! hashed copies with the old ones still there, so a glob can hand back a stale

@@ -234,10 +234,11 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
 /// rest — so the tree half of a search reads the sources. The records are still
 /// read first: they are what tells this answer whether a member was built at all,
 /// and every group says which tree its rows came from.
-/// 面是按逻辑路径、`kind`、模块与 `registry_name` 匹配的，而已发布记录既不携带前两者，对后者也只有
-/// 源码——因此搜索的树那一半读源码。记录仍然先被读取：正是它告诉这份答案一个成员到底有没有被构建过，
-/// 而每个分组都会说出它的行来自哪棵树。
-const DERIVES_BECAUSE: &str = "faces are matched on logical path, kind, module and registry_name, which the published record      does not carry";
+/// 面是按逻辑路径、`kind`、模块与 `registry_name` 匹配的；已发布记录从 2026-09-29 起携带声明拼出的
+/// 这四项，但仍不携带模块，也不携带"解析不了的面"与"外部面"这两张清单——因此搜索的树那一半仍推导，
+/// 理由是它要报告的比一张表多。记录仍然先被读取：正是它告诉这份答案一个成员到底有没有被构建过，而每个
+/// 分组都会说出它的行来自哪棵树。
+const DERIVES_BECAUSE: &str = "the published record now carries a face's declared path, kind, registry_name and parent, but this answer also counts the faces the derivation cannot parse and the external ones it excludes, which only the derivation sees";
 
 /// The tree half one package contributes: the file that could not be parsed, the
 /// stale-manifest note, and the face rows the query matched.

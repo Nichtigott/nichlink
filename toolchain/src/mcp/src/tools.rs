@@ -159,12 +159,12 @@ pub(crate) fn tools() -> Vec<Value> {
              wrote. Every reply is the tree that results, so the next call can be aimed with it. A \
              **virtual workspace root** names no package and no unique owner, so a write there is \
              refused with the candidate member directories and nothing is copied or written — a \
-             write runs against a member it is the unique owner of, or it does not run.",
+             write runs against a member it is the unique owner of, or it does not run. **`fields.module` is a bare snake_case module name** (`widget`), not the logical path the tree reports: the executor names the module's directory and file, so `control::object::widget` is refused by name. Every other `fields` value is a **string**: `exports` is one export per call rather than an array, `requires` entries are spelled `capability=>provider`, and `handle_traits` entries are the **labels** the registration rule checks (a Rust path such as `crate::control::ControlHandle` is accepted here and only the parent rule refuses it later). The one non-string key is `needs_registry`, a boolean. **A request the kernel refuses comes back as an error** (`isError` true), because a request this tool cannot carry out is a tool failure rather than a fact about the tree; the read tools are the other way round and print their verdict in the body.",
             json!({"type":"object","properties":{
                 "action":{"type":"string","enum":["add","edit","rename","delete"]},
                 "node":{"type":"string","description":"edit/rename/delete: the face, by logical path or identity"},
                 "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
-                "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults"},
+                "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults. Values are strings unless noted: `module` is a bare snake_case name, `exports` one export per call, `requires` entries `capability=>provider`, `handle_traits` entries rule labels","properties":{"needs_registry":{"type":"boolean","description":"the one non-string field"}},"additionalProperties":{"type":"string"}},
                 "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},
                 "confirm":{"type":"boolean","description":"delete: must be true. A delete is the one operation whose preview a caller can step past by accident, so the request says it rather than the bridge adding it"},
                 "root":{"type":"string"}

@@ -21,7 +21,13 @@
 //! 信任它的人而言这次变化是可见的，这也正是这里写明格式的原因。
 //!
 //! The pruning column is documented where it is produced: see [`tracked_symbol`] and
-//! the three item shapes in [`PruningItem`].
+//! the three item shapes in [`PruningItem`]. Its rows carry four more columns since
+//! 2026-09-29 — `path`, `kind`, `registry_name`, `parent` — holding what the
+//! **declaration** spelled (`-` where it named none), which is why a reader can now
+//! match a face by logical path without reading the sources.
+//! 修剪列的约定写在产出它的地方：见 [`tracked_symbol`] 与 [`PruningItem`] 里的三种条目形状。
+//! 自 2026-09-29 起它的行多带四列——`path`、`kind`、`registry_name`、`parent`——内容是**声明**拼出的
+//! 词（未声明处为 `-`），因此读者现在可以不读源码就按逻辑路径匹配一个面。
 //! 修剪列的约定写在产出它的地方：见 [`tracked_symbol`] 与 [`PruningItem`] 里的三种条目形状。
 
 use std::fmt::Write as _;
@@ -30,7 +36,7 @@ use std::path::Path;
 
 use super::Node;
 use super::registry_identity::NodeId;
-use super::registry_syntax::GraftSyntax;
+use super::registry_syntax::{FaceSyntax, GraftSyntax};
 use super::static_plan::source_module_path;
 use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
@@ -41,7 +47,39 @@ pub(crate) fn write_pruning_manifest(
 ) -> Result<(), String> {
     let mut rows = Vec::new();
     visit_pruning_symbols(src, nodes, &mut rows);
-    write_rows(out_dir.join("pruning_manifest.tsv"), rows)
+    write_face_rows(out_dir.join("pruning_manifest.tsv"), rows)
+}
+
+/// The face facts the pruning manifest publishes beside each symbol.
+/// 剪枝清单在每个符号旁发布的面事实。
+///
+/// These are the words the **declaration** used, not resolved identities: `parent` is the Rust
+/// path the face spelled, so a reader that needs the parent's `NodeId` still resolves it. The
+/// three that are already typed (`kind`, `registry_name`, `path`) are published because every
+/// table-driven answer used to re-read the sources to get them.
+/// 这些是**声明**用的那些词，不是解析后的身份：`parent` 是该面拼出的 Rust 路径，因此需要父级
+/// `NodeId` 的读者仍然要解析它。已经带类型的那三个（`kind`、`registry_name`、`path`）之所以发布，
+/// 是因为每一份查表面的答案过去都要为此重读源码。
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct FaceColumns {
+    path: String,
+    kind: String,
+    registry_name: String,
+    parent: String,
+}
+
+impl FaceColumns {
+    /// The four facts as this face spells them, with `-` where it names none.
+    /// 本面拼出的四项事实，未声明的写作 `-`。
+    fn declared(face: &FaceSyntax, kind: &str) -> Self {
+        let spelled = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
+        Self {
+            path: spelled(face.string("path")),
+            kind: kind.to_owned(),
+            registry_name: spelled(face.string("registry_name")),
+            parent: spelled(face.path("parent")),
+        }
+    }
 }
 
 pub(crate) fn write_function_manifest(
@@ -118,6 +156,26 @@ pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) -> Re
     write_if_changed(&out_dir.join("graft_plan.tsv"), &output)
 }
 
+/// Write the face manifest: identity, symbol, and the four facts the declaration spelled.
+/// 写面清单：身份、符号，以及声明拼出的四项事实。
+fn write_face_rows(
+    path: impl AsRef<Path>,
+    mut rows: Vec<(NodeId, String, String, FaceColumns)>,
+) -> Result<(), String> {
+    rows.sort();
+    rows.dedup();
+    let mut output = String::from("# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\n");
+    for (id, source, symbol, columns) in rows {
+        writeln!(
+            output,
+            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}",
+            columns.path, columns.kind, columns.registry_name, columns.parent
+        )
+        .unwrap();
+    }
+    write_if_changed(path.as_ref(), &output)
+}
+
 fn write_rows(
     path: impl AsRef<Path>,
     mut rows: Vec<(NodeId, String, String)>,
@@ -166,7 +224,11 @@ fn visit_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, St
     }
 }
 
-fn visit_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, String, String)>) {
+fn visit_pruning_symbols(
+    src: &Path,
+    nodes: &[Node],
+    rows: &mut Vec<(NodeId, String, String, FaceColumns)>,
+) {
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
@@ -177,13 +239,19 @@ fn visit_pruning_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, Str
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
                 let id = super::registry_identity::package_node_id(&relative, &kind);
                 let module = source_module_path(&relative);
+                let columns = FaceColumns::declared(&face, &kind);
                 let mut found = false;
                 for item in source.lines().filter_map(parse_pruning_item) {
                     found = true;
-                    rows.push((id, relative.clone(), tracked_symbol(&module, &kind, item)));
+                    rows.push((
+                        id,
+                        relative.clone(),
+                        tracked_symbol(&module, &kind, item),
+                        columns.clone(),
+                    ));
                 }
                 if !found {
-                    rows.push((id, relative, "-".to_owned()));
+                    rows.push((id, relative, "-".to_owned(), columns));
                 }
             }
         }
