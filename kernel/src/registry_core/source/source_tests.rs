@@ -293,6 +293,35 @@ fn the_mask_fallback_keeps_the_mask() {
 /// (audit `KRN-K-17`).
 /// 修前为红：规则是"本行含 `kind:`"，于是普通绑定按它的类型名贡献了一个 kind，而取值在下一行的
 /// 声明什么都没贡献。两个方向在源码查询的输出里都看不出来（审计 `KRN-K-17`）。
+/// A function declared inside another function's body is still a declaration. The walk used to
+/// resume at the outer body's closing brace, so a chain running through a nested helper lost
+/// that node entirely: the MCP answered `no static function match` for a helper the call site
+/// named, and the helper never appeared as a definition anywhere.
+/// 声明在另一个函数体里的函数仍然是声明。遍历过去从外部函数体的闭合花括号处继续，因此经过嵌套辅助
+/// 函数的调用链会整个丢掉那个节点：MCP 对调用点点名的辅助函数答出 `no static function match`，而那个
+/// 辅助函数在任何地方都没有作为定义出现过。
+#[test]
+fn a_function_nested_in_another_function_is_indexed() {
+    let source = "fn outer() {\n    fn button<'a>(label: &'a str) -> &'a str {\n        label\n    }\n    button(\"x\")\n}\n";
+    let functions = function_symbols(source);
+    let names: Vec<&str> = functions
+        .iter()
+        .map(|function| function.name.as_str())
+        .collect();
+    assert!(names.contains(&"outer"), "{names:?}");
+    assert!(
+        names.contains(&"button"),
+        "a nested helper is a declaration too: {names:?}"
+    );
+    let button = functions
+        .iter()
+        .find(|function| function.name == "button")
+        .expect("button");
+    assert_eq!(button.line, 2, "{button:?}");
+    assert_eq!(button.end_line, 4, "{button:?}");
+    assert!(button.body.contains("label"), "{button:?}");
+}
+
 #[test]
 fn registration_kinds_are_bounded_by_the_declaration_body() {
     assert!(

@@ -241,7 +241,17 @@ pub fn function_symbols(source: &str) -> Vec<SourceFunction> {
             line,
             end_line,
         });
-        index = close;
+        // Resume **inside** the body rather than after it: a declaration nested in a function
+        // is still a declaration, and stopping at the closing brace made every nested helper
+        // invisible — a chain that ran through one lost that node, and the MCP answered
+        // `no static function match` for a name the call site carried. Descending costs a
+        // second pass over the nested text, which is why the line counter keeps its fallback
+        // arm for offsets that go backwards.
+        // 从**体内**继续，而不是从体后继续：嵌套在函数里的声明仍是声明，而在闭合花括号处停下会让每个
+        // 嵌套辅助函数不可见——经过它的调用链会丢掉那个节点，MCP 也就对调用点携带的名字答出
+        // `no static function match`。向下走会对嵌套文本多扫一遍，这也是行计数器为回退的偏移保留兜底
+        // 那一支的原因。
+        index = open + 1;
     }
     result
 }
