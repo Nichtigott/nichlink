@@ -22,11 +22,11 @@
 
 use std::path::Path;
 
-use crate::build_time::{declared_grafts, face_views, graft_plan_rows};
+use crate::build_time::{FaceView, declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
-use crate::mcp::registry::namespace;
+use crate::mcp::workspace::{self, Scope};
 
 /// The most plan rows one reply carries before it says it truncated.
 /// 一条回复在声明被截断之前最多携带的计划条目数。
@@ -34,9 +34,32 @@ const MAX_ROWS: usize = 400;
 
 /// Report every external graft plan and whether the host entry declares its slot.
 /// 报告每条外部 graft 计划，以及宿主入口是否声明了它的槽位。
+///
+/// A **virtual manifest** is answered as the workspace it is: the plans are records
+/// under a package's own `.nichlink/`, so they are read per member and grouped, with
+/// every member's status in the census above them.
+/// **虚拟清单**按它实际的样子——工作区——作答：计划是各包自己 `.nichlink/` 之下的记录，因此逐成员
+/// 读取并分组，而它们上方是每个成员的状态普查。
 pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
-    let namespace = namespace(root)?;
-    let faces = face_views(root, &namespace)?;
+    match workspace::scope(root)? {
+        Scope::Package(namespace) => {
+            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
+            grafts_body(root, &namespace, &faces, &unparsable, arguments)
+        }
+        Scope::Workspace(members) => workspace::merge(root, &members, arguments, grafts_body),
+        Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
+    }
+}
+
+/// One package's graft report, as the merged view and the single-package view both call it.
+/// 一个包的 graft 报告；合并视图与单包视图都调用它。
+pub(crate) fn grafts_body(
+    root: &Path,
+    namespace: &str,
+    faces: &[FaceView],
+    unparsable: &str,
+    arguments: &Value,
+) -> Result<String, String> {
     let limit = arguments
         .get("limit")
         .and_then(Value::as_u64)
@@ -53,8 +76,14 @@ pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
         Ok(declared) => format!("host entry {}\n", declared.entry.display()),
         Err(error) => format!("host entry unreadable ({error})\n"),
     };
-    let rows = graft_plan_rows(root, &faces, declared.as_ref().ok())?;
-    let mut output = format!("namespace {namespace}\n{entry_line}");
+    let rows = graft_plan_rows(root, faces, declared.as_ref().ok())?;
+    // The count of unparsable registration files belongs to the tree this judgement was
+    // made over: a face the derivation could not read is judged like an absent one by
+    // `graft_plan_rows`, so the reader has to be told the tree was short.
+    // 解析不了的注册面文件数属于做出这个判断所依据的那棵树：推导读不了的面在 `graft_plan_rows` 看来
+    // 与不存在的面一样，因此必须告诉读者这棵树是短的。
+    let mut output = format!("namespace {namespace}\n{unparsable}{entry_line}");
+
     if let Err(error) = &declared {
         let _ = error;
         output.push_str(

@@ -15,18 +15,44 @@ use std::path::Path;
 use crate::build_time::{FaceView, package_name};
 use nichlink_kernel::lexicon;
 
+use crate::mcp::workspace::{self, Scope};
+
 /// Report every registration face declared under the package root `root`.
 /// 报告 `root` 这个包根下声明的每个注册面。
 ///
 /// `root` is a package root, because that is what the derivation needs: the
 /// faces' identities are hashed over paths relative to the package's `src/`, and
-/// their namespace is the package's own name.
+/// their namespace is the package's own name. A **virtual manifest** names no package,
+/// so it is answered as the workspace it is: one section per member, each under its own
+/// name, with every member's status in the census above them.
 /// `root` 是包根，因为推导需要它：面的身份是对相对该包 `src/` 的路径取散列，而它们的命名空间
-/// 就是这个包自己的名字。
+/// 就是这个包自己的名字。**虚拟清单**不命名任何包，因此它按它实际的样子——工作区——作答：逐成员
+/// 一节，各自在自己的名字之下，而它们上方是每个成员的状态普查。
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
-    let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-    Ok(render_registry(&namespace, &faces, &unparsable))
+    match workspace::scope(root)? {
+        Scope::Package(namespace) => {
+            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
+            Ok(render_registry(&namespace, &faces, &unparsable))
+        }
+        Scope::Workspace(members) => {
+            let arguments = serde_json::json!({});
+            workspace::merge(root, &members, &arguments, registry_body)
+        }
+        Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
+    }
+}
+
+/// One package's registry report, as the merged view and the single-package view both
+/// call it.
+/// 一个包的注册树报告；合并视图与单包视图都调用它。
+pub(crate) fn registry_body(
+    _root: &Path,
+    namespace: &str,
+    faces: &[FaceView],
+    unparsable: &str,
+    _arguments: &serde_json::Value,
+) -> Result<String, String> {
+    Ok(render_registry(namespace, faces, unparsable))
 }
 
 /// The identity namespace this package's faces were stamped with.
@@ -64,6 +90,12 @@ pub(crate) fn namespace(root: &Path) -> Result<String, String> {
 /// override and the fallback can be tested without the process environment.
 /// 命名空间的判断；配置值作为参数传入，因此覆盖与回落都能不依赖进程环境地测试。
 ///
+/// It is `pub(crate)` because the workspace entrance asks the same question first: a
+/// configured override names one tree, so a virtual root under it is that package rather
+/// than a workspace (`workspace::scope`).
+/// 它是 `pub(crate)`，因为工作区入口先问同一个问题：配置的覆盖命名一棵树，因此它之下的虚拟根是那个
+/// 包而不是一个工作区（`workspace::scope`）。
+///
 /// The documented default is deliberately **not** a fallback here, and the
 /// asymmetry with authoring is the point: authoring *creates* a tree, so
 /// `nichlink.default` is a real answer for a project nobody has built yet, while
@@ -77,7 +109,7 @@ pub(crate) fn namespace(root: &Path) -> Result<String, String> {
 /// 树。在 `nichlink.default` 之下作答会发布宿主从未编译过的身份——每个 `NodeId` 都是对命名
 /// 空间的散列——而代理会带着它们去做无法解析的 graft 记录或 trace 查找。一个它能据以行动的
 /// 拒绝（`set NICH_LINK_NAMESPACE`）胜过到处都错的身份。
-fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, String> {
+pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, String> {
     if let Some(configured) = configured {
         return Ok(configured.to_owned());
     }

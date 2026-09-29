@@ -28,8 +28,19 @@ const FRAMES_PER_FACE: usize = 5;
 /// 一个面在说出落下多少之前最多展示几个记录值或边。
 const VALUES_PER_FACE: usize = 8;
 
-/// The most lines a trace-driven report carries before it stops adding detail.
-/// trace 驱动的报告在停止追加细节之前最多携带的行数。
+/// The default number of lines a trace-driven report carries before it stops adding
+/// detail.
+/// trace 驱动的报告在停止追加细节之前最多携带的默认行数。
+///
+/// It is the default rather than the only value because a cap nothing can move is a cap
+/// nothing can test: the branch that says "detail stopped here" only runs on a report
+/// past this many lines, which a fixture cannot reach, so the entry point takes the cap
+/// as a parameter and this constant is what the tool passes
+/// ([`converge_from_trace_with`] is the parameterized body; `converge_tests` drives it
+/// with a small cap).
+/// 它是默认值而不是唯一取值，因为一个无法被移动的上限就是一个无法被测试的上限："细节到此为止"那一支
+/// 只在本报告越过这么多行时才跑，而夹具到不了，因此入口把这个上限作为参数接收，这个常数则是工具传入
+/// 的值（[`converge_from_trace_with`] 是带参数的主体；`converge_tests` 用小值驱动它）。
 const MAX_CONVERGE_LINES: usize = 200;
 
 /// How a reader reaches the per-face detail this report's **own** caps withhold.
@@ -53,10 +64,33 @@ const MORE_DETAIL: &str = "no argument raises this per-face cap; `nichlink.trace
 /// 帧是**按源文件**匹配到面的，回复里也这么写：面是声明、帧是正在活动的函数，把两者连起来的只有代码
 /// 所在的位置。这是这一步诚实的边界，而它仍然是一次大幅收敛——350 个文件的树会变成"既声明了面、又真的
 /// 跑了"的那几个文件。
+///
+/// The per-face detail cap is [`MAX_CONVERGE_LINES`]; [`converge_from_trace_with`] is the
+/// same report with the cap passed in, which is what lets a test reach the branch that
+/// says detail stopped.
+/// 逐面细节的上限是 [`MAX_CONVERGE_LINES`]；[`converge_from_trace_with`] 是同一份报告、上限由调用方
+/// 传入，正是它让测试能够到达"细节到此为止"的那一支。
 pub(crate) fn converge_from_trace(
     root: &Path,
     faces: &[FaceView],
     limit: usize,
+) -> Result<String, String> {
+    converge_from_trace_with(root, faces, limit, MAX_CONVERGE_LINES)
+}
+
+/// The trace-driven report with its per-face detail cap given by the caller.
+/// 逐面细节上限由调用方给出的 trace 驱动报告。
+///
+/// Everything but the cap is [`converge_from_trace`]'s behaviour; the sentence that
+/// reports a stopped detail block names whichever cap was in force, so the two callers
+/// cannot print a limit that is not the one they applied.
+/// 除了这个上限之外，一切行为都属于 [`converge_from_trace`]；报告"细节停止"的那句话点名当时生效的上限，
+/// 因此两个调用方都不可能打印出一个不是它们所施加的上限。
+pub(crate) fn converge_from_trace_with(
+    root: &Path,
+    faces: &[FaceView],
+    limit: usize,
+    max_lines: usize,
 ) -> Result<String, String> {
     let (path, artifact, header) = match read_verified(root)? {
         RecordedTrace::Absent(answer) | RecordedTrace::Refused(answer) => return Ok(answer),
@@ -175,7 +209,7 @@ pub(crate) fn converge_from_trace(
                     .is_some_and(|id| entry.frame_ids.contains(&id))
             })
             .collect();
-        if !locals.is_empty() && lines < MAX_CONVERGE_LINES {
+        if !locals.is_empty() && lines < max_lines {
             output.push_str(&format!("    values ({})\n", locals.len()));
             lines += 1;
             for local in locals.iter().take(VALUES_PER_FACE) {
@@ -204,7 +238,7 @@ pub(crate) fn converge_from_trace(
             .iter()
             .filter(|edge| ids.contains(&edge.from) || ids.contains(&edge.to))
             .collect();
-        if !edges.is_empty() && lines < MAX_CONVERGE_LINES {
+        if !edges.is_empty() && lines < max_lines {
             output.push_str(&format!("    edges ({})\n", edges.len()));
             lines += 1;
             for edge in edges.iter().take(VALUES_PER_FACE) {
@@ -288,7 +322,7 @@ pub(crate) fn converge_from_trace(
         output.push_str(&format!(
             "{}\n",
             withheld_uncounted(
-                MAX_CONVERGE_LINES,
+                max_lines,
                 "lines of per-face detail",
                 "lower `limit` so fewer files take the detail, or read the whole run with \
                  `nichlink.trace values: true`"

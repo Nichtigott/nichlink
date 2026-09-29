@@ -13,14 +13,14 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use crate::build_time::{GraftPlanRow, declared_grafts, graft_plan_rows};
+use crate::build_time::{FaceView, GraftPlanRow, declared_grafts, graft_plan_rows};
 use serde_json::Value;
 
 use crate::mcp::build_evidence::build_evidence;
 use crate::mcp::protocol::DEFAULT_LIMIT;
-use crate::mcp::registry::namespace;
 use crate::mcp::tree_delta::{FaceStatus, TreeDelta};
 use crate::mcp::truncation::withheld;
+use crate::mcp::workspace::{self, Scope};
 
 /// Report the face-level delta between two sides of this package.
 /// 报告本包两侧之间的面级差异。
@@ -35,11 +35,34 @@ use crate::mcp::truncation::withheld;
 /// ——自构建发布证据以来变了什么。`records: true` 把**外部 graft 记录**与源码对照：记录里存着它
 /// 写下时针对的身份，因此槽位没动而面换了身份会**悄悄**弄坏它，而文本 diff 看不见这件事。两者有意
 /// 共用同一套词汇（added/gone/re-identified）。
+///
+/// A **virtual manifest** is answered as the workspace it is: a comparison is between one
+/// package's sources and its own build evidence, so it is made per member and grouped,
+/// with every member's status in the census above them.
+/// **虚拟清单**按它实际的样子——工作区——作答：比较是一个包的源码与它自己的构建证据之间的事，因此
+/// 逐成员做出并分组，而它们上方是每个成员的状态普查。
 pub(crate) fn diff(root: &Path, arguments: &Value) -> Result<String, String> {
-    let namespace = namespace(root)?;
-    let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
+    match workspace::scope(root)? {
+        Scope::Package(namespace) => {
+            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
+            diff_body(root, &namespace, &faces, &unparsable, arguments)
+        }
+        Scope::Workspace(members) => workspace::merge(root, &members, arguments, diff_body),
+        Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
+    }
+}
+
+/// One package's comparison, as the merged view and the single-package view both call it.
+/// 一个包的比较；合并视图与单包视图都调用它。
+pub(crate) fn diff_body(
+    root: &Path,
+    namespace: &str,
+    faces: &[FaceView],
+    unparsable: &str,
+    arguments: &Value,
+) -> Result<String, String> {
     if arguments.get("records").and_then(Value::as_bool) == Some(true) {
-        return diff_records(root, &faces, &namespace, arguments, &unparsable);
+        return diff_records(root, faces, namespace, arguments, unparsable);
     }
     // The built side and its per-face verdicts come from one rule
     // (`crate::mcp::tree_delta`), which `nichlink.search` reads too: the same face must

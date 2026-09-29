@@ -71,7 +71,11 @@ pub(crate) fn tools() -> Vec<Value> {
              than one more result row, so it keeps appearing when the limit has already cut the \
              face list short. Below them the file \
              and function hits are unchanged. The tree half needs the identity namespace; a root \
-             Cargo cannot name still answers the source half and says the tree half is unavailable.",
+             Cargo cannot name still answers the source half and says the tree half is unavailable. \
+             A virtual workspace root is a root too, and it is answered as the workspace it is: \
+             every member appears with its status (`queried`, `no faces`, or `unresolvable` with \
+             the reason), each member's matching faces are grouped under it, and a member whose \
+             tree cannot be derived is named rather than hidden behind the file hits.",
             json!({"type":"object","properties":{"query":{"type":"string"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["query"]}),
         ),
         tool(
@@ -126,7 +130,12 @@ pub(crate) fn tools() -> Vec<Value> {
             "Report the registration faces this package declares, as the build derives them: \
              logical path, kind, source, and the NodeId the host compiled. Contract, admission, \
              and registration-rule data need the built snapshots and are not included. `root` is \
-             a package root; omitting it uses NICH_LINK_PACKAGE_ROOT.",
+             a package root; omitting it uses NICH_LINK_PACKAGE_ROOT. A **virtual workspace root** \
+             (a manifest with no `[package]`) names no package, so it is answered as the workspace: \
+             one section per member under that member's own package name, with a census naming \
+             every member's status above them — `queried`, `no faces` (a framework crate declares \
+             none), or `unresolvable` with the reason. Point `root` at one member for that \
+             package's own answer.",
             json!({"type":"object","properties":{"root":{"type":"string"}}}),
         ),
         tool(
@@ -170,7 +179,10 @@ pub(crate) fn tools() -> Vec<Value> {
              cut: the plan's path is always a logical path (every writer uses `registry.path_for`), \
              and with the identity absent nothing resolves a typed declaration's module, so such a \
              record is judged by the declaration rule like any other — and the reply prints the \
-             path it looked for rather than guessing.",
+             path it looked for rather than guessing. A **virtual workspace root** is answered as \
+             the workspace: a census of every member with its status, then each member's own \
+             comparison, so a member with no build evidence and a member that cannot be resolved \
+             are told apart rather than merged into one empty diff.",
             json!({"type":"object","properties":{"records":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
@@ -237,7 +249,10 @@ pub(crate) fn tools() -> Vec<Value> {
              reason rather than being skipped, and with no readable declaration the state is \
              `declaration unknown` rather than a false `not declared`. A declaration is about \
              the *slot* a plan targets, not the implementation it selects, so each row shows the \
-             plan's own target and graft next to the declaration's cut and graft. Read-only.",
+             plan's own target and graft next to the declaration's cut and graft. Read-only. A \
+             **virtual workspace root** is answered as the workspace: a census of every member \
+             with its status, then each member's own plans, since a plan is a record under one \
+             package's `.nichlink/`.",
             json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":400},"root":{"type":"string"}}}),
         ),
         tool(

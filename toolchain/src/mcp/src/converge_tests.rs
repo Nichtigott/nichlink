@@ -13,6 +13,7 @@ use serde_json::json;
 
 use super::converge;
 use crate::mcp::apply::apply;
+use crate::mcp::converge_trace::{converge_from_trace, converge_from_trace_with};
 
 /// A throwaway package with no faces.
 /// 一个没有注册面的一次性包。
@@ -219,6 +220,44 @@ fn the_values_a_run_captured_are_attached_to_the_faces_that_ran() {
     assert!(
         !reply.contains("seen_in_main") && !reply.contains("grown_in_main"),
         "a value from a frame outside every face must not be attached to one: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The per-face detail cap is a parameter whose default is the constant, so the branch
+/// that reports a stopped detail block is reachable: at the default cap this run prints
+/// its values, and at a cap of one the same run stops the detail, says it stopped, and
+/// names the cap that did it. The sentence used to have no nail at all, because reaching
+/// it took a report past the constant.
+/// 逐面细节上限是一个默认值取常数的参数，因此"报告细节停止"的那一支是可达的：在默认上限下这次运行会
+/// 打印它的值，而在上限为 1 时同一次运行停止细节、说出它停了，并点名是哪道上限做的。那句话过去完全
+/// 没有钉子，因为要到达它需要一份越过常数的报告。
+#[test]
+fn the_per_face_detail_cap_says_when_it_stopped_and_names_the_cap() {
+    let (root, name) = package("trace-detail-cap");
+    recorded_run(&root, &name, &name);
+    let faces = crate::build_time::face_views(&root, &name).expect("faces derive");
+    let full = converge_from_trace(&root, &faces, 40).expect("the report renders");
+    assert!(
+        full.contains("values (2)"),
+        "at the default cap this run's values print: {full}"
+    );
+    assert!(
+        !full.contains("lines of per-face detail"),
+        "this run does not reach the default cap, so the sentence must be absent: {full}"
+    );
+    let capped = converge_from_trace_with(&root, &faces, 40, 1).expect("the report renders");
+    assert!(
+        !capped.contains("values ("),
+        "the cap must stop the detail, not only label it: {capped}"
+    );
+    assert!(
+        capped.contains("lines of per-face detail withheld at the limit of 1"),
+        "the sentence names the cap that did it: {capped}"
+    );
+    assert!(
+        capped.contains("the exact count is not computed"),
+        "a stopped block was never counted, and the sentence says so: {capped}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

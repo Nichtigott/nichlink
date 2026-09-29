@@ -13,7 +13,12 @@
 //! annotates each with that build's verdict; `nichlink.diff` states the face-level
 //! delta between those two sides,
 //! and `nichlink.trace` reads a recorded trace artifact and answers what actually
-//! ran, refusing an artifact that describes a different tree. Contract, admission,
+//! ran, refusing an artifact that describes a different tree. A **workspace root** is a
+//! root too: it is a virtual manifest with no identity namespace of its own, so the tree
+//! tools enumerate its members through `cargo metadata`, give each one its own context,
+//! and answer grouped by package — every member present with its status, and a member
+//! Cargo cannot resolve named with its reason rather than dropped (`workspace.rs` is that
+//! entrance). Contract, admission,
 //! and registration-rule fields are still absent: those need a loaded registry,
 //! not a source scan.
 //! 五个工具索引 Rust 源码文本；其余工具用非源码文本的证据作答。`nichlink.registry` 报告**构建**
@@ -70,6 +75,9 @@ mod apply_target;
 
 #[path = "resolve.rs"]
 mod resolve;
+
+#[path = "workspace.rs"]
+mod workspace;
 
 #[path = "preview.rs"]
 mod preview;
