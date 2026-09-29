@@ -72,11 +72,11 @@ required-features = ["dev-supervisor", "studio"]
 
 # Dependencies merged from the seven execution surfaces.
 [dependencies]
-nichlink-kernel = { path = "../kernel", version = "0.1.6", features = ["syntax"] }
+nichlink-kernel = { path = "../kernel", version = "0.2.0", features = ["syntax"] }
 proc-macro2 = { optional = true, version = "1", features = ["span-locations"] }
 serde_json = { version = "1", optional = true }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true}
-nichlink-macro = { optional = true, path = "../macro", version = "0.1.6" }
+nichlink-macro = { optional = true, path = "../macro", version = "0.2.0" }
 petgraph = { version = "0.8", optional = true }
 tracing = { version = "0.1", optional = true }
 inventory = { version = "0.3.24", optional = true }

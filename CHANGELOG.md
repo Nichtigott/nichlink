@@ -68,15 +68,46 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 
 ### Changed
 
-- **Batch 1 of the publish-surface merge: the kernel is `kernel/` and its library is
-  `nichlink_kernel`.** The directory `core/` became `kernel/`, the package `nichlink-core`
-  became `nichlink-kernel`, and the library `nichlink` became `nichlink_kernel`, so the
-  historical three-role name (`nichlink` was the project, one binary and the kernel library)
-  is down to two. Every code reference, manifest requirement, gate site, publishing table,
-  CI line and live-document anchor moved with it in one commit; the seven execution surfaces
-  are still separate crates (that is batch 2), and the published 0.1.x names stay frozen.
-  The old→new mapping and the discriminative predicates are in
-  `docs/audit-2026-09-28/audit-merge-batch1-spec.md`.
+- **The publish surface is three crates now.** Batch 1 renamed the kernel (`core/` → `kernel/`,
+  `nichlink-core` → `nichlink-kernel`, library `nichlink` → `nichlink_kernel`); batch 2 merged the
+  seven thin execution surfaces into one crate, `nichlink-toolchain` (library `nichlink_toolchain`).
+  Nine published names became three: **`nichlink-kernel`, `nichlink-macro`, `nichlink-toolchain`**.
+  发布面现在是三个 crate：批 1 改了内核名（`core/` → `kernel/`、`nichlink-core` →
+  `nichlink-kernel`、库 `nichlink` → `nichlink_kernel`）；批 2 把七个薄执行面合并为一个 crate
+  `nichlink-toolchain`（库 `nichlink_toolchain`）。已发布的九个名字变成三个：**`nichlink-kernel`、
+  `nichlink-macro`、`nichlink-toolchain`**。
+
+- **Host usage.** A host writes `[dependencies] nichlink-toolchain` +
+  `[build-dependencies] nichlink-toolchain`, calls `nichlink_toolchain::runtime::host!();` at its
+  crate root, and its thin `build.rs` calls `nichlink_toolchain::build_time::run()`. The optional
+  backends stay behind features (`wasm`, `process-tools`, `node-graph`, `authoring`,
+  `prototype-fixtures`, `dev-supervisor`); `build_time`/`runtime` are on by default.
+  宿主用法：`[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`，
+  crate 根部调用 `nichlink_toolchain::runtime::host!();`，薄 `build.rs` 调用
+  `nichlink_toolchain::build_time::run()`。可选后端留在特性后（`wasm`、`process-tools`、
+  `node-graph`、`authoring`、`prototype-fixtures`、`dev-supervisor`）；
+  `build_time`/`runtime` 默认开启。
+
+- **Yank plan for the old names.** After `0.2.0` resolves on the index and
+  `tools/nichlink-publish --verify-publish --verify-consumers` is green, the eight merged-away
+  names are yanked at their last published version (`0.1.6`): `nichlink-core`,
+  `nichlink-run-method`, `nichlink-build-method`, `nichlink-debug-method`, `nichlink-plugin-host`,
+  `nichlink-studio`, `nichlink-mcp`, `nichlink-cli`. **`nichlink-macro` is kept** (it never merged).
+  The executable command list, in order, is in `docs/merge-batch3-publish.md`.
+  旧名 yank 计划：`0.2.0` 在 index 上可解析、且 `tools/nichlink-publish --verify-publish
+  --verify-consumers` 绿之后，把八个已合并掉的名字按它们最后发布的版本（`0.1.6`）yank：
+  `nichlink-core`、`nichlink-run-method`、`nichlink-build-method`、`nichlink-debug-method`、
+  `nichlink-plugin-host`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`。**`nichlink-macro`
+  保留**（它没有被合并）。可按序执行的命令清单见 `docs/merge-batch3-publish.md`。
+
+- **Known leftover.** Batch 2's six in-module test files (25 `#[test]` functions, the `(b)` class)
+  are **not** wired back yet: the tolerant arm of `__control_object!` cannot be reached from inside
+  the merged crate, so those files stay in their module trees (49 of the 74 `#[test]` functions did
+  come back). The diagnosis and the two candidate fixes are in
+  `docs/b3-registration-diagnosis.md`.
+  **已知遗留**：批 2 的六个模块内测试文件（25 个 `#[test]`，即 `(b)` 类）**尚未接回**：合并后的
+  crate 内部到达不了 `__control_object!` 的宽容 arm，因此它们仍留在各自模块树里（74 个 `#[test]`
+  中有 49 个已接回）。诊断与两条候选修法见 `docs/b3-registration-diagnosis.md`。
 
 ## [0.1.6] — unreleased
 
