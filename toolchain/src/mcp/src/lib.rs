@@ -108,6 +108,9 @@ mod published;
 #[path = "ownership.rs"]
 mod ownership;
 
+#[path = "affected.rs"]
+mod affected;
+
 #[path = "preview.rs"]
 mod preview;
 

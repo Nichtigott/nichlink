@@ -21,6 +21,24 @@ use serde_json::Value;
 use crate::mcp::source_index::{display_list, load_sources};
 use crate::mcp::truncation::withheld;
 
+/// Whether a labelled source looks like a test file, by this reader's own convenience rule.
+/// 一个已标注的源码看起来是不是测试文件，按这个读取方自己的便利规则判定。
+///
+/// Not the conventions gate's rule and not a judgement about placement: the bridge answers from
+/// text and has to name the files a reader would run, so it reads the three spellings a test
+/// file has in this repository — a `tests/` directory, a `_tests.rs` sibling, or `#[test]` in
+/// the file itself.
+/// 不是 conventions 门禁那条规则，也不是对位置的判断：桥从文本作答，必须点名读者会去跑的那些文件，因此它
+/// 读本仓里测试文件的三种拼法——`tests/` 目录、同级 `_tests.rs`、或文件里自带 `#[test]`。
+fn looks_like_a_test(label: &str, source: &str) -> bool {
+    // `#[cfg(test)]` is deliberately not a test: a production file that mounts its own test
+    // module carries it, and listing that file would tell a reader to run the code under test.
+    // `#[test]` is, because a file declaring tests runs them.
+    // 有意不把 `#[cfg(test)]` 当成测试：挂着自家测试模块的生产文件就带着它，而把它列出来等于叫读者去跑
+    // 被测代码本身。`#[test]` 算，因为声明了测试的文件会跑那些测试。
+    label.contains("/tests/") || label.ends_with("_tests.rs") || source.contains("#[test]")
+}
+
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     // Two bounds, because this answer is the one that grows without limit: the
     // measurement in the module doc above is the failure they exist against.
@@ -163,6 +181,67 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             ));
         }
         output.push_str(&format!("  callees: {}\n", display_list(&function.calls)));
+        // Which tests reference this definition: a name that a test file calls is covered by
+        // that file, and a reader deciding what to run needs the file rather than the caller
+        // list it already has. The rule for "a test file" is this reader's convenience — a
+        // `tests/` directory, a `_tests.rs` sibling, or a file that declares `#[test]` itself —
+        // and not the conventions gate's, which the bridge cannot use and which judges placement
+        // rather than what a file does.
+        // 哪些测试引用了这个定义：某个测试文件调用的名字就由那个文件覆盖，而"该跑什么"的读者要的是文件名，
+        // 不是他已经拿到的调用者清单。"测试文件"的判据是这个读取方的便利规则——位于 `tests/` 目录、同级的
+        // `_tests.rs`、或文件里带 `#[test]`——不是 conventions 门禁的那条：桥用不了它，而且它判的是位置
+        // 而不是文件在做什么。
+        let mut tests = labelled
+            .iter()
+            .filter(|(test_label, candidate)| {
+                looks_like_a_test(test_label, &candidate.source)
+                    && candidate.functions.iter().any(|caller| {
+                        caller
+                            .calls
+                            .iter()
+                            .any(|call| call == &name || call.ends_with(&suffix))
+                    })
+            })
+            .map(|(test_label, _)| test_label.clone())
+            .collect::<Vec<_>>();
+        tests.sort();
+        tests.dedup();
+        if !tests.is_empty() {
+            output.push_str(&format!(
+                "  tests: {}\n",
+                display_list(&tests[..tests.len().min(CALLERS)])
+            ));
+        }
+        if arguments.get("source").and_then(Value::as_bool) == Some(true)
+            && let Some((_, file)) = labelled.iter().find(|(file_label, _)| file_label == label)
+        {
+            // The definition's own span, capped by this tool's own constant and declared
+            // through the one truncation outlet: a reader who asked for source gets source, and
+            // one who asked for a summary keeps the summary.
+            // 定义自己的那一段，由本工具自己的常数设上限、并走那个唯一的截断出口：要源码的读者拿到源码，
+            // 要摘要的读者仍然拿到摘要。
+            const SOURCE_LINES: usize = 60;
+            let lines = file.source.lines().collect::<Vec<_>>();
+            let first = function.line.saturating_sub(1);
+            let last = function.end_line.min(lines.len());
+            let shown = last.saturating_sub(first).min(SOURCE_LINES);
+            output.push_str("  source:\n");
+            for line in &lines[first..first + shown] {
+                output.push_str(&format!("    {line}\n"));
+            }
+            if last.saturating_sub(first) > shown {
+                output.push_str(&format!(
+                    "  {}\n",
+                    withheld(
+                        last - first - shown,
+                        last - first,
+                        SOURCE_LINES,
+                        "lines",
+                        "pass `path` and use `nichlink.read` for the whole file"
+                    )
+                ));
+            }
+        }
     }
     if total > limit {
         output.push_str(&format!(

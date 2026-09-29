@@ -45,6 +45,7 @@
 use serde_json::{Value, json};
 use std::path::Path;
 
+use crate::mcp::affected::affected;
 use crate::mcp::apply::apply;
 use crate::mcp::build_evidence::explain;
 use crate::mcp::callgraph::callgraph;
@@ -107,7 +108,7 @@ pub(crate) fn tools() -> Vec<Value> {
              **virtual workspace root** is answered as the workspace: a named `path` is answered \
              by the member that owns it, and without one every member is asked and its answer \
              grouped under it, with `tree unavailable (reason)` where a member could not answer.",
-            json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"root":{"type":"string"}},"required":["function"]}),
+            json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"source":{"type":"boolean","description":"also print each definition's own lines (capped, declared through the truncation outlet)"},"root":{"type":"string"}},"required":["function"]}),
         ),
         tool(
             "nichlink.read",
@@ -444,6 +445,20 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"node":{"type":"string"},"trace":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
         tool(
+            "nichlink.affected",
+            "Which tests a set of changed files reaches: for each path, the definitions it holds and \
+             the test files that call any of them, by the same source index every other tool reads. \
+             This is the question a reader asks before running anything, and it is static — it names \
+             what to run, never that a test fails. `files` is an array of workspace paths. A file no \
+             test mentions is reported as such rather than as an empty list, because the smallest \
+             honest answer there is the owning package's suite. The test-file rule is this \
+             bridge's own convenience (a `tests/` directory, a `_tests.rs` sibling, or a file that \
+             declares `#[test]` itself), not the conventions gate's placement rule, which the \
+             bridge cannot use. A **virtual workspace root** answers from the member each path \
+             lives in and prefixes the listed tests with that member's directory.",
+            json!({"type":"object","properties":{"files":{"type":"array","items":{"type":"string"}},"root":{"type":"string"}},"required":["files"]}),
+        ),
+        tool(
             "nichlink.verify",
             "Run the kernel's registration validation over this package and report the tree delta the \
              run just published. It drives the same entry the CLI's `check` drives, so a verdict here \
@@ -508,6 +523,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.impact", impact),
     ("nichlink.usages", usages),
     ("nichlink.converge", converge),
+    ("nichlink.affected", affected),
     ("nichlink.verify", verify),
 ];
 
