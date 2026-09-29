@@ -131,7 +131,13 @@
    夹具 + 删掉 filter 即翻红的变异反证）。台账 `audit-report.md` 里三处原文可查：`:1770`、`:1790`、`:1803`
    ——我引的是**更早的 t51 记录**（"仍未修"）而**没往下读到 t11 的补证** ✗ ⇒ 该条**已闭环** ✓。
    **真正还开着的**：① `render_requirements` 的**破坏性半**（0.1.x 约束下按裁定 (b) 留的薄包装 + 严格兄弟
-   `try_render_requirements`；**0.2.0 这条破坏性版本线已开** ⇒ 可用 `#[deprecated]` 收掉那半，作 0.2.1 落地）；
-   ② `LGC-LG-27` 的**验证厚度**（修复已由源码阅读确认，但无夹具无变异 ⇒ 补上即闭环）；④ `N-6`（studio 6 条
-   作者钉子里 4 条是 `include_str!` 文本断言）；⑤ `N-7`（缺"渲染出 12 行"这条**行为**钉子）；⑥ `N-8`
-   （**已闭环** ✓：判据已成文进 `AGENTS.md` §Verify，台账 §14.3 那行已按惯例标注关闭 ✓）。
+   `try_render_requirements`；**0.2.0 这条破坏性版本线已开** ⇒ 已加 `#[deprecated]`，效果自 0.2.1 起对使用者
+   可见 ✓）；② `LGC-LG-27` 的**验证厚度**（**已闭环** ✓，2026-09-29：作者的两条钉子在位 + 本次补做**变异反证**
+   ——把 `authored.runtime_checks.declared()` 守卫改成恒真 ⇒ `the_declared_rule_is_one_place_for_the_conditional_fields`
+   FAILED（`left: []` / `right: [FiniteNumber]`），还原后 hash 一致；台账 t34 表那行已按惯例标注 ✓）；
+   ④ `N-6`（studio 6 条作者钉子里 4 条是 `include_str!` 文本断言）；⑤ `N-7`（**已闭环** ✓，2026-09-29：
+   新增 `the_inspector_draws_every_row_it_lists` 这条**真渲染**钉子 + 三态变异证据，提交 `1320cd2` ✓）；
+   ⑥ `N-8`（**已闭环** ✓：判据已成文进 `AGENTS.md` §Verify，台账 §14.3 那行已按惯例标注关闭 ✓）；
+   ⑦ 收尾轮另外三项：`render_requirements` 与无特性构建的两条已闭合（提交 `41b2944` ✓）、**⑦e**（`--all-features`
+   的 clippy 面从 101 收干净：根部两处 glob 撞名加显式再导出、`mcp` 的无效 glob 删掉、`module_inception`
+   在 shims 钉住的路径旁就地豁免，并把该面写进 §Verify ✓，提交 `395dffd` ✓）。

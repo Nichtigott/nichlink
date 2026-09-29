@@ -1986,7 +1986,7 @@ t14 量化了「一次版本线推进」的代价：**动 13 个文件、同步 
 | 判定对象 | 判定 | 怎么证的 |
 | --- | --- | --- |
 | `LGC-LG-04`（t26） | **证实** | 自建 5 形态夹具（空锁未知 schema / 记录后表头 / 拼错 / 重复 / 空值）全拒 + 2 条正控可读；变异 `schema_matches` 恒真 → 作者钉子与探针同时红（M1b） |
-| `LGC-LG-27`（t26） | **部分证实** | 源码读到 `if !authored.runtime_checks.is_empty() { self.runtime_checks = authored.runtime_checks; }`（与 `flow` 同规则）；未自建 `RuntimeCheckSpec` 夹具、未变异 |
+| `LGC-LG-27`（t26） | **部分证实 → 2026-09-29 补齐** ✓ | 源码读到 `if authored.runtime_checks.declared() { self.runtime_checks = authored.runtime_checks; }`（与 `flow` 同规则；`t84` 起这条规则由 `declaration/owned.rs` 的 `Declared` trait 统一表达）；**复核当时未自建 `RuntimeCheckSpec` 夹具、未变异**。2026-09-29 收尾轮补做：作者的钉子已在位——`kernel/tests/b4_core_pins.rs` 的 `merging_an_authored_snapshot_keeps_the_authored_runtime_checks`（声明过则赢）与 `the_declared_rule_is_one_place_for_the_conditional_fields`（作者侧沉默 ⇒ 保留编译期取值；声明过 ⇒ 作者赢，两半都断言）；**变异反证**：把守卫改成 `if true`（恒真）⇒ `the_declared_rule_is_one_place_for_the_conditional_fields` **FAILED**（`a silent author side keeps the compiled checks`，`left: []` / `right: [FiniteNumber]`），还原后 sha256 一致（`6e218294a2d3b4fe`）且该文件 10 条全绿 ✓ |
 | `LGC-LG-28`（t26/t32） | **证实** | 同源 `requirement_item`：published 有损返回、strict 报 Err、validator 报 Err；`parse_requirements_owned` 与 `git show HEAD:` 逐字同签名 |
 | `LGC-LG-30`（t26） | **证实（两半）** | `ControlHandle<u8, u16>` → 单标签；变异 tokens.rs 半边 → 作者单测红（M3a），变异 parse.rs 半边 → 作者钉子与探针同时红（M3b） |
 | `KRN-C-02`（t26） | **证实** | `CallSite`/`CallEdge` 两句文档与 finding 的 fix_hint 逐句对上，探针读源码断言两句都在 |
