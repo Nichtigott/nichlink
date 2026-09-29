@@ -49,12 +49,12 @@
 //! ```
 //!
 //! This fence is the pin for audit `LGC-LG-14`: refusing `linked` (or moving that
-//! arm to `$crate::call_evidence::submit!`) turns it — and every
+//! arm to `$crate::submit!`) turns it — and every
 //! `external_object!` in the tree, 36 references including
 //! `run_method/tests/external_*.rs` — into a compile failure, because `linked` is
 //! the default this macro injects rather than a value nobody writes.
 //! 这道围栏是审计 `LGC-LG-14` 的钉子：拒绝 `linked`（或把那条臂改成
-//! `$crate::call_evidence::submit!`）会让它——以及树里每一处 `external_object!`，共 36 处引用，
+//! `$crate::submit!`）会让它——以及树里每一处 `external_object!`，共 36 处引用，
 //! 含 `run_method/tests/external_*.rs`——变成编译失败，因为 `linked` 是这个宏注入的**默认值**，
 //! 而不是没人手写的取值。
 
@@ -260,7 +260,7 @@ macro_rules! __submit_registration {
     // 同一份源码的 release 构建会把这个 arm 编译掉。
     (debug; $registration:ident) => {
         #[cfg(debug_assertions)]
-        $crate::call_evidence::submit! { $registration }
+        $crate::submit! { $registration }
     };
     // Any other ident is a misspelling, and naming the three valid values here
     // beats the bare "no rules expected" error a missing arm produces inside a

@@ -13,10 +13,10 @@
 
 use std::marker::PhantomData;
 
-use nichlink_toolchain::runtime::NodeId as SurfaceNodeId;
-use nichlink_toolchain::runtime::registry_core::identity::NodeId as SurfaceKernelNodeId;
 use nichlink_kernel::identity::NodeId as OfficialNodeId;
 use nichlink_kernel::registry_core::identity::NodeId as KernelNodeId;
+use nichlink_toolchain::runtime::NodeId as SurfaceNodeId;
+use nichlink_toolchain::runtime::registry_core::identity::NodeId as SurfaceKernelNodeId;
 
 /// The same identity, reached four ways: module path, kernel module page, the
 /// surface's flat re-export, and the surface's kernel module path.
@@ -111,7 +111,8 @@ fn the_plugin_module_pages_still_resolve() {
     let _: PhantomData<nichlink_kernel::plugin::slot::PluginChannel> = PhantomData;
     let _: PhantomData<nichlink_kernel::plugin::trust::PluginTrustPolicy> = PhantomData;
     let _: PhantomData<nichlink_toolchain::runtime::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::plugin::graft_document::GraftPlanDocument> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::runtime::plugin::graft_document::GraftPlanDocument> =
+        PhantomData;
     let _: PhantomData<nichlink_toolchain::runtime::plugin::trust::PluginTrustError> = PhantomData;
 }
 
@@ -128,9 +129,12 @@ fn the_runtime_and_locals_pages_still_resolve() {
     let _: PhantomData<nichlink_toolchain::runtime::runtime::RuntimeValue> = PhantomData;
     let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::CallTrace> = PhantomData;
     let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalId> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalKind> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalValue> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::Observation> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalKind> =
+        PhantomData;
+    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalValue> =
+        PhantomData;
+    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::Observation> =
+        PhantomData;
 }
 
 /// The exported macro vocabulary keeps resolving under its public names, and
@@ -142,15 +146,26 @@ fn the_runtime_and_locals_pages_still_resolve() {
 fn the_public_macro_names_still_resolve() {
     #[allow(unused_imports)]
     use nichlink_toolchain::runtime::{
+        external_object, face_fields, face_fields_mirror, host, static_graft_plan,
+    };
+    #[allow(unused_imports)]
+    use nichlink_toolchain::{
         __admission, __assert_impls, __control_object, __external_object, __face_string_or,
         __face_ty_name_or, __face_ty_or, __face_value_or, __flow, __flow_provider, __flow_select,
         __nichlink_object, __plugin, __registration_face, __stable_name, __string_list,
         __submit_registration,
     };
+    // The plan and tracing macros are `#[macro_export]`, so an external caller names them at the
+    // crate root — the same hoisting that makes `__control_object!` a root path.
+    // 计划与追踪宏是 `#[macro_export]`，因此外部调用者按 crate 根寻址——与 `__control_object!`
+    // 被提升到根是同一件事。
+    // The pin is that these names *resolve*; whether this test calls each one is not the point,
+    // which is what the sibling compatibility blocks already say with the same attribute.
+    // 这条钉子钉的是这些名字**能解析**；本测试是否逐个调用它们不是重点——旁边那几块兼容钉子
+    // 用同一个属性表达的就是这件事。
     #[allow(unused_imports)]
-    use nichlink_toolchain::runtime::{
-        application, external_object, face_fields, face_fields_mirror, graft_plan, host,
-        static_graft_plan, trace_call, trace_call_result, trace_consume, trace_transform,
+    use nichlink_toolchain::{
+        application, graft_plan, trace_call, trace_call_result, trace_consume, trace_transform,
         trace_value,
     };
     assert_eq!(

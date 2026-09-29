@@ -22,9 +22,9 @@ impl nichlink_toolchain::runtime::PartsContract for ProbeParts {
 /// No `handle:` field: this is the arm that defaults the handle to `kind`.
 /// 没有 `handle:` 字段：这正是把 handle 默认为 `kind` 的那个 arm。
 mod probe {
-    use super::{ProbeParts, ProbePreset};
+    use crate::{ProbeParts, ProbePreset};
 
-    nichlink_toolchain::runtime::__control_object! {
+    nichlink_toolchain::__control_object! {
         collector: development,
         kind: ProbeFace,
         preset: ProbePreset,

@@ -38,3 +38,17 @@ pub use crate::runtime::{
     NodeId, Observation, SourceLocation,
 };
 pub use mir::{CallEvidence, CallRelation, MirCall, MirGraph, MirLocal, UnifiedCallGraph};
+
+// The collector probe declares its own face and then collects *this crate's* opted-in
+// declarations, so it has to run inside the crate whose registry is being read — as an
+// integration test it would collect the test crate's registry instead. Its macro invocation is
+// the strict arm (both fields, comma-separated), and the strict arm's path call goes to a
+// hand-written macro, so from inside the crate it reaches the chain — the thing the tolerant arm
+// cannot do in-crate (see `docs/b3-registration-diagnosis.md`).
+// 采集探针先声明自己的面，再采集**本 crate** 中已选择加入的声明，因此必须运行在被读取注册表的那个
+// crate 内部——作为集成测试会去读测试 crate 的注册表。它的宏调用是严格那一支（两个字段、全逗号），
+// 而严格分支的路径调用是手写宏，因此它在 crate 内部能到达宏链——宽容分支恰恰做不到这一点
+// （见 `docs/b3-registration-diagnosis.md`）。
+#[cfg(test)]
+#[path = "../tests/collector_integration.rs"]
+mod collector_integration;

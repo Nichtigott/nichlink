@@ -139,6 +139,33 @@ name = "studio_launch"
 path = "tests/studio_launch.rs"
 required-features = ["prototype-fixtures"]
 
+# The six files that arrived in batch 2 without a target (they were left inside their module
+# trees, where the macro chain's tolerant arm cannot be reached from inside the crate). They are
+# integration tests now: as external callers they reach that arm the way every other
+# `runtime_external_*` target does, which is what the audit's `(b)` residue needed.
+# 批 2 里没能接上 target 的六个文件（它们被留在各自模块树中，而宏链的宽容分支在 crate 内部
+# 到达不了）。现在它们是集成测试：作为外部调用者，它们与其他 `runtime_external_*` target 一样
+# 能到达那个分支——这正是审计 `(b)` 遗留所需要的。
+[[test]]
+name = "runtime_face_arm_defaults"
+path = "tests/runtime_face_arm_defaults.rs"
+
+[[test]]
+name = "runtime_face_fields"
+path = "tests/runtime_face_fields.rs"
+
+[[test]]
+name = "runtime_face_preset_parts"
+path = "tests/runtime_face_preset_parts.rs"
+
+[[test]]
+name = "runtime_kind_only_registry_name"
+path = "tests/runtime_kind_only_registry_name.rs"
+
+[[test]]
+name = "runtime_path_compat"
+path = "tests/runtime_path_compat.rs"
+
 [[example]]
 name = "scale_audit"
 path = "examples/scale_audit.rs"

@@ -6,7 +6,7 @@
 /// 只写 `collector` 与 `kind`、别无其它字段的注册面：没有 `handle`，没有显式
 /// `registry_name`，也没有 `needs_registry`。
 mod kind_only {
-    nichlink_toolchain::runtime::__control_object! {
+    nichlink_toolchain::__control_object! {
         collector: development,
         kind: KindOnlyFace,
     }

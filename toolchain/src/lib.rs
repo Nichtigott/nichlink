@@ -13,6 +13,17 @@
 //! 模块里，构建入口写成 `crate::build_time::run()`。
 #![warn(missing_docs)]
 
+// The merged crate has to be able to name itself. Macros that the old per-crate layout expanded
+// into carry `::nichlink_toolchain::…` paths — they were written when every surface was its own
+// crate and the host was an external caller — and the in-crate test modules that arrived with
+// batch 2 were written the same way. Without this alias those expansions fail with "cannot find
+// `nichlink_toolchain` in the crate root", which is what parked the `(b)` residue.
+// 合并后的 crate 必须能叫出自己的名字。旧的分 crate 布局下，那些宏展开出来的路径是
+// `::nichlink_toolchain::…`——写它们的时候每个执行面都是独立 crate、宿主是外部调用者——而随批 2
+// 一起进来的 crate 内测试模块也按同样方式书写。没有这个别名，那些展开会以
+// "cannot find `nichlink_toolchain` in the crate root" 失败，这正是 `(b)` 遗留当初被搁置的原因。
+extern crate self as nichlink_toolchain;
+
 // t115-mount: begin
 #[cfg(feature = "build")]
 #[path = "build_time/src/lib.rs"]

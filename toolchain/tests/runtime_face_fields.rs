@@ -3,7 +3,7 @@
 //! 手写注册面可以自由排列字段，并用 `,` 或 `;` 分隔。
 
 mod canonical {
-    nichlink_toolchain::runtime::__nichlink_object! {
+    nichlink_toolchain::__nichlink_object! {
         kind: Ordered,
         name: { zh: "有序", en: "Ordered" },
         needs_registry: true,
@@ -13,7 +13,7 @@ mod canonical {
 }
 
 mod shuffled {
-    nichlink_toolchain::runtime::__nichlink_object! {
+    nichlink_toolchain::__nichlink_object! {
         registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY;
         kind: Ordered;
         parent: nichlink_toolchain::runtime::registry_core::root_node_id("face-fields-test");
@@ -97,7 +97,7 @@ fn a_reordered_face_reports_the_authors_lines() {
 /// 分隔时才算 item，所以 `name!(…)` 与 `name![…]` 后面必须跟 `;`。别名匹配器本身
 /// 接受任何分隔符。
 mod parens {
-    nichlink_toolchain::runtime::__nichlink_object!(
+    nichlink_toolchain::__nichlink_object!(
         kind: Ordered;
         registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY;
         needs_registry: true;
@@ -154,7 +154,7 @@ mod registry_rule {
 /// 拥有注册机的目录面可以直接省略 `registry_rule:`：此时取同目录的规范规则，
 /// 而不是宽松默认值。
 mod omitted_rule {
-    nichlink_toolchain::runtime::__nichlink_object! {
+    nichlink_toolchain::__nichlink_object! {
         kind: RuleOmitted,
         name: { zh: "省略规则", en: "Rule omitted" },
         needs_registry: true,
@@ -166,7 +166,7 @@ mod omitted_rule {
 /// field, because the rule that governs it belongs to its parent.
 /// 不拥有注册机的面省略该字段时保留宽松默认值：管它的规则属于它的父级。
 mod leaf_no_rule {
-    nichlink_toolchain::runtime::__nichlink_object! {
+    nichlink_toolchain::__nichlink_object! {
         kind: LeafNoRule,
     }
 }
