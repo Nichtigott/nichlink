@@ -56,6 +56,8 @@ pub mod release_workflow;
 pub mod retired_names;
 #[path = "shims.rs"]
 pub mod shims;
+#[path = "test_shape.rs"]
+pub mod test_shape;
 #[path = "verb_table.rs"]
 pub mod verb_table;
 

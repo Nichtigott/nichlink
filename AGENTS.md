@@ -398,3 +398,56 @@ while `conventions` carries the lint along with the published crates.
 公开项：请补上文档（先英文 `///` 再中文 `///`），不要加 `#[allow(missing_docs)]`。有三个
 工作区成员设了 `publish = false`——`conventions` 与两个示例宿主；其中两个示例宿主没有开该
 lint（宿主自己的类型由宿主负责文档化），而 `conventions` 与已发布的 crate 一样带着它。
+
+## Test governance
+
+A test file lives in one of three places, decided by the module it belongs to. A
+**directory module** keeps its tests in `<dir>/tests.rs` or under `<dir>/tests/`; a
+**single-file module** keeps them in the sibling `<name>_tests.rs`. A test-only file in
+any *fourth* shape fails a gate that names its path (`conventions::test_shape`). Which
+files are judged is decided the same way the size gate decides testhood — mounted behind
+`#[cfg(test)]`, directly or through an ancestor, or living under a `tests/` directory —
+**and** carrying at least one test item, so a test-*support* module with no test of its
+own (`tree/graft_ops/fixtures.rs` is the shipped example) is not judged. The crate-root
+cargo `tests/` targets and the studio app's `tests.rs` plus its `tests/` directory are
+this same rule at the crate root.
+
+Size is a budget rather than a single ceiling. `conventions::size` counts **code lines**
+— a blank line and a comment-only line do not count, and the masking that decides what a
+line is is the kernel's own lexer, not a second text scraper — and gives each file the
+budget of its kind: `CEILING` for source and the wider `TEST_CEILING` for a file mounted
+behind `#[cfg(test)]`. Test files used to be exempt outright, and that exemption made the
+largest files in the tree the ones nothing bounded; an exception that has to be written
+down and then deleted again is `BASELINE`, and a stale entry there fails exactly as a
+newly oversized file does.
+
+`tools/nichlink-test` is the one entry point that runs *every* face: the default
+`--workspace` run, `--all-features`, an isolated `--no-default-features` run, and one face
+per `required-features` set, read from the member manifests rather than from a list that
+would drift. Each face lists its tests and then really runs them, and the script compares
+every file's written `#[test]` items against the union of the names those faces listed.
+**A grey test is a defect**: a test that no face reaches has never run once, and the
+workspace stays green while it rots. The command exits non-zero when a face fails or when
+any test is grey. `cargo test -- --list` is the inventory, so no hand-maintained test list
+is kept anywhere.
+
+测试文件只住在三种位置之一，由它所属的模块决定。**目录模块**把测试放在 `<dir>/tests.rs` 或
+`<dir>/tests/` 之下；**单文件模块**把测试放在同级的 `<name>_tests.rs`。处于任何**第四种**形状的
+仅测试文件会让门禁失败并点名它的路径（`conventions::test_shape`）。判定哪些文件的方式与尺寸门禁
+判定"是否测试"的方式相同——挂在 `#[cfg(test)]` 之后（直接挂或经由祖先挂），或位于 `tests/` 目录
+之下——**并且**至少带一个测试条目，因此自身不含测试的测试**支撑**模块（出厂树里的
+`tree/graft_ops/fixtures.rs` 就是例子）不在判定之内。crate 根的 cargo `tests/` 目标，以及 studio
+app 的 `tests.rs` 加它的 `tests/` 目录，都是同一条规则在 crate 根的形态。
+
+尺寸是预算而不是单一上限。`conventions::size` 按**代码行**计——空行与纯注释行不计，而判断"一行是
+什么"的掩码用的是内核自己的词法器，不是另写的文本刮取器——并给每个文件与其种类相称的预算：源码用
+`CEILING`，挂在 `#[cfg(test)]` 之后的文件用更宽的 `TEST_CEILING`。测试文件过去整体豁免，而这个
+豁免让树里最大的文件恰恰没有东西约束；必须写下来、缩回后必须删掉的例外是 `BASELINE`，其中过期的
+条目会像新出现的超标文件一样让门禁失败。
+
+`tools/nichlink-test` 是跑遍**每一个**面的唯一入口：默认的 `--workspace`、`--all-features`、
+隔离的 `--no-default-features`，以及每个 `required-features` 集合一个面——后者从各成员清单现读，
+而不是从一份会漂移的清单里读。每个面先列出自己的测试、再真跑，而脚本把每个文件写下的 `#[test]`
+条目与这些面列出的名字的并集对比。**灰测试就是缺陷**：任何面都到不了的测试从未跑过一次，而工作区
+会在它腐烂时保持绿色。某个面失败、或有任何测试是灰的，命令就以非零退出。清单就是
+`cargo test -- --list`，因此任何地方都不维护手写的测试清单。

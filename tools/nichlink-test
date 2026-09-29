@@ -1,0 +1,236 @@
+#!/bin/sh
+set -eu
+
+# Run every test face this workspace has, and prove that no test is hidden.
+# 跑遍本工作区拥有的每一个测试面，并证明没有测试被藏起来。
+#
+# Why one entry point instead of `cargo test --workspace`: the workspace's default
+# face lists roughly two thirds of the `#[test]` items written in the tree. The rest
+# sit behind `required-features` targets and behind non-default features, and a run
+# that only does `--workspace` reports a clean green while those never compile. The
+# face list below is derived from the manifests rather than hand-typed, because a
+# hand-typed list drifts the moment someone adds a `required-features` target.
+# 为什么要一个统一入口而不是 `cargo test --workspace`：默认面只列出树里写下的
+# `#[test]` 中的大约三分之二。其余的在 `required-features` 目标与各非默认特性之后，
+# 而只跑 `--workspace` 的运行会在那些测试从未编译的情况下报出一片干净的绿。下面的面清单
+# 从清单文件现读而不是手敲，因为手敲的清单会在有人新增 `required-features` 目标的当天漂移。
+#
+# Grey tests are defects, not trivia: a test file that no face ever reaches is a test
+# that has never run once, and the workspace stays green while it rots. This script
+# counts the `#[test]` items written per file and compares them against the union of
+# the names every face listed; a name no face printed is grey, and grey fails the run.
+# 灰测试是缺陷而不是琐事：任何面都到不了的测试文件是从未跑过一次的测试，而工作区在它腐烂时
+# 保持绿色。本脚本按文件数出写下的 `#[test]` 条目，与所有面列出的名字的并集对比；没有任何面
+# 打印过的名字就是灰的，而灰测试会让整条运行失败。
+#
+# Usage: tools/nichlink-test          # every face, every report; no partial mode
+# 用法：tools/nichlink-test           # 每个面、每份报告；没有部分模式
+#
+# The cargo invocations carry `--offline`: this checkout is developed offline, and CI
+# (which has a network) is not the caller of this script.
+# 各条 cargo 调用带 `--offline`：本检出在离线环境下开发，而 CI（有网络）不是本脚本的调用者。
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+work=target/nichlink-test
+rm -rf "$work"
+mkdir -p "$work"
+
+exit_code=0
+
+# Run one face: list it, then really run it, and record listed/passed/failed/exit.
+# 跑一个面：先列出，再真跑，记录列出的条数、通过数、失败数与退出码。
+run_face() {
+  label=$1
+  shift
+  list="$work/$label.list"
+  log="$work/$label.log"
+
+  list_exit=0
+  cargo test "$@" --offline -- --list >"$list" 2>"$work/$label.list.err" || list_exit=$?
+  listed=$(grep -c ': test$' "$list" || true)
+  [ -n "$listed" ] || listed=0
+
+  run_exit=0
+  cargo test "$@" --offline >"$log" 2>&1 || run_exit=$?
+  # libtest prints `test result: ok. 147 passed; 0 failed; …`, so the counters carry the
+  # semicolon. Matching the bare word silently reported `0 passed` for every face.
+  # libtest 打印的是 `test result: ok. 147 passed; 0 failed; …`，因此计数词带着分号。
+  # 只匹配裸词会让每一个面都静默报成 `0 passed`。
+  totals=$(awk '
+    /^test result:/ {
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^passed;?$/) passed += $(i - 1)
+        if ($i ~ /^failed;?$/) failed += $(i - 1)
+      }
+    }
+    END { print passed + 0, failed + 0 }
+  ' "$log")
+  passed=${totals%% *}
+  failed=${totals##* }
+
+  printf '%s|%s|%s|%s|%s\n' "$label" "$listed" "$passed" "$failed" "$run_exit" \
+    >>"$work/table"
+  if [ "$list_exit" -ne 0 ] || [ "$run_exit" -ne 0 ] || [ "$failed" -ne 0 ]; then
+    exit_code=1
+  fi
+  if [ "$list_exit" -ne 0 ]; then
+    echo "warning: listing face '$label' exited $list_exit; see $work/$label.list.err" >&2
+  fi
+}
+
+# The three whole-workspace faces. `--all-features` is the strict one; the
+# `--no-default-features` face is the isolated one, because some code only breaks
+# when a feature is absent (this repository shipped an `unused variable` that only
+# the feature-less build saw).
+# 三个全工作区面。`--all-features` 是严格的那一面；`--no-default-features` 是隔离的
+# 那一面，因为有些代码只在特性缺席时坏掉（本仓库出过一条只有无特性构建才看得见的
+# `unused variable`）。
+run_face default --workspace
+run_face all-features --workspace --all-features
+run_face no-default-features --workspace --no-default-features
+
+# One face per distinct `required-features` set, read from the member manifests.
+# 每个不同的 `required-features` 集合一个面，从各成员清单现读。
+awk '
+  /^\[workspace\]/ { workspace = 1; next }
+  /^\[/ { workspace = 0 }
+  workspace && /members[[:space:]]*=/ { collecting = 1 }
+  collecting {
+    line = $0
+    while (match(line, /"[^"]+"/)) {
+      print substr(line, RSTART + 1, RLENGTH - 2)
+      line = substr(line, RSTART + RLENGTH)
+    }
+    if ($0 ~ /\]/) collecting = 0
+  }
+' Cargo.toml >"$work/members"
+
+: >"$work/feature-faces"
+while IFS= read -r member; do
+  manifest=$member/Cargo.toml
+  [ -f "$manifest" ] || continue
+  package=$(awk '
+    /^\[package\]/ { package = 1; next }
+    /^\[/ { package = 0 }
+    package && /^name[[:space:]]*=/ {
+      if (match($0, /"[^"]+"/)) {
+        print substr($0, RSTART + 1, RLENGTH - 2)
+        exit
+      }
+    }
+  ' "$manifest")
+  [ -n "$package" ] || continue
+  # Each `required-features` array is one face: the feature set that target needs. Merging a
+  # crate's arrays into one face would enable features together that no single target needs,
+  # which is a different build from the one the manifest declares.
+  # 每个 `required-features` 数组是一个面：那个 target 需要的那组特性。把同一 crate 的多个数组
+  # 并成一个面，会一起打开没有任何单个 target 需要的特性，那是与清单所声明的不同的构建。
+  awk '
+    function trim(text) {
+      gsub(/^[ \t"]+/, "", text)
+      gsub(/[ \t"]+$/, "", text)
+      return text
+    }
+    /required-features[[:space:]]*=/ { collecting = 1; line = "" }
+    collecting {
+      line = line $0 " "
+      if ($0 ~ /\]/) {
+        collecting = 0
+        if (match(line, /\[[^]]*\]/)) {
+          inside = substr(line, RSTART + 1, RLENGTH - 2)
+          count = split(inside, parts, ",")
+          list = ""
+          for (i = 1; i <= count; i++) {
+            name = trim(parts[i])
+            if (name != "") list = (list == "" ? name : list "," name)
+          }
+          if (list != "") print list
+        }
+        line = ""
+      }
+    }
+  ' "$manifest" | sort -u >"$work/features"
+  while IFS= read -r features; do
+    [ -n "$features" ] || continue
+    printf '%s|%s\n' "$package" "$features" >>"$work/feature-faces"
+  done <"$work/features"
+done <"$work/members"
+sort -u "$work/feature-faces" -o "$work/feature-faces"
+
+while IFS='|' read -r package features; do
+  [ -n "$package" ] || continue
+  short=$(printf '%s' "$package" | sed 's/^nichlink-//')
+  run_face "$short+$features" -p "$package" --features "$features"
+done <"$work/feature-faces"
+
+# ---- the union of every name any face listed --------------------------------
+# ---- 任何一个面列出过的名字的并集 --------------------------------------------
+cat "$work"/*.list 2>/dev/null | grep ': test$' | sed 's/: test$//' | sort -u \
+  >"$work/union.names"
+sed 's/.*:://' "$work/union.names" | sort -u >"$work/union.leaves"
+
+# ---- grey tests: written, but reached by no face ----------------------------
+# ---- 灰测试：写了，但没有任何面到达 ------------------------------------------
+grey_total=0
+: >"$work/grey"
+find . -name target -prune -o -name '*.rs' -print | sed 's|^\./||' | sort >"$work/rust-files"
+while IFS= read -r file; do
+  # A test item is an attribute alone on its line followed by its `fn`. That is what rustfmt
+  # writes and what this tree writes; a `#[test] fn f()` packed onto one line, or a `#[test]`
+  # written inside a fixture string, is deliberately not counted here — the first would be
+  # reformatted, and the second is not a test. Names are compared as a set, so two same-named
+  # tests in one file count once; the check can therefore under-report, never over-report.
+  # 测试条目是单独占一行、后面跟着 `fn` 的属性。这是 rustfmt 写出的形态，也是本树书写的形态；
+  # 挤在一行的 `#[test] fn f()`、或写在夹具字符串里的 `#[test]` 有意不在此计数——前者会被重排，
+  # 后者不是测试。名字按集合比较，因此同一个文件里两条同名测试只算一条；本检查因此可能少报，
+  # 不会多报。
+  names=$(awk '
+    /^[[:space:]]*#\[test\][[:space:]]*$/ { pending = 1; next }
+    pending {
+      if ($0 ~ /^[[:space:]]*#\[/) next
+      if (match($0, /fn[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/)) {
+        name = substr($0, RSTART, RLENGTH)
+        sub(/fn[[:space:]]+/, "", name)
+        print name
+      }
+      pending = 0
+    }
+  ' "$file")
+  [ -n "$names" ] || continue
+  printf '%s\n' "$names" | sort -u >"$work/names"
+  written=$(wc -l <"$work/names" | tr -d ' ')
+  matched=$(grep -x -F -f "$work/union.leaves" "$work/names" | wc -l | tr -d ' ')
+  [ "$written" -le "$matched" ] && continue
+  missing=$(grep -x -F -v -f "$work/union.leaves" "$work/names" | tr '\n' ' ')
+  count=$((written - matched))
+  grey_total=$((grey_total + count))
+  printf '%s|%s|%s\n' "$file" "$count" "$missing" >>"$work/grey"
+done <"$work/rust-files"
+
+# ---- report -----------------------------------------------------------------
+# ---- 报告 -------------------------------------------------------------------
+echo "face                                      listed   passed   failed   exit"
+while IFS='|' read -r label listed passed failed run_exit; do
+  printf '%-40s %8s %8s %8s %6s\n' "$label" "$listed" "$passed" "$failed" "$run_exit"
+done <"$work/table"
+
+if [ "$grey_total" -gt 0 ]; then
+  echo
+  echo "grey tests (written but reached by no face): $grey_total"
+  while IFS='|' read -r file count missing; do
+    printf '  %s: %s not reached by any face: %s\n' "$file" "$count" "$missing"
+  done <"$work/grey"
+  exit_code=1
+fi
+
+if [ "$exit_code" -ne 0 ]; then
+  echo
+  echo "conclusion: FAIL — a face failed, a test failed, or $grey_total test(s) are grey"
+else
+  echo
+  echo "conclusion: OK — every face green and every written test reached by at least one face"
+fi
+echo "reports: $work"
+exit "$exit_code"

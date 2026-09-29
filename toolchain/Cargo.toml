@@ -132,7 +132,6 @@ required-features = ["authoring"]
 [[test]]
 name = "runtime_graft_record"
 path = "tests/runtime_graft_record.rs"
-required-features = ["authoring"]
 
 [[test]]
 name = "studio_launch"

@@ -27,7 +27,8 @@ fn the_size_ceiling_holds_except_for_the_pinned_debt() {
         .collect();
     assert!(
         new.is_empty(),
-        "new files over the {CEILING}-line ceiling; split them: {new:#?}"
+        "new files over their budget ({CEILING} code lines of source, {TEST_CEILING} for a \
+         `#[cfg(test)]` mount); split them: {new:#?}"
     );
     assert!(
         stale.is_empty(),
@@ -64,21 +65,38 @@ fn synthetic(files: &[(&str, &str)]) -> PathBuf {
     root
 }
 
-/// Filler that pushes a fixture file past [`CEILING`].
-/// 把夹具文件推过 [`CEILING`] 的填充内容。
+/// Filler that pushes a fixture past [`CEILING`] but not past [`TEST_CEILING`].
+/// 把夹具推过 [`CEILING`] 但不超过 [`TEST_CEILING`] 的填充内容。
+///
+/// The filler is *code* lines rather than comment lines: the budget counts code lines, so a
+/// file of `// filler` measures as the empty file it is, and a fixture built from comments
+/// would prove nothing. The two budgets differ on purpose, and a fixture between them is how
+/// these tests tell which budget a file was measured against.
+/// 填充的是**代码**行而不是注释行：预算按代码行计，因此一整文件 `// filler` 会度量成它本来的空
+/// 文件，用注释搭出来的夹具什么也证明不了。两份预算有意不同，而落在两者之间的夹具正是这些测试用来
+/// 分辨文件按哪份预算度量的手段。
 fn over_ceiling() -> String {
-    "// filler\n".repeat(CEILING + 10)
+    "pub fn filler() {}\n".repeat(CEILING + 10)
 }
 
-/// Location is not proof of testhood: a real module that merely sits under a `tests/`
-/// directory inside `src/` was exempt from the ceiling while the same file elsewhere was
-/// measured. The declaration that mounts it has to carry `#[cfg(test)]` — or inherit one
-/// from an ancestor, which is how this tree's nested test modules are written.
-/// 位置本身不是"仅测试"的证明：只是位于 `src/` 下某个 `tests/` 目录里的真实模块过去免于度量，
-/// 而同一个文件换个位置就会被量。挂载它的声明必须带 `#[cfg(test)]`——或者从祖先继承一个，本树
-/// 的嵌套测试模块正是这么写的。
+/// Filler that pushes a fixture past [`TEST_CEILING`] as well.
+/// 把夹具也推过 [`TEST_CEILING`] 的填充内容。
+fn over_test_ceiling() -> String {
+    "pub fn filler() {}\n".repeat(TEST_CEILING + 10)
+}
+
+/// Location is not proof of testhood, and a proof of testhood is not an exemption: a file
+/// under `src/tests/` with no `#[cfg(test)]` mount is measured against [`CEILING`], the same
+/// file mounted behind `#[cfg(test)]` is measured against the wider [`TEST_CEILING`], and a
+/// file past *that* is debt like any other. Audit G-05 stopped location from being proof; the
+/// budget model keeps the mount from being an escape.
+/// 位置不是"仅测试"的证明，而"仅测试"的证明也不是豁免：`src/tests/` 下没有 `#[cfg(test)]`
+/// 挂载的文件按 [`CEILING`] 度量，同一个文件挂在 `#[cfg(test)]` 之后则按更宽的 [`TEST_CEILING`]
+/// 度量，而越过**后者**的文件与别的文件一样是欠账。审计 G-05 让位置不再是证明；预算模型则让挂载
+/// 不再是逃生口。
 #[test]
-fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
+fn a_file_under_src_tests_is_measured_against_the_budget_its_mount_names() {
+    // 610 code lines: over `CEILING`, under `TEST_CEILING`.
     let root = synthetic(&[
         ("src/lib.rs", "pub mod tests;\n"),
         (
@@ -91,7 +109,7 @@ fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
         oversized(&root)
             .iter()
             .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
-        "nothing says this file is a test, so the ceiling measures it"
+        "nothing says this file is a test, so the source budget measures it"
     );
     let _ = fs::remove_dir_all(&root);
 
@@ -107,7 +125,23 @@ fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
         !oversized(&root)
             .iter()
             .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
-        "a `#[cfg(test)]` declaration makes it a test file"
+        "a `#[cfg(test)]` declaration moves it to the wider test budget"
+    );
+    let _ = fs::remove_dir_all(&root);
+
+    let root = synthetic(&[
+        ("src/lib.rs", "pub mod tests;\n"),
+        (
+            "src/tests.rs",
+            "#[cfg(test)]\n#[path = \"tests/zz_big.rs\"]\npub mod zz_big;\n",
+        ),
+        ("src/tests/zz_big.rs", &over_test_ceiling()),
+    ]);
+    assert!(
+        oversized(&root)
+            .iter()
+            .any(|(path, _)| path.ends_with("tests/zz_big.rs")),
+        "a test file is budgeted, not exempt: past `TEST_CEILING` it is reported"
     );
     let _ = fs::remove_dir_all(&root);
 
@@ -132,13 +166,14 @@ fn a_module_under_src_tests_needs_a_test_declaration_to_be_exempt() {
 /// The deepest chain the tree ships is six files (five mount edges): `kernel/src/lib.rs` →
 /// `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs` →
 /// `authoring/parse/flow.rs` → `authoring/parse/flow_tests.rs`. An eleven-file chain below one
-/// `#[cfg(test)]` mount must still be exempt, because a bound that merely fits today's tree
-/// reclassifies a test file as measured source the next time someone nests two more modules.
+/// `#[cfg(test)]` mount must still be read as test-only — measured against the test budget —
+/// because a bound that merely fits today's tree reclassifies a test file as measured source
+/// the next time someone nests two more modules.
 /// 递归上限是带余量的防环，而不是对本树深度的描述。本树出厂的最深链有 6 个文件（5 条挂载边）：
 /// `kernel/src/lib.rs` → `registry_core.rs` → `authoring/authoring.rs` → `authoring/parse/parse.rs`
 /// → `authoring/parse/flow.rs` → `authoring/parse/flow_tests.rs`。一条挂在单个 `#[cfg(test)]`
-/// 之下的十一个文件的链必须仍然豁免，因为"刚好装下今天的树"的上限会在下次有人再嵌两层模块时，
-/// 把一个测试文件重新归类成被测源码。
+/// 之下的十一个文件的链必须仍被读成仅测试——按测试预算度量——因为"刚好装下今天的树"的上限会在下次
+/// 有人再嵌两层模块时，把一个测试文件重新归类成被测源码。
 #[test]
 fn a_deep_mount_chain_is_still_test_only() {
     let mut files: Vec<(String, String)> = vec![(
@@ -211,11 +246,12 @@ fn an_unmounted_test_shaped_file_is_measured() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// Mounted behind `#[cfg(test)]`, the same file is exempt — under both spellings
-/// this tree uses.
-/// 挂在 `#[cfg(test)]` 之后，同一个文件重新豁免——本树使用的两种拼法都算。
+/// Mounted behind `#[cfg(test)]`, the same file moves to the wider test budget — under both
+/// spellings this tree uses — and past that budget it is reported like anything else.
+/// 挂在 `#[cfg(test)]` 之后，同一个文件转到更宽的测试预算——本树使用的两种拼法都算——而越过
+/// 那份预算时它和别的文件一样会被报出来。
 #[test]
-fn a_mounted_test_file_is_exempt() {
+fn a_mounted_test_file_is_measured_against_the_test_budget() {
     let root = synthetic(&[
         (
             "src/probe.rs",
@@ -226,7 +262,7 @@ fn a_mounted_test_file_is_exempt() {
     assert_eq!(
         oversized(&root),
         Vec::new(),
-        "a mounted `#[path]` test module is exempt"
+        "a mounted `#[path]` test module fits the wider test budget"
     );
     let _ = fs::remove_dir_all(&root);
 
@@ -237,8 +273,24 @@ fn a_mounted_test_file_is_exempt() {
     assert_eq!(
         oversized(&root),
         Vec::new(),
-        "the bare `mod tests;` form is exempt too"
+        "the bare `mod tests;` form uses that budget too"
     );
+    let _ = fs::remove_dir_all(&root);
+
+    let root = synthetic(&[
+        (
+            "src/probe.rs",
+            "#[cfg(test)]\n#[path = \"probe_tests.rs\"]\nmod probe_tests;\n",
+        ),
+        ("src/probe_tests.rs", &over_test_ceiling()),
+    ]);
+    let found = oversized(&root);
+    assert_eq!(
+        found.len(),
+        1,
+        "a test file past `TEST_CEILING` is debt, not an exemption: {found:#?}"
+    );
+    assert!(found[0].0.ends_with("src/probe_tests.rs"), "{found:#?}");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -257,23 +309,29 @@ fn the_crate_root_build_script_is_measured() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// The ceiling is the maintainer's decision, not a drift target: a file at 500
-/// lines is accepted and one past 600 is still debt. Pinned so the 2026-09-28
-/// relaxation from 450 to 600 cannot be undone or exceeded silently.
-/// 上限是维护者的决定，不是可以漂移的目标：500 行的文件被接受，超过 600 的仍是欠账。钉住它，
-/// 使 2026-09-28 从 450 到 600 的放宽不会被静默撤销或被静默越界。
+/// The ceilings are the maintainer's decision, not a drift target: 500 code lines is accepted
+/// under both, a source file past 600 is debt, and a test file is accepted up to the wider
+/// number. Pinned so the 2026-09-28 relaxation from 450 to 600 and the separate test budget
+/// cannot be undone or exceeded silently.
+/// 上限是维护者的决定，不是可以漂移的目标：500 代码行在两份预算下都被接受，超过 600 的源码文件
+/// 是欠账，而测试文件被接受到那个更宽的数字为止。钉住它，使 2026-09-28 从 450 到 600 的放宽与
+/// 独立的测试预算不会被静默撤销或被静默越界。
 #[test]
-fn the_ceiling_is_the_number_the_maintainer_set() {
+fn the_ceilings_are_the_numbers_the_maintainer_set() {
     assert_eq!(
         CEILING, 600,
         "the ratchet's ceiling is the maintainer's decision of 2026-09-28"
     );
-    let accepted = "// filler\n".repeat(500);
+    assert_eq!(
+        TEST_CEILING, 800,
+        "the test budget is its own, wider number rather than the source ceiling or an exemption"
+    );
+    let accepted = "pub fn filler() {}\n".repeat(CEILING - 100);
     let root = synthetic(&[("src/probe.rs", &accepted)]);
     assert_eq!(
         oversized(&root),
         Vec::new(),
-        "500 lines sits under a 600-line ceiling"
+        "500 code lines sits under the 600-line ceiling"
     );
     let _ = fs::remove_dir_all(&root);
 
@@ -286,18 +344,46 @@ fn the_ceiling_is_the_number_the_maintainer_set() {
     let _ = fs::remove_dir_all(&root);
 }
 
+/// The budget counts code lines, not stored lines: a blank line and a comment-only line are
+/// not code, a line of code is, and the interior of a multi-line string is the one boundary
+/// the mask does not cover.
+/// 预算按代码行而不是存储行计：空行与纯注释行不是代码，代码行是，而多行字符串的内部是掩码不覆盖
+/// 的那一处边界。
+#[test]
+fn the_budget_counts_code_lines() {
+    let text = "// comment\n/// doc\n//! module\n\nfn code() {}\n/* block\n * inside\n */\n";
+    assert_eq!(
+        code_lines(text),
+        1,
+        "only `fn code() {{}}` is code in this fixture"
+    );
+
+    let trailing = "let x = 1; // trailing comment\nlet y = 2;\n";
+    assert_eq!(code_lines(trailing), 2, "a trailing comment is not a line");
+
+    // The documented boundary: the mask blanks string literals, so the interior lines of a
+    // multi-line string are neither code nor comment.
+    // 记录在案的边界：掩码会抹掉字符串字面量，因此多行字符串的内部行既不是代码也不是注释。
+    let string = "let s = \"first\n// not a comment\nsecond\";\n";
+    assert_eq!(
+        code_lines(string),
+        2,
+        "the string's opening and closing lines are code; its interior is neither"
+    );
+}
+
 /// Every spelling rustc accepts for a `#[cfg(test)]` mount is the same mount, and the
-/// ceiling has to read all of them. Comparing the declaration against two literal
+/// budget has to read all of them. Comparing the declaration against two literal
 /// strings read `#[cfg(all(test))]` and `pub(crate) mod x;` as *not* test mounts, so a
 /// test file under either spelling was measured as source — a debt report the author
-/// cannot act on, on a file the gate had already agreed is exempt under the orthodox
-/// spelling. Audit `G-04`.
-/// rustc 接受的每一种 `#[cfg(test)]` 挂载拼法都是同一个挂载，而上限必须都能读出来。把声明与
+/// cannot act on, on a file the gate had already agreed uses the test budget under the
+/// orthodox spelling. Audit `G-04`.
+/// rustc 接受的每一种 `#[cfg(test)]` 挂载拼法都是同一个挂载，而预算必须都能读出来。把声明与
 /// 两个字面串比较，会把 `#[cfg(all(test))]` 与 `pub(crate) mod x;` 读成**不是**测试挂载，于是
-/// 这两种拼法下的测试文件被当作源码度量——在门禁已按正统拼法同意豁免的同一个文件上，报出一笔
-/// 作者无法处理的欠账。审计 `G-04`。
+/// 这两种拼法下的测试文件被当作源码度量——在门禁已按正统拼法同意使用测试预算的同一个文件上，报出
+/// 一笔作者无法处理的欠账。审计 `G-04`。
 #[test]
-fn every_spelling_of_a_test_mount_is_exempt() {
+fn every_spelling_of_a_test_mount_uses_the_test_budget() {
     let filler = over_ceiling();
     let root = synthetic(&[
         (
@@ -328,7 +414,7 @@ fn every_spelling_of_a_test_mount_is_exempt() {
 #[test]
 fn a_negative_or_conditional_cfg_is_not_a_test_mount() {
     let filler = over_ceiling();
-    for (spelling, exempt) in [
+    for (spelling, under_the_test_budget) in [
         ("#[cfg(all(test))]", true),
         ("#[cfg(all(test, feature = \"probe\"))]", true),
         ("#[cfg(test)]", true),
@@ -343,9 +429,13 @@ fn a_negative_or_conditional_cfg_is_not_a_test_mount() {
         let found = oversized(&root);
         assert_eq!(
             found.len(),
-            if exempt { 0 } else { 1 },
-            "`{spelling}` must {} the ceiling: {found:#?}",
-            if exempt { "exempt" } else { "not exempt" }
+            if under_the_test_budget { 0 } else { 1 },
+            "`{spelling}` must {} the test budget: {found:#?}",
+            if under_the_test_budget {
+                "use"
+            } else {
+                "not use"
+            }
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -387,29 +477,32 @@ fn an_unformatted_file_does_not_hide_the_ratchet() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// The claim the comment above [`declares_module`] makes, held to the code.
-/// [`declares_module`] 上面那句注释所做的断言，与实现对齐。
+/// The claim the comment above [`declared_stem`] makes, held to the code.
+/// [`declared_stem`] 上面那句注释所做的断言，与实现对齐。
 ///
 /// The branch exists for spellings rustc accepts, and the failure it guards is a *test* file
 /// measured as source: `mod  x ;` did that, because the token join left the space before the `;`
 /// in place (audit `G-07`, finding `F-2`). The pin lives here rather than in `size.rs` because a
-/// test-only file is exempt from the ceiling this gate enforces — the assertion is about a
-/// private function, and a sibling module sees it.
+/// test-only file is measured against the test budget this gate enforces — the assertion is about
+/// a private function, and a sibling module sees it.
 /// 这条分支是为 rustc 接受的拼法而存在的，而它守的失败是**测试**文件被当作源码度量：
 /// `mod  x ;` 会这样，因为那次词元连接把 `;` 前的空格留在了原地（审计 `G-07`，发现 `F-2`）。
-/// 钉子放在这里而不是 `size.rs`：仅测试文件不受本门禁执行的上限约束——断言的对象是私有函数，
+/// 钉子放在这里而不是 `size.rs`：仅测试文件按本门禁执行的测试预算度量——断言的对象是私有函数，
 /// 而兄弟模块能看见它。
 #[test]
 fn a_space_before_the_semicolon_is_the_same_declaration() {
-    assert!(declares_module("mod x;", "mod x;"));
-    assert!(declares_module("mod  x ;", "mod x;"));
-    assert!(declares_module("pub(crate) mod  x ;", "mod x;"));
+    assert_eq!(declared_stem("mod x;").as_deref(), Some("x"));
+    assert_eq!(declared_stem("mod  x ;").as_deref(), Some("x"));
+    assert_eq!(declared_stem("pub(crate) mod  x ;").as_deref(), Some("x"));
+    assert_eq!(declared_stem("pub(super) mod x;").as_deref(), Some("x"));
 }
 
-/// A longer identifier that shares the keyword's prefix is not a declaration.
-/// 仅仅与关键字同前缀的更长标识符不是声明。
+/// A longer identifier that shares the keyword's prefix is not a declaration, and neither is an
+/// inline `mod x { … }`, which mounts no file.
+/// 仅仅与关键字同前缀的更长标识符不是声明，内联的 `mod x { … }` 也不是——它不挂载任何文件。
 #[test]
 fn a_longer_identifier_is_not_the_declaration() {
-    assert!(!declares_module("modx;", "mod x;"));
-    assert!(!declares_module("module x;", "mod x;"));
+    assert_eq!(declared_stem("modx;"), None);
+    assert_eq!(declared_stem("module x;"), None);
+    assert_eq!(declared_stem("mod x {}"), None);
 }
