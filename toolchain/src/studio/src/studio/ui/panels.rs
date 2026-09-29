@@ -120,7 +120,7 @@ pub(super) fn draw_tree(frame: &mut Frame<'_>, area: Rect, app: &App, cache: &mu
     cache.tree_offset = state.offset();
 }
 
-pub(super) fn draw_details(frame: &mut Frame<'_>, area: Rect, app: &App) {
+pub(crate) fn draw_details(frame: &mut Frame<'_>, area: Rect, app: &App) {
     // One source for the rows: `App::detail_rows` also answers
     // `App::detail_field_count`, so the drawing and the keys that walk it cannot
     // disagree (audit `STU-S-02`).

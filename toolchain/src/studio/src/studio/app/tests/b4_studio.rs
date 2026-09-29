@@ -133,6 +133,68 @@ fn the_inspector_count_is_the_row_list_it_draws() {
     );
 }
 
+/// Every row the inspector lists is a row the inspector draws.
+/// 检视器列出的每一行，都是它真的画出来的行。
+///
+/// The pin above compares the model's list with itself, so a *renderer* that draws
+/// fewer rows than `detail_rows()` returns still passes it. The third consumer the
+/// audit found unguarded (`M8`: a renderer drawing 10 of 12 rows) is the frame
+/// itself, so this one renders `draw_details` into a `TestBackend` and looks for
+/// each label in the buffer — the row that never reaches the frame is the one that
+/// fails (audit `N-7`).
+/// 上面那条钉子拿模型的行清单自己比自己，因此**渲染器**少画几行它照样通过。审计发现三方一致里
+/// 没有钉子守的第三条消费者就是这一帧（`M8`：渲染器只画 12 行中的 10 行）。这一条把 `draw_details`
+/// 渲染进 `TestBackend`，再在缓冲区里逐个找标签——没画到帧上的那一行就是失败的那一行（审计 `N-7`）。
+#[test]
+#[cfg(feature = "prototype-fixtures")]
+fn the_inspector_draws_every_row_it_lists() {
+    let Some(app) = fixture_app() else {
+        return;
+    };
+    let labels = app
+        .detail_rows()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    assert!(
+        !labels.is_empty(),
+        "premise: the fixture selects a face with inspector rows"
+    );
+
+    const WIDTH: u16 = 160;
+    const HEIGHT: u16 = 48;
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(WIDTH, HEIGHT))
+        .expect("terminal");
+    terminal
+        .draw(|frame| {
+            crate::studio::studio::ui::panels::draw_details(frame, frame.area(), &app);
+        })
+        .expect("one frame");
+
+    let buffer = terminal.backend().buffer();
+    let page = buffer
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    for label in &labels {
+        assert!(
+            page.contains(label),
+            "the frame is missing the row `{label}`; drawn page:\n{page}"
+        );
+    }
+    let drawn = buffer
+        .content
+        .chunks(WIDTH as usize)
+        .filter(|row| row.iter().any(|cell| cell.symbol() != " "))
+        .count();
+    assert!(
+        drawn >= labels.len(),
+        "the inspector listed {} rows and drew {drawn} lines",
+        labels.len()
+    );
+}
+
 /// A missing file makes the editor handoff fail visibly, and the failure is
 /// returned so a success banner cannot be assigned over it.
 /// 文件缺失会让编辑器交接可见地失败，而失败作为返回值交回，因此成功横幅无法覆盖它。

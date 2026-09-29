@@ -30,7 +30,7 @@ use mark::NICH_LINK_MARK;
 mod overlay;
 use overlay::draw_overlay;
 #[path = "panels.rs"]
-mod panels;
+pub(crate) mod panels;
 use panels::{draw_brand, draw_workspace};
 mod forms;
 use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
