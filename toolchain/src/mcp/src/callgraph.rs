@@ -142,6 +142,21 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             callers_total,
             display_list(&callers[..callers_total.min(CALLERS)])
         ));
+        if callers_total == 0
+            && let Some(above) = crate::mcp::workspace::enclosing_workspace(root)
+        {
+            // Measured: asked at a member root, this census cannot see the other members — and zero
+            // callers is exactly the answer a reader takes as "nothing calls it". The note appears
+            // only at zero, so it is a warning where it matters rather than noise everywhere.
+            // 量到的：在成员根上问时这份普查看不见别的成员——而"0 个调用者"恰恰是读者会当成"没人调用它"的
+            // 答案。这句话只在 0 时出现，因此它是**该出现处的警告**，而不是到处都有的噪声。
+            output.push_str(&format!(
+                "  note  this root is the member `{}` of the workspace at {}; a caller in another \
+                 member is invisible here — ask at that root for the whole-workspace answer\n",
+                root.file_name().unwrap_or_default().to_string_lossy(),
+                above.display()
+            ));
+        }
         if callers_total > CALLERS {
             // The caller cap is this tool's own constant, not `limit`: no argument
             // raises it, so the sentence has to name the absence rather than advice a
