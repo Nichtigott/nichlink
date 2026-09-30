@@ -149,8 +149,12 @@ function fit(number, calls) {
 // `mcp-log-r<n>.jsonl` 里的一条 JSON-RPC 请求，codegraph 组把每次调用写成 `cg-log-r<n>.txt` 里的一条
 // `=== CMD:`。它们才是权威计数。
 function instrumentFrom(arm, number) {
-  const mcp = `/tmp/mcp-eval/mcp-log-r${number}.jsonl`;
-  const cg = `/tmp/mcp-eval/cg-log-r${number}.txt`;
+  // The run's directory is an environment variable so a second round writes its own evidence
+  // instead of overwriting the first round's (which is what the record quotes).
+  // 轮次目录由环境变量给出，这样第二轮写自己的证据而不会覆盖第一轮的（记录里引用的正是第一轮）。
+  const dir = process.env.NICH_MCP_EVAL_DIR || "/tmp/mcp-eval";
+  const mcp = `${dir}/mcp-log-r${number}.jsonl`;
+  const cg = `${dir}/cg-log-r${number}.txt`;
   const count = (path, test) => {
     try {
       return fs.readFileSync(path, "utf8").split("\n").filter(test).length;
@@ -165,7 +169,20 @@ function instrumentFrom(arm, number) {
   if (arm === "codegraph") {
     return `codegraph CLI ${count(cg, (line) => line.startsWith("=== CMD:"))}`;
   }
-  return `bridge ${count(mcp, (line) => line.includes('"method": "tools/call"'))}`;
+  // Two log shapes: round 1 recorded JSON-RPC frames, round 2 records one line per invocation of the
+  // new one-shot client. Both count instrument calls; the record says which run a number came from.
+  // 两种日志形态：第一轮记的是 JSON-RPC 帧，第二轮记的是新一次性客户端每次调用一行。两者数的都是"调用
+  // 自己那件仪器"的次数；记录里写明某个数字来自哪一轮。
+  // Only calls that reached the instrument count: round 2's arm also logged its own report writes,
+  // and a bookkeeping line counted as an instrument call would flatter the tool.
+  // 只数"确实打到仪器"的调用：第二轮的成员把自己的报告写入也记进了日志，而把记账行数成仪器调用会
+  // 给工具虚增分数。
+  return `bridge ${count(
+    mcp,
+    (line) =>
+      line.includes('"method": "tools/call"') ||
+      /"tool"\s*:\s*"nichlink\./.test(line)
+  )}`;
 }
 
 function report(path) {
