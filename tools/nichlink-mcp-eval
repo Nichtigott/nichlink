@@ -965,7 +965,26 @@ SCENARIOS = {
         "question": "渲染出来的报表里，条数那一行出现在哪里？这个顺序对得上 `render` 自己写下的承诺吗？",
         "answer": "不一致：`render` 的文档写明「表头、条数、然后每条一行」，而实现把 `write_count` 放在了循环之后 ⇒ 顺序错、两个调用各自都对",
         "codegraph": "能读到两个调用存在，但顺序与文档的对照要人来做",
-        "inject": [("crates/report/src/render.rs", "    write_count(&mut text, entries);\n    for entry in entries {", "    for entry in entries {")],
+        # A real order slip: the call stays, it moves after the loop. The first version deleted the
+        # call instead, which made this scenario a duplicate of the missing-call family and made its
+        # preset answer ("both calls are right, only the order is wrong") false — the round's arm
+        # caught that by measurement ("the count line never appears at all"), not by reading the plan.
+        # 真正的顺序错：调用留着，只是挪到循环之后。第一版把调用**删掉**了，于是这一关变成"漏调用"
+        # 那一族的重复，而它"两个调用都对、只有顺序错"的预设答案是假的——那轮的成员用**实测**发现了
+        # 这一点（"条数那一行根本不出现"），不是靠读题面。
+        "inject": [
+            (
+                "crates/report/src/render.rs",
+                "    write_count(&mut text, entries);\n"
+                "    for entry in entries {\n"
+                "        text.push_str(&format!(\"{}: {}\n\", entry.account, entry.amount));\n"
+                "    }",
+                "    for entry in entries {\n"
+                "        text.push_str(&format!(\"{}: {}\n\", entry.account, entry.amount));\n"
+                "    }\n"
+                "    write_count(&mut text, entries);",
+            )
+        ],
     },
     6: {
         "id": "uncovered-contract-cell",
