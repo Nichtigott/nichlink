@@ -1,0 +1,668 @@
+#!/usr/bin/env python3
+"""Build the MCP-vs-codegraph debug test project, inject one designed bug, and check it.
+
+维护者给的测试方向（原话）：「看看和 codegraph 的区别，效果是不是更好，指令执行度，debug 效率和效果
+（效率为 agent 使用我们的 mcp 改对是否使用更小的思维链，相对 codegraph 的思维链更短更高效）（效果为架构
+和代码质量更好条理更加清晰）以此作为测试方向编制测试项目，设计真实 bug，预设完美 debug 路径，测试我们的
+思维链的拟合程度」。
+
+So this tool builds a **purpose-built project** (not a mutated copy of nichlink), with **real bugs**
+designed by hand, and — the new part — a **preset ideal debug path** for each bug: the sequence of
+decisive steps that a perfect run would take, each naming the question it answers and the tool that
+answers it. The evaluation then measures how closely an agent's actual reasoning chain fits that
+path, and how long the chain was.
+
+因此本工具构建一个**专门编写的项目**（不是改 nichlink 的副本），bug 是手工设计的**真实**缺陷，而新的
+一部分是每个 bug 的**预设理想调试路径**：一次完美运行会走的那些决定性步骤，每一步点名它回答的问题以及
+回答它的工具。评测随后度量代理真实思维链对这条路径的拟合程度，以及链有多长。
+
+Commands / 子命令:
+  project <dir>          write the pristine project  / 写出原始项目
+  inject  <dir> <n>      inject designed bug n      / 注入第 n 号设计缺陷
+  check   <dir> <n>      prove the symptom appears and the documented fix restores  / 机械自证
+  plan                   print the bugs and their preset paths  / 打印缺陷与预设路径
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+# ---------------------------------------------------------------------------
+# The project: a small ledger service with a model, a store, an index, a query
+# layer and a report renderer. Written to be *real enough* that a bug in it is a
+# bug about behaviour rather than a syntax puzzle: the layers call each other, the
+# tests name behaviour, and the messages a failure prints are the strings a
+# solver has to trace back to their producer.
+# 项目：一个小型账本服务——模型、存储、索引、查询层与报表渲染器。写得**足够真实**，使其中的缺陷是关于
+# 行为的缺陷而不是语法谜题：各层互相调用、测试按行为命名，而失败打印的那句话正是解题方要回溯到产出处的
+# 字符串。
+PROJECT = {
+    "Cargo.toml": """[package]
+name = "ledger"
+version = "0.1.0"
+edition = "2024"
+""",
+    "src/lib.rs": """//! A small ledger: accounts, entries, an index, queries and a report.
+//! 一个小型账本：账户、分录、索引、查询与报表。
+
+pub mod model;
+pub mod query;
+pub mod report;
+pub mod store;
+""",
+    "src/model/mod.rs": """//! Accounts and entries.
+//! 账户与分录。
+
+pub mod account;
+pub mod entry;
+""",
+    "src/model/account.rs": """//! An account and its balance rules.
+//! 账户及其余额规则。
+
+/// One account.
+/// 一个账户。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Account {
+    /// Stable account id.
+    /// 稳定的账户 id。
+    pub id: String,
+    /// Whether the account has finished verification.
+    /// 账户是否已完成核验。
+    pub verified: bool,
+}
+
+impl Account {
+    /// Open an account.
+    /// 开一个账户。
+    pub fn open(id: &str) -> Self {
+        Self {
+            id: id.to_owned(),
+            verified: false,
+        }
+    }
+
+    /// Mark this account verified.
+    /// 把这个账户标记为已核验。
+    pub fn verify(mut self) -> Self {
+        self.verified = true;
+        self
+    }
+}
+""",
+    "src/model/entry.rs": """//! One ledger entry.
+//! 一条账本分录。
+
+/// One entry: a signed amount against an account.
+/// 一条分录：针对某个账户的一笔带符号金额。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+    /// The account this entry belongs to.
+    /// 本分录所属账户。
+    pub account: String,
+    /// The amount; negative is a debit.
+    /// 金额；负数为借方。
+    pub amount: i64,
+    /// Whether the entry carries a receipt.
+    /// 分录是否附带凭据。
+    pub has_receipt: bool,
+}
+
+impl Entry {
+    /// A new entry.
+    /// 新建一条分录。
+    pub fn new(account: &str, amount: i64, has_receipt: bool) -> Self {
+        Self {
+            account: account.to_owned(),
+            amount,
+            has_receipt,
+        }
+    }
+
+    /// Whether this entry may be posted at all.
+    /// 本分录是否允许入账。
+    ///
+    /// The rule the whole service leans on: an entry is postable when it has a
+    /// receipt, and a zero entry never is. Callers rely on the refusal, so the
+    /// check is a contract rather than a convenience.
+    /// 整个服务依赖的规则：带凭据的分录可入账，而零金额的分录一律不可。调用方依赖这个拒绝，因此这是一条
+    /// 契约而不是便利。
+    pub fn postable(&self) -> bool {
+        self.has_receipt && self.amount != 0
+    }
+}
+""",
+    "src/store/mod.rs": """//! Storage and the bucketed index.
+//! 存储与分桶索引。
+
+pub mod index;
+pub mod memory;
+""",
+    "src/store/memory.rs": """//! An in-memory store.
+//! 内存存储。
+
+use crate::model::entry::Entry;
+
+/// Entries held in memory, in insertion order.
+/// 内存中按插入顺序保存的分录。
+#[derive(Default)]
+pub struct Store {
+    entries: Vec<Entry>,
+}
+
+impl Store {
+    /// An empty store.
+    /// 空存储。
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Post one entry; `None` when the entry may not be posted.
+    /// 入账一条分录；分录不可入账时为 `None`。
+    pub fn post(&mut self, entry: Entry) -> Option<usize> {
+        if !entry.postable() {
+            return None;
+        }
+        self.entries.push(entry);
+        Some(self.entries.len() - 1)
+    }
+
+    /// Every entry, in insertion order.
+    /// 全部分录，按插入顺序。
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+}
+""",
+    "src/store/index.rs": """//! Bucketing entries by amount for reports.
+//! 按金额把分录分桶，供报表使用。
+
+/// One bucket: a half-open range of amounts.
+/// 一个桶：一段半开区间的金额。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bucket {
+    /// Inclusive lower bound.
+    /// 含下界。
+    pub low: i64,
+    /// Exclusive upper bound; `None` means unbounded.
+    /// 不含上界；`None` 表示无上界。
+    pub high: Option<i64>,
+}
+
+impl Bucket {
+    /// Whether this bucket holds an amount: at or above `low`, below `high` when it has one.
+    /// 本桶是否容纳某个金额：不小于 `low`，有上界时严格小于它。
+    pub fn contains(&self, amount: i64) -> bool {
+        if amount < self.low {
+            return false;
+        }
+        match self.high {
+            Some(high) => amount < high,
+            None => true,
+        }
+    }
+}
+
+/// The three buckets every report uses.
+/// 每份报表都用的三个桶。
+pub fn buckets() -> Vec<Bucket> {
+    vec![
+        Bucket { low: i64::MIN, high: Some(0) },
+        Bucket { low: 0, high: Some(1000) },
+        Bucket { low: 1000, high: None },
+    ]
+}
+
+/// Which bucket a bucket-list places this amount in, by name.
+/// 一组桶把这个金额放进哪个桶，按名字给出。
+pub fn bucket_of(buckets: &[Bucket], amount: i64) -> &'static str {
+    for (index, bucket) in buckets.iter().enumerate() {
+        if bucket.contains(amount) {
+            return match index {
+                0 => "debit",
+                1 => "small",
+                _ => "large",
+            };
+        }
+    }
+    "unbucketed"
+}
+""",
+    "src/query/mod.rs": """//! Queries over entries.
+//! 针对分录的查询。
+
+pub mod filter;
+pub mod summary;
+""",
+    "src/query/filter.rs": """//! Filtering entries.
+//! 过滤分录。
+
+use crate::model::entry::Entry;
+
+/// Which entries a caller wants.
+/// 调用方想要哪些分录。
+#[derive(Clone, Debug, Default)]
+pub struct Filter {
+    /// Only entries for this account, when set.
+    /// 只保留该账户的分录（若设置）。
+    pub account: Option<String>,
+    /// Only entries at or above this amount, when set.
+    /// 只保留不小于该金额的分录（若设置）。
+    pub min_amount: Option<i64>,
+    /// Only entries with a receipt, when set.
+    /// 只保留带凭据的分录（若设置）。
+    pub receipts_only: bool,
+}
+
+impl Filter {
+    /// Whether this entry passes.
+    /// 本分录是否通过。
+    pub fn matches(&self, entry: &Entry) -> bool {
+        if let Some(account) = &self.account
+            && &entry.account != account
+        {
+            return false;
+        }
+        if let Some(min) = self.min_amount
+            && entry.amount < min
+        {
+            return false;
+        }
+        if self.receipts_only && !entry.has_receipt {
+            return false;
+        }
+        true
+    }
+}
+""",
+    "src/query/summary.rs": """//! Summaries over a filtered set.
+//! 对过滤后集合的汇总。
+
+use crate::model::entry::Entry;
+use crate::store::index::{buckets, bucket_of};
+
+/// A summary of entries.
+/// 分录的汇总。
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct Summary {
+    /// Number of entries counted.
+    /// 计入的分录数。
+    pub count: usize,
+    /// Sum of the amounts.
+    /// 金额合计。
+    pub total: i64,
+    /// How many landed in each bucket, by bucket name.
+    /// 每个桶各落了多少条，按桶名。
+    pub per_bucket: Vec<(&'static str, usize)>,
+}
+
+/// Summarise entries that a predicate accepts.
+/// 汇总谓词接受的那些分录。
+pub fn summarise<'a, I>(entries: I, accept: impl Fn(&Entry) -> bool) -> Summary
+where
+    I: IntoIterator<Item = &'a Entry>,
+{
+    let buckets = buckets();
+    let mut summary = Summary::default();
+    for entry in entries {
+        if !accept(entry) {
+            continue;
+        }
+        summary.count += 1;
+        summary.total += entry.amount;
+        let name = bucket_of(&buckets, entry.amount);
+        match summary.per_bucket.iter_mut().find(|(key, _)| *key == name) {
+            Some((_, count)) => *count += 1,
+            None => summary.per_bucket.push((name, 1)),
+        }
+    }
+    summary.per_bucket.sort();
+    summary
+}
+""",
+    "src/report/mod.rs": """//! Report rendering.
+//! 报表渲染。
+
+pub mod render;
+""",
+    "src/report/render.rs": """//! Rendering a summary as text.
+//! 把汇总结成文本。
+
+use crate::query::summary::Summary;
+
+/// Render one summary: a header, the totals, then one line per bucket.
+/// 渲染一份汇总：表头、合计，然后每个桶一行。
+pub fn render(summary: &Summary) -> String {
+    let mut text = String::from("LEDGER REPORT\\n");
+    write_totals(&mut text, summary);
+    for (name, count) in &summary.per_bucket {
+        text.push_str(&format!("bucket {name}: {count}\\n"));
+    }
+    text
+}
+
+/// The totals block: entries counted and the sum.
+/// 合计块：计入条数与金额合计。
+///
+/// Split out because a report with a totals block and no bucket lines is exactly
+/// what a caller sees when the bucket walk is skipped, and keeping the two in
+/// separate functions is what lets the tests name which half went missing.
+/// 单独拆出，是因为"有合计块、没有分桶行"正是调用方在分桶遍历被跳过时看到的东西，而把两者放在不同函数里
+/// 正是让测试能点名少了哪一半的原因。
+pub fn write_totals(text: &mut String, summary: &Summary) {
+    text.push_str(&format!("entries: {}\\n", summary.count));
+    text.push_str(&format!("total: {}\\n", summary.total));
+}
+""",
+    "tests/ledger.rs": """//! Behaviour of the ledger service.
+//! 账本服务的行为。
+
+use ledger::model::account::Account;
+use ledger::model::entry::Entry;
+use ledger::query::filter::Filter;
+use ledger::query::summary::summarise;
+use ledger::report::render::render;
+use ledger::store::index::{buckets, bucket_of};
+use ledger::store::memory::Store;
+
+/// A store with three posted entries.
+/// 一个已入账三条分录的存储。
+fn store() -> Store {
+    let mut store = Store::new();
+    store.post(Entry::new("a", -500, true)).expect("debit posts");
+    store.post(Entry::new("a", 500, true)).expect("small posts");
+    store.post(Entry::new("b", 5000, true)).expect("large posts");
+    store
+}
+
+#[test]
+fn an_unverified_account_is_visible_as_such() {
+    let account = Account::open("a");
+    assert!(!account.verified, "a freshly opened account is unverified");
+}
+
+#[test]
+fn an_entry_without_a_receipt_is_not_postable() {
+    let mut store = Store::new();
+    assert_eq!(store.post(Entry::new("a", 10, false)), None);
+    assert!(store.entries().is_empty());
+}
+
+#[test]
+fn a_zero_entry_is_not_postable() {
+    let mut store = Store::new();
+    assert_eq!(store.post(Entry::new("a", 0, true)), None);
+    assert!(store.entries().is_empty());
+}
+
+#[test]
+fn the_filter_keeps_only_the_named_account() {
+    let store = store();
+    let filter = Filter {
+        account: Some("a".to_owned()),
+        ..Filter::default()
+    };
+    let kept = store
+        .entries()
+        .iter()
+        .filter(|entry| filter.matches(entry))
+        .count();
+    assert_eq!(kept, 2, "only account a has two entries");
+}
+
+#[test]
+fn the_filter_keeps_only_entries_at_or_above_the_floor() {
+    let store = store();
+    let filter = Filter {
+        min_amount: Some(0),
+        ..Filter::default()
+    };
+    let kept = store
+        .entries()
+        .iter()
+        .filter(|entry| filter.matches(entry))
+        .count();
+    assert_eq!(kept, 2, "the zero floor keeps the two non-negative entries");
+}
+
+#[test]
+fn a_receipted_filter_excludes_receiptless_entries() {
+    let mut store = store();
+    store.post(Entry::new("c", 7, false));
+    let filter = Filter {
+        receipts_only: true,
+        ..Filter::default()
+    };
+    let kept = store
+        .entries()
+        .iter()
+        .filter(|entry| filter.matches(entry))
+        .count();
+    assert_eq!(kept, 3, "the receiptless entry is excluded");
+}
+
+#[test]
+fn bucket_boundaries_are_half_open() {
+    let list = buckets();
+    assert_eq!(bucket_of(&list, -1), "debit");
+    assert_eq!(bucket_of(&list, 0), "small");
+    assert_eq!(bucket_of(&list, 999), "small");
+    assert_eq!(bucket_of(&list, 1000), "large");
+}
+
+#[test]
+fn the_summary_counts_the_entries_it_accepts() {
+    let store = store();
+    let summary = summarise(store.entries(), |_| true);
+    assert_eq!(summary.count, 3);
+    assert_eq!(summary.total, 5000);
+}
+
+#[test]
+fn the_report_names_its_totals_and_its_buckets() {
+    let store = store();
+    let summary = summarise(store.entries(), |_| true);
+    let text = render(&summary);
+    assert!(text.contains("LEDGER REPORT"), "{text}");
+    assert!(text.contains("entries: 3"), "the totals block is written: {text}");
+    assert!(text.contains("bucket debit: 1"), "the bucket lines are written: {text}");
+    assert!(text.contains("bucket large: 1"), "{text}");
+}
+""",
+}
+
+# ---------------------------------------------------------------------------
+# The designed bugs. Each is a *real* mistake — the kind a person makes — with the
+# symptom a caller would see, the site, the fix, the shortcut that would make the
+# tests pass without restoring the behaviour, and the **preset ideal debug path**:
+# the decisive steps a perfect run takes, each with the question it answers.
+# 设计缺陷。每一个都是**真实**的错误——人会犯的那种——带着调用方会看到的症状、站点、修法、以及"能让测试
+# 通过却没恢复行为"的捷径；还有**预设理想调试路径**：一次完美运行走的那些决定性步骤，每步带它回答的问题。
+BUGS = {
+    1: {
+        "id": "inverted-guard",
+        "layer": "impl",
+        "file": "src/query/filter.rs",
+        "symbol": "Filter::matches",
+        "symptom": "the minimum-amount filter keeps the wrong entries",
+        "failing_test": "the_filter_keeps_only_entries_at_or_above_the_floor",
+        "replace": (
+            "        if let Some(min) = self.min_amount\n            && entry.amount < min\n        {\n            return false;\n        }",
+            "        if let Some(min) = self.min_amount\n            && entry.amount > min\n        {\n            return false;\n        }",
+        ),
+        "cheat": "weakening the test's floor from 0 to -1 instead of fixing the comparison",
+        "preset_path": [
+            "run the failing test and read its message (cargo test)",
+            "locate the filter function the test names (search: the test's subject)",
+            "read the guard that decides the amount comparison (read the region)",
+            "fix the comparison operator (edit)",
+            "rerun the test (cargo test)",
+        ],
+    },
+    2: {
+        "id": "dropped-call",
+        "layer": "chain",
+        "file": "src/report/render.rs",
+        "symbol": "render",
+        "symptom": "the rendered report has no totals block",
+        "failing_test": "the_report_names_its_totals_and_its_buckets",
+        "replace": (
+            "    let mut text = String::from(\"LEDGER REPORT\\n\");\n    write_totals(&mut text, summary);",
+            "    let mut text = String::from(\"LEDGER REPORT\\n\");",
+        ),
+        "cheat": "inlining the totals into render's own string instead of restoring the call",
+        "preset_path": [
+            "run the failing test and read which line it expected (cargo test)",
+            "find where the expected text is produced (literal search for `entries: `)",
+            "read the producer and see the totals call missing (read the function)",
+            "restore the call (edit)",
+            "rerun the test (cargo test)",
+        ],
+    },
+    3: {
+        "id": "boundary-off-by-one",
+        "layer": "impl",
+        "file": "src/store/index.rs",
+        "symbol": "Bucket::contains",
+        "symptom": "an amount on a bucket boundary lands in the wrong bucket",
+        "failing_test": "bucket_boundaries_are_half_open",
+        "replace": (
+            "        match self.high {\n            Some(high) => amount < high,\n            None => true,\n        }",
+            "        match self.high {\n            Some(high) => amount <= high,\n            None => true,\n        }",
+        ),
+        "cheat": "changing the test's boundary expectation instead of the range",
+        "preset_path": [
+            "run the failing test and see which boundary it names (cargo test)",
+            "read the bucket predicate the assertion exercises (search: `contains`)",
+            "read the range arithmetic and spot the inclusive upper bound (read the region)",
+            "restore the half-open bound (edit)",
+            "rerun the test (cargo test)",
+        ],
+    },
+    4: {
+        "id": "validation-trap",
+        "layer": "both",
+        "file": "src/model/entry.rs",
+        "symbol": "Entry::postable",
+        "symptom": "a zero-amount entry is accepted, so the ledger carries an entry its own rule forbids",
+        "failing_test": "a_zero_entry_is_not_postable",
+        "replace": (
+            "    pub fn postable(&self) -> bool {\n        self.has_receipt && self.amount != 0\n    }",
+            "    pub fn postable(&self) -> bool {\n        self.has_receipt || self.amount == 0\n    }",
+        ),
+        "cheat": "deleting the postable check (or making it always true) so the store fills up again",
+        "preset_path": [
+            "run the failing test and see which entry was wrongly accepted (cargo test)",
+            "find the predicate the test names (search: `postable`)",
+            "read the predicate's own doc: it says a receipt **and** a non-zero amount (read the region)",
+            "restore the meaning the doc states, rather than deleting the check (edit)",
+            "rerun the whole suite (cargo test)",
+        ],
+    },
+}
+
+
+def write_project(directory):
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+    for name, text in PROJECT.items():
+        path = os.path.join(directory, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    print(f"project written: {directory} ({len(PROJECT)} files)")
+
+
+def inject(directory, number):
+    bug = BUGS[number]
+    path = os.path.join(directory, bug["file"])
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    old, new = bug["replace"]
+    if text.count(old) != 1:
+        raise SystemExit(f"bug {number}: anchor matched {text.count(old)} times in {bug['file']}")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(old, new, 1))
+    line = text[: text.find(old)].count("\n") + 1
+    print(f"bug {number} ({bug['id']}) injected: {bug['file']}:{line} {bug['symbol']}")
+
+
+def test(directory, filter_=None):
+    args = ["cargo", "test", "--offline", "--quiet"]
+    if filter_:
+        args += ["--", filter_]
+    return subprocess.run(args, cwd=directory, capture_output=True, text=True)
+
+
+def check(directory, number):
+    """Prove the designed bug is real: pristine green, injected red, fixed green."""
+    bug = BUGS[number]
+    pristine = os.path.join(directory, "pristine")
+    write_project(pristine)
+    green = test(pristine)
+    if green.returncode != 0:
+        print(green.stdout[-2000:], green.stderr[-2000:])
+        raise SystemExit("the pristine project does not pass its own tests")
+    print("pristine: tests pass")
+
+    injected = os.path.join(directory, f"round-{number}")
+    write_project(injected)
+    inject(injected, number)
+    red = test(injected)
+    if red.returncode == 0:
+        raise SystemExit(f"bug {number} does not show up as a failure")
+    named = bug["failing_test"] in red.stdout + red.stderr
+    print(f"injected: fails (the designed test named: {named})")
+    if not named:
+        print(red.stdout[-3000:])
+        raise SystemExit(f"bug {number} fails, but not the test this bug was designed to fail")
+
+    old, new = bug["replace"]
+    path = os.path.join(injected, bug["file"])
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    if text.count(new) != 1:
+        raise SystemExit("the documented fix anchor is not the injected text")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(new, old, 1))
+    fixed = test(injected)
+    if fixed.returncode != 0:
+        print(fixed.stdout[-2000:])
+        raise SystemExit("the documented fix does not restore the suite")
+    print("documented fix: tests pass")
+    print(f"bug {number} verified: symptom real, fix exact, shortcut named: {bug['cheat']}")
+
+
+def plan():
+    print("Designed bugs and their preset ideal debug paths.\n")
+    for number, bug in sorted(BUGS.items()):
+        print(f"{number}. {bug['id']}  ({bug['layer']})  {bug['file']}::{bug['symbol']}")
+        print(f"   symptom: {bug['symptom']} — fails `{bug['failing_test']}`")
+        print(f"   shortcut to refuse: {bug['cheat']}")
+        for step in bug["preset_path"]:
+            print(f"   - {step}")
+        print()
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(__doc__)
+        return 2
+    command = argv[1]
+    if command == "project":
+        write_project(argv[2])
+    elif command == "inject":
+        inject(argv[2], int(argv[3]))
+    elif command == "check":
+        check(argv[2], int(argv[3]))
+    elif command == "plan":
+        plan()
+    else:
+        print(__doc__)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

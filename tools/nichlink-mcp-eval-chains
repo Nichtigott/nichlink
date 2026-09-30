@@ -1,0 +1,213 @@
+#!/usr/bin/env node
+// Measure an evaluation member's reasoning chain from its own session log.
+// 从成员自己的会话日志里量它的思维链。
+//
+// 维护者要的度量：「效率为 agent 使用我们的 mcp 改对是否使用更小的思维链，相对 codegraph 的思维链更短更
+// 高效」。The chain is measured from the log, not from the member's self-report: reasoning characters,
+// tool calls, and how much of the preset ideal path those calls cover.
+// 思维链量自日志而不是自述：推理字符数、工具调用数，以及这些调用覆盖了预设理想路径的多少。
+//
+// The log is multi-frame zstd and a single-file decompressor returns only the first frame (a
+// 284-byte session header), so the frames are found by magic and decoded one by one — in Node,
+// because that is where `zstdDecompressSync` exists.
+// 日志是多帧 zstd，单文件解压器只回第一帧（284 字节的会话头），因此按魔数找帧并逐帧解——用 Node，因为
+// `zstdDecompressSync` 在那里。
+//
+// Usage / 用法: nichlink-mcp-eval-chains <session-log> [<session-log> ...]
+
+const fs = require("node:fs");
+const zlib = require("node:zlib");
+
+const ROUNDS = { t1: 1, t2: 1, t3: 2, t4: 2, t5: 3, t6: 3, t7: 4, t8: 4 };
+
+// The preset ideal steps per bug, as patterns over the round's tool calls.
+// 每个 bug 的预设理想步骤，用该轮工具调用上的模式表示。
+const PRESET = {
+  1: [
+    ["run the failing test", /cargo test/],
+    ["locate the function the test names", /nichlink\.(search|callgraph)|codegraph (explore|node|query)/],
+    ["read the guard", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["fix the comparison", /\bedit\b|\bwrite\b|apply_patch|str_replace/],
+    ["rerun", /cargo test|nichlink\.check/],
+  ],
+  2: [
+    ["run the failing test", /cargo test/],
+    ["find where the expected text is produced", /nichlink\.(search|literal)|codegraph (explore|query)|"grep"/],
+    ["read the producer", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["restore the call", /\bedit\b|\bwrite\b|apply_patch/],
+    ["rerun", /cargo test|nichlink\.check/],
+  ],
+  3: [
+    ["run the failing test", /cargo test/],
+    ["read the predicate", /nichlink\.(search|read|inspect)|codegraph (explore|node)|"read"/],
+    ["read the range arithmetic", /nichlink\.(read|callgraph)|codegraph (explore|node)|"read"/],
+    ["restore the half-open bound", /\bedit\b|\bwrite\b|apply_patch/],
+    ["rerun", /cargo test|nichlink\.check/],
+  ],
+  4: [
+    ["run the failing test", /cargo test/],
+    ["find the predicate the test names", /nichlink\.(search|literal)|codegraph (explore|query)|"grep"/],
+    ["read the predicate's own doc", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["restore the meaning", /\bedit\b|\bwrite\b|apply_patch/],
+    ["rerun the whole suite", /cargo test|nichlink\.check/],
+  ],
+};
+
+function frames(path) {
+  const raw = fs.readFileSync(path);
+  const offsets = [];
+  for (let i = 0; i + 4 <= raw.length; i += 1) {
+    if (raw[i] === 0x28 && raw[i + 1] === 0xb5 && raw[i + 2] === 0x2f && raw[i + 3] === 0xfd) {
+      offsets.push(i);
+    }
+  }
+  let text = "";
+  for (let k = 0; k < offsets.length; k += 1) {
+    const end = k + 1 < offsets.length ? offsets[k + 1] : raw.length;
+    try {
+      text += zlib.zstdDecompressSync(raw.subarray(offsets[k], end)).toString("utf8");
+    } catch (error) {
+      /* a partial trailing frame is expected while the member is still writing */
+    }
+  }
+  return text;
+}
+
+function events(path) {
+  return frames(path)
+    .split("\n")
+    .filter((line) => line.trim().startsWith("{"))
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+// Harness bookkeeping is the same on both arms, so it is counted separately from the substantive
+// work: the efficiency question is about the debug loop, not about claiming a task.
+// 编排开销两组相同，因此与实质工作分开计数：效率问的是调试循环，不是认领任务。
+const BOOKKEEPING = /^agent_teams_|^send_message$/;
+
+// Which calls reach the arm's own instrument. Both members drive theirs through `bash`, so the
+// instrument is recognised by the text of the command rather than by the tool's name — and that
+// indirection is itself a finding: only one of the two arms ships a command an agent can call
+// directly.
+// 哪些调用打到了本组自己的仪器。两个成员都经 `bash` 驱动各自那件仪器，因此仪器靠命令文本而不是工具名来
+// 认——而这层间接本身就是一条发现：两件仪器里只有一件提供了 agent 能直接调用的命令。
+function instrumentCall(name, arguments) {
+  if (name !== "bash" && name !== "job_output") {
+    return /^nichlink\.|^codegraph/.test(name) ? name : null;
+  }
+  if (/nichlink-mcp|nichlink\.[a-z_]+["']?\s*:|initialize.*tools\/call/.test(arguments)) return "nichlink (hand-rolled JSON-RPC)";
+  if (/\bcodegraph (init|index|status|query|explore|node|callers|callees|impact|affected)\b/.test(arguments)) return "codegraph CLI";
+  return null;
+}
+
+function measure(path) {
+  const rounds = {};
+  let current = 0;
+  for (const event of events(path)) {
+    const data = event.data || {};
+    if (event.type === "assistant/message") {
+      for (const block of (data.message && data.message.content) || []) {
+        const bucket = (rounds[current] ||= { reasoning: 0, blocks: 0, calls: [], text: 0 });
+        if (block.type === "reasoning") {
+          bucket.reasoning += (block.text || "").length;
+          bucket.blocks += 1;
+        } else if (block.type === "text") {
+          bucket.text += (block.text || "").length;
+        }
+      }
+    } else if (event.type === "tool/call") {
+      const arguments = typeof data.arguments === "string" ? data.arguments : JSON.stringify(data.arguments || {});
+      const claim = /"task_id"\s*:\s*"(t\d)"/.exec(arguments);
+      if (claim && ROUNDS[claim[1]]) {
+        current = ROUNDS[claim[1]];
+      }
+      const bucket = (rounds[current] ||= { reasoning: 0, blocks: 0, calls: [], text: 0 });
+      bucket.calls.push({ name: data.name || "?", arguments });
+    }
+  }
+  return rounds;
+}
+
+function fit(number, calls) {
+  const steps = PRESET[number] || [];
+  const joined = calls.map((call) => `${call.name} ${call.arguments}`).join("\n");
+  const covered = steps.map(([, pattern]) => pattern.test(joined));
+  return { hit: covered.filter(Boolean).length, total: steps.length, covered };
+}
+
+// The instrument calls come from the logs the briefs demanded, not from guessing at `bash` text: the
+// MCP arm writes one JSON-RPC request per call to `mcp-log-r<n>.jsonl`, the codegraph arm writes one
+// `=== CMD:` per invocation to `cg-log-r<n>.txt`. Those are the authoritative counts.
+// 仪器调用取自任务书要求留下的日志，而不是从 `bash` 文本里猜：MCP 组把每次调用写成
+// `mcp-log-r<n>.jsonl` 里的一条 JSON-RPC 请求，codegraph 组把每次调用写成 `cg-log-r<n>.txt` 里的一条
+// `=== CMD:`。它们才是权威计数。
+function instrumentFrom(arm, number) {
+  const mcp = `/tmp/mcp-eval/mcp-log-r${number}.jsonl`;
+  const cg = `/tmp/mcp-eval/cg-log-r${number}.txt`;
+  const count = (path, test) => {
+    try {
+      return fs.readFileSync(path, "utf8").split("\n").filter(test).length;
+    } catch (error) {
+      return 0;
+    }
+  };
+  // The arm decides which log is its own: both logs live under the same per-round names, so reading
+  // the wrong one silently reports the other arm's count (measured once, fixed here).
+  // 哪一组决定哪份日志是它的：两份日志在同轮同名目录下，读错会静默报出对方那一组的计数（我踩过一次，
+  // 这里修掉）。
+  if (arm === "codegraph") {
+    return `codegraph CLI ${count(cg, (line) => line.startsWith("=== CMD:"))}`;
+  }
+  return `bridge ${count(mcp, (line) => line.includes('"method": "tools/call"'))}`;
+}
+
+function report(path) {
+  // The arm is decided by what the member actually invoked, not by words anywhere in the session:
+  // the team description itself names both tools, so a whole-text search called every session
+  // "codegraph" (measured, then fixed here).
+  // 哪一组由成员**实际调用过什么**决定，而不是会话里任何地方出现的字样：团队描述本身就同时提到两件工具，
+  // 因此按整段文本搜索会把每个会话都判成 codegraph（我踩过一次，这里修掉）。
+  let arm = "bridge";
+  for (const event of events(path)) {
+    if (event.type !== "tool/call") continue;
+    const data = event.data || {};
+    const text = typeof data.arguments === "string" ? data.arguments : JSON.stringify(data.arguments || {});
+    if (/codegraph (init|index|status|query|explore|node|callers|callees|impact|affected)/.test(text)) {
+      arm = "codegraph";
+      break;
+    }
+  }
+  console.log(`=== ${path.split("/").slice(-2)[0]} (arm: ${arm}) ===`);
+  const rounds = measure(path);
+  let reasoning = 0;
+  let substantive = 0;
+  for (const number of Object.keys(rounds).map(Number).sort((a, b) => a - b)) {
+    if (!number) continue;
+    const bucket = rounds[number];
+    const sub = bucket.calls.filter((call) => !BOOKKEEPING.test(call.name));
+    const book = bucket.calls.length - sub.length;
+    const { hit, total, covered } = fit(number, bucket.calls);
+    reasoning += bucket.reasoning;
+    substantive += sub.length;
+    console.log(
+      `  round ${number}: reasoning ${bucket.reasoning} chars / ${bucket.blocks} blocks · ` +
+        `substantive calls ${sub.length} (+${book} bookkeeping) · preset ${hit}/${total} ${covered
+          .map((ok) => (ok ? "✓" : "✗"))
+          .join("")}`
+    );
+    console.log(
+      `      instrument (from its own log): ${instrumentFrom(arm, number)} · ` +
+        `calls: ${sub.map((call) => call.name).join(" → ")}`
+    );
+  }
+  console.log(`  TOTAL reasoning ${reasoning} chars · substantive calls ${substantive}`);
+}
+
+for (const path of process.argv.slice(2)) report(path);
