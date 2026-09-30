@@ -145,6 +145,8 @@ mod usages;
 
 #[path = "check.rs"]
 mod check;
+#[path = "claims.rs"]
+pub mod claims;
 
 #[path = "converge.rs"]
 mod converge;

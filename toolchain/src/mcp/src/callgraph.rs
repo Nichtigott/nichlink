@@ -30,7 +30,7 @@ use crate::mcp::truncation::withheld;
 /// the file itself.
 /// 不是 conventions 门禁那条规则，也不是对位置的判断：桥从文本作答，必须点名读者会去跑的那些文件，因此它
 /// 读本仓里测试文件的三种拼法——`tests/` 目录、同级 `_tests.rs`、或文件里自带 `#[test]`。
-fn looks_like_a_test(label: &str, source: &str) -> bool {
+pub(crate) fn looks_like_a_test(label: &str, source: &str) -> bool {
     // `#[cfg(test)]` is deliberately not a test: a production file that mounts its own test
     // module carries it, and listing that file would tell a reader to run the code under test.
     // `#[test]` is, because a file declaring tests runs them.

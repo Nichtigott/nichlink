@@ -180,6 +180,15 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
     if let Some(next) = next_step(outcome.timed_out, outcome.code) {
         lines.push(next);
     }
+    // The tree-wide half: a symptom narrows the scope and this tool answers for a face; an open
+    // "are there other problems" has nothing to narrow it, and the census is what answers that
+    // without anybody hand-sweeping the tree.
+    // 全树那一半：症状会收窄范围，而本工具按面作答；开放式的问题"还有别的问题吗"没有东西替它收窄，
+    // 总账就是那个不必有人手工扫树也能回答它的东西。
+    match crate::mcp::claims::census(root) {
+        Ok(census) => lines.extend(census),
+        Err(reason) => lines.push(format!("census unavailable ({reason})")),
+    }
     Ok(lines.join("\n"))
 }
 
