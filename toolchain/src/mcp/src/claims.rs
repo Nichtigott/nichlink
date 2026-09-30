@@ -125,6 +125,25 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
             "ask per directory to see its own items",
         ));
     }
+    // The third column: what the entry plan declares, as a static count. Families a and b both spent
+    // real effort working out that "declaring one more cut" is what changes what the application
+    // ships — and both arms derived it by experiment. The count itself is a fact this tree already
+    // contains, so the census reports it and lets the caller draw the conclusion.
+    // 第三栏：入口计划声明了什么，按静态计数给出。a/b 两族都花了真实力气才弄清"多声明一条 cut"才是
+    // 改变"这个应用发布什么"的那一步——而两臂都是靠实验推出来的。计数本身是这棵树已有的事实，总账把它
+    // 报出来，结论留给调用方。
+    let cuts = sources
+        .iter()
+        .map(|file| file.source.matches("cut(").count())
+        .sum::<usize>();
+    let grafts = sources
+        .iter()
+        .map(|file| file.source.matches("graft(").count())
+        .sum::<usize>();
+    lines.push(format!(
+        "  entry plan: {cuts} `cut(` site(s) and {grafts} `graft(` site(s) across this tree's sources \
+         (a static count; which of them this application ships is the plan's own business)"
+    ));
     lines.push(
         "  not covered: only named numeric constants; string constants, structural duplication \
          and claims written in prose are outside this census"
