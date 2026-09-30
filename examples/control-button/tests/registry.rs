@@ -671,7 +671,16 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
         "studio must not rewrite host source"
     );
 
-    let _ = std::fs::remove_dir_all(root.join(".nichlink"));
+    // Only the plan this test created is removed — and the directory that held it only when it is
+    // then empty. The whole `.nichlink` tree also holds an adoption ledger, which this test never
+    // created and must not delete: two independent evaluation arms measured exactly that, and both
+    // had to work around it by running the gate first and writing the ledger afterwards.
+    // 只删本测试创建的那份计划——而它所在的目录只在因此为空时才收。整棵 `.nichlink` 里还住着采信台账，
+    // 本测试从未创建它、也绝不该删掉它：两个独立的评测臂都量到这一点，两边都只能靠"先跑门、再落台账"绕开。
+    let _ = std::fs::remove_file(&plan_path);
+    if let Some(directory) = plan_path.parent() {
+        let _ = std::fs::remove_dir(directory);
+    }
 }
 
 // ---------------------------------------------------------------------------
