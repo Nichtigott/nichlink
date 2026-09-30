@@ -256,6 +256,20 @@ pub fn run_client(arguments: &[String]) -> Client {
         return Client::Serve;
     }
     match arguments[0].as_str() {
+        // `--list <tool>` prints one tool's **whole** description: the one-line list is for choosing
+        // a tool, and this form is for calling it without guessing the shape the list truncates.
+        // `--list <tool>` 打印**一个**工具的完整描述：一行式清单用来挑工具，这个形态用来"不必猜清单
+        // 截掉的形状"就能调用。
+        "--list" | "-l" if arguments.get(1).is_some_and(|name| !name.starts_with('-')) => {
+            let name = arguments.get(1).map(String::as_str).unwrap_or_default();
+            match describe_tool(name) {
+                Some(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
+                None => {
+                    eprintln!("unknown tool `{name}`; --list names them all");
+                    Client::Called(1)
+                }
+            }
+        }
         "--list" | "-l" => {
             for block in std::iter::once(INSTRUCTIONS.to_owned())
                 .chain(std::iter::once(String::new()))

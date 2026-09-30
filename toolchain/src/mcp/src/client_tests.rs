@@ -47,6 +47,26 @@ fn the_list_is_the_catalogue_one_entry_each() {
         .find(|entry| entry.starts_with("nichlink.search — "))
         .expect("the search entry");
     assert!(search.contains("keys: "), "{search}");
+    // `--list <tool>` is the un-truncated form, because the one-line list is what cost an arm four
+    // refusals on `apply`: its description already spelled the shape out.
+    // `--list <tool>` 是不截断的形态，因为正是"一行式清单"让一个臂在 `apply` 上白吃四次被拒：它的描述
+    // 本来就把形状写清楚了。
+    let apply = describe_tool("apply").expect("a described tool");
+    // 用描述里**真实存在**的那半句（我第一次钉的是自己编的句子 ✗）：`apply` 的描述写明除
+    // `needs_registry` 外每个 `fields` 值都是字符串。
+    assert!(
+        apply.contains("Every other `fields` value is a **string**"),
+        "{apply}"
+    );
+    assert!(
+        describe_tool("nichlink.apply").is_some(),
+        "the prefix is optional here too"
+    );
+    assert!(
+        describe_tool("no_such_tool").is_none(),
+        "unknown names are not invented"
+    );
+
     assert!(!search.contains("query*"), "query is one of two: {search}");
     assert!(
         !search.contains("literal*"),
