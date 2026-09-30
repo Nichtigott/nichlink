@@ -263,6 +263,23 @@ fn a_text_key_keeps_digits_as_text() {
     assert_eq!(scalar_for("context", "4"), Value::from(4));
 }
 
+/// The table names the adoption ledger, because the round measured the cost of not naming it: both
+/// arms had to re-derive the ledger's policy (`no renewal of unchanged bytes, one appended line for
+/// a new route`) from the kernel instead of being told where the ledger is and what it means.
+/// 流程表点名采信台账，因为"不点名"的代价被量到过：两臂都得从内核里重新推出台账策略（"未变的字节不续期、
+/// 新路线追加一行"），而不是被告知台账在哪、它是什么意思。
+#[test]
+fn the_table_names_the_adoption_ledger() {
+    assert!(
+        super::INSTRUCTIONS.contains("adopted"),
+        "the ledger tool is named"
+    );
+    assert!(
+        super::INSTRUCTIONS.contains(".nichlink/adopted/entries"),
+        "and so is where it lives"
+    );
+}
+
 #[test]
 fn a_bare_flag_means_true() {
     let temp = std::env::temp_dir().join(format!("nichlink-flag-{}", std::process::id()));

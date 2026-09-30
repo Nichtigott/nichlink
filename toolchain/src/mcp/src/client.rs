@@ -57,7 +57,12 @@ own lines and its doc, and `search {query}` first would only cost a second call.
 have yet: `callgraph` hop by hop from the caller you do have. `callgraph {orphans: true}` lists what \
 this package defines and nothing here calls. One function's own lines: `read {path, line}`. Which \
 tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `diff`, then `apply` \
-(a preview unless `apply: true`). With `root`, every path argument is relative to that root (root \
+(a preview unless `apply: true`). \\
+             If the tree carries an adoption ledger (`.nichlink/adopted/entries`), `adopted` reads it \
+             and says which entries still hold; a byte that moved makes an entry need a **person**, \
+             not an edit, and a confirmation is one more line appended. 若这棵树带采信台账 \
+             （`.nichlink/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
+             **人来确认**而不是改代码，而确认就是**再追加一行**。 With `root`, every path argument is relative to that root (root \
 \"kernel\" means path \"src/…\").";
 
 /// One line per tool: its name, then the first sentence of its description.
