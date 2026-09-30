@@ -223,6 +223,28 @@ function report(path) {
       `      instrument (from its own log): ${instrumentFrom(arm, number)} · ` +
         `calls: ${sub.map((call) => call.name).join(" → ")}`
     );
+    // **Total tool calls**, which is the axis the maintainer added: not only how often an arm
+    // reached its own instrument, but how many calls of *any* tool it needed, because a tool that
+    // answers precisely should also leave fewer `read`/`write`/`bash` calls behind it.
+    // **总工具调用**，这是维护者新加的轴：不只看一个臂打了多少次自家仪器，还要看它一共需要多少次
+    // **任何**工具的调用——一个答得准的工具，应该也让它身后的 `read`/`write`/`bash` 更少。
+    // `instrumentFrom` returns a label with the count in it ("bridge 10"), so the arithmetic needs
+    // the number pulled back out; assuming it was numeric printed `other NaN` on the first run.
+    // `instrumentFrom` 返回的是带计数的标签（"bridge 10"），因此算术要把数字取回来；直接当数字用
+    // 会在首跑印出 `other NaN`。
+    const instrument = Number(
+      String(instrumentFrom(arm, number)).match(/(\d+)\s*$/)?.[1] ?? 0
+    );
+    const byTool = new Map();
+    for (const call of sub) {
+      byTool.set(call.name, (byTool.get(call.name) || 0) + 1);
+    }
+    const order = [...byTool.entries()].sort((left, right) => right[1] - left[1]);
+    console.log(
+      `      total tool calls ${sub.length} (+${book} bookkeeping) = instrument ${instrument} + ` +
+        `other ${sub.length - instrument} · by tool: ` +
+        order.map(([name, count]) => `${name} ${count}`).join(" · ")
+    );
   }
   console.log(`  TOTAL reasoning ${reasoning} chars · substantive calls ${substantive}`);
 }
