@@ -95,6 +95,9 @@ fn first_sentence(description: &str) -> String {
 /// Run one tool and return its text, or the text of its refusal.
 /// 跑一个工具并回它的文本，或它拒绝时的文本。
 pub fn call_tool(root: &Path, name: &str, arguments: &Value) -> Result<String, String> {
+    // The base is chosen by the caller (`--root`) or by the process's own directory; the tools then
+    // resolve their `path`/`file` arguments against it.
+    // 基底由调用方（`--root`）或进程自身所在目录决定；各工具随后相对它解析自己的 `path`/`file` 参数。
     crate::mcp::tools::run_tool(root, name, arguments)
 }
 
@@ -285,8 +288,36 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
             }
         }
     }
-    let root = crate::mcp::protocol::package_root();
-    call_tool(&root, name, &Value::Object(object)).map_err(Refusal::Tool)
+    // `--root` names the tree the question is about, so it decides the base every other argument is
+    // resolved against. Forwarding it as an argument instead made it a path *inside* the caller's own
+    // root, and a scenario round measured what that costs: a call made from the wrong directory got a
+    // 475-file answer about the checkout, and only the root line on the answer caught it.
+    // `--root` 命名的是"问题问的是哪棵树"，因此它决定其它每个参数相对什么解析。把它当作参数转发，会让它
+    // 变成调用方自己根**内部**的一个路径，而一个情景轮量出了代价：在错的目录里发出的一次调用拿回的是关于本
+    // 检出的 475 个文件，只有答案上的那行 root 抓住了它。
+    let base = match object
+        .remove("root")
+        .and_then(|value| value.as_str().map(str::to_owned))
+    {
+        Some(path) => {
+            let candidate = Path::new(&path);
+            let absolute = if candidate.is_absolute() {
+                candidate.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join(candidate)
+            };
+            match std::fs::canonicalize(&absolute) {
+                Ok(found) => found,
+                Err(error) => {
+                    return Err(Refusal::Usage(format!("--root {path}: {error}")));
+                }
+            }
+        }
+        None => crate::mcp::protocol::package_root(),
+    };
+    call_tool(&base, name, &Value::Object(object)).map_err(Refusal::Tool)
 }
 
 /// A command-line value with the obvious JSON type.

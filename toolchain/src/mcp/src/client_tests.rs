@@ -170,6 +170,41 @@ fn every_shape_the_table_names_is_covered_by_an_acceptance_check() {
     }
 }
 
+/// `--root` decides which tree is answered, wherever the process happens to be standing.
+/// `--root` 决定答的是哪棵树，无论进程此刻站在哪里。
+///
+/// Measured: before this, the flag was forwarded as an argument and resolved *inside* the caller's
+/// own root, so one scenario round answered about a 475-file checkout instead of the workspace the
+/// question named, and only the answer's own root line revealed it.
+/// 量出来的：在此之前，该开关被当作参数转发、在调用方自己的根**内部**解析，于是某个情景轮答的是 475 个文件
+/// 的检出而不是问题点名的工作区，而只有答案自己那行 root 暴露了这件事。
+#[test]
+fn the_root_flag_decides_which_tree_is_answered() {
+    let alpha = crate::mcp::tools::tools_tests::scratch_package("root-alpha");
+    let beta = crate::mcp::tools::tools_tests::scratch_package("root-beta");
+    let args = vec![
+        "nichlink.status".to_owned(),
+        "--root".to_owned(),
+        alpha.display().to_string(),
+    ];
+    let answer = match call_from_arguments(&args) {
+        Ok(answer) => answer,
+        Err(Refusal::Tool(text)) | Err(Refusal::Usage(text)) => {
+            panic!("the call must be accepted, got: {text}")
+        }
+    };
+    assert!(
+        answer.contains(&alpha.display().to_string()),
+        "the answer names the tree the flag named: {answer}"
+    );
+    assert!(
+        !answer.contains(&beta.display().to_string()),
+        "and not another one: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&alpha);
+    let _ = std::fs::remove_dir_all(&beta);
+}
+
 /// A boolean is a flag: the bare spelling is accepted and means true.
 /// 布尔就是开关：裸写被接受，且意为 true。
 #[test]

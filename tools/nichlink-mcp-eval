@@ -1039,64 +1039,61 @@ PROBES = {
 }
 
 
+# The baseline's inputs, stated per scenario instead of parsed out of the question text: grep for
+# `pattern`, then check whether `rule` (the evidence the answer needs) is written in the tree at all.
+# The first version parsed symbols and rule phrases out of Chinese prose and reported zeros for two
+# scenarios and "not stated" for all eight — its own extraction failing, not a fact about the levels.
+# 基线仪的输入按关卡显式写出，而不是从题面文字里解析：先按 `pattern` grep，再查答案所需的证据
+# （`rule`）到底有没有写在树里。第一版从中文散文里抽符号与规则短语，结果两关报 0、八关全报"未写在树里"
+# ——那是它自己的抽取器失败，不是关卡的事实。
+BASELINE = {
+    1: ("post(", ""),
+    2: ("audit", "audit = []"),
+    3: ("fn audit_unused", ""),
+    4: ("postable", ""),
+    5: ("write_count", "then one line per entry"),
+    6: ("postable", "and a zero"),
+    7: ("1000", "SMALL_LIMIT"),
+    8: ("write_count", "a header, the count"),
+}
+
+
 def scenario_baseline(directory):
     """How far a plain `grep` plus reading the hits gets, per scenario.
     \u6bcf\u4e00\u5173\u91cc\u201c\u53ea\u7528 grep \u52a0\u9605\u8bfb\u547d\u4e2d\u6587\u4ef6\u201d\u80fd\u8d70\u591a\u8fdc\u3002
 
-    This is the overfit check the maintainer asked for, made mechanical instead of asserted: a
-    question a plain reader can answer from one grep is **not discriminating**, whatever a tool's
-    answer costs, and it must be reported that way rather than counted as a win.
-    \u8fd9\u5c31\u662f\u7ef4\u62a4\u8005\u8981\u7684\u8fc7\u62df\u5408\u68c0\u67e5\uff0c\u800c\u4e14\u662f\u673a\u68b0\u7684\u800c\u4e0d\u662f\u58f0\u660e\u5f0f\u7684\uff1a\u4e00\u4e2a\u7d20\u8bfb\u8005\u4e00\u6761 grep
-    \u5c31\u80fd\u7b54\u7684\u95ee\u9898\u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\uff0c\u65e0\u8bba\u5b83\u82b1\u4e86\u591a\u5c11\uff0c\u90fd\u5fc5\u987b\u5982\u5b9e\u8bb0\u6210\u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\u3002
-
-    **NOT CALIBRATED — do not quote its numbers.** Measured on first run: it reported zero files for
-    scenarios 5 and 7 and "rule not stated" for all eight, and those zeros are its own extraction
-    failing (it parses symbols and rule phrases out of Chinese prose) rather than facts about the
-    levels. The fix is to state one `grep` pattern and one rule marker per scenario inside this file
-    instead of parsing the question text; until that lands, treat this function as a sketch.
-    **\u5c1a\u672a\u6821\u51c6\u2014\u2014\u4e0d\u8981\u5f15\u7528\u5b83\u7684\u6570\u5b57\u3002**\u9996\u6b21\u8fd0\u884c\u5b9e\u6d4b\uff1a\u5b83\u5bf9\u7b2c 5\u30017 \u5173\u62a5 0 \u4e2a\u6587\u4ef6\u3001\u516b\u5173\u5168\u62a5
-    \u201c\u89c4\u5219\u672a\u5199\u5728\u6811\u91cc\u201d\uff0c\u800c\u90a3\u4e9b 0 \u662f\u5b83\u81ea\u5df1\u7684\u62bd\u53d6\u5668\u5931\u8d25\uff08\u5b83\u4ece\u4e2d\u6587\u6563\u6587\u91cc\u62bd\u7b26\u53f7\u4e0e\u89c4\u5219\u77ed\u8bed\uff09\uff0c\u4e0d\u662f\u5173\u5361\u7684\u4e8b\u5b9e\u3002
-    \u4fee\u6cd5\uff1a\u5728\u672c\u6587\u4ef6\u91cc\u4e3a\u6bcf\u4e00\u5173\u663e\u5f0f\u5199\u4e00\u4e2a `grep` \u6a21\u5f0f\u4e0e\u4e00\u4e2a\u89c4\u5219\u6807\u8bb0\uff0c\u800c\u4e0d\u662f\u89e3\u6790\u9898\u9762\u6587\u5b57\uff1b\u5728\u90a3\u4e4b\u524d\u8bf7\u628a\u672c\u51fd\u6570\u5f53\u8349\u56fe\u3002
-    \u8fd9\u5c31\u662f\u7ef4\u62a4\u8005\u8981\u7684\u8fc7\u62df\u5408\u68c0\u67e5\uff0c\u800c\u4e14\u662f\u673a\u68b0\u7684\u800c\u4e0d\u662f\u58f0\u660e\u5f0f\u7684\uff1a\u4e00\u4e2a\u7d20\u8bfb\u8005\u4e00\u6761 grep
-    \u5c31\u80fd\u7b54\u7684\u95ee\u9898\u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\uff0c\u65e0\u8bba\u4e00\u4ef6\u5de5\u5177\u7b54\u5b83\u82b1\u4e86\u591a\u5c11\uff0c\u90fd\u5fc5\u987b\u5982\u5b9e\u8bb0\u6210\u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\u800c\u4e0d\u80fd\u8ba1\u6210\u4e00\u6b21\u80dc\u5229\u3002
+    A question a plain reader can settle from one grep is **not discriminating**, whatever a tool's
+    answer costs, and it is reported that way rather than counted as a win. The two numbers are: how
+    many files that grep must open, and whether the rule the answer needs is written in the tree at
+    all — a level whose evidence is tree-local still discriminates on *finding it cheaply*.
+    \u4e00\u4e2a\u7d20\u8bfb\u8005\u4e00\u6761 grep \u5c31\u80fd\u5b9a\u7684\u95ee\u9898\u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\uff0c\u65e0\u8bba\u4e00\u4ef6\u5de5\u5177\u7b54\u5b83\u591a\u8d35\uff0c\u90fd\u5982\u5b9e\u8bb0\u6210
+    \u201c\u4e0d\u5177\u9274\u522b\u529b\u201d\u3002\u4e24\u4e2a\u6570\u5b57\u662f\uff1a\u90a3\u6761 grep \u5fc5\u987b\u6253\u5f00\u51e0\u4e2a\u6587\u4ef6\uff0c\u4ee5\u53ca\u7b54\u6848\u6240\u9700\u7684\u89c4\u5219\u5230\u5e95\u6709\u6ca1\u6709\u5199\u5728\u6811\u91cc\u2014\u2014
+    \u8bc1\u636e\u662f\u6811\u5185\u7684\u5173\u5361\u4f9d\u7136\u5728\u201c\u627e\u5f97\u5feb\u4e0d\u5feb\u201d\u8fd9\u4e00\u70b9\u4e0a\u6709\u9274\u522b\u529b\u3002
     """
-    print(f"{'scenario':<26} {'files a grep must open':<24} {'rule stated in the tree':<24}")
+    print(f"{'scenario':<26} {'files a grep must open':<24} {'rule written in the tree':<24}")
     for number, scenario in sorted(SCENARIOS.items()):
         target = os.path.join(directory, f"s{number}")
         scenario_project(target)
         scenario_inject(target, number)
-        # The symbol the question names is what a plain reader would grep for.
-        # \u95ee\u9898\u70b9\u540d\u7684\u7b26\u53f7\u5c31\u662f\u7d20\u8bfb\u8005\u4f1a\u53bb grep \u7684\u4e1c\u897f\u3002
-        import re as _re
-
-        named = _re.findall(r"`([A-Za-z_:][A-Za-z0-9_:]*)`", scenario["question"])
-        files = set()
-        for symbol in named:
-            tail = symbol.split("::")[-1]
-            found = subprocess.run(
-                ["grep", "-rln", "--include=*.rs", tail, "."],
+        pattern, rule = BASELINE[number]
+        found = subprocess.run(
+            ["grep", "-rln", "--include=*.rs", "-F", pattern, "."],
+            cwd=target,
+            capture_output=True,
+            text=True,
+        )
+        files = [line for line in found.stdout.splitlines() if line.strip()]
+        stated = "n/a"
+        if rule:
+            hit = subprocess.run(
+                ["grep", "-rq", "--include=*.rs", "-F", rule, "."],
                 cwd=target,
                 capture_output=True,
                 text=True,
             )
-            files.update(line.strip() for line in found.stdout.splitlines() if line.strip())
-        # Is the rule the answer needs stated in the tree at all? The answer's own words are the
-        # check: a phrase from it that appears verbatim means the evidence is tree-local.
-        # \u7b54\u6848\u6240\u9700\u7684\u89c4\u5219\u5230\u5e95\u6709\u6ca1\u6709\u5199\u5728\u6811\u91cc\uff1f\u5c31\u7528\u7b54\u6848\u81ea\u5df1\u7684\u8bcd\u53bb\u67e5\uff1a\u51fa\u73b0\u5728\u6811\u91cc\u5c31\u610f\u5473\u7740\u8bc1\u636e\u662f\u6811\u5185\u7684\u3002
-        markers = [
-            phrase.strip("`\u3002\uff0c\u3001 ")
-            for phrase in scenario["answer"].split("：")[-1].replace("\u3001", ",").split(",")
-            if len(phrase.strip("`\u3002\uff0c\u3001 ")) >= 6
-        ]
-        stated = False
-        for marker in markers[:4]:
-            done = subprocess.run(
-                ["grep", "-rq", "-F", marker, "."], cwd=target, capture_output=True, text=True
-            )
-            if done.returncode == 0:
-                stated = True
-                break
-        print(f"{number}. {scenario['id']:<23} {len(files):<24} {'yes' if stated else 'no'}")
+            stated = "yes" if hit.returncode == 0 else "no"
+        flag = "" if len(files) > 1 else "  <- one grep settles it"
+        print(f"{number}. {scenario['id']:<23} {len(files):<24} {stated:<24}{flag}")
     return 0
 
 
