@@ -123,6 +123,34 @@ fn write(path: &Path, text: &str) {
 /// own `CARGO_PKG_NAME` compiled with.
 /// 第一枚钉子：虚拟根上的 `nichlink.registry` 点名每个成员及其状态，而宿主成员的面真的在答案里，
 /// 就在它自己 `CARGO_PKG_NAME` 编译所用的命名空间之下。
+/// A member root is told which workspace it belongs to, so an answer can say who is invisible:
+/// the scenario round measured two functions reported as orphans at a member root whose callers
+/// simply live in the other member.
+/// 成员根会被告知它属于哪个工作区，于是答案能说清谁不可见：情景轮量到两个函数的调用者只是住在另一个
+/// 成员里，却在成员根上被报成孤儿。
+#[test]
+fn a_member_root_knows_the_workspace_above_it() {
+    let base = std::env::temp_dir().join(format!("nichlink-member-{}", std::process::id()));
+    let member = base.join("core");
+    std::fs::create_dir_all(member.join("src")).expect("the fixture directory");
+    std::fs::write(
+        base.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"core\", \"report\"]\n",
+    )
+    .expect("the manifest");
+    assert_eq!(
+        crate::mcp::workspace::enclosing_workspace(&member),
+        Some(base.clone()),
+        "the member names its workspace"
+    );
+    assert_eq!(
+        crate::mcp::workspace::enclosing_workspace(&base),
+        None,
+        "the workspace root itself has nothing above it"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 #[test]
 fn the_registry_tool_answers_a_virtual_root_with_every_member() {
     let fixture = workspace("registry");

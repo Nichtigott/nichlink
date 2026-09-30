@@ -56,6 +56,16 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
     // 每个"改动文件所属的成员"只加载一次索引；没有源码可读的成员被跳过，而不是报成一个没有测试的包：
     // 这个答案是一份"要跑什么"的清单。
     let mut output = String::from("evidence: static-heuristic\n");
+    if let Some(above) = crate::mcp::workspace::enclosing_workspace(root) {
+        // The cross-member half of this answer is the whole point of the tool, so when the root is a
+        // member the caller has to know the other members are out of frame.
+        // 这个答案的"跨成员"那一半正是这个工具的意义，因此当根是成员时，调用方必须知道别的成员在画面外。
+        output.push_str(&format!(
+            "note  this root is a member of the workspace at {}; other members are out of frame \
+             here\n",
+            above.display()
+        ));
+    }
     for path in &files {
         let (label_prefix, owner) = owner_of(root, path);
         let sources = match &owner {

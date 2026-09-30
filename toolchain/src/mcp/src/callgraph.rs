@@ -362,6 +362,18 @@ fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     let total = found.len();
     let mut output = String::from("evidence: static-heuristic\n");
+    if let Some(above) = crate::mcp::workspace::enclosing_workspace(root) {
+        // Measured: asked at a member root this view calls cross-member callers invisible, so it says
+        // who is invisible and where to ask instead rather than presenting them as orphans.
+        // 量到的：在成员根上问时，这个视图看不见跨成员的调用者，因此它说清"谁不可见、该去哪儿问"，
+        // 而不是把它们当成孤儿报出来。
+        output.push_str(&format!(
+            "note  this root is the member `{}` of the workspace at {}; callers in other members \
+             are invisible here — ask at that root for the whole-workspace answer\n",
+            root.file_name().unwrap_or_default().to_string_lossy(),
+            above.display()
+        ));
+    }
     output.push_str(&format!(
         "orphans {total} (defined here, no static caller in this tree)\n"
     ));

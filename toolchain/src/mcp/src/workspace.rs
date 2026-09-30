@@ -314,6 +314,30 @@ impl Member {
 /// 完全没有清单的目录仍然是一个错误而不是一种范围：那里没有任何东西可以被弄错，而拒绝会点名出路
 /// （`NICH_LINK_NAMESPACE`）。**有**清单而 Cargo 解析不了的目录是另一个答案——它是一个真实存在、
 /// 却无法被命名的根——因此它以 [`Scope::Unresolvable`] 回来，工具在正文里报出原因，而不是让调用失败。
+/// The workspace a member root belongs to, when this root is one of its members.
+/// 当这个根是某个工作区的成员时，给出那个工作区。
+///
+/// The scenario round's measured failure was an answer given at a **member** root: asked there,
+/// `callgraph {orphans: true}` reported two functions as orphans whose callers live in the other
+/// member, because a member root simply cannot see them. The answer has to say so, and this is how
+/// it learns there is something above it to point at.
+/// 情景轮量到的失效是"在**成员**根上作答"：在那里问 `callgraph {orphans: true}`，两个调用者在另一个成员
+/// 里的函数被报成孤儿，因为成员根本来看不见它们。答案必须说明这一点，而这个助手让它知道上面还有东西。
+pub(crate) fn enclosing_workspace(root: &Path) -> Option<std::path::PathBuf> {
+    let name = root.file_name()?.to_string_lossy().to_string();
+    let mut current = root.parent();
+    while let Some(directory) = current {
+        if let Ok(text) = std::fs::read_to_string(directory.join("Cargo.toml"))
+            && text.contains("[workspace]")
+            && text.contains(&name)
+        {
+            return Some(directory.to_path_buf());
+        }
+        current = directory.parent();
+    }
+    None
+}
+
 pub(crate) fn scope(root: &Path) -> Result<Scope, String> {
     let configured = std::env::var(lexicon::NAMESPACE_ENV).ok();
     match namespace_from(configured.as_deref(), root) {

@@ -98,6 +98,20 @@ const BOOKKEEPING = /^agent_teams_|^send_message$/;
 // directly.
 // 哪些调用打到了本组自己的仪器。两个成员都经 `bash` 驱动各自那件仪器，因此仪器靠命令文本而不是工具名来
 // 认——而这层间接本身就是一条发现：两件仪器里只有一件提供了 agent 能直接调用的命令。
+// What an "other" call was for. Lumping every non-instrument call into `bash` made the two arms
+// look alike when they were not: one drives the test suites through the instrument (`check {face}`)
+// while the other runs `cargo test` by hand, and only a purpose split shows that.
+// 一次"其它"调用是为了什么。把所有非仪器调用都堆成 `bash` 会让两个臂看起来一样而实际不一样：一个
+// 经仪器驱动套件（`check {face}`），另一个手跑 `cargo test`，只有按用途分开才看得出来。
+function purposeOf(call) {
+  const text = JSON.stringify(call.arguments || {});
+  if (/cargo\s+(test|build|check|clippy|fmt|run)/.test(text)) return "build/test";
+  if (/(^|[^\w])(rg|grep|find|fd|ls|sed|awk|python3?|node)\b/.test(text)) return "probe";
+  if (call.name === "read") return "read";
+  if (call.name === "edit" || call.name === "write") return "write";
+  return "other";
+}
+
 function instrumentCall(name, arguments) {
   if (name !== "bash" && name !== "job_output") {
     return /^nichlink\.|^codegraph/.test(name) ? name : null;
@@ -240,10 +254,23 @@ function report(path) {
       byTool.set(call.name, (byTool.get(call.name) || 0) + 1);
     }
     const order = [...byTool.entries()].sort((left, right) => right[1] - left[1]);
+    // The purpose split of the calls that did **not** reach the instrument.
+    // 那些**没有**打到仪器的调用，按用途分解。
+    const purposes = new Map();
+    for (const call of sub) {
+      if (instrumentCall(call.name, call.arguments)) continue;
+      const purpose = purposeOf(call);
+      purposes.set(purpose, (purposes.get(purpose) || 0) + 1);
+    }
+    const purposesText = [...purposes.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .map(([name, count]) => `${name} ${count}`)
+      .join(" · ");
     console.log(
       `      total tool calls ${sub.length} (+${book} bookkeeping) = instrument ${instrument} + ` +
         `other ${sub.length - instrument} · by tool: ` +
-        order.map(([name, count]) => `${name} ${count}`).join(" · ")
+        order.map(([name, count]) => `${name} ${count}`).join(" · ") +
+        ` · other by purpose: ${purposesText || "none"}`
     );
   }
   console.log(`  TOTAL reasoning ${reasoning} chars · substantive calls ${substantive}`);
