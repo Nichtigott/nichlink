@@ -314,3 +314,52 @@ fn a_name_that_matches_nothing_points_at_the_literal_mode() {
     assert!(text.contains("Type::method"), "{text}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A name that is in the build's published record is answered **without deriving the sources** —
+/// that is what the four published face facts are for — and a query that only the module can
+/// satisfy still falls back to the derivation, because a record does not carry a module.
+/// 名字出现在构建已发布的记录里时，答案是**不推导源码**就给出的——那四项已发布的面事实正是为此——而只有
+/// 模块能满足的查询仍然回落到推导，因为记录不携带模块。
+#[test]
+fn a_published_record_answers_a_name_without_deriving_the_sources() {
+    use crate::mcp::published::derivations;
+
+    let (root, _name) = package("record-first");
+    let out = root.join("target/nichlink/out");
+    std::fs::create_dir_all(&out).expect("output dir");
+    std::fs::write(
+        out.join("pruning_manifest.tsv"),
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\n\
+         bdb4427ce81c9bc51e56bee7667fd2be\tbutton/button.rs\t-\talpha::beta::gamma\tGamma\t\
+         gamma\t-\n",
+    )
+    .expect("published record");
+
+    let before = derivations();
+    let answered = search(&root, &json!({"query": "gamma"})).expect("an answer");
+    assert!(
+        answered.contains("answered from the build's published records"),
+        "{answered}"
+    );
+    assert!(answered.contains("kind=Gamma"), "{answered}");
+    assert!(answered.contains("registry=gamma"), "{answered}");
+    assert_eq!(
+        derivations(),
+        before,
+        "the record answered it, so no source should have been walked: {answered}"
+    );
+
+    // `button` is the fixture face's **module**, which a record does not carry: the same query on
+    // the same tree has to derive.
+    let before = derivations();
+    let derived = search(&root, &json!({"query": "button"})).expect("an answer");
+    assert!(
+        derived.contains("module=button"),
+        "a module-only match comes from the sources: {derived}"
+    );
+    assert!(
+        derivations() > before,
+        "the module half can only be answered by deriving: {derived}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

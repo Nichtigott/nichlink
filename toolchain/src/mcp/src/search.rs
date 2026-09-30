@@ -36,6 +36,7 @@
 use std::path::Path;
 
 use crate::build_time::FaceView;
+use nichlink_kernel::identity::NodeId;
 use serde_json::Value;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
@@ -122,20 +123,40 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // ——每个成员带它的状态——而推导不出树的成员明说，而不是在一份更长的文件命中里什么都不贡献。
     match workspace::scope(root) {
         Ok(Scope::Package(namespace)) => {
-            let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
-            results.extend(package_tree_lines(
-                root,
-                &faces,
-                &unparsable,
-                &query,
-                limit,
-                &mut hits,
-                &mut withheld_hits,
-            ));
+            match record_face_lines(root, &query, limit, &mut hits, &mut withheld_hits)? {
+                Some(lines) => results.extend(lines),
+                None => {
+                    let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
+                    let lines = package_tree_lines(
+                        root,
+                        &faces,
+                        &unparsable,
+                        &query,
+                        limit,
+                        &mut hits,
+                        &mut withheld_hits,
+                    );
+                    // The source is declared only when there is something to read: on a query that
+                    // matched nothing, "derived from the sources" is noise about an empty answer.
+                    // 只有真有东西可读时才声明来源：什么都没匹配上时，"由源码推导而来"是对一份空答案的噪音。
+                    if !lines.is_empty() {
+                        results.push(DERIVED_SOURCE.to_owned());
+                    }
+                    results.extend(lines);
+                }
+            }
         }
         Ok(Scope::Workspace(members)) => {
             results.push(workspace::roster(root, &members));
             for member in &members {
+                if let Some(lines) =
+                    record_face_lines(&member.dir, &query, limit, &mut hits, &mut withheld_hits)?
+                    && !lines.is_empty()
+                {
+                    results.push(format!("member {} ({})", member.name, member.status()));
+                    results.extend(lines);
+                    continue;
+                }
                 match member.derived_tree() {
                     Ok((faces, unparsable)) => {
                         let lines = package_tree_lines(
@@ -422,6 +443,105 @@ fn package_tree_lines(
 /// appear twice — once as a face and once as a file.
 /// 源码路径有意不在那四项之内：文件命中的行已经回答了"哪个文件"，而让面按源码匹配会让每个文件都出现
 /// 两次——一次作为面，一次作为文件。
+/// Says which tree the face rows below came from when they came from the build's records.
+/// 下面那些面行来自构建记录时，说明它们读的是哪棵树。
+const RECORD_SOURCE: &str = "tree  answered from the build's published records (a record carries \
+                             path, kind and registry_name; the module is not in one, so a query \
+                             that only matches a module derives from the sources)";
+
+/// Says which tree they came from when they had to be derived.
+/// 只能推导时，说明它们读的是哪棵树。
+const DERIVED_SOURCE: &str =
+    "tree  derived from the sources (this root's published records did not answer the query)";
+
+/// Face rows answered from the member's published records, when they can be.
+/// 能从成员的已发布记录作答的那些面行。
+///
+/// The records carry everything a name match needs and a verdict needs — identity, source, and the
+/// three declared facts — so this path costs no source walk at all. It answers `None` when the
+/// records are unreadable or nothing in them matches, and the caller derives instead; that is not a
+/// fallback of last resort but the honest half of the split, because a record does **not** carry the
+/// face's module, and a query that only matches a module can only be answered from the sources.
+/// 记录携带了名字匹配与裁决所需的一切——身份、源码路径，以及那三项声明的事实——因此这条路径完全不花
+/// 源码遍历。记录读不了、或其中没有命中时返回 `None`，由调用方改为推导；那不是最后的兜底，而是这个分工
+/// 诚实的那一半：记录**不**携带面的模块，而只匹配模块的查询只能由源码作答。
+fn record_face_lines(
+    root: &Path,
+    query: &str,
+    limit: usize,
+    hits: &mut usize,
+    withheld_hits: &mut usize,
+) -> Result<Option<Vec<String>>, String> {
+    let out = crate::mcp::build_evidence::out_dir(root);
+    let Ok(rows) = crate::build_time::read_pruning_manifest(&out) else {
+        return Ok(None);
+    };
+    // One row per tracked symbol, so a face appears as many times as it tracks symbols.
+    // 每个被跟踪符号一行，因此一个面会出现它跟踪符号数次。
+    let mut by_id: std::collections::BTreeMap<NodeId, &crate::build_time::PruningRow> =
+        std::collections::BTreeMap::new();
+    for row in &rows {
+        by_id.entry(row.id).or_insert(row);
+    }
+    let built = TreeDelta::read(root);
+    let mut lines = Vec::new();
+    for (id, row) in &by_id {
+        let declared = [
+            row.path.as_deref(),
+            row.kind.as_deref(),
+            row.registry_name.as_deref(),
+        ];
+        if !declared
+            .iter()
+            .flatten()
+            .any(|field| field.to_ascii_lowercase().contains(query))
+        {
+            continue;
+        }
+        if *hits < limit {
+            lines.push(record_face_line(*id, row, &built));
+            *hits += 1;
+        } else {
+            *withheld_hits += 1;
+        }
+    }
+    if lines.is_empty() {
+        return Ok(None);
+    }
+    let mut answer = vec![RECORD_SOURCE.to_owned()];
+    if built.known && !built.current {
+        answer.push(
+            "tree  build stale (run `nichlink check`); the statuses below compare against that \
+             build"
+                .to_owned(),
+        );
+    }
+    answer.extend(lines);
+    Ok(Some(answer))
+}
+
+/// One face hit built from a published record.
+/// 由一条已发布记录构成的面命中。
+fn record_face_line(id: NodeId, row: &crate::build_time::PruningRow, built: &TreeDelta) -> String {
+    let status = if !built.known {
+        "build unknown (run `nichlink check`)".to_owned()
+    } else {
+        let verdict = built.status_of(id, &row.source);
+        if let FaceStatus::Reidentified(previous) = verdict {
+            format!("{} ({previous} -> {id})", verdict.label())
+        } else {
+            verdict.label().to_owned()
+        }
+    };
+    format!(
+        "face  {:<40} kind={:<14} registry={:<16} source={}  [{status}]",
+        row.path.as_deref().unwrap_or("-"),
+        row.kind.as_deref().unwrap_or("-"),
+        row.registry_name.as_deref().unwrap_or("-"),
+        row.source
+    )
+}
+
 fn matches_face(face: &FaceView, query: &str) -> bool {
     [&face.path, &face.kind, &face.module, &face.registry_name]
         .iter()

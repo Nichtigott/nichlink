@@ -132,19 +132,31 @@ impl TreeDelta {
     /// Where one face stands, in the one vocabulary both tools use.
     /// 一个面的状态，用两个工具共用的那一套词汇。
     pub(crate) fn status(&self, face: &FaceView) -> FaceStatus {
-        if let Some(previous) = self.by_source.get(&face.source) {
+        self.status_of(face.id, &face.source)
+    }
+
+    /// The same verdict for a face named by identity and source only.
+    /// 只给身份与源码路径时的同一条裁决。
+    ///
+    /// The verdict never needed more than these two: the manifest keys a face by its source and
+    /// remembers its identity, which is why an answer can be built from the build's published
+    /// records (they carry both) without deriving the sources at all.
+    /// 裁决本来就不需要多过这两样：清单按源码路径给面做键、并记住它的身份，因此答案可以完全由构建已发布
+    /// 的记录构成（记录两样都有），而不必推导源码。
+    pub(crate) fn status_of(&self, id: NodeId, source: &str) -> FaceStatus {
+        if let Some(previous) = self.by_source.get(source) {
             // The identity is a hash over the source path and the kind, so a
             // recorded source whose identity differs is a changed `kind` — the one
             // piece of an identity that can move without the file moving.
             // 身份是对源码路径与 kind 的散列，因此记录了同一路径而身份不同，就是 kind 变了——
             // 这是身份输入里唯一能在文件不动的情况下移动的。
-            return if *previous == face.id {
+            return if *previous == id {
                 FaceStatus::Ok
             } else {
                 FaceStatus::Reidentified(*previous)
             };
         }
-        if self.ids.contains(&face.id) {
+        if self.ids.contains(&id) {
             FaceStatus::Ok
         } else {
             FaceStatus::AddedSinceBuild
