@@ -1,29 +1,56 @@
-//! Pins for the one-shot client: the list is the catalogue in one line each, and a call's exit code
-//! is its verdict.
-//! 一次性客户端的钉子：清单是目录的一行式形态，而一次调用的退出码就是它的判定。
+//! Pins for the one-shot client: the list is the catalogue one entry each (name, first sentence,
+//! keys), and a call's exit code is its verdict.
+//! 一次性客户端的钉子：清单是目录的"每条一目"形态（名字、第一句、键名），而一次调用的退出码就是它的判定。
 
 use super::*;
 use serde_json::json;
 
-/// The list has one line per tool, each naming the tool and then its first sentence.
-/// 清单每个工具一行，先点名工具、再给它的第一句。
+/// The list has one **entry** per tool — the name, its first sentence, and the keys it takes
+/// (`*` = required) — because the round measured an arm guessing a key name (`--face` where the
+/// tool wanted `node`) and spending a refusal on it: naming the tool without naming what it takes
+/// is the shape that caused it. The entry's first line stays the one-line form the earlier pin
+/// asserted; the keys line is the addition, and this pin now says both.
+/// 清单每个工具**一条**——名字、第一句，以及它接受的键（`*` = 必填）——因为那一轮量到一个臂猜键名
+/// （工具要 `node`、它写了 `--face`）并为此白吃一次拒绝：只点工具名、不说它收什么，正是造成这件事的形状。
+/// 条目的第一行仍是早先那条钉子断言的"一行式"，键名行是新增的，这条钉子现在把两半都说出来。
 #[test]
-fn the_list_is_the_catalogue_one_line_each() {
-    let lines = list_tool_lines();
-    assert_eq!(lines.len(), crate::mcp::tools::tools().len());
-    for line in &lines {
-        assert!(line.starts_with("nichlink."), "{line}");
+fn the_list_is_the_catalogue_one_entry_each() {
+    let entries = list_tool_lines();
+    assert_eq!(entries.len(), crate::mcp::tools::tools().len());
+    for entry in &entries {
+        let mut lines = entry.lines();
+        let first = lines.next().unwrap_or_default();
+        assert!(first.starts_with("nichlink."), "{entry}");
         assert!(
-            line.contains(" — "),
-            "name, then the first sentence: {line}"
+            first.contains(" — "),
+            "name, then the first sentence: {entry}"
         );
-        assert!(!line.contains('\n'), "one line each: {line}");
+        let keys = lines.next().unwrap_or_default();
+        assert!(
+            keys.trim_start().starts_with("keys: "),
+            "then its keys: {entry}"
+        );
+        assert_eq!(lines.count(), 0, "and nothing else: {entry}");
     }
     assert!(
-        lines
+        entries
             .iter()
-            .any(|line| line.starts_with("nichlink.callgraph — Show direct static callers")),
-        "{lines:?}"
+            .any(|entry| entry.starts_with("nichlink.callgraph — Show direct static callers")),
+        "{entries:?}"
+    );
+    // The key line says which names are required, and a branched pair is not starred as if both
+    // were: `search` takes `query` or `literal`, and starring both would be a louder lie.
+    // 键名行说出哪些名字是必填，而"二选一"的那对不会被当成两个都必填：`search` 收 `query` 或
+    // `literal`，两个都打星是更响的谎。
+    let search = entries
+        .iter()
+        .find(|entry| entry.starts_with("nichlink.search — "))
+        .expect("the search entry");
+    assert!(search.contains("keys: "), "{search}");
+    assert!(!search.contains("query*"), "query is one of two: {search}");
+    assert!(
+        !search.contains("literal*"),
+        "literal is one of two: {search}"
     );
 }
 

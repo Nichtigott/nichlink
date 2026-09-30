@@ -67,6 +67,44 @@ tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `
 /// is the ordered, cheap view of the same catalogue `tools/list` advertises in full.
 /// 第一句才是被读到的部分——评测里那些摘要引的就是它——因此这张表是同一个目录的"有序、便宜"的视图，
 /// 而 `tools/list` 给的仍是完整形态。
+/// The property names a tool accepts, following `anyOf`/`oneOf` one level down, with the names it
+/// insists on.
+/// 一个工具接受的属性名（向下跟一层 `anyOf`/`oneOf`），以及它坚持要的那些名字。
+fn visit_keys(schema: Option<&Value>, names: &mut Vec<String>, required: &mut Vec<String>) {
+    let Some(schema) = schema else { return };
+    if let Some(items) = schema.get("required").and_then(Value::as_array) {
+        for item in items.iter().filter_map(Value::as_str) {
+            if !required.iter().any(|seen| seen == item) {
+                required.push(item.to_owned());
+            }
+        }
+    }
+    if let Some(map) = schema.get("properties").and_then(Value::as_object) {
+        for key in map.keys() {
+            if !names.iter().any(|seen| seen == key) {
+                names.push(key.clone());
+            }
+        }
+    }
+    // Branched names are collected **without** the required mark: a `anyOf` branch stating that it
+    // needs one of two keys does not mean both are required, and starring both would be a louder
+    // lie than the missing star. The refusal still names the pair.
+    // 分支里的名字**不**带必填标记：`anyOf` 的一支说"两个键要其一"，不等于两个都必填，把两个都打星
+    // 是比"没星"更响的谎。拒绝文案仍会把那一对点出来。
+    for branch in ["anyOf", "oneOf"] {
+        if let Some(items) = schema.get(branch).and_then(Value::as_array) {
+            for item in items {
+                let mut ignored = Vec::new();
+                visit_keys(Some(item), names, &mut ignored);
+            }
+        }
+    }
+}
+
+/// One line per tool: its name, the first sentence of its description, and the keys it takes
+/// (`*` = required), so a caller does not have to guess a key name and spend a refusal learning it.
+/// 每个工具一行：名字、描述第一小句，以及它接受的键（`*` = 必填），这样调用方不必靠猜键名、再花一次
+/// 被拒来学会它。
 pub fn list_tool_lines() -> Vec<String> {
     crate::mcp::tools::tools()
         .into_iter()
@@ -77,7 +115,27 @@ pub fn list_tool_lines() -> Vec<String> {
                 .and_then(Value::as_str)
                 .unwrap_or("");
             let first = first_sentence(description);
-            Some(format!("{name} — {first}"))
+            // The shape of the call, on the same line as its name: the round measured an arm
+            // guessing a key (`--face` where the tool wanted `node`) and burning a refusal on it,
+            // because this list named the tool without naming what it takes.
+            // 调用的形状与名字同一行：那一轮量到一个臂猜键名（工具要 `node`、它写了 `--face`）并为此
+            // 白吃一次拒绝——因为这张表只点了工具名，没说它收什么。
+            let schema = tool.get("inputSchema");
+            let mut properties: Vec<String> = Vec::new();
+            let mut required: Vec<String> = Vec::new();
+            visit_keys(schema, &mut properties, &mut required);
+            let keys = properties
+                .iter()
+                .map(|key| {
+                    if required.contains(key) {
+                        format!("{key}*")
+                    } else {
+                        key.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("{name} — {first}\n    keys: {keys} (* = required)"))
         })
         .collect()
 }
