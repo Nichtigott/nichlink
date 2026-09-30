@@ -511,7 +511,15 @@ pub(crate) fn tools() -> Vec<Value> {
              `0 passed` is not a pass. The reply ends with a **whole-tree census** of static facts \
              for the open question — what else is wrong here — each column saying what it does not \
              cover: numeric constants that are re-spelled elsewhere or read nowhere outside tests, \
-             production `pub fn` names no test writes down, and the entry plan's own site counts.",
+             production `pub fn` names no test writes down, the entry plan's own site counts, and \
+             the production functions **no test can reach**, by a static walk from this tree's test \
+             files along the same name-in-a-call-list rule the orphan view uses (five rows and the \
+             withheld count, or `skipped (N functions over the limit)` when the tree is larger than \
+             that walk was sized for). That last column says what it cannot see instead of calling \
+             itself coverage: calls made through dynamic dispatch, function pointers, FFI or macro \
+             expansion are invisible to it, a function reached only through a trait method or a \
+             closure does not count, and matching is by name, so an unrelated same-named call \
+             counts as reaching it.",
             json!({"type":"object","properties":{
                 "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
