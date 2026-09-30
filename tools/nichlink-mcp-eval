@@ -1063,6 +1063,64 @@ PROBES = {
 # 基线仪的输入按关卡显式写出，而不是从题面文字里解析：先按 `pattern` grep，再查答案所需的证据
 # （`rule`）到底有没有写在树里。第一版从中文散文里抽符号与规则短语，结果两关报 0、八关全报"未写在树里"
 # ——那是它自己的抽取器失败，不是关卡的事实。
+# The prompt-simulation families the maintainer asked for: the user says only that something is wrong
+# (or that they want more of it), and the measurement is how much **thinking and total tool calling**
+# it takes to converge — plus whether a repetition was productive or caused by imprecise information.
+# These need a project with **registration faces** (an "object" has to be an object in this
+# repository's own vocabulary), so the carrier project is built next; the prompts and the judging are
+# pinned here first so they cannot drift while the project is being made.
+# 维护者要的提示词模拟族：用户只说"有问题"（或"还想再多一点"），量的是**收敛所需多少思考与多少次总工具
+# 调用**，以及某段反复是"有产出"还是"被不精确的信息逼出来的"。它们需要**带注册面的项目**（"对象"必须是
+# 本仓词汇里的对象），因此承载项目下一步建；题面与判据先固化在这里，免得建项目时漂移。
+PROMPTS = {
+    "a-extend": (
+        "我要加一个新对象，和现有的差不多。",
+        "横向扩展：新增一个同类对象（面/字段），必须沿用现有对象的约定而不是重新发明。",
+    ),
+    "b-deepen": (
+        "这个对象内部还不够。",
+        "深度深化：在既有对象内部加一层（方法/字段/不变量），必须与它自己已写的契约相容。",
+    ),
+    "c-adopt-then-extend": (
+        "已经采信了，现在再横向加一个。",
+        "已有采信记录后再横向扩展：必须处理采信台账（续期/新增记录），不能只改代码。",
+    ),
+    "d-one-broken": (
+        "这个对象有问题。",
+        "单对象故障（三种子形态）：调用链断了 / 对象内部不满足自己的契约 / 两者混杂。",
+    ),
+    "e-many-broken": (
+        "这几个对象都有问题。",
+        "多对象故障：能否分别定位而不互相污染（改 A 不掩盖 B 的症状）。",
+    ),
+}
+
+# What the round measures, pinned with the prompts: token spend is estimated (characters / 3.5) and
+# said to be an estimate; chain length uses the same reasoning-character/block ruler as chainfit; and
+# every repetition is classified as productive (new evidence moved it) or information-caused (the same
+# question re-asked, the same call re-sent, a return trip caused by an imprecise answer) with a share.
+# 这一轮量什么，与题面一起固化：token 按字符/3.5 估算并标明是估算；链长用与 chainfit 同一把尺子
+# （推理字符/块数）；每一段反复都分类为"有产出（新证据推进了它）"或"信息导致（同一问题被重问、同一调用
+# 被重发、因答案不精确而回头）"并给出占比。
+PROMPT_MEASURES = (
+    "tokens (estimated: characters / 3.5)",
+    "chain length (reasoning characters and blocks, the chainfit ruler)",
+    "total tool calls (instrument + other, the axis added on 2026-09-30)",
+    "repetition split: productive vs information-caused, judged per segment from the raw log",
+)
+
+
+def prompt_plan():
+    print("Prompt-simulation families / 提示词模拟族（题面只说「有问题」）:\n")
+    for key, (prompt, intent) in PROMPTS.items():
+        print(f"  {key:<22} 「{prompt}」")
+        print(f"  {'':<22}   {intent}")
+    print("\nMeasures / 量什么:")
+    for measure in PROMPT_MEASURES:
+        print(f"  - {measure}")
+    return 0
+
+
 BASELINE = {
     1: ("post(", ""),
     2: ("audit", "audit = []"),
@@ -1380,6 +1438,8 @@ def main(argv):
         scenario_plan()
     elif command == "scenario-check":
         return scenario_check(argv[2])
+    elif command == "prompt-plan":
+        return prompt_plan()
     elif command == "scenario-baseline":
         return scenario_baseline(argv[2])
     elif command == "scenario-probe":
