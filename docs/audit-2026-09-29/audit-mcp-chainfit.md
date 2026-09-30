@@ -138,3 +138,83 @@ one byte string (`md5 c39b1b4264989855eebf1e3ec4b2946f` × 8 ⇒ no assertion wa
 diff is one file and one line, every store has a single commit and a clean status, and the hard
 constraints (`tools/nichlink-mcp-eval`, `git log`/`show`/`HEAD~`/`reflog`, `diff -r`/`cmp`, other
 trees' paths) have **zero** hits across all eight reports and both logs.
+
+## 8. Dissecting the chain: where the +53% actually went / 解剖思维链：那 +53% 花在哪
+
+The maintainer's reading — "our description surface is too bare and unorganised; our input ought to
+be smaller and more precise, so our chain ought to be shorter" — is **half right, and the measurement
+says which half**.
+维护者读法（「描述太裸没有组织、按理输入更小更精确、约束更强、本该更好」）**对了一半**，而实测说清了是哪一半。
+
+**The surface is not small — it is large and unordered / 描述面不小，而是"大而无序"**
+
+| part 部分 | size 体量 |
+| --- | --- |
+| `initialize.instructions` (the whole workflow guidance) 流程指引全文 | **202 字符（一句话）** |
+| 22 tool descriptions 工具描述 | 27,846 字符 |
+| 22 input schemas 入参 schema | 8,527 字符 |
+| total surface 描述面合计 | **36,373 字符** |
+| largest single description 单条最大 | `diff` 2,195 / `search` 2,185 / `apply` 2,139 |
+| smallest 最小 | `status` 61 |
+
+So the token premise is false in the direction that hurts: we ship **180× more per-tool prose than
+workflow guidance**, the agent reads the *first clause* of each description (that is what its own
+digests quote), and nothing anywhere says *which tool answers which symptom*.
+因此"输入更小"这条在**伤人的那一侧**不成立：每条工具的说明是流程指引的 180 倍，而 agent 只读每条描述的**第一小句**
+（它自己的摘要就是这么引的），而且没有任何地方说**哪种症状该用哪个工具**。
+
+**What reached the model, and how long it stayed / 实际到达模型的是什么、留了多久**
+
+One `tools/list` payload arrived as a **17,917-character tool result — and truncated** (the arm's own
+hand-rolled client capped it), after which it was carried through **52 further assistant steps**.
+一次 `tools/list` 的输出以 **17,917 字符的一帧**到达，**而且被截断**（该组自己手搓的客户端设了上限），随后**被 52
+个后续步骤一直携带**。
+
+**The first third of round 1 is a client-building tax / 第 1 题前三分之一是"自建客户端税"**
+
+Reading our arm's 25 reasoning blocks in round 1: blocks 0–10 are build the binary, check its
+freshness, **write a Python MCP driver**, debug a hang (`notifications/initialized` without an id), a
+`pkill` that matched its own shell, and the truncated list — including the moment it asked itself
+whether a bridge "oriented at nichlink registration faces" even applies to a plain Rust project.
+The diagnosis then happens in **three blocks** (the guard, its doc, the fix). Codegraph's round 1, same
+brief: block 0 plans, block 2 runs one `explore`, **block 3 names the site**. Same verdict, and the
+entire difference sits in the first third.
+读我们这组第 1 题的 25 个推理块：块 0–10 是构建二进制、核对它新不新、**写一个 Python MCP 驱动**、排查一次挂起
+（`notifications/initialized` 没带 id）、一次把自己的 shell 也匹配上的 `pkill`、以及那份被截断的清单——其中还
+包括它自问"这个面向 nichlink 注册面的桥是否适用于一个普通 Rust 项目"。定罪只用了**三块**（守卫、它的文档、修法）。
+codegraph 第 1 题同一份题面：块 0 计划、块 2 一条 `explore`、**块 3 点名病灶**。同样的判定，差别全在前三分之一。
+
+**Why the prose instruction was ignored 4/4 / 那条散文指令为什么 0/4 被无视**
+
+Because guidance lives in prose while the agent's decisions are shaped by **what an answer hands
+back**. The one instruction that did work is the one embedded in a *response*: `search` with no match
+says "pass `literal`", and the arm then used `literal` correctly in round 2. That is the design lesson:
+put the next step in the answer, not in a preamble.
+因为指引住在散文里，而 agent 的决定由**答案交回了什么**塑造。唯一生效的指令是嵌在**响应**里的那条：`search` 查不到
+时会说 "pass `literal`"，而该组在第 2 题就正确用上了 `literal`。这就是设计结论：**把下一步放进答案里，而不是放进开场白**。
+
+**Ranked causes / 排序后的成因**
+
+1. **No client / 没有可直接调用的客户端** — dominant: it costs the first third of the first round plus a
+   protocol-hang detour, and the client it writes truncates the surface. Codegraph pays none of it.
+2. **Large, unordered surface / 大而无序的描述面** — 36.4k characters of essays against 202 characters
+   of procedure; the first clause is what gets read.
+3. **Answers need a follow-up / 答案要补一次调用** — `converge` without source, `callgraph` without
+   source by default, `literal` hits without context: each costs one call plus the deliberation about
+   whether to make it.
+4. **Prose does not steer / 散文不塑造行为** — 0/4 compliance, while an in-answer pointer worked.
+
+**One measurement artifact, disclosed / 一处度量瑕疵，如实说明**: the briefs capped the report at 60
+lines, and **both** arms spent 3–4 blocks trimming to fit. It inflates both chains, so it does not
+explain the gap — but it is my brief's cost, not the tools'.
+题面把报告限制在 60 行，**两组**都为压行数花了 3–4 块推理。它同时抬高两条链，因此解释不了差距——但那是我的题面成本，
+不是工具的成本。
+
+**What this run could not judge / 这次评不到的东西**: the comparison only exercised the *lookup* half.
+`check` (run a face and report the exit code and log), `status`+`faces`, `apply`/`plugin` (the write
+path), `diff`/`trace`/`unified`/`adopted` were never needed by these four bugs, so "effect on
+architecture and code quality" cannot be settled from this run — and those are exactly the capabilities
+codegraph does not have.
+这次对照只压到**查找**那一半。`check`、`status`+`faces`、`apply`/`plugin`（写入通道）、
+`diff`/`trace`/`unified`/`adopted` 在这四道题里都没用上，因此"对架构与代码质量的效果"**这次判不了**——而那些恰好是
+codegraph 没有的能力。
