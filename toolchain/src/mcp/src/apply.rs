@@ -518,16 +518,23 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
     })?;
     let kind = face.kind.clone();
     let path = root.join("src").join(&face.source);
+    // Every message names the file **relative to the package**, because a preview's absolute path is
+    // a throwaway copy deleted a moment later — and the write path's own rule is that a preview must
+    // never tell a caller to look somewhere that will not exist. An independent review of the first
+    // cut caught this by quoting the `/tmp/nichlink-toolchain-preview-…` path out of a refusal.
+    // 所有文案都用**相对包**的路径：预览的绝对路径是一份随后就被删掉的一次性副本，而写入路径自己的
+    // 规矩就是"预览绝不能叫调用方去看一个随后不存在的目录"。第一版的独立复核正是从一条拒绝文案里
+    // 把 `/tmp/nichlink-toolchain-preview-…` 抄出来抓到这个的。
+    let named = format!("src/{}", face.source);
     let text = std::fs::read_to_string(&path)
-        .map_err(|error| format!("{} is not readable: {error}", path.display()))?;
+        .map_err(|error| format!("{named} is not readable: {error}"))?;
     let marker = format!("pub struct {kind};");
     let markers = text.lines().filter(|line| line.trim() == marker).count();
     if markers != 1 {
         return Err(format!(
-            "deepen needs the line `{marker}` in {} exactly once to hold the layer, and found it \
-             {markers} time(s); this action deepens a face whose shape it can read rather than \
-             guessing at another shape",
-            path.display()
+            "deepen needs the line `{marker}` in {named} exactly once to hold the layer, and found \
+             it {markers} time(s); this action deepens a face whose shape it can read rather than \
+             guessing at another shape"
         ));
     }
     let listed = fields
@@ -560,8 +567,7 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
          \x20       &self.parts\n\
          \x20   }}\n}}\n"
     ));
-    std::fs::write(&path, text)
-        .map_err(|error| format!("{} is not writable: {error}", path.display()))?;
+    std::fs::write(&path, text).map_err(|error| format!("{named} is not writable: {error}"))?;
     Ok(Outcome {
         message: format!(
             "deepened {}: `{kind}` now holds `{kind}Parts` with {} part(s) ({listed}); its \
@@ -750,6 +756,17 @@ fn report(
              forces its graft slot to `full graft`, and moves the factory-shape assertions that \
              count faces, scope rows and slots; the layer above was measured to leave all of them \
              alone\n",
+        );
+        // The one shape change this action *does* make, said before the write: the face stops being a
+        // unit struct. An independent review of the first cut listed it as a boundary, and a
+        // consequence a caller has to discover by compiling is exactly what this block exists to
+        // prevent.
+        // 这个动作**确实**会带来的一处形状变化，写在写之前：这个面不再是单位结构体。第一版的独立复核
+        // 把它列为一条边界，而"要编译一次才知道的后果"正是这一节要消灭的东西。
+        reply.push_str(
+            "note   this face stops being a unit struct: anything that used the type as a value \
+             (`let _ = Kind;`, a literal pattern) has to be updated by hand — this action writes the \
+             face's own file and does not touch callers\n",
         );
     }
     Ok(reply)

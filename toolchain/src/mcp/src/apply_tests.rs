@@ -272,6 +272,10 @@ fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
         "the reply prices the other reading: {reply}"
     );
     assert!(
+        reply.contains("stops being a unit struct"),
+        "and says the one shape change it does make: {reply}"
+    );
+    assert!(
         reply.contains("faces 2"),
         "the registration tree is unchanged: {reply}"
     );
@@ -341,6 +345,15 @@ fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
     assert!(
         unclear.contains("pub struct Button;") && unclear.contains("0 time(s)"),
         "{unclear}"
+    );
+    // The refusal names the file **relative to the package**: a preview's absolute path is a copy
+    // that is deleted a moment later, so quoting it would send the caller somewhere that will not
+    // exist (an independent review caught exactly that in the first cut).
+    // 拒绝按**相对包**的路径点名文件：预览的绝对路径是随后就被删掉的副本，抄它等于把调用方指向一个
+    // 不存在的目录（第一版正是被独立复核这样抄出来的）。
+    assert!(
+        unclear.contains("src/") && unclear.contains("button.rs") && !unclear.contains("/tmp/"),
+        "the refusal names a path that will still exist: {unclear}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
