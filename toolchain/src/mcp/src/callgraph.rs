@@ -159,7 +159,28 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
                 )
             ));
         }
-        output.push_str(&format!("  callees: {}\n", display_list(&function.calls)));
+        // Each callee carries the line this tree defines it at: the measured `callgraph → callgraph`
+        // pair (16 forced returns in one arm's two rounds) is a walk where every hop ended with "now
+        // where is *that* one defined", which this answer can already know.
+        // 每个被调用者在**本树**有定义时带上它的定义行：量到的 `callgraph → callgraph`（一个臂两轮里 16 次
+        // 被迫回头）就是这样一次走链——每一跳都以"那它又定义在哪"收尾，而这个答案本来就能知道。
+        let definitions = labelled_sources(root, None)?;
+        let located: Vec<String> = function
+            .calls
+            .iter()
+            .map(|call| {
+                for (label, file) in &definitions {
+                    for candidate in &file.functions {
+                        let suffix = format!("::{}", candidate.name);
+                        if candidate.name == *call || call.ends_with(&suffix) {
+                            return format!("{call} -> {label}:{}", candidate.line);
+                        }
+                    }
+                }
+                call.clone()
+            })
+            .collect();
+        output.push_str(&format!("  callees: {}\n", display_list(&located)));
         // Which tests reference this definition: a name that a test file calls is covered by
         // that file, and a reader deciding what to run needs the file rather than the caller
         // list it already has. The rule for "a test file" is this reader's convenience — a
