@@ -248,11 +248,11 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         // 死路正是调用方最需要下一步的地方：名字与文本是两个问题，而**按名字**失败的拼法
         // （`Type::method`、枚举变体、失败断言印出的那句话）恰恰是 `literal` 能答的那些。评测量出了
         // 这个代价：连着三轮，"范围收窄"那一步都是"去找这句话在哪里产出"，而答案只能来自桥外的 grep。
-        results.push(
-            "no matches — names only; for text (a message, an enum variant, a qualified spelling \
-             like `Type::method`) pass `literal`"
-                .to_owned(),
-        );
+        results.push(format!(
+            "no matches in {} — names only; for text (a message, an enum variant, a qualified \
+             spelling like `Type::method`) pass `literal`",
+            root.display()
+        ));
     }
     if withheld_hits > 0 {
         results.push(crate::mcp::truncation::withheld(
@@ -350,7 +350,11 @@ fn literal_search(
         Scope::Unresolvable(reason) => results.push(format!("tree  unavailable ({reason})")),
     }
     if hits == 0 {
-        results.push("no matches".to_owned());
+        // The moment a caller most needs to know **which tree** was searched is the moment nothing
+        // matched: "no matches" alone cannot be told from "no matches in the wrong root".
+        // 调用方最需要知道**搜的是哪棵树**的时刻，恰恰是什么都没匹配上的时刻：光一句 "no matches"
+        // 分不出"这棵树里没有"与"在错的根上搜了"。
+        results.push(format!("no matches in {}", root.display()));
     } else if context == 0 {
         // Guidance in the answer rather than in a preamble: prose instructions measured 0/4
         // compliance, while the one pointer embedded in a response was followed immediately.

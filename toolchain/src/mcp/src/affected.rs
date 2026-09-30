@@ -22,17 +22,30 @@ use crate::mcp::truncation::withheld;
 const TESTS_PER_FILE: usize = 10;
 
 pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String> {
-    let files = arguments
-        .get("files")
-        .and_then(Value::as_array)
-        .ok_or_else(|| {
-            "nichlink.affected requires `files`, an array of workspace paths".to_owned()
-        })?
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::trim)
+    // One path and a list of paths are the same question asked twice, so both spellings are
+    // accepted: a single `--files <path>` became a string on the command line, and refusing it was
+    // the round's three-call detour through `--json`.
+    // 一个路径与一串路径是同一个问题问两次，因此两种写法都收：命令行上的单个 `--files <路径>` 是字符串，
+    // 拒绝它正是那轮经 `--json` 绕行的三次调用。
+    let files = match arguments.get("files") {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+        Some(Value::String(path)) => vec![path.clone()],
+        _ => {
+            return Err(
+                "nichlink.affected requires `files`: one path, a list of paths, or repeated \
+                 `--files` flags from the one-shot client"
+                    .to_owned(),
+            );
+        }
+    };
+    let files = files
+        .into_iter()
+        .map(|path| path.trim().to_owned())
         .filter(|path| !path.is_empty())
-        .map(str::to_owned)
         .collect::<Vec<_>>();
     if files.is_empty() {
         return Err("`files` must name at least one path".to_owned());
@@ -45,8 +58,8 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
     let mut output = String::from("evidence: static-heuristic\n");
     for path in &files {
         let (label_prefix, owner) = owner_of(root, path);
-        let sources = match owner {
-            Some(member) => load_sources(&member)?,
+        let sources = match &owner {
+            Some(member) => load_sources(member)?,
             None => load_sources(root)?,
         };
         let touched = sources.iter().find(|file| {
@@ -75,6 +88,44 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
             })
             .map(|candidate| format!("{label_prefix}{}", candidate.relative))
             .collect::<Vec<_>>();
+        // A test in another member reaches this file through the library's public surface, and the
+        // member that owns the changed file cannot see it. The scenario round measured exactly this
+        // miss: a change to a core model file did not name the report crate's suite, while the
+        // control tool's own impact answer did. Every other member is asked the same question here.
+        // 另一个成员里的测试经库的公开表面抵达这个文件，而拥有该改动文件的成员看不见它。情景轮量到的正是
+        // 这一次漏报：改 core 的模型文件时没有点名 report crate 的套件，而对照工具自己那条影响面答案点名了。
+        // 这里对其余每个成员问同一个问题。
+        if let Ok(crate::mcp::workspace::Scope::Workspace(members)) =
+            crate::mcp::workspace::scope(root)
+        {
+            for member in &members {
+                if Some(&member.dir) == owner.as_ref() {
+                    continue;
+                }
+                let Ok(other) = load_sources(&member.dir) else {
+                    continue;
+                };
+                let label = member
+                    .dir
+                    .strip_prefix(root)
+                    .map(|relative| {
+                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
+                    })
+                    .unwrap_or_else(|_| member.name.clone());
+                for candidate in other.iter().filter(|candidate| is_test_file(candidate)) {
+                    let reaches = candidate.functions.iter().any(|caller| {
+                        caller.calls.iter().any(|call| {
+                            names
+                                .iter()
+                                .any(|name| call == name || call.ends_with(&format!("::{name}")))
+                        })
+                    });
+                    if reaches {
+                        tests.push(format!("{label}/{}", candidate.relative));
+                    }
+                }
+            }
+        }
         tests.sort();
         tests.dedup();
         output.push_str(&format!(

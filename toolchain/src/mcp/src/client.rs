@@ -269,7 +269,21 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         object.insert(key, value);
     }
     for (key, value) in overrides {
-        object.insert(key, value);
+        // A repeated flag is how a list is spelled on a command line: `--files a --files b` becomes
+        // the array the tool asks for. Without it the only spelling was a pasted `--json` object,
+        // which the round measured costing three refused calls.
+        // 重复的开关就是命令行上写列表的方式：`--files a --files b` 变成工具要的那个数组。没有它，
+        // 唯一的写法是粘贴一个 `--json` 对象——那轮量到它花了三次被拒的调用。
+        match object.get_mut(&key) {
+            Some(Value::Array(items)) => items.push(value),
+            Some(existing) => {
+                let first = std::mem::take(existing);
+                object.insert(key, Value::Array(vec![first, value]));
+            }
+            None => {
+                object.insert(key, value);
+            }
+        }
     }
     let root = crate::mcp::protocol::package_root();
     call_tool(&root, name, &Value::Object(object)).map_err(Refusal::Tool)

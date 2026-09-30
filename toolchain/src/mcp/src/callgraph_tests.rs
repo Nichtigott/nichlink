@@ -129,6 +129,25 @@ fn the_limit_contract_is_the_one_the_catalog_declares() {
 /// says so in the reply.
 /// 实测：评测每一轮都在这个工具只给了名字之后多花一次调用，因此默认改成"不需要补问"的那份答案，而
 /// `source: false` 是那个会在回复里说明自己的退出选项。
+/// The source block starts at the doc comment's first line, because that pairing is what lets a
+/// reader catch a promise the implementation contradicts — the round-4 trap was decided by it.
+/// 源码块从文档注释首行起打，因为正是这个并排让读者抓住"承诺与实现相矛盾"——第 4 题的陷阱就由它裁决。
+#[test]
+fn the_source_block_starts_at_the_docs_first_line() {
+    let root = crate::mcp::tools::tools_tests::scratch_package("docline");
+    let answer = callgraph(&root, &json!({"function": "used"})).expect("an answer");
+    let source = answer
+        .split("  source:\n")
+        .nth(1)
+        .expect("the bodies are included by default");
+    let first = source.lines().next().unwrap_or_default();
+    assert!(
+        first.trim_start().starts_with("///"),
+        "the doc rides along: {first:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn the_bodies_are_included_unless_asked_otherwise() {
     let root = tree("bodies", 1, 1);
