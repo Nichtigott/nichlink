@@ -170,13 +170,18 @@ pub(crate) fn tools() -> Vec<Value> {
              ships it, are answered before the write instead of after a red run. A refusal that has \
              a way forward says so: a parent that owns no registry is told `needs_registry`, and a \
              slot whose face now owns children is told `full graft`, while the rule itself still \
-             refuses. A \
+             refuses. `deepen` is the opposite direction: `inside.parts` adds a layer **inside** one \
+             face — a parts struct and an accessor in that face's own file — and leaves its \
+             declaration, its public path, its tree row and every factory-shape pin alone; the reply \
+             also prices the other reading (another face under it), so the decision is made before \
+             the write rather than by a red run. A \
              **virtual workspace root** names no package and no unique owner, so a write there is \
              refused with the candidate member directories and nothing is copied or written — a \
              write runs against a member it is the unique owner of, or it does not run. **`fields.module` is a bare snake_case module name** (`widget`), not the logical path the tree reports: the executor names the module's directory and file, so `control::object::widget` is refused by name. Every other `fields` value is a **string**: `exports` is one export per call rather than an array, `requires` entries are spelled `capability=>provider`, and `handle_traits` entries are the **labels** the registration rule checks (a Rust path such as `crate::control::ControlHandle` is accepted here and only the parent rule refuses it later). The one non-string key is `needs_registry`, a boolean. **A request the kernel refuses comes back as an error** (`isError` true), because a request this tool cannot carry out is a tool failure rather than a fact about the tree; the read tools are the other way round and print their verdict in the body.",
             json!({"type":"object","properties":{
-                "action":{"type":"string","enum":["add","edit","rename","delete"]},
-                "node":{"type":"string","description":"edit/rename/delete: the face, by logical path or identity"},
+                "action":{"type":"string","enum":["add","edit","rename","delete","deepen"]},
+                "node":{"type":"string","description":"edit/rename/delete/deepen: the face, by logical path or identity"},
+                 "inside":{"type":"object","description":"deepen: the layer to add inside the face. `parts` is an object of `field: Type` pairs (simple types only); the action writes a parts struct plus an accessor into the face's own file and touches nothing else — no declaration, no tree row, no public path, no factory-shape pin","properties":{"parts":{"type":"object","additionalProperties":{"type":"string"}}},"required":["parts"]},
                 "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
                 "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults. Values are strings unless noted: `module` is a bare snake_case name, `exports` one export per call, `requires` entries `capability=>provider`, `handle_traits` entries rule labels","properties":{"needs_registry":{"type":"boolean","description":"the one non-string field"}},"additionalProperties":{"type":"string"}},
                 "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},

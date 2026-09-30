@@ -64,7 +64,13 @@ tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `
              （`.nichlink/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
              **人来确认**而不是改代码，而确认就是**再追加一行**。 A route the ledger never named is a **new anchor** — a first confirmation, not a \
              renewal; the read names that action. 台账从未点名的路线是**新锚**——首次确认、不是续期，\
-             读取时会把该动作点出来。 **Independence is evidence you construct**: two green runs do \
+             读取时会把该动作点出来。 **An object that should be deeper inside is not a new face**: \
+             `apply {action: \"deepen\", node, inside, apply: true}` writes a parts layer into that \
+             face's own file and leaves the tree, the public path and the factory pins alone, and \
+             its reply prices the other reading (another face under it). 把一个对象做深**不是**加面：\
+             `apply {action: \"deepen\", node, inside, apply: true}` 把零件层写进那个面自己的文件，\
+             不动树、公开路径与出厂形状钉子，并在回复里给出另一种读法的代价。 \
+             **Independence is evidence you construct**: two green runs do \
              not show that two defects are independent — fix or revoke one and show the other's \
              symptom is still there. **独立性是构造出来的证据**：两次全绿不能说明两处缺陷互相独立\
              ——只修其一（或撤销其一），再证明另一处的症状仍在。 With `root`, every path argument is relative to that root (root \

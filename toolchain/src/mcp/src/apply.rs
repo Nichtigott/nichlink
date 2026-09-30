@@ -47,6 +47,9 @@ enum Action {
     /// Move one face's module subtree into the recoverable trash.
     /// 把一个面的模块子树移入可恢复的回收目录。
     Delete,
+    /// Add a layer **inside** one face, leaving its declaration, path and tree row alone.
+    /// 在一个面**内部**加一层，不动它的声明、路径与树行。
+    Deepen,
 }
 
 /// Run one edit request, previewing unless `apply` is true.
@@ -64,10 +67,11 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some("edit") => Action::Edit,
         Some("rename") => Action::Rename,
         Some("delete") => Action::Delete,
+        Some("deepen") => Action::Deepen,
         Some(other) => {
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
-                 `rename`, and `delete`"
+                 `rename`, `delete`, and `deepen`"
             ));
         }
         None => {
@@ -93,6 +97,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
             run_edit(target.work_dir(root), &namespace, arguments, action)
         }
         Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
+        Action::Deepen => run_deepen(target.work_dir(root), &namespace, arguments),
     };
     let outcome = match outcome {
         // A preview ran in the copy, so the paths the executor reported belong to
@@ -151,6 +156,10 @@ struct Outcome {
     /// Whether the path is a destination rather than a rewritten source.
     /// 该路径是目的地，而不是被重写的源文件。
     moved: bool,
+    /// Whether this change came from `deepen`, whose reply also states the *other* reading of
+    /// "make it deeper" and what that one costs.
+    /// 这次改动是否来自 `deepen`——它的回复还会说出"把它做深"的**另一种读法**及那种读法的代价。
+    alternative: bool,
 }
 
 /// The face fields a request may carry, which is the set `overlay` matches by name.
@@ -314,6 +323,7 @@ fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, S
         source: change.source,
         declaration: None,
         moved: false,
+        alternative: false,
     })
 }
 
@@ -399,6 +409,7 @@ fn run_edit(
         source: change.source,
         declaration: None,
         moved: false,
+        alternative: false,
     })
 }
 
@@ -440,6 +451,128 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         source: change.source,
         declaration: None,
         moved: true,
+        alternative: false,
+    })
+}
+
+/// Add a layer **inside** one face: a parts type the face owns, plus an accessor.
+/// 在一个面**内部**加一层：它自己拥有的零件类型，以及一个访问器。
+///
+/// The measured reason this exists: family b of the round-5 evaluation asked for "this object is
+/// not deep enough inside", and the only write the bridge had (`add`) works on the registration
+/// tree — so "deeper" could only be read as "another face under it". That reading moves four
+/// families of factory-shape assertions and adds a segment to the public module path, so the arm
+/// that kept the gate green delivered nothing and wrote an essay about why. This action adds the
+/// layer the object's own contract already talks about, touches exactly one file, and leaves the
+/// tree, the public paths and the pins alone.
+/// 这个动作的存在有实测原因：第五轮五族 b 的题面是"这个对象内部还不够"，而桥当时唯一的写
+/// （`add`）作用在注册树上——于是"更深"只能被读成"它下面再挂一个面"。那条路会移动四类按出厂形状
+/// 钉死的断言、并让公开模块路径多一段，于是守住门的那一臂交不出东西、只写了一篇"为什么不可能"。
+/// 本动作加的是对象自己契约已经说到的那一层，只碰一个文件，树、公开路径与钉子都不动。
+fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
+    let target = arguments
+        .get("node")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "deepen requires `node`: the face, by logical path or identity".to_owned()
+        })?;
+    let parts = arguments
+        .get("inside")
+        .and_then(|inside| inside.get("parts"))
+        .and_then(Value::as_object)
+        .filter(|parts| !parts.is_empty())
+        .ok_or_else(|| {
+            "deepen requires `inside.parts`: an object of `field: Type` pairs, at least one"
+                .to_owned()
+        })?;
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for (name, value) in parts {
+        let named_well = !name.is_empty()
+            && !name.starts_with(|character: char| character.is_ascii_digit())
+            && name.chars().all(|character| {
+                character == '_' || character.is_ascii_lowercase() || character.is_ascii_digit()
+            });
+        if !named_well {
+            return Err(format!(
+                "`{name}` is not a snake_case field name; this action writes Rust, so the names it \
+                 writes have to be Rust names"
+            ));
+        }
+        let kind = value
+            .as_str()
+            .ok_or_else(|| format!("`{name}` must be a type string, like `String`"))?
+            .trim();
+        if kind.is_empty() || kind.contains([';', '{', '}', '#', '\n']) {
+            return Err(format!(
+                "`{name}: {kind}` is not a type this action writes; it writes a simple type \
+                 (`String`, `&'static str`, an integer, a float, a bool)"
+            ));
+        }
+        fields.push((name.clone(), kind.to_owned()));
+    }
+    let _registry = load_registry(root, namespace)?;
+    let id = resolve_node(root, namespace, target)?;
+    let faces = face_views(root, namespace)?;
+    let face = faces.iter().find(|face| face.id == id).ok_or_else(|| {
+        format!("`{target}` does not name a face in this tree, so there is nothing to deepen")
+    })?;
+    let kind = face.kind.clone();
+    let path = root.join("src").join(&face.source);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("{} is not readable: {error}", path.display()))?;
+    let marker = format!("pub struct {kind};");
+    let markers = text.lines().filter(|line| line.trim() == marker).count();
+    if markers != 1 {
+        return Err(format!(
+            "deepen needs the line `{marker}` in {} exactly once to hold the layer, and found it \
+             {markers} time(s); this action deepens a face whose shape it can read rather than \
+             guessing at another shape",
+            path.display()
+        ));
+    }
+    let listed = fields
+        .iter()
+        .map(|(name, _)| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let declarations = fields
+        .iter()
+        .map(|(name, held_kind)| {
+            format!(
+                "    /// The {name} this face carries.\n    /// 这个面携带的 {name}。\n    \
+                 pub {name}: {held_kind},\n"
+            )
+        })
+        .collect::<String>();
+    let held = format!("pub struct {kind} {{\n    parts: {kind}Parts,\n}}");
+    let mut text = text.replacen(&marker, &held, 1);
+    text.push_str(&format!(
+        "\n/// The layer inside this face: the parts its own declaration already describes.\n\
+         /// 这个面内部的那一层：它自己的声明已经描述过的那些零件。\npub struct {kind}Parts {{\n\
+         {declarations}}}\n\
+         \nimpl nichlink_toolchain::runtime::PartsContract for {kind}Parts {{\n\
+         \x20   type Output = {kind}Parts;\n\
+         \x20   const PROVIDED_PARTS: &'static [&'static str] = &[{listed}];\n}}\n\
+         \nimpl {kind} {{\n\
+         \x20   /// The layer this face carries.\n\
+         \x20   /// 这个面携带的那一层。\n\
+         \x20   pub fn parts(&self) -> &{kind}Parts {{\n\
+         \x20       &self.parts\n\
+         \x20   }}\n}}\n"
+    ));
+    std::fs::write(&path, text)
+        .map_err(|error| format!("{} is not writable: {error}", path.display()))?;
+    Ok(Outcome {
+        message: format!(
+            "deepened {}: `{kind}` now holds `{kind}Parts` with {} part(s) ({listed}); its \
+             declaration, its public path and its tree row were not touched",
+            face.path,
+            fields.len()
+        ),
+        source: path,
+        declaration: None,
+        moved: false,
+        alternative: true,
     })
 }
 
@@ -595,13 +728,31 @@ fn report(
         format!("preview effect: {}", outcome.message)
     };
     let consequences = consequences(target.work_dir(root), root, namespace, outcome)?;
-    Ok(format!(
+    let mut reply = format!(
         "action {}\nnamespace {namespace}\n{}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
         if applied { "apply" } else { "preview" },
         editable_fields_line(),
         outcome.source.display(),
         faces.len()
-    ))
+    );
+    if outcome.alternative {
+        // The other reading of "make it deeper", priced. Family b of the round measured that this
+        // decision is what costs the iterations — the tree, the public path, the slot and four
+        // families of pins all move together — so the write path states both readings and lets the
+        // caller choose instead of letting a red run do the arithmetic.
+        // "把它做深"的另一种读法，连同它的价钱。五族 b 量到的正是：这个决定才是迭代成本所在——树、
+        // 公开路径、槽位与四类钉子是一起动的——因此写入路径把两种读法都摆出来让调用方选，而不是让
+        // 一次红运行去做这道算术。
+        reply.push_str(
+            "alternative (the other reading of `make it deeper`): hang another face **under** this \
+             one — that needs `needs_registry: true` plus its own `registration_rule`, adds a row \
+             per child to the registration tree, adds a segment to this face's public module path, \
+             forces its graft slot to `full graft`, and moves the factory-shape assertions that \
+             count faces, scope rows and slots; the layer above was measured to leave all of them \
+             alone\n",
+        );
+    }
+    Ok(reply)
 }
 
 /// The editable fields, as a request must spell them: the shape the refusals point at and every

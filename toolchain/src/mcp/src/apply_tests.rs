@@ -238,6 +238,113 @@ fn a_refusal_that_has_a_way_forward_names_it() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// `deepen` adds a layer **inside** a face: the tree, the declaration and the public path do not
+/// move, and the reply prices the other reading ("another face under it").
+/// `deepen` 在一个面**内部**加一层：树、声明与公开路径都不动，而且回复会给出另一种读法（"它下面再挂
+/// 一个面"）的代价。
+#[test]
+fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
+    let (root, _) = package("deepen");
+    apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "apply": true,
+                "fields": {"module": "control", "kind": "Control", "needs_registry": true}}),
+    )
+    .expect("the parent face");
+    let added = apply(
+        &root,
+        &json!({"action": "add", "parent": "root/control", "apply": true,
+                "fields": {"module": "button", "kind": "Button"}}),
+    )
+    .expect("the leaf face");
+    let face = written(&added);
+    let reply = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button",
+                "inside": {"parts": {"label": "String"}}}),
+    )
+    .expect("the deepen preview runs");
+    assert!(reply.contains("action preview"), "{reply}");
+    assert!(reply.contains("deepened root/control/button"), "{reply}");
+    assert!(reply.contains("ButtonParts"), "{reply}");
+    assert!(
+        reply.contains("alternative (the other reading"),
+        "the reply prices the other reading: {reply}"
+    );
+    assert!(
+        reply.contains("faces 2"),
+        "the registration tree is unchanged: {reply}"
+    );
+    assert!(
+        !std::fs::read_to_string(&face)
+            .expect("the face file")
+            .contains("ButtonParts"),
+        "a preview writes nothing"
+    );
+    let applied = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button", "apply": true,
+                "inside": {"parts": {"label": "String", "count": "usize"}}}),
+    )
+    .expect("the deepen applies");
+    assert!(applied.contains("action apply"), "{applied}");
+    let text = std::fs::read_to_string(&face).expect("the face file");
+    assert!(
+        text.contains("pub struct Button {\n    parts: ButtonParts,\n}"),
+        "{text}"
+    );
+    assert!(
+        text.contains("impl nichlink_toolchain::runtime::PartsContract for ButtonParts"),
+        "{text}"
+    );
+    // The parts list follows the JSON object's own order, which is sorted by key, so the pin states
+    // that order rather than the order the request happened to write them in.
+    // 零件列表按 JSON 对象自己的顺序（按键排序），因此钉子写的是那个顺序，而不是请求碰巧写下的顺序。
+    assert!(
+        text.contains("const PROVIDED_PARTS: &'static [&'static str] = &[\"count\", \"label\"]"),
+        "{text}"
+    );
+    assert!(
+        text.contains("pub fn parts(&self) -> &ButtonParts"),
+        "{text}"
+    );
+    assert!(
+        text.contains("kind: Button"),
+        "the declaration is untouched: {text}"
+    );
+    let missing = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/nope", "inside": {"parts": {"x": "u8"}}}),
+    )
+    .expect_err("there is no such face");
+    assert!(
+        missing.contains("no registration face") || missing.contains("does not name a face"),
+        "{missing}"
+    );
+    // A file whose face still resolves but no longer holds the unit marker: the action refuses by
+    // naming the line it looked for, rather than guessing at another shape.
+    // 一个面仍能解析、但已不再持有单位标记的文件：本动作按名拒绝、点出它找的那一行，而不是去猜另一种形状。
+    let text = std::fs::read_to_string(&face).expect("the face file");
+    std::fs::write(
+        &face,
+        text.replace(
+            "pub struct Button {\n    parts: ButtonParts,\n}",
+            "pub struct Button {\n    own: u8,\n}",
+        ),
+    )
+    .expect("fixture rewrite");
+    let unclear = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button", "inside": {"parts": {"x": "u8"}}}),
+    )
+    .expect_err("a shape it cannot read is refused rather than guessed at");
+    assert!(
+        unclear.contains("pub struct Button;") && unclear.contains("0 time(s)"),
+        "{unclear}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// An apply writes the face, and the next call can aim with the tree the previous
 /// reply reported: a child is added under the logical path the first apply
 /// produced, which is the loop that makes the tool usable by an agent.
