@@ -181,6 +181,36 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             })
             .collect();
         output.push_str(&format!("  callees: {}\n", display_list(&located)));
+        // This file's other definitions, with their lines: the measured `callgraph → read` pair (10
+        // forced returns in one arm's two rounds) is a caller who got this function and still had to
+        // open the file for its neighbours — the "the next hop is in the same file" case.
+        // 本文件的其它定义及其行号：量到的 `callgraph → read`（一个臂两轮里 10 次被迫回头）就是"拿到了这个
+        // 函数、却还得为它的邻居打开文件"——也就是"下一跳就在同一个文件里"那一族。
+        if let Some((label, file)) = definitions
+            .iter()
+            .find(|(_, file)| file.functions.iter().any(|seen| seen.name == function.name))
+        {
+            let others: Vec<&crate::mcp::source_index::Function> = file
+                .functions
+                .iter()
+                .filter(|seen| seen.name != function.name)
+                .collect();
+            if !others.is_empty() {
+                const SHOWN: usize = 6;
+                let listed = others
+                    .iter()
+                    .take(SHOWN)
+                    .map(|seen| format!("{} -> {label}:{}", seen.name, seen.line))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let more = if others.len() > SHOWN {
+                    format!(" (+{} more in this file)", others.len() - SHOWN)
+                } else {
+                    String::new()
+                };
+                output.push_str(&format!("  also here: {listed}{more}\n"));
+            }
+        }
         // Which tests reference this definition: a name that a test file calls is covered by
         // that file, and a reader deciding what to run needs the file rather than the caller
         // list it already has. The rule for "a test file" is this reader's convenience — a
