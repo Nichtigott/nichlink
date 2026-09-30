@@ -951,6 +951,16 @@ SCENARIOS = {
             ("crates/report/src/render.rs", "    write_count(&mut text, entries);\n", ""),
         ],
     },
+    9: {
+        "id": "two-independent-defects",
+        "question": "报表这边有问题，审计那边也不对——两处都要修。",
+        "answer": "两处**互相独立**的缺陷，落在两个不同的面上：`crates/report/src/query.rs` 的下限比较反向（**默认面**红）+ `crates/core/src/audit.rs` 的过滤器反向（**audit 特性面**红）⇒ 两面都绿才算修完，且修 A 不能掩盖 B",
+        "codegraph": "两处都能靠逐文件回读发现，但它**没有「面」的概念** ⇒ 「另一个面也红」得自己想到去跑 `--features audit`",
+        "inject": [
+            ("crates/report/src/query.rs", "        if entry.amount < min {", "        if entry.amount > min {"),
+            ("crates/core/src/audit.rs", "entries.iter().filter(|entry| entry.amount != 0).count()", "entries.iter().filter(|entry| entry.amount == 0).count()"),
+        ],
+    },
     7: {
         "id": "limit-drift",
         "question": "报表把恰好等于上限的金额归到了哪一档？这与账本自己声明的上限一致吗？",
@@ -1313,7 +1323,7 @@ def scenario_check(directory):
         if number in (1, 3, 4, 6) and audit.returncode != 0:
             print(f"    !! scenario {number}'s audit face must be green on the pristine fixtures")
             ok = False
-        if number in (7, 8) and default.returncode == 0:
+        if number in (7, 8, 9) and default.returncode == 0:
             print(f"    !! scenario {number} must be red on the default face")
             ok = False
         if number == 5 and default.returncode == 0:
