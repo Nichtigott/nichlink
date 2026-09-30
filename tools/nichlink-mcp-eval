@@ -597,6 +597,7 @@ audit = []
     "crates/core/src/lib.rs": """//! The ledger's model and store.
 //! 账本的模型与存储。
 
+pub mod limits;
 pub mod model;
 pub mod store;
 
@@ -728,6 +729,64 @@ fn the_audit_counts_the_non_zero_entries() {
     );
 }
 """,
+    "crates/core/src/limits.rs": """//! The ledger's own limits.
+//! 账本自己的上限。
+
+/// The amount below which an entry is reported as a small one.
+/// 低于该金额的分录在报表里算"小额"。
+///
+/// It is stated here and nowhere else on purpose: the report's buckets read it from this constant,
+/// so a report that spells the number again will drift the moment this value moves.
+/// 它被有意只写在这里：报表的分桶从这个常量读它，因此"把数字再拼一遍"的报表会在这个值一变动时漂移。
+pub const SMALL_LIMIT: i64 = 1000;
+""",
+    "crates/report/src/buckets.rs": """//! The report's buckets.
+
+use ledger_core::model::Entry;
+
+/// Which bucket an amount is reported under.
+/// 一个金额在报表里归入哪个桶。
+pub fn bucket_name(amount: i64) -> &'static str {
+    if amount < 0 {
+        "debit"
+    } else if amount < 1000 {
+        "small"
+    } else {
+        "large"
+    }
+}
+
+/// The bucket lines of a report.
+/// 报表的分桶行。
+pub fn bucket_lines(entries: &[Entry]) -> Vec<String> {
+    let mut names = entries
+        .iter()
+        .map(|entry| bucket_name(entry.amount))
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names.into_iter().map(|name| format!("bucket {name}")).collect()
+}
+""",
+    "crates/report/tests/buckets.rs": """//! The buckets' behaviour, stated as the report a reader sees.
+//! 分桶的行为，按读者看到的报表来陈述。
+
+use ledger_core::model::Entry;
+use ledger_report::buckets::bucket_lines;
+
+/// An amount exactly at the small limit belongs to the next bucket up, and the report must agree
+/// with whatever limit the ledger itself declares.
+/// 恰好等于小额上限的金额属于再上一档，而报表必须与账本自己声明的上限一致。
+#[test]
+fn the_report_agrees_with_the_ledgers_own_limit() {
+    let entries = [
+        Entry::new("a", ledger_core::limits::SMALL_LIMIT - 1, true),
+        Entry::new("a", ledger_core::limits::SMALL_LIMIT, true),
+    ];
+    let lines = bucket_lines(&entries);
+    assert_eq!(lines.len(), 2, "one amount on each side of the limit: {lines:?}");
+}
+""",
     "crates/report/Cargo.toml": """[package]
 name = "ledger-report"
 version.workspace = true
@@ -739,6 +798,7 @@ ledger-core = { path = "../core" }
     "crates/report/src/lib.rs": """//! Rendering and querying.
 //! 渲染与查询。
 
+pub mod buckets;
 pub mod query;
 pub mod render;
 """,
@@ -826,6 +886,19 @@ fn the_minimum_amount_filter_keeps_the_entries_at_or_above_it() {
     assert_eq!(kept, 2, "the zero floor keeps the two non-negative entries");
 }
 
+/// What a reader sees first: the count, then the entries. Stated as the printed order rather than
+/// as "which call runs first", so the test describes the symptom and not the mechanism.
+/// 读者先看到什么：先是条数，然后是分录。断言的是打印出来的顺序，而不是"哪个调用先跑"，因此这条测试
+/// 描述的是症状而不是机制。
+#[test]
+fn the_report_prints_its_count_before_the_entries() {
+    let store = store();
+    let text = render(store.entries());
+    let count = text.find("entries: 3").expect("the count line is printed");
+    let first_entry = text.find("a: -500").expect("the first entry is printed");
+    assert!(count < first_entry, "the count comes first:\n{text}");
+}
+
 #[test]
 fn the_report_names_its_count_and_its_entries() {
     let store = store();
@@ -879,6 +952,20 @@ SCENARIOS = {
             ("crates/report/src/query.rs", "if entry.amount < min {", "if entry.amount > min {"),
             ("crates/report/src/render.rs", "    write_count(&mut text, entries);\n", ""),
         ],
+    },
+    7: {
+        "id": "limit-drift",
+        "question": "报表把恰好等于上限的金额归到了哪一档？这与账本自己声明的上限一致吗？",
+        "answer": "不一致：`buckets.rs` 把上限又拼了一遍（`1000`），而账本声明它在 `core/src/limits.rs` 的 `SMALL_LIMIT` 里 ⇒ 该常量是唯一家，报表应读它",
+        "codegraph": "无「同一事实两处实现」的视图；它可以读文件，但不会指出这处漂移",
+        "inject": [("crates/report/src/buckets.rs", "    } else if amount < 1000 {", "    } else if amount <= 1000 {")],
+    },
+    8: {
+        "id": "order-slip",
+        "question": "渲染出来的报表里，条数那一行出现在哪里？这个顺序对得上 `render` 自己写下的承诺吗？",
+        "answer": "不一致：`render` 的文档写明「表头、条数、然后每条一行」，而实现把 `write_count` 放在了循环之后 ⇒ 顺序错、两个调用各自都对",
+        "codegraph": "能读到两个调用存在，但顺序与文档的对照要人来做",
+        "inject": [("crates/report/src/render.rs", "    write_count(&mut text, entries);\n    for entry in entries {", "    for entry in entries {")],
     },
     6: {
         "id": "uncovered-contract-cell",
@@ -1071,6 +1158,9 @@ def scenario_check(directory):
             ok = False
         if number in (1, 3, 4, 6) and audit.returncode != 0:
             print(f"    !! scenario {number}'s audit face must be green on the pristine fixtures")
+            ok = False
+        if number in (7, 8) and default.returncode == 0:
+            print(f"    !! scenario {number} must be red on the default face")
             ok = False
         if number == 5 and default.returncode == 0:
             print("    !! scenario 5 must be red on the default face")
