@@ -218,3 +218,131 @@ codegraph does not have.
 这次对照只压到**查找**那一半。`check`、`status`+`faces`、`apply`/`plugin`（写入通道）、
 `diff`/`trace`/`unified`/`adopted` 在这四道题里都没用上，因此"对架构与代码质量的效果"**这次判不了**——而那些恰好是
 codegraph 没有的能力。
+
+## 9. Round 2: did the four fixes move the chain? / 第二轮：那四条修复有没有让链变短
+
+Same project, same four bugs, same device, same ruler; the four fixes from §8 had landed. Fresh trees
+under `/tmp/mcp-eval2`; round 1's evidence kept untouched under `/tmp/mcp-eval`.
+同一个项目、同样四道题、同一装置、同一把尺子；§8 那四条修复已经落地。新树在 `/tmp/mcp-eval2`，第一轮证据
+在 `/tmp/mcp-eval` 原样保留。
+
+| round 题 | ours 我们 | codegraph | who is shorter 谁短 |
+| --- | --- | --- | --- |
+| 1 (inverted guard) | **8,710** | 14,483 | ours |
+| 2 (missing call) | 13,090 | **6,096** | codegraph |
+| 3 (boundary) | **3,956** | 13,089 | ours |
+| 4 (the trap) | 26,646 | **15,138** | codegraph |
+| total 合计 | **53,233** / 56 calls | **49,166** / 44 calls | codegraph |
+| round 1 for comparison 第一轮 | 60,059 / 66 | 39,320 / 69 | codegraph |
+
+**The prediction held in part, and the honest headline is that it did not hold overall.**
+**预测部分成立；如实的总标题是：整体上不成立。**
+
+- Our own chain fell **11%** (60,059 → 53,233) and round 1 fell **61%** (22,623 → 8,710) — the
+  client-building tax is gone: round 1 used 7 instrument calls and the arm never left the tool to
+  grep. But the total is still **above** codegraph's, so "shorter than codegraph" is **not** what
+  happened.
+  我们自己的链降了 **11%**、第 1 题降 **61%**——"自建客户端税"没了（第 1 题 7 次仪器调用、全程没离开工具去
+  grep ✓）；但**总量仍高于 codegraph** ⇒"比 codegraph 更短"**没有**发生。
+- The split is by **family**, not by tool: we win where the verdict is a line to read against its own
+  doc (rounds 1 and 3), codegraph wins where the verdict is a graph property to prove (round 2: a
+  missing call edge) or a contract to weigh (round 4: the trap).
+  分化按**缺陷族**而不是按工具：判定是"一行代码对着它自己的文档"时我们赢（1、3 题），判定是"要证明的图性质"
+  （第 2 题：缺一条调用边）或"要权衡的契约"（第 4 题：陷阱）时 codegraph 赢。
+- Codegraph's own total **rose 25%**, and most of that is it buying findings rather than thrashing: in
+  round 3 it chased the `no covering tests found` warning to its mechanism (call sites inside macro
+  arguments never become caller edges), and in round 4 it built the full truth table plus six reasons
+  why the shortest path is wrong.
+  codegraph 自己的总量**升了 25%**，而其中大半是**买回了发现**而不是空转：第 3 题它把 "no covering tests
+  found" 追到机制（**宏实参里的调用点从不成为 caller 边**），第 4 题它做了完整真值表 + 六条"最短路径为什么
+  是错的"理由。
+
+**What the four fixes actually bought, measured / 那四条修复实际买到了什么（有量）**
+
+- `callgraph` bodies by default: **4/4 rounds took the body** and the tool no longer needs
+  `source: true`; the auditor records the extra call the old default cost.
+  `callgraph` 默认带函数体：**4/4 轮都吃到了**，`source: true` 已成冗余。
+- `literal` with `context`: decisive in round 4, where the contract is the verdict —
+  `--literal "zero" --context 4` printed the whole bilingual contract in one call, and the round-4
+  fix was justified by **two counter-experiments the arm ran and reverted** (only `||`→`&&` leaves
+  the target test red at 3 passed; moving the guard to the caller turns **9/9 green while the public
+  predicate still lies**, which is the trap).
+  `literal` 带 `context`：第 4 题成为主力——`--literal "zero" --context 4` 一次打出整段中英契约；而该轮修复
+  由**两次实测反证**支撑（只改 `||`→`&&` 时目标测试仍红、3 passed；把守卫挪到调用方则 **9/9 全绿而公开谓词
+  仍在说谎** = 陷阱本体）。
+- The in-answer pointers: `search`'s no-match pointer to `literal` was followed, but the `check`
+  trailer fired **0/4** — all four rounds ran `cargo test` first and used `check` only after the fix,
+  so a pointer attached to a failing `check` never appears. Guidance in the answer only works on the
+  path the agent actually takes.
+  答案里的指引：`search` 查不到时指向 `literal` 那条被照做了；但 `check` 的尾注 **0/4** 触发——四轮都先跑
+  `cargo test`、`check` 只在修后做验证 ⇒ 挂在"失败的 check"上的指引永远不出现。**指引只在 agent 真走的那条
+  路上才有用。**
+
+**Two defects of mine that the round measured / 这轮量出来的、我自己造的两处缺陷**
+
+1. The flow table advertised `callgraph {orphans: true}` as a first-class entry while the orphan view
+   was deliberately left out. Both arms hit it independently; in round 2 it cost **2 of 10 calls**
+   (exit 1 `requires function`, exit 2 `needs a value`) — a self-description defect, the repository's
+   own red line. And the pin that was supposed to protect the table only asserted that the *string*
+   appears in `INSTRUCTIONS`, never that the *tool* accepts the shape.
+   流程表把 `callgraph {orphans: true}` 当一等入口推荐，而孤儿视图被我故意缓做 ⇒ 两位成员独立撞上，第 2 题
+   白花 **10 次里的 2 次**；这是自我描述缺陷（本仓红线）。而那条本该守住它的钉子只断言那张表里**出现过这个
+   字符串**，从没说**工具接受这个形状**——**钉子太弱，正是它没拦住我的原因**。
+2. The client cannot express a bare boolean flag: `--orphans` alone answers `needs a value`, so the
+   natural spelling of a boolean is refused.
+   一次性客户端表达不了裸布尔开关：`--orphans` 单独出现时报 `needs a value`。
+
+**Audit, round 2 / 审计（第二轮）**
+
+- **Shortcuts: zero, 8/8 clean** — each tree's diff is one place; `tests/` untouched, no
+  `#[ignore]`/`#[allow]`, and the two arms' diffs are **byte-identical** per round (the outcomes do
+  not differ). All eight fixes restore the injected text verbatim.
+  **零捷径，8/8 干净**：每棵树 diff 只一处、`tests/` 未动、无豁免，而两组在同题上的 **diff 逐字节相同**
+  （结果层无组间差）；八处都逐字还原注入。
+- **Effect: 8/8 restores the judgment's own meaning** (the floor comparison, the totals call, the
+  half-open bound, the conjunction). Round 4's *reasoning* differs: ours is the harder experimental
+  statement (9/9 green while the contract lies), codegraph's is the fuller argument (its truth table
+  names the **uncovered** `(false, 0)` cell, plus six reasons and the `impact` chain).
+  **效果：8/8 恢复了判断本身的意思**；第 4 题的**论证**风格不同：我们的更硬（实验证明"全绿而契约说谎"），
+  对照组的更全（真值表点出**没有用例覆盖**的 `(false, 0)` 格 + 六条理由 + `impact` 链）。
+- **Instruction adherence**: our flow table has seven entries, five were followed; `check` first never
+  happened (0/4, see above); `literal` 2/4; query-search 2/4 (round 3 wasted one call behind the
+  wrong order); `affected` 0/4. Codegraph followed its own "do not re-read" advice **4/4** (one
+  `explore` per round, zero `Read`s) while its `affected` was a false negative **4/4** and its
+  coverage warning wrong **4/4**.
+  **指令执行度**：流程表七条、照走五条；`check` 先跑 0/4；`literal` 2/4；`query search` 2/4（第 3 题因为
+  顺序错白花一次）；`affected` 0/4。对照组把它自己的"别再 Read"建议 **4/4** 照做（每题一次 `explore`、零
+  `Read`），而它的 `affected` **4/4** 假阴性、覆盖率告警 **4/4** 误报。
+- **Locating directness**: codegraph's locating round count is **≤ ours in 4/4** (one `explore` against
+  our 2–3 hops) — a fact worth keeping even in the rounds we "won" on characters.
+  **定位直接性**：对照组的定位轮数 **4/4 不大于我们**（一次 `explore` 对我们 2–3 跳）——即使在我们按字符
+  数赢的轮次里，这条也成立。
+- **Accounting correction (the auditor's, accepted after re-check)**: codegraph's own tables disagree
+  with its own log in **3 of 4 rounds** (a claimed `--help` that never ran, cargo counts of 3 against 1
+  actual, a 14-group table whose parts sum to 15), so its instrument-call count is **not**
+  recomputable: all commands 12/14/12/13 = 51, codegraph-only 10/11/9/10 = **40**. Our side (7/10/6/7
+  = 30) matches its per-line log exactly.
+  **账目更正（审计的，复核后接受）**：对照组自己的表与自己的日志 **3/4 轮对不上**（声称跑过的 `--help`
+  在日志里不存在、cargo 计 3 实 1、14 组的表各部分加总为 15）⇒ 它的仪器调用数**不可复算**：全命令
+  12/14/12/13 = 51，**仅 codegraph 10/11/9/10 = 40**。我们这侧（7/10/6/7 = 30）与逐行日志完全吻合。
+
+**Queue from round 2 / 第二轮带出的队列**（the two the round measured are first / 先做量出来的这两条）
+
+1. **Implement the orphan view** (`callgraph {orphans: true}`), or delete the line from the table — the
+   round chose implement, because the trap round's `write_totals` is the textbook dead-code case.
+   **实现孤儿视图**（或删掉表里那行）——这轮选实现，因为陷阱题里的 `write_totals` 就是教科书级死代码。
+2. **Accept a bare `--flag` in the client** (⇒ `true`).
+   **客户端接受裸 `--flag`**（⇒ `true`）。
+3. **Fix the flow table's order and branches**: a known symbol name goes to `callgraph {function}`
+   first (the round measured one wasted call per such round); a symptom that lives in a product ⇒
+   search the product's own literal (one call in round 2); a symptom that is an assertion message ⇒
+   search a short stable phrase, because the framework appends `left:`/`right:`.
+   **修流程表的顺序与分支**：符号名已知 ⇒ 首跳 `callgraph {function}`；症状在产物里 ⇒ 搜产物自己的字面量；
+   症状是断言消息 ⇒ 搜短而稳定那半句（panic 会拼上框架的 `left:`/`right:`）。
+4. **Return the symbol's doc first line** from `callgraph`/`search {query}` — the one gap the MCP arm
+   hit in every round: "the doc says A and the code writes not-A" is the strongest signal this bridge
+   can produce, and today it takes two requests to put the two halves side by side.
+   **让 `callgraph`/`search {query}` 顺带回该符号的 doc 首行**——这是 MCP 组每轮都撞到的唯一缺口。
+5. **Strengthen the pin** that guards the flow table: assert the *tool accepts* each shape the table
+   advertises, not that the string appears.
+   **加强那条守住流程表的钉子**：断言"工具接受表里承诺的每个形状"，而不是"字符串出现过"。
