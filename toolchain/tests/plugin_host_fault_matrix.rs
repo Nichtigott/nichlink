@@ -701,6 +701,26 @@ mod process_faults {
         drop(dir);
     }
 
+    /// Limits for a pin whose subject is **not** the deadline.
+    /// 给"被测对象不是截止时间"的钉子的限额。
+    ///
+    /// `ProcessLimits::default()` carries a 2-second timeout, which is a fine production budget
+    /// and a poor incidental one: the pins below exchange a few hundred kilobytes through pipes,
+    /// and under load that exchange could exceed two seconds, so they failed with `Timeout` — a
+    /// failure about the machine rather than about the behaviour under test (reported once by the
+    /// simulation evaluation, not reproducible in thirteen targeted reruns). The deadline is still
+    /// there; it just stops being the thing these pins measure.
+    /// `ProcessLimits::default()` 带着 2 秒的超时，这是个好的生产预算，却是个糟糕的顺带预算：下面
+    /// 那些钉子要经管道来回几百 KB，负载下这段交换可能超过两秒，于是它们以 `Timeout` 失败——一个关于
+    /// 机器而不是关于被测行为的失败（模拟评测报过一次，13 次定点重跑未复现）。截止时间仍然在；只是它
+    /// 不再是被这些钉子测的东西。
+    fn patient_limits() -> ProcessLimits {
+        ProcessLimits {
+            timeout: Duration::from_secs(30),
+            ..ProcessLimits::default()
+        }
+    }
+
     /// Write one plugin script and return its path.
     /// 写一个插件脚本并返回其路径。
     fn script(directory: &Path, name: &str, body: &str) -> PathBuf {
@@ -760,7 +780,7 @@ mod process_faults {
             let directory = tempfile::tempdir().unwrap();
             let payload = vec![b'x'; body];
             let plugin = emitter(directory.path(), "emit", &framed(&payload));
-            let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
+            let loaded = load_plugin_host_fault_matrix(&plugin, patient_limits());
             assert_eq!(
                 loaded.call("run", &[]).unwrap().len(),
                 body,
@@ -790,7 +810,7 @@ mod process_faults {
                 frame.display()
             ),
         );
-        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, patient_limits());
         assert_eq!(loaded.call("run", &[]).unwrap(), payload);
     }
 
@@ -818,7 +838,7 @@ mod process_faults {
             "truncated",
             &format!("#!/bin/sh\nhead -c 5 {}\nexit 0\n", frame.display()),
         );
-        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, patient_limits());
         let error = loaded
             .call("run", &[])
             .expect_err("a cut-off frame is not an answer");
@@ -858,7 +878,7 @@ mod process_faults {
             "never-started",
             &format!("#!/bin/sh\nhead -c 4 {}\nexit 0\n", frame.display()),
         );
-        let loaded = load_plugin_host_fault_matrix(&never_started, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&never_started, patient_limits());
         let error = loaded
             .call("run", &[])
             .expect_err("a declared frame that never started is not an answer");
@@ -1017,7 +1037,7 @@ mod process_faults {
                 payload.display()
             ),
         );
-        let loaded = load_plugin_host_fault_matrix(&plugin, ProcessLimits::default());
+        let loaded = load_plugin_host_fault_matrix(&plugin, patient_limits());
         assert_eq!(loaded.call("run", &vec![7_u8; 1024 * 1024]).unwrap(), b"ok");
     }
 
