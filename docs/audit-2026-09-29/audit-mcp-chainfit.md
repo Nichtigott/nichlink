@@ -554,3 +554,84 @@ the other members are invisible ✓ · the example's Studio test no longer delet
 **Honest limits / 诚实的限制**：n=1 per arm ✗; tokens are estimated at characters/3.5 ✗; the round is an
 aggregate of 17 subjects ✗ (per-subject attribution is by the tree path in each call's arguments ✓);
 and the confounds above mean the 93:302 gap is **not** by itself proof of a better tool ✗.
+
+## 13. 第五轮：题面只剩一句话，以及装置自己错在哪 / Round 5: one-sentence briefs, and what the fixture got wrong
+
+**装置**：26 棵树在 `/tmp/round5` —— 四道注入缺陷 `r1`–`r4`（每臂一棵）、八个情景关卡 `s1`–`s8`（两臂共用只读树）、
+五族 `a`–`e`（每臂一棵），**每臂 17 个样本**。题面与题面级硬约束在 `/tmp/round5/BRIEF.md`，判分口径在
+`/tmp/round5/AUDIT-BRIEF.md`；`pristine-1..4` 由出题器新生成，专供四题的逐字还原。
+队 `nichlink-round5` 共 **27 个任务**：原计划 35 个，被 `agent_teams_create` 的 inline plan 上限（**32 条**）压成 27
+——八关两两合并成每臂 4 条，逐样本的日志与交付文件仍然分开。**上一轮会话就是死在哪一步**：35 条任务的完整题面
+一次塞进工具调用（约 100 KB），模型吐出不合法 JSON（`MALFORMED_RESPONSE`），队没建起来。
+
+**判分（机械，队长独立复核）**：四题 **8/8 逐字还原** ✓（两臂各自的工作树与 `pristine-N` 逐文件相同；每树只一个源文件
+改动、diff 恰好一处；`tests/` 未动、无 `#[ignore]`/`#[allow]`；八棵树交付态 `cargo test --offline` 9 passed、rc=0）。
+八关：`s1`/`s2`/`s4`/`s5`/`s7`/`s8` **两臂全对** ✓；**`s3` 两臂同为部分对**（都只答 `audit_unused`，缺 5 个 `#[test]`
+——两臂所用工具共同的"默认排测试文件"边界）；**`s6` 分岔**：codegraph 与队长实测的真值表逐格一致，mcp 对预设判对，
+但含**两处与源码矛盾的事实断言**（称 `(10,false)` 的实现值为真、称 `(0,true)` 与契约相同）。五族 10 棵树默认面与
+`--all-features` 全绿 ✓。
+
+**`r4` 陷阱题两臂都通过**：mcp 拒绝"在 `Store::post` 里加零额守卫"并给三条理由（契约明写判定责任在 `postable`、
+调用点守卫只骗得过测试、它只治零额那一半）；codegraph 更进一步，在树外副本里把那条捷径**跑了一遍**
+（9 条测试全绿 + 契约探针红）再拒绝。
+
+**调用与 token（队长用独立脚本逐字符复算，与审计数字一致）**：
+
+| 轴 | mcp 臂 | codegraph 臂 |
+| --- | --- | --- |
+| 仪器调用 | **154**（桥；被拒 **8**） | **116**（codegraph；仪器 0 被拒） |
+| 其它工具 | 278（cargo 71 / shell 探查 66 / python 9 / 非 bash 132） | 75（cargo 71 / python3 4） |
+| 留档 | 154 行 JSON | 191 个 `=== CMD:` = 仪器 116 + 其它 75 |
+| 推理字符 | 162,497 | 519,099 |
+| 答复字符 | 21,519 | 18,643 |
+| 工具输出字符 | 447,053 | 578,613 |
+| 题面字符 | 157,967 | 149,092 |
+| ≈token（字符/3.5，**估算**） | **225.4k** | **361.6k** |
+
+⇒ 本轮 **mcp ≈0.62×**（第四轮是 0.90×）。差距主要来自五族的 `a`/`b`（`a` 89.5k vs 40.3k、`b` 70.9k vs 40.3k，
+是 codegraph 用 16/48 次 cargo 迭代换来的）。**八关逐题仍互有胜负**：`s1`–`s4` 我们明显轻（`s3` 一次
+`callgraph {orphans}` 收工 = 9 次调用，vs 它逐符号手查 21 次），`s7`/`s8` 它略轻。口径提醒：**别拿它的
+"全命令 191"去比我们的"仅仪器 154"**。
+
+**标签**：mcp 真赢 0 / 不具鉴别力 15 / 输 2（`fb`、`fc`）；codegraph 真赢 2（`fb`、`fc`）/ 不具鉴别力 15 / 输 0。
+**但这个分类有一处口径缺陷必须如实写**：本轮我给的标签集合只有"真赢 / 不具鉴别力 / 输"，**没有"平手"这一档**，
+审计于是把"两臂同判"塞进了"不具鉴别力"；而按本轮预先登记的字面定义（"答案不依赖树内证据，一条 grep 就能定"），
+`r1`–`r4` 这种"先跑测试拿到失败用例名、再读文档与代码那一处对照"的题**不该**算不具鉴别力。
+⇒ **15/17 不能与第四轮的"不具鉴别力 0"直接对比**（两轮用的是两个定义）；按更严的读法，本轮 17 题里大约只有
+`s3` 是真正"一条 grep 即定"。
+
+**两条预登记复测**：
+1. **被拒没有归零** ✗：mcp 8 次（`fa` 5、`fb` 1、`s4` 1、`s6` 1），codegraph 仪器 0 次。而且
+   **`--list` / `--list <tool>` 实际调用 0 次** ✗（`s4` 日志里那处 `--list` 是错误信息自带的用法行）
+   ⇒ 本轮新增的"键名 / 完整描述"兜底**从未被读过**，"`s4` 的拒绝由描述不足造成"这个归因因此**没有实测依据**；
+   `fa` 的 5 次仍是 `apply` 形状（4 次 schema/取值 + 1 次父规则语义拒绝），与第四轮同族。
+2. **被迫回头降了** ✓：mcp 相邻仪器调用对 `callgraph → callgraph` **16 → 10**、`callgraph → read` **10 → 6**
+   （同一条尺子）；新的高频对是 `search → search` 11、`check → callgraph` 9。
+
+**装置缺陷（本轮抓到 7 条，每条都有实测）**：
+- **F1 `s3` 的预设与工具边界**：预设真值含 5 个 `#[test]`，而孤儿视图默认排测试文件 ⇒ 两臂被同一限制封顶在
+  "部分对"。要么预设显式声明排除面，要么把问题限定为 `src`。
+- **F2 `s6` 预设不精确**：「未覆盖的一格 = `(has_receipt=false, amount=0)`」为真但不全——未覆盖类是**零金额分录**
+  （含 `(0,true)`）。已在轮中预先登记、**未临场改预设**。
+- **F3 `fc` 的意图措辞预设了实现分支**：「必须处理采信台账（**续期/新增记录**）」把"作出决定并留下可核证据"写成了
+  "写一行"。mcp 零改动 + 论证（满足用意、不满足字面），codegraph 满足字面。
+- **F4 `fa`/`fb` 的两条硬约束互斥**：§4「不改测试」与"对象/深化真的上线 + 门绿"在现有钉子上**不可兼得**——
+  mcp 两族都保住树但没上线，codegraph 两族都上线但改了 `tests/registry.rs`（`fb` 里还把
+  `assert!(!cut.is_full())` 反成 `assert!(cut.is_full())`）、`tests/static_plan_allocations.rs`、
+  `examples/graft_record.rs`。
+- **F5 `fc` 的 codegraph 新行是"代笔的人确认"**：`verifier = nich (maintainer, requested through the round-5 agent)`，
+  且 `at = 2026-09-30T13:41:53Z` **早于**既有行的 `17:00:00Z`（追加在后、时间在前）。内核只校 8 段非空与指纹，
+  故**合法但语义可疑**。
+- **F6 "工具给的范围"与关卡预设并不等价**：mcp 的 `affected` 给文件级并集、codegraph 给 3 个测试文件，
+  两臂都另用符号级判据收窄到 `crates/report/tests/report.rs`；判分按预设取最小必跑集。
+- **F7（队长自己的错）标签集合少了"平手"**：见上。
+
+**队长独立复核用的手段**（都不重跑成员的脚本）：8 组 `diff -r … pristine-N`；从 `log-mcp-*.jsonl` 重算相邻调用对；
+从两臂会话日志逐字符重算四类字符（`assistant/message` 的 reasoning/text、`tool/result` 的 `message.content`、
+`user/message`）；对 `fc` 的 codegraph 树直接跑桥的 `adopted` 读出台账（`provisional 2 lapsed 0` ⇒ 它**手算的指纹
+是对的**）；在 `git show HEAD:` 的版本上单跑 rustfmt，证明 `crates/report/src/buckets.rs` 与
+`crates/report/tests/buckets.rs` 里的格式差异是**夹具自带**（不是选手引入）；在树外副本上原型验证 `fb` 的第四条路
+（`/tmp/fb-lead-check`：给 `Button` 加内部 `PartsContract` 零件层、不写进声明 ⇒ `cargo test` rc=0、25+1 passed 与基线同）。
+
+**诚实的限制**：n=1/臂 ✗；token 是字符/3.5 的**估算** ✗（附 harness 自报 `outputTokens` 可交叉核对）；
+配对成一条任务的两题共享开销落在第一题 ✗；`fb` 的 parts 路线只有队长的原型、审计未自行复现 ✗。
