@@ -420,3 +420,94 @@ checkout rather than the tree.
 4. **Sharpen scenario 1** with a fully-qualified cross-crate call, so the recorded codegraph false
    negative is reproduced rather than assumed.
    **磨尖第 1 关**：加一条全限定的跨 crate 调用，让 codegraph 记录在案的假阴性被**复现**而不是被假定。
+
+## 11. Round 3: what the fixes bought, measured / 第三轮：那批修复买到了什么（有量）
+
+Same twelve-action brief as round 2, byte for byte, on fresh trees under `/tmp/mcp-eval3`; the tree
+blobs are identical to round 2's (the auditor checked `ls-tree` blob-for-blob), so the ruler did not
+move while the tool did.
+题面与第二轮**逐字相同**，新树在 `/tmp/mcp-eval3`；审计核过两轮的树 `ls-tree` **blob 逐一相同** ⇒ 尺子
+没动，动的是工具。
+
+| metric 度量 | round 2 | round 3 | reading 读法 |
+| --- | --- | --- | --- |
+| reasoning chars 思维链 | 53,233 (ours) / 49,166 | **97,142 / 77,012** | both up; see below 两轮都涨 |
+| instrument calls 自家仪器调用 | 30 / 47 | **24 / 24** | ours −20%, theirs −49%; tie at 24 打平 |
+| refusals 被拒 | 2 (ours) / 0 | **3 / 0** | new family, same side 新族、仍在我们侧 |
+| preset-path fit 预设路径拟合 | 5/5 × 4 | 5/5 × 3, 4/5 × 1 | unchanged 基本不变 |
+| repairs 修复 | 8/8 one line, byte-identical per pair | same | outcomes never differed 结果层从无组间差 |
+
+**What the flow table actually did / 流程表实际起了什么作用.** The auditor's finding is the one worth
+keeping: rounds 2, 3 and 4 followed the rewritten table **in order, with zero detours and zero
+refusals** — round 2 went to the product's own literal (branch ②), round 3 correctly declined branch ③
+because its assertion carries no custom message, and round 4 used the hop-by-hop route with the doc
+riding along as the only deciding evidence. Round 1's deviation was **not** the order: it was two
+**blanks** in the client — the answer does not say which root it searched, and an array argument can
+only be spelled through `--json` while the refusal does not say so.
+**审计的这条发现最值得留**：第 2/3/4 题**严格按重写后的表逐条走、零弯路零拒绝**——第 2 题走②（产物自己的
+字面量）、第 3 题正确**弃用**③（它的断言没有自定义话术）、第 4 题走逐跳且 **doc 随行成为唯一裁决证据**。
+第 1 题的偏离**不在顺序**，而在客户端的**两处空白**：答案不说它在哪个根上搜，以及数组参数只能经 `--json`
+而拒绝文案不说明。
+
+**The doc adjacency is the decisive capability, and it is measurable / doc 随行是决定性能力，而且可量.**
+The auditor verified that both arms' round-4 reports quote the contract, and that **both got it in one
+call** (ours from `callgraph`'s doc-plus-source, codegraph from a single `explore` dump). Cross-round,
+that is a change: in round 2 the MCP arm needed a **second request** for the doc in 4 of 4 rounds
+(round 4 spent two `search --literal zero` calls on it), while round 3's round 4 used **zero** `search`
+calls and went 7 → 5 on `--call`. The arm's own priority call therefore stands, and the queue follows
+it: **do not spend the next batch on "`callees` should carry positions" (saves one call) before the doc
+stays where it is (saves two calls and closes a judgement gap no test can close).**
+**审计核过**：两组第 4 题的报告**都真的引用契约**，而且**都是一次调用同屏**（我们来自 `callgraph` 的
+doc+源码、它来自一次 `explore` dump）。跨轮看这是个**变化**：第二轮我们那组 **4/4 都要第二次请求**才拿到
+doc（第 4 题为此花了两次 `search --literal zero`），而第三轮第 4 题 **`search` 归零**、`--call` 7→5。
+⇒ 成员的优先级判断成立，队列照它排：**下一批别先做"`callees` 附位置"（省 1 次），doc 留在原处更值
+（省 2 次 + 关掉一个测试关不上的判断缺口）**。
+
+**What is proven and what is not / 什么被证明了、什么没有.** The orphan view was implemented and works
+(scenario S3 calls it and gets `orphans 1 … audit_unused`, one call), but in these four rounds it was
+called **zero** times: round 2 reached the same "no caller" conclusion through `search`'s zero
+references instead. So the prediction "the missing-edge family flips" is **untested here** — the source
+shape is implemented and the scenario exercises it, while the bug rounds took another route.
+**孤儿视图已实现且可用**（情景 S3 调它并一次拿到 `orphans 1 … audit_unused`），但这四轮里它被调用
+**零**次：第 2 题改用 `search` 的零引用达到同一结论 ⇒"证明缺边族翻转"这条预测**在此未被检验**（源码形状
+已实现、情景关卡也在用，只是这四轮走了另一条路）.
+
+**Why the chains grew, with the causes I can name / 链为什么变长（可点名的成因）**: round 1 carried the
+two client blanks above (2 calls lost to the root, 3 refusals on `affected`'s array argument); every
+answer now carries the doc and the body, so fewer calls buy more reading; and codegraph's round 4 spent
+46,824 characters — its largest of any round — **buying the finding that `||` → `^` is the only
+single-token replacement that turns the suite green while still lying on the contract's uncovered
+cell**. With one run per cell, no claim about the batch's net effect on the chain is warranted; what is
+warranted is the call-count reduction and the three named causes.
+**第 1 题带着上面那两处客户端空白**（根丢 2 次、`affected` 数组参数被拒 3 次）；**每个答案现在都带 doc
+与函数体** ⇒ 调用更少、要读的更多；而 codegraph 的第 4 题花了 46,824 字符（它所有轮次里最长）——
+**买回了"`||`→`^` 是唯一能让套件全绿、却在契约未覆盖那一格上说谎的单 token 替换"这条发现**。n=1/格，
+因此不对"这批对链长的净效果"下任何结论；成立的是**调用数下降**与那三条可点名的成因。
+
+**The round-4 trap, judged by the contract rather than by the suite / 第 4 题：按契约判，不按套件判**:
+the auditor hand-checked the four-cell truth table independently of the captain's probe and confirmed
+that `^` differs from the contract **only** on `(has_receipt=false, amount=0)`. Both arms quoted the
+contract verbatim and neither touched `Store::post`; the same-round repair blobs are byte-identical.
+**审计独立手算**了四格真值表（与队长的探针互相印证）：`^` **只在** `(has_receipt=false, amount=0)`
+上与契约不同。两组都逐字引用契约、都没动 `Store::post`，同题修复 blob 逐字节相同。
+
+**Queue, in the order the evidence now supports / 队列（按证据排）**
+
+1. **Answer must carry the root it searched** (2 calls lost in round 1; the empty answer is where it
+   matters most).
+   **答案必须带上它搜索的根**（第 1 题丢 2 次；空答案处最要紧）。
+2. **Array arguments without `--json`**, and until then the refusal must name `--json` (3 refusals).
+   **数组参数可不经 `--json`**；在做到前拒绝文案必须点名它（被拒 3 次）。
+3. **Keep the doc adjacency where it is**; do **not** trade it for `callees` positions.
+   **保持 doc 随行**；不要为 `callees` 的位置把它换掉。
+4. **`affected` must follow cross-member reachability** (scenario S4, the one level we lost while
+   codegraph answered it).
+   **`affected` 必须追跨成员可达性**（情景 S4，唯一输掉的一关）。
+5. **Exercise the orphan view in a bug round** — the four rounds never called it, so its behavioural
+   claim rests on scenario S3 alone.
+   **让孤儿视图在缺陷轮次里被真的用到**——这四轮一次都没调，它的行为结论目前只靠情景 S3。
+6. **Make round logs raw again**: round 2's per-call JSON-RPC frames allowed counts to be recomputed
+   from the artifacts; round 3's summary lines did not, which is why the auditor could only give call
+   counts as proxies for that comparison.
+   **把轮次日志恢复成原始形态**：第二轮逐次 JSON-RPC 帧可以从产物复算计数，第三轮的摘要行不行——这正是
+   审计只能拿调用数当代理量的原因。
