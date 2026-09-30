@@ -50,6 +50,7 @@ use crate::mcp::affected::affected;
 use crate::mcp::apply::apply;
 use crate::mcp::build_evidence::explain;
 use crate::mcp::callgraph::callgraph;
+use crate::mcp::check::check;
 use crate::mcp::converge::converge;
 use crate::mcp::diff::diff;
 use crate::mcp::grafts::grafts;
@@ -474,6 +475,27 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"files":{"type":"array","items":{"type":"string"}},"root":{"type":"string"}},"required":["files"]}),
         ),
         tool(
+            "nichlink.check",
+            "Test this tree by **running** the face you name: `face` is `default`, `all`, or one \
+             feature name, and there is no default face here because choosing it is what this tool \
+             is for. It is the one tool that runs a process (`cargo test` in the root), and it \
+             exists because the alternative was measured: a defect compiled only under a \
+             non-default feature cannot fail on the default face, so a green default run is not \
+             evidence about that feature. `nichlink.status` says which faces exist; this says what \
+             one of them did. The full output goes to `target/nichlink/out/check-<face>.log`, and \
+             the reply is the exact command, the exit code, the elapsed time, every `test result:` \
+             line (capped, and the cap says so), the failing test names, and that path. A run that \
+             reaches `timeout_ms` (default 900000, clamped to 1000–3600000) is reported as \
+             **unknown**, never as a pass, and the reply says the direct child was killed and its \
+             own children may survive. A log with no `test result:` line reports that nothing ran: \
+             `0 passed` is not a pass.",
+            json!({"type":"object","properties":{
+                "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
+                "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
+                "root":{"type":"string"}
+            },"required":["face"]}),
+        ),
+        tool(
             "nichlink.verify",
             "Run the kernel's registration validation over this package and report the tree delta the \
              run just published. It drives the same entry the CLI's `check` drives, so a verdict here \
@@ -540,6 +562,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.converge", converge),
     ("nichlink.adopted", adopted),
     ("nichlink.affected", affected),
+    ("nichlink.check", check),
     ("nichlink.verify", verify),
 ];
 
@@ -631,12 +654,20 @@ fn inspect(root: &Path, arguments: &Value) -> Result<String, String> {
 fn status(root: &Path) -> Result<String, String> {
     let files = load_sources(root)?;
     let functions = files.iter().map(|file| file.functions.len()).sum::<usize>();
-    Ok(format!(
+    // The census says how much tree was read; the faces say which face a red run would appear on.
+    // They belong together because the blindness they describe is a fact about *this* tree: a file
+    // compiled only under a non-default feature cannot fail on the default face, and a caller who
+    // has just counted the files is the one about to run the tests.
+    // 普查说读到了多少树；特性面说红会出现在哪个面。它们该在一起，因为它们描述的那种失明是关于**这棵**
+    // 树的事实：只在非默认特性下编译的文件在默认面上不可能失败，而刚数完文件的调用方正是要去跑测试的人。
+    let mut lines = vec![format!(
         "root {}\nrust_files={} functions={} tool=nichlink-toolchain",
         root.display(),
         files.len(),
         functions
-    ))
+    )];
+    lines.extend(crate::mcp::faces::faces_lines(root));
+    Ok(lines.join("\n"))
 }
 
 #[cfg(test)]

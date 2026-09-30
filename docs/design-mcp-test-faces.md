@@ -52,7 +52,17 @@ note   a file compiled only under a non-default feature cannot fail on the defau
 
 先做 **A**（半天内可落地、直接止住第 11 轮那类盲区），**B 单独拍板**（它是能力扩张，且需要定超时/并发/日志三条契约）。
 
-## 5. 相关记录
+## 5. 已落地（2026-09-29）
+
+候选 **A** 与 **B** 都已实现（同一批）：
+
+- **A**：新模块 `toolchain/src/mcp/src/faces.rs`（从 `workspace::metadata_json` 读 Cargo 自己的看法，命令拼法仍只有一份），`nichlink.status` 末尾多一节。真树上实测输出：
+  `faces  nichlink-toolchain: default=[build, run] all=[authoring, build, cli, dev-supervisor, evidence, mcp, …]`
+  加那条盲区备注 —— 第 11 轮那个盲区现在在调用方跑测试**之前**就写在答案里了。
+- **B**：新工具 `nichlink.check {face, timeout_ms?, root?}`（目录第 22 项），四条钉子：失败运行如实报出退出码/结果行/失败测试名；`timeout_ms` 到点 ⇒ 印 `unknown (timed out…只杀直接子进程…日志在…)` **而不是 pass**；没有 `test result:` 行 ⇒ 印"什么都没跑，这不是通过"；不说 `face` ⇒ 按名拒绝（没有默认面）。输出走**文件**而不是管道（没人排空的管道会填满并让子进程死锁，本仓已经付过一次代价）。
+- 判据同 §3：静态清单与观测结果在答案里可分辨（`faces` 行 vs `check` 行的命令与退出码）✓；自我描述同批改（`tools/list` 描述 + 模块文档）✓。
+
+## 6. 相关记录
 
 - `docs/audit-2026-09-29/audit-agent-simulation.md` §7（第 2 轮：F6/F7 的答案、`root` 基准缺陷的修复）。
 - `docs/audit-2026-09-29/audit-chain-eval.md`（机械半边：14 轮种子注入与机械判分）。

@@ -132,11 +132,17 @@ mod build_evidence;
 #[path = "trace.rs"]
 mod trace;
 
+#[path = "faces.rs"]
+mod faces;
+
 #[path = "diff.rs"]
 mod diff;
 
 #[path = "usages.rs"]
 mod usages;
+
+#[path = "check.rs"]
+mod check;
 
 #[path = "converge.rs"]
 mod converge;

@@ -508,6 +508,32 @@ fn detail(member: &Member) -> String {
     }
 }
 
+/// The `cargo metadata` document for a manifest, or the reason Cargo gave none.
+/// `cargo metadata` 为一份清单产出的文档，或 Cargo 拿不出它的原因。
+///
+/// One spelling of the command, so the member list and the feature faces cannot come from two
+/// different invocations that disagree: everything a caller wants out of Cargo's view of a tree
+/// comes through here.
+/// 这条命令只有一份拼法，因此成员清单与特性面不可能出自两次互相矛盾的调用：调用方想从 Cargo 对一棵树
+/// 的看法里取得的东西都经由这里。
+pub(crate) fn metadata_json(manifest: &Path) -> Result<Value, String> {
+    let output = std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .arg("--manifest-path")
+        .arg(manifest)
+        .output()
+        .map_err(|error| format!("cannot run cargo metadata: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo metadata failed for {}: {}",
+            manifest.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    serde_json::from_slice::<Value>(&output.stdout)
+        .map_err(|error| format!("cargo metadata did not return JSON: {error}"))
+}
+
 /// The members `cargo metadata` reports for a manifest, in Cargo's own order.
 /// `cargo metadata` 为一份清单报告的成员，按 Cargo 自己的顺序。
 ///
@@ -517,18 +543,7 @@ fn detail(member: &Member) -> String {
 /// 失败以空清单而不是错误回来，因为调用方已经握有原因：`package_name` 跑过同一条命令，它的消息点名
 /// 清单与 Cargo 的 stderr，那才是值得报出的句子。
 fn metadata_members(manifest: &Path) -> Vec<(PathBuf, String)> {
-    let Ok(output) = std::process::Command::new("cargo")
-        .args(["metadata", "--format-version", "1", "--no-deps"])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .output()
-    else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    let Ok(metadata) = serde_json::from_slice::<Value>(&output.stdout) else {
+    let Ok(metadata) = metadata_json(manifest) else {
         return Vec::new();
     };
     let (Some(packages), Some(members)) = (
