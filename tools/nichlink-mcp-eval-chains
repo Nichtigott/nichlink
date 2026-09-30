@@ -288,7 +288,28 @@ function report(path) {
 // 三个数——推理**字符**、推理**块数**、**每仪器调用的思考量**——这样"我们的链更短"不会被误读成"步数更少"。
 function subjects(path) {
   const rows = new Map();
-  let current = null;
+  // A member reasons before it claims anything (opening the log, reading the brief), and the first
+  // cut of this mode dropped that block on the floor: an independent review counted one extra block
+  // on one side and 463 extra characters on the other. It is kept under a `(pre)` row so the totals
+  // match a parser that simply sums the log.
+  // 成员在认领第一道题之前也会推理（打开日志、读题面），而这个模式的第一版把那一块**丢了**：独立复核
+  // 数到某一侧多一个块、另一侧多 463 字符。现在它留在 `(pre)` 行里，因此合计与"直接对日志求和"的解析一致。
+  let current = "(pre)";
+  const row = () => {
+    if (!rows.has(current)) {
+      rows.set(current, {
+        label: current,
+        reasoning: 0,
+        blocks: 0,
+        calls: 0,
+        instrument: 0,
+        refused: 0,
+        trips: 0,
+        tools: [],
+      });
+    }
+    return rows.get(current);
+  };
   for (const event of events(path)) {
     const data = event.data || {};
     if (event.type === "tool/result") {
@@ -299,44 +320,34 @@ function subjects(path) {
       const claim = /Task (t\d+) claimed by/.exec(text);
       if (claim) {
         current = claim[1];
-        rows.set(current, {
-          label: (text.split("\n")[1] || current).trim().slice(0, 34),
-          reasoning: 0,
-          blocks: 0,
-          calls: 0,
-          instrument: 0,
-          refused: 0,
-          trips: 0,
-          tools: [],
-        });
+        const fresh = row();
+        fresh.label = (text.split("\n")[1] || current).trim().slice(0, 34);
       }
-      if (current && /"exit"\s*:\s*[1-9]|=== EXIT:\s*[1-9]/.test(text)) {
-        rows.get(current).refused += 1;
+      if (/"exit"\s*:\s*[1-9]|=== EXIT:\s*[1-9]/.test(text)) {
+        row().refused += 1;
       }
     } else if (event.type === "assistant/message") {
-      const row = current && rows.get(current);
-      if (!row) continue;
       for (const block of (data.message && data.message.content) || []) {
         if (block.type === "reasoning") {
-          row.reasoning += (block.text || "").length;
-          row.blocks += 1;
+          const bucket = row();
+          bucket.reasoning += (block.text || "").length;
+          bucket.blocks += 1;
         }
       }
     } else if (event.type === "tool/call") {
-      const row = current && rows.get(current);
-      if (!row) continue;
       const arguments =
         typeof data.arguments === "string" ? data.arguments : JSON.stringify(data.arguments || {});
-      row.calls += 1;
+      const bucket = row();
+      bucket.calls += 1;
       const instrument = instrumentCall(data.name || "?", arguments);
       if (instrument) {
-        row.instrument += 1;
-        row.tools.push(instrument);
+        bucket.instrument += 1;
+        bucket.tools.push(instrument);
       }
     }
   }
-  for (const row of rows.values()) {
-    row.trips = row.tools.slice(1).filter((tool, index) => tool === row.tools[index]).length;
+  for (const bucket of rows.values()) {
+    bucket.trips = bucket.tools.slice(1).filter((tool, index) => tool === bucket.tools[index]).length;
   }
   return rows;
 }
@@ -344,8 +355,9 @@ function subjects(path) {
 function compare(leftPath, rightPath) {
   const left = subjects(leftPath);
   const right = subjects(rightPath);
-  const leftKeys = [...left.keys()];
-  const rightKeys = [...right.keys()];
+  const PRE = "(pre)";
+  const leftKeys = [...left.keys()].filter((key) => key !== PRE);
+  const rightKeys = [...right.keys()].filter((key) => key !== PRE);
   console.log(
     "subject\tleft reason/blocks\tright reason/blocks\tleft/right\tleft instr*/ref*/trip*\tright instr*/ref*/trip*"
   );
@@ -376,11 +388,24 @@ function compare(leftPath, rightPath) {
         `${a.instrument}/${a.refused}/${a.trips}\t${b.instrument}/${b.refused}/${b.trips}`
     );
   });
+  // The reasoning before the first claim is a real part of the chain and is counted in TOTAL (it is
+  // not paired to a subject, because no subject had been claimed yet).
+  // 认领第一道题之前的推理是链的真实一部分，计入 TOTAL（不与任何题配对，因为那时还没有认领）。
+  const leftPre = left.get(PRE) || { reasoning: 0, blocks: 0, instrument: 0, refused: 0, trips: 0 };
+  const rightPre = right.get(PRE) || { reasoning: 0, blocks: 0, instrument: 0, refused: 0, trips: 0 };
   console.log(
-    `TOTAL\t${lr}/${lb}\t${rr}/${rb}\t${rr ? (lr / rr).toFixed(2) : "-"}\t${li}\t${ri}`
+    `(pre)\t${leftPre.reasoning}/${leftPre.blocks}\t${rightPre.reasoning}/${rightPre.blocks}\t-\t` +
+      `${leftPre.instrument}/${leftPre.refused}/${leftPre.trips}\t` +
+      `${rightPre.instrument}/${rightPre.refused}/${rightPre.trips}`
   );
   console.log(
-    "note  subjects are paired by order (the two arms claim the same list in the same order). " +
+    `TOTAL\t${lr + leftPre.reasoning}/${lb + leftPre.blocks}\t${rr + rightPre.reasoning}/` +
+      `${rb + rightPre.blocks}\t${rr + rightPre.reasoning ? ((lr + leftPre.reasoning) / (rr + rightPre.reasoning)).toFixed(2) : "-"}\t` +
+      `${li + leftPre.instrument}\t${ri + rightPre.instrument}`
+  );
+  console.log(
+    "note  subjects are paired by order (the two arms claim the same list in the same order); the " +
+      "`(pre)` row is the reasoning before the first claim and is included in TOTAL. " +
       "* = session-derived **lower bound**: an arm that wraps the instrument in a shell script " +
       "names the binary in only some of its bash calls (round 5 wrote /tmp/round5/mcp.sh and called " +
       "that, so 7 of 154 instrument calls carried the binary name), so the per-arm logs the briefs " +

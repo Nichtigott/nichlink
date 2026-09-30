@@ -241,10 +241,16 @@ fn invalid_field(fields: &Value, action: Action) -> Option<String> {
         }
         if key == "needs_registry" {
             if !value.is_boolean() {
-                return Some("`needs_registry` must be true or false".to_owned());
+                return Some(format!(
+                    "`needs_registry` must be true or false\n{}",
+                    editable_fields_line()
+                ));
             }
         } else if !value.is_string() {
-            return Some(format!("`{key}` must be a string"));
+            return Some(format!(
+                "`{key}` must be a string (this shape takes strings, not arrays or objects)\n{}",
+                editable_fields_line()
+            ));
         }
     }
     None
@@ -480,9 +486,12 @@ fn overlay(
             "exports" => authored.exports = text()?,
             "stable_name" => authored.stable_name = text()?,
             "needs_registry" => {
-                authored.needs_registry = value
-                    .as_bool()
-                    .ok_or_else(|| "`needs_registry` must be true or false".to_owned())?;
+                authored.needs_registry = value.as_bool().ok_or_else(|| {
+                    format!(
+                        "`needs_registry` must be true or false\n{}",
+                        editable_fields_line()
+                    )
+                })?;
             }
             "getting_from_other_registry" => authored.getting_from_other_registry = text()?,
             "registration_rule" => authored.registration_rule = text()?,

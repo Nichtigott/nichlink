@@ -80,6 +80,25 @@ fn a_misspelled_field_is_refused_by_add_and_edit() {
         mistyped.contains("`needs_registry` must be true or false"),
         "{mistyped}"
     );
+    // Every type refusal carries the shape too: an independent review of the first cut found this
+    // exact hole (the boolean refusal was the one an arm actually hit), so the pin covers both the
+    // boolean and the string case rather than only the misspelled key.
+    // 每一种类型拒绝也带形状：对第一版的独立复核正是从这个洞里抓到的（被拒的恰是布尔那一条），因此
+    // 钉子同时覆盖布尔与字符串两种情形，而不是只覆盖拼错的键。
+    assert!(
+        mistyped.contains("fields: module kind") && mistyped.contains("one boolean"),
+        "the boolean refusal carries the shape: {mistyped}"
+    );
+    let mistyped_string = apply(
+        &root,
+        &json!({"action": "add", "fields": {"module": "probe", "exports": ["control.render"]}}),
+    )
+    .expect_err("an array where a string belongs is refused rather than coerced");
+    assert!(
+        mistyped_string.contains("`exports` must be a string")
+            && mistyped_string.contains("fields: module kind"),
+        "the string refusal carries the shape: {mistyped_string}"
+    );
 
     let applied = apply(
         &root,
