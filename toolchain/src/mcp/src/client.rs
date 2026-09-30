@@ -43,9 +43,11 @@ use serde_json::{Map, Value};
 /// 逐工具散文，而只读每条描述第一小句的 agent 手上没有任何东西说"哪种症状用哪个工具"。表里点名症状、
 /// 该发的调用、以及这次调用答不了的那一件事。
 pub const INSTRUCTIONS: &str = "\
-Read the symptom first, then take the shortest route it names. A failing test? `check {face}` runs \
-that face and makes the exit code the verdict — but if you already ran `cargo test`, keep its \
-output: the failing assertion's own words are the next clue. **If the symptom is in something the \
+Read the symptom first, then take the shortest route it names. A failing test? Run the suite you \
+already have (`cargo test`) and keep its output: the failing assertion's own words are the next \
+clue. `check {face}` is the same run aimed at **one face** — reach for it when the default face is \
+green and you suspect another one (`face: \"all\"`, or a feature name), because it names the face \
+it ran and makes the exit code the verdict. **If the symptom is in something the \
 code produces** (a rendered report, a generated record), `search {literal}` on that product's own \
 words finds the line that produces it, usually in one call. **If the symptom is the assertion's \
 message**, search a short, stable phrase from it: the test framework appends `left:`/`right:` and \
