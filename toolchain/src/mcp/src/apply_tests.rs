@@ -64,6 +64,12 @@ fn a_misspelled_field_is_refused_by_add_and_edit() {
         misspelled.contains("`knd` is not an editable registration-face field"),
         "{misspelled}"
     );
+    // The refusal also names the accepted shape, so the next call does not have to guess it.
+    // 拒绝同时点名"可接受的形状"，让下一次调用不必靠猜。
+    assert!(
+        misspelled.contains("fields: module kind") && misspelled.contains("one boolean"),
+        "the refusal carries the shape: {misspelled}"
+    );
 
     let mistyped = apply(
         &root,
@@ -113,6 +119,13 @@ fn a_preview_reports_the_resulting_tree_and_leaves_the_project_alone() {
     .expect("the preview runs");
     assert!(reply.contains("action preview"), "{reply}");
     assert!(reply.contains("namespace "), "{reply}");
+    // Every reply carries the shape a request must spell, because the round measured that the one
+    // place listing it (`--list <tool>`) was never called.
+    // 每次回复都带上"请求必须写出的形状"——那轮量到唯一列出它的地方（`--list <tool>`）一次都没被调用。
+    assert!(
+        reply.contains("fields: module kind preset parts") && reply.contains("one boolean"),
+        "the reply states the editable-field shape: {reply}"
+    );
     assert!(reply.contains("faces 1"), "{reply}");
     assert!(reply.contains("root/button"), "{reply}");
     assert!(reply.contains("diff:"), "{reply}");

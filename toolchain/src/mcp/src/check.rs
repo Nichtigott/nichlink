@@ -206,7 +206,11 @@ fn next_step(timed_out: bool, code: Option<i32>) -> Option<String> {
     }
     Some(
         "next   the failing assertion's message is a string in this tree: \
-         search {literal: \"<that text>\"} finds where it is produced"
+         search {literal: \"<that text>\"} finds where it is produced. If two red things may be \
+         independent, two green runs are not the evidence: fix one and re-run, and say which red \
+         survived. And a probe you built yourself that disagrees with the source is a reason to \
+         re-read that line (`read`, `search {literal}`) before rebuilding — a second look is \
+         cheaper than a second build"
             .to_owned(),
     )
 }

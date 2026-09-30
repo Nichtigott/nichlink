@@ -207,8 +207,14 @@ fn invalid_field(fields: &Value, action: Action) -> Option<String> {
             continue;
         }
         if !EDITABLE_FIELDS.contains(&key.as_str()) {
+            // The refusal names the shape as well as the mistake: the round measured five refusals
+            // in one family, all of them field spelling, and a refusal that only says "no" costs the
+            // next call as well.
+            // 拒绝同时说出"形状"和"错在哪"：那轮量到一个族里五次被拒、全是字段拼法，而只会说"不行"的
+            // 拒绝还要再花掉下一次调用。
             return Some(format!(
-                "`{key}` is not an editable registration-face field"
+                "`{key}` is not an editable registration-face field\n{}",
+                editable_fields_line()
             ));
         }
         // The executor's edit field order does not carry the two contract keys: they
@@ -455,10 +461,12 @@ fn overlay(
     };
     for (key, value) in object {
         let text = || {
-            value
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| format!("`{key}` must be a string"))
+            value.as_str().map(str::to_owned).ok_or_else(|| {
+                format!(
+                    "`{key}` must be a string (this shape takes strings, not arrays or objects)\n{}",
+                    editable_fields_line()
+                )
+            })
         };
         match key.as_str() {
             "module" => authored.module = text()?,
@@ -579,11 +587,25 @@ fn report(
     };
     let consequences = consequences(target.work_dir(root), root, namespace, outcome)?;
     Ok(format!(
-        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
+        "action {}\nnamespace {namespace}\n{}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
         if applied { "apply" } else { "preview" },
+        editable_fields_line(),
         outcome.source.display(),
         faces.len()
     ))
+}
+
+/// The editable fields, as a request must spell them: the shape the refusals point at and every
+/// successful reply repeats. `--list <tool>` carries the same list, but the round measured that
+/// nothing calls it (zero uses in seventeen subjects), so the shape travels with the answer instead.
+/// 可编辑字段，按请求必须写出的形状：拒绝文案指向它，每次成功的回复也重复它。`--list <tool>` 载着同一
+/// 份清单，但那轮量到**没有任何一次调用**去读它（17 个样本里 0 次），因此形状随答案一起走。
+fn editable_fields_line() -> String {
+    format!(
+        "fields: {} — every value is a string; `needs_registry` is the one boolean, and \
+         `exports`/`handle_traits`/`requires` are spelled as strings rather than arrays",
+        EDITABLE_FIELDS.join(" ")
+    )
 }
 
 /// What this change will make the rest of the tree say, as static facts with their boundary.

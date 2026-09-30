@@ -745,14 +745,35 @@ mod process_faults {
 
     /// Stage `bytes` as a plugin executable and load it with `limits`.
     /// 把 `bytes` 暂存为插件可执行文件，并以 `limits` 加载它。
+    ///
+    /// The load retries a bounded number of times on `ExecutableFileBusy` (ETXTBSY): this suite runs
+    /// its cases in parallel, and a child forked by one case can inherit the descriptor of a script
+    /// another case is still writing, after which the kernel refuses to exec it. That window is a
+    /// property of the machine rather than of the host, so it is retried here instead of serializing
+    /// the suite (measured: one run in ten failed this way before the retry, and the failing test
+    /// passes on its own).
+    /// 加载对 `ExecutableFileBusy`（ETXTBSY）做有界重试：本套件并行跑各用例，某个用例 fork 出的子进程
+    /// 可能继承另一个用例仍在写的脚本描述符，此后内核会拒绝 exec 它。这个窗口是机器的性质而不是宿主的
+    /// 性质，因此在这里重试，而不是把套件串行化（量到：加重试前约十次全量运行会失败一次，而那条测试单独
+    /// 跑必过）。
     fn load_plugin_host_fault_matrix(path: &Path, limits: ProcessLimits) -> impl PluginInstance {
         let bytes = std::fs::read(path).unwrap();
-        ProcessBackend::new(limits)
-            .load_process_backend(
-                artifact(bytes, PluginMode::Extension),
+        let mut attempts = 0;
+        loop {
+            match ProcessBackend::new(limits).load_process_backend(
+                artifact(bytes.clone(), PluginMode::Extension),
                 ProcessProgram::new(path),
-            )
-            .unwrap()
+            ) {
+                Ok(loaded) => return loaded,
+                Err(error)
+                    if attempts < 20 && format!("{error:?}").contains("ExecutableFileBusy") =>
+                {
+                    attempts += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                Err(error) => panic!("the host refused {path:?}: {error:?}"),
+            }
+        }
     }
 
     /// Build a plugin that emits the prepared `frame` on stdout without reading stdin.
