@@ -930,7 +930,7 @@ SCENARIOS = {
     3: {
         "id": "orphan",
         "question": "本工作区里有哪些函数定义了、却没有任何静态调用者？",
-        "answer": "静态零调用者的真值：`audit_unused`（core/src/audit.rs）；外加 3 个 `#[test]` 函数（libtest 经运行期调用，静态上没有入边）",
+        "answer": "静态零调用者的真值：`audit_unused`（core/src/audit.rs）；外加 5 个 `#[test]` 函数（libtest 经运行期调用，静态上没有入边；数目以树为准，F2 曾把 3 写成真值 ✗）",
         "codegraph": "无孤儿视图；只能逐符号 callers，符号多时调用线性增长",
         "inject": [],
     },
@@ -1140,6 +1140,11 @@ BASELINE = {
     6: ("postable", "and a zero"),
     7: ("1000", "SMALL_LIMIT"),
     8: ("write_count", "a header, the count"),
+    # F1: a level without a baseline row crashed the judge command with a KeyError, so the table and
+    # the scenarios have to grow together — the round's auditor found the gap by running it.
+    # F1：少了基线行的关卡会让判官命令以 KeyError 崩掉，因此这张表必须与关卡一起长——那轮的审计是在
+    # 真跑它的时候发现的。
+    9: ("entry.amount", "audit = []"),
 }
 
 
