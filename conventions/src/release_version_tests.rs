@@ -199,3 +199,38 @@ fn a_renamed_internal_requirement_is_reported() {
     );
     let _ = fs::remove_dir_all(&root);
 }
+
+/// The version line has one home: a member may inherit its requirement from
+/// `[workspace.dependencies]`, which is legal exactly when the root names the package — the root's
+/// own entry is scanned as a requirement like any other, so the value is still held to the release
+/// line. Inheriting from a root that does not name it is the finding.
+/// 版本线只有一个家：成员可以从 `[workspace.dependencies]` 继承要求，而这在**根点名了该包**时合法——
+/// 根里那条本身就是一条被扫描的要求，取值仍被绑到发布线上。根没有点名却要继承，才是那条发现。
+#[test]
+fn an_inherited_requirement_is_legal_when_the_root_names_it() {
+    let member = "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
+                  [dependencies]\nnichlink-kernel = { workspace = true }\n";
+    let named = synthetic(
+        "[workspace]\nmembers = [\"toolchain\"]\n\n[workspace.package]\nversion = \"0.2.0\"\n\n\
+         [workspace.dependencies]\nnichlink-kernel = { path = \"kernel\", version = \"0.2.0\" }\n",
+        &[("toolchain", member)],
+    );
+    let found = findings(&named);
+    assert!(
+        found.is_empty(),
+        "the root names it and holds the version: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&named);
+
+    let unnamed = synthetic(
+        "[workspace]\nmembers = [\"toolchain\"]\n\n[workspace.package]\nversion = \"0.2.0\"\n",
+        &[("toolchain", member)],
+    );
+    let found = findings(&unnamed);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(
+        found[0].reason.contains("does not name it"),
+        "the finding says which table failed to name it: {found:#?}"
+    );
+    let _ = fs::remove_dir_all(&unnamed);
+}

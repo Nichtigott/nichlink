@@ -90,9 +90,10 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// `nichlink.default` 是真实答案，而搭建新项目的向导依赖它。针对已存在树的**查询**则不能凭空
 /// 造出身份域，因此桥选择拒绝。
 pub(super) fn namespace_for(manifest: &Path, configured: Option<&str>) -> String {
-    if let Some(configured) = configured {
-        return configured.to_owned();
-    }
-    crate::build_time::package_name(manifest)
+    // The override half is the shared rule in `build_time`; the fallback is this surface's own
+    // decision (authoring creates, so it defaults) and stays on this line where it can be read.
+    // 覆盖那一半是 `build_time` 里的共享规则；回落是这个执行面自己的决定（创作在创建，因此给默认值）
+    // 并且留在这两行里，一眼能读到。
+    crate::build_time::identity_namespace(configured, manifest)
         .unwrap_or_else(|_| crate::runtime::lexicon::DEFAULT_NAMESPACE.to_owned())
 }

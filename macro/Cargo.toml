@@ -17,7 +17,7 @@ name = "nichlink_macro"
 proc-macro = true
 
 [dependencies]
-nichlink-kernel = { path = "../kernel", version = "0.2.0", features = ["syntax"] }
+nichlink-kernel = { workspace = true, features = ["syntax"] }
 proc-macro2 = "1"
 
 [dev-dependencies]

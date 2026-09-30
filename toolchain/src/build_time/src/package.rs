@@ -37,6 +37,35 @@ use std::path::Path;
 /// `Cargo.toml`"这个假设烤进接口；Cargo 反正拒绝别的名字（"the manifest-path must be a path to a
 /// Cargo.toml file"），所以这个假设连用处都没有。
 ///
+/// The identity namespace a surface must use: the configured override verbatim, else Cargo's
+/// answer for the manifest.
+/// 一个执行面必须使用的身份命名空间：配置的覆盖原样胜出，否则就是 Cargo 对该清单的回答。
+///
+/// This is the half every surface shares, and it is shared **here** because the two surfaces that
+/// ask it — the MCP bridge and Studio — must not be able to disagree about it: an identity domain
+/// that two surfaces compute differently names nodes the host never compiled (audit `S12`,
+/// `LGC-LG-13`). What they deliberately do *not* share is the fallback when Cargo has no answer:
+/// authoring creates a tree, so Studio falls back to the documented default, while a query about an
+/// existing tree refuses rather than invent one. Keeping that difference at each caller's one line
+/// is what makes it visible instead of buried.
+/// 这是每个执行面共享的那一半，而且**在这里**共享，是因为问它的两个执行面——MCP 桥与 Studio——不能对它
+/// 有分歧：两个执行面算出不同答案的身份域，命名的是宿主从未编译过的节点（审计 `S12`、`LGC-LG-13`）。
+/// 它们有意**不**共享的是"Cargo 答不出时怎么办"：创作是在创建一棵树，因此 Studio 回落到文档化的默认值；
+/// 而对已存在树的查询宁可拒绝也不凭空造一个。把这个差别留在各自调用处的那一行，正是让它可见而不是被埋掉。
+///
+/// An empty or whitespace-only override counts as absent: `NICH_LINK_NAMESPACE=` is how a shell
+/// clears a variable it inherited, and taking it literally produced a namespace no `NodeId` was ever
+/// hashed under — every identity in that session came back as one the tree had never seen.
+/// 空或只有空白的覆盖算作没有设置：`NICH_LINK_NAMESPACE=` 正是 shell 清掉一个继承来的变量的写法，而
+/// 照字面采用它会得到一个从未有任何 `NodeId` 在其下散列的命名空间——那个会话里的每个身份都会被报成
+/// 这棵树从未见过的。
+pub fn identity_namespace(configured: Option<&str>, manifest: &Path) -> Result<String, String> {
+    if let Some(configured) = configured.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok(configured.to_owned());
+    }
+    package_name(manifest)
+}
+
 /// Reading `[package] name` by hand was wrong three ways at once: it did not
 /// know TOML sections, so a `[lib]` or `[[bin]]` name key could answer first; it
 /// did not know single-quoted strings; and when it found nothing it silently
@@ -185,6 +214,31 @@ mod tests {
         let root = temporary_root("no-manifest");
         let error = package_name(&root).expect_err("a directory is not a manifest");
         assert!(error.contains("cargo metadata failed"), "{error}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A configured namespace wins **verbatim** and without asking Cargo, and an empty one counts
+    /// as absent: `NICH_LINK_NAMESPACE=` is how a shell clears an inherited variable, and taking it
+    /// literally would name an identity domain no `NodeId` was ever hashed under.
+    /// 配置的命名空间**原样**胜出、且不问 Cargo；空的算作没设置：`NICH_LINK_NAMESPACE=` 正是 shell 清掉
+    /// 继承变量的写法，照字面采用它会得到一个从未有任何 `NodeId` 在其下散列的命名域。
+    #[test]
+    fn a_configured_namespace_wins_verbatim_and_an_empty_one_is_absent() {
+        // A directory rather than a manifest: any Cargo answer at all would fail, so a `Some`
+        // override proves it never asked.
+        // 给的是目录而不是清单：任何 Cargo 回答都会失败，因此有覆盖时能成功就证明它根本没问。
+        let root = std::env::temp_dir().join(format!("nichlink-namespace-{}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("scratch");
+        assert_eq!(
+            super::identity_namespace(Some("trace-recorded-host"), &root)
+                .expect("the override is the answer"),
+            "trace-recorded-host"
+        );
+        for blank in ["", "   "] {
+            let error = super::identity_namespace(Some(blank), &root)
+                .expect_err("an empty override is absent, so Cargo is asked and cannot answer");
+            assert!(error.contains("cargo metadata failed"), "{error}");
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 }

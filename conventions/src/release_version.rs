@@ -356,6 +356,24 @@ fn record(
             manifest: relative(root, manifest),
             reason: format!("`{name}` requires {version}, but the workspace version is {release}"),
         }),
+        // An inherited requirement is legal **because the root names it**: the version then lives
+        // in exactly one place, and the root's own entry is scanned as a requirement like any other
+        // (this section is in `is_requirement_section`), so the value is still held to the release
+        // line. Inheriting from a root that does not name the package is the finding.
+        // 继承来的要求之所以合法，是因为**根点名了它**：版本因此只有一个家，而根里那条本身就是一条
+        // 被扫描的要求（`workspace.dependencies` 在 `is_requirement_section` 里），取值仍被绑到发布线
+        // 上。根没有点名这个包却要继承，才是那条发现。
+        None if inherits_from_workspace(value) => {
+            if !workspace_dependency_names(root, name) {
+                found.push(Finding {
+                    manifest: relative(root, manifest),
+                    reason: format!(
+                        "`{name}` inherits its version from `[workspace.dependencies]`, which \
+                         does not name it"
+                    ),
+                });
+            }
+        }
         None if require_version => found.push(Finding {
             manifest: relative(root, manifest),
             reason: format!(
@@ -377,6 +395,51 @@ fn version_in(value: &str) -> Option<String> {
     let (_, after) = value.split_once("version")?;
     let (_, after) = after.split_once('=')?;
     quoted(after.trim_start())
+}
+
+/// Whether this requirement takes its version from `[workspace.dependencies]`.
+/// 这条要求是否从 `[workspace.dependencies]` 取得版本。
+fn inherits_from_workspace(value: &str) -> bool {
+    let Some(at) = value.find("workspace") else {
+        return false;
+    };
+    let rest = value[at + "workspace".len()..].trim_start();
+    match rest.strip_prefix('=') {
+        Some(rest) => rest.trim_start().starts_with("true"),
+        None => false,
+    }
+}
+
+/// Whether the root manifest's `[workspace.dependencies]` names this package.
+/// 根清单的 `[workspace.dependencies]` 是否点名了这个包。
+fn workspace_dependency_names(root: &Path, name: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(root.join("Cargo.toml")) else {
+        return false;
+    };
+    let mut in_table = false;
+    for line in text.lines() {
+        let trimmed = line.split('#').next().unwrap_or("").trim();
+        if let Some(header) = trimmed.strip_prefix('[') {
+            in_table = header.trim_end_matches(']').trim() == "workspace.dependencies";
+            continue;
+        }
+        if !in_table {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let named = if key.starts_with("nichlink-") {
+            Some(key.to_owned())
+        } else {
+            package_field(value.trim())
+        };
+        if named.as_deref() == Some(name) {
+            return true;
+        }
+    }
+    false
 }
 
 /// The contents of the leading quoted string in `text`, if it starts with one.

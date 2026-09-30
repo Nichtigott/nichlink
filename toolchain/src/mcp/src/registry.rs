@@ -136,10 +136,7 @@ pub(crate) fn namespace(root: &Path) -> Result<String, String> {
 /// 空间的散列——而代理会带着它们去做无法解析的 graft 记录或 trace 查找。一个它能据以行动的
 /// 拒绝（`set NICH_LINK_NAMESPACE`）胜过到处都错的身份。
 pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, String> {
-    if let Some(configured) = configured {
-        return Ok(configured.to_owned());
-    }
-    crate::build_time::package_name(&root.join("Cargo.toml")).map_err(|error| {
+    crate::build_time::identity_namespace(configured, &root.join("Cargo.toml")).map_err(|error| {
         format!(
             "cannot learn the identity namespace of {}: {error}; \
              set {} to name it explicitly",

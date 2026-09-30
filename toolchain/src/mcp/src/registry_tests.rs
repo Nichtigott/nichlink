@@ -126,3 +126,28 @@ fn an_unparsable_registration_file_is_counted_in_the_reply() {
     assert!(reply.contains("unparsable faces 1"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The writer and the readers resolve identities through **one** entry, which is what keeps
+/// `verify` (which stamps records) and `diff`/`search` (which read them) from reporting a fresh
+/// tree as one whose every identity moved (audit `LGC-LG-13`). Spelling `package_name` in any of
+/// them is how that drift starts, so it is refused here rather than reviewed for.
+/// 写入方与读取方经**同一个**入口解析身份——正是它让 `verify`（盖记录）与 `diff`/`search`（读记录）
+/// 不会把一棵刚校验过的树报成每个身份都动过（审计 `LGC-LG-13`）。在其中任何一个里另写 `package_name`
+/// 正是漂移的起点，因此这里直接拒绝，而不是留给评审去看。
+#[test]
+fn the_writer_and_the_readers_share_one_namespace_entry() {
+    for (name, source) in [
+        ("verify.rs", include_str!("verify.rs")),
+        ("diff.rs", include_str!("diff.rs")),
+        ("search.rs", include_str!("search.rs")),
+    ] {
+        assert!(
+            !source.contains("package_name("),
+            "{name} must resolve identities through `registry::namespace`, not Cargo directly"
+        );
+    }
+    assert!(
+        include_str!("verify.rs").contains("registry::namespace"),
+        "verify is the writer; it has to use the shared entry"
+    );
+}
