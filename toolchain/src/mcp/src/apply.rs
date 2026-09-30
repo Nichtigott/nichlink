@@ -118,7 +118,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
             // touching it.
             // 失败的预览不必留下副本；失败的落盘保留项目，而执行器在碰它之前就已经拒绝。
             target.discard(root);
-            return Err(error);
+            return Err(refused_with_a_way_forward(error));
         }
     };
     let report = report(root, &target, &namespace, &outcome)?;
@@ -577,12 +577,143 @@ fn report(
     } else {
         format!("preview effect: {}", outcome.message)
     };
+    let consequences = consequences(target.work_dir(root), root, namespace, outcome)?;
     Ok(format!(
-        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n",
+        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
         if applied { "apply" } else { "preview" },
         outcome.source.display(),
         faces.len()
     ))
+}
+
+/// What this change will make the rest of the tree say, as static facts with their boundary.
+/// 这次改动会让这棵树的其他部分说什么——按静态事实给出，并带上它们的边界。
+///
+/// Both families of the round-5 evaluation spent their most expensive iterations discovering this by
+/// experiment: a new face moves the factory enumerations, and "the application ships this face" is a
+/// different question from "the build discovered it". Both facts are already in the tree, so the
+/// write path states them before the write instead of leaving them to be rediscovered by a red run.
+/// 第五轮评测的两个族都把最贵的迭代花在"靠实验发现这件事"上：新面会移动出厂形状的枚举，而"这个应用
+/// 是否发布这个面"与"构建发现了它"是两个问题。两件事本来就写在这棵树里，因此写入路径在写之前把它们
+/// 说出来，而不是留给一次红运行去重新发现。
+fn consequences(
+    work: &Path,
+    project: &Path,
+    namespace: &str,
+    outcome: &Outcome,
+) -> Result<String, String> {
+    let changed = outcome
+        .source
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if changed.is_empty() {
+        return Ok(String::new());
+    }
+    let faces = face_views(work, namespace)?;
+    let Some(face) = faces.iter().find(|face| face.source.ends_with(&changed)) else {
+        return Ok(String::new());
+    };
+    let leaf = face.path.rsplit('/').next().unwrap_or_default().to_owned();
+    let tokens = [face.registry_name.clone(), face.kind.clone(), leaf];
+    let sources = crate::mcp::source_index::load_sources(project)?;
+    const PINS: usize = 5;
+    let mut pins: Vec<String> = Vec::new();
+    let mut shipped_by_a_cut = false;
+    for file in &sources {
+        let test = crate::mcp::callgraph::looks_like_a_test(&file.relative, &file.source);
+        for (index, line) in file.source.lines().enumerate() {
+            let names_it = tokens
+                .iter()
+                .any(|token| !token.is_empty() && line.contains(token.as_str()));
+            if !names_it {
+                continue;
+            }
+            if test {
+                let text = line.trim();
+                let kept: String = text.chars().take(96).collect();
+                pins.push(format!("  {}:{}  {kept}", file.relative, index + 1));
+            }
+            if line.contains("cut(") || line.contains("graft(") {
+                shipped_by_a_cut = true;
+            }
+        }
+    }
+    let cuts = sources
+        .iter()
+        .map(|file| file.source.matches("cut(").count())
+        .sum::<usize>();
+    let grafts = sources
+        .iter()
+        .map(|file| file.source.matches("graft(").count())
+        .sum::<usize>();
+    let mut report = format!(
+        "consequences (static, text-level): {} in-tree test line(s) name this face\n",
+        pins.len()
+    );
+    for line in pins.iter().take(PINS) {
+        report.push_str(line);
+        report.push('\n');
+    }
+    if pins.len() > PINS {
+        report.push_str(&format!(
+            "{}\n",
+            crate::mcp::truncation::withheld(
+                pins.len() - PINS,
+                pins.len(),
+                PINS,
+                "pin lines",
+                "grep the face's name in test files"
+            )
+        ));
+    }
+    report.push_str(&format!(
+        "  entry plan: {cuts} `cut(` and {grafts} `graft(` site(s); this face's name appears at {} \
+         of them — whether the application ships it is the plan's own business\n",
+        if shipped_by_a_cut { "one" } else { "none" }
+    ));
+    report.push_str(
+        "  not covered: this lists test lines that spell the face's name; a test that counts faces \
+         without naming it, or reaches it through another spelling, does not appear here — run the \
+         suite before believing either list\n",
+    );
+    Ok(report)
+}
+
+/// An executor refusal, plus the way forward when the wall is one the round measured.
+/// 执行器的拒绝；当这堵墙是那轮量到的那一堵时，附上继续走的两条路。
+///
+/// Two walls cost the evaluation real time, and both are decidable from the message itself: a face
+/// cannot take children until it declares a registry of its own, and a face that owns children
+/// cannot stay behind a plain cut. Naming the two ways forward is not a licence to skip the rule —
+/// the executor still refuses — it is the difference between "no" and "no, and here is what yes
+/// needs".
+/// 有两堵墙花了评测的真实时间，而两堵都能从消息本身判定：一个面在声明自己的注册机之前不能接收子级；
+/// 而一个面一旦拥有子级，它的槽位就不能再是普通切口。点出两条路不是绕过规则的许可证——执行器照样
+/// 拒绝——它是"不行"与"不行，而'行'需要什么"之间的差别。
+fn refused_with_a_way_forward(error: String) -> String {
+    // The kernel spells it `does not own a Registry`; the match is case-folded so a wording change in
+    // its capitalisation cannot silently drop the way forward.
+    // 内核把它写成 `does not own a Registry`；这里按大小写折叠来匹配，免得它改了首字母就把"继续走的
+    // 路"悄悄丢掉。
+    let folded = error.to_lowercase();
+    if folded.contains("does not own a registry") {
+        return format!(
+            "{error}\nway forward: either declare `needs_registry: true` on that parent together \
+             with its own `registration_rule` (then a child can hang under it), or attach this face \
+             to a parent that already owns a registry — both are changes to declarations, and the \
+             kernel's rule stays as it is"
+        );
+    }
+    if folded.contains("non-empty child registry") {
+        return format!(
+            "{error}\nway forward: the slot whose face now owns children has to be declared as a \
+             full replacement (`cut(…) full graft(…)`) rather than a plain cut, or those children \
+             have to move out from under it — the factory assertions move with either decision, and \
+             that is the decision, not a workaround"
+        );
+    }
+    error
 }
 
 #[cfg(test)]

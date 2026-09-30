@@ -135,6 +135,77 @@ fn a_preview_reports_the_resulting_tree_and_leaves_the_project_alone() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The write path states what the change will make the rest of the tree say: which in-tree test
+/// lines name the face, and whether the entry plan names it at all. Both families of the round-5
+/// evaluation discovered those two facts only by running the suite and reading the red.
+/// 写入路径会说出这次改动会让树的其他部分说什么：哪些树内测试行点到了这个面，以及入口计划到底有没有
+/// 点名它。第五轮评测的两个族都只靠"跑测试、看红"才发现这两件事。
+#[test]
+fn a_preview_names_the_pins_and_the_entry_plan_the_change_will_move() {
+    let (root, _) = package("consequences");
+    std::fs::create_dir_all(root.join("tests")).expect("fixture test dir");
+    std::fs::write(
+        root.join("tests/registry.rs"),
+        "#[test]\nfn the_factory_lists_every_face() { assert!(true, \"button\"); }\n",
+    )
+    .expect("fixture test file");
+    let reply = apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "fields": {"module": "button", "kind": "Button", "name_en": "Button"},
+        }),
+    )
+    .expect("the preview runs");
+    assert!(
+        reply.contains("consequences (static, text-level)"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("tests/registry.rs:"),
+        "the in-tree test line that names the face is listed: {reply}"
+    );
+    assert!(reply.contains("entry plan:"), "{reply}");
+    assert!(
+        reply.contains("not covered"),
+        "and the block says what it cannot see: {reply}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The wall the round measured comes back with the way forward named: "no" and "no, and here is what
+/// yes needs" are different answers, and the second one is the one an agent can act on.
+/// 那轮量到的那堵墙会带着"继续走的两条路"回来："不行"与"不行，而'行'需要什么"是两个不同的回答，
+/// 而后者才是代理能据以行动的那个。
+#[test]
+fn a_refusal_that_has_a_way_forward_names_it() {
+    let (root, _) = package("way-forward");
+    let control = json!({
+        "action": "add",
+        "parent": "root",
+        "apply": true,
+        "fields": {"module": "control", "kind": "Control"},
+    });
+    apply(&root, &control).expect("the parent face is created");
+    let refused = apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root/control",
+            "fields": {"module": "label", "kind": "Label"},
+        }),
+    )
+    .expect_err("a parent that owns no registry cannot take a child");
+    assert!(
+        refused.contains("does not own a Registry"),
+        "the kernel's own refusal is kept: {refused}"
+    );
+    assert!(refused.contains("way forward"), "{refused}");
+    assert!(refused.contains("needs_registry"), "{refused}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// An apply writes the face, and the next call can aim with the tree the previous
 /// reply reported: a child is added under the logical path the first apply
 /// produced, which is the loop that makes the tool usable by an agent.

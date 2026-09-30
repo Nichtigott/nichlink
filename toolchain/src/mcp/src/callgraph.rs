@@ -406,10 +406,14 @@ fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
         }
     }
     let mut found: Vec<String> = Vec::new();
+    // The test half is **counted**, not listed: the harness calls those functions, so listing them
+    // as orphans would be a false positive a reader has to undo — but leaving them out silently is
+    // what capped both arms of the round-5 evaluation at "partly right" on the orphan question.
+    // 测试那一半只**计数**、不列出：测试框架会调用它们，把它们列成孤儿是读者还得自己撤销的假阳性；
+    // 而默默略过它们，正是第五轮评测两臂在孤儿题上一同止步于"部分对"的原因。
+    let mut test_only: usize = 0;
     for (label, file) in &labelled {
-        if looks_like_a_test(label, &file.source) {
-            continue;
-        }
+        let is_test = looks_like_a_test(label, &file.source);
         for function in &file.functions {
             if function.name == "main" {
                 continue;
@@ -418,11 +422,13 @@ fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
             let reached = called
                 .iter()
                 .any(|call| *call == function.name || call.ends_with(&suffix));
-            if !reached {
-                found.push(format!(
+            match (reached, is_test) {
+                (true, _) => {}
+                (false, true) => test_only += 1,
+                (false, false) => found.push(format!(
                     "  fn    {} -> {label}:{}",
                     function.name, function.line
-                ));
+                )),
             }
         }
     }
@@ -443,6 +449,17 @@ fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
     output.push_str(&format!(
         "orphans {total} (defined here, no static caller in this tree)\n"
     ));
+    if test_only > 0 {
+        // The boundary is stated with its number instead of being silent: "one orphan" and "one
+        // orphan plus five functions only the harness calls" are different facts about a tree, and
+        // the round measured an answer that could not tell them apart.
+        // 边界连同它的数字一起说出来，而不是沉默：对一棵树来说，"一个孤儿"与"一个孤儿外加五个只有
+        // 测试框架调用的函数"是两件不同的事实，而那轮量到的正是一个分不清它们的答案。
+        output.push_str(&format!(
+            "note   {test_only} function(s) in test files have no static caller either; the test \
+             harness calls them, so they are counted here rather than listed above\n"
+        ));
+    }
     for line in found.iter().take(limit) {
         output.push_str(line);
         output.push('\n');

@@ -62,7 +62,12 @@ tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `
              and says which entries still hold; a byte that moved makes an entry need a **person**, \
              not an edit, and a confirmation is one more line appended. 若这棵树带采信台账 \
              （`.nichlink/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
-             **人来确认**而不是改代码，而确认就是**再追加一行**。 With `root`, every path argument is relative to that root (root \
+             **人来确认**而不是改代码，而确认就是**再追加一行**。 A route the ledger never named is a **new anchor** — a first confirmation, not a \
+             renewal; the read names that action. 台账从未点名的路线是**新锚**——首次确认、不是续期，\
+             读取时会把该动作点出来。 **Independence is evidence you construct**: two green runs do \
+             not show that two defects are independent — fix or revoke one and show the other's \
+             symptom is still there. **独立性是构造出来的证据**：两次全绿不能说明两处缺陷互相独立\
+             ——只修其一（或撤销其一），再证明另一处的症状仍在。 With `root`, every path argument is relative to that root (root \
 \"kernel\" means path \"src/…\").";
 
 /// One line per tool: its name, then the first sentence of its description.

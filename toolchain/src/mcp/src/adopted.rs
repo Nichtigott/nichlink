@@ -109,6 +109,20 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
          anchor is the one in force; an earlier line stays as its history, which is why a lapsed \
          line can sit above a provisional one and still be the truth about the bytes it named.\n",
     );
+    // The state was complete and the action was missing: the round-5 evaluation's other arm read
+    // this ledger's rules, concluded that a confirmation belongs to a person, and therefore changed
+    // nothing — while the question was what to do about a route the ledger does not name. Naming
+    // that action here is not a licence to forge a confirmation: the request still has to say
+    // `apply` and `confirm`, and the line still names who confirmed it.
+    // 状态是完整的，缺的是**动作**：第五轮评测的另一臂读懂了这台账的规矩，推出"确认属于人"，于是
+    // 什么都没做——而它面对的问题恰恰是"台账没点名的路线该怎么办"。这里把那个动作点出来，不是给伪造
+    // 确认发许可证：请求仍然必须说出 `apply` 与 `confirm`，那一行仍然点名是谁确认的。
+    output.push_str(
+        "next   a route this ledger does not name is a **new anchor** — a first confirmation, not a \
+         renewal: pass `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` together \
+         with `apply: true` and `confirm: true`, and this tool appends one line whose fingerprint it \
+         computes from those files\n",
+    );
     Ok(output)
 }
 

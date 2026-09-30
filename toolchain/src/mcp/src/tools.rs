@@ -112,8 +112,11 @@ pub(crate) fn tools() -> Vec<Value> {
              the name. A \
              **virtual workspace root** is answered as the workspace: a named `path` is answered \
              by the member that owns it, and without one every member is asked and its answer \
-             grouped under it, with `tree unavailable (reason)` where a member could not answer.",
-            json!({"type":"object","properties":{"function":{"type":"string"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"source":{"type":"boolean","description":"also print each definition's own lines (capped, declared through the truncation outlet)"},"root":{"type":"string"}},"required":["function"]}),
+             grouped under it, with `tree unavailable (reason)` where a member could not answer. \
+             `orphans: true` asks the other question — which functions this tree defines and no \
+             function here calls — and counts the test-file half separately, because the harness is \
+             what calls those.",
+            json!({"type":"object","properties":{"function":{"type":"string"},"orphans":{"type":"boolean","description":"list the functions this tree defines that no function here calls; functions in test files are counted separately because the test harness calls them"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"source":{"type":"boolean","description":"also print each definition's own lines (capped, declared through the truncation outlet)"},"root":{"type":"string"}},"anyOf":[{"required":["function"]},{"required":["orphans"]}]}),
         ),
         tool(
             "nichlink.read",
@@ -160,7 +163,14 @@ pub(crate) fn tools() -> Vec<Value> {
              **A request is previewed unless `apply` is true**: the \
              preview runs the real operation on a throwaway copy and returns the file diff plus \
              the registration tree it produces; `apply: true` writes it and names the files it \
-             wrote. Every reply is the tree that results, so the next call can be aimed with it. A \
+             wrote. Every reply is the tree that results, so the next call can be aimed with it. \
+             Every reply also states the **consequences** of the change, as static facts with their \
+             boundary: the in-tree test lines that spell this face's name, and whether the entry \
+             plan names it at all — so what this change will break, and whether the application \
+             ships it, are answered before the write instead of after a red run. A refusal that has \
+             a way forward says so: a parent that owns no registry is told `needs_registry`, and a \
+             slot whose face now owns children is told `full graft`, while the rule itself still \
+             refuses. A \
              **virtual workspace root** names no package and no unique owner, so a write there is \
              refused with the candidate member directories and nothing is copied or written — a \
              write runs against a member it is the unique owner of, or it does not run. **`fields.module` is a bare snake_case module name** (`widget`), not the logical path the tree reports: the executor names the module's directory and file, so `control::object::widget` is refused by name. Every other `fields` value is a **string**: `exports` is one export per call rather than an array, `requires` entries are spelled `capability=>provider`, and `handle_traits` entries are the **labels** the registration rule checks (a Rust path such as `crate::control::ControlHandle` is accepted here and only the parent rule refuses it later). The one non-string key is `needs_registry`, a boolean. **A request the kernel refuses comes back as an error** (`isError` true), because a request this tool cannot carry out is a tool failure rather than a fact about the tree; the read tools are the other way round and print their verdict in the body.",
@@ -460,7 +470,9 @@ pub(crate) fn tools() -> Vec<Value> {
              adoption is a lease whose honest level is `provisional`, and re-earning it takes a \
              person. With `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` the \
              same tool **appends** one line — a preview unless the request also says `apply: true` \
-             and `confirm: true` — so a confirmation is one more line rather than a rewrite.",
+             and `confirm: true` — so a confirmation is one more line rather than a rewrite. The \
+             read also names the action for a route this ledger does not carry: a route the ledger \
+             has never named is a **new anchor** and a first confirmation, not a renewal.",
             json!({"type":"object","properties":{"anchor":{"type":"string"},"certifies":{"type":"string"},"evidence":{"type":"string"},"verifier":{"type":"string"},"reason":{"type":"string"},"files":{"type":"array","items":{"type":"string"}},"apply":{"type":"boolean"},"confirm":{"type":"boolean"},"root":{"type":"string"}}}),
         ),
         tool(
@@ -491,7 +503,10 @@ pub(crate) fn tools() -> Vec<Value> {
              reaches `timeout_ms` (default 900000, clamped to 1000–3600000) is reported as \
              **unknown**, never as a pass, and the reply says the direct child was killed and its \
              own children may survive. A log with no `test result:` line reports that nothing ran: \
-             `0 passed` is not a pass.",
+             `0 passed` is not a pass. The reply ends with a **whole-tree census** of static facts \
+             for the open question — what else is wrong here — each column saying what it does not \
+             cover: numeric constants that are re-spelled elsewhere or read nowhere outside tests, \
+             production `pub fn` names no test writes down, and the entry plan's own site counts.",
             json!({"type":"object","properties":{
                 "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},

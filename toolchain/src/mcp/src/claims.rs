@@ -144,10 +144,72 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
         "  entry plan: {cuts} `cut(` site(s) and {grafts} `graft(` site(s) across this tree's sources \
          (a static count; which of them this application ships is the plan's own business)"
     ));
+    // The fourth column: declarations no test writes down. The round-4 index asked for a "which
+    // promises does this tree make, who verifies them, and which ones no case touches" view, and
+    // the decidable first cut is the cheap one: a `pub fn` in a production file that appears in no
+    // test file at all. It is a text-level fact and it says so — a test that reaches the function
+    // through a face, a macro, or a call it never spells does not count here.
+    // 第四栏：没有任何测试写下来的声明。第四轮的索引要的是"这棵树许了哪些承诺、谁在验证、哪些没有任何
+    // 用例碰过"的视图，而可判定的第一刀是便宜的那一刀：生产文件里的 `pub fn`，在任何测试文件里一次都
+    // 没出现。这是文本级事实，而且它自己会说出来——通过面、宏或一次未拼出名字的调用抵达该函数的测试，
+    // 在这里不算数。
+    let test_text = sources
+        .iter()
+        .filter(|file| crate::mcp::callgraph::looks_like_a_test(&file.relative, &file.source))
+        .map(|file| file.source.as_str())
+        .collect::<Vec<_>>();
+    let mut unnamed: Vec<String> = Vec::new();
+    for file in &sources {
+        if crate::mcp::callgraph::looks_like_a_test(&file.relative, &file.source) {
+            continue;
+        }
+        for (index, line) in file.source.lines().enumerate() {
+            let Some(rest) = line.trim().strip_prefix("pub fn ") else {
+                continue;
+            };
+            let name = rest
+                .split(['(', '<', ' '])
+                .next()
+                .unwrap_or_default()
+                .trim();
+            if name.is_empty() || name == "main" {
+                continue;
+            }
+            if !test_text.iter().any(|text| text.contains(name)) {
+                unnamed.push(format!(
+                    "  no test names `{name}` ({}:{})",
+                    file.relative,
+                    index + 1
+                ));
+            }
+        }
+    }
+    let unnamed_total = unnamed.len();
+    for line in unnamed.iter().take(SAMPLE) {
+        lines.push(line.clone());
+    }
+    if unnamed_total > SAMPLE {
+        lines.push(crate::mcp::truncation::withheld(
+            unnamed_total - SAMPLE,
+            unnamed_total,
+            SAMPLE,
+            "unverified declarations",
+            "ask per directory to see its own items",
+        ));
+    }
+    lines.push(format!(
+        "  declarations: {unnamed_total} production `pub fn` name(s) appear in no test file (a \
+         text-level count: a test that reaches one without writing its name does not count here)"
+    ));
     lines.push(
-        "  not covered: only named numeric constants; string constants, structural duplication \
-         and claims written in prose are outside this census"
+        "  not covered: only named numeric constants and production `pub fn` names; string \
+         constants, structural duplication, behavioural coverage and claims written in prose are \
+         outside this census"
             .to_owned(),
     );
     Ok(lines)
 }
+
+#[cfg(test)]
+#[path = "claims_tests.rs"]
+mod claims_tests;

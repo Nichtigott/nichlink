@@ -21,6 +21,15 @@ Commands / 子命令:
   inject  <dir> <n>      inject designed bug n      / 注入第 n 号设计缺陷
   check   <dir> <n>      prove the symptom appears and the documented fix restores  / 机械自证
   plan                   print the bugs and their preset paths  / 打印缺陷与预设路径
+  scenario-project <dir> write the two-crate scenario workspace  / 写出两 crate 情景工作区
+  scenario-inject  <dir> <n>  inject scenario state n   / 注入第 n 号情景状态
+  scenario-plan          print the scenario questions and their preset answers  / 打印情景题面与预设答案
+  scenario-check <dir>   prove every level has the shape it claims (green default, one red face)
+  scenario-baseline <dir>  how far a plain grep gets, per level  / 每一关"只用 grep"能走多远
+  scenario-probe <dir> <binary>  run both tools on every level and score them mechanically
+  prompt-plan            print the five prompt families and what the round measures
+  round-brief            print the durable brief: logging, prohibitions, gate, labels, evidence
+                         / 打印可复现的题面与判分口径（含标签集合与"平手"档）
 """
 
 import json
@@ -930,7 +939,7 @@ SCENARIOS = {
     3: {
         "id": "orphan",
         "question": "本工作区里有哪些函数定义了、却没有任何静态调用者？",
-        "answer": "静态零调用者的真值：`audit_unused`（core/src/audit.rs）；外加 5 个 `#[test]` 函数（libtest 经运行期调用，静态上没有入边；数目以树为准，F2 曾把 3 写成真值 ✗）",
+        "answer": "静态零调用者的真值：`audit_unused`（core/src/audit.rs）；外加 5 个 `#[test]` 函数（libtest 经运行期调用，静态上没有入边；数目以树为准，F2 曾把 3 写成真值 ✗）。**判分口径（F1 修）**：问域是**生产代码**；只答 `audit_unused` 且**明确声明「测试函数由框架在运行期调用、不计入」**这一边界的，记**对**；只答 `audit_unused` 而对测试那一半只字不提的，记**部分对**——两臂的工具都默认排测试文件，缺的那一半是工具边界，不是答错，但**边界必须被说出来**。",
         "codegraph": "无孤儿视图；只能逐符号 callers，符号多时调用线性增长",
         "inject": [],
     },
@@ -997,7 +1006,7 @@ SCENARIOS = {
     6: {
         "id": "uncovered-contract-cell",
         "question": "`Entry::postable` 现在的行为与它自己的契约一致吗？不一致的话哪一类输入没有被任何用例覆盖？",
-        "answer": "谓词被写成 `has_receipt || amount == 0`；未覆盖的一格是 (has_receipt=false, amount=0)",
+        "answer": "谓词被写成 `has_receipt || amount == 0`，而契约是 `has_receipt && amount != 0`；**与契约不一致的恰好是零金额那两格** `(0,true)` 与 `(0,false)`（实现为真、契约为假；非零格无论有无凭据都一致）。**未被任何用例覆盖的类是零金额分录**（`(has_receipt=false, amount=0)` 只是其中一格——F2 修：第五轮预设想只写了这一格，实测真值见上，答「零金额那一类」或答包含 `(false,0)` 的类别都算对；与真值表矛盾的断言单独记为答案内容的事实错误）。",
         "codegraph": "无「文档↔实现」对照视图，只能读源码自己比",
         "inject": [("crates/core/src/model.rs", "self.has_receipt && self.amount != 0", "self.has_receipt || self.amount == 0")],
     },
@@ -1093,7 +1102,10 @@ PROMPTS = {
     ),
     "c-adopt-then-extend": (
         "已经采信了，现在再横向加一个。",
-        "已有采信记录后再横向扩展：必须处理采信台账（续期/新增记录），不能只改代码。",
+        "已有采信记录后再横向扩展：必须对采信台账的状态**作出决定并留下可核证据**（既有条目该不该续期、"
+        "新路线是否记一条首次确认——两条路都行，但决定本身要写出来并有台账证据），不能只改代码。"
+        "注意这条意图**不**规定实现分支：说「不追加、并说明为什么」且论证与台账语义自洽，与「追加一条」"
+        "同样算满足（第五轮把「续期/新增记录」写成了唯一答案，那是验收词缺陷）。",
     ),
     "d-one-broken": (
         "这个对象有问题。",
@@ -1129,6 +1141,52 @@ def prompt_plan():
     for measure in PROMPT_MEASURES:
         print(f"  - {measure}")
     return 0
+
+
+# The round's题面、装置与判分口径，放在出题器里而不是只放在某一轮的 /tmp 稿里：第五轮的题面稿随 /tmp 一起
+# 会消失，而其中三条缺陷（F1 的问域、F4 的两条硬约束互斥、F7 的标签少了"平手"）是可以固化下来的。
+ROUND_BRIEF = """\
+对照评测：题面、装置与判分口径（与轮次无关的可复现一份）
+
+每臂每轮答同样 17 个样本：四道注入缺陷（r1–r4）+ 八个情景关卡（s1–s8）+ 五族提示词模拟（fa–fe）。
+四题的参照树由 `project <dir>` 生成（`pristine-N`），逐字还原按它与选手树逐文件 diff 判。
+
+## 记录（硬要求）
+- mcp 臂：每次调用往日志追一行 JSON `{"request":…,"response":…,"exit":N}`（response 是原始正文）。
+- codegraph 臂：每次调用追 `=== CMD:` / 原始输出逐字 / `=== EXIT: N`。
+- 每条答案末尾写总调用次数（成功 / 被拒）。两臂的分母不同：mcp 日志只记仪器，cg 日志记全部命令。
+
+## 禁止
+- 不读、不运行本出题器（只有审计可以）。
+- 不用 git 查历史（`git log` / `git show` / `git stash` / `git diff <历史>`）；`git status`、`git diff --stat` 可以。
+- 不与另一条臂或别的题的树比较。
+- 不加 `#[ignore]`/`#[allow]`、不删校验。**改测试有两条规矩（F4 修）**：
+  ① **削弱**断言（改期望值、加豁免、删校验）一律禁止；
+  ② **按出厂形状钉死的枚举**（注册树行数、`faces()` 数、`source_scope` 行数、槽位切法）在"新增或加深对象"
+     时**必须随之更新**——那是这次变更本身的一部分。把它作为**决策**写进交付（改前/改后语义 + 为什么必须），
+     不算违规。第五轮曾把"不改测试"读成一律禁止，于是守规矩的一臂交不出上线对象、破规矩的一臂反而赢
+     ——那是在惩罚守规。
+
+## 交付后的门
+交付后这棵树自己的门必须绿（`cargo test --offline`；改动可能触及特性面时另跑 `--all-features`）。
+
+## 标签（F7 修：给"平手"留一档）
+- **真赢**：对方答错 / 答不出，而此臂答对。
+- **平手**：两臂都对（先记平手，再单独谈代价差距）。
+- **不具鉴别力**：答案**不依赖树内证据**、一条 grep 就能定；只能从答案内容论证。
+- **输**：答错、答不出、或未交付预登记的字面要求。
+⚠ 不许用"两臂同判"当"不具鉴别力"：那会把平手混进来，跨轮数字就不可比（第五轮 15/17 与第四轮 0 正是两个定义）。
+
+## 证据形态（两轮实测最贵的两处）
+- 问"两处是否互相独立"：证据必须**构造**出来（只修其一 / 撤销其一，再证明另一处症状仍在）；两次全绿不算。
+- 问"某状态该怎么办"（采信台账、槽位切法、是否发布）：答案要给出**决定 + 依据 + 可核证据**，只报状态不算。
+"""
+
+
+def round_brief():
+    print(ROUND_BRIEF)
+    return 0
+
 
 
 BASELINE = {
@@ -1455,6 +1513,8 @@ def main(argv):
         return scenario_check(argv[2])
     elif command == "prompt-plan":
         return prompt_plan()
+    elif command == "round-brief":
+        return round_brief()
     elif command == "scenario-baseline":
         return scenario_baseline(argv[2])
     elif command == "scenario-probe":

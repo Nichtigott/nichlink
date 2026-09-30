@@ -50,6 +50,14 @@ fn a_lease_whose_bytes_are_unchanged_reads_as_provisional() {
         !text.contains("verified") && !text.contains("guaranteed"),
         "an adoption is a lease, never a certificate: {text}"
     );
+    // The state is not the whole answer: a route the ledger does not name needs the action spelled
+    // out, because the round measured an arm that read the rules and concluded it should do nothing.
+    // 状态不是全部答案：台账没点名的路线需要把**动作**说出来——那轮量到的正是一臂读懂了规矩、
+    // 于是推出"什么都不该做"。
+    assert!(
+        text.contains("new anchor") && text.contains("apply: true"),
+        "the read names the action for a route the ledger does not carry: {text}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

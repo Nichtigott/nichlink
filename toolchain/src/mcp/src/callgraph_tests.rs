@@ -167,6 +167,16 @@ fn the_bodies_are_included_unless_asked_otherwise() {
 #[test]
 fn the_orphan_view_names_what_nothing_calls() {
     let root = crate::mcp::tools::tools_tests::scratch_package("orphans");
+    // One test function, which no other function calls: the harness is its caller, so it belongs in
+    // the count the view reports rather than in the list it prints.
+    // 一个测试函数，没有任何函数调用它：测试框架才是它的调用者，因此它属于视图报出的那个**计数**，
+    // 而不属于它打印的那张**清单**。
+    std::fs::create_dir_all(root.join("tests")).expect("fixture test dir");
+    std::fs::write(
+        root.join("tests/orphans.rs"),
+        "#[test]\nfn the_only_test() { assert!(fixture_orphans::used() == 1); }\n",
+    )
+    .expect("fixture test file");
     let answer = callgraph(&root, &json!({"orphans": true})).expect("an answer");
     assert!(answer.contains("fn    orphan ->"), "{answer}");
     assert!(
@@ -180,6 +190,14 @@ fn the_orphan_view_names_what_nothing_calls() {
     assert!(
         answer.contains("invisible to it"),
         "and says what it cannot see: {answer}"
+    );
+    assert!(
+        !answer.contains("fn    the_only_test ->"),
+        "a test function is not listed as an orphan: {answer}"
+    );
+    assert!(
+        answer.contains("1 function(s) in test files have no static caller"),
+        "but the test half is counted and named: {answer}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
