@@ -92,7 +92,7 @@ pub(crate) fn tools() -> Vec<Value> {
              published record does not carry, so a member's own records are read first and the \
              sources are derived when they cannot answer — and a member whose tree cannot be \
              derived is named rather than hidden behind the file hits. With `converge: true` the answer is layered — the tree's verdicts, then the call chain the name leads into, then the next step and the bounds of what was **not** looked at — so one call localizes instead of three. `query` matches **names** — faces, files, functions — while `literal` matches **text** anywhere in a source file: raw bytes, case-sensitive, comments and string literals included. The literal mode is what a failing assertion's message usually needs (find where that message is produced), and it replaces leaving the tool to grep for it. Pass one of the two, not both.",
-            json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
+            json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
             "nichlink.inspect",
@@ -106,7 +106,10 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.callgraph",
             "Show direct static callers and callees for one function. `limit` bounds how many \
              definitions are listed (default 5, at most 50); a truncation line names how many \
-             were withheld, and `path` selects one definition when several share the name. A \
+             were withheld, and Each definition's own lines are included unless `source: false` says otherwise — the short
+             answer is available, it is just no longer the default, because every evaluation round
+             spent one extra call to see the body. `path` selects one definition when several share
+             the name. A \
              **virtual workspace root** is answered as the workspace: a named `path` is answered \
              by the member that owns it, and without one every member is asked and its answer \
              grouped under it, with `tree unavailable (reason)` where a member could not answer.",
@@ -589,6 +592,20 @@ fn explain_tool(root: &Path, arguments: &Value) -> Result<String, String> {
     }
 }
 
+/// Run one tool by name, the single place a name becomes a handler.
+/// 按名跑一个工具——名字变成处理函数的唯一位置。
+///
+/// The stdio bridge and the one-shot client both come through here, so a tool cannot answer two
+/// different ways depending on which client asked.
+/// stdio 桥与一次性客户端都从这里进，因此同一个工具不会因为"谁问的"而答出两种样子。
+pub(crate) fn run_tool(root: &Path, name: &str, arguments: &Value) -> Result<String, String> {
+    crate::mcp::freshness::set_policy(crate::mcp::freshness::policy_from(arguments));
+    match DISPATCH.iter().find(|(listed, _)| *listed == name) {
+        Some((_, handler)) => crate::mcp::ownership::dispatch(root, name, arguments, *handler),
+        None => Err(format!("unknown tool `{name}`")),
+    }
+}
+
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
         return error_response(id, -32602, "tools/call requires name".to_owned());
@@ -610,10 +627,7 @@ pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
     // `freshness` 参数是**请求级**策略：它决定这一次调用愿意为内容核验付多少。在这里设置它——每个
     // 工具进入的唯一位置——就不必让每个主体自己记着这件事。
     crate::mcp::freshness::set_policy(crate::mcp::freshness::policy_from(arguments));
-    let result = match DISPATCH.iter().find(|(listed, _)| *listed == name) {
-        Some((_, handler)) => crate::mcp::ownership::dispatch(&root, name, arguments, *handler),
-        None => Err(format!("unknown tool `{name}`")),
-    };
+    let result = run_tool(&root, name, arguments);
     match result {
         Ok(value) => success(
             id,

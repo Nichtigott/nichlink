@@ -100,6 +100,11 @@ name = "build_time_outside_src_layout"
 path = "tests/build_time_outside_src_layout.rs"
 
 [[test]]
+name = "mcp_client"
+path = "tests/mcp_client.rs"
+required-features = ["mcp"]
+
+[[test]]
 name = "plugin_host_admission"
 path = "tests/plugin_host_admission.rs"
 required-features = ["wasm", "process-tools"]

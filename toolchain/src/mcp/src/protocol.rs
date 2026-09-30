@@ -45,7 +45,7 @@ pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 /// 编辑器与执行器不会对"打开的是哪个项目"产生分歧。只有最后兜底属于本桥自己，并且有意保持
 /// 为当前目录：stdio 桥是在代理正在处理的项目里启动的，而本 crate 自己的清单路径是编译它的
 /// 那台机器上的路径——对已安装的二进制来说是错的。
-fn package_root() -> PathBuf {
+pub(crate) fn package_root() -> PathBuf {
     let configured = env::var_os(nichlink_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = env::current_dir().ok();
     let fallback = current.clone().unwrap_or_else(|| PathBuf::from("."));
@@ -287,9 +287,7 @@ fn dispatch(root: &Path, request: &Value) -> Value {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": { "tools": { "listChanged": false } },
                 "serverInfo": { "name": "nichlink-toolchain", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": "Use nichlink.search before reading source (it also takes \
-                 `literal` for text); callgraph is static-heuristic. With `root`, every path \
-                 argument is relative to that root (root \"kernel\" means path \"src/…\")."
+                "instructions": crate::mcp::client::INSTRUCTIONS
             }),
         ),
         // An id-carrying `notifications/…` member is a *request* by the envelope rule

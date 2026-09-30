@@ -74,8 +74,10 @@
 // 发布表面必须能在 docs.rs 上不跳页读懂，因此 lint 开在整个 crate 上；
 // `clippy -D warnings` 会让新增的、没有文档的公开项变成失败。
 
+pub mod client;
 #[path = "protocol.rs"]
 mod protocol;
+
 pub use protocol::run;
 
 #[path = "tools.rs"]

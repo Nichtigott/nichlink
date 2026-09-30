@@ -212,7 +212,10 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
                 display_list(&tests[..tests.len().min(CALLERS)])
             ));
         }
-        if arguments.get("source").and_then(Value::as_bool) == Some(true)
+        if arguments
+            .get("source")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
             && let Some((_, file)) = labelled.iter().find(|(file_label, _)| file_label == label)
         {
             // The definition's own span, capped by this tool's own constant and declared
@@ -256,6 +259,18 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         ));
     }
     output.push_str("dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.\n");
+    // Guidance in the answer, and the measured default: the evaluation's rounds each spent one
+    // extra call to see the body after this tool had shown only names. Bodies are therefore
+    // included **by default**; a caller who wants the short answer says `source: false` and the
+    // answer says how to get them back.
+    // 指引放进答案，默认值来自实测：评测每一轮都在这个工具只给了名字之后，多花一次调用去看函数体。
+    // 因此函数体**默认包含**；想要短答案的调用方说 `source: false`，而答案会说怎么把它们要回来。
+    if arguments.get("source").and_then(Value::as_bool) == Some(false) {
+        output.push_str(
+            "note   bodies omitted on request: drop `source: false` (or pass source: true) for \
+             each definition's own lines\n",
+        );
+    }
     Ok(output)
 }
 

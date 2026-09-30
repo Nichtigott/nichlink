@@ -5,7 +5,7 @@
 use std::process::Command;
 use std::time::Duration;
 
-use super::{observation, run_command};
+use super::{next_step, observation, run_command};
 
 /// A throwaway directory for the logs.
 /// 一个一次性的日志目录。
@@ -80,4 +80,20 @@ fn a_log_without_a_result_line_says_nothing_ran() {
     assert!(joined.contains("nothing ran"), "{joined}");
     assert!(joined.contains("not a pass"), "{joined}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A run that did not pass says where to look next, and one that passed says nothing extra.
+/// 没有通过的运行会说下一步去哪找，而通过的运行不多说一句。
+#[test]
+fn a_failing_run_says_where_to_look_next() {
+    let failing = next_step(false, Some(101)).expect("a failing run has a next step");
+    assert!(failing.contains("search {literal"), "{failing}");
+    assert!(
+        next_step(false, Some(0)).is_none(),
+        "a passing run needs no pointer"
+    );
+    assert!(
+        next_step(true, None).is_none(),
+        "a timeout is unknown, not a failure to chase"
+    );
 }

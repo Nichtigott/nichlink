@@ -194,6 +194,14 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         "detail: nichlink.explain (build evidence) · nichlink.usages (fields and capability refs) · \
          nichlink.trace (what ran) · nichlink.diff (what changed since the build)\n",
     );
+    // The layered answer ends by naming the next call, because that is the one place guidance was
+    // measured to work (the `literal` pointer in `search`): prose at `initialize` was ignored 4/4.
+    // 分层答案以"下一个调用"收尾，因为那是实测唯一有效的指引位置（`search` 里指向 `literal` 的那条）：
+    // `initialize` 里的散文 0/4 被无视。
+    output.push_str(
+        "next   callgraph {function: \"<a name above>\"} returns that definition's callers, \
+         callees and its own lines in one answer\n",
+    );
     Ok(output)
 }
 

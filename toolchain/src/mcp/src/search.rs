@@ -68,7 +68,17 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         );
     }
     if let Some(literal) = arguments.get("literal").and_then(Value::as_str) {
-        return literal_search(root, literal, limit);
+        // A hit with no context is a line number the caller then has to `read` around — the measured
+        // extra call. `context` is off by default so the cheap answer stays cheap, and the trailer
+        // below says the one word that turns it on.
+        // 没有上下文的命中只是一个行号，调用方随后还得在它周围 `read` 一次——那正是量出来的多出来的
+        // 一次调用。`context` 默认关闭，让便宜的答案保持便宜，而下面的尾注说出打开它的那一个词。
+        let context = arguments
+            .get("context")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            .min(10) as usize;
+        return literal_search(root, literal, limit, context);
     }
     let written = arguments
         .get("query")
@@ -288,7 +298,12 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
 /// 文案里点名了一个常量，去找这句话是在哪里产出的"——源码里的一处字符串——而每一次代理都只能离开桥
 /// 去 grep。检索刻意做成字面的：原始字节、区分大小写、注释与字符串字面量都算。对这种问题，屏蔽过的
 /// 视图恰恰是错答案，因为要找的东西通常**就是**一个字符串字面量。
-fn literal_search(root: &Path, literal: &str, limit: usize) -> Result<String, String> {
+fn literal_search(
+    root: &Path,
+    literal: &str,
+    limit: usize,
+    context: usize,
+) -> Result<String, String> {
     if literal.is_empty() {
         return Err("`literal` must not be empty".to_owned());
     }
@@ -297,21 +312,27 @@ fn literal_search(root: &Path, literal: &str, limit: usize) -> Result<String, St
     )];
     let mut hits = 0usize;
     let mut withheld = 0usize;
-    let mut record = |file: &str, line: usize, text: &str, results: &mut Vec<String>| {
+    // The closure reports whether the hit was recorded: a hit past the limit must not drag its
+    // context lines into an answer that already said how much it withheld.
+    // 闭包回报这次命中是否被记下：超出上限的命中不得把它周围的上下文拖进一份已经声明扣下多少的答案里。
+    let mut record = |file: &str, line: usize, text: &str, results: &mut Vec<String>| -> bool {
         if hits < limit {
             results.push(format!("{file}:{line}: {}", clipped(text)));
             hits += 1;
+            true
         } else {
             withheld += 1;
+            false
         }
     };
     match workspace::scope(root)? {
         Scope::Package(_) => {
-            literal_lines(root, literal, &mut results, &mut record)?;
+            literal_lines(root, literal, context, &mut results, &mut record)?;
         }
         Scope::Workspace(members) => {
             for member in &members {
-                let found = literal_lines(&member.dir, literal, &mut results, &mut record)?;
+                let found =
+                    literal_lines(&member.dir, literal, context, &mut results, &mut record)?;
                 if found > 0 {
                     results.push(format!("member {} ({found} lines)", member.name));
                 }
@@ -321,6 +342,11 @@ fn literal_search(root: &Path, literal: &str, limit: usize) -> Result<String, St
     }
     if hits == 0 {
         results.push("no matches".to_owned());
+    } else if context == 0 {
+        // Guidance in the answer rather than in a preamble: prose instructions measured 0/4
+        // compliance, while the one pointer embedded in a response was followed immediately.
+        // 指引放进答案而不是开场白：散文指令实测 0/4 被遵守，而嵌在响应里的那一条当场就被照做。
+        results.push("note   pass context: 2 to print the lines around each hit here".to_owned());
     }
     if withheld > 0 {
         results.push(crate::mcp::truncation::withheld(
@@ -339,15 +365,27 @@ fn literal_search(root: &Path, literal: &str, limit: usize) -> Result<String, St
 fn literal_lines(
     root: &Path,
     literal: &str,
+    context: usize,
     results: &mut Vec<String>,
-    record: &mut impl FnMut(&str, usize, &str, &mut Vec<String>),
+    record: &mut impl FnMut(&str, usize, &str, &mut Vec<String>) -> bool,
 ) -> Result<usize, String> {
     let mut found = 0usize;
     for file in load_sources(root)? {
-        for (index, line) in file.source.lines().enumerate() {
-            if line.contains(literal) {
-                record(&file.relative, index + 1, line, results);
-                found += 1;
+        let lines = file.source.lines().collect::<Vec<_>>();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.contains(literal) {
+                continue;
+            }
+            found += 1;
+            if !record(&file.relative, index + 1, line, results) || context == 0 {
+                continue;
+            }
+            let start = index.saturating_sub(context);
+            let end = (index + context + 1).min(lines.len());
+            for (other, text) in lines.iter().enumerate().take(end).skip(start) {
+                if other != index {
+                    results.push(format!("  {}: {}", other + 1, clipped(text)));
+                }
             }
         }
     }

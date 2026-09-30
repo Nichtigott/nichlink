@@ -177,7 +177,29 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
         (false, None) => lines.push("exit   unknown (the process was signalled)".to_owned()),
     }
     lines.extend(observation(&outcome.log)?);
+    if let Some(next) = next_step(outcome.timed_out, outcome.code) {
+        lines.push(next);
+    }
     Ok(lines.join("\n"))
+}
+
+/// What to do about a run that did not pass, in the answer rather than in a preamble.
+/// 对于一次没有通过的运行该怎么办——写在答案里，而不是开场白里。
+///
+/// A failing assertion's message is a string literal in the tree, so the cheapest next call is the
+/// literal search that finds where it is produced; that pointer is the reason `literal` exists and
+/// the one shape of guidance this bridge has measured to work.
+/// 失败断言的那句话是树里的一个字符串字面量，因此下一个最便宜的调用就是找出它在哪产出的字面检索；这条指引
+/// 正是 `literal` 存在的理由，也是本桥实测唯一生效的那种指引形态。
+fn next_step(timed_out: bool, code: Option<i32>) -> Option<String> {
+    if timed_out || code == Some(0) {
+        return None;
+    }
+    Some(
+        "next   the failing assertion's message is a string in this tree: \
+         search {literal: \"<that text>\"} finds where it is produced"
+            .to_owned(),
+    )
 }
 
 /// The exact flags the command carried, so the answer names what it ran.

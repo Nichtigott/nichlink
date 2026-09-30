@@ -120,3 +120,25 @@ fn the_limit_contract_is_the_one_the_catalog_declares() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The bodies are in the answer unless the caller asks for the short one.
+/// 函数体默认就在答案里，除非调用方点名要短的那份。
+///
+/// Measured: every evaluation round spent one extra call after this tool had shown only names, so
+/// the default is now the answer that needs no follow-up, and `source: false` is the opt-out that
+/// says so in the reply.
+/// 实测：评测每一轮都在这个工具只给了名字之后多花一次调用，因此默认改成"不需要补问"的那份答案，而
+/// `source: false` 是那个会在回复里说明自己的退出选项。
+#[test]
+fn the_bodies_are_included_unless_asked_otherwise() {
+    let root = tree("bodies", 1, 1);
+    let full = callgraph(&root, &json!({"function": "new"})).expect("an answer");
+    assert!(
+        full.contains("source:"),
+        "the bodies come by default: {full}"
+    );
+    let short = callgraph(&root, &json!({"function": "new", "source": false})).expect("an answer");
+    assert!(!short.contains("  source:"), "{short}");
+    assert!(short.contains("bodies omitted on request"), "{short}");
+    let _ = std::fs::remove_dir_all(&root);
+}

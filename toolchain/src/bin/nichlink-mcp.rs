@@ -13,8 +13,18 @@
 #![warn(missing_docs)]
 
 fn main() {
-    if let Err(error) = nichlink_toolchain::mcp::run() {
-        eprintln!("nichlink-toolchain: {error}");
-        std::process::exit(1);
+    // No arguments = serve the stdio bridge, exactly as before; `--list` and `--call` are the
+    // one-shot client the chain-fit evaluation measured the absence of.
+    // 不带参数＝照旧做 stdio 桥服务；`--list` 与 `--call` 就是思维链拟合评测量出来的那个"缺失的一次性
+    // 客户端"。
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    match nichlink_toolchain::mcp::client::run_client(&arguments) {
+        nichlink_toolchain::mcp::client::Client::Serve => {
+            if let Err(error) = nichlink_toolchain::mcp::run() {
+                eprintln!("nichlink-toolchain: {error}");
+                std::process::exit(1);
+            }
+        }
+        nichlink_toolchain::mcp::client::Client::Called(code) => std::process::exit(code),
     }
 }
