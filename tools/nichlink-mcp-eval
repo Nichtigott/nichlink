@@ -1179,6 +1179,23 @@ def scenario_inject(directory, number):
 
 
 def scenario_plan():
+    # The round protocol is printed with the levels, so it travels with them instead of living in
+    # whatever the captain remembers when writing briefs. Two of the queue's items are protocol
+    # rather than code: the orphan view has to be exercised by a question whose shortest route *is*
+    # it, and every call has to be logged raw, because summary lines cannot be recomputed from.
+    # 轮次协议与关卡一起打印，因此它随关卡走，而不是留在队长写题面时的记忆里。队列里有两项属于协议而不是
+    # 代码：孤儿视图必须由一个"它本身就是最短路"的问题来触达；每一次调用都必须留**原始**记录，因为摘要行
+    # 无法被复算。
+    print("Round protocol / 轮次协议:")
+    print("  - briefs carry the question and the symptom only, never the preset answer")
+    print("    题面只给问题与症状，绝不给预设答案")
+    print("  - every call is logged raw: {\"request\": …, \"response\": …, \"exit\": N} per line")
+    print("    每次调用留原始记录：每行一条 {request, response, exit}")
+    print("  - scenario 3 is the orphan view's own question: its shortest route is that view")
+    print("    第 3 关是孤儿视图自己的问题：它本身就是最短路")
+    print("  - the trees are read-only for the answerer")
+    print("    答题方对题树只读")
+    print()
     print("Scenario levels: the shapes a real workspace has.\n")
     for number, scenario in sorted(SCENARIOS.items()):
         print(f"{number}. {scenario['id']}")
