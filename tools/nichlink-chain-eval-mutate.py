@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 
 
@@ -137,7 +138,9 @@ def main(argv=None) -> int:
     truth["sha256_before"] = {
         path: digest(os.path.join(arguments.copy, path)) for path in touched
     }
+    seal_pristine(arguments.copy)
     apply(arguments.copy, truth)
+    seal_injection(arguments.copy, arguments.round)
     truth["sha256_after"] = {
         path: digest(os.path.join(arguments.copy, path)) for path in touched
     }
@@ -160,6 +163,63 @@ def main(argv=None) -> int:
         f" site={truth['site']['file']}::{truth['site']['name']} | " + " | ".join(detail)
     )
     return 0
+
+
+def git(copy, *args):
+    """Run one git command in the copy, quietly."""
+    return subprocess.run(
+        ["git", *args], cwd=copy, capture_output=True, text=True
+    )
+
+
+def seal_pristine(copy):
+    """Commit the pristine tree, so the injection can be shown as a diff later.
+
+    Measured need (evaluation round 2): the control arm's work tree was not a checkout, so its only
+    evidence for "this is what I changed" was a before/after grep and the audit could not ask for a
+    diff. Two commits — pristine, then injected — keep the injector's own record out of the tree
+    while making `git diff HEAD~1` the verification instrument the solvers were asked for. `target/`
+    and `.codegraph/` are ignored: the copy's build directory is hundreds of megabytes and is not
+    part of the question.
+
+    给原始树一次提交，好让注入日后能以 diff 示人。第 2 轮量出的需求：对照组的工作树不是检出，它证明
+    "我改了什么"的唯一凭证是改前/改后 grep，而审计要不到 diff。两次提交——原始、再注入——把注入记录
+    留在树外，同时让 `git diff HEAD~1` 成为当初要求解题者给出的核对仪器。`target/` 与 `.codegraph/`
+    被忽略：副本的构建目录有数百 MB，而且不属于这道题。
+    """
+    if git(copy, "rev-parse", "--git-dir").returncode == 0:
+        return
+    with open(os.path.join(copy, ".gitignore"), "a", encoding="utf-8") as handle:
+        handle.write("\ntarget/\n.codegraph/\n")
+    git(copy, "init", "-q")
+    git(copy, "add", "-A")
+    git(
+        copy,
+        "-c",
+        "user.email=eval@nichlink.invalid",
+        "-c",
+        "user.name=nichlink eval",
+        "commit",
+        "-q",
+        "-m",
+        "import: the tree before this round's injection",
+    )
+
+
+def seal_injection(copy, round_number):
+    """Commit the mutated tree as a second commit, so `git diff HEAD~1` is the mutation."""
+    git(copy, "add", "-A")
+    git(
+        copy,
+        "-c",
+        "user.email=eval@nichlink.invalid",
+        "-c",
+        "user.name=nichlink eval",
+        "commit",
+        "-q",
+        "-m",
+        f"round {round_number}: the injected defect",
+    )
 
 
 if __name__ == "__main__":
