@@ -346,3 +346,77 @@ under `/tmp/mcp-eval2`; round 1's evidence kept untouched under `/tmp/mcp-eval`.
 5. **Strengthen the pin** that guards the flow table: assert the *tool accepts* each shape the table
    advertises, not that the string appears.
    **加强那条守住流程表的钉子**：断言"工具接受表里承诺的每个形状"，而不是"字符串出现过"。
+
+## 10. Scenario levels: the shapes a one-line bug never reaches / 情景关卡：一行缺陷够不到的形状
+
+The maintainer asked for more items, realistic project shapes, and for out-performing codegraph rather
+than matching it. The four injected bugs measure localization speed on a known shape; these six
+measure whether a tool can **answer at all** when the question needs a framework notion or
+cross-member reachability. `tools/nichlink-mcp-eval` gained `scenario-project` / `scenario-inject` /
+`scenario-plan` / `scenario-check` / `scenario-probe`; the project is a two-crate workspace
+(`ledger-core` + `ledger-report`) with a feature-gated module, a cross-crate caller, a zero-caller
+definition, a two-site chain and a contract whose one uncovered cell no test exercises.
+维护者要更多测试项、真实项目形状，并要求**超越**而不是打平。四个注入缺陷量的是"已知形状上的定位速度"；
+这六关量的是当问题需要一个**框架概念**或**跨成员可达性**时，一件工具**能不能作答**。项目是两 crate 工作区
+（`ledger-core` + `ledger-report`），带一个特性门控模块、一个跨 crate 调用者、一个零调用者定义、一条两处
+站点的链，以及一条"有一格没有任何用例覆盖"的契约。
+
+**Every scenario is mechanically self-proved** (`scenario-check`): on the real tree, the default face is
+green wherever the scenario says it should be, and the feature face is red for exactly one scenario —
+the one whose whole point is that the red is invisible on the default face.
+**每一关都机械自证**（`scenario-check`）：在真树上，该绿的默认面绿，而**恰好只有一关**的特性面红——那一关的
+全部要点正是"红在默认面上看不见"。
+
+| # | scenario 关卡 | ours 我们 | codegraph | verdict 判 |
+| --- | --- | --- | --- | --- |
+| 1 | cross-crate caller 跨 crate 调用者 | `callers (1) … report.rs::store` ✓ 1 call | names the same caller ✓ 1 call | tie 平手 |
+| 2 | which face is red 红在哪个面 | `faces … default=[] all=[audit]` + the blindness note, then `check --face audit` ✓ 2 calls | **no notion of a face** ✗ | **ours, structurally** ✓ |
+| 3 | orphan view 孤儿视图 | `orphans 1 … audit_unused -> core/src/audit.rs:14` ✓ 1 call | `No callers found for "audit_unused"` ✓ but only **when the name is already known** ✗ | ours has the view ✓ |
+| 4 | change impact 改动影响（该跑哪些测试） | `tests: core/tests/audit.rs` ✗ **misses `report/tests/report.rs`** | `Affected test files (2): …audit.rs, …report.rs` ✓ | **codegraph wins** ✗✗ |
+| 5 | two-site chain 两处站点 | round-1/2 families, both sites reachable | same | measured in §8–§9 |
+| 6 | uncovered contract cell 未覆盖的契约格 | the doc's own conjunction, read in one call | the same text, but with no doc-vs-code view | ours on adjacency |
+
+**The one that matters is #4, and it is ours to fix.** At a virtual workspace root our `affected`
+reports only the **owning member's** tests: a change to `crates/core/src/model.rs` names
+`crates/core/tests/audit.rs` and never `crates/report/tests/report.rs`, although the report suite
+reaches that definition through `Store::post`. Codegraph answered that same question correctly on the
+same tree. Four single-bug rounds never touched this path; a scenario did.
+**要害在第 4 关，而且该我们修。** 在虚拟工作区根上，我们的 `affected` 只报**拥有者成员**的测试：改
+`crates/core/src/model.rs` 时它点名 `crates/core/tests/audit.rs`，从不提
+`crates/report/tests/report.rs`，尽管报表套件经 `Store::post` 抵达那个定义。codegraph 在同一棵树上答对了。
+四个单点缺陷轮次从未碰到这条路径，一个情景碰到了。
+
+**Honest limits of this table / 这张表的如实边界**: #1 is a tie because the fixture's cross-crate call is
+method-style (`store.post(...)`), which is *not* the fully-qualified spelling codegraph's recorded
+false negative is about — sharpening the fixture with a `ledger_core::store::Store::new()` call is
+queued rather than done, so #1 currently over-states nothing but proves less than it could. #5 and #6
+re-run families already measured in §8–§9, so they add coverage rather than new evidence.
+**#1 之所以是平手**：夹具里的跨 crate 调用是方法式（`store.post(...)`），而 codegraph 记录在案的假阴性针对的
+是**全限定**拼法 ⇒ 用一条 `ledger_core::store::Store::new()` 把夹具磨尖这件事排进队列而**没有现在做**，因此
+#1 既没有夸大、也比它能证明的要少。#5/#6 重跑的是 §8–§9 已量过的族，属补覆盖而不是新证据。
+
+**Round 3's first data points / 第三轮的头两个数据点**: r2 took **5 calls with zero refusals** (the
+predicted disappearance of the two refusals held), while r1 took 11 with **three** — and the three are a
+**new** family the queue did not know about: `affected`'s array argument can only be spelled through
+`--json`, and the refusal (`requires files, an array`) does not point at it; separately, `search`'s
+empty answer does not say **which root it searched**, which cost two calls when the caller's cwd was the
+checkout rather than the tree.
+**第三轮头两个数据点**：r2 **5 次调用、零拒绝**（预测的"2 次被拒消失"成立 ✓），而 r1 用了 11 次、其中
+**3 次被拒** —— 这 3 次属于队列**不知道的新族**：`affected` 的数组参数只能经 `--json` 拼出，而拒绝文案
+（`requires files, an array`）不指向它；另外 `search` 的空答案**不说它在哪个根上搜的**，当调用方的 cwd
+是检出而不是题树时，这一条白花了 2 次。
+
+**Queue from the scenario levels / 情景关卡带出的队列**（#4 first / 第 4 条优先）
+
+1. **`affected` must follow cross-member reachability** at a workspace root — it is the one scenario we
+   lost, and codegraph answers it.
+   **`affected` 必须追跨成员可达性**——这是唯一输掉的一关，而 codegraph 答对了。
+2. **Array arguments** should be spellable without `--json` (a repeated flag is the natural shape) and
+   the refusal must name `--json` until they are.
+   **数组参数**应能不经 `--json` 拼出（重复开关是自然形状），在做到之前，拒绝文案必须点名 `--json`。
+3. **Every answer should carry the root it answered from** — the empty answer is where it matters most,
+   because "no matches" is exactly the moment a caller wonders whether it is asking the right tree.
+   **每个答案都应带上它作答的根**——空答案处最要紧，因为 "no matches" 正是调用方怀疑自己问错树的时刻。
+4. **Sharpen scenario 1** with a fully-qualified cross-crate call, so the recorded codegraph false
+   negative is reproduced rather than assumed.
+   **磨尖第 1 关**：加一条全限定的跨 crate 调用，让 codegraph 记录在案的假阴性被**复现**而不是被假定。

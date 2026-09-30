@@ -563,6 +563,525 @@ BUGS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Scenario levels: the shapes a real workspace has that one-line bugs do not reach.
+# 情景关卡：真实工作区才有、而"一行缺陷"够不到的那些形状。
+#
+# The four injected bugs measure how fast a tool localizes a known-shape defect. These measure
+# something else, and it is the thing the maintainer asked for ("全面超越"): whether a tool can
+# answer at all when the question is about a **feature face**, a **cross-crate caller**, a
+# **stale artifact**, a **zero-caller definition**, a **change's test impact**, a **two-site chain**
+# or a **contract cell nothing covers**. Each carries the preset correct answer, and
+# `scenario-check` proves on the real tree that the answer is derivable rather than asserted.
+# 四个注入缺陷量的是"定位已知形状缺陷有多快"。这些量的是另一件事，也正是维护者要的（"全面超越"）：
+# 当问题问的是**特性面**、**跨 crate 调用者**、**过期产物**、**零调用者定义**、**改动的测试影响**、
+# **两处站点组成的链**或**没有任何用例覆盖的契约格**时，一件工具**能不能作答**。每一关都带预设正确答案，
+# 而 `scenario-check` 在真树上证明那个答案**可推导**，而不是被断言的。
+WORKSPACE = {
+    "Cargo.toml": """[workspace]
+members = ["crates/core", "crates/report"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+""",
+    "crates/core/Cargo.toml": """[package]
+name = "ledger-core"
+version.workspace = true
+edition.workspace = true
+
+[features]
+audit = []
+""",
+    "crates/core/src/lib.rs": """//! The ledger's model and store.
+//! 账本的模型与存储。
+
+pub mod model;
+pub mod store;
+
+#[cfg(feature = "audit")]
+pub mod audit;
+""",
+    "crates/core/src/model.rs": """//! Entries.
+
+/// One entry: a signed amount against an account.
+/// 一条分录：针对某个账户的一笔带符号金额。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+    /// The account this entry belongs to.
+    /// 本分录所属账户。
+    pub account: String,
+    /// The amount; negative is a debit.
+    /// 金额；负数为借方。
+    pub amount: i64,
+    /// Whether the entry carries a receipt.
+    /// 分录是否附带凭据。
+    pub has_receipt: bool,
+}
+
+impl Entry {
+    /// A new entry.
+    /// 新建一条分录。
+    pub fn new(account: &str, amount: i64, has_receipt: bool) -> Self {
+        Self {
+            account: account.to_owned(),
+            amount,
+            has_receipt,
+        }
+    }
+
+    /// Whether this entry may be posted at all.
+    /// 本分录是否允许入账。
+    ///
+    /// The rule the whole service leans on: an entry is postable when it has a receipt, and a zero
+    /// entry never is. Callers rely on the refusal, so this is a contract rather than a
+    /// convenience.
+    /// 整个服务依赖的规则：带凭据的分录可入账，而零金额的分录一律不可。调用方依赖这个拒绝，因此这是一条
+    /// 契约而不是便利。
+    pub fn postable(&self) -> bool {
+        self.has_receipt && self.amount != 0
+    }
+}
+""",
+    "crates/core/src/store.rs": """//! The store.
+
+use crate::model::Entry;
+
+/// Entries held in memory.
+/// 内存中保存的分录。
+#[derive(Default)]
+pub struct Store {
+    entries: Vec<Entry>,
+}
+
+impl Store {
+    /// An empty store.
+    /// 空存储。
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Post one entry; `None` when the entry may not be posted.
+    /// 入账一条分录；分录不可入账时为 `None`。
+    pub fn post(&mut self, entry: Entry) -> Option<usize> {
+        if !entry.postable() {
+            return None;
+        }
+        self.entries.push(entry);
+        Some(self.entries.len() - 1)
+    }
+
+    /// Every entry.
+    /// 全部分录。
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+}
+""",
+    "crates/core/src/audit.rs": """//! Audit totals, behind the `audit` feature.
+//! 审计合计，门控在 `audit` 特性之后。
+
+use crate::model::Entry;
+
+/// How many entries the audit counts.
+/// 审计计入多少条分录。
+pub fn audit_count(entries: &[Entry]) -> usize {
+    entries.iter().filter(|entry| entry.amount != 0).count()
+}
+
+/// The audit's own view, never called by the default build.
+/// 审计自己的视图，默认构建从不调用它。
+pub fn audit_unused(entries: &[Entry]) -> usize {
+    audit_count(entries) + 1
+}
+""",
+    "crates/core/tests/audit.rs": """//! The audit feature's own suite: only compiled with `--features audit`.
+//! 审计特性自己的套件：只有 `--features audit` 才编译。
+//!
+//! The `cfg` is not decoration: without it this file names a module the default build does not
+//! compile, so the *default* face would fail to build — the same shape as the grey test that once
+//! hid three other tests.
+//! 这个 `cfg` 不是装饰：没有它，本文件点名了一个默认构建不编译的模块，于是**默认面**连编译都过不去
+//! ——与那条曾经藏掉另外三条测试的灰测试同形。
+
+#![cfg(feature = "audit")]
+
+use ledger_core::model::Entry;
+
+#[test]
+fn the_audit_counts_the_non_zero_entries() {
+    // Two non-zero entries and one zero one: the audit counts the first two, and this fixture is
+    // what makes the feature face discriminating — the injected defect inverts the filter, which
+    // turns 2 into 1 and fails here rather than passing by accident.
+    // 两条非零、一条零：审计计入前两条，而正是这个夹具让"特性面"这一关有鉴别力——注入的缺陷把过滤器
+    // 反过来，于是 2 变 1、在这里红，而不是碰巧通过。
+    let entries = [
+        Entry::new("a", 5, true),
+        Entry::new("a", 0, true),
+        Entry::new("b", 7, true),
+    ];
+    assert_eq!(
+        ledger_core::audit::audit_count(&entries),
+        2,
+        "the zero entry is not counted"
+    );
+}
+""",
+    "crates/report/Cargo.toml": """[package]
+name = "ledger-report"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ledger-core = { path = "../core" }
+""",
+    "crates/report/src/lib.rs": """//! Rendering and querying.
+//! 渲染与查询。
+
+pub mod query;
+pub mod render;
+""",
+    "crates/report/src/query.rs": """//! Filtering entries.
+
+use ledger_core::model::Entry;
+
+/// Which entries a caller wants.
+/// 调用方想要哪些分录。
+#[derive(Clone, Debug, Default)]
+pub struct Filter {
+    /// Only entries for this account, when set.
+    /// 只保留该账户的分录（若设置）。
+    pub account: Option<String>,
+    /// Only entries at or above this amount, when set.
+    /// 只保留不小于该金额的分录（若设置）。
+    pub min_amount: Option<i64>,
+}
+
+impl Filter {
+    /// Whether this entry passes.
+    /// 本分录是否通过。
+    pub fn matches(&self, entry: &Entry) -> bool {
+        if let Some(account) = &self.account {
+            if &entry.account != account {
+                return false;
+            }
+        }
+        if let Some(min) = self.min_amount {
+            if entry.amount < min {
+                return false;
+            }
+        }
+        true
+    }
+}
+""",
+    "crates/report/src/render.rs": """//! Rendering.
+
+use ledger_core::model::Entry;
+
+/// Render the entries: a header, the count, then one line per entry.
+/// 渲染分录：表头、条数，然后每条一行。
+pub fn render(entries: &[Entry]) -> String {
+    let mut text = String::from("LEDGER REPORT\n");
+    write_count(&mut text, entries);
+    for entry in entries {
+        text.push_str(&format!("{}: {}\n", entry.account, entry.amount));
+    }
+    text
+}
+
+/// The count block.
+/// 条数块。
+pub fn write_count(text: &mut String, entries: &[Entry]) {
+    text.push_str(&format!("entries: {}\n", entries.len()));
+}
+""",
+    "crates/report/tests/report.rs": """//! The report suite.
+//! 报表套件。
+
+use ledger_core::model::Entry;
+use ledger_core::store::Store;
+use ledger_report::query::Filter;
+use ledger_report::render::render;
+
+/// Three posted entries.
+/// 三条已入账分录。
+fn store() -> Store {
+    let mut store = Store::new();
+    store.post(Entry::new("a", -500, true)).expect("debit posts");
+    store.post(Entry::new("a", 500, true)).expect("small posts");
+    store.post(Entry::new("b", 5000, true)).expect("large posts");
+    store
+}
+
+#[test]
+fn the_minimum_amount_filter_keeps_the_entries_at_or_above_it() {
+    let store = store();
+    let filter = Filter {
+        min_amount: Some(0),
+        ..Filter::default()
+    };
+    let kept = store.entries().iter().filter(|entry| filter.matches(entry)).count();
+    assert_eq!(kept, 2, "the zero floor keeps the two non-negative entries");
+}
+
+#[test]
+fn the_report_names_its_count_and_its_entries() {
+    let store = store();
+    let text = render(store.entries());
+    assert!(text.contains("LEDGER REPORT"), "{text}");
+    assert!(text.contains("entries: 3"), "the count block is written: {text}");
+    assert!(text.contains("b: 5000"), "{text}");
+}
+""",
+}
+
+# The scenario injections: named states rather than one bug per round, because a scenario is a
+# *question about a tree*, and some questions need two defects or none at all.
+# 情景注入：按"状态"而不是"每题一个缺陷"命名——情景是关于一棵树的**问题**，而有些问题需要两处缺陷、有些
+# 一处都不需要。
+SCENARIOS = {
+    1: {
+        "id": "cross-crate-caller",
+        "question": "谁调用了 `ledger_core::store::Store::post`？（调用者在另一个 crate 里）",
+        "answer": "至少点名 crates/report/tests/report.rs 里那三处（跨 crate、且是**全限定/构造式**调用）",
+        "codegraph": "历史实测：跨 crate 全限定引用的调用者会落进 unresolved_refs ⇒ 假阴性（本题复测）",
+        "inject": [],
+    },
+    2: {
+        "id": "feature-face",
+        "question": "`cargo test --workspace` 全绿，但这个仓库里有一个面是红的——是哪个面？",
+        "answer": "`audit`（只有 --features audit 才编译、才红）",
+        "codegraph": "结构上无此能力：它没有「面」的概念，也没有按特性跑测试的入口",
+        "inject": [("crates/core/src/audit.rs", "entries.iter().filter(|entry| entry.amount != 0).count()", "entries.iter().filter(|entry| entry.amount == 0).count()")],
+    },
+    3: {
+        "id": "orphan",
+        "question": "本工作区里有哪些函数定义了、却没有任何静态调用者？",
+        "answer": "`audit_unused`（audit.rs）、以及 report 侧零调用者的 `write_count`？——按实测的答案清单",
+        "codegraph": "无孤儿视图；只能逐符号 callers，符号多时调用线性增长",
+        "inject": [],
+    },
+    4: {
+        "id": "change-impact",
+        "question": "我改了 crates/core/src/model.rs 里的 `postable`——该跑哪些测试？",
+        "answer": "crates/report/tests/report.rs（经 report→core 的调用抵达）",
+        "codegraph": "`affected` 四题全假阴性（历史实测）；`impact` 可用但按符号",
+        "inject": [],
+    },
+    5: {
+        "id": "two-site-chain",
+        "question": "报表测试红，且渲染出来的东西缺一块——病灶在哪？",
+        "answer": "两处：query.rs 的下限守卫写反 + render.rs 的 write_count 调用被删（症状在 render，根因之一在 query）",
+        "codegraph": "能各自定位，但要把两处并成一条链需要额外步骤",
+        "inject": [
+            ("crates/report/src/query.rs", "if entry.amount < min {", "if entry.amount > min {"),
+            ("crates/report/src/render.rs", "    write_count(&mut text, entries);\n", ""),
+        ],
+    },
+    6: {
+        "id": "uncovered-contract-cell",
+        "question": "`Entry::postable` 现在的行为与它自己的契约一致吗？不一致的话哪一类输入没有被任何用例覆盖？",
+        "answer": "谓词被写成 `has_receipt || amount == 0`；未覆盖的一格是 (has_receipt=false, amount=0)",
+        "codegraph": "无「文档↔实现」对照视图，只能读源码自己比",
+        "inject": [("crates/core/src/model.rs", "self.has_receipt && self.amount != 0", "self.has_receipt || self.amount == 0")],
+    },
+}
+
+
+# What a good agent would ask, per scenario, and what a correct answer must contain. Ours is a list
+# of one-shot client calls; codegraph's is a list of its own commands. Both are run on the **same
+# tree**, and correctness is a substring the answer must contain — a mechanical judge, not a reader.
+# 每个情景里"一个称职 agent 会问什么"、以及正确答案必须包含什么。我们这侧是一次性客户端调用清单，
+# codegraph 那侧是它自己的命令清单。两者都跑在**同一棵树**上，而正确性判据是"答案必须包含的子串"——
+# 机械判据，不靠人读。
+PROBES = {
+    1: {
+        "ours": [["--call", "nichlink.callgraph", "--function", "post"]],
+        "expect_ours": ["report"],
+        "codegraph": [["callers", "post"]],
+        "expect_codegraph": ["report"],
+    },
+    2: {
+        "ours": [
+            ["--call", "nichlink.status"],
+            ["--call", "nichlink.check", "--face", "audit"],
+        ],
+        "expect_ours": ["audit"],
+        "codegraph": [["--help"]],
+        "expect_codegraph": ["NO-EQUIVALENT-EXPECTED"],
+    },
+    3: {
+        "ours": [["--call", "nichlink.callgraph", "--orphans"]],
+        "expect_ours": ["audit_unused"],
+        "codegraph": [["callers", "audit_unused"]],
+        "expect_codegraph": ["no callers"],
+    },
+    4: {
+        "ours": [
+            ["--call", "nichlink.affected", "--json", '{"files": ["crates/core/src/model.rs"]}']
+        ],
+        "expect_ours": ["report"],
+        "codegraph": [
+            ["affected", "crates/core/src/model.rs"],
+            ["impact", "postable"],
+        ],
+        "expect_codegraph": ["report"],
+    },
+    5: {
+        "ours": [
+            ["--call", "nichlink.callgraph", "--function", "matches"],
+            ["--call", "nichlink.callgraph", "--function", "render"],
+        ],
+        "expect_ours": ["amount > min", "write_count"],
+        "codegraph": [
+            ["explore", "render report write_count matches filter"],
+        ],
+        "expect_codegraph": ["write_count"],
+    },
+    6: {
+        "ours": [
+            ["--call", "nichlink.search", "--query", "postable"],
+            ["--call", "nichlink.read", "--path", "crates/core/src/model.rs", "--line", "35"],
+        ],
+        "expect_ours": ["has_receipt", "amount != 0"],
+        "codegraph": [["explore", "postable receipt zero entry contract"]],
+        "expect_codegraph": ["postable"],
+    },
+}
+
+
+def scenario_probe(directory, binary):
+    """Run both tools on every scenario tree and score them mechanically.
+    \u5728\u6bcf\u4e00\u68f5\u60c5\u666f\u6811\u4e0a\u8dd1\u4e24\u4ef6\u5de5\u5177\uff0c\u5e76\u673a\u68b0\u5224\u5206\u3002"""
+    print(f"{'scenario':<26} {'ours':<30} {'codegraph':<34}")
+    for number, scenario in sorted(SCENARIOS.items()):
+        target = os.path.join(directory, f"s{number}")
+        scenario_project(target)
+        scenario_inject(target, number)
+        probe = PROBES[number]
+        ours = run_cli(target, binary, probe["ours"])
+        ours_ok = all(needle in ours["text"] for needle in probe["expect_ours"])
+        ours_note = f"{ours['calls']} calls {'OK' if ours_ok else 'WRONG'}"
+        if not ours_ok:
+            ours_note += " (" + ours["text"].replace("\n", " ")[:60] + ")"
+        codeg = run_codegraph(target, probe["codegraph"])
+        # `NO-EQUIVALENT-EXPECTED` is not a wrong answer: it records that the question has no
+        # counterpart in that tool at all, which is a different fact from answering it badly.
+        # 这个哨兵不是"答错"：它记的是那件工具根本没有这一问的对应物，与"答得差"是两件事。
+        absent = probe["expect_codegraph"] == ["NO-EQUIVALENT-EXPECTED"]
+        codeg_ok = all(needle in codeg["text"] for needle in probe["expect_codegraph"])
+        if absent:
+            codeg_note = f"{codeg['calls']} calls no equivalent"
+        else:
+            codeg_note = f"{codeg['calls']} calls {'OK' if codeg_ok else 'WRONG'}"
+        print(f"{number}. {scenario['id']:<23} {ours_note:<30} {codeg_note:<34}")
+    return 0
+
+
+def run_cli(target, binary, calls):
+    """Run one-shot client calls in the tree; the answer is every call's stdout.
+    \u5728\u6811\u91cc\u8dd1\u4e00\u6b21\u6027\u5ba2\u6237\u7aef\u8c03\u7528\uff1b\u7b54\u6848\u662f\u6bcf\u6b21\u8c03\u7528\u7684 stdout\u3002"""
+    text = ""
+    for call in calls:
+        done = subprocess.run([binary, *call], cwd=target, capture_output=True, text=True)
+        text += done.stdout + done.stderr
+    return {"calls": len(calls), "text": text}
+
+
+def run_codegraph(target, calls):
+    """Run codegraph commands in the tree, after one index.
+    \u5148\u5efa\u7d22\u5f15\uff0c\u518d\u5728\u6811\u91cc\u8dd1 codegraph \u547d\u4ee4\u3002"""
+    env = dict(os.environ, PATH=os.path.expanduser("~/.local/bin") + os.pathsep + os.environ["PATH"])
+    text = ""
+    count = 0
+    for command in [["init"]] + calls:
+        done = subprocess.run(
+            ["codegraph", *command], cwd=target, capture_output=True, text=True, env=env
+        )
+        text += done.stdout + done.stderr
+        count += 1
+    return {"calls": count, "text": text}
+
+
+def scenario_project(directory):
+    """Write the workspace the scenario levels are asked about.
+    \u5199\u51fa\u60c5\u666f\u5173\u5361\u6240\u95ee\u7684\u90a3\u4e2a\u5de5\u4f5c\u533a\u3002"""
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+    for name, text in WORKSPACE.items():
+        path = os.path.join(directory, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    print(f"scenario workspace written: {directory} ({len(WORKSPACE)} files)")
+
+
+def scenario_inject(directory, number):
+    """Apply the state a scenario asks about.
+    \u5e94\u7528\u4e00\u4e2a\u60c5\u666f\u6240\u95ee\u7684\u72b6\u6001\u3002"""
+    scenario = SCENARIOS[number]
+    for relative, old, new in scenario["inject"]:
+        path = os.path.join(directory, relative)
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        if text.count(old) != 1:
+            raise SystemExit(f"scenario {number}: anchor matched {text.count(old)} times in {relative}")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text.replace(old, new, 1))
+    print(f"scenario {number} ({scenario['id']}) applied: {len(scenario['inject'])} site(s)")
+
+
+def scenario_plan():
+    print("Scenario levels: the shapes a real workspace has.\n")
+    for number, scenario in sorted(SCENARIOS.items()):
+        print(f"{number}. {scenario['id']}")
+        print(f"   question: {scenario['question']}")
+        print(f"   preset answer: {scenario['answer']}")
+        print(f"   codegraph: {scenario['codegraph']}")
+        print(f"   sites: {len(scenario['inject'])}")
+        print()
+
+
+def scenario_check(directory):
+    """Prove each scenario's question is real on its tree: the suite and the tool can see it.
+    \u5728\u771f\u6811\u4e0a\u8bc1\u660e\u6bcf\u4e00\u5173\u7684\u95ee\u9898\u662f\u771f\u7684\u3002"""
+    ok = True
+    for number, scenario in sorted(SCENARIOS.items()):
+        target = os.path.join(directory, f"s{number}")
+        scenario_project(target)
+        scenario_inject(target, number)
+        default = test(target)
+        audit = subprocess.run(
+            ["cargo", "test", "--offline", "--features", "ledger-core/audit", "--quiet"],
+            cwd=target,
+            capture_output=True,
+            text=True,
+        )
+        print(
+            f"  s{number} {scenario['id']:<26} default-face rc={default.returncode} "
+            f"audit-face rc={audit.returncode}"
+        )
+        if number == 2 and default.returncode != 0:
+            print("    !! scenario 2 needs its red to be invisible on the default face")
+            ok = False
+        if number == 2 and audit.returncode == 0:
+            print("    !! scenario 2's audit face must be red")
+            ok = False
+        if number in (1, 3, 4, 6) and audit.returncode != 0:
+            print(f"    !! scenario {number}'s audit face must be green on the pristine fixtures")
+            ok = False
+        if number == 5 and default.returncode == 0:
+            print("    !! scenario 5 must be red on the default face")
+            ok = False
+        if number in (1, 3, 4, 6) and default.returncode != 0:
+            print(f"    !! scenario {number} must be green on the default face")
+            ok = False
+    print("scenario shapes verified" if ok else "scenario shapes FAILED")
+    return 0 if ok else 1
+
+
 def write_project(directory):
     if os.path.exists(directory):
         shutil.rmtree(directory)
@@ -658,6 +1177,16 @@ def main(argv):
         check(argv[2], int(argv[3]))
     elif command == "plan":
         plan()
+    elif command == "scenario-project":
+        scenario_project(argv[2])
+    elif command == "scenario-inject":
+        scenario_inject(argv[2], int(argv[3]))
+    elif command == "scenario-plan":
+        scenario_plan()
+    elif command == "scenario-check":
+        return scenario_check(argv[2])
+    elif command == "scenario-probe":
+        return scenario_probe(argv[2], argv[3])
     else:
         print(__doc__)
         return 2
