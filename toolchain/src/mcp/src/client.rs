@@ -101,6 +101,50 @@ fn visit_keys(schema: Option<&Value>, names: &mut Vec<String>, required: &mut Ve
     }
 }
 
+/// One tool's whole description, for the caller that needs the shape the one-line list truncates.
+/// 一个工具的完整描述，供需要"一行式清单所截掉的那部分形状"的调用方使用。
+///
+/// The round measured what the truncation costs: the `apply` description already spells out that the
+/// values live under `fields` and that every value must be a string, and an arm still spent four
+/// refusals discovering it, because the one-shot client only ever showed the first sentence.
+/// 那一轮量出了截断的代价：`apply` 的描述本来就写明"取值在 `fields` 下、每个值必须是字符串"，而一个臂
+/// 仍花了四次被拒才发现它——因为一次性客户端从来只显示第一句。
+pub fn describe_tool(name: &str) -> Option<String> {
+    let wanted = if name.contains('.') {
+        name.to_owned()
+    } else {
+        format!("nichlink.{name}")
+    };
+    crate::mcp::tools::tools().into_iter().find_map(|tool| {
+        let tool_name = tool.get("name")?.as_str()?;
+        if tool_name != wanted {
+            return None;
+        }
+        let description = tool
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let schema = tool.get("inputSchema");
+        let mut properties: Vec<String> = Vec::new();
+        let mut required: Vec<String> = Vec::new();
+        visit_keys(schema, &mut properties, &mut required);
+        let keys = properties
+            .iter()
+            .map(|key| {
+                if required.contains(key) {
+                    format!("{key}*")
+                } else {
+                    key.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(format!(
+            "{tool_name}\n    keys: {keys} (* = required)\n{description}"
+        ))
+    })
+}
+
 /// One line per tool: its name, the first sentence of its description, and the keys it takes
 /// (`*` = required), so a caller does not have to guess a key name and spend a refusal learning it.
 /// 每个工具一行：名字、描述第一小句，以及它接受的键（`*` = 必填），这样调用方不必靠猜键名、再花一次
