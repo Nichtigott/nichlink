@@ -431,3 +431,37 @@ fn the_new_writes_name_the_executor_they_reuse() {
         );
     }
 }
+
+/// A throwaway package with a called function, its caller, an orphan, and a documented definition.
+/// 一个一次性包：一个被调用的函数、它的调用者、一个孤儿，以及一个带文档的定义。
+///
+/// Shared by the acceptance pin (the table's shapes must be accepted here) and the orphan pin, so
+/// the two cannot disagree about what the fixture is.
+/// 由接受性钉子（表里的形状必须在这里被接受）与孤儿钉子共用，因此两者不会对"夹具是什么"产生分歧。
+pub(crate) fn scratch_package(label: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-mcp-tools-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!("[package]\nname = \"fixture-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+    )
+    .expect("fixture manifest");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "//! A fixture module.\n\
+         /// What this function is for.\n\
+         pub fn used() -> u32 { 1 }\n\
+         \n\
+         pub fn call_used() -> u32 { used() }\n\
+         \n\
+         pub fn orphan() -> u32 { 2 }\n",
+    )
+    .expect("fixture source");
+    root
+}

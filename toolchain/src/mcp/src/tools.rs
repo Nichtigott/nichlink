@@ -686,4 +686,4 @@ fn status(root: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 #[path = "tools_tests.rs"]
-mod tools_tests;
+pub(crate) mod tools_tests;

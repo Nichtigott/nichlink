@@ -43,14 +43,20 @@ use serde_json::{Map, Value};
 /// 逐工具散文，而只读每条描述第一小句的 agent 手上没有任何东西说"哪种症状用哪个工具"。表里点名症状、
 /// 该发的调用、以及这次调用答不了的那一件事。
 pub const INSTRUCTIONS: &str = "\
-A failing test? `check {face}` runs that face and makes the exit code the verdict. Then take the \
-assertion's own words — `search {literal}` finds where that text is produced (comments and string \
-literals included). A name? `search {query}`. Who reaches it, and what it reaches? `callgraph \
-{function, source: true}` (static heuristic: it sees static calls, not dynamic dispatch). Nobody \
-reaches it? `callgraph {orphans: true}` lists what this package defines but never calls. One \
-function's own lines? `read {path, line}` or `inspect {path}`. Which tests a change reaches? \
-`affected`. Registration faces: `registry`, `explain`, `diff`, then `apply` (preview by default). \
-With `root`, every path argument is relative to that root (root \"kernel\" means path \"src/…\").";
+Read the symptom first, then take the shortest route it names. A failing test? `check {face}` runs \
+that face and makes the exit code the verdict — but if you already ran `cargo test`, keep its \
+output: the failing assertion's own words are the next clue. **If the symptom is in something the \
+code produces** (a rendered report, a generated record), `search {literal}` on that product's own \
+words finds the line that produces it, usually in one call. **If the symptom is the assertion's \
+message**, search a short, stable phrase from it: the test framework appends `left:`/`right:` and \
+the numbers, so the whole line matches nothing. **A symbol name you can already read** (from a test \
+or a trace) goes straight to `callgraph {function}` — one call gives its callers, its callees, its \
+own lines and its doc, and `search {query}` first would only cost a second call. A name you do not \
+have yet: `callgraph` hop by hop from the caller you do have. `callgraph {orphans: true}` lists what \
+this package defines and nothing here calls. One function's own lines: `read {path, line}`. Which \
+tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `diff`, then `apply` \
+(a preview unless `apply: true`). With `root`, every path argument is relative to that root (root \
+\"kernel\" means path \"src/…\").";
 
 /// One line per tool: its name, then the first sentence of its description.
 /// 每个工具一行：名字，然后是它描述的第一句。
@@ -206,13 +212,15 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         )));
     }
     let mut object = Map::new();
-    let mut rest = arguments[1..].iter();
+    let remaining: Vec<&String> = arguments[1..].iter().collect();
+    let mut at = 0usize;
     // `--json` sets the base and the explicit pairs win, so a caller can start from a pasted object
     // and still override one key.
     // `--json` 设基底，显式键值对胜出，因此调用方可以从粘贴的对象出发、仍然覆盖某一项。
     let mut overrides: Vec<(String, Value)> = Vec::new();
     let mut base: Option<Map<String, Value>> = None;
-    while let Some(flag) = rest.next() {
+    while at < remaining.len() {
+        let flag = remaining[at];
         let key = match flag.strip_prefix("--") {
             Some(key) if !key.is_empty() => key.to_owned(),
             _ => {
@@ -221,10 +229,12 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
                 )));
             }
         };
+        at += 1;
         if key == "json" {
-            let Some(text) = rest.next() else {
+            let Some(text) = remaining.get(at) else {
                 return Err(Refusal::Usage("`--json` needs an object".to_owned()));
             };
+            at += 1;
             let parsed: Value = serde_json::from_str(text)
                 .map_err(|error| Refusal::Usage(format!("`--json` is not valid JSON: {error}")))?;
             match parsed {
@@ -238,10 +248,20 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
             }
             continue;
         }
-        let Some(value) = rest.next() else {
-            return Err(Refusal::Usage(format!("`--{key}` needs a value")));
+        // A boolean is a flag: `--orphans` alone means true, and only a token that is not another
+        // `--flag` is taken as a value. The round measured the cost of requiring a value here —
+        // `--orphans` answered "needs a value" while the flow table recommended exactly that shape.
+        // 布尔就是开关：`--orphans` 单独出现意为 true，只有不是另一个 `--flag` 的记号才被当作取值。
+        // 那轮量出了"这里必须给值"的代价——流程表推荐的形状恰恰是 `--orphans`，而它回的是 "needs a
+        // value"。
+        let value = match remaining.get(at) {
+            Some(next) if !next.starts_with("--") => {
+                at += 1;
+                scalar(next)
+            }
+            _ => Value::Bool(true),
         };
-        overrides.push((key, scalar(value)));
+        overrides.push((key, value));
     }
     for (key, value) in base.unwrap_or_default() {
         object.insert(key, value);

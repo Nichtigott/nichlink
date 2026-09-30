@@ -48,10 +48,18 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
     // 定义数与调用者各自设上限，且都说出自己扣下了多少。
     const DEFINITIONS: usize = 5;
     const CALLERS: usize = 20;
+    // The orphan view asks about the whole tree rather than about one name, so it is answered
+    // before `function` is required — otherwise the shape the table advertises would be refused by
+    // an argument rule, which is exactly what the round measured.
+    // 孤儿视图问的是整棵树而不是某个名字，因此在要求 `function` 之前作答——否则流程表推荐的形状会被参数
+    // 规则拒掉，而那正是那轮量到的东西。
+    if arguments.get("orphans").and_then(Value::as_bool) == Some(true) {
+        return orphan_answer(root, arguments);
+    }
     let query = arguments
         .get("function")
         .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.callgraph requires function".to_owned())?
+        .ok_or_else(|| "nichlink.callgraph requires function or orphans".to_owned())?
         .trim();
     if query.is_empty() {
         return Err("function must not be empty".to_owned());
@@ -71,36 +79,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
     // 成员的那个成员里，因此逐成员提问会丢掉每一个跨 crate 调用者（实测：同一个符号在整个工作区上 36 个
     // 调用者，而每个成员只搜自己时 17 个）。每个文件携带的标签就是答案打印的东西，因此工作区命中会点名
     // 它来自哪个成员，而单包命中保持自己的相对路径。
-    let mut labelled: Vec<(String, crate::mcp::source_index::SourceFile)> = Vec::new();
-    match crate::mcp::workspace::scope(root) {
-        Ok(crate::mcp::workspace::Scope::Workspace(members)) if path_filter.is_none() => {
-            for member in &members {
-                let Ok(sources) = load_sources(&member.dir) else {
-                    continue;
-                };
-                // The label is the member's directory relative to the workspace root, which is
-                // the path a reader can grep for; the package name alone would name the identity
-                // but not the file's place in this checkout.
-                // 标签是成员目录相对工作区根的路径，也就是读者能直接 grep 的路径；只用包名会点名身份，
-                // 却不说明文件在本次检出里的位置。
-                let prefix = member
-                    .dir
-                    .strip_prefix(root)
-                    .map(|relative| {
-                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
-                    })
-                    .unwrap_or_else(|_| member.name.clone());
-                for file in sources {
-                    labelled.push((format!("{prefix}/{}", file.relative), file));
-                }
-            }
-        }
-        _ => {
-            for file in load_sources(root)? {
-                labelled.push((file.relative.clone(), file));
-            }
-        }
-    }
+    let labelled = labelled_sources(root, path_filter)?;
     let mut found = Vec::new();
     for (label, file) in &labelled {
         if path_filter.is_some_and(|path| label != path) {
@@ -225,7 +204,22 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             // 要摘要的读者仍然拿到摘要。
             const SOURCE_LINES: usize = 60;
             let lines = file.source.lines().collect::<Vec<_>>();
-            let first = function.line.saturating_sub(1);
+            let definition = function.line.saturating_sub(1);
+            // Start at the doc comment's first line when there is one: "the doc says A and the code
+            // writes not-A" is the strongest signal this bridge can print, and the evaluation's arm
+            // hit that pairing in every round — twice over two requests each time, because the doc
+            // and the body arrived from different calls.
+            // 有文档注释时从它的首行开始："文档说要 A、代码写着 ¬A"是本桥能打印的最强信号，而评测里那一组
+            // 每轮都撞到这个配对——每次都要两次请求，因为文档与函数体来自不同的调用。
+            let mut first = definition;
+            while first > 0 {
+                let above = lines[first - 1].trim_start();
+                if above.starts_with("///") || above.starts_with("#[") {
+                    first -= 1;
+                } else {
+                    break;
+                }
+            }
             let last = function.end_line.min(lines.len());
             let shown = last.saturating_sub(first).min(SOURCE_LINES);
             output.push_str("  source:\n");
@@ -271,6 +265,126 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
              each definition's own lines\n",
         );
     }
+    Ok(output)
+}
+
+/// The files an answer may read, each under the label its rows print.
+/// 答案可以读的那些文件，各自带着它那些行会打印的标签。
+///
+/// Extracted so the orphan view and the name view cannot disagree about which files exist or what
+/// a row is called: one rule, one implementation. A second copy here would be the drift this
+/// repository keeps deleting.
+/// 抽出来是为了让孤儿视图与名字视图不会对"有哪些文件、一行该叫什么"产生分歧：一条规则一份实现。在这里再抄
+/// 一份就是本仓一直在删的那种漂移。
+fn labelled_sources(
+    root: &Path,
+    path_filter: Option<&str>,
+) -> Result<Vec<(String, crate::mcp::source_index::SourceFile)>, String> {
+    let mut labelled: Vec<(String, crate::mcp::source_index::SourceFile)> = Vec::new();
+    match crate::mcp::workspace::scope(root) {
+        Ok(crate::mcp::workspace::Scope::Workspace(members)) if path_filter.is_none() => {
+            for member in &members {
+                let Ok(sources) = load_sources(&member.dir) else {
+                    continue;
+                };
+                // The label is the member's directory relative to the workspace root, which is
+                // the path a reader can grep for; the package name alone would name the identity
+                // but not the file's place in this checkout.
+                // 标签是成员目录相对工作区根的路径，也就是读者能直接 grep 的路径；只用包名会点名身份，
+                // 却不说明文件在本次检出里的位置。
+                let prefix = member
+                    .dir
+                    .strip_prefix(root)
+                    .map(|relative| {
+                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
+                    })
+                    .unwrap_or_else(|_| member.name.clone());
+                for file in sources {
+                    labelled.push((format!("{prefix}/{}", file.relative), file));
+                }
+            }
+        }
+        _ => {
+            for file in load_sources(root)? {
+                labelled.push((file.relative.clone(), file));
+            }
+        }
+    }
+    Ok(labelled)
+}
+
+/// What this package defines and never calls.
+/// 本包定义了、却从不调用的那些东西。
+///
+/// The round asked for this view by name: the trap round's `write_totals` was a textbook dead-code
+/// candidate, the table advertised `orphans: true`, and the tool refused it twice — two of that
+/// round's ten calls. The count is static and says so: a name counts as called when it appears in
+/// some function's call list *in this tree*, so dynamic dispatch, function pointers and
+/// macro-expanded calls are invisible to it, exactly as they are to the name view.
+/// 这一视图是那轮点名要的：陷阱题里的 `write_totals` 是教科书级死代码候选，而流程表推荐了 `orphans: true`
+/// 却被工具拒了两次——那轮 10 次调用里的 2 次。计数是静态的并且说出来：只要一个名字出现在**这棵树**某个函数
+/// 的调用清单里就算被调用，因此动态派发、函数指针与宏展开出来的调用对它不可见——与名字视图一样。
+fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
+    const ORPHANS: usize = 20;
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(ORPHANS, |value| value.clamp(1, 200) as usize);
+    let labelled = labelled_sources(root, None)?;
+    let mut called: Vec<&str> = Vec::new();
+    for (_, file) in &labelled {
+        for function in &file.functions {
+            for call in &function.calls {
+                called.push(call.as_str());
+            }
+        }
+    }
+    let mut found: Vec<String> = Vec::new();
+    for (label, file) in &labelled {
+        if looks_like_a_test(label, &file.source) {
+            continue;
+        }
+        for function in &file.functions {
+            if function.name == "main" {
+                continue;
+            }
+            let suffix = format!("::{}", function.name);
+            let reached = called
+                .iter()
+                .any(|call| *call == function.name || call.ends_with(&suffix));
+            if !reached {
+                found.push(format!(
+                    "  fn    {} -> {label}:{}",
+                    function.name, function.line
+                ));
+            }
+        }
+    }
+    let total = found.len();
+    let mut output = String::from("evidence: static-heuristic\n");
+    output.push_str(&format!(
+        "orphans {total} (defined here, no static caller in this tree)\n"
+    ));
+    for line in found.iter().take(limit) {
+        output.push_str(line);
+        output.push('\n');
+    }
+    if total > limit {
+        output.push_str(&format!(
+            "{}\n",
+            withheld(
+                total - limit,
+                total,
+                limit,
+                "orphans",
+                "raise `limit`, or read the file the row names"
+            )
+        ));
+    }
+    output.push_str(
+        "note   a name counts as called when it appears in some function's call list in this \
+         tree: dynamic dispatch, function pointers and macro-expanded calls are invisible to it\n",
+    );
     Ok(output)
 }
 

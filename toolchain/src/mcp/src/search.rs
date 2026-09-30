@@ -213,8 +213,17 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
                 continue;
             }
             if hits < limit {
+                // The doc's first line rides along: "the doc says A and the code writes not-A" is
+                // the strongest signal this bridge prints, and the evaluation's arm needed two
+                // requests to put the two halves side by side in every round.
+                // 文档首行随行给出："文档说要 A、代码写着 ¬A"是本桥能打印的最强信号，而评测里那一组每轮都
+                // 要两次请求才把两半并排。
+                let doc = match doc_first_line(&file.source, function.line) {
+                    Some(doc) => format!("  /// {doc}"),
+                    None => String::new(),
+                };
                 results.push(format!(
-                    "fn    {} -> {}:{}",
+                    "fn    {} -> {}:{}{doc}",
                     function.name, file.relative, function.line
                 ));
                 hits += 1;
@@ -390,6 +399,32 @@ fn literal_lines(
         }
     }
     Ok(found)
+}
+
+/// The first line of the doc comment attached above a definition, when there is one.
+/// 定义正上方所附文档注释的第一行（若有）。
+///
+/// "Above" means the contiguous `///` block immediately preceding the definition, and "first" means
+/// the top of that block: that is the line a reader has to see next to the code to catch the case
+/// where the promise and the implementation disagree.
+/// "上方"指紧邻定义之前那段连续的 `///` 块，"第一行"指该块的顶端：要抓住"承诺与实现不一致"这种情况，
+/// 读者必须把那一行与代码并排看到。
+fn doc_first_line(source: &str, line: usize) -> Option<String> {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut at = line.saturating_sub(2);
+    let mut top: Option<&str> = None;
+    while let Some(current) = lines.get(at) {
+        if !current.trim_start().starts_with("///") {
+            break;
+        }
+        top = Some(current);
+        if at == 0 {
+            break;
+        }
+        at -= 1;
+    }
+    let text = top?.trim_start().trim_start_matches("///").trim();
+    (!text.is_empty()).then(|| text.to_owned())
 }
 
 /// One source line, capped, saying so when it was.

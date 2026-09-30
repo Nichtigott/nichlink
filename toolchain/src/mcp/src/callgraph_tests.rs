@@ -142,3 +142,25 @@ fn the_bodies_are_included_unless_asked_otherwise() {
     assert!(short.contains("bodies omitted on request"), "{short}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The orphan view names what nothing here calls, and says what its count can and cannot see.
+/// 孤儿视图点名这里没人调用的东西，并说清它的计数看得见什么、看不见什么。
+#[test]
+fn the_orphan_view_names_what_nothing_calls() {
+    let root = crate::mcp::tools::tools_tests::scratch_package("orphans");
+    let answer = callgraph(&root, &json!({"orphans": true})).expect("an answer");
+    assert!(answer.contains("fn    orphan ->"), "{answer}");
+    assert!(
+        !answer.contains("fn    used ->"),
+        "`used` is called by `call_used`: {answer}"
+    );
+    assert!(
+        answer.contains("static"),
+        "the count says it is static: {answer}"
+    );
+    assert!(
+        answer.contains("invisible to it"),
+        "and says what it cannot see: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
