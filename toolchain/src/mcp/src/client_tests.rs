@@ -83,12 +83,12 @@ fn a_call_exits_with_its_verdict() {
 /// 普通 `--key value` 参数带上最显然的 JSON 类型，因此常见调用不必写 JSON。
 #[test]
 fn plain_arguments_carry_their_json_type() {
-    assert_eq!(scalar("true"), Value::Bool(true));
-    assert_eq!(scalar("false"), Value::Bool(false));
-    assert_eq!(scalar("900000"), Value::from(900_000));
-    assert_eq!(scalar("default"), Value::from("default"));
+    assert_eq!(scalar_for("source", "true"), Value::Bool(true));
+    assert_eq!(scalar_for("source", "false"), Value::Bool(false));
+    assert_eq!(scalar_for("timeout_ms", "900000"), Value::from(900_000));
+    assert_eq!(scalar_for("face", "default"), Value::from("default"));
     assert_eq!(
-        scalar("00"),
+        scalar_for("limit", "00"),
         Value::from("00"),
         "a leading zero is a string, not a number"
     );
@@ -207,6 +207,15 @@ fn the_root_flag_decides_which_tree_is_answered() {
 
 /// A boolean is a flag: the bare spelling is accepted and means true.
 /// 布尔就是开关：裸写被接受，且意为 true。
+/// A text key keeps digits as text: the round could not express `--literal 1000`.
+/// 文本键把数字串留作文本：那轮无法表达 `--literal 1000`。
+#[test]
+fn a_text_key_keeps_digits_as_text() {
+    assert_eq!(scalar_for("literal", "1000"), Value::from("1000"));
+    assert_eq!(scalar_for("query", "0"), Value::from("0"));
+    assert_eq!(scalar_for("context", "4"), Value::from(4));
+}
+
 #[test]
 fn a_bare_flag_means_true() {
     let temp = std::env::temp_dir().join(format!("nichlink-flag-{}", std::process::id()));

@@ -185,7 +185,11 @@ fn requested_span(arguments: &Value) -> Result<Span, String> {
 /// 回答出空正文，而那读起来和"区间在文件末尾之外"一模一样。
 fn parse_range(text: &str) -> Result<(usize, usize), String> {
     let text = text.trim();
-    let Some((start, end)) = text.split_once('-') else {
+    // `START:END` is how a range is spelled in most tools, so it is accepted alongside `START-END`;
+    // the round's arm lost one call to the `-` spelling.
+    // `START:END` 是多数工具里区间的写法，因此与 `START-END` 一并接受；那轮的成员为 `-` 的拼法白花
+    // 了一次调用。
+    let Some((start, end)) = text.split_once('-').or_else(|| text.split_once(':')) else {
         return Err(format!(
             "`lines` must be spelled `START-END` (for example `120-260`); got `{text}`"
         ));

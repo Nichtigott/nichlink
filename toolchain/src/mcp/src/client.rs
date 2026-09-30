@@ -166,6 +166,23 @@ pub fn run_client(arguments: &[String]) -> Client {
             Client::Called(0)
         }
         "--help" | "-h" => Client::Called(emit_or_stop(USAGE).unwrap_or(0)),
+        // A bare tool name is a call: `nichlink-mcp callgraph --function x` reads the way a command
+        // line reads, and requiring `--call` first cost the round a refused call.
+        // 裸工具名就是一次调用：`nichlink-mcp callgraph --function x` 是命令行的读法，而此前必须先写
+        // `--call` 让那一轮白吃了一次拒绝。
+        other if other.starts_with("nichlink.") || !other.starts_with('-') => {
+            match call_from_arguments(arguments) {
+                Ok(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
+                Err(Refusal::Tool(text)) => {
+                    eprintln!("{text}");
+                    Client::Called(1)
+                }
+                Err(Refusal::Usage(text)) => {
+                    eprintln!("{text}");
+                    Client::Called(2)
+                }
+            }
+        }
         "--call" => match call_from_arguments(&arguments[1..]) {
             Ok(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
             Err(Refusal::Tool(text)) => {
@@ -216,6 +233,16 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
             "`--call` needs a tool name, not `{name}`\n\n{USAGE}"
         )));
     }
+    // The `nichlink.` prefix is the catalogue's spelling; on a command line whose only tool source is
+    // this bridge it is redundant, so a bare `callgraph` resolves to `nichlink.callgraph`.
+    // `nichlink.` 前缀是目录里的拼法；在命令行上，唯一的工具来源就是这个桥，因此它是冗余的 ——
+    // 裸写 `callgraph` 就解析成 `nichlink.callgraph`。
+    let resolved = if name.contains('.') {
+        name.to_owned()
+    } else {
+        format!("nichlink.{name}")
+    };
+    let name = resolved.as_str();
     let mut object = Map::new();
     let remaining: Vec<&String> = arguments[1..].iter().collect();
     let mut at = 0usize;
@@ -262,7 +289,7 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         let value = match remaining.get(at) {
             Some(next) if !next.starts_with("--") => {
                 at += 1;
-                scalar(next)
+                scalar_for(&key, next)
             }
             _ => Value::Bool(true),
         };
@@ -320,17 +347,33 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
     call_tool(&base, name, &Value::Object(object)).map_err(Refusal::Tool)
 }
 
-/// A command-line value with the obvious JSON type.
-/// 命令行取值按最显然的 JSON 类型解释。
-fn scalar(value: &str) -> Value {
+/// A command-line value with the type its **key** implies.
+/// 命令行取值按**键**所暗示的类型解释。
+///
+/// Text is the default, because a command line is text: turning every digit string into a number is
+/// what made `--literal 1000` unexpressible in the round (the search wanted text and got a number).
+/// Only the keys that are numbers by name get a number, and `true`/`false` are booleans anywhere.
+/// 默认是文本，因为命令行本来就是文本：把每个数字串都变成数字，正是那轮 `--literal 1000` 无法表达的
+/// 原因（检索要文本、拿到的是数字）。只有**名字上就是数字**的键才转数字，而 `true`/`false` 在任何键上
+/// 都是布尔。
+fn scalar_for(key: &str, value: &str) -> Value {
     match value {
         "true" => Value::Bool(true),
         "false" => Value::Bool(false),
-        other => match other.parse::<i64>() {
+        other if numeric_key(key) => match other.parse::<i64>() {
             Ok(number) if number.to_string() == other => Value::from(number),
             _ => Value::from(other),
         },
+        other => Value::from(other),
     }
+}
+
+/// Whether a key names a number, so its value may become one.
+/// 某个键是否点名一个数字，从而它的取值可以变成数字。
+fn numeric_key(key: &str) -> bool {
+    matches!(key, "limit" | "line" | "context" | "count" | "depth")
+        || key.ends_with("_ms")
+        || key.ends_with("_bytes")
 }
 
 /// The name of a JSON value's type, for a refusal that says what it got.

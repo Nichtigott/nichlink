@@ -841,10 +841,10 @@ use ledger_core::model::Entry;
 /// Render the entries: a header, the count, then one line per entry.
 /// 渲染分录：表头、条数，然后每条一行。
 pub fn render(entries: &[Entry]) -> String {
-    let mut text = String::from("LEDGER REPORT\n");
+    let mut text = String::from("LEDGER REPORT\\n");
     write_count(&mut text, entries);
     for entry in entries {
-        text.push_str(&format!("{}: {}\n", entry.account, entry.amount));
+        text.push_str(&format!("{}: {}\\n", entry.account, entry.amount));
     }
     text
 }
@@ -852,7 +852,7 @@ pub fn render(entries: &[Entry]) -> String {
 /// The count block.
 /// 条数块。
 pub fn write_count(text: &mut String, entries: &[Entry]) {
-    text.push_str(&format!("entries: {}\n", entries.len()));
+    text.push_str(&format!("entries: {}\\n", entries.len()));
 }
 """,
     "crates/report/tests/report.rs": """//! The report suite.
@@ -894,7 +894,7 @@ fn the_report_prints_its_count_before_the_entries() {
     let text = render(store.entries());
     let count = text.find("entries: 3").expect("the count line is printed");
     let first_entry = text.find("a: -500").expect("the first entry is printed");
-    assert!(count < first_entry, "the count comes first:\n{text}");
+    assert!(count < first_entry, "the count comes first:\\n{text}");
 }
 
 #[test]
@@ -975,10 +975,10 @@ SCENARIOS = {
                 "crates/report/src/render.rs",
                 "    write_count(&mut text, entries);\n"
                 "    for entry in entries {\n"
-                "        text.push_str(&format!(\"{}: {}\n\", entry.account, entry.amount));\n"
+                "        text.push_str(&format!(\"{}: {}\\n\", entry.account, entry.amount));\n"
                 "    }",
                 "    for entry in entries {\n"
-                "        text.push_str(&format!(\"{}: {}\n\", entry.account, entry.amount));\n"
+                "        text.push_str(&format!(\"{}: {}\\n\", entry.account, entry.amount));\n"
                 "    }\n"
                 "    write_count(&mut text, entries);",
             )
