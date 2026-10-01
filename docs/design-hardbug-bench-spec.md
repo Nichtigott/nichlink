@@ -58,3 +58,15 @@
 2. 真值文件由**构造**得出（不从答案反推），且判分脚本能机械复核；
 3. 红/绿形状与配方一致（例如 H4 恰有一支未被覆盖 ⇒ `check --census` 相应栏位与真值一致）；
 4. 题面与真值**物理隔离**（真值在 `.audit/`，题面引用不指向它）——第六、七两轮的泄漏教训。
+
+## 生成器落点（2026-10-01 侦察）
+
+`tools/` 下的出题器与判分器都是 **Python 脚本**（`nichlink-mcp-eval` 66 KB、`nichlink-mcp-eval-chains`
+21 KB，另有 `nichlink-chain-eval-*` 一整套）。⇒ **W7 生成器写成独立脚本** `tools/nichlink-mcp-hardbug`
+（Python 3），**不要**往 66 KB 的既有脚本里再塞一个职责：
+
+- 内部用 `subprocess` 调既有的 `nichlink-mcp-eval scenario-project <dir>` / `project <dir>` 起底，再按本
+  文件上面的配方注入；
+- 子命令：`build <dir> <class>`（派生 + 注入 + 写 `.audit/truth.json` + 自证四件事）·
+  `score <tree> <answer>`（机械判分）· `plan`（打印四类的配方与真值形状，给审计读）；
+- `.audit/` 的真值与判分脚本**不被题面引用**；每棵树 git 单提交。
