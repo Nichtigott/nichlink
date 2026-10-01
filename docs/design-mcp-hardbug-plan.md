@@ -179,6 +179,17 @@
   这也是唯一一处**必须新增解析管线**的地方（W1–W3/W6 都只用现有事实）。**先做这件事，再做 W4/W5**；
   接线时守住"一条规则一份实现"：成员与字段都取自既有的发现/索引，不另写一套推导。
 
+**第二轮回读（同日晚些，把落点收窄到函数级）**：结构化数据就在 `registry_body(&member, &arguments)`
+（`toolchain/src/mcp/src/registry.rs:141`）**内部推导出来的那批面**身上——`build_time` 的
+`discovery_cache.rs` 只是**缓存**（`FaceSyntax` 的字段读法见它第 157 行：对
+`["parts","exports","handle_traits","part_traits"]` 逐个 `face.field(name)`），入口是
+`update_discovery_cache` / `cached_parent_id`，**不适合**当只读查询面。⇒ 正确的接法：**在
+`registry.rs` 里把 `registry_body` 现在"推导面再渲染"的那一步拆出一个只读的中间层**
+（`fn faces_of(member) -> Result<Vec<FaceRow>, String>`，`FaceRow { parent, node, module, kind,
+exports, handle_traits, parts, part_traits }`），让 `registry_body` 与未来的 `consistency`/`conformance`
+**共用同一份推导**；`--parent` 的同族集合就是这张表按 `parent` 分组（同族 = 同一 parent 下的面）。
+**这一步只重构、不改答案**：先钉住"`registry` 的输出逐字节不变"，再加 `consistency`（钉子+答案键按 §7）。
+
 **每项的验证列（统一模板）**：改前/改后两个二进制在同一批树上跑 ⇒ 给**仪器调用数 / 步数 / 回复字符**
 三列 + 既有答案键仍 PASS（判据信息一条不丢）。**不跑对照臂。**
 
