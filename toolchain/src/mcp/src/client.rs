@@ -287,6 +287,14 @@ pub fn run_client(arguments: &[String]) -> Client {
     if arguments.is_empty() {
         return Client::Serve;
     }
+    // W1.7: `--log <file>` appends one JSON line per call — `{"request":[…],"response":"…","exit":N}`
+    // — so a measured run needs no wrapper script around every call. The round paid one extra step
+    // per instrument call for exactly that wrapper.
+    // W1.7：`--log <文件>` 每次调用追一行 JSON —— `{"request":[…],"response":"…","exit":N}` —— 因此
+    // 一次被测量的运行不必为每次调用套一个包装脚本。那一轮正是为这个包装每次仪器调用多花一步。
+    let (log, arguments) = split_log(arguments);
+    let arguments = arguments.as_slice();
+    let request: Vec<&str> = arguments.iter().map(String::as_str).collect();
     match arguments[0].as_str() {
         // `--list <tool>` prints one tool's **whole** description: the one-line list is for choosing
         // a tool, and this form is for calling it without guessing the shape the list truncates.
@@ -319,34 +327,68 @@ pub fn run_client(arguments: &[String]) -> Client {
         // 裸工具名就是一次调用：`nichlink-mcp callgraph --function x` 是命令行的读法，而此前必须先写
         // `--call` 让那一轮白吃了一次拒绝。
         other if other.starts_with("nichlink.") || !other.starts_with('-') => {
-            match call_from_arguments(arguments) {
-                Ok(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
-                Err(Refusal::Tool(text)) => {
-                    eprintln!("{text}");
-                    Client::Called(1)
-                }
-                Err(Refusal::Usage(text)) => {
-                    eprintln!("{text}");
-                    Client::Called(2)
-                }
-            }
+            answered(&log, &request, call_from_arguments(arguments))
         }
-        "--call" => match call_from_arguments(&arguments[1..]) {
-            Ok(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
-            Err(Refusal::Tool(text)) => {
-                eprintln!("{text}");
-                Client::Called(1)
-            }
-            Err(Refusal::Usage(text)) => {
-                eprintln!("{text}");
-                Client::Called(2)
-            }
-        },
+        "--call" => answered(&log, &request, call_from_arguments(&arguments[1..])),
         other => {
             eprintln!("unknown argument `{other}`\n\n{USAGE}");
             Client::Called(2)
         }
     }
+}
+
+/// Emit one call's answer, and write the log line when the caller asked for one.
+/// 输出一次调用的答案；调用方要了日志就写一行。
+fn answered(
+    log: &Option<std::path::PathBuf>,
+    request: &[&str],
+    outcome: Result<String, Refusal>,
+) -> Client {
+    let (text, code) = match outcome {
+        Ok(text) => (text, 0),
+        Err(Refusal::Tool(text)) => (text, 1),
+        Err(Refusal::Usage(text)) => (text, 2),
+    };
+    if let Some(path) = log {
+        let line = serde_json::json!({
+            "request": request,
+            "response": text,
+            "exit": code,
+        });
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "{line}");
+        }
+    }
+    match code {
+        0 => Client::Called(emit_or_stop(&text).unwrap_or(0)),
+        _ => {
+            eprintln!("{text}");
+            Client::Called(code)
+        }
+    }
+}
+
+/// Pull `--log <file>` out of the arguments; the rest is parsed as before.
+/// 把 `--log <文件>` 从实参里摘出来；其余照旧解析。
+fn split_log(arguments: &[String]) -> (Option<std::path::PathBuf>, Vec<String>) {
+    let mut log = None;
+    let mut rest = Vec::with_capacity(arguments.len());
+    let mut at = 0;
+    while at < arguments.len() {
+        if arguments[at] == "--log" && at + 1 < arguments.len() {
+            log = Some(std::path::PathBuf::from(&arguments[at + 1]));
+            at += 2;
+            continue;
+        }
+        rest.push(arguments[at].clone());
+        at += 1;
+    }
+    (log, rest)
 }
 
 /// The first argument that names a catalogue tool, and where it sat.

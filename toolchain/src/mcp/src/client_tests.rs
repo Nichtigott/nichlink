@@ -354,3 +354,52 @@ fn a_bare_flag_means_true() {
     let _ = std::fs::remove_dir_all(&temp);
     let _ = &root;
 }
+
+/// `--log <file>` records one JSON line per call — `{request, response, exit}` — so a measured run
+/// needs no wrapper script around every call (the round paid one extra step per instrument call for
+/// exactly that wrapper).
+/// `--log <文件>` 每次调用记一行 JSON —— `{request, response, exit}` —— 因此被测量的运行不必为每次
+/// 调用套包装脚本（那一轮正是为这个包装，每次仪器调用多花一步）。
+#[test]
+fn a_log_flag_records_one_line_that_mirrors_the_call() {
+    let temp = std::env::temp_dir().join(format!("mcp-log-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp);
+    std::fs::create_dir_all(&temp).expect("temp directory");
+    let log = temp.join("calls.jsonl");
+
+    let args: Vec<String> = [
+        "--call",
+        "callgraph",
+        "--root",
+        temp.to_str().expect("path"),
+        "--log",
+        log.to_str().expect("path"),
+    ]
+    .iter()
+    .map(|part| (*part).to_owned())
+    .collect();
+    let code = match run_client(&args) {
+        Client::Called(code) => code,
+        Client::Serve => panic!("--call is a call"),
+    };
+
+    let text = std::fs::read_to_string(&log).expect("the log file exists");
+    assert_eq!(text.lines().count(), 1, "one line per call: {text}");
+    let line: serde_json::Value =
+        serde_json::from_str(text.lines().next().expect("a line")).expect("the line is JSON");
+    assert_eq!(line["exit"].as_i64(), Some(code.into()), "{line}");
+    assert!(
+        line["request"]
+            .as_array()
+            .is_some_and(|request| request.len() >= 4),
+        "the request is the argv: {line}"
+    );
+    assert!(
+        line["response"]
+            .as_str()
+            .is_some_and(|body| !body.is_empty()),
+        "the response is the answer body: {line}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp);
+}
