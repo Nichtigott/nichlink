@@ -465,3 +465,44 @@ pub(crate) fn scratch_package(label: &str) -> std::path::PathBuf {
     .expect("fixture source");
     root
 }
+
+/// Every read answer ends by naming the next call — **once**, and on its own line.
+/// 每个读答案末尾点名下一次调用 —— **只点一次**，而且自占一行。
+///
+/// The measured failure this guards: the hint was appended without a separator, so it arrived glued
+/// to the last line (`…default runnext   registry …`) and a reader that greps for a line starting
+/// with `next` saw none.
+/// 它守的实测失败：提示追加时没加分隔，于是粘在答案最后一行上（`…default runnext   registry …`），
+/// 按"行首是 `next`"去 grep 的读者一条也看不到。
+#[test]
+fn a_read_answer_names_the_next_call_exactly_once() {
+    let plain = super::with_next_hint("nichlink.callgraph", "callers (0): -\n".to_owned());
+    assert_eq!(plain.matches("\nnext").count(), 1, "{plain}");
+    assert!(plain.ends_with("what depends on it\n"), "{plain}");
+
+    // An answer that already names one (search, check, adopted) is left alone.
+    // 已经点名过的答案（search / check / adopted）不动。
+    let already = "no matches in /root\nnext   pass `literal` for text\n".to_owned();
+    assert_eq!(
+        super::with_next_hint("nichlink.callgraph", already.clone()),
+        already
+    );
+
+    // A tool with no hint is left alone.
+    // 没有提示的工具不动。
+    assert_eq!(
+        super::with_next_hint("nichlink.apply", "ok\n".to_owned()),
+        "ok\n"
+    );
+
+    for name in [
+        "nichlink.status",
+        "nichlink.registry",
+        "nichlink.explain",
+        "nichlink.callgraph",
+        "nichlink.inspect",
+        "nichlink.affected",
+    ] {
+        assert!(super::next_hint(name).is_some(), "{name} needs a hint");
+    }
+}

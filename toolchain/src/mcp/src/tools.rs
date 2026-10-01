@@ -663,10 +663,56 @@ fn explain_tool(root: &Path, arguments: &Value) -> Result<String, String> {
 /// stdio 桥与一次性客户端都从这里进，因此同一个工具不会因为"谁问的"而答出两种样子。
 pub(crate) fn run_tool(root: &Path, name: &str, arguments: &Value) -> Result<String, String> {
     crate::mcp::freshness::set_policy(crate::mcp::freshness::policy_from(arguments));
-    match DISPATCH.iter().find(|(listed, _)| *listed == name) {
+    let answer = match DISPATCH.iter().find(|(listed, _)| *listed == name) {
         Some((_, handler)) => crate::mcp::ownership::dispatch(root, name, arguments, *handler),
         None => Err(format!("unknown tool `{name}`")),
+    };
+    // W1.3: every read answer ends by naming the next call. The rounds measured that a separate
+    // `--list` lookup is never made (0 calls in two rounds) while a next step written into the
+    // answer is taken, so the hint rides here — the single place a name becomes a handler.
+    // W1.3：每个读答案末尾点名"下一次调用"。两轮实测 `--list` 都是 0 次调用，而写进答案的下一步会被
+    // 照做，因此这句话挂在这里 —— 名字变成处理函数的唯一位置。
+    answer.map(|text| with_next_hint(name, text))
+}
+
+/// Append the next-call hint, unless the answer already names one.
+/// 追加"下一次调用"的提示，除非答案里已经点名了一次。
+fn with_next_hint(name: &str, text: String) -> String {
+    match next_hint(name) {
+        Some(hint) if !text.lines().any(|line| line.starts_with("next")) => {
+            if text.ends_with('\n') {
+                format!("{text}{hint}")
+            } else {
+                format!("{text}\n{hint}")
+            }
+        }
+        _ => text,
     }
+}
+
+/// The next call a read tool's answer should name, when it has one.
+/// 一个读工具的答案应当点名的那次调用；没有就什么都不加。
+fn next_hint(name: &str) -> Option<&'static str> {
+    let hint = match name {
+        "nichlink.status" => "next   `registry` lists the tree, `check {face}` runs one face\n",
+        "nichlink.registry" => {
+            "next   `explain {node}` for one face's contract, `check {face}` for whether it builds\n"
+        }
+        "nichlink.explain" => {
+            "next   `callgraph {function}` for its callers and callees, `read {path, line}` for the body\n"
+        }
+        "nichlink.callgraph" => {
+            "next   `read {path, line}` for a body, `affected {files}` for what depends on it\n"
+        }
+        "nichlink.inspect" => {
+            "next   `callgraph {function}` for its callers, `read {path, line}` for the body\n"
+        }
+        "nichlink.affected" => {
+            "next   `check {face}` to run the tests this change touches, `read {path, line}` for a line\n"
+        }
+        _ => return None,
+    };
+    Some(hint)
 }
 
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
