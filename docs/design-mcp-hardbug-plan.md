@@ -179,7 +179,18 @@
   这也是唯一一处**必须新增解析管线**的地方（W1–W3/W6 都只用现有事实）。**先做这件事，再做 W4/W5**；
   接线时守住"一条规则一份实现"：成员与字段都取自既有的发现/索引，不另写一套推导。
 
-**第二轮回读（同日晚些，把落点收窄到函数级）**：结构化数据就在 `registry_body(&member, &arguments)`
+**第三轮回读（同日，把 W4 v1 的范围钉死）**：`FaceView`（`render_registry` 迭代的那个类型）只带
+`path` / `kind` / `source` / `id` / `parent_resolved` —— **没有** `exports`/`handle_traits`/`parts` 这些
+声明字段（它们在**构建期**的 `FaceSyntax::field` 上，`discovery_cache` 里的 `contract\t<name>\t<value>`
+就是它们的缓存）。⇒ **W4 v1 不要卡在声明字段上**：
+- 信号默认取 **`api`**：同族每个面**它自己文件里调用的名字族**（由既有 `direct_calls` 归纳，例如
+  `*_world` 与 `*_local` 两族）——这正是维护者说的"供应链驳杂"（button 用相对坐标、slider/timeline 用
+  世界坐标）那条；`--by kind|path|source` 三个便宜信号直接来自 `FaceView`；
+- 面的来源只覆盖 **`Tree::Derived { faces, .. }`**（开发树的正路）；`Tree::Published` 那一支
+  **明说"这一支的字段要另读记录/缓存"** 并指向 `registry`/`adopted`，不填默认值；
+- 声明字段（`parts`/`exports`/`handle_traits`）留给 **W5 `conformance`** 从台账标本那一侧推导
+  （标本的字段在**它的源文件**里，可以用同一条内核语法/文本路径读），不要为此先造第二套解析。
+  ⇒ 这样 W4 **不需要**先重构 `registry_body`；第二轮回读里那条"拆 `face_rows`"仍是 W5 的前置。**第二轮回读（同日晚些，把落点收窄到函数级）**：结构化数据就在 `registry_body(&member, &arguments)`
 （`toolchain/src/mcp/src/registry.rs:141`）**内部推导出来的那批面**身上——`build_time` 的
 `discovery_cache.rs` 只是**缓存**（`FaceSyntax` 的字段读法见它第 157 行：对
 `["parts","exports","handle_traits","part_traits"]` 逐个 `face.field(name)`），入口是
