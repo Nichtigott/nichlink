@@ -14,6 +14,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::mcp::callgraph::is_call_to;
 use crate::mcp::source_index::{SourceFile, display_list, load_sources};
 use crate::mcp::truncation::withheld;
 
@@ -88,12 +89,18 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
             .iter()
             .filter(|candidate| is_test_file(candidate))
             .filter(|candidate| {
+                // Whether a call names one of this file's definitions is `callgraph::is_call_to`'s
+                // business and nobody else's: the rule has one implementation, in the module that
+                // owns the call graph, and this tool, `orphans` and the census's test-reachability
+                // column all go through it.
+                // 一次调用是否点名了本文件里的某个定义，是 `callgraph::is_call_to` 的事、不是别人的：这条
+                // 规则只有一份实现，住在拥有调用图的那个模块里，而本工具、`orphans` 与总账的测试可达性栏
+                // 都经过它。
                 candidate.functions.iter().any(|caller| {
-                    caller.calls.iter().any(|call| {
-                        names
-                            .iter()
-                            .any(|name| call == name || call.ends_with(&format!("::{name}")))
-                    })
+                    caller
+                        .calls
+                        .iter()
+                        .any(|call| names.iter().any(|name| is_call_to(call, name)))
                 })
             })
             .map(|candidate| format!("{label_prefix}{}", candidate.relative))
@@ -124,11 +131,10 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
                     .unwrap_or_else(|_| member.name.clone());
                 for candidate in other.iter().filter(|candidate| is_test_file(candidate)) {
                     let reaches = candidate.functions.iter().any(|caller| {
-                        caller.calls.iter().any(|call| {
-                            names
-                                .iter()
-                                .any(|name| call == name || call.ends_with(&format!("::{name}")))
-                        })
+                        caller
+                            .calls
+                            .iter()
+                            .any(|call| names.iter().any(|name| is_call_to(call, name)))
                     });
                     if reaches {
                         tests.push(format!("{label}/{}", candidate.relative));

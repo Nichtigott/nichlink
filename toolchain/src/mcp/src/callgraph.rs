@@ -39,6 +39,25 @@ pub(crate) fn looks_like_a_test(label: &str, source: &str) -> bool {
     label.contains("/tests/") || label.ends_with("_tests.rs") || source.contains("#[test]")
 }
 
+/// Whether a call spelled `call` names a function spelled `name`: the **one** implementation of the
+/// rule the orphan view and the census's test-reachability column both read.
+/// 拼作 `call` 的这次调用是否点名了名字为 `name` 的函数：孤儿视图与总账的测试可达性栏共读的那条规则的
+/// **唯一**一份实现。
+///
+/// The rule is: the call *is* the name, or it ends with `::` followed by the name. Both spellings
+/// occur in this index — `direct_calls` records the bare last identifier before a `(`, while other
+/// readers hand over qualified paths — and the two views have to agree on which of them counts. A
+/// rule spelled twice is a rule that drifts, so it is spelled once, here, and both views call it.
+/// 规则是：调用**就是**该名字，或它以 `::` 加该名字结尾。两种拼法都出现在本索引里——`direct_calls`
+/// 记录 `(` 前最后一个裸标识符，而别的读取方会交来限定路径——而两个视图必须对"哪种算数"一致。拼两遍的
+/// 规则就是会漂移的规则，因此它只在这里拼一遍，两个视图都调它。
+pub(crate) fn is_call_to(call: &str, name: &str) -> bool {
+    call == name
+        || call
+            .strip_suffix(name)
+            .is_some_and(|prefix| prefix.ends_with("::"))
+}
+
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     // Two bounds, because this answer is the one that grows without limit: the
     // measurement in the module doc above is the failure they exist against.
@@ -418,10 +437,7 @@ fn orphan_answer(root: &Path, arguments: &Value) -> Result<String, String> {
             if function.name == "main" {
                 continue;
             }
-            let suffix = format!("::{}", function.name);
-            let reached = called
-                .iter()
-                .any(|call| *call == function.name || call.ends_with(&suffix));
+            let reached = called.iter().any(|call| is_call_to(call, &function.name));
             match (reached, is_test) {
                 (true, _) => {}
                 (false, true) => test_only += 1,

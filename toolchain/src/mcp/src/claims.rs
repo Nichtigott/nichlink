@@ -18,7 +18,7 @@
 //! 这里的每一行都是**关于这棵树的静态事实**，不是对代码的裁定，而且这一节末尾会说明它**不覆盖**什么
 // ——一份自称完备的总账，就是这个仓库一直在删的那种假绿。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 
 const SAMPLE: usize = 5;
@@ -26,15 +26,16 @@ const SAMPLE: usize = 5;
 /// The most indexed functions the test-reachability walk answers for.
 /// 测试可达性遍历最多为多少个已索引函数作答。
 ///
-/// The walk is one linear pass over this tree's functions and their call lists, so this is not a
-/// timer: it is where the census stops claiming to answer at all, because a tree larger than this
-/// has never been measured against that column. 10,000 is an order of magnitude above a
-/// single-package root and comfortably above this checkout's own tree (a few thousand indexed
-/// functions); past it the column prints the skip with its own count instead of walking a tree it
-/// was never sized for.
-/// 这次遍历是对本树函数与调用清单的一趟线性扫描，因此这不是计时器：它是**总账停止自称作答**的那一点，
-/// 因为比这更大的树从未对着那一栏量过。10,000 比单包根高一个数量级、也比本检出自己的树（几千个已索引
-/// 函数）宽裕得多；超过它时那一栏打印带自身计数的跳过说明，而不是去走一棵从未按它定过尺寸的树。
+/// The walk tests each call name it reaches against this tree's functions through the one shared
+/// `is_call_to` predicate, so this is not a timer: it is where the census stops claiming to answer
+/// at all, because a tree larger than this has never been measured against that column. 10,000 is
+/// an order of magnitude above a single-package root and comfortably above this checkout's own tree
+/// (a few thousand indexed functions); past it the column prints the skip with its own count
+/// instead of walking a tree it was never sized for.
+/// 这次遍历把它到达的每个调用名通过那条共享的 `is_call_to` 判据与本树的函数比对，因此这不是计时器：
+/// 它是**总账停止自称作答**的那一点，因为比这更大的树从未对着那一栏量过。10,000 比单包根高一个数量级、
+/// 也比本检出自己的树（几千个已索引函数）宽裕得多；超过它时那一栏打印带自身计数的跳过说明，而不是去走
+/// 一棵从未按它定过尺寸的树。
 const REACHABILITY_BUDGET: usize = 10_000;
 
 /// What the test-reachability column does not cover.
@@ -227,11 +228,12 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
     // The fifth column: production functions **no test can reach**, by walking the call graph the
     // name view and the orphan view already walk. This is the behavioural half of the round-4
     // question and it is deliberately not the orphan question: "nothing calls it" and "no test can
-    // reach it" are two different facts about a function, so this column shares their rule for what
-    // a call is and shares nothing else with `orphans`.
+    // reach it" are two different facts about a function, so this column decides what a call names
+    // through the one shared `callgraph::is_call_to` and shares nothing else with `orphans`.
     // 第五栏：**没有任何测试能到达**的生产函数，沿名字视图与孤儿视图本来就在走的那张调用图走。这是第四轮
     // 那个问题的行为级那一半，而且它**有意**不是孤儿问题："没人调用它"与"没有测试能到达它"是关于同一个函数
-    // 的两件不同事实，因此这一栏与 `orphans` 共享"什么才算一次调用"这条规则，其余什么都不共享。
+    // 的两件不同事实，因此这一栏经**唯一**那份 `callgraph::is_call_to` 判定一次调用点名了什么，其余什么都不
+    // 与 `orphans` 共享。
     lines.extend(reachability_column(&sources));
     lines.push(
         "  not covered: named numeric constants, production `pub fn` names, and one static walk from \
@@ -250,12 +252,14 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
 /// Behavioural, and static: the walk starts at every function defined in a file the bridge's own
 /// convenience rule calls a test file, follows the call lists the source index already extracted,
 /// and reports the functions left over. An edge is the same fact `orphans` reads — a name appearing
-/// in some function's call list — so dynamic dispatch, function pointers, FFI and macro-expanded
-/// calls are invisible here exactly as they are there, and the column says so rather than calling
-/// itself coverage.
+/// in some function's call list — and it is read through the same function, `callgraph::is_call_to`,
+/// so the two views cannot disagree about which call names which definition; dynamic dispatch,
+/// function pointers, FFI and macro-expanded calls are invisible here exactly as they are there, and
+/// the column says so rather than calling itself coverage.
 /// 行为级、且静态：遍历从**桥自己的便利规则**判为测试文件的文件里的每个函数出发，沿源码索引已经抽出的
-/// 调用清单走，把剩下的函数报出来。一条边的判据与 `orphans` 读的是同一个事实——一个名字出现在某个函数的
-/// 调用清单里——因此动态派发、函数指针、FFI 与宏展开出来的调用在这里与在那里一样不可见，而这一栏会把这点
+/// 调用清单走，把剩下的函数报出来。一条边与 `orphans` 读的是同一个事实——一个名字出现在某个函数的调用
+/// 清单里——而且经过**同一个函数** `callgraph::is_call_to` 来读，因此两个视图不可能对"哪次调用点名了哪个
+/// 定义"产生分歧；动态派发、函数指针、FFI 与宏展开出来的调用在这里与在那里一样不可见，而这一栏会把这点
 /// 说出来，而不是自称覆盖率。
 fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String> {
     let indexed = sources
@@ -285,10 +289,6 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
                 .map(move |function| (file, function, is_test))
         })
         .collect::<Vec<_>>();
-    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (at, (_, function, _)) in flat.iter().enumerate() {
-        by_name.entry(function.name.as_str()).or_default().push(at);
-    }
     // The seeds are the names of every function in a test file. Worklist rather than recursion:
     // the queue only grows when a call string is new, and there are finitely many of those, so the
     // walk terminates on a cyclic graph and cannot overflow the stack on a deep one.
@@ -303,8 +303,13 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
     }
     let mut visited = vec![false; flat.len()];
     while let Some(call) = queue.pop() {
-        for at in named_functions(&by_name, &call) {
-            if visited[at] {
+        // Which definitions this call names is `is_call_to`'s business and nobody else's: the rule
+        // has one implementation, in the module that owns the call graph, and both this column and
+        // the orphan view go through it.
+        // 这次调用点名了哪些定义是 `is_call_to` 的事、不是别人的：这条规则只有一份实现，住在拥有调用图的
+        // 那个模块里，而本栏与孤儿视图都经过它。
+        for (at, (_, function, _)) in flat.iter().enumerate() {
+            if visited[at] || !crate::mcp::callgraph::is_call_to(&call, &function.name) {
                 continue;
             }
             visited[at] = true;
@@ -354,28 +359,6 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
     }
     lines.push(REACHABILITY_BOUNDARY.to_owned());
     lines
-}
-
-/// Every function index a call names, by the orphan rule spelled as a lookup.
-/// 一个调用点名的每一个函数下标——把孤儿那条规则写成查表。
-///
-/// The orphan view decides that a name is called with `call == name || call.ends_with("::" + name)`.
-/// Every name satisfying that is a suffix of the call starting at an identifier boundary, and
-/// splitting the call at each `::` walks exactly those names, so this lookup and that predicate
-/// agree by construction instead of by a second convention.
-/// 孤儿视图用一个名字是否满足 `call == name || call.ends_with("::" + name)` 来判定它算不算被调用。满足
-/// 这条的每个名字都是该调用在标识符边界上的一个后缀，而把调用按每一处 `::` 切开恰好走遍这些名字，因此这次
-/// 查表与那条判据是**构造上**一致的，而不是靠第二套约定凑成一致。
-fn named_functions(by_name: &HashMap<&str, Vec<usize>>, call: &str) -> Vec<usize> {
-    let mut found = Vec::new();
-    let mut rest = Some(call);
-    while let Some(name) = rest {
-        if let Some(indices) = by_name.get(name) {
-            found.extend(indices.iter().copied());
-        }
-        rest = name.split_once("::").map(|(_, tail)| tail);
-    }
-    found
 }
 
 #[cfg(test)]

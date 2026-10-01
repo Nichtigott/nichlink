@@ -125,23 +125,6 @@ fn the_walk_lists_only_the_function_no_test_can_reach() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// The walk's matching is the orphan rule, not a second convention: a bare name and a qualified
-/// call reach the same definition, and a name the call does not end on does not.
-/// 这次遍历的匹配就是孤儿那条规则、不是第二套约定：裸名与限定调用到达同一个定义，而调用并不以其结尾的
-/// 名字则不行。
-#[test]
-fn a_call_reaches_a_definition_by_the_orphan_rule() {
-    let mut by_name: std::collections::HashMap<&str, Vec<usize>> = std::collections::HashMap::new();
-    by_name.insert("paint", vec![0]);
-    assert_eq!(super::named_functions(&by_name, "paint"), vec![0]);
-    assert_eq!(
-        super::named_functions(&by_name, "crate::control::paint"),
-        vec![0]
-    );
-    assert!(super::named_functions(&by_name, "repaint").is_empty());
-    assert!(super::named_functions(&by_name, "paint_brush").is_empty());
-}
-
 /// The other pin: the boundary sentence itself is in the answer, with every invisibility it has to
 /// admit, and the column never calls itself coverage.
 /// 另一条钉子：边界那句本身就在答案里，带着它必须承认的每一种不可见，而且这一栏从不自称覆盖率。

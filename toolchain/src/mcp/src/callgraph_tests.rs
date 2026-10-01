@@ -8,11 +8,11 @@
 //! 这些测试所针对的实测失败：常见名（`new`）在 NichUI 语料里有 142 个定义，而每个定义都列出该名字
 //! 在树里的每一个调用点，最终以 4.5 MB 的回复抵达。代理读不下的答案不算答案，因此两道上限都钉在这里。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use super::callgraph;
+use super::{callgraph, is_call_to};
 
 /// A throwaway source root: `definitions` files each declaring `fn new`, and one
 /// file holding `callers` functions that all call it.
@@ -200,4 +200,136 @@ fn the_orphan_view_names_what_nothing_calls() {
         "but the test half is counted and named: {answer}"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The rule "a call names a definition" is one rule: the bare name and the qualified path both
+/// count, and a name the call does not end on at a `::` boundary does not.
+/// "一次调用点名某个定义"是一条规则：裸名与限定路径都算，而调用并不在 `::` 边界上以其结尾的名字不算。
+#[test]
+fn a_call_names_a_definition_by_the_one_rule() {
+    assert!(is_call_to("paint", "paint"));
+    assert!(is_call_to("::paint", "paint"));
+    assert!(is_call_to("control::paint", "paint"));
+    assert!(is_call_to("crate::control::paint", "paint"));
+    assert!(!is_call_to("repaint", "paint"));
+    assert!(!is_call_to("paint_brush", "paint"));
+    assert!(!is_call_to("paint", "pain"));
+}
+
+/// One implementation, three consumers: `orphans`, the census's test-reachability column and
+/// `affected` all reach a definition through `is_call_to`, and none of them keeps a clause of its
+/// own.
+/// 一份实现、三个消费方：`orphans`、总账的测试可达性栏与 `affected` 都经 `is_call_to` 到达定义，谁也
+/// 不留自己的子句。
+///
+/// This is the pin behaviour tests cannot give. Two byte-identical clauses behave identically until
+/// one of them is edited, so a behaviour test stays green through exactly the change this refinement
+/// exists to prevent; only reading the sources sees the copy. The counts are taken over every
+/// shipping source file in this checkout and the body assertions are anchored to the three
+/// consumers, so a fourth spelling — in any file, or text elsewhere in these files — fails here.
+/// 这是行为测试给不出的钉子。两段逐字相同的子句在被改动之前行为一致，因此正是这次收敛要防的那种改动
+/// 会让行为测试保持绿色；只有读源码才看得见那份副本。计数取自本检出**每一个出厂源码文件**，函数体断言
+/// 锚定在三个消费方上，因此第四份拼写——不论出现在哪个文件、还是这些文件里别处的文本——都会在这里失败。
+#[test]
+fn every_view_reaches_a_definition_through_the_one_predicate() {
+    let sources = shipped_rust_sources();
+    let joined = sources
+        .iter()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        joined.matches("fn is_call_to(").count(),
+        1,
+        "the predicate is defined once, in the module that owns the call graph"
+    );
+    assert_eq!(
+        joined.matches("strip_suffix(name)").count(),
+        1,
+        "the rule's body is spelled exactly once in this checkout's shipping sources"
+    );
+    for (file, consumer) in [
+        ("toolchain/src/mcp/src/callgraph.rs", "fn orphan_answer"),
+        ("toolchain/src/mcp/src/claims.rs", "fn reachability_column"),
+        (
+            "toolchain/src/mcp/src/affected.rs",
+            "pub(crate) fn affected",
+        ),
+    ] {
+        let source = sources
+            .iter()
+            .find(|(path, _)| path == file)
+            .map(|(_, text)| text.as_str())
+            .unwrap_or_else(|| panic!("{file} is part of this checkout"));
+        let body = body_of(source, consumer);
+        assert!(
+            body.contains("is_call_to("),
+            "{file} does not reach a definition through the shared predicate: {body}"
+        );
+        assert!(
+            !body.contains("ends_with("),
+            "{file} must not keep its own matching clause: {body}"
+        );
+    }
+}
+
+/// Every shipping Rust file in this checkout, as `(path relative to the checkout root, text)`.
+/// 本检出里每一个出厂 Rust 文件，形如 `(相对检出根的路径, 文本)`。
+///
+/// Test files are left out on purpose: this rule is about the code that ships, and a test is
+/// allowed to quote it. Collecting the paths (rather than `include_str!`-ing a hand-kept list) is
+/// what makes the counts above cover the whole checkout instead of the files that happened to
+/// consume the predicate the day this pin was written.
+/// 有意排除测试文件：这条规则针对的是会出厂的代码，而测试允许引用它。收集路径（而不是把一份手工清单
+/// `include_str!` 进来）正是让上面的计数覆盖**整个检出**、而不是"写下这条钉子那天恰好用到该判据的那几个
+/// 文件"的原因。
+fn shipped_rust_sources() -> Vec<(String, String)> {
+    // The verb table spells a private recursive helper as `visit_` (D-5): `walk` is a bare verb,
+    // and `collect_` on a private function is the table's `visit_`.
+    // 动词表把私有的递归辅助函数拼作 `visit_`（D-5）：`walk` 是裸动词，而私有函数上的 `collect_` 正是
+    // 表里叫作 `visit_` 的那种东西。
+    fn visit_sources(root: &Path, directory: &Path, found: &mut Vec<(String, String)>) {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                visit_sources(root, &path, found);
+                continue;
+            }
+            let spelling = path.to_string_lossy();
+            let is_rust = path.extension().and_then(|ext| ext.to_str()) == Some("rs");
+            if !is_rust || spelling.ends_with("_tests.rs") || spelling.contains("/tests/") {
+                continue;
+            }
+            let relative = path
+                .strip_prefix(root)
+                .map(|relative| relative.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            found.push((relative, std::fs::read_to_string(&path).unwrap_or_default()));
+        }
+    }
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("this crate lives inside the checkout")
+        .to_path_buf();
+    let mut found = Vec::new();
+    for member in ["kernel", "toolchain", "macro", "conventions", "examples"] {
+        visit_sources(&checkout, &checkout.join(member).join("src"), &mut found);
+    }
+    found
+}
+
+/// The source of one top-level function: from the line that declares it to the closing brace at
+/// column zero, so a body assertion cannot be satisfied by text elsewhere in the file.
+/// 一个顶层函数的源码：从声明它的那一行到列零处的收尾花括号——这样函数体断言不会被文件里别处的文本
+/// 满足。
+fn body_of<'a>(source: &'a str, declaration: &str) -> &'a str {
+    let start = source
+        .find(declaration)
+        .expect("the declaration is in the file");
+    let rest = &source[start..];
+    let end = rest.find("\n}\n").map_or(rest.len(), |end| end + 2);
+    &rest[..end]
 }
