@@ -6,6 +6,7 @@
 //! 每条被修的条目一枚钉子，都经 crate 的公开面断言，因此钉子说的是消费方看到的东西，而不是某个
 //! 私有助手凑巧做了什么。
 
+#[cfg(feature = "syntax")]
 use std::collections::BTreeMap;
 
 #[cfg(feature = "syntax")]
