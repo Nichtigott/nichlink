@@ -50,7 +50,7 @@ fn source_line(line: &str) -> String {
 /// 两件可判定的事，都从两个标签读出来：调用者是不是测试文件（与 `looks_like_a_test` 同一套三种拼法），
 /// 以及它是否住在这个定义自己的目录之外。措辞说的是**目录**而不是"成员"：包名无法从路径推出来，而
 /// 猜一个正是这座桥拒绝编造的那类事实。
-fn caller_note(definition_label: &str, caller_label: &str) -> Option<String> {
+pub(crate) fn caller_note(definition_label: &str, caller_label: &str) -> Option<String> {
     let test = looks_like_a_test(caller_label, "");
     let caller_dir = caller_label.rsplit_once('/').map(|(dir, _)| dir);
     let outside =

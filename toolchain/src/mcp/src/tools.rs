@@ -95,6 +95,16 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
+            "nichlink.why",
+            "Gather the upstream facts one `path:line` depends on, in one call: the contract lines \
+             above its definition, who calls it (with the same test-file/outside-directory notes \
+             `callgraph` prints), and which adoption-ledger entries name that file. It also names \
+             what it does **not** answer — whether the definition is in the published tree and how \
+             its slot is wired, whether a feature gates it, and any runtime evidence — and which \
+             call answers each of those.",
+            json!({"type":"object","properties":{"at":{"type":"string","description":"a `path:line` inside this tree; a registration node is `explain`'s question"},"root":{"type":"string"}},"required":["at"]}),
+        ),
+        tool(
             "nichlink.locate",
             "Rank the places a symptom's own words point at, so a reader holding an assertion \
              message or an error does not have to guess a name first. The reply lists up to five \
@@ -618,6 +628,7 @@ type Handler = fn(&Path, &Value) -> Result<String, String>;
 const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.search", search),
     ("nichlink.locate", crate::mcp::locate::locate),
+    ("nichlink.why", crate::mcp::why::why),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),

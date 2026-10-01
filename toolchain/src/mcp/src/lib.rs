@@ -178,6 +178,9 @@ mod search;
 #[path = "locate.rs"]
 mod locate;
 
+#[path = "why.rs"]
+mod why;
+
 #[path = "tree_delta.rs"]
 mod tree_delta;
 
