@@ -38,6 +38,19 @@
    ⇒ H3 当时**没有一次调用的路径**。补齐后实测：`why --at src/control/object/dial/dial.rs:16` 一次给出
    `scope not-selected (mode=auto)` + `wiring no declared cut in …/src/lib.rs names root/control/dial`。
 
+### 校准记录（判据先被真答案校准过一次）
+
+W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个**文档违规，而不是一个：`signed` 的文档写着
+"A debit prints with a leading minus"，实现却在 `amount < 0` 时返回 `-self.amount` ⇒ 实测
+`signed(-5) = 5`。题面的第二条线索（"no test covers the branch that does it"）**只选中未注定的那一个**，
+于是真值选的和线索选的不是同一个缺陷。成员的处理比我的真值好：它两个都给了，并写明"哪条线索选中哪一个、
+如果判分器的真值算的是零金额那条规则，它的修法在下面、证据是 E6"。
+⇒ 已把 `signed` 的文档改成与实现一致（"always non-negative"）⇒ 一道题一个缺陷；这也说明**出题台的第一版
+把"文档与实现相反"当成了背景，而它本身就是一个可被发现的缺陷**。
+**本轮的处理**：frozen 树不动（两臂面对同一棵树，改动会让比较失效）；h4 在本轮按**两个读法并列**报分，
+并标为"该题在本轮不具鉴别力"。**同批记录的判分器弱点**：`root_cause_hit` 是"文件 + 机制词 + 某一处 ±3 行"
+的袋装规则，对一份把什么都提一遍的长答案会误判为命中 ⇒ 交给独立复核逐字段重算。
+
 ### 四类的实测红/绿（`build` 自己跑出来的原始数字）
 
 | 类 | 注入 | 红（命令 → 退出码） | 绿 |
