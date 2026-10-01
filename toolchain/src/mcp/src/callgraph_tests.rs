@@ -202,6 +202,33 @@ fn the_orphan_view_names_what_nothing_calls() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A caller's note says only what the two labels prove — that it is a test file, and that it sits
+/// outside the definition's own directory. It never names a package: a path cannot prove one.
+/// 调用者的注只说两个标签能证明的事 —— 它是测试文件、以及它在该定义自己的目录之外。它从不点名包名：
+/// 路径证明不了包名。
+#[test]
+fn a_caller_note_says_only_what_the_labels_prove() {
+    let definition = "crates/core/src/store.rs";
+
+    assert_eq!(
+        super::caller_note(definition, "crates/core/src/other.rs"),
+        None,
+        "same directory, not a test file: nothing worth saying"
+    );
+    assert_eq!(
+        super::caller_note(definition, "crates/report/tests/report.rs").as_deref(),
+        Some("a test file; outside this file's directory (crates/report/tests)")
+    );
+    assert_eq!(
+        super::caller_note(definition, "crates/report/src/query.rs").as_deref(),
+        Some("outside this file's directory (crates/report/src)")
+    );
+    assert_eq!(
+        super::caller_note(definition, "crates/core/tests/audit.rs").as_deref(),
+        Some("a test file; outside this file's directory (crates/core/tests)")
+    );
+}
+
 /// The rule "a call names a definition" is one rule: the bare name and the qualified path both
 /// count, and a name the call does not end on at a `::` boundary does not.
 /// "一次调用点名某个定义"是一条规则：裸名与限定路径都算，而调用并不在 `::` 边界上以其结尾的名字不算。

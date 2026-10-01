@@ -21,8 +21,36 @@ use serde_json::Value;
 use crate::mcp::source_index::{display_list, load_sources};
 use crate::mcp::truncation::withheld;
 
-/// Whether a labelled source looks like a test file, by this reader's own convenience rule.
-/// 一个已标注的源码看起来是不是测试文件，按这个读取方自己的便利规则判定。
+/// Where a caller sits, when saying it saves the reader a call.
+/// 调用者坐在哪里 —— 说出来能替读者省一次调用时才说。
+///
+/// Two decidable things, both read off the two labels: whether the caller is a test file (the same
+/// three spellings `looks_like_a_test` reads), and whether it lives outside the definition's own
+/// directory. The wording says **directory**, not "member": the package name is not derivable from a
+/// path, and a reply that guessed one would be the kind of fact this bridge refuses to invent.
+/// 两件可判定的事，都从两个标签读出来：调用者是不是测试文件（与 `looks_like_a_test` 同一套三种拼法），
+/// 以及它是否住在这个定义自己的目录之外。措辞说的是**目录**而不是"成员"：包名无法从路径推出来，而
+/// 猜一个正是这座桥拒绝编造的那类事实。
+fn caller_note(definition_label: &str, caller_label: &str) -> Option<String> {
+    let test = looks_like_a_test(caller_label, "");
+    let caller_dir = caller_label.rsplit_once('/').map(|(dir, _)| dir);
+    let outside =
+        caller_dir.is_some() && caller_dir != definition_label.rsplit_once('/').map(|(dir, _)| dir);
+    match (test, outside) {
+        (false, false) => None,
+        (true, false) => Some("a test file".to_owned()),
+        (false, true) => Some(format!(
+            "outside this file's directory ({})",
+            caller_dir.unwrap_or_default()
+        )),
+        (true, true) => Some(format!(
+            "a test file; outside this file's directory ({})",
+            caller_dir.unwrap_or_default()
+        )),
+    }
+}
+
+/// Whether a labelled source looks like a test file, by this reader's own convenience rule./// 一个已标注的源码看起来是不是测试文件，按这个读取方自己的便利规则判定。
 ///
 /// Not the conventions gate's rule and not a judgement about placement: the bridge answers from
 /// text and has to name the files a reader would run, so it reads the three spellings a test
@@ -164,10 +192,29 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         callers.dedup();
         let callers_total = callers.len();
         output.push_str(&format!("{label}:{} fn {}\n", function.line, function.name));
+        // Where each caller sits, when there is something to say. Measured in the seventh round:
+        // `callers (1): crates/report/tests/report.rs::store` left an agent to send one more `search`
+        // to work out that the caller is in another crate's test file.
+        // 每个调用者坐在哪里 —— 有话可说时才说。第七轮量到：`callers (1): crates/report/tests/report.rs::store`
+        // 让代理又发了一次 `search` 才弄清"调用者在另一个 crate 的测试文件里"。
+        let shown: Vec<String> = callers
+            .iter()
+            .take(CALLERS)
+            .map(|caller| {
+                let caller_label = caller
+                    .rsplit_once("::")
+                    .map(|(label, _)| label)
+                    .unwrap_or(caller.as_str());
+                match caller_note(label, caller_label) {
+                    Some(note) => format!("{caller} ({note})"),
+                    None => caller.clone(),
+                }
+            })
+            .collect();
         output.push_str(&format!(
             "  callers ({}): {}\n",
             callers_total,
-            display_list(&callers[..callers_total.min(CALLERS)])
+            display_list(&shown)
         ));
         if callers_total == 0
             && let Some(above) = crate::mcp::workspace::enclosing_workspace(root)
