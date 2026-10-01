@@ -102,3 +102,119 @@ fn a_ledger_entry_naming_the_file_is_read() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A package with one parent face and one child face whose function carries a `#[cfg]`.
+/// 一个包：一个父面，以及一个子面——它的函数带着一条 `#[cfg]`。
+///
+/// The layout is the one the derivation accepts (`<name>/<name>.rs`), so the face is real to every
+/// reader rather than only to this test.
+/// 布局是推导接受的那一种（`<name>/<name>.rs`），因此这个面对每个读者都是真的，而不只对本测试真。
+fn face_package(label: &str) -> std::path::PathBuf {
+    let root =
+        std::env::temp_dir().join(format!("nichlink-mcp-why-{label}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let write = |relative: &str, text: &str| {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dirs");
+        std::fs::write(path, text).expect("fixture file");
+    };
+    write(
+        "Cargo.toml",
+        &format!(
+            "[package]\nname = \"fixture-why-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+        ),
+    );
+    write("src/lib.rs", "//! fixture\npub mod control;\n");
+    write(
+        "src/control/control.rs",
+        "pub struct Control;\n\ncrate::root_object! {\n    kind: Control,\n    needs_registry: \
+         true,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+    );
+    write(
+        "src/control/object/button/button.rs",
+        "/// A gated paint.\n#[cfg(feature = \"fancy\")]\npub fn fancy_paint() -> i32 { 1 }\n\n\
+         pub struct Button;\n\ncrate::control_object! {\n    kind: Button,\n    exports: \
+         [\"control.render\"],\n    parent: crate::control::NODE_ID,\n}\n",
+    );
+    root
+}
+
+/// The plan half rides with the source facts: the gate, the build's scope, and the declared cut.
+/// 计划那一半随源码事实一起给出：门控、构建的作用域、以及已声明的切口。
+///
+/// This is the half the third hard-bug class turns on — a file present on disk but absent from the
+/// scope the entry declared is how a new face vanishes — and every line answers rather than staying
+/// silent, including the tree that was never built.
+/// 这正是第三类复杂 bug 依赖的那一半——盘上有、而入口声明的作用域里没有，正是一个新面消失的来路——而每
+/// 一行都作答而不是沉默，包括那棵从未构建过的树。
+#[test]
+fn the_plan_facts_ride_with_the_line() {
+    let root = face_package("plan");
+    let answer = super::why(
+        &root,
+        &json!({"at": "src/control/object/button/button.rs:3"}),
+    )
+    .expect("an answer");
+    assert!(
+        answer.contains(
+            "gate       #[cfg(feature = \"fancy\")] at \
+                         src/control/object/button/button.rs:2"
+        ),
+        "the attribute and its own line are named: {answer}"
+    );
+    assert!(
+        answer.contains("scope unknown (no source_scope.tsv; run `nichlink check`)")
+            && answer.contains("pruning unknown (no pruning_manifest.tsv"),
+        "an unbuilt tree is answered as unbuilt rather than as out-of-scope: {answer}"
+    );
+    assert!(
+        answer.contains("declares no graft cut"),
+        "an entry with no cut says so: {answer}"
+    );
+    assert!(
+        !answer.contains("whether this definition is in the published tree"),
+        "the boundary no longer disowns a fact this reply now answers: {answer}"
+    );
+    assert!(
+        answer.contains("not covered here") && answer.contains("next"),
+        "a boundary and a next call still ride along: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A definition with no attribute above it says so, rather than leaving the reader to guess.
+/// 上方没有任何属性的定义会说出来，而不是让读者去猜。
+#[test]
+fn an_ungated_definition_says_it_is_ungated() {
+    let root = face_package("ungated");
+    std::fs::write(
+        root.join("src/control/object/button/button.rs"),
+        "pub fn plain_paint() -> i32 { 1 }\n\npub struct Button;\n\ncrate::control_object! {\n    \
+         kind: Button,\n    parent: crate::control::NODE_ID,\n}\n",
+    )
+    .expect("fixture write");
+    let answer = super::why(
+        &root,
+        &json!({"at": "src/control/object/button/button.rs:1"}),
+    )
+    .expect("answer");
+    assert!(
+        answer.contains("no `#[cfg]` attribute sits directly above this definition"),
+        "the absence is stated with its own bound: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A file no face owns has no scope membership to report, and the reply says that instead of guessing.
+/// 没有面拥有的文件没有可报的作用域成员资格，而回复会说清这一点，而不是猜。
+#[test]
+fn a_file_no_face_owns_has_no_scope_membership() {
+    let root = scratch("why-no-face");
+    let answer = super::why(&root, &json!({"at": "src/lib.rs:3"})).expect("an answer");
+    assert!(
+        answer.contains("is not any registration face's own source")
+            && answer.contains("`check {face}`'s question"),
+        "the line names why it cannot answer and who can: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -139,10 +139,13 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.why",
             "Gather the upstream facts one `path:line` depends on, in one call: the contract lines \
              above its definition, who calls it (with the same test-file/outside-directory notes \
-             `callgraph` prints), and which adoption-ledger entries name that file. It also names \
-             what it does **not** answer — whether the definition is in the published tree and how \
-             its slot is wired, whether a feature gates it, and any runtime evidence — and which \
-             call answers each of those.",
+             `callgraph` prints), which adoption-ledger entries name that file, and the **plan half** \
+             — whether this file is one of the sources the build selected or one the entry's scope \
+             leaves out, whether a `#[cfg]` gates the definition, and which declared graft cut names \
+             the face that owns the file (with the entry and line). Those three read the same \
+             implementations `explain` and `grafts` read, so the answers cannot disagree. It also \
+             names what it does **not** answer — how a grafted subtree looks at runtime — and which \
+             call answers that.",
             json!({"type":"object","properties":{"at":{"type":"string","description":"a `path:line` inside this tree; a registration node is `explain`'s question"},"root":{"type":"string"}},"required":["at"]}),
         ),
         tool(
