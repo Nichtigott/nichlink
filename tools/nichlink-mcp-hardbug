@@ -1,0 +1,1231 @@
+#!/usr/bin/env python3
+"""The hard-bug bench: build one class of complex-cause bug, and score an answer against it.
+
+出题台：造一类"复杂原因"的 bug，并按构造出来的真值机械判分。
+
+Specification and the four recipes are `docs/design-hardbug-bench-spec.md`; the design seed is
+`target/hardbug/BRIEF.md`. This tool is **new and separate** rather than a fourth job inside the
+66 KB `nichlink-mcp-eval`: it reuses that generator's fixtures (the two example host crates are
+copied and repointed) and never edits it.
+
+本工具与 `nichlink-mcp-eval` 分开：规格与四类配方在 `docs/design-hardbug-bench-spec.md`，设计种子在
+`target/hardbug/BRIEF.md`；它复用那套出题器的夹具（复制并重指两个示例宿主 crate），不改那个脚本。
+
+Subcommands / 子命令:
+  plan                     print the four classes, their recipes and their truth shapes
+  plan --scoring           print the scoring rules verbatim, for an auditor
+  build <dir> <class>      derive a tree, inject, self-prove, write `.audit/truth.json`
+  score <tree> <answer>    score one answer against that truth, as JSON
+
+Nothing here judges with a model: the truth is constructed by `build`, and `score` compares text.
+这里没有"模型当裁判"：真值由 `build` 构造出来，`score` 只做文本比对。
+
+Why a class's tree is a copy of the example rather than a package written from scratch: the derived
+registration tree, the build-time scope and the graft plan are three mechanisms a hand-written
+fixture would have to re-earn. The example already earns them, so the bench copies it, repoints its
+two path dependencies at this checkout, drops the example's own assertions and generates its own
+children. That also means the bench refuses loudly if the example's shape changes.
+题树是示例的副本而不是从零写的包，理由：推导出的注册树、构建期作用域与 graft 计划是三套机制，手写夹具
+得把三样重新挣一遍。示例已经挣到了，因此出题台复制它、把两个路径依赖重指到本检出、丢掉示例自己的断言、
+再生成自己的子对象。这也意味着示例的形状一变，出题台会明确拒绝而不是猜。
+"""
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+TOOL = Path(__file__).resolve()
+CHECKOUT = TOOL.parent.parent
+TEMPLATE_HOST = CHECKOUT / "examples" / "control-button"
+TEMPLATE_GRAFT = CHECKOUT / "examples" / "control-button-graft"
+
+# The family a class is built on: eight siblings under one parent, plus a ninth the third class
+# prunes. Eight is the size the specification fixes — below it, `ls` plus reading each file finds the
+# outlier by brute force, and the question stops being about a sibling set.
+# 各类共用的同族：一个父级下的八个兄弟，外加第三个类剪掉的第九个。八是规格定下的规模——低于它，`ls`
+# 加逐个读文件就能暴力找到离群者，问题也就不再是关于同族集合的了。
+WIDGETS = ["button", "slider", "timeline", "gauge", "toggle", "spinner", "panel", "badge"]
+PRUNED = "dial"
+
+# Which sibling H1 pushes onto the other coordinate family, and which ones class H2 leaves without a
+# declaration. Both sit in the middle of the list on purpose: "the first file you read" is not allowed
+# to be the answer.
+# H1 把哪个兄弟推到另一族坐标系上、H2 让哪个兄弟缺一条声明。两者都有意落在列表中间："你读的第一个文件"
+# 不许是答案。
+H1_OUTLIER = "toggle"
+H2_UNDECLARED = "spinner"
+H2_LAPSED = "panel"
+
+LOCAL_BIAS = 7
+WORLD_BIAS = 31
+
+CLASSES = [
+    (
+        "h1-supply-chain",
+        "one sibling calls another family of names than its siblings (relative vs world space)",
+        "同族里有一个兄弟调用了另一族名字（相对坐标 vs 世界坐标）",
+        "outlier object + the family it calls",
+        "离群对象 + 它调用的那一族",
+        "consistency --parent root/control --by api",
+        "guess after reading every sibling; name the majority as the outlier",
+        "逐个读完再猜；把多数派当成离群",
+    ),
+    (
+        "h2-claim-unkept",
+        "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry",
+        "真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目",
+        "who lacks which declaration + which entry lapsed at which file",
+        "谁缺哪条声明 + 哪条采信在哪个文件失效",
+        "conformance --anchor <specimen> then consistency --specimen <specimen>",
+        "say only that the ledger has N entries; call `lapsed` a code fix (a person is needed)",
+        "只说台账有 N 条；把 lapsed 说成改代码（正解是需要人）",
+    ),
+    (
+        "h3-cross-file-chain",
+        "the entry plan omits the new face's cut, so the build-time scope prunes it",
+        "入口切口故意漏声明新面 ⇒ 构建期作用域把它剪掉",
+        "which declaration is missing (file + line) + the pruned face",
+        "缺哪条声明（文件 + 行）+ 被剪掉的面",
+        "why --at <symptom line>",
+        "look only for missing source; read `the file is there` as `it ships`",
+        "只在源码里找缺什么；把文件在当成会发布",
+    ),
+    (
+        "h4-one-file-many-algorithms",
+        "three algorithms in one file, exactly one branch inverted and exactly one branch uncovered",
+        "一个文件三套算法，恰有一支写反、恰有一支没被覆盖",
+        "which algorithm, which line, which contract line it contradicts",
+        "哪一套、哪一行、与哪句契约相反",
+        "digest --file <path> then read {path, line}",
+        "rewrite the file; change the test so the symptom disappears",
+        "重写整个文件；改测试让症状消失",
+    ),
+]
+
+USAGE = """nichlink-mcp-hardbug plan                        the four classes and their truth shapes
+nichlink-mcp-hardbug plan --scoring              the scoring rules, verbatim
+nichlink-mcp-hardbug build <dir> <class>         derive, inject, self-prove, write .audit/truth.json
+nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
+
+Specification: docs/design-hardbug-bench-spec.md
+规格见 docs/design-hardbug-bench-spec.md。
+
+The call log's line shape, because the scoring reads it rather than guessing:
+  {"tool": "nichlink.consistency", "arguments": {...}, "request_chars": 120,
+   "response_chars": 900, "exit": 0}
+每次调用的日志行形状（判分读它，不从 bash 文本里猜）：
+  {"tool": "nichlink.consistency", "arguments": {...}, "request_chars": 120,
+   "response_chars": 900, "exit": 0}
+"""
+
+SCORING_RULES = """\
+Scoring rules (mechanical; no model is a judge) / 判分规则（机械；不许模型当裁判）
+
+`.audit/truth.json` is written by `build` from the injection itself, never from an answer.
+  root_cause   {file, line, symbol, mechanism: [words]}   the injected site
+  declaration  {sibling, lacks, file}                     H2 only: who lacks which declaration
+  lapsed       {anchor, file}                             H2 only: the entry whose bytes moved
+  pruned       {face, entry, line, symptom}               H3 only: the face and the missing cut
+  contract     {file, line, text}                         H4 only: the doc line it contradicts
+  fix          {file, anchor, forbidden: [tokens]}         the documented fix and what it is not
+  red / green  {command, exit, evidence}                   the self-proof this build ran
+
+The answer is scored on:
+  root_cause_hit   truth.root_cause.file named, AND at least half of mechanism present, AND either a
+                   `<file>:N` with N within 3 lines of truth.line, or every mechanism word present
+  instrument_calls lines of the call log whose `tool` starts with `nichlink.` — null when no log,
+                   because counting from the answer's prose is guessing
+  steps            every line of the call log (instrument and shell alike) — null when no log
+  response_chars   the sum of `response_chars` over the log — null when no log
+  tokens_raw       (sum of request_chars + response_chars) / 3.5, and marked as an estimate
+  counter_proof    the answer carries at least one tool invocation anywhere on a line AND at least
+                   one explicit exit code (`exit N`, `exited N`, `rc=N`) — the evidence discipline
+                   the brief demands
+  minimal_fix      the answer names truth.fix.file AND contains truth.fix.anchor AND contains none
+                   of truth.fix.forbidden
+  shortcut_taken   the first of the class's must-refuse patterns the answer matches, or null
+"""
+
+# A command is a tool invocation anywhere on the line, not only at its start: answers write their
+# evidence as `evidence — $ nichlink-mcp …`, and a rule that only looked at column zero would score
+# every honestly cited command as absent.
+# 命令是行内任意位置的工具调用，不只在行首：答案把证据写成 `evidence — $ nichlink-mcp …`，而只看第 0 列的
+# 规则会把每一条如实引用的命令都判成没写。
+COMMAND_LINE = re.compile(
+    r"(?:^|[\s`$>])(?:cargo|nichlink|nichlink-mcp|rg|grep|git|ls|cat|diff|python3)\s+\S"
+)
+EXIT_CODE = re.compile(r"\b(?:exit|exited|rc)\s*[:=]?\s*(\d{1,3})\b")
+
+
+def run(command, cwd, check=True):
+    """Run one command, returning (exit, combined output)."""
+    done = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True)
+    output = done.stdout + done.stderr
+    if check and done.returncode != 0:
+        raise SystemExit(
+            f"`{' '.join(map(str, command))}` failed ({done.returncode}):\n{output[-4000:]}"
+        )
+    return done.returncode, output
+
+
+def write(path, text):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(text, encoding="utf-8")
+
+
+def host_face(name, kind, family):
+    """One sibling face: it implements the parent's handle and computes its offset in `family`."""
+    return f'''//! The {name} face.
+
+use crate::control::{{ControlFrame, ControlHandle, {family}}};
+
+pub struct {kind};
+
+impl ControlHandle for {kind} {{
+    /// Paint this widget onto the frame it was handed.
+    fn paint(&self) -> ControlFrame {{
+        ControlFrame
+    }}
+}}
+
+/// This widget's offset, in the coordinate family its siblings use.
+pub fn offset(x: i32) -> i32 {{
+    {family}(x)
+}}
+
+crate::control_object! {{
+    kind: {kind},
+    exports: ["control.render"],
+    parent: crate::control::NODE_ID,
+    handle_contracts: [crate::control::ControlHandle],
+}}
+'''
+
+
+def graft_face(name, kind):
+    """The out-of-project replacement for one sibling, declared with `external_object!`."""
+    return f'''//! The out-of-project replacement for `{kind}`.
+
+use nichlink_toolchain::runtime::registry_core::{{
+    ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
+}};
+
+pub struct {kind}Fast;
+
+nichlink_toolchain::runtime::external_object! {{
+    source: "{name}_fast/{name}_fast.rs",
+    kind: {kind}Fast,
+    preset: NoPreset,
+    parts: NoParts,
+    name: {{ zh: "快速{name}", en: "Fast {name}" }},
+    summary: {{ zh: "项目外实现", en: "Out-of-project implementation" }},
+    exports: ["control.render"],
+    needs_registry: false,
+    parent: root_node_id(env!("CARGO_PKG_NAME")),
+    getting_from_other_registry: None,
+    registry_rule_path: "{name}_fast/{name}_fast.rs",
+    registry_rule: RegistrationRule::ANY,
+    handle_traits: ["ControlHandle"],
+    requires: [],
+    provides: [],
+    flow: FlowContract::new(
+        ContractId::new("control.render.v1"),
+        1,
+        "ControlInput",
+        "ControlFrame",
+    ),
+    runtime_checks: [],
+}}
+'''
+
+
+def control_face():
+    """The parent face's file, which is also where the two coordinate families live.
+
+    They live here because the generated module tree mounts exactly the faces the build selected and
+    nothing else: a helper file of its own is never mounted, so a name defined outside a mounted file
+    cannot be called at all. Measured while building this bench.
+    两个坐标系函数住在父面自己的文件里，因为生成树只挂载构建选中的那些面：单独一个辅助文件永远不会被挂载，
+    因此定义在挂载文件之外的名字根本调不到。这是做出题台时量到的。
+    """
+    return (
+        "//! The control folder face, the two coordinate families its children may use, and the\n"
+        "//! handle every direct child implements.\n"
+        "\n"
+        "/// The local family: offsets are measured from the widget's own origin.\n"
+        f"pub fn to_local(x: i32) -> i32 {{ x + {LOCAL_BIAS} }}\n"
+        "\n"
+        "/// The world family: offsets are measured from the frame's origin.\n"
+        f"pub fn to_world(x: i32) -> i32 {{ x + {WORLD_BIAS} }}\n"
+        "\n"
+        "/// The frame a parent face hands to its children for painting.\n"
+        "pub struct ControlFrame;\n"
+        "\n"
+        "/// The interface every direct child must implement.\n"
+        "pub trait ControlHandle {\n"
+        "    fn paint(&self) -> ControlFrame;\n"
+        "}\n"
+        "\n"
+        "pub struct Control;\n"
+        "\n"
+        "crate::root_object! {\n"
+        "    kind: Control,\n"
+        "    needs_registry: true,\n"
+        '    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),\n'
+        "}\n"
+    )
+
+
+def graft_lib():
+    """The external crate's own registry, listing every replacement face."""
+    modules = "\n".join(f"pub mod {name}_fast;" for name in WIDGETS + [PRUNED])
+    listed = ",\n            ".join(f"{name}_fast::REGISTRATION" for name in WIDGETS + [PRUNED])
+    return f'''//! An out-of-project crate: it takes no part in the host's generated tree.
+//! 项目外 crate：它不参与宿主那棵生成树。
+
+use nichlink_toolchain::runtime::registry_core::{{FrameworkId, Registry}};
+
+/// Must match the host framework, or the overlay rejects this tree.
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+
+{modules}
+
+/// The external implementation's own registry.
+pub fn external_registry() -> Registry {{
+    let mut registry = Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"));
+    registry
+        .register_all(&[
+            {listed},
+        ])
+        .expect("external face registers");
+    registry
+}}
+'''
+
+
+def patch_entry(entry, declared):
+    """Replace the entry's graft plan with one cut per declared sibling, in WIDGETS order."""
+    text = entry.read_text(encoding="utf-8")
+    marker = "nichlink_toolchain::runtime::static_graft_plan!("
+    if marker not in text:
+        raise SystemExit(f"{entry} no longer declares a graft plan — the example's shape changed")
+    start = text.index(marker)
+    end = text.index("\n);", start) + len("\n);")
+    cuts = "\n".join(
+        f"    cut(crate::control::object::{name}::NODE_ID)\n"
+        f"        graft(control_button_graft::{name}_fast::NODE_ID),"
+        for name in declared
+    )
+    plan = f"{marker}\n    FRAMEWORK,\n{cuts}\n);"
+    return text[:start] + plan + text[end:]
+
+
+def checkout_tree(directory):
+    """Lay down the base: the example host and its graft crate, repointed and stripped.
+
+    The example's own `tests/` and `examples/` are dropped rather than kept: they assert a two-child
+    tree, and a bench tree whose shipped assertions are red before any injection is a tree nobody can
+    read a symptom from. What replaces them is written by each class.
+    丢掉示例自己的 `tests/` 与 `examples/`：它们断言的是两子级的树，而一棵"未注入就红"的题树没人能从中
+    读出症状。替代它们的东西由每个类自己写下。
+    """
+    directory = Path(directory)
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True)
+    host = directory / "host"
+    graft = directory / "graft"
+    shutil.copytree(
+        TEMPLATE_HOST, host, ignore=shutil.ignore_patterns("target", "tests", "examples")
+    )
+    shutil.copytree(TEMPLATE_GRAFT, graft, ignore=shutil.ignore_patterns("target"))
+    for manifest, replacements in [
+        (
+            host / "Cargo.toml",
+            {
+                'path = "../../toolchain"': f'path = "{CHECKOUT / "toolchain"}"',
+                'path = "../control-button-graft"': f'path = "{graft}"',
+            },
+        ),
+        (
+            graft / "Cargo.toml",
+            {'path = "../../toolchain"': f'path = "{CHECKOUT / "toolchain"}"'},
+        ),
+    ]:
+        text = manifest.read_text(encoding="utf-8")
+        for old, new in replacements.items():
+            if old not in text:
+                raise SystemExit(
+                    f"{manifest} no longer spells `{old}` — the example's shape changed, and this "
+                    "bench refuses to guess a new one"
+                )
+            text = text.replace(old, new)
+        manifest.write_text(text, encoding="utf-8")
+    return host, graft
+
+
+def write_widgets(host, graft, declared, family_overrides):
+    """Write every face: the parent (with both families), the children, and their replacements."""
+    write(host / "src/control/control.rs", control_face())
+    write(
+        host / "src/control/registry_rule/registry_rule.rs",
+        "//! The control parent's minimum structure for a direct child.\n"
+        "\n"
+        "use crate::RegistrationRule;\n"
+        "\n"
+        "pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()\n"
+        '    .require_exports(&["control.render"]);\n',
+    )
+    for name in WIDGETS + [PRUNED]:
+        kind = name.capitalize()
+        write(
+            host / f"src/control/object/{name}/{name}.rs",
+            host_face(name, kind, family_overrides.get(name, "to_local")),
+        )
+        write(graft / f"src/{name}_fast.rs", graft_face(name, kind))
+    write(graft / "src/lib.rs", graft_lib())
+    for stale in sorted((graft / "src").glob("*.rs")):
+        if stale.name != "lib.rs" and stale.name not in {
+            f"{name}_fast.rs" for name in WIDGETS + [PRUNED]
+        }:
+            stale.unlink()
+    # The example keeps a child roster file for some layouts; the generated tree discovers children
+    # from the folder layout, so a stale roster would be a second, disagreeing list.
+    # 示例里某些布局保留了子对象名册文件；生成树是按目录布局发现子对象的，因此残留的名册会变成第二份
+    # 会分歧的清单。
+    roster = host / "src/control/object/object.rs"
+    if roster.exists():
+        roster.unlink()
+    entry = host / "src/lib.rs"
+    entry.write_text(patch_entry(entry, declared), encoding="utf-8")
+
+
+def offsets_test(count):
+    """A rendering test whose number is right only when every sibling uses the local family.
+
+    The assertion deliberately carries the **total**, not the per-widget value: the symptom a
+    maintainer sees is a layout that is off, and naming the widget in the failing message would hand
+    over the half of the answer the sibling comparison exists to produce.
+    断言刻意只给**总量**，不给每个对象的值：维护者看到的症状是布局偏了，而在失败信息里点名那个对象，等于把
+    "同族比较"本该产出的那一半答案直接送出去。
+    """
+    calls = " +\n        ".join(
+        f"control_button::control::object::{name}::offset(10)" for name in WIDGETS
+    )
+    expected = count * (10 + LOCAL_BIAS)
+    return f'''//! The rendered layout: every sibling's offset, added up.
+//! 渲染出的布局：每个兄弟的偏移加总。
+
+/// The frame this tree renders when every widget places itself the way its siblings do.
+const EXPECTED_TOTAL: i32 = {expected};
+
+#[test]
+fn the_rendered_offsets_add_up() {{
+    let total =
+        {calls};
+    assert_eq!(
+        total, EXPECTED_TOTAL,
+        "the rendered offsets add up to {{total}}, not {{EXPECTED_TOTAL}}"
+    );
+}}
+'''
+
+
+def shipped_test(names):
+    """An integration test that the registry the host ships contains every declared widget."""
+    listed = ",\n        ".join(f'"{name}"' for name in names)
+    return f'''//! What this host actually ships: the tree the build scoped.
+//! 这个宿主真正发布的东西：构建划定作用域后的那棵树。
+
+#[test]
+fn every_declared_widget_ships() {{
+    let rows = control_button::outline();
+    let shipped = rows.join("\\n");
+    for name in [
+        {listed},
+    ] {{
+        assert!(
+            shipped.contains(&format!("/{{name}}  kind=")),
+            "`{{name}}` is declared and does not ship; the tree is:\\n{{shipped}}"
+        );
+    }}
+}}
+'''
+
+
+def fingerprint(root, files):
+    """The adoption ledger's fingerprint: the kernel's own algorithm, re-spelled here for the bench.
+
+    `path` + NUL + `len(contents)` + NUL + `contents` + NUL per file in path order, then SHA-256. The
+    bench has to write a fingerprint a *person* could have written, so it recomputes the algorithm
+    rather than copying a value out of the ledger it is about to write.
+    指纹算法：按路径序，逐文件拼 `path` + NUL + 长度 + NUL + 内容 + NUL，再 SHA-256。出题台要写的是
+    **人也能写出**的指纹，因此它重算这条算法，而不是从自己即将写下的台账里抄一个值。
+    """
+    digest = hashlib.sha256()
+    for relative in sorted(files):
+        data = (Path(root) / relative).read_bytes()
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(str(len(data)).encode())
+        digest.update(b"\0")
+        digest.update(data)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def ledger_line(root, anchor, certifies, files, reason, at="2026-10-01T10:00:00+08:00"):
+    """One ledger line, with the fingerprint computed from the bytes it names right now."""
+    return (
+        f"{anchor}|{certifies}|traced once|nich|{at}|{','.join(files)}|"
+        f"{fingerprint(root, files)}|{reason}\n"
+    )
+
+
+def first_lines(text, count=12):
+    """The evidence a `red`/`green` entry carries: the tail, where the compiler and the harness
+    actually say what happened."""
+    rows = [row for row in text.splitlines() if row.strip()]
+    return "\n".join(rows[-count:])
+
+
+def bridge_binary():
+    """This checkout's one-shot bridge, built if it is not there.
+
+    The bench drives the tool it is measuring rather than a copy of it: a tree scored against a
+    hand-rolled approximation would measure the approximation.
+    出题台驱动的是它要测的那个工具，而不是它的复制品：对着手搓的近似物判分，量到的是那个近似物。
+    """
+    binary = CHECKOUT / "target/debug/nichlink-mcp"
+    if not binary.exists():
+        run(
+            [
+                "cargo",
+                "build",
+                "-p",
+                "nichlink-toolchain",
+                "--offline",
+                "--features",
+                "mcp",
+                "--bin",
+                "nichlink-mcp",
+            ],
+            CHECKOUT,
+        )
+    return str(binary)
+
+
+def cli_binary():
+    """This checkout's CLI, which is what writes `target/nichlink/out` — the scope lines' evidence.
+
+    Every face class runs it: without those artifacts a tree that has a build-time scope answers
+    `scope unknown`, and the third class's decisive fact is exactly that scope. Building the trees
+    unbuilt would make the class unanswerable and the other two unrealistic.
+    每个面类都跑它：没有那些产物，一棵**有**构建期作用域的树会答 `scope unknown`，而第三个类的决定性事实
+    正是那个作用域。让题树停在未构建态，会让第三个类答不了、另两个类不真实。
+    """
+    binary = CHECKOUT / "target/debug/nichlink"
+    if not binary.exists():
+        run(
+            [
+                "cargo",
+                "build",
+                "-p",
+                "nichlink-toolchain",
+                "--offline",
+                "--features",
+                "cli",
+                "--bin",
+                "nichlink",
+            ],
+            CHECKOUT,
+        )
+    return str(binary)
+
+
+def scope_sources(host):
+    """The sources the build selected, read out of the manifest it wrote."""
+    manifest = host / "target/nichlink/out/source_scope.tsv"
+    if not manifest.exists():
+        raise SystemExit(f"the build wrote no scope at {manifest}")
+    rows = []
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        fields = line.split("\t")
+        if len(fields) >= 2:
+            rows.append(fields[1])
+    return rows
+
+
+def root_cause_for(klass, host):
+    """The injected site, read back out of the file the injection wrote."""
+    if klass == "h1-supply-chain":
+        relative = f"src/control/object/{H1_OUTLIER}/{H1_OUTLIER}.rs"
+        text = (host / relative).read_text(encoding="utf-8")
+        line = next(
+            index + 1 for index, row in enumerate(text.splitlines()) if "to_world(x)" in row
+        )
+        return {
+            "file": relative,
+            "line": line,
+            "symbol": "offset",
+            "mechanism": ["to_world", "world"],
+        }
+    if klass == "h2-claim-unkept":
+        relative = f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs"
+        text = (host / relative).read_text(encoding="utf-8")
+        line = next(
+            index + 1
+            for index, row in enumerate(text.splitlines())
+            if "parent: crate::control::NODE_ID" in row
+        )
+        return {
+            "file": relative,
+            "line": line,
+            "symbol": H2_UNDECLARED,
+            "mechanism": ["handle_contracts", "handle_traits"],
+        }
+    if klass == "h3-cross-file-chain":
+        return {
+            "file": "src/lib.rs",
+            "line": None,
+            "symbol": "static_graft_plan",
+            "mechanism": ["cut", PRUNED],
+        }
+    return {
+        "file": "src/model/entry.rs",
+        "line": None,
+        "symbol": "zero_arm",
+        "mechanism": ["ZeroArm::Post", "zero_arm"],
+    }
+
+
+def refusals_for(klass):
+    """The shortcuts each class must refuse, as patterns the scorer matches mechanically.
+
+    They are written as *claims* rather than as words: "the outlier is slider" is a refusal whatever
+    sentence carries it, and a scorer that looked for a phrase would reward the phrasing instead of
+    the claim.
+    这些捷径写成**断言**而不是词：无论哪句话承载"离群的是 slider"，它都是同一条捷径；而去找某个短语的判分
+    只会奖励措辞、不会奖励断言。
+    """
+    if klass == "h1-supply-chain":
+        return [
+            r"outlier\W{0,20}(button|slider|timeline|gauge|spinner|panel|badge)",
+            r"\b(I (guessed|assume)|probably|might be)\b",
+        ]
+    if klass == "h2-claim-unkept":
+        return [
+            r"ledger (has|holds|contains) \d+ entr",
+            r"lapsed\W{0,40}(fix|repair|rewrite|edit|change the code)",
+        ]
+    if klass == "h3-cross-file-chain":
+        return [
+            r"file (is )?(missing|not there|does not exist)",
+            r"\b(nothing to fix|no defect)\b",
+        ]
+    return [r"rewrite the file", r"change the test", r"delete the test"]
+
+
+def fix_for(klass, truth):
+    """The documented fix, and the edits it is not."""
+    if klass == "h1-supply-chain":
+        return {
+            "file": truth["root_cause"]["file"],
+            "anchor": "to_local",
+            "forbidden": ["rewrite the file", "change the test"],
+        }
+    if klass == "h2-claim-unkept":
+        return {
+            "file": truth["declaration"]["file"],
+            "anchor": "handle_contracts",
+            "forbidden": ["delete the ledger", "remove the entry"],
+        }
+    if klass == "h3-cross-file-chain":
+        return {
+            "file": "src/lib.rs",
+            "anchor": f"{PRUNED}_fast",
+            "forbidden": ["delete the face", "remove the file"],
+        }
+    return {
+        "file": "src/model/entry.rs",
+        "anchor": "ZeroArm::Refuse",
+        "forbidden": ["rewrite the file", "delete the test"],
+    }
+
+
+def prove(klass, host, truth):
+    """Run the red command, apply the documented fix, run the green command, restore the tree.
+
+    The proof is the bench's own, so it is run here and its raw numbers are stored rather than
+    described. The tree is restored to its injected state afterwards, because the answerer must meet
+    the defect and not the fix.
+    自证由出题台自己跑，原始数字被存下来而不是被描述。跑完把树还原成注入态，因为答题方要遇到的是缺陷、
+    不是修法。
+    """
+    if klass == "h2-claim-unkept":
+        # This class's red is the diagnosis the class is about, not a failing build: the tree compiles
+        # and its tests pass, and what holds the defect is the ledger. The two commands are the ones
+        # the answer's ideal path uses, read through this checkout's own bridge.
+        # 这一类的红是它要问的那个诊断，而不是一次失败的构建：树编得过、测试也过，病灶在台账里。两条命令
+        # 正是答案理想路径要用的那两次，经本检出自己的桥读出。
+        bridge = bridge_binary()
+        red_exit, red_out = run(
+            [bridge, "consistency", "--root", ".", "--specimen", truth["specimen"]],
+            host,
+            check=False,
+        )
+        green_exit, green_out = run(
+            [bridge, "conformance", "--root", ".", "--anchor", truth["lapsed"]["anchor"]],
+            host,
+            check=False,
+        )
+        return (
+            {
+                "command": f"nichlink-mcp consistency --root . --specimen {truth['specimen']}",
+                "exit": red_exit,
+                "evidence": first_lines(red_out),
+            },
+            {
+                "command": f"nichlink-mcp conformance --root . --anchor {truth['lapsed']['anchor']}",
+                "exit": green_exit,
+                "evidence": first_lines(green_out),
+            },
+        )
+
+    red_exit, red_out = run(["cargo", "test", "--offline", "--quiet"], host, check=False)
+    if red_exit == 0:
+        raise SystemExit(
+            "the injection is not red: `cargo test` passed on the injected tree, so this is a story "
+            "rather than a question"
+        )
+    fix = fix_for(klass, truth)
+    target = host / fix["file"]
+    original = target.read_text(encoding="utf-8")
+    if klass == "h1-supply-chain":
+        # Both halves of the drift, because they are one edit: the call and the import that names the
+        # family. Replacing only the call leaves a file that calls a name it does not import, which is
+        # a second defect rather than a fix.
+        # 漂移的两半，因为它们是**一处**改动：调用本身，以及点名那一族的导入。只换调用会留下一个"调了没
+        # 导入的名字"的文件，那是第二个缺陷而不是修法。
+        patched = original.replace("to_world", "to_local")
+    elif klass == "h3-cross-file-chain":
+        patched = patch_entry_text(
+            original,
+            WIDGETS + [PRUNED],
+        )
+    else:
+        raise SystemExit(f"no fix is implemented for {klass}")
+    target.write_text(patched, encoding="utf-8")
+    green_exit, green_out = run(["cargo", "test", "--offline", "--quiet"], host, check=False)
+    target.write_text(original, encoding="utf-8")
+    if green_exit != 0:
+        raise SystemExit(
+            f"the documented fix is not green: `cargo test` exited {green_exit} after applying it\n"
+            f"{green_out[-2000:]}"
+        )
+    # And the injected tree must be red again after the restore, or the proof above could have been
+    # about a tree that was never broken.
+    # 还原之后注入树必须重新变红，否则上面那次自证可能针对的是一棵根本没坏过的树。
+    again_exit, _ = run(["cargo", "test", "--offline", "--quiet"], host, check=False)
+    if again_exit == 0:
+        raise SystemExit("restoring the injection did not restore the red")
+    return (
+        {"command": "cargo test --offline", "exit": red_exit, "evidence": first_lines(red_out)},
+        {"command": "cargo test --offline", "exit": green_exit, "evidence": first_lines(green_out)},
+    )
+
+
+def patch_entry_text(text, declared):
+    """Replace the graft plan in a **string** the same way `patch_entry` does in a file."""
+    marker = "nichlink_toolchain::runtime::static_graft_plan!("
+    start = text.index(marker)
+    end = text.index("\n);", start) + len("\n);")
+    cuts = "\n".join(
+        f"    cut(crate::control::object::{name}::NODE_ID)\n"
+        f"        graft(control_button_graft::{name}_fast::NODE_ID),"
+        for name in declared
+    )
+    return text[:start] + f"{marker}\n    FRAMEWORK,\n{cuts}\n);" + text[end:]
+
+
+def brief(directory, klass, truth):
+    """The task text: the symptom and the deliverable, never the answer."""
+    recipe = next(entry for entry in CLASSES if entry[0] == klass)
+    fields = [
+        "`root cause` — the file and line you believe the defect is at",
+        "`mechanism`  — why that line produces the symptom, in your own words",
+        "`evidence`   — for every claim: the command you ran, its raw output, and its exit code",
+        "`counter-proof` — one thing you did that would have shown your diagnosis wrong",
+        "`fix`        — the smallest edit, and which files you did **not** touch",
+    ]
+    symptom = {
+        "h1-supply-chain": (
+            "The rendered layout is off. `cargo test --offline` fails in the offsets test with a "
+            "total that no single widget's own code explains, and every widget file reads as correct "
+            "on its own."
+        ),
+        "h2-claim-unkept": (
+            "A constraint this design adopted is not holding on a later sibling, and one ledger "
+            "entry no longer describes the bytes it names. The tree builds and its tests pass: the "
+            "question is what the ledger and the sibling shapes say, not what a test run says."
+        ),
+        "h3-cross-file-chain": (
+            "A widget that exists in the sources does not appear in the shipped registry tree. "
+            "`cargo test --offline` fails on the shipped-tree assertion."
+        ),
+        "h4-one-file-many-algorithms": (
+            "One algorithm in one file does the opposite of what its own documentation promises, "
+            "and no test covers the branch that does it. `cargo test --offline` is green."
+        ),
+    }[klass]
+    text = f"""# {klass}
+
+## Symptom
+
+{symptom}
+
+## Deliverable
+
+Answer with these five fields, each on its own line, and keep the labels:
+
+{chr(10).join(fields)}
+
+The tree is **read-only**: do not edit it, and do not change a test. Every claim needs the command
+you ran, its raw output and its exit code — "I verified it" is not evidence.
+
+## The class
+
+{recipe[1]}
+{recipe[2]}
+
+Diagnose the cause. Do not rewrite a file, and do not make a symptom disappear by changing a test.
+"""
+    write(Path(directory) / "BRIEF.md", text)
+
+
+def build_algorithms(directory, klass):
+    """The fourth class: a plain crate, three algorithms in one file, one branch inverted.
+
+    Plain on purpose. This class is about one file's own logic, so it needs no registration tree, no
+    build step and no scope — and a crate with no dependencies builds in seconds, which is what makes
+    the red/green self-proof cheap enough to run on every build. Its red is not a failing run either:
+    the recipe says the default face is green, so what must name the defect is the census's branch
+    column.
+    有意做成普通 crate：这一类说的是一个文件自己的逻辑，因此不需要注册树、构建步骤与作用域——而没有依赖
+    的 crate 几秒就能构建，这正是让红/绿自证便宜到每次 build 都跑得起的原因。它的红也不是"运行失败"：
+    配方说默认面是绿的，因此点名缺陷的必须是普查的分支栏。
+    """
+    directory = Path(directory)
+    if directory.exists():
+        shutil.rmtree(directory)
+    (directory / "src/model").mkdir(parents=True)
+    (directory / "tests").mkdir(parents=True)
+    write(
+        directory / "Cargo.toml",
+        '[package]\nname = "hardbug-algorithms"\nversion = "0.1.0"\nedition = "2024"\n',
+    )
+    write(
+        directory / "src/lib.rs",
+        '//! A ledger model.\n\n#[path = "model/model.rs"]\npub mod model;\n',
+    )
+    write(
+        directory / "src/model/model.rs",
+        '#[path = "entry.rs"]\npub mod entry;\n',
+    )
+    entry = (
+        "//! Entries.\n"
+        "\n"
+        "/// Which arm decides a zero amount.\n"
+        "#[derive(Clone, Copy, Debug, PartialEq, Eq)]\n"
+        "enum ZeroArm {\n"
+        "    /// A zero entry is posted like any other.\n"
+        "    Post,\n"
+        "    /// A zero entry is refused.\n"
+        "    Refuse,\n"
+        "}\n"
+        "\n"
+        "/// One entry: a signed amount against an account.\n"
+        "#[derive(Clone, Debug, PartialEq, Eq)]\n"
+        "pub struct Entry {\n"
+        "    /// The account this entry belongs to.\n"
+        "    pub account: String,\n"
+        "    /// The amount; negative is a debit.\n"
+        "    pub amount: i64,\n"
+        "    /// Whether the entry carries a receipt.\n"
+        "    pub has_receipt: bool,\n"
+        "}\n"
+        "\n"
+        "impl Entry {\n"
+        "    /// A new entry.\n"
+        "    pub fn new(account: &str, amount: i64, has_receipt: bool) -> Self {\n"
+        "        Self { account: account.to_owned(), amount, has_receipt }\n"
+        "    }\n"
+        "\n"
+        "    /// Which arm decides a zero amount.\n"
+        "    fn zero_arm(&self) -> ZeroArm {\n"
+        "        ZeroArm::Post\n"
+        "    }\n"
+        "\n"
+        "    /// Whether this entry may be posted at all.\n"
+        "    ///\n"
+        "    /// The rule the service leans on: an entry is postable when it carries a receipt, and a\n"
+        "    /// zero entry never is. Callers rely on the refusal, so this is a contract.\n"
+        "    pub fn postable(&self) -> bool {\n"
+        "        if !self.has_receipt {\n"
+        "            return false;\n"
+        "        }\n"
+        "        match self.zero_arm() {\n"
+        "            ZeroArm::Post => true,\n"
+        "            ZeroArm::Refuse => false,\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    /// The entry's signed magnitude, as the report prints it.\n"
+        "    ///\n"
+        "    /// A debit prints with a leading minus; a credit as it stands.\n"
+        "    pub fn signed(&self) -> i64 {\n"
+        "        if self.amount < 0 { -self.amount } else { self.amount }\n"
+        "    }\n"
+        "\n"
+        "    /// The account this entry is filed under, normalized.\n"
+        "    ///\n"
+        "    /// Accounts are case-insensitive and trimmed.\n"
+        "    pub fn normalized_account(&self) -> String {\n"
+        "        self.account.trim().to_lowercase()\n"
+        "    }\n"
+        "}\n"
+    )
+    write(directory / "src/model/entry.rs", entry)
+    write(
+        directory / "tests/postable.rs",
+        "use hardbug_algorithms::model::entry::Entry;\n"
+        "\n"
+        "#[test]\n"
+        "fn a_receipted_entry_posts() {\n"
+        '    assert!(Entry::new("a", 5, true).postable());\n'
+        "}\n"
+        "\n"
+        "#[test]\n"
+        "fn an_entry_without_a_receipt_does_not_post() {\n"
+        '    assert!(!Entry::new("a", 5, false).postable());\n'
+        "}\n",
+    )
+    exit_code, output = run(["cargo", "test", "--offline", "--quiet"], directory, check=False)
+    if exit_code != 0:
+        raise SystemExit(
+            "this class ships a green default face on purpose; a red one means the fixture moved:\n"
+            f"{output[-2000:]}"
+        )
+    zero_arm = next(
+        index + 1 for index, row in enumerate(entry.splitlines()) if "ZeroArm::Post\n" in row + "\n"
+    )
+    dead_arm = next(
+        index + 1 for index, row in enumerate(entry.splitlines()) if "ZeroArm::Refuse =>" in row
+    )
+    contract = next(
+        index + 1
+        for index, row in enumerate(entry.splitlines())
+        if "zero entry never is" in row
+    )
+    bridge = bridge_binary()
+    red_exit, red_out = run(
+        [bridge, "check", "--root", ".", "--face", "default", "--census"], directory, check=False
+    )
+    if "no construction of `ZeroArm::Refuse`" not in red_out:
+        raise SystemExit(
+            "the census's branch column does not name the dead arm, so this class has no red "
+            f"fingerprint at all:\n{red_out[-2000:]}"
+        )
+    truth = {
+        "class": klass,
+        "tree": str(directory),
+        "root_cause": {
+            "file": "src/model/entry.rs",
+            "line": zero_arm,
+            "symbol": "zero_arm",
+            "mechanism": ["ZeroArm::Post", "zero_arm"],
+        },
+        "contract": {
+            "file": "src/model/entry.rs",
+            "line": contract,
+            "text": "an entry is postable when it carries a receipt, and a zero entry never is",
+        },
+        "dead_arm": {
+            "enum": "ZeroArm",
+            "variant": "Refuse",
+            "file": "src/model/entry.rs",
+            "line": dead_arm,
+        },
+        "pruned": None,
+        "ledger": None,
+        "fix": fix_for(klass, {"root_cause": {"file": "src/model/entry.rs"}}),
+        "must_refuse": refusals_for(klass),
+        "red": {
+            "command": "nichlink-mcp check --root . --face default --census",
+            "exit": red_exit,
+            "evidence": "the default face is green by design; the red is the branch column, which "
+            "names the arm this contract forbids",
+        },
+        "green": {"command": "cargo test --offline", "exit": exit_code, "evidence": "green"},
+    }
+    write(directory / ".audit/truth.json", json.dumps(truth, indent=2, sort_keys=True) + "\n")
+    write(
+        directory / ".audit/README.md",
+        "The bench's own directory: the constructed truth. No task text points here.\n"
+        "出题台自己的目录：构造出的真值。题面不指向这里。\n",
+    )
+    brief(directory, klass, truth)
+    print(f"built {klass} at {directory}")
+    print(f"  default face green (exit {exit_code}); the census names ZeroArm::Refuse at line "
+          f"{dead_arm}")
+    return 0
+
+
+def build(directory, klass):
+    directory = Path(directory).resolve()
+    if klass not in {name for name, *_ in CLASSES}:
+        raise SystemExit(f"unknown class `{klass}`; `plan` names the four")
+    if klass == "h4-one-file-many-algorithms":
+        return build_algorithms(directory, klass)
+
+    declared = WIDGETS if klass != "h3-cross-file-chain" else WIDGETS
+    overrides = {H1_OUTLIER: "to_world"} if klass == "h1-supply-chain" else {}
+    host, graft = checkout_tree(directory)
+    write_widgets(host, graft, declared, overrides)
+
+    truth = {"class": klass, "tree": str(directory), "pruned": None, "contract": None,
+             "ledger": None}
+
+    if klass == "h3-cross-file-chain":
+        # The ninth face exists in both crates and in no cut: what fails to declare it is the entry.
+        # 第九个面在两个 crate 里都在、且不在任何切口里：没声明它的是入口。
+        entry = host / "src/lib.rs"
+        text = entry.read_text(encoding="utf-8")
+        line = text[: text.index("nichlink_toolchain::runtime::static_graft_plan!")].count("\n") + 1
+        write(host / "tests/shipped.rs", shipped_test(WIDGETS + [PRUNED]))
+        truth["pruned"] = {
+            "face": f"root/control/{PRUNED}",
+            "entry": "src/lib.rs",
+            "line": line,
+            "symptom": f"src/control/object/{PRUNED}/{PRUNED}.rs:9",
+        }
+    else:
+        write(host / "tests/offsets.rs", offsets_test(len(WIDGETS)))
+
+    if klass == "h2-claim-unkept":
+        # A real ledger: one specimen the siblings are compared against, and one lapsed entry whose
+        # fingerprint describes bytes that are no longer there.
+        # 真台账：一条供兄弟比对的标本，以及一条指纹描述着"已经不在了的字节"的失效条目。
+        specimen = "root/control/button"
+        specimen_files = ["src/control/object/button/button.rs"]
+        lapsed_files = [f"src/control/object/{H2_LAPSED}/{H2_LAPSED}.rs"]
+        lines = [
+            ledger_line(
+                host,
+                specimen,
+                "the reference sibling shape",
+                specimen_files,
+                "the shape every sibling follows",
+            )
+        ]
+        # The lapsed line is written against different bytes on purpose: a fingerprint that matches
+        # is `provisional`, and this class needs one that does not.
+        # 失效那条有意针对另一批字节写：指纹对得上就是 `provisional`，而这个类要的是一条对不上的。
+        stale = fingerprint(host, specimen_files)
+        lines.append(
+            f"root/control/{H2_LAPSED}|the panel's original contract|traced once|nich|"
+            f"2026-09-20T09:00:00+08:00|{','.join(lapsed_files)}|{stale}|"
+            "recorded before the panel was rewritten\n"
+        )
+        write(host / ".nichlink/adopted/entries", "".join(lines))
+        # The declaration this sibling is missing: `handle_contracts`, which every sibling states.
+        # 这个兄弟缺的那条声明：`handle_contracts`，每个兄弟都写了它。
+        face = host / f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs"
+        face.write_text(
+            face.read_text(encoding="utf-8").replace(
+                "    handle_contracts: [crate::control::ControlHandle],\n", ""
+            ),
+            encoding="utf-8",
+        )
+        truth["declaration"] = {
+            "sibling": f"root/control/{H2_UNDECLARED}",
+            "lacks": "handle_contracts",
+            "file": f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs",
+        }
+        truth["specimen"] = specimen
+        truth["lapsed"] = {"anchor": f"root/control/{H2_LAPSED}", "file": lapsed_files[0]}
+
+    run([cli_binary(), "check"], host, check=False)
+    selected = scope_sources(host)
+    truth["scope"] = {
+        "selected": len(selected),
+        "sources": selected,
+    }
+    if klass == "h3-cross-file-chain":
+        # The class's decisive fact, asserted at build time: the face exists in the sources and the
+        # build's own scope does not select it. If that ever stops being true the class is a story,
+        # so the build refuses rather than shipping it.
+        # 这个类的决定性事实在这里被构建期断言：那个面存在于源码里，而构建自己的作用域没有选中它。这件事
+        # 一旦不再成立，这个类就成了故事，因此构建直接拒绝而不是把它发出去。
+        if any(PRUNED in source for source in selected):
+            raise SystemExit(
+                f"the build selected `{PRUNED}`, so the entry does declare its cut and this class "
+                "has nothing to ask"
+            )
+    truth["root_cause"] = root_cause_for(klass, host)
+    truth["fix"] = fix_for(klass, truth)
+    truth["must_refuse"] = refusals_for(klass)
+    truth["red"], truth["green"] = prove(klass, host, truth)
+    write(
+        directory / ".audit/truth.json",
+        json.dumps(truth, indent=2, sort_keys=True) + "\n",
+    )
+    write(
+        directory / ".audit/README.md",
+        "This directory is the bench's own: the truth `build` constructed, and the self-proof it "
+        "ran. No task text points here.\n这个目录是出题台自己的：`build` 构造出的真值，以及它跑过的"
+        "自证。题面不指向这里。\n",
+    )
+    brief(directory, klass, truth)
+    print(f"built {klass} at {directory}")
+    print(f"  red    {truth['red']['command']} -> exit {truth['red']['exit']}")
+    print(f"  green  {truth['green']['command']} -> exit {truth['green']['exit']}")
+    return 0
+
+
+def score(tree, answer_path, log_path=None):
+    """Score one answer against the constructed truth, mechanically."""
+    directory = Path(tree).resolve()
+    truth = json.loads((directory / ".audit/truth.json").read_text(encoding="utf-8"))
+    answer = Path(answer_path).read_text(encoding="utf-8")
+    cause = truth["root_cause"]
+    mechanism = cause.get("mechanism") or []
+    present = [word for word in mechanism if word in answer]
+    file_named = cause["file"] in answer
+    if cause.get("line"):
+        line_hit = any(
+            abs(int(match.group(1)) - cause["line"]) <= 3
+            for match in re.finditer(re.escape(cause["file"]) + r":(\d+)", answer)
+        )
+    else:
+        line_hit = False
+    root_cause_hit = bool(
+        file_named
+        and len(present) * 2 >= max(len(mechanism), 1)
+        and (line_hit or (mechanism and len(present) == len(mechanism)))
+    )
+
+    calls = steps = response_chars = request_chars = None
+    if log_path is None:
+        candidate = directory / ".audit/calls.jsonl"
+        log_path = candidate if candidate.exists() else None
+    if log_path:
+        calls = steps = response_chars = request_chars = 0
+        for row in Path(log_path).read_text(encoding="utf-8").splitlines():
+            if not row.strip():
+                continue
+            record = json.loads(row)
+            steps += 1
+            response_chars += int(record.get("response_chars", 0))
+            request_chars += int(record.get("request_chars", 0))
+            if str(record.get("tool", "")).startswith("nichlink."):
+                calls += 1
+
+    fix = truth.get("fix") or {}
+    forbidden = [token for token in fix.get("forbidden", []) if token in answer]
+    minimal_fix = bool(
+        fix and fix.get("file") in answer and fix.get("anchor") in answer and not forbidden
+    )
+    shortcut = None
+    for pattern in truth.get("must_refuse", []):
+        if re.search(pattern, answer, re.IGNORECASE):
+            shortcut = pattern
+            break
+
+    result = {
+        "class": truth["class"],
+        "root_cause_hit": root_cause_hit,
+        "root_cause_file_named": file_named,
+        "mechanism_present": present,
+        "mechanism_expected": mechanism,
+        "line_within_3": line_hit,
+        "instrument_calls": calls,
+        "steps": steps,
+        "response_chars": response_chars,
+        "tokens_raw_estimate": (
+            None if request_chars is None else round((request_chars + response_chars) / 3.5, 1)
+        ),
+        "counter_proof": bool(
+            any(COMMAND_LINE.search(row) for row in answer.splitlines())
+            and EXIT_CODE.search(answer)
+        ),
+        "minimal_fix": minimal_fix,
+        "forbidden_present": forbidden,
+        "shortcut_taken": shortcut,
+        "notes": [],
+    }
+    if calls is None:
+        result["notes"].append(
+            "no call log: instrument calls and steps are null rather than guessed from the prose"
+        )
+    if truth.get("pruned"):
+        result["pruned_face_named"] = truth["pruned"]["face"] in answer
+    if truth.get("declaration"):
+        result["declaration_named"] = (
+            truth["declaration"]["lacks"] in answer
+            and truth["declaration"]["sibling"].rsplit("/", 1)[-1] in answer
+        )
+        result["lapsed_named"] = truth["lapsed"]["anchor"].rsplit("/", 1)[-1] in answer
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def plan(scoring=False):
+    if scoring:
+        print(SCORING_RULES, end="")
+        return 0
+    print("hard-bug bench — four classes (spec: docs/design-hardbug-bench-spec.md)")
+    for name, recipe_en, recipe_zh, truth_en, truth_zh, path, shortcut_en, shortcut_zh in CLASSES:
+        print(f"\n{name}")
+        print(f"  recipe     {recipe_en}")
+        print(f"              {recipe_zh}")
+        print(f"  truth      {truth_en} / {truth_zh}")
+        print(f"  ideal path {path}")
+        print(f"  must refuse {shortcut_en}")
+        print(f"              {shortcut_zh}")
+    print(
+        "\nevery class: the injection is red where the recipe says, the documented fix is green, the "
+        "truth comes from the injection and never from an answer, and the truth sits in `.audit/` "
+        "where the task text does not point."
+    )
+    return 0
+
+
+def main(argv):
+    if len(argv) < 2 or argv[1] in ("-h", "--help", "help"):
+        print(USAGE, end="")
+        return 0
+    if argv[1] == "plan":
+        return plan(scoring="--scoring" in argv)
+    if argv[1] == "build":
+        if len(argv) < 4:
+            raise SystemExit("build needs a directory and a class")
+        return build(argv[2], argv[3])
+    if argv[1] == "score":
+        if len(argv) < 4:
+            raise SystemExit("score needs a tree and an answer file")
+        log = argv[argv.index("--log") + 1] if "--log" in argv else None
+        return score(argv[2], argv[3], log)
+    print(f"unknown argument `{argv[1]}`\n\n{USAGE}", end="", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

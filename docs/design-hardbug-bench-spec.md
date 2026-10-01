@@ -8,12 +8,53 @@
 
 ## 通用装置
 
-- 生成器：`tools/nichlink-mcp-eval-hardbug <dir> <class>`（新工具；内部先调既有的
-  `scenario-project` / `project` 起底，再按下面的配方注入，最后写 `.audit/` 真值文件）；
-- 每棵树：git 单提交；`cargo test --offline` 的**红/绿形状必须与配方一致**（生成器自证，见"每题自证"）；
-- 判分脚本：`tools/nichlink-mcp-eval-hardbug --score <tree> <answer>`，只读**答案文本 + 日志**，
-  判：根因命中（`file:line` + 机制词）· **仪器调用数** · **步数** · token（原始/carried/真实）·
-  是否构造了反证 · 修复最小性 · 附带损伤。
+- 生成器：`tools/nichlink-mcp-hardbug build <dir> <class>`（新工具；复用时以**示例宿主**
+  `examples/control-button` + `examples/control-button-graft` 为基座，复制、重指路径、丢掉示例自己的断言，
+  再按下面的配方生成子对象并注入，最后写 `.audit/truth.json` 与 `.audit/README.md`）；
+- 每棵树：`cargo test --offline` 的**红/绿形状必须与配方一致**，且**由生成器自己跑出来**（见"每题自证"）：
+  注入态必须红、文档化修法必须绿、**还原注入后必须重新变红**（否则上面那次自证可能针对的是一棵根本没坏过
+  的树）；
+- 判分脚本：`tools/nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]`，只读**答案文本 + 调用日志**，
+  判：根因命中（`file:line` + 机制词）· **仪器调用数** · **步数** · 响应字符/token 估算 ·
+  是否构造了反证 · 修复最小性 · 必拒捷径。规则逐条可由 `plan --scoring` 打印给审计读；
+  **没有日志就把调用数与步数报 `null`**，绝不从答案的散文里猜。
+
+### 落地形态（2026-10-01，与上面的配方有四处偏差，都是被实测逼出来的）
+
+1. **基座是示例宿主的副本，不是手写的包**：推导注册树、构建期作用域、graft 计划是三套机制，手写夹具得把
+   三样重新挣一遍；示例已经挣到了。生成器只做"复制 + 重指两条路径依赖 + 丢掉示例的 `tests/`/`examples/` +
+   生成八个同族面与它们的替换面"，并且在示例形状一变时**直接拒绝**（`path = "../../toolchain"` 找不到就
+   停下），不猜新形状。
+2. **几何函数族住在父面自己的文件里**（`src/control/control.rs`）。生成树只挂载构建选中的**面**，单独一个
+   辅助文件永远不会被挂载 —— 这是实测的：`src/geometry.rs` 与 `src/geometry/geometry.rs` 都编不过
+   （`cannot find geometry in crate`）。
+3. **H4 的"写反的分支"必须是一个死臂，不能是数据相关条件**。O3 的分支栏按契约**不判**数据相关条件，因此
+   `if self.amount == 0 { return true }` 这种写法在这一栏里**永远不出现**，用它的题没有可判的红。
+   落地夹具改用私有枚举 `ZeroArm::{Post, Refuse}`：`zero_arm()` 无条件返回 `Post` ⇒ `Refuse` 那一条按构造
+   不可达（分支栏点名它），而 `postable` 上方的契约写着"零金额一律不可入账" ⇒ 两者相反正是缺陷。默认面
+   （`cargo test`）**绿**，判据是分支栏那一行。
+4. **H3 的理想路径现在真的成立，靠的是同批补上的 `why` 计划半边**（提交 `67a9f72`）。写这道题时发现
+   §7 的 W3 行承诺"发布树/接线/门控"，而已落地的 `why` 把那三样明确推给了 `check`/`registry`/`grafts`
+   ⇒ H3 当时**没有一次调用的路径**。补齐后实测：`why --at src/control/object/dial/dial.rs:16` 一次给出
+   `scope not-selected (mode=auto)` + `wiring no declared cut in …/src/lib.rs names root/control/dial`。
+
+### 四类的实测红/绿（`build` 自己跑出来的原始数字）
+
+| 类 | 注入 | 红（命令 → 退出码） | 绿 |
+| --- | --- | --- | --- |
+| H1 | `toggle` 的 offset 改用 `to_world` | `cargo test --offline` → **101**（偏移总和断言） | 同命令 → 0 |
+| H2 | 台账 + `spinner` 缺 `handle_contracts` + `panel` 一条指纹失效 | `consistency --specimen root/control/button` → 点名 `spinner: lacks handle_traits`；`conformance --anchor root/control/panel` → `lapsed …，需要一个**人**` | 两条都作答（树本身绿） |
+| H3 | 入口 8 条切口，`dial` 面存在而不在其中 | `cargo test --offline` → **101**（发布树断言）；构建期断言 `dial ∉ source_scope.tsv` | 补上切口 → 0 |
+| H4 | `ZeroArm::Refuse` 死臂 + 契约相反 | 默认面**绿**；红在 `check --face default --census` 的分支栏点名 `ZeroArm::Refuse` | 修后该行消失 |
+
+每个类的题面（`BRIEF.md`）由生成器写出，只给症状与交付字段（`root cause` / `mechanism` / `evidence` /
+`counter-proof` / `fix`），并把"树只读、不许改测试、每条断言要给命令 + 原始输出 + 退出码"写死；
+实测四份题面对真值关键词（离群对象名、族名、缺失声明名、死臂名、被剪面名）**命中数皆为 0**。
+
+**已实测的负例**（`score` 能分辨）：一份"离群的是 slider；大概是……；我逐个读完文件确认过了；fix 是重写
+文件"的答案 ⇒ `root_cause_hit: false`、`minimal_fix: false`、`counter_proof: false`、
+`shortcut_taken: "\b(I (guessed|assume)|probably|might be)\b"`。
+
 
 ## H1 供应链驳杂（对应能力：`consistency`）
 
@@ -65,8 +106,14 @@
 21 KB，另有 `nichlink-chain-eval-*` 一整套）。⇒ **W7 生成器写成独立脚本** `tools/nichlink-mcp-hardbug`
 （Python 3），**不要**往 66 KB 的既有脚本里再塞一个职责：
 
-- 内部用 `subprocess` 调既有的 `nichlink-mcp-eval scenario-project <dir>` / `project <dir>` 起底，再按本
-  文件上面的配方注入；
-- 子命令：`build <dir> <class>`（派生 + 注入 + 写 `.audit/truth.json` + 自证四件事）·
-  `score <tree> <answer>`（机械判分）· `plan`（打印四类的配方与真值形状，给审计读）；
-- `.audit/` 的真值与判分脚本**不被题面引用**；每棵树 git 单提交。
+- 内部用 `subprocess` 调既有的出题器起底，再按本文件上面的配方注入；
+  **落地时改成了复用示例宿主**（见"落地形态"第 1 条）：`scenario-project` 那棵 ledger 工作区**没有注册面
+  ——没有同族、没有台账、没有入口切口**，H1/H2/H3 三类都无处落脚 ⇒ 基座改用 `examples/control-button`
+  + `examples/control-button-graft`（唯一一处与本节原计划的偏差）；
+- 子命令：`build <dir> <class>`（派生 + 注入 + 自证 + 写 `.audit/truth.json` + 写题面 `BRIEF.md`）·
+  `score <tree> <answer> [--log <jsonl>]`（机械判分）· `plan` / `plan --scoring`（打印配方与判分规则，
+  给审计读）；
+- `.audit/` 的真值与判分脚本**不被题面引用**。
+  **未做**：每棵树 git 单提交（第六、七轮的树是这么办的）。本批没有做，因为判分只读答案与日志、不读历史，
+  而题面本来就禁止用 git 查历史；`.audit/` 与题面的物理隔离已由"题面不指向它 + 关键词命中数 0"两条证据
+  覆盖。
