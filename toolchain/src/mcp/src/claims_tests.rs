@@ -150,6 +150,57 @@ fn the_walk_states_its_own_boundary_in_the_answer() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The third pin: both boundary lines are **one-line indexes**. They keep the phrase that stops
+/// an inventory reading as a measurement, they name where the prose went (`--list check`), they
+/// are really emitted with the census — and a budget keeps them from growing back into the
+/// paragraphs they were.
+/// 第三枚钉子：两条边界行都是**一行索引**。它们留下那个阻止读者把清单当成量度的短语，点名散文去了哪里
+/// （`--list check`），真的随总账输出——而一份预算让它们长不回过去那种段落。
+#[test]
+fn the_boundaries_are_one_line_indexes_under_a_budget() {
+    let root = reachability_package("index", 1);
+    let lines = census(&root).expect("the census answers").join("\n");
+    for boundary in [super::REACHABILITY_BOUNDARY, super::CENSUS_BOUNDARY] {
+        assert!(
+            !boundary.contains('\n'),
+            "one line, not a paragraph: {boundary}"
+        );
+        assert!(
+            boundary.contains("not a coverage measurement"),
+            "a boundary must never stop saying what it is not: {boundary}"
+        );
+        assert!(
+            boundary.contains("--list check"),
+            "the prose it indexes has to be named: {boundary}"
+        );
+        assert!(
+            lines.contains(boundary),
+            "the boundary is emitted with the census: {boundary}\n{lines}"
+        );
+    }
+    assert!(
+        super::CENSUS_BOUNDARY.contains("not covered:"),
+        "the closing line says what it does not cover: {}",
+        super::CENSUS_BOUNDARY
+    );
+    assert!(
+        super::REACHABILITY_BOUNDARY.contains("not covered by the test-reachability column:"),
+        "so does the reachability column's own: {}",
+        super::REACHABILITY_BOUNDARY
+    );
+    // The budget is a ratchet rather than a taste: the two lines measured 774 + 331 characters
+    // before they became indexes, and 850 is the ceiling they must not cross again.
+    // 预算是棘轮而不是口味：这两行在变成索引之前量到 774 + 331 个字符，而 850 是它们不许再次越过的上限。
+    const BUDGET: usize = 850;
+    let total =
+        super::REACHABILITY_BOUNDARY.chars().count() + super::CENSUS_BOUNDARY.chars().count();
+    assert!(
+        total <= BUDGET,
+        "the two boundaries must stay within {BUDGET} characters; they are {total}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// The cap: five rows, then the one truncation sentence with what it withheld.
 /// 上限：五行，然后是那句唯一的截断说明与被扣下的数量。
 #[test]

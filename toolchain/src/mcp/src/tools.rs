@@ -61,7 +61,7 @@ use crate::mcp::overlay::overlay;
 use crate::mcp::plugin::plugin;
 use crate::mcp::protocol::{error_response, success};
 use crate::mcp::read::read_source;
-use crate::mcp::registry::registry;
+use crate::mcp::registry::{registry, registry_brief};
 use crate::mcp::search::search;
 use crate::mcp::source_index::{load_one, load_sources, required_path, resolve_root};
 use crate::mcp::trace::trace;
@@ -125,8 +125,10 @@ pub(crate) fn tools() -> Vec<Value> {
              lines)`: `N` is the file's own line count, not the printed range, so a windowed \
              read still says how much of the file is left — which is the fact the old \
              81-line window withheld, forcing six calls for a 473-line file. Default: a \
-             window of `context` lines either side of `line` (context 40, at most 120, \
-             240 lines). `whole: true` prints the file; `lines: \"120-260\"` prints that \
+             window of `context` lines either side of `line` (context 8, at most 120, \
+             240 lines) — a peek, because a caller that named only a line asked for one; \
+             pass `context` for a wider window and `whole` for the file. \
+             `whole: true` prints the file; `lines: \"120-260\"` prints that \
              forward, 1-based range. The three shapes are exclusive and mixing them is \
              refused by name. An explicit whole/range read is bounded at 1200 lines and a \
              reply past that bound is cut by the shared truncation notice, which names the \
@@ -138,7 +140,7 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{
                 "path":{"type":"string"},
                 "line":{"type":"integer","minimum":1,"description":"window: the line to centre on (default 1)"},
-                "context":{"type":"integer","minimum":0,"maximum":120,"description":"window: lines either side of `line` (default 40)"},
+                "context":{"type":"integer","minimum":0,"maximum":120,"description":"window: lines either side of `line` (default 8)"},
                 "whole":{"type":"boolean","description":"print the whole file (bounded at 1200 lines)"},
                 "lines":{"type":"string","description":"print one forward, 1-based range, e.g. `120-260` (bounded at 1200 lines)"},
                 "root":{"type":"string"}
@@ -273,12 +275,14 @@ pub(crate) fn tools() -> Vec<Value> {
              at ...)` above the derived rows. Contract, admission, and registration-rule data need \
              the built snapshots and are not included. `root` is a package root; omitting it uses \
              NICH_LINK_PACKAGE_ROOT. A **virtual workspace root** (a manifest with no `[package]`) \
-             names no package, so it is answered as the workspace: one section per member under \
-             that member's own package name, with a census naming every member's status above them \
-             — `published`, `not built` (no records, so its tree was derived now), `no faces` (a \
-             framework crate declares none), or `unresolvable` with the reason. Point `root` at \
-             one member for that package's own answer.",
-            json!({"type":"object","properties":{"root":{"type":"string"}}}),
+             names no package, so it is answered as the workspace: a census naming every member's \
+             status — `published`, `not built` (no records, so its tree was derived now), `no faces` \
+             (a framework crate declares none), or `unresolvable` with the reason — and, in the \
+             **default** answer, one row per member with the faces it declares. The per-member \
+             trees are what that default leaves out: pass `full: true` for one section per member \
+             under that member's own package name, as the build sees it. Point `root` at one member \
+             for that package's own answer, which is always the whole tree.",
+            json!({"type":"object","properties":{"root":{"type":"string"},"full":{"type":"boolean","description":"virtual root: print each member's own tree instead of the member-to-faces default (default false)"}}}),
         ),
         tool(
             "nichlink.explain",
@@ -508,14 +512,16 @@ pub(crate) fn tools() -> Vec<Value> {
              reaches `timeout_ms` (default 900000, clamped to 1000–3600000) is reported as \
              **unknown**, never as a pass, and the reply says the direct child was killed and its \
              own children may survive. A log with no `test result:` line reports that nothing ran: \
-             `0 passed` is not a pass. The reply ends with a **whole-tree census** of static facts \
-             for the open question — what else is wrong here — each column saying what it does not \
-             cover: numeric constants that are re-spelled elsewhere or read nowhere outside tests, \
-             production `pub fn` names no test writes down, the entry plan's own site counts, and \
-             the production functions **no test can reach**, by a static walk from this tree's test \
-             files along the same name-in-a-call-list rule the orphan view uses (five rows and the \
-             withheld count, or `skipped (N functions over the limit)` when the tree is larger than \
-             that walk was sized for). That last column says what it cannot see instead of calling \
+             `0 passed` is not a pass. The reply then carries a **sampled whole-tree census** of \
+             static facts for the open question — what else is wrong here — each column saying what \
+             it does not cover: numeric constants that are re-spelled elsewhere or read nowhere \
+             outside tests, production `pub fn` names no test writes down, the entry plan's own site \
+             counts, and the production functions **no test can reach**, by a static walk from this \
+             tree's test files along the same name-in-a-call-list rule the orphan view uses (five \
+             rows and the withheld count, or `skipped (N functions over the limit)` when the tree is \
+             larger than that walk was sized for). The sample keeps the first five rows and always \
+             the lines that say what the census is not; pass `census: true` for the whole table. \
+             That last column says what it cannot see instead of calling \
              itself coverage: calls made through dynamic dispatch, function pointers, FFI or macro \
              expansion are invisible to it, a function reached only through a trait method or a \
              closure does not count, and matching is by name, so an unrelated same-named call \
@@ -523,6 +529,7 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{
                 "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
+                "census":{"type":"boolean","description":"print the whole census table instead of the first five rows plus the boundary lines (default false)"},
                 "root":{"type":"string"}
             },"required":["face"]}),
         ),
@@ -603,10 +610,15 @@ fn status_tool(root: &Path, _arguments: &Value) -> Result<String, String> {
     status(root)
 }
 
-/// `nichlink.registry` reads no arguments either (its `root` is resolved above).
-/// `nichlink.registry` 同样不读参数（它的 `root` 已在上面解析）。
-fn registry_tool(root: &Path, _arguments: &Value) -> Result<String, String> {
-    registry(root)
+/// `nichlink.registry` reads one argument: `full`, which buys the per-member trees a virtual root's
+/// default answer leaves out.
+/// `nichlink.registry` 只读一个参数：`full`，它买下虚拟根的默认答案省掉的那些逐成员树。
+fn registry_tool(root: &Path, arguments: &Value) -> Result<String, String> {
+    if arguments.get("full").and_then(Value::as_bool) == Some(true) {
+        registry(root)
+    } else {
+        registry_brief(root)
+    }
 }
 
 /// `nichlink.explain` is the one name that routes to two implementations: `overlay:

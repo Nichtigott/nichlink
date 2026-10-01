@@ -10,6 +10,18 @@
 //! 这些测试所针对的实测失败正是窗口逼出来的形状：一个 473 行的文件要 `ceil(473/81)` = 六次调用，而没有
 //! 一次说明还剩多少，因为标头不带总数。因此钉子关心的是：**一次**调用回答一整个文件；窗口仍然说出总数；
 //! 越过上限的回复走唯一那个截断出口，而不是无声地变短。
+//!
+//! The window is now smaller than that shape's (8 lines either side — 17 lines — pinned
+//! exactly in `a_window_read_states_the_file_total`), so a long function is read in two calls
+//! where it used to be read in one. That is the trade the measurement bought, and it is named
+//! here rather than left for a reader to discover: the read class was the largest single class
+//! of the characters this bridge sent back. What keeps the second call honest is the **total on
+//! the header** — a caller can see how much is left instead of guessing — and `context`/`whole`
+//! are the one-call spellings for the caller that wants one.
+//! 窗口现在比那种形状更小（每侧 8 行——17 行——由 `a_window_read_states_the_file_total` 精确钉住），因此一个
+//! 长函数过去一次读完，现在要两次。这就是那次测量买来的取舍，它在这里被点名，而不是留给读者自己发现：read
+//! 这一类是本桥送回字符里最大的一类。让第二次调用诚实的是**标头上的总数**——调用方看得见还剩多少，而不是靠
+//! 猜——而 `context`/`whole` 才是想要一次读完的调用方的拼法。
 
 use std::path::PathBuf;
 
@@ -114,14 +126,24 @@ fn one_whole_file_call_returns_all_473_lines() {
     assert!(reply.contains("// line 473"), "{reply}");
 }
 
-/// The second nail: a window read says how much file is left.
-/// 第二枚钉子：窗口读取说出还剩多少文件。
+/// The second nail: a window read says how much file is left, and the default window is the small
+/// peek it was decided to be.
+/// 第二枚钉子：窗口读取说出还剩多少文件，而默认窗口就是那一次被定下来的小小窥视。
 ///
-/// The window is still the default and still small — that is the maintainer's rule, a
-/// bridge does not feed the whole tree by default — but the header now carries the
-/// total, so a caller can tell a window from the file.
+/// The window is still the default and still small — that is the maintainer's rule, a bridge does
+/// not feed the whole tree by default — but the header now carries the total, so a caller can tell
+/// a window from the file.
 /// 窗口仍是默认、仍然小——那是维护者的原则，本桥默认不投喂整棵树——但标头现在带着总数，调用方因此分得出
 /// 窗口与整个文件。
+///
+/// The half-width is pinned **exactly** rather than bounded, because it moved: it was 40 (81 lines)
+/// and it is 8 (17 lines), a decision taken on the measurement that the read class was the largest
+/// single class of the characters this bridge sent back. `context` is how a caller asks for more and
+/// `whole` for everything, so the default has no reason to be generous — and a bound like `< 81`
+/// would stay green through exactly the growth this pin exists to stop.
+/// 半宽是**精确**钉住的而不是给个上界，因为它动过：它曾是 40（81 行），现在是 8（17 行），这个决定建立在
+/// "read 这一类是本桥送回字符里最大的一类"的测量上。要更多由 `context` 说，要全部由 `whole` 说，因此默认
+/// 没有理由慷慨——而像 `< 81` 这样的上界会在正是这条钉子要拦的那次增长里保持绿色。
 #[test]
 fn a_window_read_states_the_file_total() {
     let fixture = root_with_lines("window", 473);
@@ -132,9 +154,15 @@ fn a_window_read_states_the_file_total() {
         total, 473,
         "a window must still state the file total: {reply}"
     );
-    assert!(
-        end - start < 81,
-        "the default window stays the small reply it was: {reply}"
+    assert_eq!(
+        (start, end),
+        (192, 208),
+        "the default window is ±8 lines around the named one: {reply}"
+    );
+    assert_eq!(
+        body_lines(&reply).len(),
+        17,
+        "and that is what it prints: {reply}"
     );
     assert!(start <= 200 && 200 <= end, "{reply}");
 }

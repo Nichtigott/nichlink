@@ -39,6 +39,7 @@
 //! 覆盖仍然只命名一棵树。`NICH_LINK_NAMESPACE` 在询问 Cargo 之前胜出，因此设置它之后，虚拟根会被
 //! 读作那个名字所指的包——这是调用方唯一能手工给工作区根一个身份的情形。
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use nichlink_kernel::lexicon;
@@ -359,6 +360,49 @@ pub(crate) fn scope(root: &Path) -> Result<Scope, String> {
     }
 }
 
+// The root whose full preamble this session has already spent, or `None` before the first.
+// 本会话已经花掉完整前言的根，或第一条之前为 `None`。
+//
+// The decision this holds is deliberately **not** a cache of an answer: what is remembered is
+// only *which root was opened*, never what was said about it, so a cheaper second answer can
+// never report a tree the first one did not read.
+// 这里保存的判断**有意**不是答案的缓存：记住的只是**打开过哪个根**，从不是"关于它说过什么"，因此更
+// 便宜的第二次答案不可能报出一棵第一次没读过的树。
+thread_local! {
+    static LAST_ANNOUNCED: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Whether this answer is the one that opens a root, and if so, makes it the open one.
+/// 这份答案是否就是打开某个根的那一份；是的话，把它记为当前打开的根。
+///
+/// "The first answer after a change of root" is a fact about the **session**, not about this
+/// call, so it is kept here beside the roster that spends it rather than threaded through every
+/// tool. It is thread-local for the same reason `freshness`'s reuse table is: the bridge serves
+/// one session on one thread. A test that wants a tool's own answer rather than the one the
+/// call order produced says so through [`forget_announced`].
+/// "换根后的第一份答案"是关于**会话**的事实，不是关于这一次调用的，因此它留在这里、就在花掉它的普查
+/// 旁边，而不是穿过每个工具去传。它是 thread-local 的，理由与 `freshness` 的复用表相同：桥在一个线程
+/// 上服务一个会话。想要"工具自己的答案"而不是"调用次序产出的答案"的测试，通过 [`forget_announced`]
+/// 说出来。
+fn opens_root(root: &Path) -> bool {
+    LAST_ANNOUNCED.with(|last| {
+        let mut last = last.borrow_mut();
+        let first = last.as_deref() != Some(root);
+        if first {
+            *last = Some(root.to_path_buf());
+        }
+        first
+    })
+}
+
+/// Forget the root the last preamble opened, so a test asks what a **tool** answers rather than
+/// what the call order before it produced.
+/// 忘记上一次前言打开的根，好让测试问的是**工具**的答案，而不是它之前的调用次序产出的东西。
+#[cfg(test)]
+pub(crate) fn forget_announced() {
+    LAST_ANNOUNCED.with(|last| *last.borrow_mut() = None);
+}
+
 /// The header every merged tree answer opens with: the root, the member census, and one
 /// row per member with its status.
 /// 每份合并树级答案开头的表头：根、成员普查，以及逐成员一行带状态。
@@ -373,7 +417,83 @@ pub(crate) fn scope(root: &Path) -> Result<Scope, String> {
 /// 不会被读成一棵空的宿主树，也让坏掉的成员不会被读成不存在的成员。它的前四个计数是这个普查一直以来
 /// 说的东西；`published` 与 `not built` 是证据轴，加进来是为了让"读了构建的记录"与"不得不推导"被
 /// 区分开，而不是都读成 `queried`。
+///
+/// **A change of root is what buys the rows back.** The same root asked again in the same session
+/// gets the one-line index instead — `workspace <root> · members N · built P · census <census>` —
+/// because the rows said nothing about *this* call: they are the same four lines the previous
+/// answer already carried, and the member sections below still name every member. The index
+/// repeats the census verbatim rather than abbreviating it, so a reader (or a pin) that looked
+/// for the counts finds them whether the answer opened the root or followed one.
+/// **换根才是买回那些行的条件。** 同一个会话里再问同一个根，拿到的是那一行索引——`workspace <根> ·
+/// members N · built P · census <普查>`——因为那些行说的不是**这次**调用的事：它们与上一份答案带的
+/// 是同样四行，而下面的成员小节仍然点名每一个成员。索引逐字重复普查而不是缩写它，因此找这些计数的读者
+/// （或钉子）无论答案是在打开一个根还是跟在别人后面，都能找到它们。
+///
+/// The rows themselves are folded here: the `not built` / `unresolvable` **reason** is expanded
+/// only by the face and build tools ([`roster_expanded`]), which are the answers a reader goes to
+/// when the one line is not enough. Every other tool still names the member's status word, and an
+/// `unresolvable` member's own section — wherever the tool writes sections at all — states its
+/// reason; the refusal to expand here is what keeps a lookup answer about the thing that was
+/// looked up.
+/// 行本身在这里是折起来的：`not built` / `unresolvable` 的**原因**只由面与构建类工具
+/// （[`roster_expanded`]）展开——那一句话不够时读者正是去那些答案里看。其余工具仍然点名成员的**状态词**，
+/// 而 `unresolvable` 成员自己的小节——在工具写小节的地方——说出它的原因；这里不展开，正是让一份查表答案
+/// 说的是被查的那件事。
 pub(crate) fn roster(root: &Path, members: &[Member]) -> String {
+    roster_with(root, members, false)
+}
+
+/// The roster the face and build tools open with: the same census, with every member's
+/// degradation reason spelled out.
+/// 面与构建类工具开头的表头：同一份普查，外加逐成员的降级原因全文。
+///
+/// The reason is the reader's own words and it names an absolute path, so it is worth its space
+/// exactly where the reader is asking about the **build** — `registry`, `diff` and `grafts` are
+/// the three that come through [`merge`], and they are the ones whose question the reason answers.
+/// 原因是读取方自己的话，而且点名一条绝对路径，因此它值这点篇幅的地方恰恰是读者在问**构建**的时候
+/// ——经 [`merge`] 进来的 `registry`、`diff` 与 `grafts` 正是这三位，也正是原因能回答其问题的那些。
+fn roster_expanded(root: &Path, members: &[Member]) -> String {
+    roster_with(root, members, true)
+}
+
+/// The roster in either of its two shapes, so the census is composed by one spelling.
+/// 两种形态之一的表头，好让普查只有一处拼法。
+fn roster_with(root: &Path, members: &[Member], reasons: bool) -> String {
+    let census = census_line(members);
+    if !opens_root(root) {
+        let built = members
+            .iter()
+            .filter(|member| member.status() == "published")
+            .count();
+        return format!(
+            "workspace {} · members {} · built {} · census {}\n",
+            root.display(),
+            members.len(),
+            built,
+            census.trim_end(),
+        );
+    }
+    let mut output = format!(
+        "workspace {} (virtual manifest: a workspace root is not a package, so it has no identity \
+         namespace of its own; each member below has one)\n",
+        root.display(),
+    );
+    output.push_str(&census);
+    for member in members {
+        output.push_str(&format!(
+            "  {:<13} {:<30} {}\n",
+            member.status(),
+            member.name,
+            detail(member, reasons),
+        ));
+    }
+    output
+}
+
+/// The census line: one count per member status, in the four-then-two order this census has
+/// always spelled.
+/// 普查行：每个成员状态一个计数，按这个普查一直以来的"四加二"顺序。
+fn census_line(members: &[Member]) -> String {
     let count = |word: &str| members.iter().filter(|m| m.status() == word).count();
     let with_faces = members
         .iter()
@@ -383,27 +503,15 @@ pub(crate) fn roster(root: &Path, members: &[Member]) -> String {
             MemberState::Unresolvable(_) => false,
         })
         .count();
-    let mut output = format!(
-        "workspace {} (virtual manifest: a workspace root is not a package, so it has no identity \
-         namespace of its own; each member below has one)\nmembers {}  queried {}  no faces {}  \
-         unresolvable {}  published {}  not built {}\n",
-        root.display(),
+    format!(
+        "members {}  queried {}  no faces {}  unresolvable {}  published {}  not built {}\n",
         members.len(),
         with_faces,
         count("no faces"),
         count("unresolvable"),
         count("published"),
         count("not built"),
-    );
-    for member in members {
-        output.push_str(&format!(
-            "  {:<13} {:<30} {}\n",
-            member.status(),
-            member.name,
-            detail(member),
-        ));
-    }
-    output
+    )
 }
 
 /// Run one tool's per-package body for every member, under the roster.
@@ -445,7 +553,7 @@ where
             _ => sections.push_str(&body(member, arguments)?),
         }
     }
-    let mut output = roster(root, members);
+    let mut output = roster_expanded(root, members);
     output.push_str(&sections);
     output.push_str(DETAIL);
     Ok(output)
@@ -499,7 +607,17 @@ pub(crate) const NO_FACES_REASON: &str = "no registration face under src/ — fo
 /// 丢弃过注册面文件的推导在这里也要说出来：一个还有第四个文件谁也解析不了的包，若只写
 /// `queried, 3 faces`，那就会被读成一棵完整的树，而这一行正是读者先看的地方。证据在同一行里点名，
 /// 因为"3 个面"是不同的事实，取决于它们是构建发布的还是这份答案刚推导出来的。
-fn detail(member: &Member) -> String {
+///
+/// `reasons` is the one difference between the two rosters: the `not built (…)` and
+/// `tree unavailable (…)` tails are the reader's own words about the **build**, so they are
+/// expanded where the build is the question ([`roster_expanded`]) and folded away everywhere else.
+/// The status word itself is never folded: `not built` and `unresolvable` are what say the tree
+/// below was derived rather than read, and that sentence is what this census exists for.
+/// `reasons` 是两种表头之间唯一的差别：`not built (…)` 与 `tree unavailable (…)` 这两条尾巴是读取方
+/// 关于**构建**的原话，因此在构建就是问题的地方展开（[`roster_expanded`]），其余地方折掉。**状态词
+/// 本身从不折**：`not built` 与 `unresolvable` 正是说出下面那棵树是现推的而不是读来的那一句，而那句话
+/// 正是这份普查存在的理由。
+fn detail(member: &Member, reasons: bool) -> String {
     match &member.state {
         MemberState::Published(tree) => {
             let head = if tree.records_no_faces() {
@@ -526,9 +644,19 @@ fn detail(member: &Member) -> String {
             } else {
                 format!("{head}; {}", unparsable.trim())
             };
-            format!("{head}; not built ({})", one_line(reason))
+            if reasons {
+                format!("{head}; not built ({})", one_line(reason))
+            } else {
+                format!("{head}; not built")
+            }
         }
-        MemberState::Unresolvable(reason) => format!("tree unavailable ({})", one_line(reason)),
+        MemberState::Unresolvable(reason) => {
+            if reasons {
+                format!("tree unavailable ({})", one_line(reason))
+            } else {
+                "tree unavailable".to_owned()
+            }
+        }
     }
 }
 

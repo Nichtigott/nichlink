@@ -41,10 +41,31 @@ const REACHABILITY_BUDGET: usize = 10_000;
 /// What the test-reachability column does not cover.
 /// 测试可达性那一栏**不覆盖**什么。
 ///
-/// One sentence, emitted with the column, because a static walk that let itself be read as a
-/// coverage measurement would be exactly the false green this census exists against.
-/// 一句话，随那一栏输出——一次放任自己被读成"覆盖率"的静态遍历，正是这份总账要对付的那种假绿。
-const REACHABILITY_BOUNDARY: &str = "  not covered by the test-reachability column: calls made through dynamic dispatch, function pointers, FFI, or macro expansion are invisible to it, so a function reached only that way is still listed; a function reached only through a trait method or a closure does not count; matching is by name across the whole tree, so a call of the same name on an unrelated type counts as reaching it; every function in a test-looking file seeds the walk (a `tests/` directory, a `_tests.rs` sibling, or a file declaring `#[test]` itself), so a production file that carries its own `#[test]` errs toward not being listed; and `main` is not listed because the process entry point is called by the OS rather than by a test. This is a static reachability walk, not a coverage measurement.";
+/// One line, emitted with the column, because a static walk that let itself be read as a
+/// coverage measurement would be exactly the false green this census exists against. It is an
+/// **index** rather than the prose it used to be: every bound it admits is still named here, and
+/// the sentences that say *why* each one is invisible live in the tool's own description
+/// (`--list check`), which is where a reader goes when one line is not enough. The two phrases
+/// that must survive any compression are in it: the column names what it does not cover, and it
+/// says out loud that it is `not a coverage measurement`.
+/// 一句话，随那一栏输出——一次放任自己被读成"覆盖率"的静态遍历，正是这份总账要对付的那种假绿。它是一条
+/// **索引**而不是它过去那种散文：它承认的每一条边界仍然在这里点名，而说清每一条**为什么**不可见的句子住在
+/// 工具自己的描述里（`--list check`）——一行不够时读者正是去那里。任何压缩都必须留下的两个短语都在里面：
+/// 这一栏点名它不覆盖什么，并且明说它"不是覆盖率量度"。
+const REACHABILITY_BOUNDARY: &str = "  not covered by the test-reachability column: dynamic dispatch, function pointers, FFI, macro expansion, and reach only through a trait method or a closure are invisible, so a function reached only that way stays listed; a test-looking file (`tests/`, `_tests.rs`, or `#[test]`) seeds the walk, so a production file with its own `#[test]` is likely not listed; matching is by name, so an unrelated same-named call counts; `main` is never listed. A static walk, not a coverage measurement; `--list check` has the full text.";
+
+/// What the census as a whole does not cover, in the one line every `check` ends with.
+/// 整份总账**不覆盖**什么——每次 `check` 结尾那一行。
+///
+/// An index rather than a second copy of the columns above it: the reader already has the four
+/// counts and their own sentences in the same reply, so restating them here bought nothing and
+/// cost every `check` the same hundred words. What it must keep is the boundary a count cannot
+/// imply — the shapes no column reads — and the phrase that stops a reader taking an inventory
+/// for a measurement.
+/// 它是上面那几栏的索引，而不是它们的第二份副本：读者在同一份回复里已经有那四个计数与它们自己的句子，
+/// 因此在这里复述它们什么都买不到，却让每一次 `check` 都付同样的上百个词。它必须留下的是一个计数推不出
+/// 的边界——没有任何一栏去读的那些形状——以及那个阻止读者把一份清单当成一次量度的短语。
+const CENSUS_BOUNDARY: &str = "  not covered: this census reads exactly what the columns above name; string constants, structural duplication, runtime behaviour and claims written in prose are outside it, and the static walk is not a coverage measurement. `--list check` has the full text";
 
 /// One declared numeric constant, as the tree spells it.
 /// 一条被声明的数值常量，按这棵树里的写法。
@@ -235,13 +256,15 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
     // 的两件不同事实，因此这一栏经**唯一**那份 `callgraph::is_call_to` 判定一次调用点名了什么，其余什么都不
     // 与 `orphans` 共享。
     lines.extend(reachability_column(&sources));
-    lines.push(
-        "  not covered: named numeric constants, production `pub fn` names, and one static walk from \
-         test files are what this census reads; string constants, structural duplication, runtime \
-         behaviour, and claims written in prose are outside it, and the walk is not a coverage \
-         measurement (its own column names the call shapes it cannot see)"
-            .to_owned(),
-    );
+    // The closing line is the same kind of index the reachability column's own boundary is:
+    // one line naming what this census does not read, with the prose left to the tool's own
+    // description (`--list check`). It used to restate the four columns above it on every
+    // `check`, which is the repetition this compression removes; the phrase it must never lose
+    // is the one that stops a reader taking an inventory for a measurement.
+    // 结尾那一行与可达性栏自己的边界是同一种索引：一行点名这份总账**不读**什么，把散文留给工具自己的
+    // 描述（`--list check`）。它过去在每次 `check` 上把上面那四栏复述一遍，那正是这次压缩去掉的重复；它
+    // 绝不能丢的短语，是那个阻止读者把一份清单当成一次量度的短语。
+    lines.push(CENSUS_BOUNDARY.to_owned());
     Ok(lines)
 }
 

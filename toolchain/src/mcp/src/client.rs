@@ -55,7 +55,9 @@ the numbers, so the whole line matches nothing. **A symbol name you can already 
 or a trace) goes straight to `callgraph {function}` — one call gives its callers, its callees, its \
 own lines and its doc, and `search {query}` first would only cost a second call. A name you do not \
 have yet: `callgraph` hop by hop from the caller you do have. `callgraph {orphans: true}` lists what \
-this package defines and nothing here calls. One function's own lines: `read {path, line}`. Which \
+this package defines and nothing here calls. One function's own lines: `read {path, line}` — the \
+window is ±8 lines by default, so pass `context` for a wider one and `whole` for the whole file. \
+Which \
 tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `diff`, then `apply` \
 (a preview unless `apply: true`). \\
              If the tree carries an adoption ledger (`.nichlink/adopted/entries`), `adopted` reads it \

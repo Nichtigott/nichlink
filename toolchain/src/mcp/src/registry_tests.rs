@@ -151,3 +151,150 @@ fn the_writer_and_the_readers_share_one_namespace_entry() {
         "verify is the writer; it has to use the shared entry"
     );
 }
+
+/// A throwaway **virtual** workspace: two member packages, each with a `src/` and no published
+/// records, which is the shape the workspace default has to summarize.
+/// 一个一次性**虚拟**工作区：两个成员包，各自有 `src/`、什么都没发布——正是工作区默认档要概括的形状。
+fn workspace(label: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-toolchain-registry-ws-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    write_fixture(
+        &root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/a\", \"crates/b\"]\nresolver = \"2\"\n",
+    );
+    for member in ["a", "b"] {
+        write_fixture(
+            &root.join(format!("crates/{member}/Cargo.toml")),
+            &format!(
+                "[package]\nname = \"mcp-{label}-{member}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+            ),
+        );
+        write_fixture(
+            &root.join(format!("crates/{member}/src/lib.rs")),
+            "// member entry\n",
+        );
+    }
+    root
+}
+
+/// Write one fixture file, creating its directory.
+/// 写一个夹具文件并建好它的目录。
+fn write_fixture(path: &std::path::Path, text: &str) {
+    std::fs::create_dir_all(path.parent().expect("fixture parent")).expect("fixture directories");
+    std::fs::write(path, text).expect("fixture file");
+}
+
+/// The default at a virtual root is the **member→faces** shape, and `full` is the one word that
+/// buys the per-member trees back.
+/// 虚拟根上的默认是**成员→面数**的形状，而 `full` 就是买回逐成员树的那一个词。
+///
+/// The measured reason: a workspace-root `registry` cost 1,558 characters, most of them the trees of
+/// members the caller had not asked about yet. What must not change with the shape is *what the
+/// answer says about the tree* — every member, its status and its face count — so those are asserted
+/// on the short form too, and only the per-member sections are asserted **absent**.
+/// 量到的理由：工作区根上一次 `registry` 花 1,558 个字符，其中大多是调用方还没问到的成员的树。不随形状
+/// 改变的是**答案对被读到的那棵树说了什么**——每个成员、它的状态与它的面数——因此这些在短档上也要断言，
+/// 只断言逐成员小节**不在**。
+#[test]
+fn a_virtual_root_answers_members_and_faces_until_full_is_asked_for() {
+    let root = workspace("brief");
+    let brief = super::registry_brief(&root).expect("the short default answers");
+    assert!(brief.contains("members 2"), "{brief}");
+    for member in ["mcp-brief-a", "mcp-brief-b"] {
+        assert!(brief.contains(member), "every member is named: {brief}");
+    }
+    assert!(
+        brief.contains("0 faces"),
+        "each member's face count is the payload of the short form: {brief}"
+    );
+    assert!(
+        brief.contains("full: true") && brief.contains("(no faces)"),
+        "the way to the trees it leaves out, and each member's status, are in the answer: {brief}"
+    );
+    assert!(
+        !brief.contains("== ") && !brief.contains("source_scope.tsv"),
+        "the per-member sections and reasons are what the default leaves out: {brief}"
+    );
+
+    let full = registry(&root).expect("the expanded answer");
+    assert!(full.contains("== mcp-brief-a ("), "{full}");
+    assert!(
+        full.contains("source_scope.tsv"),
+        "the expanded answer carries the reasons the default folded: {full}"
+    );
+    assert!(
+        full.len() > brief.len(),
+        "`full` is the bigger answer by the sections it restores ({} vs {}): {full}",
+        brief.len(),
+        full.len()
+    );
+    // The member list is this answer's payload, so it must not collapse the way a preamble may:
+    // the *second* call in a session says the same thing as the first.
+    let again = super::registry_brief(&root).expect("the short default answers again");
+    assert_eq!(
+        again, brief,
+        "the short form is a stable answer, not a preamble"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The switches this batch added are advertised, and the registry one is **accepted** rather than
+/// silently ignored; `read`'s window is advertised as the 8 it now is.
+/// 这一批新加的开关被声明，而注册树的那一个是被**接受**的、不是被静默忽略；`read` 的窗口按它现在的
+/// 8 行声明。
+///
+/// The check half is pinned by advertisement here, because this batch's in-scope test file is this
+/// one: `check_tests.rs` is out of it, and calling `check` runs `cargo test`. `--census` end to end
+/// is in the measured evidence (`target/nichlink-t1/granularity-compare.txt`).
+/// `census` 那一半在这里按"被声明"钉住，因为本任务 in-scope 的测试文件就是这一个：`check_tests.rs`
+/// 不在其中，而调用 `check` 会跑 `cargo test`。`--census` 的端到端证据在量到的记录里
+/// （`target/nichlink-t1/granularity-compare.txt`）。
+#[test]
+fn the_new_granularity_switches_are_advertised_and_the_registry_one_is_accepted() {
+    let listed = crate::mcp::tools::tools();
+    let schema = |name: &str| {
+        listed
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is advertised"))["inputSchema"]["properties"]
+            .clone()
+    };
+    assert!(
+        schema("nichlink.registry").get("full").is_some(),
+        "nichlink.registry advertises `full`"
+    );
+    assert!(
+        schema("nichlink.check").get("census").is_some(),
+        "nichlink.check advertises `census`"
+    );
+    let context = schema("nichlink.read")["context"]["description"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(
+        context.contains("default 8") && !context.contains("default 40"),
+        "the read window's description must be the 8 it is: {context}"
+    );
+
+    let root = workspace("switches");
+    let reply = crate::mcp::tools::tool_call(
+        &root,
+        serde_json::json!(1),
+        &serde_json::json!({"name": "nichlink.registry", "arguments": {"full": true}}),
+    );
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert!(
+        text.contains("== mcp-switches-a ("),
+        "`full: true` is accepted and expands the answer: {text}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

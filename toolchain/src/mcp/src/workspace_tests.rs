@@ -151,6 +151,113 @@ fn a_member_root_knows_the_workspace_above_it() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// The third nail: the preamble is spent **once per root**. The answer that opens a root
+/// carries the census and a row per member; the next answer for the same root — whatever tool
+/// asks — carries the one-line index instead, census and all; and a *change* of root buys the
+/// rows back.
+/// 第三枚钉子：前言**每个根只花一次**。打开一个根的那份答案带着普查与逐成员一行；同一个根的下一条
+/// 答案——无论哪个工具问——带的是那一行索引，普查也在里面；而**换根**会把那些行买回来。
+///
+/// The index repeats the census verbatim rather than abbreviating it, so this pin can assert the
+/// same counts on both shapes: a compressed answer must not be able to say less about the tree it
+/// read than the full one did.
+/// 索引逐字重复普查而不是缩写它，因此这枚钉子可以在两种形态上断言同一份计数：一份压缩过的答案，不许
+/// 对"它读过的那棵树"说得比完整形态更少。
+#[test]
+fn the_preamble_is_spent_once_per_root_and_a_change_of_root_brings_it_back() {
+    let fixture = workspace("preamble");
+    super::forget_announced();
+    let opened = crate::mcp::registry::registry(&fixture.root).expect("the root opens");
+    assert!(opened.contains(&fixture.census()), "{opened}");
+    for member in [&fixture.host, &fixture.framework, &fixture.tool] {
+        assert!(
+            ["not built", "no faces", "unresolvable"]
+                .iter()
+                .any(|word| opened.contains(&format!("  {word:<13} {member:<30} "))),
+            "every member gets a row when the root opens, `{member}` did not: {opened}"
+        );
+    }
+
+    // A **different tool** on the same root pays nothing: what is remembered is the root, not
+    // the tool, so the second answer cannot be shorter merely because the first one was registry.
+    // 同一个根上的**另一个工具**什么都不同付：记住的是根而不是工具，因此第二条答案不会仅仅因为第一条
+    // 是 registry 就短一截。
+    let again = crate::mcp::search::search(&fixture.root, &json!({"query": "button"}))
+        .expect("the same root answers again");
+    let index = format!(
+        "workspace {} · members 3 · built 0 · census {}",
+        fixture.root.display(),
+        fixture.census()
+    );
+    assert!(
+        again.contains(&index),
+        "the second answer is the index line: {again}"
+    );
+    assert!(
+        !again.contains(&format!("  {:<13} {:<30} ", "not built", fixture.host)),
+        "the rows are not repeated: {again}"
+    );
+
+    let other = workspace("preamble-other");
+    let elsewhere = crate::mcp::registry::registry(&other.root).expect("another root opens");
+    assert!(elsewhere.contains(&other.census()), "{elsewhere}");
+    let back = crate::mcp::registry::registry(&fixture.root).expect("the first root opens again");
+    assert!(
+        back.contains(&fixture.census()) && back.contains("== "),
+        "a change of root buys the rows back: {back}"
+    );
+    assert!(
+        back.contains(&format!("  {:<13} {:<30} ", "not built", fixture.host)),
+        "the rows are back: {back}"
+    );
+}
+
+/// The fourth nail: the degradation reason is expanded by the face and build tools and folded
+/// everywhere else — and the two facts a row must never lose stay in **both** shapes: the status
+/// word (`not built`, `unresolvable`), and why a member has no faces.
+/// 第四枚钉子：降级原因由面与构建类工具展开、其余地方折起来——而一行绝不能丢的两件事在**两种**形态里
+/// 都在：状态词（`not built`、`unresolvable`），以及一个成员为什么没有面。
+#[test]
+fn the_degradation_reason_is_expanded_by_the_face_and_build_tools_only() {
+    let fixture = workspace("reasons");
+    super::forget_announced();
+    let registry = crate::mcp::registry::registry(&fixture.root).expect("registry answers");
+    assert!(
+        registry.contains(&format!(
+            "  {:<13} {:<30} tree unavailable (no source tree at",
+            "unresolvable", fixture.tool
+        )),
+        "a face tool expands the reason in its row: {registry}"
+    );
+    assert!(
+        registry.contains("1 faces; not built (cannot read"),
+        "a face tool expands the not-built reason too: {registry}"
+    );
+
+    super::forget_announced();
+    let search = crate::mcp::search::search(&fixture.root, &json!({"query": "button"}))
+        .expect("search answers");
+    assert!(
+        search.contains(&format!(
+            "  {:<13} {:<30} tree unavailable\n",
+            "unresolvable", fixture.tool
+        )),
+        "a lookup tool folds the unresolvable reason away: {search}"
+    );
+    assert!(
+        search.contains("1 faces; not built\n"),
+        "a lookup tool folds the not-built reason away: {search}"
+    );
+    assert!(
+        !search.contains("not built (cannot read"),
+        "the folded row carries no reason: {search}"
+    );
+    assert!(
+        search.contains("no registration face under src/"),
+        "why a member has no faces is not the reason that folds: {search}"
+    );
+}
+
 #[test]
 fn the_registry_tool_answers_a_virtual_root_with_every_member() {
     let fixture = workspace("registry");

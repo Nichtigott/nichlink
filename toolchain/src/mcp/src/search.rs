@@ -62,10 +62,25 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         .and_then(Value::as_u64)
         .map_or(DEFAULT_LIMIT, |value| value.clamp(1, 200) as usize);
     if arguments.get("query").is_some() && arguments.get("literal").is_some() {
-        return Err(
-            "`query` matches names and `literal` matches text; pass one of them, not both"
-                .to_owned(),
-        );
+        // The refusal names the key the caller should have kept, and the shape of what it passed is
+        // what decides it: a bare name is `query`'s question, and anything else — call punctuation,
+        // a sentence, a message — is text, which is `literal`'s. Naming the key is the point: the
+        // sixth round's arm lost this call to the refusal and would have spent the next one working
+        // out which key it meant.
+        // 拒绝点名调用方本该留下哪个键，而它传入东西的形状就是判据：裸名是 `query` 的问题，别的一切
+        // ——调用的标点、一句话、一条消息——都是文本，也就是 `literal` 的问题。点名那个键正是要点：
+        // 第六轮的成员为这条拒绝白花了一次调用，而它接下来还得再花一次才弄清自己指的是哪个键。
+        let query = arguments.get("query").and_then(Value::as_str).unwrap_or("");
+        let keep = if is_bare_name(query) {
+            format!("`{query}` is a bare name, so keep `query` and drop `literal`")
+        } else {
+            "what you passed to `query` is not a bare name, so keep `literal` and drop `query`"
+                .to_owned()
+        };
+        return Err(format!(
+            "`query` matches names (faces, files, functions) and `literal` matches text (raw \
+             bytes, comments included); pass one of them, not both — {keep}"
+        ));
     }
     if let Some(literal) = arguments.get("literal").and_then(Value::as_str) {
         // A hit with no context is a line number the caller then has to `read` around — the measured
@@ -355,6 +370,21 @@ fn literal_search(
         // 调用方最需要知道**搜的是哪棵树**的时刻，恰恰是什么都没匹配上的时刻：光一句 "no matches"
         // 分不出"这棵树里没有"与"在错的根上搜了"。
         results.push(format!("no matches in {}", root.display()));
+        // A literal that reads like a **spelling** and matched nothing is the round's white call:
+        // `.post(`, `Store::post`, `entry.postable(` are code, not text, and the text question is
+        // the wrong question for them — what answers them is a name, which is what `query` takes.
+        // The line names the key, the bare name the spelling writes, and the call to make, because
+        // that is what a caller needs in order not to spend a second call discovering it.
+        // 一个读起来像**拼法**、却什么都没匹配上的字面量正是那一轮的白跑：`.post(`、
+        // `Store::post`、`entry.postable(` 是代码而不是文本，而"文本"这个问题对它们是错的问题——
+        // 能回答它们的是名字，也就是 `query` 收的东西。这一行点名那个键、这段拼法写出的裸名、以及该发的
+        // 调用，因为调用方需要的正是这些，好让它不必再花一次调用才发现这件事。
+        if let Some(name) = spelled_name(literal) {
+            results.push(format!(
+                "next   that is a spelling, not text: for a name (a face, a file, a function) pass \
+                 `query` — this spelling writes `{name}`, so `search {{query: \"{name}\"}}`"
+            ));
+        }
     } else if context == 0 {
         // Guidance in the answer rather than in a preamble: prose instructions measured 0/4
         // compliance, while the one pointer embedded in a response was followed immediately.
@@ -642,6 +672,55 @@ fn face_line(face: &FaceView, built: &TreeDelta) -> String {
         "face  {:<40} kind={:<14} module={:<28} source={}  [{status}]",
         face.path, face.kind, face.module, face.source
     )
+}
+
+/// Whether the text is a **bare name** — the one shape `query` answers.
+/// 该文本是否是一个**裸名**——`query` 唯一能回答的那种形状。
+///
+/// A name is an identifier and nothing else: letters, digits and `_`, starting with a letter or
+/// `_`. `Button`, `gauge_value` and `postable` are names; `.post(`, `does not target framework` and
+/// `a::b` are not, and the refusal above reads this to say which key to keep.
+/// 名字就是标识符本身：字母、数字与 `_`，以字母或 `_` 开头。`Button`、`gauge_value` 与 `postable`
+/// 是名字；`.post(`、`does not target framework` 与 `a::b` 不是，上面的拒绝读它来说出该留下哪个键。
+fn is_bare_name(text: &str) -> bool {
+    let text = text.trim();
+    !text.is_empty()
+        && text
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_alphabetic() || first == '_')
+        && text
+            .chars()
+            .all(|letter| letter.is_alphanumeric() || letter == '_')
+}
+
+/// The bare name a call-shaped literal **writes**, or `None` when the text is not a spelling.
+/// 一段形似调用的字面量所**写出的**裸名；当该文本不是拼法时为 `None`。
+///
+/// The question this serves is "did the caller paste code where the tool asks for text": a literal
+/// that is one code token — it carries `.`, `::` or a trailing `(`, and no whitespace anywhere — is a
+/// spelling, and what answers it is the name inside it. `.post(` writes `post`, `Store::post` writes
+/// `post`, `entry.postable(` writes `postable`. Prose is excluded on purpose: a sentence that merely
+/// ends in a period is text, and pointing it at `query` would buy a second white call rather than
+/// save one.
+/// 这一问所服务的问题是"调用方是不是把代码贴到了工具要文本的地方"：一个只由一段代码组成的字面量
+/// ——带 `.`、带 `::`、或以 `(` 结尾，且任何位置都没有空白——就是一个拼法，而能回答它的是它里面的那个
+/// 名字。`.post(` 写出 `post`，`Store::post` 写出 `post`，`entry.postable(` 写出 `postable`。散文被
+/// 有意排除：仅仅以句号结尾的一句话是文本，把它指向 `query` 会买来第二次白跑，而不是省下一次。
+fn spelled_name(literal: &str) -> Option<String> {
+    let text = literal.trim();
+    let spelling = !text.is_empty()
+        && !text.chars().any(char::is_whitespace)
+        && (text.contains('.') || text.contains("::") || text.ends_with('('));
+    if !spelling {
+        return None;
+    }
+    let head = text.trim_end_matches('(');
+    let last = head.rsplit("::").next().unwrap_or(head);
+    let name = last
+        .rsplit(|letter: char| !(letter.is_alphanumeric() || letter == '_'))
+        .find(|part| !part.is_empty())?;
+    is_bare_name(name).then(|| name.to_owned())
 }
 
 #[cfg(test)]

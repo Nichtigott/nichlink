@@ -185,11 +185,63 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
     // without anybody hand-sweeping the tree.
     // 全树那一半：症状会收窄范围，而本工具按面作答；开放式的问题"还有别的问题吗"没有东西替它收窄，
     // 总账就是那个不必有人手工扫树也能回答它的东西。
+    //
+    // It is **sampled** by default and whole on request. The face's own verdict is what a caller
+    // ran this tool for; the census is the open question's answer, and a caller that asked for one
+    // face was paying for both. The sample keeps the first rows — the constants and the nearest
+    // findings — plus the two lines that say what the census is *not*, because those are the ones
+    // that stop an inventory from reading as a measurement.
+    // 它默认**抽样**、按要求给全表。调用方跑这个工具为的是**面自己的结论**，而总账是那个开放式问题的
+    // 答案——只问了一个面的调用方在为两者付钱。样本保留最前面的行——常量与最近的发现——外加说出这份
+    // 总账**不是**什么的那两行，因为正是那两行不让一份清单被读成一次量度。
     match crate::mcp::claims::census(root) {
-        Ok(census) => lines.extend(census),
+        Ok(census) => {
+            if arguments.get("census").and_then(Value::as_bool) == Some(true) {
+                lines.extend(census);
+            } else {
+                lines.extend(census_sample(&census));
+            }
+        }
         Err(reason) => lines.push(format!("census unavailable ({reason})")),
     }
     Ok(lines.join("\n"))
+}
+
+/// How many census rows the default `check` keeps before it points at `census: true`.
+/// 默认的 `check` 在指向 `census: true` 之前保留多少行总账。
+const CENSUS_SAMPLE: usize = 5;
+
+/// The census rows the default reply carries: the head of the table, and the lines that say what
+/// the table is not.
+/// 默认回复携带的总账行：表头一段，以及说出这份表**不是**什么的那几行。
+///
+/// The boundary lines are kept unconditionally rather than by position, because they are not rows
+/// of the inventory — they are the sentence that keeps the inventory from being read as one, and a
+/// sample that dropped them would be exactly the false green the census exists against. What is
+/// left out is counted through [`crate::mcp::truncation::withheld`], the one truncation outlet, so
+/// the withheld count, the cap and the way to the rest are all named.
+/// 边界行是**无条件**保留的，而不是按位置保留：它们不是这份清单的行，而是让这份清单不被读成一次量度
+/// 的那句话，丢掉它们的抽样恰恰是这份总账要对付的那种假绿。省下的部分经
+/// [`crate::mcp::truncation::withheld`]——唯一那个截断出口——计数，因此被扣下的数量、上限与拿到其余
+/// 部分的办法都会被点名。
+fn census_sample(census: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = census.iter().take(CENSUS_SAMPLE).cloned().collect();
+    for line in census {
+        if line.starts_with("  not covered") && !kept.contains(line) {
+            kept.push(line.clone());
+        }
+    }
+    let omitted = census.len().saturating_sub(kept.len());
+    if omitted > 0 {
+        kept.push(withheld(
+            omitted,
+            census.len(),
+            CENSUS_SAMPLE,
+            "census lines",
+            "pass `census: true` for the whole table",
+        ));
+    }
+    kept
 }
 
 /// What to do about a run that did not pass, in the answer rather than in a preamble.

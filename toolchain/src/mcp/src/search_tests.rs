@@ -283,8 +283,59 @@ fn a_literal_search_finds_text_in_strings_and_comments() {
     assert!(text.contains("src/literal_probe.rs:2:"), "{text}");
     let error = search(&root, &json!({"query": "Button", "literal": "x"})).expect_err("a refusal");
     assert!(error.contains("pass one of them"), "{error}");
+    assert!(
+        error.contains("keep `query`"),
+        "the refusal names the key the bare name belongs to: {error}"
+    );
     let none = search(&root, &json!({"literal": "nowhere-at-all"})).expect("an answer");
     assert!(none.contains("no matches"), "{none}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The round's white call, pinned: a literal that is a **spelling** and matched nothing says which
+/// question answers it, and a literal that is plain text does not get that second suggestion.
+/// 那一轮的白跑，钉住：一段**拼法**式的字面量什么都没匹配上时，说出该由哪个问题来答；而一段纯文本
+/// 的字面量不会得到那第二条建议。
+///
+/// The line is what turns a white call into a next step: `.post(`, `Store::post` and `entry.postable(`
+/// are code pasted where the tool asks for text, and the name inside them is what `query` answers.
+/// 这一行正是把一次白跑变成下一步的东西：`.post(`、`Store::post` 与 `entry.postable(` 是被贴到了工具
+/// 要文本的地方的代码，而它们里面的那个名字才是 `query` 答的东西。
+#[test]
+fn a_spelling_that_matches_nothing_names_the_name_search() {
+    let (root, _name) = package("spelling");
+    std::fs::write(
+        root.join("src/spelling_probe.rs"),
+        "pub fn post() {}\n\
+         pub fn caller() { post(); }\n",
+    )
+    .expect("probe source");
+    // `post(` is text and it hits here — the call site is written that way — so the alternative is
+    // not offered: a literal with hits has answered the question it was asked.
+    let hit = search(&root, &json!({"literal": "post("})).expect("an answer");
+    assert!(hit.contains("src/spelling_probe.rs:2:"), "{hit}");
+    assert!(
+        !hit.contains("next"),
+        "a literal that matched needs no alternative: {hit}"
+    );
+    // `Store::post` is a spelling of a name no byte of this tree writes, and that empty answer is
+    // the one that has to point somewhere: the root, then the key and the bare name.
+    let none = search(&root, &json!({"literal": "Store::post"})).expect("an answer");
+    assert!(
+        none.contains("no matches in "),
+        "the empty answer still carries the root: {none}"
+    );
+    assert!(
+        none.contains("next   ") && none.contains("writes `post`") && none.contains("`query`"),
+        "the spelling points at the name search, with the name in it: {none}"
+    );
+    // Prose is text: the same miss gets the root and nothing else.
+    let prose = search(&root, &json!({"literal": "nowhere at all"})).expect("an answer");
+    assert!(prose.contains("no matches in "), "{prose}");
+    assert!(
+        !prose.contains("next"),
+        "prose is text; `query` is not its question: {prose}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

@@ -45,16 +45,85 @@ use crate::mcp::workspace::{self, Member, Scope, Tree};
 /// 就是这个包自己的名字。**虚拟清单**不命名任何包，因此它按它实际的样子——工作区——作答：逐成员
 /// 一节，各自在自己的名字之下，而它们上方是每个成员的状态普查。
 pub(crate) fn registry(root: &Path) -> Result<String, String> {
+    registry_with(root, true)
+}
+
+/// The registry's **default** answer at a virtual workspace root: the members and the faces each
+/// one declares, not each member's whole tree.
+/// 虚拟工作区根上注册树的**默认**答案：成员，以及每个成员声明多少个面——不是每个成员的整棵树。
+///
+/// The measured reason is what a workspace-root call used to cost: 1,558 characters, most of them
+/// the per-member trees of members whose answer the caller had not asked for yet. What a reader
+/// actually needs first is the shape — which members there are and which of them declare anything —
+/// and `full: true` is one word away. A **package** root is unchanged: there the tree *is* the
+/// answer, and there is no member list to summarize.
+/// 量到的理由是一次工作区根调用过去的代价：1,558 个字符，其中大多是调用方还没问到的成员的整棵树。
+/// 读取方真正先需要的是形状——有哪些成员、其中哪些声明了东西——而 `full: true` 只差一个词。**包**根
+/// 逐字节不变：在那里树**就是**答案，也没有成员清单可概括。
+pub(crate) fn registry_brief(root: &Path) -> Result<String, String> {
+    registry_with(root, false)
+}
+
+/// The two shapes the tool chooses between, so the scope decision below has one spelling.
+/// 工具在两种形态之间选择，因此下面的作用域判断只有一处拼法。
+fn registry_with(root: &Path, full: bool) -> Result<String, String> {
     match workspace::scope(root)? {
         Scope::Package(namespace) => {
             let member = Member::package(root, namespace);
             registry_body(&member, &serde_json::json!({}))
         }
-        Scope::Workspace(members) => {
+        Scope::Workspace(members) if full => {
             let arguments = serde_json::json!({});
             workspace::merge(root, &members, &arguments, registry_body)
         }
+        Scope::Workspace(members) => Ok(members_and_faces(root, &members)),
         Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
+    }
+}
+
+/// The short default: the root, one line per member, and the face count that member declares.
+/// 短默认档：根，逐成员一行，以及该成员声明多少个面。
+///
+/// It is **not** built through [`workspace::roster`], and that is a decision rather than an
+/// oversight: the roster is a *preamble* — it is allowed to collapse to one line once this session
+/// has opened the root — while the member list here **is** the answer. A default that answered
+/// `members 2` and no names on the second call would be a different answer to the same question.
+/// 它**不**经 [`workspace::roster`] 构成，这是决定而不是疏漏：普查是**前言**——本会话打开过这个根之后
+/// 它可以塌成一行——而这里的成员清单**就是**答案。一个在第二次调用时只答 `members 2`、不点名任何成员的
+/// 默认档，是对同一个问题的另一个答案。
+fn members_and_faces(root: &Path, members: &[Member]) -> String {
+    let mut output = format!(
+        "workspace {} · members {} · `full: true` for each member's tree\n",
+        root.display(),
+        members.len(),
+    );
+    for member in members {
+        output.push_str(&format!(
+            "  {:<32} {:<14} ({})\n",
+            member.name,
+            faces_word(member),
+            member.status(),
+        ));
+    }
+    output
+}
+
+/// What one member's row says about faces, in the one word it can carry.
+/// 一个成员那一行对面数说的一句话，用它能带的那个词。
+///
+/// The states are the ones the roster row already tells apart, said short: a member that declared
+/// nothing says `0 faces`, a member whose records do not answer says `faces unknown` rather than
+/// borrowing a count, and a member with no tree says `no tree` — its status word beside it is
+/// `unresolvable`.
+/// 这几种状态就是普查行已经分辨出的那几种，只是用短的说法：什么都没声明的成员写 `0 faces`，记录答不了
+/// 的成员写 `faces unknown` 而不是借一个计数，没有树的成员写 `no tree`——它旁边的状态词是 `unresolvable`。
+fn faces_word(member: &Member) -> String {
+    match member.tree() {
+        Ok(Tree::Published(tree)) if tree.records_no_faces() => "0 faces".to_owned(),
+        Ok(Tree::Published(tree)) if tree.faces_unknown() => "faces unknown".to_owned(),
+        Ok(Tree::Published(tree)) => format!("{} faces", tree.faces().len()),
+        Ok(Tree::Derived { faces, .. }) => format!("{} faces", faces.len()),
+        Err(_) => "no tree".to_owned(),
     }
 }
 

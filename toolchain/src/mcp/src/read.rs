@@ -2,17 +2,22 @@
 //! `nichlink.read`：对一份源码文件的一次有界读取，以及该文件的总行数。
 //!
 //! The window was the only shape this tool had, and it was a shape the caller could
-//! not see: `{path, line}` answered with ±40 lines around that line, capped at 81,
-//! and said nothing about how much file was left. Reading a 473-line file therefore
-//! took six calls and no call could tell the reader it was done — the reply carried
-//! no total. The bounded window stays the default, because the maintainer's rule is
-//! that a bridge does not feed the whole tree by default, but the two explicit
-//! shapes are now available and the **total line count is on every header**, so even
-//! a windowed read says how much of the file is still unread.
-//! 窗口是此前唯一的形状，而这是调用方看不见的形状：`{path, line}` 以该行为中心返回 ±40 行、上限 81
-//! 行，且对"还剩多少文件"一言不发。于是读一个 473 行的文件要六次调用，而没有一次调用能告诉读者它读完了
-//! ——回复里没有总数。有界窗口仍是默认，因为维护者的原则是本桥默认不投喂整棵树；但两种显式形状现在可用，
-//! 而**每个标头都带总行数**，因此即使是一次窗口读取，也说得出这个文件还有多少没读。
+//! not see: `{path, line}` answered with a half-width of 40 — 81 lines at most — and
+//! said nothing about how much file was left. Reading a 473-line file therefore took
+//! six calls and no call could tell the reader it was done — the reply carried no
+//! total. The bounded window stays the default, because the maintainer's rule is that
+//! a bridge does not feed the whole tree by default, and what a caller that names only
+//! a line is asking for is a **peek**: its half-width is [`DEFAULT_CONTEXT`] (8, so 17
+//! lines), because the 40 it used to be was measured as the largest single class of
+//! the characters this bridge sent back. The two explicit shapes are how a caller asks
+//! for more, and the **total line count is on every header**, so even a windowed read
+//! says how much of the file is still unread.
+//! 窗口是此前唯一的形状，而这是调用方看不见的形状：`{path, line}` 以该行为中心返回半宽 40 行、上限
+//! 81 行，且对"还剩多少文件"一言不发。于是读一个 473 行的文件要六次调用，而没有一次调用能告诉读者它读完了
+//! ——回复里没有总数。有界窗口仍是默认，因为维护者的原则是本桥默认不投喂整棵树，而只点名一行的调用方要的
+//! 是一次**窥视**：它的半宽是 [`DEFAULT_CONTEXT`]（8，也就是 17 行），因为它曾经的 40 被量到是本桥
+//! 送回的字符里最大的一类。两种显式形状才是调用方要更多东西的方式，而**每个标头都带总行数**，因此即使是
+//! 一次窗口读取，也说得出这个文件还有多少没读。
 //!
 //! Three shapes, one header. `whole: true` prints the file; `lines: "120-260"` prints
 //! that forward range; neither means the window around `line`. The window and the
@@ -55,7 +60,18 @@ pub(crate) const MAX_FULL_READ_LINES: usize = 1200;
 
 /// The half-width of the window a request that names no span gets.
 /// 没有点名区间的请求所得窗口的半宽。
-const DEFAULT_CONTEXT: usize = 40;
+///
+/// Eight lines either side, so a bare `{path, line}` answers with 17 lines. It was forty, and that
+/// default was the largest single class of the characters this bridge sent back — a peek was being
+/// paid for at the price of a chunk of the file. The rule it keeps is the maintainer's: a bridge
+/// does not feed the whole tree by default, which is why this number stays small and why the two
+/// explicit shapes exist. `context` raises the half-width up to [`MAX_CONTEXT`], `whole`/`lines`
+/// leave the window entirely, and [`MAX_READ_LINES`] still bounds what any window prints.
+/// 每侧八行，因此一个只给 `{path, line}` 的请求回 17 行。它曾经是四十，而那个默认是本桥送回的字符里最大
+/// 的一类——一次窥视被按整块文件的价钱买下。它守的原则是维护者的：本桥默认不投喂整棵树，这既是这个数字保持
+/// 小的原因，也是两种显式形状存在的原因。`context` 把半宽抬到最多 [`MAX_CONTEXT`]，`whole`/`lines` 干脆
+/// 离开窗口，而 [`MAX_READ_LINES`] 仍然约束任何窗口能打印多少。
+const DEFAULT_CONTEXT: usize = 8;
 
 /// The widest window half-width a caller can ask for.
 /// 调用方能要求的最大窗口半宽。
