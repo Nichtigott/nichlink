@@ -506,8 +506,14 @@ pub(crate) fn tools() -> Vec<Value> {
              exists because the alternative was measured: a defect compiled only under a \
              non-default feature cannot fail on the default face, so a green default run is not \
              evidence about that feature. `nichlink.status` says which faces exist; this says what \
-             one of them did. The full output goes to `target/nichlink/out/check-<face>.log`, and \
-             the reply is the exact command, the exit code, the elapsed time, every `test result:` \
+             one of them did. **The reply's first line is the run's verdict** — `verdict  passed \
+             (cargo exit 0)`, `verdict  failed (cargo exit 101)`, or `verdict  unknown (…)` for a run \
+             that timed out, was signalled, or left no `test result:` line — so a reader that stops at \
+             the top of the reply cannot read a failing face as green. That verdict is the run's, \
+             **not the one-shot client's exit code**: `--call` exits `0` when the tool answered (this \
+             tool answers even about a failing run), `1` when it refused, `2` on a usage error. The \
+             full output goes to `target/nichlink/out/check-<face>.log`, and the rest of the reply is \
+             the exact command, cargo's own exit code, the elapsed time, every `test result:` \
              line (capped, and the cap says so), the failing test names, and that path. A run that \
              reaches `timeout_ms` (default 900000, clamped to 1000–3600000) is reported as \
              **unknown**, never as a pass, and the reply says the direct child was killed and its \

@@ -1,6 +1,8 @@
 //! Pins for the one-shot client: the list is the catalogue one entry each (name, first sentence,
-//! keys), and a call's exit code is its verdict.
-//! 一次性客户端的钉子：清单是目录的"每条一目"形态（名字、第一句、键名），而一次调用的退出码就是它的判定。
+//! keys), a call's exit code says how the call went (answered, refused, or a usage error), and the
+//! tool's own verdict is in its text — `check` puts it on the reply's first line.
+//! 一次性客户端的钉子：清单是目录的"每条一目"形态（名字、第一句、键名），一次调用的退出码说的是这次调用
+//! 怎么样（作答、拒绝、或用法错），而工具自己的判定在它的文本里——`check` 把它放在回复第一行。
 
 use super::*;
 use serde_json::json;
@@ -102,10 +104,63 @@ fn the_instructions_name_the_symptom_and_the_call() {
     );
 }
 
-/// A call makes its verdict an exit code: answered, refused, or malformed.
-/// 一次调用把判定变成退出码：作答、拒绝、或畸形。
+/// The table no longer says the exit code is the verdict: round 7 measured that promise false, and a
+/// reader who believed it read a red face as green.
+/// 流程表不再说"退出码就是判定"：第七轮量出那句承诺是假的，而信了它的读者把红面读成了绿。
+///
+/// The measurement, on the frozen fixture `target/round7/s5`: `check` answered `exit   101` on line
+/// six of the reply while the one-shot client exited `0`, so the promise held for the green `s1` and
+/// failed exactly where a reader needed it. What replaces it names both halves — where the verdict
+/// is (`check`'s first line) and what the exit code does say (`0`/`1`/`2` = answered/refused/usage
+/// error). The strings are pinned verbatim, because the failure was a *sentence* nobody checked.
+/// 实测（冻结夹具 `target/round7/s5`）：`check` 把 `exit   101` 写在回复第六行，而一次性客户端以 `0`
+/// 退出——那句承诺对绿的 `s1` 成立、恰好在读者最需要它的地方不成立。替换它的文本把两半都点名——判定在哪
+/// （`check` 的第一行）以及退出码到底说的是什么（`0`/`1`/`2` = 作答/拒绝/用法错）。字符串逐字钉住，因为
+/// 失败的正是一句没人检查的**话**。
 #[test]
-fn a_call_exits_with_its_verdict() {
+fn the_table_does_not_read_the_exit_code_as_the_verdict() {
+    assert!(
+        !INSTRUCTIONS.contains("exit code the verdict"),
+        "the promise the round measured false is gone: {INSTRUCTIONS}"
+    );
+    for expected in [
+        "verdict is the first line of the reply",
+        "`0` answered, `1` refused, `2` a usage error",
+        "verdict  passed (cargo exit 0)",
+        "verdict  failed (cargo exit 101)",
+    ] {
+        assert!(
+            INSTRUCTIONS.contains(expected),
+            "missing `{expected}`: {INSTRUCTIONS}"
+        );
+    }
+}
+
+/// `--list check` says which line the verdict lands on and what the client's exit code means, because
+/// the measured defect was an agent taking the exit code for the verdict.
+/// `--list check` 说明判定落在哪一行、以及客户端的退出码是什么意思，因为量到的缺陷正是 agent 把退出码当判定。
+#[test]
+fn the_check_description_names_the_verdict_line_and_the_exit_code() {
+    let check = describe_tool("check").expect("the check tool is described");
+    for expected in [
+        "The reply's first line is the run's verdict",
+        "verdict  passed (cargo exit 0)",
+        "verdict  failed (cargo exit 101)",
+        "not the one-shot client's exit code",
+        "`0` when the tool answered",
+        "`1` when it refused",
+        "`2` on a usage error",
+    ] {
+        assert!(check.contains(expected), "missing `{expected}`: {check}");
+    }
+}
+
+/// The exit code says how the **call** went — answered, refused, or a usage error — and never what
+/// the tool found: `check` on a failing face still answers, so this client still exits `0` here.
+/// 退出码说的是这次**调用**怎么样——作答、拒绝、或用法错——从不说工具发现了什么：`check` 在失败的面上
+/// 仍是作答，因此这里客户端仍以 `0` 退出。
+#[test]
+fn the_client_exit_code_says_how_the_call_went() {
     let temp = std::env::temp_dir().join(format!("nichlink-client-{}", std::process::id()));
     std::fs::create_dir_all(&temp).expect("scratch");
     let root = temp.display().to_string();
@@ -120,7 +175,7 @@ fn a_call_exits_with_its_verdict() {
         Client::Serve => panic!("--call is a call"),
     }
     match run_client(&args(&["--call"])) {
-        Client::Called(code) => assert_eq!(code, 2, "a malformed request is exit 2"),
+        Client::Called(code) => assert_eq!(code, 2, "a usage error is exit 2"),
         Client::Serve => panic!("--call is a call"),
     }
     let _ = std::fs::remove_dir_all(&temp);

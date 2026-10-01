@@ -18,11 +18,20 @@
 //!   ordered and short instead of as ~36,000 characters of prose in one truncated payload.
 //!   `--list` 打印流程表与每个工具一行，于是描述面以"有组织且短"的形式到达，而不是一帧约 36,000 字符、
 //!   还被截断的散文。
-//! - `nichlink-mcp --call <tool> --json '{…}'` runs exactly one tool and **makes the exit code the
-//!   verdict**: `0` answered, `1` the tool refused (its text goes to stderr), `2` the request itself
-//!   was malformed. Plain `--key value` arguments work too, so the common call needs no JSON.
-//!   `--call` 只跑一个工具，并**让退出码成为判定**：`0` 作答、`1` 工具拒绝（文本走 stderr）、`2` 请求本身
-//!   畸形。也接受普通的 `--key value` 参数，因此常见的调用不必写 JSON。
+//! - `nichlink-mcp --call <tool> --json '{…}'` runs exactly one tool; **its exit code is the
+//!   call's, never the tool's**: `0` the tool answered (its text goes to stdout), `1` it refused (its
+//!   text goes to stderr), `2` the request itself was malformed (a usage error). The tool's own
+//!   **verdict is in the reply body** — `check`, the one tool that judges a run, puts it on the
+//!   reply's **first line**. Round 7 measured the cost of the old promise that a call's exit code was
+//!   the tool's verdict: `check` on the failing fixture `target/round7/s5` answered with `exit   101`
+//!   on line six while this client exited `0`, so anything that read the exit code as the verdict read
+//!   a red face as green. Plain `--key value` arguments work too, so the common call needs no JSON.
+//!   `--call` 只跑一个工具；**它的退出码是这次调用的，绝不是工具的**：`0` 工具作答（文本走 stdout）、
+//!   `1` 工具拒绝（文本走 stderr）、`2` 请求本身畸形（用法错）。工具自己的**判定在回复正文里**——
+//!   `check` 这个唯一判定一次运行的工具把它放在回复的**第一行**。第七轮量到了旧承诺的代价——那句说
+//!   "一次调用的退出码就是工具的判定"的话：`check` 在失败夹具 `target/round7/s5` 上把 `exit   101`
+//!   写在第六行，而这个客户端以 `0` 退出，于是任何"把退出码当判定"的读法都把红面读成了绿面。也接受
+//!   普通的 `--key value` 参数，因此常见的调用不必写 JSON。
 //!
 //! Neither shape replaces the stdio bridge: with no arguments this binary still serves it.
 //! 两种形状都不取代 stdio 桥：不带参数时这个二进制仍然做服务。
@@ -47,7 +56,10 @@ Read the symptom first, then take the shortest route it names. A failing test? R
 already have (`cargo test`) and keep its output: the failing assertion's own words are the next \
 clue. `check {face}` is the same run aimed at **one face** — reach for it when the default face is \
 green and you suspect another one (`face: \"all\"`, or a feature name), because it names the face \
-it ran and makes the exit code the verdict. **If the symptom is in something the \
+it ran. **Its verdict is the first line of the reply, not this client's exit code**: the exit code \
+says only how the call went (`0` answered, `1` refused, `2` a usage error), and `check` answers \
+even about a failing run — so read the `verdict  passed (cargo exit 0)` line or the \
+`verdict  failed (cargo exit 101)` line before anything else. **If the symptom is in something the \
 code produces** (a rendered report, a generated record), `search {literal}` on that product's own \
 words finds the line that produces it, usually in one call. **If the symptom is the assertion's \
 message**, search a short, stable phrase from it: the test framework appends `left:`/`right:` and \
@@ -227,8 +239,10 @@ pub enum Client {
     /// Serve the stdio bridge as before.
     /// 照旧做 stdio 桥服务。
     Serve,
-    /// Call one tool; the number is the exit code.
-    /// 调用一个工具；那个数字是退出码。
+    /// Call one tool; the number is the exit code of the **call** — answered (`0`), refused (`1`), or
+    /// a usage error (`2`) — never the tool's own verdict, which is in the reply's text.
+    /// 调用一个工具；那个数字是这次**调用**的退出码——作答（`0`）、拒绝（`1`）、用法错（`2`）——绝不是
+    /// 工具自己的判定，后者在回复的文本里。
     Called(i32),
 }
 
@@ -351,7 +365,8 @@ enum Refusal {
 const USAGE: &str = "\
 nichlink-mcp                 serve the stdio bridge (JSON-RPC 2.0)
 nichlink-mcp --list          the workflow table and one line per tool
-nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 malformed
+nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage error
+                             (the tool's own verdict is in its output, e.g. `check`'s first line)
     [--json '<object>'] [--root <path>] [--<key> <value> …]";
 
 /// Assemble and run one `--call`.

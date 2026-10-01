@@ -50,6 +50,22 @@ const MAX_TIMEOUT_MS: u64 = 3_600_000;
 /// 摘要对每一类明细保留多少行。
 const SAMPLE: usize = 12;
 
+/// What a log said: the lines the reply carries, and how many `test result:` lines it had.
+/// 日志说了什么：回复携带的行，以及它有几条 `test result:` 行。
+///
+/// The count is separate from the lines because it decides the verdict: a log with no result line is
+/// not a pass, and the verdict line has to be able to say that without re-reading the log.
+/// 这个计数与那些行分开，因为它决定判定：没有结果行的日志不是通过，而判定行必须能说出这件事，不能再读
+/// 一遍日志。
+pub(crate) struct Observation {
+    /// The `result` and `failed` lines, in the order the log carried them.
+    /// 按日志里的顺序排列的 `result` 与 `failed` 行。
+    pub(crate) lines: Vec<String>,
+    /// How many `test result:` lines the log had; zero means nothing ran.
+    /// 日志里有几条 `test result:` 行；零意味着什么都没跑。
+    pub(crate) results: usize,
+}
+
 /// What one finished (or killed) command produced.
 /// 一条结束（或被杀死）的命令产出了什么。
 pub(crate) struct RunOutcome {
@@ -121,6 +137,78 @@ pub(crate) fn run_command(
     })
 }
 
+/// The run's verdict, as the first line of the reply.
+/// 这次运行的判定，作为回复的第一行。
+///
+/// Round 7 measured the defect this line exists for, on the frozen fixture `target/round7/s5`:
+/// `cargo test` failed with exit 101, the reply said so on its **sixth** line (`exit   101`), and
+/// the one-shot client exited `0` — so a reader that stopped at the top of the reply, or took the
+/// client's exit code for the verdict, read a failing face as green. The verdict is now line 1, and
+/// the first two lines are enough to tell a red face from a green one.
+/// 第七轮在冻结夹具 `target/round7/s5` 上量到这一行存在的理由：`cargo test` 以 101 失败，回复把它写在
+/// **第六**行（`exit   101`），而一次性客户端以 `0` 退出——于是只在回复开头停下的读者、或把客户端退出码
+/// 当判定的读者，会把失败的面读成绿。现在判定是第 1 行，头两行就足以区分红面与绿面。
+///
+/// It is the **run's** verdict, never the call's: a timeout, a signal and a log with no
+/// `test result:` line are all `unknown`, because none of them is evidence of a pass, and the
+/// client's own `0` (answered) says nothing about any of them.
+/// 它是**这次运行**的判定，绝不是这次调用的：超时、信号、以及没有 `test result:` 行的日志都是
+/// `unknown`，因为它们都不是通过的证据，而客户端自己的 `0`（作答）对其中任何一个都没说什么。
+fn verdict(timed_out: bool, code: Option<i32>, results: usize) -> String {
+    match (timed_out, code) {
+        (true, _) => "verdict  unknown (the run timed out; a killed run is not a pass)".to_owned(),
+        (false, Some(0)) if results > 0 => "verdict  passed (cargo exit 0)".to_owned(),
+        (false, Some(0)) => {
+            "verdict  unknown (cargo exit 0, but the log has no `test result:` line: \
+                             nothing ran, and that is not a pass)"
+                .to_owned()
+        }
+        (false, Some(code)) => format!("verdict  failed (cargo exit {code})"),
+        (false, None) => {
+            "verdict  unknown (the process was signalled; a signalled run is not a pass)".to_owned()
+        }
+    }
+}
+
+/// The head of the reply: the verdict first, then what produced it.
+/// 回复的开头：判定在最前，然后是产出它的一切。
+///
+/// Only [`check`]'s own callers see the census, and it is appended *after* this: the verdict is the
+/// thing a reader stops at, and no later section may push it down.
+/// 只有 [`check`] 自己的调用方会看到总账，而它接在这之后：判定是读者会停下的那件事，后面任何一段都不
+/// 能把它挤下去。
+fn head(
+    root: &Path,
+    face: &str,
+    outcome: &RunOutcome,
+    timeout: Duration,
+    observed: &Observation,
+) -> Vec<String> {
+    let mut lines = vec![
+        verdict(outcome.timed_out, outcome.code, observed.results),
+        format!("check  cargo test{}", flags(face)),
+        format!("face   {face}"),
+        format!("root   {}", root.display()),
+        format!("elapsed {} ms", outcome.elapsed.as_millis()),
+        format!("log    {}", outcome.log.display()),
+    ];
+    match (outcome.timed_out, outcome.code) {
+        (true, _) => lines.push(format!(
+            "exit   unknown (timed out after {} ms; the direct child was killed — its own children \
+             may survive — and the log so far is at {})",
+            timeout.as_millis(),
+            outcome.log.display()
+        )),
+        (false, Some(code)) => lines.push(format!("exit   {code}")),
+        (false, None) => lines.push("exit   unknown (the process was signalled)".to_owned()),
+    }
+    lines.extend(observed.lines.iter().cloned());
+    if let Some(next) = next_step(outcome.timed_out, outcome.code) {
+        lines.push(next);
+    }
+    lines
+}
+
 /// Test this tree's faces by running them, and report only what the run said.
 /// 跑一遍这棵树的面来做测试，并只报出这次运行说了什么。
 pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -159,27 +247,13 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     let log = out_dir(root).join(format!("check-{face}.log"));
     let outcome = run_command(&mut command, timeout, &log)?;
-    let mut lines = vec![
-        format!("check  cargo test{}", flags(face)),
-        format!("face   {face}"),
-        format!("root   {}", root.display()),
-        format!("elapsed {} ms", outcome.elapsed.as_millis()),
-        format!("log    {}", outcome.log.display()),
-    ];
-    match (outcome.timed_out, outcome.code) {
-        (true, _) => lines.push(format!(
-            "exit   unknown (timed out after {} ms; the direct child was killed — its own children \
-             may survive — and the log so far is at {})",
-            timeout.as_millis(),
-            outcome.log.display()
-        )),
-        (false, Some(code)) => lines.push(format!("exit   {code}")),
-        (false, None) => lines.push("exit   unknown (the process was signalled)".to_owned()),
-    }
-    lines.extend(observation(&outcome.log)?);
-    if let Some(next) = next_step(outcome.timed_out, outcome.code) {
-        lines.push(next);
-    }
+    let observed = observation(&outcome.log)?;
+    // The verdict is line 1 (see `verdict`), ahead of everything the run produced, because round 7
+    // measured a reader taking the one-shot client's `0` for a green face while the only failure
+    // report sat on line six. The `exit` line below is the run's own code, and it stays.
+    // 判定是第 1 行（见 `verdict`），排在这次运行产出的一切之前，因为第七轮量到有读者把一次性客户端的
+    // `0` 当成绿面，而唯一那句失败报告在第六行。下面的 `exit` 行是运行自己的码，保留。
+    let mut lines = head(root, face, &outcome, timeout, &observed);
     // The tree-wide half: a symptom narrows the scope and this tool answers for a face; an open
     // "are there other problems" has nothing to narrow it, and the census is what answers that
     // without anybody hand-sweeping the tree.
@@ -277,9 +351,11 @@ fn flags(face: &str) -> String {
     }
 }
 
-/// What the log said, as the run said it.
-/// 日志说了什么，按运行自己说的样子。
-fn observation(log: &Path) -> Result<Vec<String>, String> {
+/// What the log said, as the run said it — and how many `test result:` lines it had, because a log
+/// with none is not a pass and the verdict line has to be able to say so.
+/// 日志说了什么，按运行自己说的样子——以及它有几条 `test result:` 行，因为没有的那种日志不是通过，
+/// 而判定行必须能说出这件事。
+fn observation(log: &Path) -> Result<Observation, String> {
     let mut file =
         File::open(log).map_err(|error| format!("cannot read {}: {error}", log.display()))?;
     let mut text = String::new();
@@ -341,7 +417,10 @@ fn observation(log: &Path) -> Result<Vec<String>, String> {
             "read the log named above",
         ));
     }
-    Ok(lines)
+    Ok(Observation {
+        lines,
+        results: results.len(),
+    })
 }
 
 #[cfg(test)]
