@@ -2,9 +2,19 @@
 //! what it did not cover.
 //! 总账是 `check` 的全树那一半：静态事实，每条都带着"它没覆盖什么"那一句。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use super::census;
+/// The census as the default `check` reply carries it: sampled rows and the boundary indexes.
+/// 默认 `check` 回复携带的总账：抽样的行与边界索引。
+fn census(root: &Path) -> Result<Vec<String>, String> {
+    super::census(root, false)
+}
+
+/// The census as `census: true` carries it: the whole table and the full boundary prose.
+/// `census: true` 携带的总账：整表与完整边界散文。
+fn whole(root: &Path) -> Result<Vec<String>, String> {
+    super::census(root, true)
+}
 
 /// A throwaway package with one respelled constant, one unreferenced constant, one production
 /// function no test names, and one a test does name.
@@ -131,7 +141,7 @@ fn the_walk_lists_only_the_function_no_test_can_reach() {
 #[test]
 fn the_walk_states_its_own_boundary_in_the_answer() {
     let root = reachability_package("boundary", 1);
-    let lines = census(&root).expect("the census answers").join("\n");
+    let lines = whole(&root).expect("the census answers").join("\n");
     assert!(lines.contains(super::REACHABILITY_BOUNDARY), "{lines}");
     for bound in [
         "dynamic dispatch",
@@ -159,7 +169,7 @@ fn the_walk_states_its_own_boundary_in_the_answer() {
 #[test]
 fn the_boundaries_are_one_line_indexes_under_a_budget() {
     let root = reachability_package("index", 1);
-    let lines = census(&root).expect("the census answers").join("\n");
+    let lines = whole(&root).expect("the census answers").join("\n");
     for boundary in [
         super::REACHABILITY_BOUNDARY,
         super::CENSUS_BOUNDARY,
@@ -478,7 +488,7 @@ fn a_row_without_a_function_name_omits_the_name() {
 #[test]
 fn the_branch_column_states_its_own_boundary_in_the_answer() {
     let root = branch_package("boundary");
-    let lines = census(&root).expect("the census answers").join("\n");
+    let lines = whole(&root).expect("the census answers").join("\n");
     assert!(lines.contains(super::BRANCH_BOUNDARY), "{lines}");
     for bound in [
         "a condition whose value depends on data",
@@ -554,6 +564,141 @@ fn a_tree_over_the_function_budget_is_reported_as_skipped() {
     assert!(
         !lines.contains("no test reaches `"),
         "no rows are computed for a skipped tree: {lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A package whose unreachable functions sit in two different directories, and whose root has none.
+/// 一个包：够不着的函数分住在两个目录里，而根上一个都没有。
+fn split_package(label: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-mcp-claims-split-{label}-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    for directory in ["src", "src/alpha", "src/beta", "tests"] {
+        std::fs::create_dir_all(root.join(directory)).expect("fixture dirs");
+    }
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"fixture-split-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+        ),
+    )
+    .expect("fixture manifest");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "//! A split fixture.\npub mod alpha;\npub mod beta;\n\
+         pub fn entry() -> i64 { alpha::alpha_reachable() }\n",
+    )
+    .expect("fixture root");
+    std::fs::write(
+        root.join("src/alpha/alpha.rs"),
+        "pub fn alpha_reachable() -> i64 { 1 }\npub fn alpha_orphan() -> i64 { 2 }\n",
+    )
+    .expect("fixture alpha");
+    std::fs::write(
+        root.join("src/beta/beta.rs"),
+        "pub fn beta_orphan() -> i64 { 3 }\n",
+    )
+    .expect("fixture beta");
+    std::fs::write(
+        root.join("tests/one.rs"),
+        "#[test]\nfn walks() { assert_eq!(fixture_split::entry(), 1); }\n",
+    )
+    .expect("fixture test");
+    root
+}
+
+/// The shorter reply carries the boundary **indexes**; the whole table carries the prose.
+/// 较短的回复携带边界**索引**；整表携带散文。
+///
+/// What must not be lost is settled by the answer keys rather than by taste: both forms say
+/// `not a coverage measurement`, both say what the column does not cover, and the index names both
+/// ways to the prose (`census: true`, `--list check`). The ratchet is that the index is shorter —
+/// otherwise the compression bought nothing.
+/// 什么不能丢由答案键裁定而不是口味：两种形态都说 `not a coverage measurement`、都说清那一栏不覆盖什么，
+/// 而索引点名了拿到散文的两条路（`census: true`、`--list check`）。棘轮是"索引更短"——否则这次压缩什么
+/// 都没买到。
+#[test]
+fn the_shorter_reply_carries_the_boundary_index_and_the_table_carries_the_prose() {
+    let root = reachability_package("index-forms", 1);
+    let sampled = census(&root).expect("the census answers").join("\n");
+    for index in [
+        super::REACHABILITY_BOUNDARY_INDEX,
+        super::BRANCH_BOUNDARY_INDEX,
+    ] {
+        assert!(!index.contains('\n'), "one line: {index}");
+        assert!(
+            index.contains("not a coverage measurement"),
+            "the phrase that stops an inventory reading as a measurement: {index}"
+        );
+        assert!(
+            index.contains("not covered by") && index.contains("--list check"),
+            "the index names both what it does not cover and where the prose is: {index}"
+        );
+        assert!(
+            index.contains("census: true"),
+            "and the switch that buys the prose in the same call: {index}"
+        );
+        assert!(
+            sampled.contains(index),
+            "the index is what the shorter reply carries: {index}\n{sampled}"
+        );
+    }
+    assert!(
+        !sampled.contains(super::REACHABILITY_BOUNDARY)
+            && !sampled.contains(super::BRANCH_BOUNDARY),
+        "the prose is what the shorter reply saves: {sampled}"
+    );
+    for (index, prose) in [
+        (
+            super::REACHABILITY_BOUNDARY_INDEX,
+            super::REACHABILITY_BOUNDARY,
+        ),
+        (super::BRANCH_BOUNDARY_INDEX, super::BRANCH_BOUNDARY),
+    ] {
+        assert!(
+            index.chars().count() < prose.chars().count(),
+            "the index has to be the shorter form: {} vs {}",
+            index.chars().count(),
+            prose.chars().count()
+        );
+    }
+    let full = whole(&root).expect("the census answers").join("\n");
+    assert!(
+        full.contains(super::REACHABILITY_BOUNDARY) && full.contains(super::BRANCH_BOUNDARY),
+        "the switch the index names really buys the prose: {full}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The whole table breaks the test-unreachable column down per directory, and the sample does not.
+/// 整表把"没有测试能到达"那一栏按目录拆开，而样本不拆。
+///
+/// Measured need: the column was a count plus five rows, so "which parts of this tree are the
+/// unreachable ones in" cost one call per directory (the round that produced `s3` spent 13). Two
+/// numbers per directory answer it once, and a directory with nothing unreachable is left out
+/// rather than printed as a zero.
+/// 量出来的需求：这一栏过去是一个计数加五行，于是"这棵树里够不着的是哪几块"要一个目录一次调用（产出 `s3`
+/// 的那轮花了 13 次）。每个目录两个数字一次答完，而没有够不着的函数的目录不印成一个零。
+#[test]
+fn the_whole_table_splits_the_unreachable_column_per_directory() {
+    let root = split_package("split");
+    let full = whole(&root).expect("the census answers").join("\n");
+    assert!(
+        full.contains("by directory: src/alpha 1 of 2 · src/beta 1 of 1"),
+        "each directory carries its own two numbers, alphabetically, and `src` has no row: {full}"
+    );
+    assert!(
+        full.contains("no test reaches `alpha_orphan`")
+            && full.contains("no test reaches `beta_orphan`"),
+        "the rows are still the answer: {full}"
+    );
+    let sampled = census(&root).expect("the census answers").join("\n");
+    assert!(
+        !sampled.contains("by directory"),
+        "the sample stays a sample: {sampled}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

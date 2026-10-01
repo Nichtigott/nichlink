@@ -590,8 +590,13 @@ pub(crate) fn tools() -> Vec<Value> {
              tree's test files along the same name-in-a-call-list rule the orphan view uses (five \
              rows and the withheld count, or `skipped (N functions over the limit)` when the tree is \
              larger than that walk was sized for). The sample keeps the first five rows and always \
-             the lines that say what the census is not; pass `census: true` for the whole table. \
-             That last column says what it cannot see instead of calling \
+             the lines that say what the census is not, and those lines are one-sentence **indexes** \
+             there — each keeps what it does not cover and the phrase that stops an inventory \
+             reading as a measurement. Pass `census: true` for the whole table: the full boundary \
+             prose, every test-unreachable function instead of five, and that column broken down \
+             **per directory** (`src/mcp 3 of 20 · …`) so \"which parts of this tree are the \
+             unreachable ones in\" is one call rather than one per directory. That last column says \
+             what it cannot see instead of calling \
              itself coverage: calls made through dynamic dispatch, function pointers, FFI or macro \
              expansion are invisible to it, a function reached only through a trait method or a \
              closure does not count, and matching is by name, so an unrelated same-named call \
@@ -616,7 +621,7 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{
                 "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
-                "census":{"type":"boolean","description":"print the whole census table instead of the first five rows plus the boundary lines (default false)"},
+                "census":{"type":"boolean","description":"print the whole census table instead of the sampled rows and the one-sentence boundary indexes; the whole table also names every test-unreachable function and splits that column per directory (default false)"},
                 "root":{"type":"string"}
             },"required":["face"]}),
         ),

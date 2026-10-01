@@ -268,7 +268,10 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
     // 它默认**抽样**、按要求给全表。调用方跑这个工具为的是**面自己的结论**，而总账是那个开放式问题的
     // 答案——只问了一个面的调用方在为两者付钱。样本保留最前面的行——常量与最近的发现——外加说出这份
     // 总账**不是**什么的那两行，因为正是那两行不让一份清单被读成一次量度。
-    match crate::mcp::claims::census(root) {
+    match crate::mcp::claims::census(
+        root,
+        arguments.get("census").and_then(Value::as_bool) == Some(true),
+    ) {
         Ok(census) => {
             if arguments.get("census").and_then(Value::as_bool) == Some(true) {
                 lines.extend(census);

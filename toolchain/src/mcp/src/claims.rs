@@ -23,6 +23,18 @@ use std::path::Path;
 
 const SAMPLE: usize = 5;
 
+/// How many rows one column prints when the whole table was asked for.
+/// 要求整表时，一栏最多印多少行。
+///
+/// Not "all of them": the walk was sized for a tree of a few thousand functions, and a column is a
+/// place to aim the next read rather than a dump. It is large enough to hold this checkout's whole
+/// reachability column, so on the tree it is used on it is not a cap at all — and when it does cut,
+/// the one truncation sentence names the count, the cap and the way to the rest.
+/// 不是"全部"：这次遍历是按几千个函数的树定尺寸的，而一栏是用来瞄准下一次阅读的，不是一次倒出。它大到
+/// 装得下本检出整条可达性栏，因此在它实际被用的那棵树上它根本不是一道上限——而它真的切下去时，那句唯一的
+/// 截断说明会点名数量、上限与拿到其余部分的办法。
+const WHOLE_SAMPLE: usize = 40;
+
 /// The most indexed functions the test-reachability walk answers for.
 /// 测试可达性遍历最多为多少个已索引函数作答。
 ///
@@ -54,6 +66,21 @@ const REACHABILITY_BUDGET: usize = 10_000;
 /// 这一栏点名它不覆盖什么，并且明说它"不是覆盖率量度"。
 const REACHABILITY_BOUNDARY: &str = "  not covered by the test-reachability column: dynamic dispatch, function pointers, FFI, macro expansion, and reach only through a trait method or a closure are invisible, so a function reached only that way stays listed; a test-looking file (`tests/`, `_tests.rs`, or `#[test]`) seeds the walk, so a production file with its own `#[test]` is likely not listed; matching is by name, so an unrelated same-named call counts; `main` is never listed. A static walk, not a coverage measurement; `--list check` has the full text.";
 
+/// The same bounds as a one-sentence index, for the reply that was **not** asked for the whole table.
+/// 同一套边界的一句话索引，用于**没有**要求整表的那次回复。
+///
+/// Every `check` carries this column, and the full sentence above is 523 characters that a caller who
+/// asked about one face did not ask for. The index keeps what a reader must not lose — that this is
+/// not a coverage measurement, and that dynamic dispatch and the rest are invisible — and names both
+/// places the prose lives: `census: true` in the same call, and the tool's own description. Whether
+/// a phrase may be dropped is settled by the answer keys, not by taste: both `not a coverage
+/// measurement` and the `not covered by …` opening are pinned in the tests below.
+/// 每一次 `check` 都带这一栏，而上面那句全文有 523 个字符，是只问了一个面的调用方没有要的。索引留下了读者
+/// 绝不能丢的东西——这不是覆盖率量度、动态派发等一律不可见——并点名散文住在哪两处：同一次调用里的
+/// `census: true`，以及工具自己的描述。哪句话可以删由答案键裁定、不由口味裁定：`not a coverage
+/// measurement` 与 `not covered by …` 这个开头都被下面的钉子钉住。
+const REACHABILITY_BOUNDARY_INDEX: &str = "  not covered by the test-reachability column: dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible, matching is by name, and `main` is never listed. A static walk, not a coverage measurement; `census: true` and `--list check` have the full text.";
+
 /// What the census as a whole does not cover, in the one line every `check` ends with.
 /// 整份总账**不覆盖**什么——每次 `check` 结尾那一行。
 ///
@@ -82,6 +109,17 @@ const CENSUS_BOUNDARY: &str = "  not covered: this census reads exactly what the
 /// 的形状，每一条都点名后果——本树没拼出的构造会**否证**某一行，而不只是被它漏掉，因此那一行自己的
 /// 措辞说的是"拼出了什么"，而不是"是否可达"。
 const BRANCH_BOUNDARY: &str = "  not covered by the branch-level column: a condition whose value depends on data — a field, a parameter, a comparison, a `match` over a value — is not judged at all, so an arm no run has taken yet stays invisible here; `false` is the only guard literal decided, so `1 == 2`, `!true`, a `const` bool and `cfg!(…)` are not read; macro expansion, dynamic dispatch, function pointers and FFI are invisible, while a `macro_rules!` body this tree writes **is** text — an `if false` inside one is listed (and when that body sits outside any function, its row names no function, because there is none to name), and an arm that only exists after expansion is invisible; a construction this tree does not spell (a derive that builds a value, `unsafe`, a consumer outside this root) would falsify a row; a `pub` enum is never judged, an arm reached through a wildcard or a binding is not read, and an enum name this file imports from another crate is conservatively skipped, so a same-named foreign enum's arms are a miss here rather than a false row. A static read of the source text, not a coverage measurement; `--list check` has the full text.";
+
+/// The branch column's bounds as a one-sentence index, for the reply that was not asked for the whole
+/// table.
+/// 分支栏边界的一句话索引，用于没有要求整表的那次回复。
+///
+/// The full sentence is the longest of the three (1137 characters) and the column with the fewest
+/// rows, so it is where the index saves the most. The two things it keeps are the two a reader can
+/// act on: nothing data-dependent is judged at all, and this is not a coverage measurement.
+/// 全文是三条里最长的一条（1137 个字符），而这一栏的行数最少，因此索引在这里省得最多。它留下的两件事是
+/// 读者能据以行动的那两件：值依赖数据的条件一律不判，以及这不是覆盖率量度。
+const BRANCH_BOUNDARY_INDEX: &str = "  not covered by the branch-level column: a condition whose value depends on data is not judged at all, so an arm only a run could rule out stays invisible; `false` is the only guard literal decided; macro expansion, dynamic dispatch, function pointers and FFI are invisible; a `pub` enum is never judged; and a construction this tree does not spell would falsify a row. A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text.";
 
 /// One declared numeric constant, as the tree spells it.
 /// 一条被声明的数值常量，按这棵树里的写法。
@@ -118,7 +156,15 @@ fn uses_whole_number(text: &str, value: &str) -> bool {
 
 /// The census, as answer lines: the header, one line per finding, and the coverage sentence.
 /// 总账，按答案行给出：表头、每条发现一行、以及覆盖范围那一句。
-pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
+///
+/// `whole` is the caller saying "I want the table, not a sample": it buys the full boundary prose
+/// (the index is what the shorter reply carries), every test-unreachable function instead of five,
+/// and the per-directory split of that column. Everything else is the same answer — the two forms
+/// differ in how much of it is printed, never in what counts as a finding.
+/// `whole` 是调用方在说"我要那张表，不要样本"：它买下完整的边界散文（短回复携带的是索引）、
+/// 全部"没有测试能到达"的函数而不是五条，以及那一栏的逐目录拆分。其余都是同一个答案——两种形态的差别
+/// 只在印出多少，从不在"什么算一条发现"。
+pub(crate) fn census(root: &Path, whole: bool) -> Result<Vec<String>, String> {
     let sources = crate::mcp::source_index::load_sources(root)?;
     let mut declared: Vec<Declared> = Vec::new();
     for file in &sources {
@@ -271,7 +317,7 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
     // 那个问题的行为级那一半，而且它**有意**不是孤儿问题："没人调用它"与"没有测试能到达它"是关于同一个函数
     // 的两件不同事实，因此这一栏经**唯一**那份 `callgraph::is_call_to` 判定一次调用点名了什么，其余什么都不
     // 与 `orphans` 共享。
-    lines.extend(reachability_column(&sources));
+    lines.extend(reachability_column(&sources, whole));
     // The sixth column: the arms unreachable **by construction**, which is a different question
     // from the fifth one. A function can be test-reachable and still hold an arm no execution can
     // enter; and an arm no run has taken yet can be perfectly reachable, which is why nothing
@@ -279,7 +325,7 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
     // 第六栏：**按构造**不可达的臂，与第五栏是两个不同的问题。一个函数可以被测试到达、同时含着一个
     // 任何执行都进不去的臂；而一个还没有任何运行走到过的臂完全可以是可达的——这正是这里不报任何数据相关
     // 东西的原因，也是边界句在同一份回复里说出这一点的原因。
-    lines.extend(branch_column(&sources));
+    lines.extend(branch_column(&sources, whole));
     // The closing line is the same kind of index the reachability column's own boundary is:
     // one line naming what this census does not read, with the prose left to the tool's own
     // description (`--list check`). It used to restate the four columns above it on every
@@ -308,11 +354,19 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
 /// 清单里——而且经过**同一个函数** `callgraph::is_call_to` 来读，因此两个视图不可能对"哪次调用点名了哪个
 /// 定义"产生分歧；动态派发、函数指针、FFI 与宏展开出来的调用在这里与在那里一样不可见，而这一栏会把这点
 /// 说出来，而不是自称覆盖率。
-fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String> {
+fn reachability_column(
+    sources: &[crate::mcp::source_index::SourceFile],
+    whole: bool,
+) -> Vec<String> {
     let indexed = sources
         .iter()
         .map(|file| file.functions.len())
         .sum::<usize>();
+    let boundary = if whole {
+        REACHABILITY_BOUNDARY
+    } else {
+        REACHABILITY_BOUNDARY_INDEX
+    };
     let mut lines = Vec::new();
     if indexed > REACHABILITY_BUDGET {
         lines.push(format!(
@@ -320,7 +374,7 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
              {REACHABILITY_BUDGET}); this tree is larger than the walk was sized for, so no \
              reachability rows are computed for it"
         ));
-        lines.push(REACHABILITY_BOUNDARY.to_owned());
+        lines.push(boundary.to_owned());
         return lines;
     }
     // One flat list of every indexed function, with the file it came from and whether that file is
@@ -368,7 +422,15 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
         }
     }
     let mut production = 0usize;
-    let mut rows = Vec::new();
+    let mut rows: Vec<(String, usize, String)> = Vec::new();
+    // The per-directory split is the answer to the question the sampled reply made a reader ask once
+    // per directory: "which parts of this tree are the unreachable ones in". Two numbers per
+    // directory — unreachable of production — are enough to aim the next read, and the rows below
+    // say which functions they are.
+    // 逐目录拆分回答的正是抽样回复逼读者**逐个目录**去问的那个问题："这棵树里够不着的是哪几块"。
+    // 每个目录两个数字——够不着的 / 生产的——就足以瞄准下一次阅读，而下面的行说清是哪些函数。
+    let mut per_directory: std::collections::BTreeMap<String, (usize, usize)> =
+        std::collections::BTreeMap::new();
     for (at, (file, function, is_test)) in flat.iter().enumerate() {
         // `main` is left out for the same reason `orphans` leaves it out: it is the process entry
         // point, the OS calls it, and listing it would be a row every reader has to undo.
@@ -378,34 +440,101 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
             continue;
         }
         production += 1;
+        let directory = directory_of(&file.relative);
+        let counts = per_directory.entry(directory).or_default();
+        counts.1 += 1;
         if visited[at] {
             continue;
         }
-        rows.push(format!(
-            "  no test reaches `{}` ({}:{})",
-            function.name, file.relative, function.line
+        counts.0 += 1;
+        rows.push((
+            file.relative.clone(),
+            function.line,
+            format!(
+                "  no test reaches `{}` ({}:{})",
+                function.name, file.relative, function.line
+            ),
         ));
     }
+    rows.sort_by(|left, right| (&left.0, left.1).cmp(&(&right.0, right.1)));
     let total = rows.len();
     lines.push(format!(
         "  test-reachable: {total} of {production} production function(s) no test can reach \
          ({indexed} function(s) indexed in this tree; a static walk from the test files along the \
          same name-in-call-list rule the orphan view uses)"
     ));
-    for row in rows.iter().take(SAMPLE) {
+    if whole && total > 0 {
+        lines.push(directory_split(&per_directory));
+    }
+    let cap = if whole { WHOLE_SAMPLE } else { SAMPLE };
+    for (_, _, row) in rows.iter().take(cap) {
         lines.push(row.clone());
     }
-    if total > SAMPLE {
+    if total > cap {
         lines.push(crate::mcp::truncation::withheld(
-            total - SAMPLE,
+            total - cap,
             total,
-            SAMPLE,
+            cap,
             "test-unreachable functions",
-            "ask per directory to see its own items",
+            if whole {
+                "ask per directory to see its own items"
+            } else {
+                "pass `census: true` for every row, or ask per directory"
+            },
         ));
     }
-    lines.push(REACHABILITY_BOUNDARY.to_owned());
+    lines.push(boundary.to_owned());
     lines
+}
+
+/// The two-segment prefix a source path belongs to: `src/mcp/src/tools.rs` is `src/mcp`.
+/// 一条源码路径所属的两段前缀：`src/mcp/src/tools.rs` 属于 `src/mcp`。
+///
+/// Two segments is the granularity the split is for. In a merged crate it is the module that used to
+/// be its own crate; in a flat package it is the top module directory; and a file at the root (`src/lib.rs`)
+/// is its own bucket rather than being attributed to a directory it does not sit in.
+/// 两段正是这次拆分要的颗粒度。在合并后的 crate 里它就是过去各自成 crate 的那个模块；在扁平包里它是顶层
+/// 模块目录；而根上的文件（`src/lib.rs`）自成一格，不会被算进它并不在其中的目录。
+fn directory_of(relative: &str) -> String {
+    let mut parts = relative.split('/');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(first), Some(second), Some(_)) => format!("{first}/{second}"),
+        (Some(first), Some(_), None) => first.to_owned(),
+        _ => relative.to_owned(),
+    }
+}
+
+/// The per-directory split, one line, directories with nothing unreachable left out.
+/// 逐目录拆分，一行；没有够不着的函数的目录不列。
+///
+/// A directory with rows is the whole point of the line, so a directory with none is not a zero to
+/// print: it is the absence of a finding.
+/// 有行的目录才是这一行的意义，因此没有行的目录不是一个要印出来的零：它意味着这里没有发现。
+fn directory_split(counts: &std::collections::BTreeMap<String, (usize, usize)>) -> String {
+    const DIRECTORIES: usize = 12;
+    let mut present = counts
+        .iter()
+        .filter(|(_, (unreachable, _))| *unreachable > 0)
+        .map(|(directory, (unreachable, production))| {
+            format!("{directory} {unreachable} of {production}")
+        })
+        .collect::<Vec<_>>();
+    let total = present.len();
+    present.truncate(DIRECTORIES);
+    let mut line = format!("  by directory: {}", present.join(" · "));
+    if total > DIRECTORIES {
+        line.push_str(&format!(
+            "\n{}",
+            crate::mcp::truncation::withheld(
+                total - DIRECTORIES,
+                total,
+                DIRECTORIES,
+                "directories",
+                "ask per directory to see its own items",
+            )
+        ));
+    }
+    line
 }
 
 /// The ` in `fn`` segment of a row, empty when the arm sits outside any function.
@@ -441,7 +570,7 @@ fn arm_site(function: &str) -> String {
 /// `false` 的守卫。**B** 是本树从未拼出构造的变体的 `match` 臂，且声明该变体的枚举本身在本树声明、不带
 /// `pub`、也不带能造出值的属性。B 的那两半合起来才让它成为答案而不是猜测：非 `pub` 的变体在树外拼不出
 /// 路径，因此它的构造点恰好就是这次扫描能看见的那些。
-fn branch_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String> {
+fn branch_column(sources: &[crate::mcp::source_index::SourceFile], whole: bool) -> Vec<String> {
     // Which enums may be judged at all. Two declarations of one name resolve to the unjudged side:
     // a miss is the cheap direction, and a tree that declares the same name twice is exactly the
     // tree where the join cannot be sure which one a pattern meant.
@@ -541,19 +670,27 @@ fn branch_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String
          guard(s), {variants} never-constructed variant(s); a static read of the source text, not a \
          coverage measurement)"
     )];
-    for (_, _, row) in rows.iter().take(SAMPLE) {
+    let cap = if whole { WHOLE_SAMPLE } else { SAMPLE };
+    for (_, _, row) in rows.iter().take(cap) {
         lines.push(row.clone());
     }
-    if total > SAMPLE {
+    if total > cap {
         lines.push(crate::mcp::truncation::withheld(
-            total - SAMPLE,
+            total - cap,
             total,
-            SAMPLE,
+            cap,
             "unreachable arms",
             "ask per directory to see its own items",
         ));
     }
-    lines.push(BRANCH_BOUNDARY.to_owned());
+    lines.push(
+        if whole {
+            BRANCH_BOUNDARY
+        } else {
+            BRANCH_BOUNDARY_INDEX
+        }
+        .to_owned(),
+    );
     lines
 }
 
