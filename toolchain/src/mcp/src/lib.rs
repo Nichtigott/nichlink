@@ -181,6 +181,9 @@ mod locate;
 #[path = "why.rs"]
 mod why;
 
+#[path = "consistency.rs"]
+mod consistency;
+
 #[path = "tree_delta.rs"]
 mod tree_delta;
 

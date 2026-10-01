@@ -95,6 +95,20 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
+            "nichlink.consistency",
+            "Compare the siblings directly under one logical path and name the ones that differ — \
+             the shape the maintainer calls a mixed supply chain: one object following a different \
+             convention from its siblings while every file is locally plausible. The sibling set is \
+             read from the registration tree (a fact only a tree has); `by` picks the signal: `api` \
+             (default) compares the names each sibling's own file calls, `kind` and `source` compare \
+             the declared value. It prints what the majority shares that an outlier lacks, and what \
+             the outlier calls that nobody else does. **It reads text**: a convention living in a \
+             shared helper or generated code is invisible, units and arithmetic are not compared, \
+             and an outlier is a place to look rather than a defect. A tree that comes from \
+             published records is answered as such instead of being filled with defaults.",
+            json!({"type":"object","properties":{"parent":{"type":"string","description":"the logical path whose children to compare (one level under it)"},"by":{"type":"string","enum":["api","kind","source"],"description":"which signal to compare; `api` (default) reads the names each sibling's own file calls"},"root":{"type":"string"}},"required":["parent"]}),
+        ),
+        tool(
             "nichlink.why",
             "Gather the upstream facts one `path:line` depends on, in one call: the contract lines \
              above its definition, who calls it (with the same test-file/outside-directory notes \
@@ -629,6 +643,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.search", search),
     ("nichlink.locate", crate::mcp::locate::locate),
     ("nichlink.why", crate::mcp::why::why),
+    ("nichlink.consistency", crate::mcp::consistency::consistency),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),
