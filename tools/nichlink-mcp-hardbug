@@ -137,8 +137,10 @@ Scoring rules (mechanical; no model is a judge) / 判分规则（机械；不许
   red / green  {command, exit, evidence}                   the self-proof this build ran
 
 The answer is scored on:
-  root_cause_hit   truth.root_cause.file named, AND at least half of mechanism present, AND either a
-                   `<file>:N` with N within 3 lines of truth.line, or every mechanism word present
+  root_cause_hit   truth.root_cause.file named, AND a `<file>:N` with N within 3 lines of
+                   truth.line, AND at least half of truth.root_cause.mechanism present. The line is
+                   required: the first round let the word list stand in for it and a line-less
+                   answer passed.
   instrument_calls lines of the log that name a tool. Null when there is no log, because counting
                    from the answer's prose is guessing.
   init_calls       the subset of those whose command is `init`: index setup, counted apart so an
@@ -492,6 +494,47 @@ def ledger_line(root, anchor, certifies, files, reason, at="2026-10-01T10:00:00+
     )
 
 
+def tree_digest(root):
+    """One hash over every file a tree is made of, so a run can say which bytes it judged.
+
+    `target/` and `.codegraph/` are left out: they are build output and an index the answerer makes,
+    not the question. Everything else counts, including the graft crate and the ledger, because a
+    change to any of them is a change to the question.
+    `target/` 与 `.codegraph/` 不计：那是构建产物与答题方建的索引，不是题目。其余全部计入，包括 graft
+    crate 与台账——它们任一改动都等于改了题。
+    """
+    digest = hashlib.sha256()
+    for path in sorted(Path(root).rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if relative.parts and relative.parts[0] in {"target", ".codegraph", ".audit"}:
+            continue
+        if any(part in {"target", ".codegraph"} for part in relative.parts):
+            continue
+        digest.update(str(relative).encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def apparatus(directory):
+    """The three hashes a run must register: the questions, the recipe, and the judge.
+
+    The first round measured a gap here — the trees were frozen before the arms started while the
+    recipe and the scorer were still being repaired, so "the criteria were registered in advance"
+    held for the questions and not for the two things that turn them into numbers.
+    第一轮量到这个洞：树在两臂开工前就冻住了，而配方与判分器还在修，于是"判据预先登记"只对题目成立、
+    对把它们变成数字的那两样不成立。
+    """
+    return {
+        "tool": str(TOOL),
+        "tool_sha256": hashlib.sha256(TOOL.read_bytes()).hexdigest(),
+        "tree_sha256": tree_digest(directory),
+    }
+
+
 def first_lines(text, count=12):
     """The evidence a `red`/`green` entry carries: the tail, where the compiler and the harness
     actually say what happened."""
@@ -568,6 +611,12 @@ def scope_sources(host):
     return rows
 
 
+def graft_plan_line(host):
+    """The 1-based line the entry's graft plan starts on."""
+    text = (host / "src/lib.rs").read_text(encoding="utf-8")
+    return text[: text.index("nichlink_toolchain::runtime::static_graft_plan!")].count("\n") + 1
+
+
 def root_cause_for(klass, host):
     """The injected site, read back out of the file the injection wrote."""
     if klass == "h1-supply-chain":
@@ -585,11 +634,18 @@ def root_cause_for(klass, host):
     if klass == "h2-claim-unkept":
         relative = f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs"
         text = (host / relative).read_text(encoding="utf-8")
+        # The anchor is where the declaration **would** sit, not the line it was removed from: the
+        # generated order ends `… parent: …, handle_contracts: …, }`, so after the removal the gap is
+        # the line right after `parent:`. Anchoring on `parent:` itself made the column report a hit
+        # for a line the answer had not located (round 1, audit D5).
+        # 锚点是那条声明**本该**在的位置，不是它被删掉的那一行：生成顺序以 `… parent: …,
+        # handle_contracts: …, }` 收尾，因此删掉之后空缺就是 `parent:` 的下一行。锚在 `parent:` 本身上，
+        # 会让那一栏对一行答案其实没定位到的行报命中（第一轮审计 D5）。
         line = next(
             index + 1
             for index, row in enumerate(text.splitlines())
             if "parent: crate::control::NODE_ID" in row
-        )
+        ) + 1
         return {
             "file": relative,
             "line": line,
@@ -597,9 +653,14 @@ def root_cause_for(klass, host):
             "mechanism": ["handle_contracts", "handle_traits"],
         }
     if klass == "h3-cross-file-chain":
+        # The line is the entry's graft plan, where the missing cut belongs. Leaving it null made
+        # every answer fail the line column for a reason that was the recipe's, not the answerer's
+        # (round 1, audit: `truth line=null 故 line_within_3 两臂皆 false`).
+        # 行号是入口的 graft 计划，也就是缺的那条切口该在的位置。留 null 会让每个答案都因为**配方**的
+        # 原因在行号那一栏失败，而不是因为答题方（第一轮审计）。
         return {
             "file": "src/lib.rs",
-            "line": None,
+            "line": graft_plan_line(host),
             "symbol": "static_graft_plan",
             "mechanism": ["cut", PRUNED],
         }
@@ -974,6 +1035,7 @@ def build_algorithms(directory, klass):
         "ledger": None,
         "fix": fix_for(klass, {"root_cause": {"file": "src/model/entry.rs"}}),
         "must_refuse": refusals_for(klass),
+        "apparatus": apparatus(directory),
         "red": {
             "command": "nichlink-mcp check --root . --face default --census",
             "exit": red_exit,
@@ -1089,6 +1151,7 @@ def build(directory, klass):
     truth["root_cause"] = root_cause_for(klass, host)
     truth["fix"] = fix_for(klass, truth)
     truth["must_refuse"] = refusals_for(klass)
+    truth["apparatus"] = apparatus(directory)
     truth["red"], truth["green"] = prove(klass, host, truth)
     write(
         directory / ".audit/truth.json",
@@ -1173,11 +1236,13 @@ def score(tree, answer_path, log_path=None):
         )
     else:
         line_hit = False
-    root_cause_hit = bool(
-        file_named
-        and len(present) * 2 >= max(len(mechanism), 1)
-        and (line_hit or (mechanism and len(present) == len(mechanism)))
-    )
+    # The line is required. The first round's rule let "every mechanism word present" stand in for
+    # it, and an answer with no line number at all — one that named the file and the family and
+    # nothing else — passed on that escape (round 1, audit D3). The mechanism words are still
+    # reported; they are no longer a substitute for locating the defect.
+    # 行号是**必需**的。第一轮的规则允许"机制词全中"代替它，于是一份**没有任何行号**、只点了文件名与那一族的
+    # 答案靠那条逃逸通过了（第一轮审计 D3）。机制词仍然报出来，但不再能代替"定位到缺陷"。
+    root_cause_hit = bool(file_named and line_hit and len(present) * 2 >= max(len(mechanism), 1))
 
     calls = answering = init_calls = steps = response_chars = request_chars = None
     bridge_log = False
@@ -1227,6 +1292,9 @@ def score(tree, answer_path, log_path=None):
 
     result = {
         "class": truth["class"],
+        "tree_sha256": truth.get("apparatus", {}).get("tree_sha256"),
+        "scored_with_tool_sha256": hashlib.sha256(TOOL.read_bytes()).hexdigest(),
+        "registered_tool_sha256": truth.get("apparatus", {}).get("tool_sha256"),
         "root_cause_hit": root_cause_hit,
         "root_cause_file_named": file_named,
         "mechanism_present": present,
