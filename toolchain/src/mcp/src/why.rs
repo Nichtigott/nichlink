@@ -148,30 +148,42 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
     // The adoption ledger, when this tree carries one: entries that name this file. The verdict is
     // `adopted`'s to compute; this says only which entries name the file, and says so.
     // 采信台账（这棵树带的话）：点名了这个文件的条目。判定归 `adopted` 算；这里只说哪些条目点了名。
-    let ledger = root.join(".nichlink/adopted/entries");
-    if let Ok(text) = std::fs::read_to_string(&ledger) {
-        let naming: Vec<String> = text
-            .lines()
-            .filter(|entry| !entry.trim_start().starts_with('#') && !entry.trim().is_empty())
-            .filter(|entry| {
-                entry.split('|').nth(5).is_some_and(|files| {
-                    files.split(',').any(|named| named.trim() == file.relative)
+    match crate::mcp::adopted::entries(root) {
+        Err(error) => lines.push(format!("  adoption   ledger unreadable ({error})")),
+        Ok(entries) => {
+            // The parser is the kernel's (`parse_adoption`), reached through `adopted::entries`, so
+            // this reader cannot drift from the verdict `adopted` prints. It says only which entries
+            // name the file; the verdict is `adopted`'s to compute.
+            // 解析器是内核那个（`parse_adoption`），经 `adopted::entries` 到达，因此这个读者不会与
+            // `adopted` 打印的判定漂移。它只说哪些条目点名了这个文件；判定归 `adopted` 算。
+            let naming: Vec<String> = entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .files
+                        .iter()
+                        .any(|named| named.trim() == file.relative)
                 })
-            })
-            .filter_map(|entry| entry.split('|').next().map(str::to_owned))
-            .collect();
-        if naming.is_empty() {
-            lines.push("  adoption   no entry names this file".to_owned());
-        } else {
-            lines.push(format!(
-                "  adoption   {} entry(ies) name this file — anchors: {} (read the verdict with \
-                 `adopted`)",
-                naming.len(),
-                naming.join(", ")
-            ));
+                .map(|entry| entry.anchor.clone())
+                .collect();
+            if naming.is_empty() {
+                lines.push(if entries.is_empty() {
+                    "  adoption   no ledger at .nichlink/adopted/entries in this root".to_owned()
+                } else {
+                    format!(
+                        "  adoption   {} entry(ies) in the ledger, none naming this file",
+                        entries.len()
+                    )
+                });
+            } else {
+                lines.push(format!(
+                    "  adoption   {} entry(ies) name this file — anchors: {} (read the verdict with \
+                     `adopted`)",
+                    naming.len(),
+                    naming.join(", ")
+                ));
+            }
         }
-    } else {
-        lines.push("  adoption   no ledger at .nichlink/adopted/entries in this root".to_owned());
     }
 
     lines.push(

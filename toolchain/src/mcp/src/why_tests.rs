@@ -81,3 +81,24 @@ fn a_line_outside_every_definition_lists_the_definitions() {
         "the index is printed rather than a guess: {answer}"
     );
 }
+
+/// An entry that names the file is read through the kernel's parser, not a second scan.
+/// 点名了该文件的条目经**内核的解析器**读出，而不是第二次手写扫描。
+#[test]
+fn a_ledger_entry_naming_the_file_is_read() {
+    let root = scratch("why-named");
+    std::fs::create_dir_all(root.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::write(
+        root.join(".nichlink/adopted/entries"),
+        "# a ledger written for this pin\nroot/control/button|the button face renders through its \
+         contract|traced once|nich|2026-10-01T00:00:00+08:00|src/lib.rs|cafe|the pin needs a \
+         naming entry\n",
+    )
+    .expect("ledger");
+    let answer = super::why(&root, &json!({"at": "src/lib.rs:3"})).expect("an answer");
+    assert!(
+        answer.contains("1 entry(ies) name this file") && answer.contains("root/control/button"),
+        "the anchor is named: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

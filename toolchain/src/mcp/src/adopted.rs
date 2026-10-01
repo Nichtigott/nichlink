@@ -57,6 +57,22 @@ fn read_files(root: &Path, files: &[String]) -> Result<Vec<(String, String)>, St
 
 /// Report every ledger entry, or add one when the request asks to.
 /// 报出台账里的每条条目；当请求要求写入时追加一条。
+/// The ledger's parsed entries, for readers that need the rows rather than a rendered verdict.
+/// 台账解析后的条目，供需要"行"而不是"渲染结论"的读者使用。
+///
+/// The parser is the kernel's, so a second reading of the same format cannot drift from it.
+/// 解析器是内核那一个，因此同一格式不会出现第二份会漂移的读法。
+pub(crate) fn entries(root: &Path) -> Result<Vec<AdoptionEntry>, String> {
+    let path = ledger_path(root);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    parse_adoption(&text)
+        .map_err(|error| format!("{}:{}: {}", path.display(), error.line, error.message))
+}
+
 pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> {
     let ledger = ledger_path(root);
     if arguments.get("anchor").and_then(Value::as_str).is_some() {
