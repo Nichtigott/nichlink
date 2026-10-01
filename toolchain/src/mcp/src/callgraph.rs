@@ -21,6 +21,25 @@ use serde_json::Value;
 use crate::mcp::source_index::{display_list, load_sources};
 use crate::mcp::truncation::withheld;
 
+/// One printed line of a definition's source, marked as contract or implementation.
+/// 定义源码里被打印的一行，标成"契约"或"实现"。
+///
+/// The doc comment **is** the contract this tree writes down, and the body is what it does; the
+/// strongest signal this bridge can print is the pair disagreeing, so the reader should not have to
+/// work out which printed line is which. `///` and `//!` are the doc spellings; everything else is
+/// code.
+/// 文档注释**就是**这棵树写下的契约，而函数体是它实际做的事；本桥能打印的最强信号就是这两者不一致，
+/// 因此读者不必自己分辨哪一行是哪种。`///` 与 `//!` 是文档的拼法，其余都是代码。
+fn source_line(line: &str) -> String {
+    let trimmed = line.trim_start();
+    let kind = if trimmed.starts_with("///") || trimmed.starts_with("//!") {
+        "contract"
+    } else {
+        "impl"
+    };
+    format!("    {kind:<8} {line}\n")
+}
+
 /// Where a caller sits, when saying it saves the reader a call.
 /// 调用者坐在哪里 —— 说出来能替读者省一次调用时才说。
 ///
@@ -361,7 +380,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             let shown = last.saturating_sub(first).min(SOURCE_LINES);
             output.push_str("  source:\n");
             for line in &lines[first..first + shown] {
-                output.push_str(&format!("    {line}\n"));
+                output.push_str(&source_line(line));
             }
             if last.saturating_sub(first) > shown {
                 output.push_str(&format!(

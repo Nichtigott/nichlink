@@ -132,6 +132,14 @@ fn the_limit_contract_is_the_one_the_catalog_declares() {
 /// The source block starts at the doc comment's first line, because that pairing is what lets a
 /// reader catch a promise the implementation contradicts — the round-4 trap was decided by it.
 /// 源码块从文档注释首行起打，因为正是这个并排让读者抓住"承诺与实现相矛盾"——第 4 题的陷阱就由它裁决。
+///
+/// The line now carries the `contract` marker (W1.6): the pairing is the strongest signal this bridge
+/// prints, so the reader should not have to work out which half each printed line is. The intent of
+/// this pin is unchanged — **the doc still rides along** — so the expectation moves with the shape
+/// rather than the implementation being narrowed to keep the old string.
+/// 这一行现在带 `contract` 标记（W1.6）：这个并排是本桥打印的最强信号，因此读者不必自己分辨每一行是
+/// 哪一半。本钉子的意图不变——**文档仍然随行打出**——因此预期随形状一起改，而不是把实现收窄去迁就旧
+/// 字符串。
 #[test]
 fn the_source_block_starts_at_the_docs_first_line() {
     let root = crate::mcp::tools::tools_tests::scratch_package("docline");
@@ -142,8 +150,8 @@ fn the_source_block_starts_at_the_docs_first_line() {
         .expect("the bodies are included by default");
     let first = source.lines().next().unwrap_or_default();
     assert!(
-        first.trim_start().starts_with("///"),
-        "the doc rides along: {first:?}"
+        first.trim_start().starts_with("contract ///"),
+        "the doc rides along, marked as the contract: {first:?}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -200,6 +208,34 @@ fn the_orphan_view_names_what_nothing_calls() {
         "but the test half is counted and named: {answer}"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A printed source line says which half it is: the doc comment is the contract, the body is the
+/// implementation. The pair disagreeing is the strongest signal the bridge prints, so the reader
+/// should not have to work out which line is which.
+/// 打印出来的源码行要说明自己是哪一半：文档注释是契约，函数体是实现。两者不一致是本桥打印的最强信号，
+/// 因此读者不必自己分辨哪一行是哪种。
+#[test]
+fn a_printed_source_line_says_contract_or_implementation() {
+    assert!(
+        super::source_line("/// Whether this entry may be posted at all.")
+            .starts_with("    contract"),
+        "a doc line is the contract"
+    );
+    assert!(
+        super::source_line("    self.has_receipt && self.amount != 0").starts_with("    impl"),
+        "a body line is the implementation"
+    );
+    assert!(
+        super::source_line("//! Module doc.").starts_with("    contract"),
+        "an inner doc line is the contract too"
+    );
+    // The line itself is printed unchanged after the marker.
+    // 标记之后原样打印那一行。
+    assert!(
+        super::source_line("/// c").ends_with(" /// c\n"),
+        "the line survives the marker"
+    );
 }
 
 /// A caller's note says only what the two labels prove — that it is a test file, and that it sits
