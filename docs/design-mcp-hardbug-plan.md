@@ -142,6 +142,17 @@
 **顺序与依赖**：W1（零风险）→ W2（打调用数，收益最大）→ W3 → W4 → W5 → W6；**W7 与 W1–W6 并行推进**
 （它只依赖已有的注入器与题树纪律）；W8 在全部自证通过后一次跑完。
 
+### W4/W5 的落点侦察（2026-10-01，先量后做）
+
+- `toolchain/src/mcp/src/registry.rs` 的入口**都返回渲染好的字符串**（`registry` / `registry_brief` /
+  `registry_with` / `registry_body` / `namespace`），**没有**"结构化面清单"可用；
+- 带 `parts` / `exports` / `handle_traits` / `part_traits` 这些字段的**结构化发现**在
+  `toolchain/src/build_time/src/discovery_cache.rs`（那里逐个字段名遍历）；
+- ⇒ **W4 `consistency` 与 W5 `conformance` 都需要先把"结构化面清单（parent + 声明字段 + 成员归属）"
+  接到 mcp 面**（一条只读的、与 `registry` 同源的分支），再谈"同族 × 属性"与"标本形状指纹"。
+  这也是唯一一处**必须新增解析管线**的地方（W1–W3/W6 都只用现有事实）。**先做这件事，再做 W4/W5**；
+  接线时守住"一条规则一份实现"：成员与字段都取自既有的发现/索引，不另写一套推导。
+
 **每项的验证列（统一模板）**：改前/改后两个二进制在同一批树上跑 ⇒ 给**仪器调用数 / 步数 / 回复字符**
 三列 + 既有答案键仍 PASS（判据信息一条不丢）。**不跑对照臂。**
 
