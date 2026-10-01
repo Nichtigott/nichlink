@@ -95,6 +95,17 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
+            "nichlink.digest",
+            "One bounded summary of one file, for the case the maintainer named: a file holding \
+             several algorithms where one branch of one of them is wrong. Each row gives a \
+             function's line range, how many names it calls, how many callers it has, whether a test \
+             names it, and the first line of the contract above it. It does **not** read the file \
+             out in full, and it says so: which branches are dead or covered and whether the static \
+             walk reaches a function are the census's columns (`check {face}`), and a body is \
+             `read {path, line}`'s.",
+            json!({"type":"object","properties":{"file":{"type":"string","description":"a path as this root sees it (e.g. `src/model/entry.rs`)"},"root":{"type":"string"}},"required":["file"]}),
+        ),
+        tool(
             "nichlink.conformance",
             "Say what an anchor's claim is right now: which ledger revision is in force (an \
              adoption is a lease, so the newest line wins), whether it still holds or lapsed at a \
@@ -655,6 +666,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.why", crate::mcp::why::why),
     ("nichlink.consistency", crate::mcp::consistency::consistency),
     ("nichlink.conformance", crate::mcp::adopted::conformance),
+    ("nichlink.digest", crate::mcp::digest::digest),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),

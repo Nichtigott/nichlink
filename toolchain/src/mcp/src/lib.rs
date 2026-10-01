@@ -184,6 +184,9 @@ mod why;
 #[path = "consistency.rs"]
 mod consistency;
 
+#[path = "digest.rs"]
+mod digest;
+
 #[path = "tree_delta.rs"]
 mod tree_delta;
 
