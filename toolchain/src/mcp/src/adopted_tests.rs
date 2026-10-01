@@ -111,3 +111,49 @@ fn a_renewal_is_a_preview_until_it_is_applied_and_confirmed() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The anchor's claim is answered in three states: unknown, lapsed at a named file, and the newest
+/// revision in force when an anchor has a history.
+/// 一个 anchor 的声明有三种状态：没有条目、在点名文件上失效、以及有历史时**最后一条**生效。
+#[test]
+fn conformance_answers_unknown_lapsed_and_in_force() {
+    let root = std::env::temp_dir().join(format!("mcp-conformance-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::write(root.join("src.rs"), "pub fn one() {}\n").expect("a file to cover");
+    let ledger = root.join(".nichlink/adopted/entries");
+    std::fs::write(
+        &ledger,
+        "root/control/button|first reading|traced once|nich|2026-10-01T10:00:00+08:00|src.rs|cafe|first\n\
+         root/control/button|second reading|traced twice|nich|2026-10-01T11:00:00+08:00|src.rs|cafe|second\n",
+    )
+    .expect("ledger");
+
+    let unknown = super::conformance(&root, &json!({"anchor": "root/nope"})).expect("an answer");
+    assert!(
+        unknown.starts_with("no ledger entry names `root/nope`"),
+        "{unknown}"
+    );
+
+    let answer =
+        super::conformance(&root, &json!({"anchor": "root/control/button"})).expect("an answer");
+    assert!(
+        answer.contains("2 revision(s)") && answer.contains("2026-10-01T11:00:00+08:00"),
+        "the newest revision is the one in force (its `at` is printed): {answer}"
+    );
+    assert!(
+        answer.contains("lapsed at") && answer.contains("needs a **person**"),
+        "a fingerprint that does not match the bytes is lapsed, and the file is named: {answer}"
+    );
+    assert!(
+        answer.contains("covers     src.rs") && answer.contains("not covered here"),
+        "the covered files and the bounds ride along: {answer}"
+    );
+
+    let missing = super::conformance(&root, &json!({})).expect_err("an anchor is required");
+    assert!(
+        missing.contains("`anchor`") && missing.contains("accepted shape"),
+        "{missing}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

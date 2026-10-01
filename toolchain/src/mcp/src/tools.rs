@@ -95,6 +95,16 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
+            "nichlink.conformance",
+            "Say what an anchor's claim is right now: which ledger revision is in force (an \
+             adoption is a lease, so the newest line wins), whether it still holds or lapsed at a \
+             named file, and which files it covers. It answers the half of \"was this design carried \
+             through?\" that the ledger itself can prove, and it names the half it does not answer — \
+             whether the siblings follow the same shape (that is `consistency`) and the declared \
+             fields a specimen carries (those live in its own source).",
+            json!({"type":"object","properties":{"anchor":{"type":"string","description":"the route a ledger entry names"},"root":{"type":"string"}},"required":["anchor"]}),
+        ),
+        tool(
             "nichlink.consistency",
             "Compare the siblings directly under one logical path and name the ones that differ — \
              the shape the maintainer calls a mixed supply chain: one object following a different \
@@ -644,6 +654,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.locate", crate::mcp::locate::locate),
     ("nichlink.why", crate::mcp::why::why),
     ("nichlink.consistency", crate::mcp::consistency::consistency),
+    ("nichlink.conformance", crate::mcp::adopted::conformance),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),

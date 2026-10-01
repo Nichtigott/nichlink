@@ -73,6 +73,74 @@ pub(crate) fn entries(root: &Path) -> Result<Vec<AdoptionEntry>, String> {
         .map_err(|error| format!("{}:{}: {}", path.display(), error.line, error.message))
 }
 
+/// What an anchor's claim is right now: the entry in force, its verdict, and the ledger's history.
+/// 某个 anchor 的声明现在处于什么状态：生效的那一条、它的判定，以及台账里的修订次数。
+///
+/// The question is the ledger's own, so it is answered here rather than in a second module that
+/// would have to re-read the same file. The lease semantics are the kernel's: the **newest** line
+/// for an anchor is the one in force.
+/// 这个问题是台账自己的，因此在这里回答，而不是另开一个模块再读一遍同一个文件。租约语义来自内核：
+/// 同一个 anchor 的**最后一条**生效。
+pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, String> {
+    let anchor = arguments
+        .get("anchor")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|anchor| !anchor.is_empty())
+        .ok_or_else(|| {
+            "conformance needs `anchor`: the route a ledger entry names — accepted shape: \
+             {\"anchor\":\"<anchor>\",\"root\":\"<path>\"}"
+                .to_owned()
+        })?;
+    let entries = entries(root)?;
+    let history: Vec<&AdoptionEntry> = entries
+        .iter()
+        .filter(|entry| entry.anchor == anchor)
+        .collect();
+    if history.is_empty() {
+        return Ok(format!(
+            "no ledger entry names `{anchor}` in {} — the ledger holds {} entry(ies){}\n",
+            root.display(),
+            entries.len(),
+            if entries.is_empty() {
+                " (there is no ledger here)"
+            } else {
+                "; `adopted` lists the anchors"
+            }
+        ));
+    }
+    let effective = history.last().expect("non-empty history");
+    let current = read_files(root, &effective.files)?;
+    let mut lines = vec![format!(
+        "anchor `{anchor}` — {} revision(s) in the ledger; the last is in force (an adoption is a \
+         lease: the newest line wins)",
+        history.len()
+    )];
+    match verdict_of(effective, &current) {
+        AdoptionVerdict::Provisional => lines.push(format!(
+            "  in force   provisional — certifies: {} (adopted {} by {})",
+            effective.certifies, effective.at, effective.verifier
+        )),
+        AdoptionVerdict::Lapsed { file } => lines.push(format!(
+            "  in force   lapsed at {file}: the bytes moved after the confirmation, so this needs a \
+             **person**, not an edit (adopted {} by {})",
+            effective.at, effective.verifier
+        )),
+    }
+    lines.push(format!("  covers     {}", effective.files.join(", ")));
+    lines.push(
+        "not covered here: whether the siblings of this anchor's object follow the same shape (ask \
+         `consistency --parent <its parent>`), and the declared fields a specimen carries (they live \
+         in its own source, which this reply does not read)"
+            .to_owned(),
+    );
+    lines.push(
+        "next   `adopted` for every entry's verdict, `consistency --parent <parent>` for the siblings"
+            .to_owned(),
+    );
+    Ok(format!("{}\n", lines.join("\n")))
+}
+
 pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> {
     let ledger = ledger_path(root);
     if arguments.get("anchor").and_then(Value::as_str).is_some() {
