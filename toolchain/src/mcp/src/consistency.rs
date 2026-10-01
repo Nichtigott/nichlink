@@ -25,7 +25,7 @@ use nichlink_kernel::syntax::{FaceSyntax, parse_faces};
 use serde_json::Value;
 
 use crate::mcp::source_index::{SourceFile, load_sources};
-use crate::mcp::workspace::{Member, Scope, Tree};
+use crate::mcp::workspace::{Member, Scope};
 
 #[cfg(test)]
 #[path = "consistency_tests.rs"]
@@ -281,33 +281,19 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
     };
     let sources = load_sources(root)?;
     for member in &members {
-        let faces = match member.tree()? {
-            Tree::Derived { faces, unparsable } => {
-                // Same reason as the parent mode: a file the derivation refused is missing from the
-                // sibling set, and an answer that counted the set without saying so would read as
-                // complete.
-                // 理由与 parent 模式相同：推导拒绝掉的文件不在同族集合里，而一个不说明这点就清点集合的
-                // 答案会被读成完整的。
-                if !unparsable.trim().is_empty() {
-                    lines.push(format!(
-                        "member {}: {} (such a file is not in the sibling set below)",
-                        member.name,
-                        unparsable.trim_end()
-                    ));
-                }
-                faces
-            }
-            Tree::Published(_) => {
-                lines.push(format!(
-                    "member {}: the tree comes from published records, which do not carry the \
-                     declared fields this comparison reads — ask `registry --full` for the records, \
-                     or derive the sources and ask again",
-                    member.name
-                ));
-                continue;
-            }
-        };
-        let siblings = siblings(faces, &parent)
+        let (evidence, faces, unparsable) = member_faces(member, RECORD_CANNOT_ANSWER)?;
+        lines.push(evidence);
+        // A file the derivation refused is missing from the sibling set, and an answer that counted
+        // the set without saying so would read as complete.
+        // 推导拒绝掉的文件不在同族集合里，而一个不说明这点就清点集合的答案会被读成完整的。
+        if !unparsable.trim().is_empty() {
+            lines.push(format!(
+                "member {}: {} (such a file is not in the sibling set below)",
+                member.name,
+                unparsable.trim_end()
+            ));
+        }
+        let siblings = siblings(&faces, &parent)
             .into_iter()
             .filter(|face| face.path.trim_end_matches('/') != anchor.trim_end_matches('/'))
             .collect::<Vec<_>>();
@@ -393,6 +379,37 @@ fn specimen_bounds() -> Vec<String> {
          ledger's own verdict on this specimen"
             .to_owned(),
     ]
+}
+
+/// Why the published record cannot answer this tool's question.
+/// 发布记录为什么答不了本工具的问题。
+///
+/// The comparison reads each sibling's declared fields and its own text; a record carries neither.
+/// Saying that out loud is what lets the derived reading be the honest one rather than a silent
+/// fallback.
+/// 这次比较读的是每个兄弟的已声明字段与它自己的文本，而记录两样都不带。把这一点说出来，才让"此刻推导"
+/// 是一个诚实的读法，而不是一次静默的回落。
+const RECORD_CANNOT_ANSWER: &str = "this comparison reads each sibling's declared fields and its own text, which the published \
+     record does not carry";
+
+/// One member's faces, derived now, plus the line that says which tree this answer read.
+/// 一个成员此刻推导出的面，以及说明这份答案读的是哪棵树的那一行。
+///
+/// The published record carries no `path` and no declared fields, so it can never answer this
+/// question: the derived tree is not a fallback here but the only reading. That is why this goes
+/// through `derived_tree` (the documented fallback every caller has to state) rather than `tree` —
+/// the latter answers from the record and would make this tool refuse on exactly the trees that have
+/// been built, which is the normal case.
+/// 发布记录不携带 `path`、也不携带已声明字段，因此它永远答不了这个问题：推导树在这里不是回落而是唯一的
+/// 读法。这也是它走 `derived_tree`（有文档的、每个调用方都必须说出来的那条回落）而不是 `tree` 的原因——
+/// 后者从记录作答，会让本工具恰好在**已经构建过**的树上拒答，而那是常态。
+fn member_faces(
+    member: &Member,
+    because: &str,
+) -> Result<(String, Vec<crate::build_time::FaceView>, String), String> {
+    let evidence = member.evidence_line(because).trim_end().to_owned();
+    let (faces, unparsable) = member.derived_tree()?;
+    Ok((evidence, faces, unparsable))
 }
 
 /// The sibling set: faces directly under one logical path, in tree order.
@@ -522,34 +539,21 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
     let sources = load_sources(root)?;
     let mut sections: Vec<String> = Vec::new();
     for member in &members {
-        let faces = match member.tree()? {
-            Tree::Derived { faces, unparsable } => {
-                // A file the derivation refused is not in the sibling set, so a comparison that
-                // stayed silent about it would answer "these are all the siblings" about a tree that
-                // dropped one. The drop is the tree's own line; it is carried here rather than
-                // re-derived.
-                // 推导拒绝掉的文件不在同族集合里，因此对这件事保持沉默的比较，会对着一个**丢掉了一个
-                // 文件**的树答出"兄弟就这些"。丢掉的实情是树自己那一行，这里只是搬运，不重新推导。
-                if !unparsable.trim().is_empty() {
-                    sections.push(format!(
-                        "member {}: {} (such a file is not in the sibling set below)",
-                        member.name,
-                        unparsable.trim_end()
-                    ));
-                }
-                faces
-            }
-            Tree::Published(_) => {
-                sections.push(format!(
-                    "member {}: the tree comes from published records, which do not carry the \
-                     declared fields this comparison reads — ask `registry --full` for the records, \
-                     or derive the sources and ask again",
-                    member.name
-                ));
-                continue;
-            }
-        };
-        let set = siblings(faces, parent);
+        let (evidence, faces, unparsable) = member_faces(member, RECORD_CANNOT_ANSWER)?;
+        sections.push(evidence);
+        // A file the derivation refused is not in the sibling set, so a comparison that stayed
+        // silent about it would answer "these are all the siblings" about a tree that dropped one.
+        // The drop is the tree's own line; it is carried here rather than re-derived.
+        // 推导拒绝掉的文件不在同族集合里，因此对这件事保持沉默的比较，会对着一个**丢掉了一个文件**的树
+        // 答出"兄弟就这些"。丢掉的实情是树自己那一行，这里只是搬运，不重新推导。
+        if !unparsable.trim().is_empty() {
+            sections.push(format!(
+                "member {}: {} (such a file is not in the sibling set below)",
+                member.name,
+                unparsable.trim_end()
+            ));
+        }
+        let set = siblings(&faces, parent);
         if set.is_empty() {
             sections.push(format!(
                 "family {parent} · member {} · 0 members (no face sits directly under it)",
@@ -591,8 +595,15 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                     let names: BTreeSet<String> = sources
                         .iter()
                         .filter(|source| {
-                            let path = format!("src/{}", source.relative.trim_start_matches("./"));
-                            path.starts_with(&format!("{directory}/"))
+                            // `SourceFile::relative` is already spelled from the package root
+                            // (`src/…`), which is why the directory is built with one `src/` and the
+                            // comparison does not add a second: doing that made every filter miss and
+                            // the whole signal answer `0 call(s)` on every tree — the defect this
+                            // pin was written for.
+                            // `SourceFile::relative` 本来就是从包根拼的（`src/…`），因此目录只加一次
+                            // `src/`，比较时不再加第二次：加第二次会让每一个过滤都落空，于是整个信号在
+                            // 每棵树上都答 `0 call(s)`——这正是这条钉子被写下来的那个缺陷。
+                            source.relative.starts_with(&format!("{directory}/"))
                         })
                         .flat_map(|source| source.functions.iter())
                         .flat_map(|function| function.calls.iter().cloned())

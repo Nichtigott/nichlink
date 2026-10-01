@@ -56,8 +56,10 @@ fn specimen_package(label: &str) -> PathBuf {
     write_fixture(&root.join("src/lib.rs"), "//! fixture\npub mod control;\n");
     write_fixture(
         &root.join("src/control/control.rs"),
-        "pub struct Control;\npub struct ControlParts;\n\ncrate::root_object! {\n    kind: \
-         Control,\n    parts: ControlParts,\n    needs_registry: true,\n    parent: \
+        "/// The local family every child is expected to use.\npub fn to_local(x: i32) -> i32 { x + \
+         7 }\n\n/// The other family, which one child may drift onto.\npub fn to_world(x: i32) -> \
+         i32 { x + 31 }\n\npub struct Control;\npub struct ControlParts;\n\ncrate::root_object! \
+         {\n    kind: Control,\n    parts: ControlParts,\n    needs_registry: true,\n    parent: \
          crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
     );
     write_fixture(
@@ -72,9 +74,11 @@ fn specimen_package(label: &str) -> PathBuf {
         write_fixture(
             &root.join(format!("src/control/object/{name}/{name}.rs")),
             &format!(
-                "pub struct {kind};\npub struct {kind}Parts;\n\ncrate::control_object! {{\n    \
-                 kind: {kind},\n    parts: {kind}Parts,\n    exports: [\"control.render\"],\n    \
-                 handle_traits: [\"ControlHandle\"],\n    parent: crate::control::NODE_ID,\n}}\n"
+                "pub struct {kind};\npub struct {kind}Parts;\n\n/// This widget's offset, in \
+                 the family its siblings use.\npub fn offset(x: i32) -> i32 {{ \
+                 crate::control::to_local(x) }}\n\ncrate::control_object! {{\n    kind: {kind},\n    \
+                 parts: {kind}Parts,\n    exports: [\"control.render\"],\n    handle_traits: \
+                 [\"ControlHandle\"],\n    parent: crate::control::NODE_ID,\n}}\n"
             ),
         );
     }
@@ -401,4 +405,87 @@ fn the_sibling_set_is_one_level_deep() {
         let above = path.rsplit_once('/').map(|(above, _)| above);
         assert_eq!(above == Some(parent), wanted, "`{path}` under `{parent}`");
     }
+}
+
+/// The `api` signal reads the calls the sibling's own file makes, and names the one that drifted.
+/// `api` 信号读的是那个兄弟自己的文件所做的调用，并点名漂移的那一个。
+///
+/// The failure this guards was measured on a real host: the directory prefix was built with a second
+/// `src/`, so every source filter missed and the whole signal answered `0 call(s)` on **every** tree.
+/// A pin on the rule alone could not see it — the rule was right and the wiring was wrong — which is
+/// why this one goes through the tool and a package.
+/// 它守的失败是在一个真宿主上量到的：目录前缀里多拼了一次 `src/`，于是每一个源码过滤都落空、整个信号在
+/// **每一棵**树上都答 `0 call(s)`。只钉规则看不见它——规则是对的、接线是错的——因此这一条经由工具与一个
+/// 包来钉。
+#[test]
+fn the_api_signal_reads_each_siblings_own_calls_and_names_the_drifter() {
+    let root = specimen_package("api-signal");
+    let file = "src/control/object/slider/slider.rs";
+    let clean =
+        super::consistency(&root, &json!({"parent": "root/control", "by": "api"})).expect("answer");
+    assert!(
+        clean.contains("1 call(s): to_local") && !clean.contains("\n  outlier"),
+        "every sibling's own call is read and unanimity is not an outlier: {clean}"
+    );
+
+    replace(
+        &root,
+        file,
+        "crate::control::to_local(x)",
+        "crate::control::to_world(x)",
+    );
+    let drifted =
+        super::consistency(&root, &json!({"parent": "root/control", "by": "api"})).expect("answer");
+    assert!(
+        drifted.contains("outlier     slider: does not call `to_local`")
+            && drifted.contains("calls `to_world`, which no sibling calls"),
+        "the drifter and both directions are named: {drifted}"
+    );
+    assert!(
+        drifted.contains("outliers: 1 of 3"),
+        "exactly one sibling differs: {drifted}"
+    );
+
+    replace(
+        &root,
+        file,
+        "crate::control::to_world(x)",
+        "crate::control::to_local(x)",
+    );
+    let back =
+        super::consistency(&root, &json!({"parent": "root/control", "by": "api"})).expect("answer");
+    assert!(
+        back.contains("outliers: 0 of 3"),
+        "putting the call back makes the family unanimous again: {back}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The comparison derives its tree instead of reading published records, and it says that it did.
+/// 这次比较推导自己的树，而不是读发布记录，并且它说出了这一点。
+///
+/// The record carries no `path` and no declared fields, so reading it made this tool refuse on
+/// exactly the trees that have been built — the normal case. This is the coupling pin for that: a
+/// swap back to `member.tree()` fails here even on a tree with no records to disagree about.
+/// 记录不携带 `path`、也不携带已声明字段，因此读它会让本工具恰好在**已经构建过**的树上拒答——那是常态。
+/// 这是那件事的耦合钉子：改回 `member.tree()` 会在这里失败，即便是在一棵没有记录可分歧的树上。
+#[test]
+fn the_comparison_derives_rather_than_reading_the_record() {
+    let source = include_str!("consistency.rs");
+    assert!(
+        source.contains("derived_tree()"),
+        "the derived reading is the documented fallback every caller states"
+    );
+    assert!(
+        !source.contains("member.tree()"),
+        "the record answers neither the sibling set's text nor its declared fields"
+    );
+    let root = specimen_package("derived-evidence");
+    let answer = super::consistency(&root, &json!({"parent": "root/control", "by": "kind"}))
+        .expect("answer");
+    assert!(
+        answer.contains("tree derived now") && answer.contains("no published records at"),
+        "the answer says which tree it read, and why it derived: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
