@@ -68,6 +68,27 @@ fn gate(source: &str, definition: usize) -> Option<(usize, String)> {
     None
 }
 
+/// The registration declaration a line falls inside, by macro name and line span.
+/// 某一行落在里面的那个注册面声明（宏名与行区间）。
+///
+/// Measured need (W8 round): `why --at <face file>:<line>` with a line inside the `control_object!`
+/// block answered "no function covers this line" and stopped, and the agent had to ask again with a
+/// different line. Twice in one round, on two questions. The fact that the line is inside a
+/// declaration is something this tree already knows — the kernel's parser carries the macro's whole
+/// span — so the answer was withholding information it had, which is exactly the shape of waste the
+/// maintainer named.
+/// 量出来的需求（W8 那轮）：`why --at <面文件>:<行>` 给的行号落在 `control_object!` 块里时，答案只说
+/// "no function covers this line" 就停了，agent 只能换个行号再问一次。一轮里两次、两道题。而"这一行在
+/// 一个声明里"是这棵树**已经知道**的事实——内核解析器带着宏的整个区间——所以那次答案是扣下了自己手里的
+/// 信息，这正是维护者点名的那种浪费。
+fn declaration_at(source: &str, line: usize) -> Option<(String, usize, usize)> {
+    let faces = nichlink_kernel::syntax::parse_faces(source).ok()?;
+    faces
+        .into_iter()
+        .find(|face| face.location.line <= line && line <= face.end.line)
+        .map(|face| (face.macro_name, face.location.line, face.end.line))
+}
+
 /// The plan facts a symptom at one definition depends on: scope, gate, and the declared cut.
 /// 一个定义处的症状所依赖的计划事实：作用域、门控、以及已声明的切口。
 ///
@@ -218,8 +239,20 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
         .iter()
         .find(|function| function.line <= line && line <= function.end_line)
     else {
+        // A line inside a registration declaration is a **different answer**, not a miss: the
+        // declaration is the thing that registers this face, and saying so costs one line while
+        // leaving it out cost the round two extra calls.
+        // 落在注册面声明里的行是**另一个答案**，不是没命中：那条声明正是注册这个面的东西，说出来只花一行，
+        // 而不说让那一轮多花了两次调用。
+        let inside = declaration_at(&file.source, line).map_or(String::new(), |(macro_name, start, end)| {
+            format!(
+                "this line is inside the `{macro_name}!` declaration spanning lines {start}-{end}, \
+                 not inside a function — that declaration is what registers this face in the tree \
+                 (its `kind` is a token in it), and `explain {{node}}` reports what it declares\n"
+            )
+        });
         return Ok(format!(
-            "no function covers {}:{line} in {} — the index lists:\n{}\n",
+            "no function covers {}:{line} in {}\n{inside}the functions in this file are:\n{}\n",
             file.relative,
             root.display(),
             file.functions

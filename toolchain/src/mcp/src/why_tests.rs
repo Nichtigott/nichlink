@@ -218,3 +218,36 @@ fn a_file_no_face_owns_has_no_scope_membership() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A line inside a registration declaration is answered as a declaration, not as a miss.
+/// 落在注册面声明里的行按"声明"作答，而不是当作没命中。
+///
+/// Measured in the W8 round: the old reply stopped at "no function covers this line" plus a function
+/// list, and the agent asked again with a different line — twice in one round, on two questions. The
+/// tree already knew the line was inside the face's declaration (the kernel's parser carries the
+/// macro's whole span), so the answer was withholding a fact it held.
+/// W8 那轮量到的：旧答案在"no function covers this line"加一份函数清单处停住，agent 只能换个行号再问一次
+/// ——一轮两次、两道题。而树本来就知道这一行在面的声明里（内核解析器带着宏的整个区间），因此那次答案是
+/// 扣下了自己手里的事实。
+#[test]
+fn a_line_inside_a_declaration_is_answered_as_a_declaration() {
+    let root = face_package("declaration");
+    let answer = super::why(
+        &root,
+        &json!({"at": "src/control/object/button/button.rs:9"}),
+    )
+    .expect("answer");
+    assert!(
+        answer.contains("inside the `control_object!` declaration spanning lines 7-11"),
+        "the declaration and its span are named: {answer}"
+    );
+    assert!(
+        answer.contains("`explain {node}` reports what it declares"),
+        "and the next call for the declared fields is named: {answer}"
+    );
+    assert!(
+        answer.contains("the functions in this file are:") && answer.contains("fancy_paint"),
+        "the function index still rides along: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
