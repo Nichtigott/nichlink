@@ -84,7 +84,13 @@ tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `
              （`.nichlink/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
              **人来确认**而不是改代码，而确认就是**再追加一行**。 A route the ledger never named is a **new anchor** — a first confirmation, not a \
              renewal; the read names that action. 台账从未点名的路线是**新锚**——首次确认、不是续期，\
-             读取时会把该动作点出来。 **An object that should be deeper inside is not a new face**: \
+             读取时会把该动作点出来。 **Did the design get carried through?** `conformance {anchor}` \
+             says whether the ledger's claim still holds and where it lapsed; \
+             `consistency --specimen <anchor>` compares the siblings against the declared shape those \
+             files carry, and names who lacks which declaration. **设计落实下去了吗？** \
+             `conformance {anchor}` 判台账的声明是否仍成立、在哪个文件失效；\
+             `consistency --specimen <anchor>` 把兄弟与那批文件携带的已声明形状比对，点名谁缺哪条声明。 \
+             **An object that should be deeper inside is not a new face**: \
              `apply {action: \"deepen\", node, inside, apply: true}` writes a parts layer into that \
              face's own file and leaves the tree, the public path and the factory pins alone, and \
              its reply prices the other reading (another face under it). 把一个对象做深**不是**加面：\

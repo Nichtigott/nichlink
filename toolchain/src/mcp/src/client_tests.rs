@@ -233,6 +233,12 @@ fn the_table_only_advertises_shapes_the_tool_accepts() {
         ("nichlink.affected", json!({"files": ["src/lib.rs"]})),
         ("nichlink.explain", json!({})),
         ("nichlink.diff", json!({})),
+        // The two ledger shapes: a fixture with no ledger is still an answer (the absence is
+        // reported), so acceptance here means the arguments were not refused.
+        // 两种台账形状：没有台账的夹具仍然是一个答案（缺失会被报出），因此这里的接受指的是"参数没被拒"。
+        ("nichlink.conformance", json!({"anchor": "root/button"})),
+        ("nichlink.consistency", json!({"specimen": "root/button"})),
+        ("nichlink.consistency", json!({"parent": "root/control"})),
     ];
     for (tool, arguments) in &shapes {
         let answer = crate::mcp::tools::run_tool(&root, tool, arguments);
@@ -273,6 +279,12 @@ fn every_shape_the_table_names_is_covered_by_an_acceptance_check() {
             "search" | "callgraph" | "read" | "inspect" | "affected" | "registry" | "explain"
             | "diff" => true,
             "apply" => keys.contains("apply"),
+            // The ledger pair: the table names `conformance {anchor}` and
+            // `consistency --specimen <anchor>`, and both are called for real above.
+            // 台账那一对：表里点名 `conformance {anchor}` 与 `consistency --specimen <anchor>`，两者都在
+            // 上面真调过。
+            "conformance" => keys.contains("anchor"),
+            "consistency" => keys.contains("specimen") || keys.contains("parent"),
             other => panic!("the table names `{other}`, which no acceptance check covers"),
         };
         assert!(checked, "{tool} {keys}");

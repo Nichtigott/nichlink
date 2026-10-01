@@ -111,23 +111,29 @@ pub(crate) fn tools() -> Vec<Value> {
              adoption is a lease, so the newest line wins), whether it still holds or lapsed at a \
              named file, and which files it covers. It answers the half of \"was this design carried \
              through?\" that the ledger itself can prove, and it names the half it does not answer — \
-             whether the siblings follow the same shape (that is `consistency`) and the declared \
-             fields a specimen carries (those live in its own source).",
+             whether the siblings follow the same shape (that is `consistency --specimen <anchor>`) \
+             and the declared fields a specimen carries (those live in its own source, and \
+             `consistency --specimen` reads them from there).",
             json!({"type":"object","properties":{"anchor":{"type":"string","description":"the route a ledger entry names"},"root":{"type":"string"}},"required":["anchor"]}),
         ),
         tool(
             "nichlink.consistency",
-            "Compare the siblings directly under one logical path and name the ones that differ — \
+            "Compare siblings directly under one logical path and name the ones that differ — \
              the shape the maintainer calls a mixed supply chain: one object following a different \
              convention from its siblings while every file is locally plausible. The sibling set is \
              read from the registration tree (a fact only a tree has); `by` picks the signal: `api` \
              (default) compares the names each sibling's own file calls, `kind` and `source` compare \
              the declared value. It prints what the majority shares that an outlier lacks, and what \
-             the outlier calls that nobody else does. **It reads text**: a convention living in a \
+             the outlier calls that nobody else does. `specimen` is the other baseline: given a \
+             ledger anchor it compares every sibling's own file against the declared shape the \
+             ledger's entry **in force** certifies (parts, exports, handle_traits, part_traits, read \
+             with the kernel's face parser) and names who lacks or re-states which declaration — the \
+             design was written down and the question is whether it was carried through, so a \
+             sibling that declares more is not reported. **It reads text**: a convention living in a \
              shared helper or generated code is invisible, units and arithmetic are not compared, \
              and an outlier is a place to look rather than a defect. A tree that comes from \
              published records is answered as such instead of being filled with defaults.",
-            json!({"type":"object","properties":{"parent":{"type":"string","description":"the logical path whose children to compare (one level under it)"},"by":{"type":"string","enum":["api","kind","source"],"description":"which signal to compare; `api` (default) reads the names each sibling's own file calls"},"root":{"type":"string"}},"required":["parent"]}),
+            json!({"type":"object","properties":{"parent":{"type":"string","description":"the logical path whose children to compare (one level under it)"},"specimen":{"type":"string","description":"a ledger anchor: compare its siblings against the shape the ledger's entry in force certifies (its parent is derived from the anchor)"},"by":{"type":"string","enum":["api","kind","source"],"description":"which signal to compare; `api` (default) reads the names each sibling's own file calls"},"root":{"type":"string"}},"anyOf":[{"required":["parent"]},{"required":["specimen"]}]}),
         ),
         tool(
             "nichlink.why",
@@ -662,11 +668,11 @@ type Handler = fn(&Path, &Value) -> Result<String, String>;
 /// 名字与顺序：只往目录里加工具而漏掉处理函数、或把它放错位置，都会让测试失败而不是出厂。
 const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.search", search),
-    ("nichlink.locate", crate::mcp::locate::locate),
-    ("nichlink.why", crate::mcp::why::why),
-    ("nichlink.consistency", crate::mcp::consistency::consistency),
-    ("nichlink.conformance", crate::mcp::adopted::conformance),
     ("nichlink.digest", crate::mcp::digest::digest),
+    ("nichlink.conformance", crate::mcp::adopted::conformance),
+    ("nichlink.consistency", crate::mcp::consistency::consistency),
+    ("nichlink.why", crate::mcp::why::why),
+    ("nichlink.locate", crate::mcp::locate::locate),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),

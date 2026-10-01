@@ -33,7 +33,12 @@ fn ledger_path(root: &Path) -> PathBuf {
 
 /// Read the files a decision rests on, refusing to leave the root.
 /// 读取一次决定依托的文件，拒绝离开根。
-fn read_files(root: &Path, files: &[String]) -> Result<Vec<(String, String)>, String> {
+///
+/// Shared with `consistency --specimen`, which compares the shape those same bytes declare: one
+/// reader for "the bytes a lease rests on", so a containment rule cannot drift between two copies.
+/// 与 `consistency --specimen` 共用——它比较的正是同一批字节所声明的形状：租约依托哪些字节只有一个读法，
+/// 因此"不许离开根"这条规则不会在两份副本之间漂移。
+pub(crate) fn read_files(root: &Path, files: &[String]) -> Result<Vec<(String, String)>, String> {
     let mut read = Vec::new();
     for file in files {
         let relative = Path::new(file);
@@ -130,12 +135,14 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
     lines.push(format!("  covers     {}", effective.files.join(", ")));
     lines.push(
         "not covered here: whether the siblings of this anchor's object follow the same shape (ask \
-         `consistency --parent <its parent>`), and the declared fields a specimen carries (they live \
-         in its own source, which this reply does not read)"
+         `consistency --specimen <anchor>`, which reads the declared fields from the files this \
+         entry covers and compares the siblings against them), and the shape of the ledger's own \
+         history beyond the newest line"
             .to_owned(),
     );
     lines.push(
-        "next   `adopted` for every entry's verdict, `consistency --parent <parent>` for the siblings"
+        "next   `adopted` for every entry's verdict, `consistency --specimen <anchor>` for whether \
+         the siblings follow this shape"
             .to_owned(),
     );
     Ok(format!("{}\n", lines.join("\n")))
