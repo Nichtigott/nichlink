@@ -169,6 +169,11 @@ pub(crate) fn dispatch(
                     // 先构成答案：把源码交给主体正是把成员标为已用的动作，随后构成的普查才说得出这份答案
                     // 依托的是哪个成员。
                     let answer = handler(root, arguments)?;
+                    // Terse, like the lookup tools it serves: the reason is expanded on the
+                    // **face and build** path (`every_member`, which `explain`/`verify` come
+                    // through), and nowhere else, which is t1's decision.
+                    // 短档，与它所服务的查表工具一致：原因只在**面与构建**那条路径
+                    // （`every_member`，`explain`/`verify` 经它进来）展开，别处不展开——这是 t1 的决定。
                     let mut output = workspace::roster(root, &members);
                     output.push_str(&answer);
                     output.push_str(workspace::DETAIL);
@@ -241,6 +246,10 @@ fn resolve_owner(root: &Path, arguments: &Value, handler: Handler) -> Result<Str
         .iter()
         .filter_map(|(_, path)| owner_of(&members, root, path))
         .collect();
+    // Terse: `read`/`inspect` are lookup tools, and expanding their member list would contradict
+    // t1's decision that only the face and build path carries the reason (measured: +324 chars).
+    // 短档：`read`/`inspect` 是查表工具，展开它们的成员清单会与 t1"只有面与构建那条路径带原因"的
+    // 决定相抵（实测 +324 字符）。
     let mut output = workspace::roster(root, &members);
     let (_, primary_path) = &named[0];
     match owners.len() {
@@ -453,7 +462,12 @@ fn every_member(
             }
         }
     }
-    let mut output = workspace::roster(root, members);
+    // `explain` and `verify` come through here, and their rows are the ones t1's acceptance
+    // named: the reason is expanded like `registry`/`diff`/`grafts`, so the face and build tools
+    // spell their member lists the same way.
+    // `explain` 与 `verify` 经这里进来，而它们那几行正是 t1 验收点名的：原因像
+    // `registry`/`diff`/`grafts` 一样展开，因此面与构建类工具的成员清单拼法一致。
+    let mut output = workspace::roster_expanded(root, members);
     output.push_str(&format!(
         "answers: {} of {} members answered this request  declined {}  no tree {}\n",
         answered,
@@ -541,6 +555,9 @@ fn refused_write(
     target: Option<&str>,
     owners: usize,
 ) -> String {
+    // Terse: a refusal is not the build/face picture. The `REFUSED:` line itself is untouched
+    // (the shape line is a red line).
+    // 短档：拒绝不是面/构建的画面。`REFUSED:` 那一行本身未动（形状行是红线）。
     let mut output = workspace::roster(root, members);
     output.push_str(&format!(
         "\nREFUSED: {tool} needs one package, and this root is a virtual manifest that names \

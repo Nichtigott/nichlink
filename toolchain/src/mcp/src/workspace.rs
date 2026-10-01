@@ -449,10 +449,14 @@ pub(crate) fn roster(root: &Path, members: &[Member]) -> String {
 ///
 /// The reason is the reader's own words and it names an absolute path, so it is worth its space
 /// exactly where the reader is asking about the **build** — `registry`, `diff` and `grafts` are
-/// the three that come through [`merge`], and they are the ones whose question the reason answers.
+/// the three that come through [`merge`], and `explain`/`verify` reach it through the ownership
+/// entrance. That caller is why this entry is `pub(crate)` rather than private to this module:
+/// "the rows carry the reason" has one spelling, not a second one written where the caller is.
 /// 原因是读取方自己的话，而且点名一条绝对路径，因此它值这点篇幅的地方恰恰是读者在问**构建**的时候
-/// ——经 [`merge`] 进来的 `registry`、`diff` 与 `grafts` 正是这三位，也正是原因能回答其问题的那些。
-fn roster_expanded(root: &Path, members: &[Member]) -> String {
+/// ——经 [`merge`] 进来的 `registry`、`diff` 与 `grafts` 正是这三位，而 `explain`/`verify` 经归属
+/// 入口到达它。正是那个调用方让本入口成为 `pub(crate)` 而不是本模块私有物："行里带原因"只有一处
+/// 拼法，而不是在调用方那里再写第二套。
+pub(crate) fn roster_expanded(root: &Path, members: &[Member]) -> String {
     roster_with(root, members, true)
 }
 

@@ -175,6 +175,14 @@ fn a_face_naming_tool_answers_every_member_on_a_virtual_root() {
         } else {
             json!({"node": "root/button"})
         };
+        // Each tool is measured as the answer that **opens** the root, so this pin is about which
+        // roster shape this entrance composes rather than about the order the loop happens to call
+        // in: after the first answer the preamble is allowed to collapse to its one-line index
+        // (t1's decision), and a pin that read that shape would be asserting the call order.
+        // 每个工具都按**打开**这个根的那份答案来量，因此这条钉子量的是本入口构成哪种表头形态，而不是这个
+        // 循环碰巧的调用次序：第一条答案之后，前言允许塌成它那一行索引（t1 的决定），而读到那个形态的钉子
+        // 断言的就是调用次序了。
+        crate::mcp::workspace::forget_announced();
         let (text, failed) = call(&fixture.root, tool, arguments);
         assert!(
             !failed,
@@ -209,6 +217,25 @@ fn a_face_naming_tool_answers_every_member_on_a_virtual_root() {
             text.contains(&format!("== {} (unresolvable)\n", fixture.tool))
                 && text.contains("tree unavailable (no source tree at"),
             "{tool} must explain the member whose tree it could not read: {text}"
+        );
+        // The **rows** carry the reason too, which is the decision this batch took: the ownership
+        // entrance composes one roster spelling, and it is the expanded one, so `explain`/`verify`
+        // name each member's degradation exactly where `registry`/`diff`/`grafts` do. The padded
+        // row is asserted rather than the bare sentence, because the member's section carries the
+        // same sentence and would make a weaker assertion pass either way.
+        // **行**里也带原因，这是本批做出的决定：归属入口只拼一种表头拼法，而且是展开的那一种，因此
+        // `explain`/`verify` 点名每个成员的降级的位置与 `registry`/`diff`/`grafts` 完全相同。断言的是
+        // 带对齐的那一行而不是光秃秃的那句话，因为成员小节里也有同一句话，更弱的断言两边都会通过。
+        assert!(
+            text.contains(&format!(
+                "  {:<13} {:<30} tree unavailable (no source tree at",
+                "unresolvable", fixture.tool
+            )),
+            "{tool}'s roster row must carry the reason the member could not be read: {text}"
+        );
+        assert!(
+            text.contains("; not built (cannot read"),
+            "{tool}'s not-built row must carry the reason it was derived now: {text}"
         );
         // The member that derived its tree but whose own body refused is named with its
         // reason, so "1 of 3" is actionable rather than a number.
