@@ -59,7 +59,13 @@ green and you suspect another one (`face: \"all\"`, or a feature name), because 
 it ran. **Its verdict is the first line of the reply, not this client's exit code**: the exit code \
 says only how the call went (`0` answered, `1` refused, `2` a usage error), and `check` answers \
 even about a failing run — so read the `verdict  passed (cargo exit 0)` line or the \
-`verdict  failed (cargo exit 101)` line before anything else. **If the symptom is in something the \
+`verdict  failed (cargo exit 101)` line before anything else. **A range-type question** \
+（「这里还有别的问题吗」）is the other workflow and it starts from the same reply: `check` ends with a \
+whole-tree census of static facts (pass `census: true` for the whole table), and every column says \
+what it does not cover — dispose of each column before opening files one by one. \
+**范围型问题**（「这里还有别的问题吗」）是另一条工作流，也从同一次回复开始：`check` 末尾带一张整树\
+静态事实普查（`census: true` 给整表），每栏都写明它不覆盖什么——先把每栏处置掉，再逐个打开文件。 \
+**If the symptom is in something the \
 code produces** (a rendered report, a generated record), `search {literal}` on that product's own \
 words finds the line that produces it, usually in one call. **If the symptom is the assertion's \
 message**, search a short, stable phrase from it: the test framework appends `left:`/`right:` and \

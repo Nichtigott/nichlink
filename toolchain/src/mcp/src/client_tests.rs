@@ -128,6 +128,13 @@ fn the_table_does_not_read_the_exit_code_as_the_verdict() {
         "`0` answered, `1` refused, `2` a usage error",
         "verdict  passed (cargo exit 0)",
         "verdict  failed (cargo exit 101)",
+        // The range-type workflow starts from the same reply's census, and the table has to say so:
+        // the round measured agents opening files one by one for a question the census already
+        // answered column by column.
+        // 范围型工作流要从同一次回复的普查开始，表里必须写明：那一轮量到代理为一个"普查已逐栏回答"的
+        // 问题去逐个打开文件。
+        "A range-type question",
+        "census: true",
     ] {
         assert!(
             INSTRUCTIONS.contains(expected),
