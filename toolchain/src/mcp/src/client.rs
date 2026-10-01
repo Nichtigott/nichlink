@@ -349,6 +349,18 @@ pub fn run_client(arguments: &[String]) -> Client {
     }
 }
 
+/// The first argument that names a catalogue tool, and where it sat.
+/// 第一个点名目录里某个工具的实参，以及它出现的位置。
+fn find_catalogue_name(arguments: &[String]) -> Option<(usize, &String)> {
+    arguments.iter().enumerate().find(|(_, token)| {
+        let bare = token.strip_prefix("nichlink.").unwrap_or(token);
+        let wanted = format!("nichlink.{bare}");
+        crate::mcp::tools::tools()
+            .into_iter()
+            .any(|tool| tool.get("name").and_then(|name| name.as_str()) == Some(wanted.as_str()))
+    })
+}
+
 /// How a `--call` can fail.
 /// `--call` 可能怎么失败。
 enum Refusal {
@@ -372,28 +384,42 @@ nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage e
 /// Assemble and run one `--call`.
 /// 组装并执行一次 `--call`。
 fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
-    let Some(name) = arguments.first() else {
-        return Err(Refusal::Usage(format!(
-            "`--call` needs a tool name\n\n{USAGE}"
-        )));
+    // The tool name may sit **anywhere** among the flags. A round measured the cost of requiring it
+    // first: `--call --json … --root … s3` was refused with "needs a tool name, not `--json`" and
+    // that call bought nothing.
+    // 工具名可以出现在开关之间的**任意位置**。有一轮量到"必须放最前"的代价：`--call --json … --root
+    // … s3` 被拒成 "needs a tool name, not `--json`"，那次调用一无所获。
+    let (raw, remaining): (&String, Vec<&String>) = match arguments.first() {
+        Some(first) if !first.starts_with('-') => (first, arguments[1..].iter().collect()),
+        _ => match find_catalogue_name(arguments) {
+            Some((index, name)) => (
+                name,
+                arguments
+                    .iter()
+                    .enumerate()
+                    .filter(|(at, _)| *at != index)
+                    .map(|(_, token)| token)
+                    .collect(),
+            ),
+            None => {
+                let spelled = arguments.first().map(String::as_str).unwrap_or("");
+                return Err(Refusal::Usage(format!(
+                    "`--call` needs a tool name (one of the names `--list` prints), not `{spelled}`\n\n{USAGE}"
+                )));
+            }
+        },
     };
-    if name.starts_with('-') {
-        return Err(Refusal::Usage(format!(
-            "`--call` needs a tool name, not `{name}`\n\n{USAGE}"
-        )));
-    }
     // The `nichlink.` prefix is the catalogue's spelling; on a command line whose only tool source is
     // this bridge it is redundant, so a bare `callgraph` resolves to `nichlink.callgraph`.
     // `nichlink.` 前缀是目录里的拼法；在命令行上，唯一的工具来源就是这个桥，因此它是冗余的 ——
     // 裸写 `callgraph` 就解析成 `nichlink.callgraph`。
-    let resolved = if name.contains('.') {
-        name.to_owned()
+    let resolved = if raw.contains('.') {
+        raw.to_owned()
     } else {
-        format!("nichlink.{name}")
+        format!("nichlink.{raw}")
     };
     let name = resolved.as_str();
     let mut object = Map::new();
-    let remaining: Vec<&String> = arguments[1..].iter().collect();
     let mut at = 0usize;
     // `--json` sets the base and the explicit pairs win, so a caller can start from a pasted object
     // and still override one key.

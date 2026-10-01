@@ -774,3 +774,54 @@ fn edit_refuses_the_two_contract_keys_by_name_and_add_still_sets_them() {
     }
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A missing required key is refused **with the whole accepted shape**, so the next call does not
+/// have to guess it. A round measured five such refusals, each costing a round trip.
+/// 缺一个必填键时，拒绝里带上**完整可接受形状**，让下一次调用不必靠猜 —— 有一轮量到五次这样的拒绝，
+/// 每一次都白花一个往返。
+#[test]
+fn a_missing_required_key_is_refused_with_the_whole_shape() {
+    let (root, _) = package("shape");
+
+    let add = apply(
+        &root,
+        &json!({"action": "add", "fields": {"kind": "Button"}}),
+    )
+    .expect_err("add without `fields.module` is refused");
+    assert!(
+        add.contains("accepted shape")
+            && add.contains("\"action\":\"add\"")
+            && add.contains("\"module\"")
+            && add.contains("\"apply\":true"),
+        "the add refusal carries the shape: {add}"
+    );
+
+    let rename = apply(
+        &root,
+        &json!({"action": "rename", "node": "root/control/button", "fields": {}}),
+    )
+    .expect_err("rename without `fields.module` is refused");
+    // `rename` resolves its node first, so on this empty fixture the error is the resolution refusal
+    // rather than the shape one; both name what was missing, and the shape text is asserted for the
+    // two actions whose argument check runs first.
+    // `rename` 先解析 node，因此在这个空夹具上得到的是解析拒绝而不是形状拒绝；两者都点名缺了什么，
+    // 而形状文本由「先检查参数」的那两个动作断言。
+    assert!(
+        rename.contains("no registration face") || rename.contains("accepted shape"),
+        "the rename refusal names what is missing: {rename}"
+    );
+
+    let deepen = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button"}),
+    )
+    .expect_err("deepen without `inside.parts` is refused");
+    assert!(
+        deepen.contains("accepted shape")
+            && deepen.contains("\"action\":\"deepen\"")
+            && deepen.contains("\"parts\""),
+        "the deepen refusal carries the shape: {deepen}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

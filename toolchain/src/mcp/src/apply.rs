@@ -274,7 +274,12 @@ fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, S
     }
     let module = text(fields, "module");
     if module.is_empty() {
-        return Err("add requires `fields.module`, the new module's name".to_owned());
+        return Err(
+            "add requires `fields.module`, the new module's name — accepted shape: \
+             {\"action\":\"add\",\"parent\":\"<node>\",\"fields\":{\"module\":\"<snake_case>\",\
+             \"kind\":\"<Kind>\",\"exports\":\"<export>\"},\"apply\":true}"
+                .to_owned(),
+        );
     }
     let registry = load_registry(root, namespace)?;
     let parent = parent_id(root, namespace, arguments, fields)?;
@@ -357,7 +362,12 @@ fn run_edit(
     if matches!(action, Action::Rename) {
         let module = fields.get("module").and_then(Value::as_str).unwrap_or("");
         if module.is_empty() {
-            return Err("rename requires `fields.module`, the new module name".to_owned());
+            return Err(
+                "rename requires `fields.module`, the new module name — accepted shape: \
+                 {\"action\":\"rename\",\"node\":\"<node>\",\"fields\":{\"module\":\"<snake_case>\"},\
+                 \"apply\":true}"
+                    .to_owned(),
+            );
         }
     }
     // Both halves run inside one context, and not only the write: reading the face
@@ -482,7 +492,9 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .and_then(Value::as_object)
         .filter(|parts| !parts.is_empty())
         .ok_or_else(|| {
-            "deepen requires `inside.parts`: an object of `field: Type` pairs, at least one"
+            "deepen requires `inside.parts`: an object of `field: Type` pairs, at least one — \
+             accepted shape: {\"action\":\"deepen\",\"node\":\"<node>\",\
+             \"inside\":{\"parts\":{\"<field>\":\"<Type>\"}},\"apply\":true}"
                 .to_owned()
         })?;
     let mut fields: Vec<(String, String)> = Vec::new();
