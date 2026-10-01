@@ -139,13 +139,14 @@ Scoring rules (mechanical; no model is a judge) / 判分规则（机械；不许
 The answer is scored on:
   root_cause_hit   truth.root_cause.file named, AND at least half of mechanism present, AND either a
                    `<file>:N` with N within 3 lines of truth.line, or every mechanism word present
-  instrument_calls lines of the call log that name a tool — the bridge writes one line per
-                   invocation, so this counts bridge calls. Null when there is no log, because
-                   counting from the answer's prose is guessing.
-  steps            every line of the log when each line carries its own `tool` (an arm's own log),
-                   and otherwise the same number as instrument_calls plus a note: the bridge's log
-                   covers bridge calls only, and a shell step is not in it
-  response_chars   the sum of the response texts' lengths — null when no log
+  instrument_calls lines of the log that name a tool. Null when there is no log, because counting
+                   from the answer's prose is guessing.
+  init_calls       the subset of those whose command is `init`: index setup, counted apart so an
+                   index cost is not read as an answer cost. answering_calls = the difference.
+  steps            instrument calls plus the lines of a sibling `<log>.shell.jsonl` when the arm kept
+                   one; otherwise equal to instrument_calls, with a note saying the shell steps are
+                   not in this log
+  response_chars   the sum of the responses' lengths — null when no log
   tokens_raw       (sum of request_chars + response_chars) / 3.5, and marked as an estimate
   counter_proof    the answer carries at least one tool invocation anywhere on a line AND at least
                    one explicit exit code (`exit N`, `exited N`, `rc=N`) — the evidence discipline
@@ -1107,30 +1108,53 @@ def build(directory, klass):
 
 
 def normalize_log_record(record):
-    """One log line as (tool, request characters, response characters).
+    """One log line as a dict: tool, whether it is index setup, and the characters each way.
 
-    The bridge writes its own argv and reply, so the tool is the first argument that is not a flag —
-    the same rule the client itself uses to find the tool name. A record that already carries
-    `tool`/`request_chars`/`response_chars` is read as it stands, so an arm that keeps its own log in
-    that shape is scored the same way.
-    桥写下的是它自己的 argv 与回复，因此"工具"是第一个不是开关的实参——与客户端自己找工具名的规则相同。
-    已经带 `tool`/`request_chars`/`response_chars` 的记录按原样读，因此按那种形状自己记账的一臂得到同样的
-    判分。
+    Three shapes are read, because two arms produce two of them and the bench's own documented shape is
+    the third:
+      * the bridge's own `--log`: `{"exit", "request": [argv…], "response": "…"}`
+      * an arm's own log: `{"tool", "argv": […], "exit", "stdout_chars", "stderr_chars"}`
+      * the bench's documented shape: `{"tool", "request_chars", "response_chars", "exit"}`
+    A line that names no tool is not an instrument call: `--list` and a bare `--help` are lookups, and
+    counting them would inflate the KPI the comparison turns on. `init` is an instrument call too, but
+    it is index setup rather than answering, so it is counted apart — the rounds already fixed that
+    convention and mixing them is how an index cost gets read as an answer cost.
+    三种形状都读，因为两臂各产一种、而出题台自己文档里那种是第三种。没有点名工具的行不算仪器调用：
+    `--list` 与裸 `--help` 是查表，算进去会灌水这次比较赖以成立的 KPI。`init` 也是仪器调用，但它是建索引
+    而不是答题，因此单列——各轮已经定下这个口径，把两者混起来等于把索引成本读成答题成本。
     """
-    if record.get("tool") is not None or record.get("request_chars") is not None:
-        return (
-            record.get("tool"),
-            int(record.get("request_chars", 0)),
-            int(record.get("response_chars", 0)),
-        )
-    request = record.get("request")
-    if isinstance(request, list):
-        parts = [str(part) for part in request]
-    else:
-        parts = str(request or "").split()
-    sent = sum(len(part) for part in parts)
-    tool = next((part for part in parts if not part.startswith("-")), None)
-    return (tool, sent, len(str(record.get("response", ""))))
+    if record.get("argv") is not None:
+        argv = [str(part) for part in record["argv"]]
+        received = record.get("stdout_chars")
+        if received is None:
+            received = len(str(record.get("stdout", ""))) + len(str(record.get("stderr", "")))
+        else:
+            received = int(received) + int(record.get("stderr_chars", 0))
+        return {
+            "tool": argv[0] if argv else None,
+            "init": bool(argv) and argv[0] == "init",
+            "sent": sum(len(part) for part in argv),
+            "received": int(received),
+            "bridge": False,
+        }
+    if record.get("request") is not None:
+        argv = record["request"]
+        argv = [str(part) for part in argv] if isinstance(argv, list) else str(argv).split()
+        tool = next((part for part in argv if not part.startswith("-")), None)
+        return {
+            "tool": tool,
+            "init": tool == "init",
+            "sent": sum(len(part) for part in argv),
+            "received": len(str(record.get("response", ""))),
+            "bridge": True,
+        }
+    return {
+        "tool": record.get("tool"),
+        "init": record.get("tool") == "init",
+        "sent": int(record.get("request_chars", 0)),
+        "received": int(record.get("response_chars", 0)),
+        "bridge": True,
+    }
 
 
 def score(tree, answer_path, log_path=None):
@@ -1155,34 +1179,41 @@ def score(tree, answer_path, log_path=None):
         and (line_hit or (mechanism and len(present) == len(mechanism)))
     )
 
-    calls = steps = response_chars = request_chars = None
+    calls = answering = init_calls = steps = response_chars = request_chars = None
     bridge_log = False
+    shell_steps = None
     if log_path is None:
         candidate = directory / ".audit/calls.jsonl"
         log_path = candidate if candidate.exists() else None
     if log_path:
-        calls = response_chars = request_chars = 0
-        steps = 0
+        calls = answering = init_calls = 0
+        response_chars = request_chars = 0
         for row in Path(log_path).read_text(encoding="utf-8").splitlines():
             if not row.strip():
                 continue
-            record = json.loads(row)
-            tool, sent, received = normalize_log_record(record)
-            if tool is None:
-                # A line that names no tool is not an instrument call: `--list` and a bare `--help`
-                # are lookups, and counting them as instrument calls would inflate the KPI the
-                # comparison turns on.
-                # 没有点名工具的行不是仪器调用：`--list` 与裸 `--help` 是查表，把它们算成仪器调用会灌水
-                # 这次比较赖以成立的那个 KPI。
+            normalized = normalize_log_record(json.loads(row))
+            if normalized["tool"] is None:
                 continue
             calls += 1
-            steps += 1
-            response_chars += received
-            request_chars += sent
-            bridge_log = bridge_log or record.get("request") is not None
-        if bridge_log:
+            if normalized["init"]:
+                init_calls += 1
+            else:
+                answering += 1
+            response_chars += normalized["received"]
+            request_chars += normalized["sent"]
+            bridge_log = bridge_log or normalized["bridge"]
+        # An arm that keeps its own log usually keeps a second one for the shell steps it took
+        # between instrument calls; reading it is how `steps` becomes a step count rather than a
+        # second name for the instrument count.
+        # 自己记账的一臂通常还会给仪器调用之间的 shell 步留第二份日志；读它，`steps` 才是步数而不是仪器
+        # 调用的第二个名字。
+        sibling = Path(str(log_path).replace(".jsonl", ".shell.jsonl"))
+        if sibling.exists() and sibling != Path(log_path):
+            shell_steps = sum(1 for row in sibling.read_text(encoding="utf-8").splitlines()
+                              if row.strip())
+            steps = calls + shell_steps
+        elif bridge_log:
             steps = calls
-
     fix = truth.get("fix") or {}
     forbidden = [token for token in fix.get("forbidden", []) if token in answer]
     minimal_fix = bool(
@@ -1202,7 +1233,10 @@ def score(tree, answer_path, log_path=None):
         "mechanism_expected": mechanism,
         "line_within_3": line_hit,
         "instrument_calls": calls,
+        "init_calls": init_calls,
+        "answering_calls": answering,
         "steps": steps,
+        "shell_steps": shell_steps,
         "response_chars": response_chars,
         "tokens_raw_estimate": (
             None if request_chars is None else round((request_chars + response_chars) / 3.5, 1)
@@ -1224,6 +1258,11 @@ def score(tree, answer_path, log_path=None):
         result["notes"].append(
             "the log is the bridge's own: it covers bridge calls only, so `steps` equals "
             "`instrument_calls` and a shell step is not counted here"
+        )
+    if init_calls:
+        result["notes"].append(
+            f"{init_calls} of the instrument calls are `init` (index setup, not answering): "
+            f"answering calls = {answering}"
         )
     if truth.get("pruned"):
         result["pruned_face_named"] = truth["pruned"]["face"] in answer
