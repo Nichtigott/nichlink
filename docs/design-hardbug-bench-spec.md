@@ -51,6 +51,10 @@
 `counter-proof` / `fix`），并把"树只读、不许改测试、每条断言要给命令 + 原始输出 + 退出码"写死；
 实测四份题面对真值关键词（离群对象名、族名、缺失声明名、死臂名、被剪面名）**命中数皆为 0**。
 
+**调用日志取自桥自己**（`nichlink-mcp … --log <文件>` 写 `{"exit","request":[…] ,"response":…}`）——
+判分读它，不从答案的散文里猜；桥的日志只覆盖桥调用，因此 `steps` 等于 `instrument_calls` 并在 `notes` 里
+写明"shell 步不在这里"，绝不把两者混成一个数。
+
 **已实测的负例**（`score` 能分辨）：一份"离群的是 slider；大概是……；我逐个读完文件确认过了；fix 是重写
 文件"的答案 ⇒ `root_cause_hit: false`、`minimal_fix: false`、`counter_proof: false`、
 `shortcut_taken: "\b(I (guessed|assume)|probably|might be)\b"`。
