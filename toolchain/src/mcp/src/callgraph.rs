@@ -105,7 +105,20 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             continue;
         }
         for function in &file.functions {
-            if function.name == query || function.name.ends_with(&format!("::{query}")) {
+            // The definition half asks its own question — *which* definitions match the requested
+            // query — and it keeps today's direction on purpose: `is_call_to` receives the
+            // definition's spelled name as the spelling and the query as the target, so a definition
+            // spelled with a path would be found by a bare query. The reverse direction
+            // (`is_call_to(query, &function.name)`), which would let the **query** `inner::helper`
+            // name the bare `helper`, is a query-semantics choice rather than a spelling: it was
+            // measured to change behaviour (`--function inner::helper` answers "no static function
+            // match" today and would hit `helper`), so it is deliberately not taken here.
+            // 定义那一半问的是它自己的问题——**哪些**定义匹配这个查询——而它有意保持今天的方向：
+            // `is_call_to` 收到的"拼法"是定义的名字、"目标"是查询，因此若有以路径拼写的定义，裸查询也能
+            // 找到它。反方向（`is_call_to(query, &function.name)`）会让**查询** `inner::helper` 点名裸的
+            // `helper`，那是**查询语义**的取舍而不是拼法：实测它会改变行为（今天 `--function
+            // inner::helper` 答"no static function match"，改后命中 `helper`），因此这里有意不取。
+            if is_call_to(&function.name, query) {
                 found.push((label, function));
             }
         }
@@ -127,28 +140,23 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         ));
     }
     for (label, function) in found.into_iter().take(limit) {
-        // The matched name and its qualified suffix are cloned into the inner closure: it runs
-        // once per candidate file, and borrowing the definition from the outer scope made the
-        // closure outlive it.
-        // 被匹配的名字与它的限定后缀被克隆进内层闭包：它每个候选文件跑一次，而从外层作用域借用那个定义
-        // 会让闭包活得比它长。
+        // The matched name is cloned into the inner closure: it runs once per candidate file, and
+        // borrowing the definition from the outer scope made the closure outlive it. Whether a call
+        // names that definition is `is_call_to`'s business now, as it is for `orphans`, the census's
+        // test-reachability column and `affected`.
+        // 被匹配的名字被克隆进内层闭包：它每个候选文件跑一次，而从外层作用域借用那个定义会让闭包活得比它
+        // 长。这次调用是否点名了那个定义，现在归 `is_call_to` 管——`orphans`、总账的测试可达性栏与
+        // `affected` 也一样。
         let name = function.name.clone();
-        let suffix = format!("::{query}");
         let mut callers = labelled
             .iter()
             .flat_map(|(caller_label, candidate)| {
                 let prefix = format!("{caller_label}::");
                 let name = name.clone();
-                let suffix = suffix.clone();
                 candidate
                     .functions
                     .iter()
-                    .filter(move |caller| {
-                        caller
-                            .calls
-                            .iter()
-                            .any(|call| call == &name || call.ends_with(&suffix))
-                    })
+                    .filter(move |caller| caller.calls.iter().any(|call| is_call_to(call, &name)))
                     .map(move |caller| format!("{prefix}{}", caller.name))
             })
             .collect::<Vec<_>>();
@@ -205,8 +213,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             .map(|call| {
                 for (label, file) in &definitions {
                     for candidate in &file.functions {
-                        let suffix = format!("::{}", candidate.name);
-                        if candidate.name == *call || call.ends_with(&suffix) {
+                        if is_call_to(call, &candidate.name) {
                             return format!("{call} -> {label}:{}", candidate.line);
                         }
                     }
@@ -259,12 +266,10 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
             .iter()
             .filter(|(test_label, candidate)| {
                 looks_like_a_test(test_label, &candidate.source)
-                    && candidate.functions.iter().any(|caller| {
-                        caller
-                            .calls
-                            .iter()
-                            .any(|call| call == &name || call.ends_with(&suffix))
-                    })
+                    && candidate
+                        .functions
+                        .iter()
+                        .any(|caller| caller.calls.iter().any(|call| is_call_to(call, &name)))
             })
             .map(|(test_label, _)| test_label.clone())
             .collect::<Vec<_>>();

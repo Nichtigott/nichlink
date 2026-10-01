@@ -216,20 +216,58 @@ fn a_call_names_a_definition_by_the_one_rule() {
     assert!(!is_call_to("paint", "pain"));
 }
 
-/// One implementation, three consumers: `orphans`, the census's test-reachability column and
-/// `affected` all reach a definition through `is_call_to`, and none of them keeps a clause of its
-/// own.
-/// 一份实现、三个消费方：`orphans`、总账的测试可达性栏与 `affected` 都经 `is_call_to` 到达定义，谁也
-/// 不留自己的子句。
+/// The definition half keeps its own direction, and that is pinned as behaviour rather than left as
+/// a comment: a query spelled as a path does **not** name the bare definition, so
+/// `--function inner::helper` answers exactly the no-match sentence while `--function helper`
+/// finds it.
+/// 定义名那一半保持自己的方向，而且这一点作为**行为**被钉住、不是只留在注释里：以路径拼写的查询**不**
+/// 点名裸定义，因此 `--function inner::helper` 恰好答那句"没有匹配"，而 `--function helper` 找得到。
+///
+/// The reverse spelling (`is_call_to(query, &function.name)`) is the one that would change this, and
+/// it is a query-semantics choice rather than a copy of the caller rule: the verification round
+/// measured it, and this pin is what keeps the choice visible if someone takes it by accident.
+/// 反方向的拼法（`is_call_to(query, &function.name)`）才是会改变它的那个，而那是**查询语义**的取舍、
+/// 不是调用者规则的副本：复核那一轮量到了它，而这条钉子就是"有人误踩时它会现形"的保证。
+#[test]
+fn the_definition_half_keeps_its_own_direction() {
+    let root = std::env::temp_dir().join(format!("mcp-callgraph-query-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "//! A query fixture.\n\
+         pub mod inner {\n\
+         \x20   pub fn helper() -> i64 { 1 }\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let bare = callgraph(&root, &json!({"function": "helper"})).expect("an answer");
+    assert!(bare.contains("matches 1"), "{bare}");
+    assert!(bare.contains("src/lib.rs:3 fn helper"), "{bare}");
+    let qualified = callgraph(&root, &json!({"function": "inner::helper"})).expect("an answer");
+    assert_eq!(
+        qualified, "no static function match for `inner::helper`",
+        "{qualified}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// One implementation, four consumers: the name view, `orphans`, the census's test-reachability
+/// column and `affected` all reach a definition through `is_call_to`, and none of them keeps a
+/// clause of its own.
+/// 一份实现、四个消费方：名字视图、`orphans`、总账的测试可达性栏与 `affected` 都经 `is_call_to`
+/// 到达定义，谁也不留自己的子句。
 ///
 /// This is the pin behaviour tests cannot give. Two byte-identical clauses behave identically until
 /// one of them is edited, so a behaviour test stays green through exactly the change this refinement
 /// exists to prevent; only reading the sources sees the copy. The counts are taken over every
-/// shipping source file in this checkout and the body assertions are anchored to the three
-/// consumers, so a fourth spelling — in any file, or text elsewhere in these files — fails here.
+/// shipping source file in this checkout and the body assertions are anchored to each consumer body
+/// (four of them — `callgraph.rs` contributes the name view and the orphan view), so a further
+/// spelling — in any file, or text elsewhere in these files — fails here.
 /// 这是行为测试给不出的钉子。两段逐字相同的子句在被改动之前行为一致，因此正是这次收敛要防的那种改动
 /// 会让行为测试保持绿色；只有读源码才看得见那份副本。计数取自本检出**每一个出厂源码文件**，函数体断言
-/// 锚定在三个消费方上，因此第四份拼写——不论出现在哪个文件、还是这些文件里别处的文本——都会在这里失败。
+/// 锚定在每一个消费方函数体上（共四个——`callgraph.rs` 贡献名字视图与孤儿视图），因此再多一份拼写——
+/// 不论出现在哪个文件、还是这些文件里别处的文本——都会在这里失败。
 #[test]
 fn every_view_reaches_a_definition_through_the_one_predicate() {
     let sources = shipped_rust_sources();
@@ -249,6 +287,10 @@ fn every_view_reaches_a_definition_through_the_one_predicate() {
         "the rule's body is spelled exactly once in this checkout's shipping sources"
     );
     for (file, consumer) in [
+        (
+            "toolchain/src/mcp/src/callgraph.rs",
+            "pub(crate) fn callgraph",
+        ),
         ("toolchain/src/mcp/src/callgraph.rs", "fn orphan_answer"),
         ("toolchain/src/mcp/src/claims.rs", "fn reachability_column"),
         (
