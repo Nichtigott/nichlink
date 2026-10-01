@@ -95,6 +95,19 @@ pub(crate) fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{"query":{"type":"string","description":"a name: face, file or function"},"literal":{"type":"string","description":"text to find verbatim anywhere in a source file (raw bytes, case-sensitive, comments and string literals included)"},"context":{"type":"integer","minimum":0,"maximum":10,"description":"literal mode: also print this many lines around each hit (default 0; the reply points at it)"},"converge":{"type":"boolean","description":"answer in layers: the tree's verdicts, then the call chain this name leads into, then the next step and the bounds of what was looked at"},"root":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200}},"anyOf":[{"required":["query"]},{"required":["literal"]}]}),
         ),
         tool(
+            "nichlink.locate",
+            "Rank the places a symptom's own words point at, so a reader holding an assertion \
+             message or an error does not have to guess a name first. The reply lists up to five \
+             candidates as `file:line \u{60}name\u{60}` with the reason each ranked — word overlap \
+             with the function's name and with the doc comments above it, a whole-phrase bonus when \
+             the symptom's exact words appear in the file, and whether the file looks like a test \
+             file. **It reads text only**: no call graph, no build records, no runtime evidence, so \
+             a paraphrase that shares no word finds nothing, dynamic dispatch and macro expansion \
+             are invisible, and a hit is a place to look rather than the defect. An empty answer \
+             carries the root and the route back (`search {literal}` for an exact phrase).",
+            json!({"type":"object","properties":{"symptom":{"type":"string","description":"the words of the symptom: a failing assertion's message, an error, or a description of what goes wrong"},"root":{"type":"string"}},"required":["symptom"]}),
+        ),
+        tool(
             "nichlink.inspect",
             "Summarize functions and registration declarations in one Rust file. A **virtual \
              workspace root** is answered as the workspace: the member whose root contains the \
@@ -604,6 +617,7 @@ type Handler = fn(&Path, &Value) -> Result<String, String>;
 /// 名字与顺序：只往目录里加工具而漏掉处理函数、或把它放错位置，都会让测试失败而不是出厂。
 const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.search", search),
+    ("nichlink.locate", crate::mcp::locate::locate),
     ("nichlink.inspect", inspect),
     ("nichlink.callgraph", callgraph),
     ("nichlink.read", read_source),

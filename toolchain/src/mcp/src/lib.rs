@@ -175,6 +175,9 @@ mod overlay;
 #[path = "search.rs"]
 mod search;
 
+#[path = "locate.rs"]
+mod locate;
+
 #[path = "tree_delta.rs"]
 mod tree_delta;
 
