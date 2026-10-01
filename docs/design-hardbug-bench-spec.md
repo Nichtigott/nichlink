@@ -38,6 +38,28 @@
    ⇒ H3 当时**没有一次调用的路径**。补齐后实测：`why --at src/control/object/dial/dial.rs:16` 一次给出
    `scope not-selected (mode=auto)` + `wiring no declared cut in …/src/lib.rs names root/control/dial`。
 
+### 测量必须旁路（2026-10-01 维护者加的约束：**前提是不会改变 AI 的泛化能力**）
+
+判据要的三轴里，凡是"需要新增一个交付物才能量"的指标，**它已经改了那道题**。按这条把要加的字段分成两类：
+
+| 字段 | 任务要改吗 | 处置 |
+| --- | --- | --- |
+| `usage{input,output,cacheRead}`（provider 自报，非估算） | 不改——事后读 harness 的会话日志 | **已加**：`tools/nichlink-mcp-hardbug tokens <session>` |
+| `reasoning_chars`（链长） | 不改——同上 | **已加**（同一个子命令） |
+| `fix_diff_lines` / `touched_files_outside_scope` | 要——得让修复落盘 | **不塞进现有四题**；留作新类 |
+| `patch_layers`（补丁层数，"糊纸"的代理量） | 要——同上 | **同上**；且它是**新能力问题**，该有自己的题树，不是挂在 h1–h4 上 |
+
+理由：任务一旦多一个交付物，臂就知道它在被量，于是会去优化那个量（写"小 diff"），量到的就不是能力而是
+指标；而且题面一变，与 W8 那张表**不再可比**（判据纪律：只有对照自身变化或新增样本才重跑，共享样本对着
+冻结集配对）。
+
+**三轴的读法**（写入 run 记录时也必须分轴、不合数）：输入＝`inputTokens + cacheReadTokens +
+cacheWriteTokens`（prompt，每一步都要重发）；输出＝`outputTokens`（模型生成的）。**单价不同，因此从不
+合成一个数**；价格比由 provider 的三档定价决定，报告里给三档原文数字让人自己套。
+
+同批的操作事实：会话日志是**多帧拼接的 zstd**，`node:zlib.zstdDecompressSync` 只解第一帧（585 KB 的记录
+只吐出 284 字节并报 `Unknown frame descriptor`）⇒ 用 `zstd -dc`。
+
 ### 校准记录（判据先被真答案校准过一次）
 
 W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个**文档违规，而不是一个：`signed` 的文档写着

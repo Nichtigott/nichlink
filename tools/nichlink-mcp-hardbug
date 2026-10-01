@@ -111,6 +111,7 @@ USAGE = """nichlink-mcp-hardbug plan                        the four classes and
 nichlink-mcp-hardbug plan --scoring              the scoring rules, verbatim
 nichlink-mcp-hardbug build <dir> <class>         derive, inject, self-prove, write .audit/truth.json
 nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
+nichlink-mcp-hardbug tokens <session-dir|session.jsonl.zstd>  per-axis token account, out of band
 
 Specification: docs/design-hardbug-bench-spec.md
 规格见 docs/design-hardbug-bench-spec.md。
@@ -1220,6 +1221,87 @@ def normalize_log_record(record):
     }
 
 
+def tokens(target):
+    """Per-axis token account for one session, read **out of band**.
+
+    Nothing about the task changes when this runs: it reads the harness's own session log after the
+    fact. That is the point — a metric that needs a new deliverable has already changed the question,
+    and the maintainer's constraint is that measuring must not move the thing being measured.
+    它跑起来时任务一点没变：事后读 harness 自己的会话日志。这正是要点——需要新增交付物才能量的指标，
+    已经改了那道题；而维护者的约束是"测量不许动被测量的东西"。
+
+    The three axes are the provider's own numbers, not an estimate:
+      input  = inputTokens + cacheReadTokens + cacheWriteTokens   (the prompt, re-sent every step)
+      output = outputTokens                                       (what the model generated)
+    They are priced differently, so they are never added into one figure here.
+    三档是 provider 自己报的数、不是估算：输入＝prompt（每步都要重发），输出＝模型生成的。两者单价不同，
+    因此这里从不合成一个数。
+
+    `zstd -dc` rather than a library: the file is a concatenation of zstd frames, and node's
+    `zstdDecompressSync` stops at the first one (a 585 KB transcript decoded to 284 bytes).
+    用 `zstd -dc` 而不是库：文件是多帧拼接的 zstd，node 的 `zstdDecompressSync` 只解第一帧
+    （585 KB 的记录只吐出 284 字节）。
+    """
+    path = Path(target)
+    if path.is_dir():
+        candidates = sorted(path.glob("session*.jsonl.zstd"))
+        if not candidates:
+            raise SystemExit(f"no session log under {path}")
+        path = candidates[0]
+    done = subprocess.run(["zstd", "-dc", str(path)], capture_output=True, text=True)
+    if done.returncode != 0:
+        raise SystemExit(f"cannot decompress {path}: {done.stderr[-400:]}")
+    label = None
+    steps = tool_calls = 0
+    prompt = cached = generated = 0
+    reasoning = visible = tool_result = 0
+    for row in done.stdout.splitlines():
+        if not row.strip():
+            continue
+        try:
+            record = json.loads(row)
+        except ValueError:
+            continue
+        kind = record.get("type")
+        data = record.get("data") or {}
+        if kind == "subagent/descriptor":
+            label = data.get("label")
+        elif kind == "assistant/message":
+            steps += 1
+            usage = data.get("usage") or {}
+            prompt += int(usage.get("inputTokens", 0))
+            cached += int(usage.get("cacheReadTokens", 0)) + int(usage.get("cacheWriteTokens", 0))
+            generated += int(usage.get("outputTokens", 0))
+            for block in (data.get("message") or {}).get("content") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "reasoning":
+                    reasoning += len(block.get("text") or "")
+                elif block.get("type") == "text":
+                    visible += len(block.get("text") or "")
+                elif block.get("type") == "tool-call":
+                    tool_calls += 1
+        elif kind == "tool/result":
+            message = data.get("message")
+            tool_result += len(message if isinstance(message, str)
+                               else json.dumps(message, ensure_ascii=False))
+    print(json.dumps({
+        "label": label,
+        "session": str(path),
+        "steps": steps,
+        "tool_calls": tool_calls,
+        "input_tokens_uncached": prompt,
+        "input_tokens_cached": cached,
+        "input_tokens_total": prompt + cached,
+        "output_tokens": generated,
+        "reasoning_chars": reasoning,
+        "visible_text_chars": visible,
+        "tool_result_chars": tool_result,
+        "note": "input and output are separate axes with separate prices; neither is an estimate",
+    }, indent=2, sort_keys=True))
+    return 0
+
+
 def score(tree, answer_path, log_path=None):
     """Score one answer against the constructed truth, mechanically."""
     directory = Path(tree).resolve()
@@ -1375,6 +1457,10 @@ def main(argv):
         if len(argv) < 4:
             raise SystemExit("build needs a directory and a class")
         return build(argv[2], argv[3])
+    if argv[1] == "tokens":
+        if len(argv) < 3:
+            raise SystemExit("tokens needs a session directory or a session jsonl.zstd")
+        return tokens(argv[2])
     if argv[1] == "score":
         if len(argv) < 4:
             raise SystemExit("score needs a tree and an answer file")
