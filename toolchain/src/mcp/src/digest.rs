@@ -26,24 +26,6 @@ const ROWS: usize = 12;
 
 /// The doc lines directly above a definition.
 /// 定义正上方的文档行。
-fn contract_lines(source: &str, definition: usize) -> Vec<String> {
-    let lines = source.lines().collect::<Vec<_>>();
-    let mut first = definition.saturating_sub(1).min(lines.len());
-    while first > 0 {
-        let above = lines[first - 1].trim_start();
-        if above.starts_with("///") || above.starts_with("#![") || above.starts_with("#[") {
-            first -= 1;
-        } else {
-            break;
-        }
-    }
-    lines[first..definition.saturating_sub(1).min(lines.len())]
-        .iter()
-        .filter(|line| line.trim_start().starts_with("///"))
-        .map(|line| (*line).to_owned())
-        .collect()
-}
-
 /// Answer "what is in this file, in one bounded reply?"
 /// 用一次有界的回复回答"这个文件里有什么"。
 pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -79,7 +61,7 @@ pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
         file.source.lines().count()
     )];
     for function in file.functions.iter().take(ROWS) {
-        let contract = contract_lines(&file.source, function.line);
+        let contract = crate::mcp::source_index::contract_lines(&file.source, function.line);
         let tested = named_by_test
             .iter()
             .any(|call| crate::mcp::callgraph::is_call_to(call, &function.name));
@@ -97,6 +79,16 @@ pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
         }
         callers.sort();
         callers.dedup();
+        // A blank `///` is a separator inside a doc block, not contract text: taking it as the first
+        // line printed `contract: ` with nothing after it.
+        // 空的 `///` 是文档块里的分隔、不是契约正文：把它当首行会印出后面什么都没有的 `contract: `。
+        let contract = contract
+            .into_iter()
+            .filter_map(|(line, text)| {
+                let text = crate::mcp::source_index::contract_text(&text);
+                (!text.is_empty()).then_some((line, text))
+            })
+            .collect::<Vec<_>>();
         lines.push(format!(
             "  {}:{}-{} `{}` — {} call(s) out, {} caller(s){}{}",
             file.relative,
@@ -109,7 +101,7 @@ pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
             if contract.is_empty() {
                 String::new()
             } else {
-                format!("; contract: {}", contract[0].trim_start_matches('/').trim())
+                format!("; contract: {}", contract[0].1)
             }
         ));
     }

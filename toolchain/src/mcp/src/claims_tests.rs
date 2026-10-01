@@ -702,3 +702,75 @@ fn the_whole_table_splits_the_unreachable_column_per_directory() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A dead arm's row carries the contract of the function it sits in — the join, not just the fact.
+/// 死臂那一行带上它所在函数的契约——是**合并**，不只是那个事实。
+///
+/// Measured (W8, h4): the census named the dead arm in one answer and `digest` printed the contract's
+/// first line in the next one, and the agent spent 31,397 characters of reasoning — 20% of that arm's
+/// whole chain — comparing implementations against their documentation by hand. Both halves were
+/// already computed here; only the join was missing.
+/// 量出来的（W8 的 h4）：总账在一次答案里点名死臂，`digest` 在下一次里印契约首行，而 agent 为此写掉
+/// 31,397 字符的推理——占该臂整条链的 20%——手工把实现与文档逐条比对。两半本来都在这里算出来了，
+/// 缺的只是合并。
+fn documented_dead_arm_package(label: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-mcp-claims-docdebt-{label}-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"fixture-docdebt-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+        ),
+    )
+    .expect("fixture manifest");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "//! A documented dead arm.\n\
+         enum Mode { Live, Dead }\n\
+         \n\
+         /// Which mode decides the answer.\n\
+         ///\n\
+         /// The second line carries the promise.\n\
+         fn decide(mode: Mode) -> bool {\n\
+         \x20   match mode {\n\
+         \x20       Mode::Live => true,\n\
+         \x20       Mode::Dead => false,\n\
+         \x20   }\n\
+         }\n\
+         \n\
+         fn only_live() -> bool {\n\
+         \x20   decide(Mode::Live)\n\
+         }\n",
+    )
+    .expect("fixture source");
+    root
+}
+
+#[test]
+fn a_dead_arms_row_carries_the_contract_of_its_function() {
+    let root = documented_dead_arm_package("contract-note");
+    let lines = whole(&root).expect("the census answers").join("\n");
+    let row = lines
+        .lines()
+        .find(|line| line.contains("can never be entered"))
+        .unwrap_or_else(|| panic!("no dead-arm row in:\n{lines}"));
+    assert!(
+        row.contains("the contract above it says"),
+        "the arm's row carries the contract of its function: {row}"
+    );
+    assert!(
+        row.contains("Which mode decides the answer."),
+        "and the contract text is the function's own, without its `///`: {row}"
+    );
+    // The note is bounded and says so, so a long doc block cannot push the row past its budget.
+    // 注是有界的、并且自己说明了，因此一长段文档不会把这一行撑爆。
+    assert!(
+        !row.contains("///"),
+        "the rendered contract text must not keep its markers, indented or not: {row}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -185,28 +185,6 @@ fn plan_facts(root: &Path, relative: &str, source: &str, definition: usize) -> V
     lines
 }
 
-/// The doc lines directly above a definition, and the line they start on.
-/// 定义正上方的文档行，以及它们起始的行号。
-fn contract(source: &str, definition: usize) -> Vec<(usize, String)> {
-    let lines = source.lines().collect::<Vec<_>>();
-    let mut first = definition.saturating_sub(1).min(lines.len());
-    while first > 0 {
-        let above = lines[first - 1].trim_start();
-        if above.starts_with("///") || above.starts_with("#[") {
-            first -= 1;
-        } else {
-            break;
-        }
-    }
-    lines[first..definition.saturating_sub(1).min(lines.len())]
-        .iter()
-        .enumerate()
-        .filter(|(_, line)| line.trim_start().starts_with("///"))
-        .map(|(offset, line)| (first + offset + 1, (*line).to_owned()))
-        .take(CONTRACT_LINES)
-        .collect()
-}
-
 /// Answer "what does this line depend on?" for a `path:line`.
 /// 对 `路径:行号` 回答"这一行依赖什么"。
 pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -270,7 +248,11 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
         "at {}:{} — the definition `{}` (lines {}-{})",
         file.relative, line, function.name, function.line, function.end_line
     )];
-    let contract = contract(&file.source, function.line);
+    let contract: Vec<(usize, String)> =
+        crate::mcp::source_index::contract_lines(&file.source, function.line)
+            .into_iter()
+            .take(CONTRACT_LINES)
+            .collect();
     if contract.is_empty() {
         lines.push("  contract   none: no `///` line sits above this definition".to_owned());
     } else {

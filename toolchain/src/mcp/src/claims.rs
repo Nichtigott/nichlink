@@ -537,6 +537,66 @@ fn directory_split(counts: &std::collections::BTreeMap<String, (usize, usize)>) 
     line
 }
 
+/// The contract lines above the function an arm sits in, as one bounded note.
+/// 某个臂所在函数上方的契约行，作为一条有界的注。
+///
+/// The join this adds was measured, not guessed. W8's h4 put **31,397 characters of reasoning** into
+/// one block (87% of that question, 20% of the arm) spent comparing each algorithm against its own
+/// documentation — and the two facts it needed sat in two different answers: the census named the
+/// dead arm, and `digest` (a call later) printed the contract's first line. Two facts, two answers,
+/// one join left to the reader. The join is mechanical here because both halves are already computed.
+/// 这条注加的是一次**量出来的**合并，不是猜的。W8 的 h4 把 **31,397 字符的推理**塞进一个块（占该题 87%、
+/// 占该臂 20%），内容是把每个算法与它自己的文档逐条比对——而它需要的两块事实分居**两次答案**：总账点名了
+/// 死臂，契约首行是隔一次调用才由 `digest` 印出来的。两块事实、两次答案，合并留给了读者。而这里的两半本来
+/// 都已经算出来了，因此这个合并是机械的。
+fn contract_note(file: &crate::mcp::source_index::SourceFile, function: &str) -> String {
+    if function.is_empty() {
+        return String::new();
+    }
+    let Some(definition) = file
+        .functions
+        .iter()
+        .find(|candidate| candidate.name == function)
+    else {
+        return String::new();
+    };
+    let lines = crate::mcp::source_index::contract_lines(&file.source, definition.line);
+    if lines.is_empty() {
+        return String::new();
+    }
+    // Three, not two: at two the h4 fixture cut off exactly the decisive line ("a zero entry never
+    // is") and left only its setup. The cap exists to bound a row, not to hide the sentence the row
+    // is about.
+    // 取三不取二：h4 夹具在 2 行时恰好切掉了决定性的那一句（"a zero entry never is"），只留下它的铺垫。
+    // 上限是为了给一行封顶，不是为了藏掉这一行正在讲的那句话。
+    const SHOWN: usize = 3;
+    // Blank `///` lines are separators inside a doc block, not contract text: rendering one as
+    // `35: ` would put an empty quote in the answer and read as a broken row.
+    // 空的 `///` 行是文档块里的分隔，不是契约正文：把它渲染成 `35: ` 会让答案里出现一句空引文、读起来像坏行。
+    let shown = lines
+        .iter()
+        .map(|(line, text)| (*line, crate::mcp::source_index::contract_text(text)))
+        .filter(|(_, text)| !text.is_empty())
+        .collect::<Vec<_>>();
+    if shown.is_empty() {
+        return String::new();
+    }
+    let text = shown
+        .iter()
+        .take(SHOWN)
+        .map(|(line, text)| format!("{line}: {text}"))
+        .collect::<Vec<_>>()
+        .join(" / ");
+    format!(
+        "; the contract above it says {text}{}",
+        if shown.len() > SHOWN {
+            format!(" (first {SHOWN} lines; `read {{path, line}}` has the rest)")
+        } else {
+            String::new()
+        }
+    )
+}
+
 /// The ` in `fn`` segment of a row, empty when the arm sits outside any function.
 /// 一行里的 ` in `fn`` 片段；臂不在任何函数里时为空。
 ///
@@ -610,10 +670,11 @@ fn branch_column(sources: &[crate::mcp::source_index::SourceFile], whole: bool) 
                 file.relative.clone(),
                 guard.line,
                 format!(
-                    "  `if false` guards an arm{} at {}:{} that no run can enter",
+                    "  `if false` guards an arm{} at {}:{} that no run can enter{}",
                     arm_site(&guard.function),
                     file.relative,
-                    guard.line
+                    guard.line,
+                    contract_note(file, &guard.function)
                 ),
             ));
             guards += 1;
@@ -652,12 +713,13 @@ fn branch_column(sources: &[crate::mcp::source_index::SourceFile], whole: bool) 
                 format!(
                     "  no construction of `{}::{}` is spelled in this tree, so the arm matching \
                      it{} at {}:{} can never be entered (the enum is private, so a constructor \
-                     outside this tree cannot spell the variant either)",
+                     outside this tree cannot spell the variant either){}",
                     arm.enum_name,
                     arm.variant,
                     arm_site(&arm.function),
                     file.relative,
-                    arm.line
+                    arm.line,
+                    contract_note(file, &arm.function)
                 ),
             ));
             variants += 1;

@@ -137,6 +137,49 @@ fn visit_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
+/// One contract line's text, without its indentation and without its `///` markers.
+/// 一条契约行的文本：去掉缩进、去掉 `///` 标记。
+///
+/// The trim order is the whole point, and it was measured twice. A doc line inside an `impl` is
+/// indented, so `trim_start_matches('/')` alone does nothing and the rendered text keeps its `///` —
+/// the W6 round hit this once in `digest`, and the branch column's new contract note hit it again the
+/// first time it ran on a real fixture. It lives here so a third reader cannot re-learn it.
+/// 顺序就是要点，而且量到过两次。`impl` 里的文档行是**缩进**的，因此单用 `trim_start_matches('/')`
+/// 什么也去不掉，渲染出来的文本会留着 `///`——W6 那轮在 `digest` 上撞过一次，分支栏新加的契约注第一次
+/// 在真夹具上跑又撞了一次。它住在这里，好让第三个读者不必再学一遍。
+pub(crate) fn contract_text(line: &str) -> String {
+    line.trim_start().trim_start_matches('/').trim().to_owned()
+}
+
+/// The `///` lines directly above a definition, with the line each sits on.
+/// 定义正上方的 `///` 行，以及每一行自己的行号。
+///
+/// One implementation for every reader that shows a contract: `digest` prints the first line in a
+/// row, `why` prints a window of them, and the census's branch column prints them beside a dead arm.
+/// Three readers used to mean two copies plus a third rendering; the copies had already drifted
+/// (`#![` versus `#[` in the stop condition).
+/// 每个展示契约的读者共用这一份：`digest` 在行里印首行，`why` 印一窗，总账的分支栏在死臂旁边印它们。
+/// 三个读者过去意味着两份副本外加第三种渲染，而两份副本**已经开始漂移**（停止条件一个写 `#![`、
+/// 另一个写 `#[`）。
+pub(crate) fn contract_lines(source: &str, definition: usize) -> Vec<(usize, String)> {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut first = definition.saturating_sub(1).min(lines.len());
+    while first > 0 {
+        let above = lines[first - 1].trim_start();
+        if above.starts_with("///") || above.starts_with("#[") {
+            first -= 1;
+        } else {
+            break;
+        }
+    }
+    lines[first..definition.saturating_sub(1).min(lines.len())]
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.trim_start().starts_with("///"))
+        .map(|(offset, line)| (first + offset + 1, (*line).to_owned()))
+        .collect()
+}
+
 pub(crate) fn load_one(root: &Path, relative: &str) -> Result<SourceFile, String> {
     let path = root.join(relative);
     if !is_safe_child(root, &path) {
