@@ -22,6 +22,17 @@ pub(crate) struct SourceFile {
     pub(crate) relative: String,
     pub(crate) source: String,
     pub(crate) functions: Vec<Function>,
+    /// The file's branch-level facts, as the kernel's own read reports them.
+    /// 该文件的分支级事实，按内核自己的读取报告的样子。
+    ///
+    /// This module **carries** them; it does not decide them. Which arms are unreachable is a
+    /// lexical judgement over masked text, and the workspace has one implementation of that
+    /// judgement (`kernel::source`), so a surface that lexed the file again would be the second
+    /// rule that drifts — the same reason `functions` comes from `function_symbols`.
+    /// 本模块只**搬运**它们，不判定它们。哪些臂不可达是对掩码文本的词法判断，而本工作区只有一份那份
+    /// 判断的实现（`kernel::source`），因此再词法一遍的执行面就是第二条会漂移的规则——`functions`
+    /// 来自 `function_symbols` 是同一条理由。
+    pub(crate) branches: nichlink_kernel::source::BranchFacts,
 }
 
 pub(crate) fn required_path(arguments: &Value) -> Result<String, String> {
@@ -169,6 +180,7 @@ fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
             .map_err(|_| "source path escaped root".to_owned())?,
     );
     Ok(SourceFile {
+        branches: nichlink_kernel::source::branch_facts(&source),
         functions: parse_functions(&source),
         relative,
         source,

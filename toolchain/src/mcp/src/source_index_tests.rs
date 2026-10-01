@@ -45,6 +45,70 @@ fn parser_indexes_functions_and_direct_calls() {
     assert_eq!(functions[0].calls, ["helper", "sink"]);
 }
 
+/// The index **carries** the kernel's branch facts instead of deciding them: an indexed file
+/// reports the literal-`false` guard with its function and line, the qualified variant pattern, the
+/// enum declaration, and the construction the tree spells — all four as `kernel::source` read them.
+/// 索引**搬运**内核的分支事实，而不是自己判定它们：一个已索引的文件报出带函数名与行号的字面量
+/// `false` 守卫、限定变体模式、枚举声明，以及本树拼出的构造——四者都按 `kernel::source` 读到的样子。
+#[test]
+fn the_index_carries_the_kernels_branch_facts() {
+    let root = temporary_root("branches");
+    fs::write(
+        root.join("bands.rs"),
+        "enum Band { Small, Frozen }\n\
+         \n\
+         fn band_word(band: Band) -> &'static str {\n\
+         \x20   if false { return \"unreachable\"; }\n\
+         \x20   match band {\n\
+         \x20       Band::Small => \"small\",\n\
+         \x20       Band::Frozen => \"frozen\",\n\
+         \x20   }\n\
+         }\n\
+         \n\
+         fn first_band() -> Band { Band::Small }\n",
+    )
+    .expect("write");
+    let sources = load_sources(&root).expect("the walk reads the root");
+    let branches = &sources[0].branches;
+    assert_eq!(
+        branches
+            .false_guards
+            .iter()
+            .map(|guard| (guard.function.as_str(), guard.line))
+            .collect::<Vec<_>>(),
+        [("band_word", 4)],
+        "the guard is attributed to its function, at its own line"
+    );
+    assert_eq!(
+        branches
+            .matched_variants
+            .iter()
+            .map(|arm| (arm.enum_name.as_str(), arm.variant.as_str(), arm.line))
+            .collect::<Vec<_>>(),
+        [("Band", "Small", 6), ("Band", "Frozen", 7)],
+        "both arms are read, with their own pattern lines"
+    );
+    assert_eq!(
+        branches
+            .enums
+            .iter()
+            .map(|declaration| (declaration.name.as_str(), declaration.judged))
+            .collect::<Vec<_>>(),
+        [("Band", true)],
+        "the declaration's judgement rides along with the fact"
+    );
+    assert_eq!(
+        branches
+            .variant_paths
+            .iter()
+            .map(|path| (path.enum_name.as_str(), path.variant.as_str(), path.line))
+            .collect::<Vec<_>>(),
+        [("Band", "Small", 11)],
+        "only the construction is a path; the two patterns are not"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
 #[test]
 fn registration_kinds_are_compact_and_deduplicated() {
     let kinds = nichlink_kernel::source::registration_kinds(

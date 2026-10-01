@@ -5,16 +5,20 @@
 //! 这里的所有函数只做文本变换，文件 I/O 由调用方负责。
 //!
 //! Function discovery lives here; `calls` scans call sites inside an extracted
-//! body, `items` owns the declaration vocabulary (`item_symbols`), and `walk` owns
-//! the recursive source traversal.
-//! 函数发现位于本页；`calls` 扫描已提取函数体内的调用点，`items` 拥有声明词表
-//! （`item_symbols`），`walk` 拥有递归源码遍历。
+//! body, `branches` reads the arms a static branch read can decide, `items` owns the
+//! declaration vocabulary (`item_symbols`), and `walk` owns the recursive source
+//! traversal.
+//! 函数发现位于本页；`calls` 扫描已提取函数体内的调用点，`branches` 读取静态分支读取
+//! 能判定的臂，`items` 拥有声明词表（`item_symbols`），`walk` 拥有递归源码遍历。
 #[path = "lex.rs"]
 pub(crate) mod lex;
 
 #[path = "calls.rs"]
 mod calls;
 pub use calls::*;
+#[path = "branches.rs"]
+mod branches;
+pub use branches::*;
 #[path = "walk.rs"]
 mod walk;
 pub use walk::*;

@@ -160,7 +160,11 @@ fn the_walk_states_its_own_boundary_in_the_answer() {
 fn the_boundaries_are_one_line_indexes_under_a_budget() {
     let root = reachability_package("index", 1);
     let lines = census(&root).expect("the census answers").join("\n");
-    for boundary in [super::REACHABILITY_BOUNDARY, super::CENSUS_BOUNDARY] {
+    for boundary in [
+        super::REACHABILITY_BOUNDARY,
+        super::CENSUS_BOUNDARY,
+        super::BRANCH_BOUNDARY,
+    ] {
         assert!(
             !boundary.contains('\n'),
             "one line, not a paragraph: {boundary}"
@@ -188,15 +192,327 @@ fn the_boundaries_are_one_line_indexes_under_a_budget() {
         "so does the reachability column's own: {}",
         super::REACHABILITY_BOUNDARY
     );
+    assert!(
+        super::BRANCH_BOUNDARY.contains("not covered by the branch-level column:"),
+        "and the branch column's own: {}",
+        super::BRANCH_BOUNDARY
+    );
     // The budget is a ratchet rather than a taste: the two lines measured 774 + 331 characters
-    // before they became indexes, and 850 is the ceiling they must not cross again.
-    // 预算是棘轮而不是口味：这两行在变成索引之前量到 774 + 331 个字符，而 850 是它们不许再次越过的上限。
-    const BUDGET: usize = 850;
-    let total =
-        super::REACHABILITY_BOUNDARY.chars().count() + super::CENSUS_BOUNDARY.chars().count();
+    // before they became indexes; with the branch column's own boundary (the third line, which the
+    // O3 answer key pins verbatim) the three measured 523 + 257 + 725 = 1505, and the repair task
+    // t4 added the two truths the independent re-test found missing from that third line (a macro
+    // body this tree writes is text; a name imported from another crate is skipped), which brings it
+    // to 1137 and the three to 523 + 257 + 1137 = 1917 — the ceiling they must not cross again.
+    // 预算是棘轮而不是口味：这两行在变成索引之前量到 774 + 331 个字符；加上分支栏自己的边界（第三条
+    // 行，O3 的答案键逐字钉住了它）之后三行量到 523 + 257 + 725 = 1505，而修复任务 t4 把独立复测发现
+    // 第三条行里缺的两条真话补上（本树写下的宏体是文本；从另一个 crate 引入的名字会被略过），它于是变成
+    // 1137，三行合计 523 + 257 + 1137 = 1917——这就是它们不许再次越过的上限。
+    const BUDGET: usize = 1917;
+    let total = super::REACHABILITY_BOUNDARY.chars().count()
+        + super::CENSUS_BOUNDARY.chars().count()
+        + super::BRANCH_BOUNDARY.chars().count();
     assert!(
         total <= BUDGET,
         "the two boundaries must stay within {BUDGET} characters; they are {total}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A throwaway package with the three arms a branch-level read has to separate: a literal-`false`
+/// guard and a variant of a private enum that nothing constructs (both decided), and a
+/// data-dependent condition (never judged). The variant is named in a comment above its own arm, so
+/// a read that counted raw text instead of the kernel's masked text would erase the row.
+/// 一个一次性包，含分支级读取必须区分开的三种臂：字面量 `false` 守卫与私有枚举中没人构造的变体
+/// （两个都被判定），以及一个数据相关条件（一律不判）。该变体在它自己的臂上方**注释**里被提到一次，
+/// 因此拿原始文本而不是内核掩码文本去数的读取会把那一行抹掉。
+fn branch_package(label: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-mcp-claims-branch-{label}-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"fixture-branch-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+        ),
+    )
+    .expect("fixture manifest");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "//! A branch fixture.\n\
+         enum Band { Small, Frozen }\n\
+         \n\
+         fn band_word(band: Band, amount: i64, limit: i64) -> &'static str {\n\
+         \x20   if false {\n\
+         \x20       return \"unreachable\";\n\
+         \x20   }\n\
+         \x20   if amount > limit {\n\
+         \x20       return \"over\";\n\
+         \x20   }\n\
+         \x20   match band {\n\
+         \x20       Band::Small => \"small\",\n\
+         \x20       // Band::Frozen is constructed nowhere in this tree.\n\
+         \x20       Band::Frozen => \"frozen\",\n\
+         \x20   }\n\
+         }\n\
+         \n\
+         pub fn default_band() -> Band { Band::Small }\n",
+    )
+    .expect("fixture source");
+    root
+}
+
+/// The sixth column reports the two arms decided by construction, at the lines the design fixes:
+/// the guard's own line and the arm's pattern line.
+/// 第六栏报出按构造判定的两个臂，行号就是设计钉住的那两个：守卫自己的行与臂的模式行。
+#[test]
+fn the_branch_column_reports_the_two_constructively_unreachable_arms() {
+    let root = branch_package("rows");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        lines.contains(
+            "branch-level: 2 constructively unreachable arm(s) in this tree (1 `false` guard(s), 1 \
+             never-constructed variant(s)"
+        ),
+        "{lines}"
+    );
+    assert!(
+        lines.contains("`if false` guards an arm in `band_word` at src/lib.rs:5"),
+        "the row reports the line of the guard, not of its block: {lines}"
+    );
+    assert!(
+        lines.contains("no construction of `Band::Frozen` is spelled in this tree"),
+        "{lines}"
+    );
+    assert!(
+        lines.contains("the arm matching it in `band_word` at src/lib.rs:14"),
+        "the row reports the arm's pattern line, not the comment above it: {lines}"
+    );
+    assert!(
+        lines.contains(
+            "can never be entered (the enum is private, so a constructor outside this \
+                        tree cannot spell the variant either)"
+        ),
+        "{lines}"
+    );
+    // The data-dependent arm sits two lines above the match and must not be named at all.
+    // 数据相关的那个臂就在 match 上方两行，并且绝不能被点名。
+    assert!(
+        !lines.contains("src/lib.rs:8") && !lines.contains("`amount > limit`"),
+        "a condition whose value depends on data is not judged: {lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A `pub` enum is never judged: a consumer outside this root can construct a variant this tree
+/// never spells, so the arm is not an answer about this tree.
+/// `pub` 枚举一律不判：本根之外的使用方可以构造一个本树从未拼出的变体，因此那个臂不是关于这棵树的答案。
+#[test]
+fn the_branch_column_never_judges_a_public_enum() {
+    let root = branch_package("public");
+    std::fs::write(
+        root.join("src/pub.rs"),
+        "//! A public enum nothing here constructs a dormant variant of.\n\
+         pub enum State { Open, Dormant }\n\
+         \n\
+         pub fn state_word(state: State) -> &'static str {\n\
+         \x20   match state { State::Open => \"open\", State::Dormant => \"dormant\" }\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        lines.contains("branch-level: 2 constructively unreachable arm(s)"),
+        "the `pub` enum adds no row of its own: {lines}"
+    );
+    assert!(
+        !lines.contains("State::Dormant"),
+        "a public enum's arm is never judged: {lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A variant this tree *does* construct is not reported, and a construction in a test file counts:
+/// the join is about the tree, not about where the spelling lives — while an arm written in that
+/// same test file would still be skipped, because that half *is* about where it lives.
+/// 本树**确实**构造的变体不会被报，而测试文件里的构造也算数：这次连接说的是整棵树，而不是拼法住在哪
+/// ——而在同一个测试文件里写下的臂仍然会被略过，因为那一半**是**关于它住在哪的。
+#[test]
+fn a_construction_in_a_test_file_still_counts() {
+    let root = branch_package("constructed");
+    std::fs::write(
+        root.join("src/extra.rs"),
+        "//! A test-only file that constructs the reserved band.\n\
+         #[test]\n\
+         fn builds_the_reserved_band() {\n\
+         \x20   let _ = crate::Band::Frozen;\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        lines.contains(
+            "branch-level: 1 constructively unreachable arm(s) in this tree (1 `false` guard(s), 0 \
+             never-constructed variant(s)"
+        ),
+        "the constructed variant drops its row and keeps the guard's: {lines}"
+    );
+    assert!(
+        !lines.contains("Band::Frozen"),
+        "a variant this tree constructs is not unreachable: {lines}"
+    );
+    assert!(
+        lines.contains("`if false` guards an arm in `band_word` at src/lib.rs:5"),
+        "{lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An arm on an enum this tree does not declare is not judged: the variant may be constructed by
+/// the crate that declares it, and no scan of this root can see that.
+/// 本树没有声明该枚举时，它的臂不被判定：变体可能是声明它的那个 crate 构造的，而任何对本根的扫描都看
+/// 不到那件事。
+#[test]
+fn the_branch_column_never_judges_an_enum_this_tree_does_not_declare() {
+    let root = branch_package("foreign");
+    std::fs::write(
+        root.join("src/elsewhere.rs"),
+        "//! An arm on an enum another crate declares.\n\
+         use ledger_core::State;\n\
+         \n\
+         pub fn state_name(state: State) -> &'static str {\n\
+         \x20   match state { State::Open => \"open\", State::Dormant => \"dormant\" }\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        lines.contains("branch-level: 2 constructively unreachable arm(s)"),
+        "the undeclared enum adds no row of its own: {lines}"
+    );
+    assert!(
+        !lines.contains("State::Dormant"),
+        "an enum this tree never declares is never reported: {lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A two-segment pattern names whatever that name means **in its own file**, so when the file
+/// imports the name from another crate the tree's own declaration of the same name is not what the
+/// arm named — and no row may claim it.
+/// 两段模式点名的是那个名字**在它自己文件里**的含义，因此当该文件从另一个 crate 引入这个名字时，这个臂
+/// 点名的并不是本树同名的那个声明——任何一行都不得声称它。
+#[test]
+fn the_branch_column_never_judges_a_name_imported_from_outside() {
+    let root = branch_package("imported");
+    std::fs::write(
+        root.join("src/elsewhere.rs"),
+        "//! The same name, imported: this arm does not name this tree's enum.\n\
+         use ledger_core::Band;\n\
+         \n\
+         pub fn band_name(band: Band) -> &'static str {\n\
+         \x20   match band { Band::Small => \"small\", Band::Frozen => \"frozen\" }\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        !lines.contains("the arm matching it in `band_name`"),
+        "the imported name is not this tree's enum: {lines}"
+    );
+    assert!(
+        lines.contains("the arm matching it in `band_word` at src/lib.rs:14"),
+        "the tree's own arm is still reported: {lines}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An arm that sits outside any function — a `macro_rules!` body this tree writes — is still
+/// listed, because that body **is** text; but its row must not render a pair of empty backticks.
+/// The kernel keeps reporting the empty name (its own pin says so); the rendering drops the segment.
+/// 不在任何函数里的臂——本树写下的 `macro_rules!` 体——**仍然**会被列出，因为那个体就是文本；但它的行
+/// 绝不能渲染出一对空反引号。内核仍然报告空名字（它自己的钉子钉住这一点），渲染把这一段省掉。
+#[test]
+fn a_row_without_a_function_name_omits_the_name() {
+    let root = branch_package("no-function");
+    std::fs::write(
+        root.join("src/macros.rs"),
+        "//! A macro body the tree writes: its text is read, and no function encloses it.\n\
+         macro_rules! m {\n\
+         \x20   () => {\n\
+         \x20       if false {\n\
+         \x20           return;\n\
+         \x20       }\n\
+         \x20   };\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(
+        lines.contains("`if false` guards an arm at src/macros.rs:4 that no run can enter"),
+        "the row drops the name instead of printing an empty pair of backticks: {lines}"
+    );
+    assert!(
+        !lines.contains("an arm in `` at"),
+        "an empty function name is never rendered as empty backticks: {lines}"
+    );
+    assert!(
+        !lines.contains("matching it in `` at"),
+        "and neither is the variant row's: {lines}"
+    );
+    // The behaviour is stated where a reader meets it, so the row is not the only place saying so.
+    // 这个行为在读者遇到它的地方就有说明，因此那一行不是唯一说出这件事的地方。
+    assert!(
+        super::BRANCH_BOUNDARY.contains("its row names no function"),
+        "the boundary says the row names no function: {}",
+        super::BRANCH_BOUNDARY
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The sixth column's boundary sentence is emitted with the column, names every invisibility it has
+/// to admit, and says out loud that the read is not a coverage measurement.
+/// 第六栏的边界句随那一栏输出，点名它必须承认的每一种不可见，并明说这次读取不是覆盖率量度。
+#[test]
+fn the_branch_column_states_its_own_boundary_in_the_answer() {
+    let root = branch_package("boundary");
+    let lines = census(&root).expect("the census answers").join("\n");
+    assert!(lines.contains(super::BRANCH_BOUNDARY), "{lines}");
+    for bound in [
+        "a condition whose value depends on data",
+        "`false` is the only guard literal decided",
+        "macro expansion, dynamic dispatch, function pointers and FFI are invisible",
+        "would falsify a row",
+        "a `pub` enum is never judged",
+        "wildcard or a binding",
+        "not a coverage measurement",
+        // The two truths t3's independent re-test found missing from this sentence: a macro body
+        // this tree writes is text (so its arms are read), and a name imported from another crate
+        // is skipped rather than judged.
+        // t3 独立复测发现这句里缺的两条真话：本树写下的宏体是文本（因此其中的臂会被读到），以及从另
+        // 一个 crate 引入的名字会被略过而不是被判定。
+        "a `macro_rules!` body this tree writes **is** text",
+        "an arm that only exists after expansion is invisible",
+        "its row names no function",
+        "conservatively skipped",
+        "a same-named foreign enum's arms are a miss here rather than a false row",
+    ] {
+        assert!(
+            super::BRANCH_BOUNDARY.contains(bound),
+            "the boundary sentence has to name `{bound}`: {}",
+            super::BRANCH_BOUNDARY
+        );
+    }
+    assert!(
+        super::BRANCH_BOUNDARY.contains("not covered by the branch-level column:"),
+        "the boundary says what column it indexes: {}",
+        super::BRANCH_BOUNDARY
+    );
+    assert!(
+        !lines.contains("if amount > limit"),
+        "the data-dependent arm is invisible, not reported: {lines}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -525,7 +525,24 @@ pub(crate) fn tools() -> Vec<Value> {
              itself coverage: calls made through dynamic dispatch, function pointers, FFI or macro \
              expansion are invisible to it, a function reached only through a trait method or a \
              closure does not count, and matching is by name, so an unrelated same-named call \
-             counts as reaching it.",
+             counts as reaching it. The sixth column is **branch-level**: the arms no execution can \
+             enter **by construction** — an `if`/`else if` whose condition is the literal `false`, \
+             and a `match` arm on a variant of an enum declared in this tree without `pub` and \
+             without an attribute that could build a value, where no construction of that variant \
+             is spelled anywhere in this tree. It is a static read of the source text and it says \
+             so: a condition whose value depends on data — a field, a parameter, a comparison, a \
+             `match` over a value — is **not judged at all**, so an arm no run has taken yet stays \
+             invisible here; `false` is the only guard literal decided; macro expansion, dynamic \
+             dispatch, function pointers and FFI are invisible, while a `macro_rules!` body this tree \
+             writes **is** text — an `if false` inside one is listed, and when that body sits outside \
+             any function its row names no function (there is none to name) — and an arm that only \
+             exists after expansion is invisible; a construction this tree does not spell (a derive \
+             that builds a value, `unsafe`, a consumer outside this scanned root) would falsify a row \
+             rather than merely be missed by one; a `pub` enum is never judged, an arm reached \
+             through a wildcard or a binding is not read, and an enum name a file imports from \
+             another crate is **conservatively skipped**, so a same-named foreign enum's arms are a \
+             miss here rather than a false row. Each row names the line it decided — the guard's own \
+             line, or the arm's pattern line.",
             json!({"type":"object","properties":{
                 "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},

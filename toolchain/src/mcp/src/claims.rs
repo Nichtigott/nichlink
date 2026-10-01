@@ -18,7 +18,7 @@
 //! 这里的每一行都是**关于这棵树的静态事实**，不是对代码的裁定，而且这一节末尾会说明它**不覆盖**什么
 // ——一份自称完备的总账，就是这个仓库一直在删的那种假绿。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 const SAMPLE: usize = 5;
@@ -66,6 +66,22 @@ const REACHABILITY_BOUNDARY: &str = "  not covered by the test-reachability colu
 /// 因此在这里复述它们什么都买不到，却让每一次 `check` 都付同样的上百个词。它必须留下的是一个计数推不出
 /// 的边界——没有任何一栏去读的那些形状——以及那个阻止读者把一份清单当成一次量度的短语。
 const CENSUS_BOUNDARY: &str = "  not covered: this census reads exactly what the columns above name; string constants, structural duplication, runtime behaviour and claims written in prose are outside it, and the static walk is not a coverage measurement. `--list check` has the full text";
+
+/// What the branch-level column does not cover, emitted with the column itself.
+/// 分支级那一栏**不覆盖**什么，随那一栏一起输出。
+///
+/// The column reports arms that are unreachable **by construction**, and this sentence is what
+/// keeps that from reading as "no run takes this arm". The first bound is the important one: a
+/// condition whose value depends on data is not judged at all, which is why an arm that only a run
+/// could rule out stays invisible here. The rest are the shapes a text read cannot see, each named
+/// with the consequence — a construction this tree does not spell would **falsify** a row rather
+/// than merely be missed by it, which is why the row's own wording says what is spelled and not
+/// what is reachable.
+/// 这一栏报的是**按构造**不可达的臂，而这句话正是阻止它被读成"没有运行走到这个臂"的东西。第一条边界
+/// 最要紧：值依赖数据的条件一律不判，因此只有运行期才能排除的臂在这里仍然不可见。其余是文本读取看不见
+/// 的形状，每一条都点名后果——本树没拼出的构造会**否证**某一行，而不只是被它漏掉，因此那一行自己的
+/// 措辞说的是"拼出了什么"，而不是"是否可达"。
+const BRANCH_BOUNDARY: &str = "  not covered by the branch-level column: a condition whose value depends on data — a field, a parameter, a comparison, a `match` over a value — is not judged at all, so an arm no run has taken yet stays invisible here; `false` is the only guard literal decided, so `1 == 2`, `!true`, a `const` bool and `cfg!(…)` are not read; macro expansion, dynamic dispatch, function pointers and FFI are invisible, while a `macro_rules!` body this tree writes **is** text — an `if false` inside one is listed (and when that body sits outside any function, its row names no function, because there is none to name), and an arm that only exists after expansion is invisible; a construction this tree does not spell (a derive that builds a value, `unsafe`, a consumer outside this root) would falsify a row; a `pub` enum is never judged, an arm reached through a wildcard or a binding is not read, and an enum name this file imports from another crate is conservatively skipped, so a same-named foreign enum's arms are a miss here rather than a false row. A static read of the source text, not a coverage measurement; `--list check` has the full text.";
 
 /// One declared numeric constant, as the tree spells it.
 /// 一条被声明的数值常量，按这棵树里的写法。
@@ -256,6 +272,14 @@ pub(crate) fn census(root: &Path) -> Result<Vec<String>, String> {
     // 的两件不同事实，因此这一栏经**唯一**那份 `callgraph::is_call_to` 判定一次调用点名了什么，其余什么都不
     // 与 `orphans` 共享。
     lines.extend(reachability_column(&sources));
+    // The sixth column: the arms unreachable **by construction**, which is a different question
+    // from the fifth one. A function can be test-reachable and still hold an arm no execution can
+    // enter; and an arm no run has taken yet can be perfectly reachable, which is why nothing
+    // data-dependent is reported here and the boundary says so in the same reply.
+    // 第六栏：**按构造**不可达的臂，与第五栏是两个不同的问题。一个函数可以被测试到达、同时含着一个
+    // 任何执行都进不去的臂；而一个还没有任何运行走到过的臂完全可以是可达的——这正是这里不报任何数据相关
+    // 东西的原因，也是边界句在同一份回复里说出这一点的原因。
+    lines.extend(branch_column(&sources));
     // The closing line is the same kind of index the reachability column's own boundary is:
     // one line naming what this census does not read, with the prose left to the tool's own
     // description (`--list check`). It used to restate the four columns above it on every
@@ -381,6 +405,155 @@ fn reachability_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<
         ));
     }
     lines.push(REACHABILITY_BOUNDARY.to_owned());
+    lines
+}
+
+/// The ` in `fn`` segment of a row, empty when the arm sits outside any function.
+/// 一行里的 ` in `fn`` 片段；臂不在任何函数里时为空。
+///
+/// A `macro_rules!` body this tree writes outside a function produces an arm with no enclosing
+/// function, and rendering that as a pair of empty backticks reads as a broken row rather than as
+/// the fact it is. The kernel still *reports* the empty name — "no enclosing function" is
+/// information a caller may want — so the decision not to print it is made here, in the one place
+/// that renders rows, and the boundary sentence says the row "names no function".
+/// 写在函数之外的 `macro_rules!` 体会产出没有所属函数的臂，而把它渲染成一对空反引号会被读成一行坏掉的
+/// 输出，而不是它所是的那个事实。内核**仍然报告**空名字——"没有所属函数"是调用方可能想要的信息——因此
+/// "不打印它"这个决定落在这里、唯一渲染行的地方，而边界句会说那一行"不点名函数"。
+fn arm_site(function: &str) -> String {
+    if function.is_empty() {
+        String::new()
+    } else {
+        format!(" in `{function}`")
+    }
+}
+
+/// The arms no execution can enter, decided by construction and joined across the whole tree.
+/// 任何执行都进不去的臂——按构造判定，并在全树范围内连接。
+///
+/// Two rules, and both of them are the kernel's: this function only **joins** the facts
+/// `source_index` already carries. **A** is a guard whose condition is the literal `false`.
+/// **B** is a `match` arm whose variant the tree never spells a construction of, where the enum
+/// declaring that variant is itself declared in this tree without `pub` and without an attribute
+/// that could build a value. B's two halves are what make it an answer rather than a guess: a
+/// non-`pub` variant cannot have its path spelled outside this tree, so its construction sites are
+/// exactly the ones this scan can see.
+/// 两条规则，而且两条都是内核的：本函数只**连接** `source_index` 已经携带的事实。**A** 是条件为字面量
+/// `false` 的守卫。**B** 是本树从未拼出构造的变体的 `match` 臂，且声明该变体的枚举本身在本树声明、不带
+/// `pub`、也不带能造出值的属性。B 的那两半合起来才让它成为答案而不是猜测：非 `pub` 的变体在树外拼不出
+/// 路径，因此它的构造点恰好就是这次扫描能看见的那些。
+fn branch_column(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String> {
+    // Which enums may be judged at all. Two declarations of one name resolve to the unjudged side:
+    // a miss is the cheap direction, and a tree that declares the same name twice is exactly the
+    // tree where the join cannot be sure which one a pattern meant.
+    // 哪些枚举可以被判定。同名声明出现两次时取"不判"那一侧：漏报是便宜的方向，而同名声明两次的树恰好
+    // 就是连接无法确定模式指的是哪一个的树。
+    let mut judged: HashMap<&str, bool> = HashMap::new();
+    for file in sources {
+        for declaration in &file.branches.enums {
+            judged
+                .entry(declaration.name.as_str())
+                .and_modify(|current| *current &= declaration.judged)
+                .or_insert(declaration.judged);
+        }
+    }
+    // Every path the tree spells counts, test files included: a test that constructs a variant
+    // makes it constructed, whatever the column thinks about where tests are.
+    // 本树拼出的每条路径都算数，测试文件也算：构造了某个变体的测试就让它成了已构造的，无论这一栏怎么看
+    // 测试文件在哪。
+    let mut constructed: HashSet<(&str, &str)> = HashSet::new();
+    for file in sources {
+        for path in &file.branches.variant_paths {
+            constructed.insert((path.enum_name.as_str(), path.variant.as_str()));
+        }
+    }
+    let mut rows: Vec<(String, u32, String)> = Vec::new();
+    let mut guards = 0usize;
+    let mut variants = 0usize;
+    for file in sources {
+        // Test-looking files are left out for the reason the other columns leave them out: this
+        // column is about what this tree ships, and a test's own arms are its business.
+        // 测试样子的文件与其它几栏一样被略过：这一栏说的是这棵树发布什么，而测试自己的臂是它自己的事。
+        if crate::mcp::callgraph::looks_like_a_test(&file.relative, &file.source) {
+            continue;
+        }
+        for guard in &file.branches.false_guards {
+            rows.push((
+                file.relative.clone(),
+                guard.line,
+                format!(
+                    "  `if false` guards an arm{} at {}:{} that no run can enter",
+                    arm_site(&guard.function),
+                    file.relative,
+                    guard.line
+                ),
+            ));
+            guards += 1;
+        }
+        // One arm is one row. An or-pattern names several variants and they all carry the arm's
+        // line, so the first unconstructed one decides the row and the rest are the same arm.
+        // 一个臂就是一行。或模式点名多个变体，而它们都带该臂的行号，因此第一个未被构造的变体决定这一行，
+        // 其余的都是同一个臂。
+        let mut reported: HashSet<u32> = HashSet::new();
+        for arm in &file.branches.matched_variants {
+            if !judged.get(arm.enum_name.as_str()).copied().unwrap_or(false) {
+                continue;
+            }
+            // A two-segment pattern names whatever that name means in *this file*. When the file
+            // imports it from outside its own crate, this tree's declaration is not what the arm
+            // named, so no row may claim it — a miss here is the cheap direction.
+            // 两段模式点名的是那个名字**在这个文件里**的含义。当该文件从自己 crate 之外引入它时，这个臂
+            // 点名的就不是本树的那个声明，因此任何一行都不得声称它——这里漏报是便宜的方向。
+            if file
+                .branches
+                .foreign_imports
+                .iter()
+                .any(|imported| imported == &arm.enum_name)
+            {
+                continue;
+            }
+            if constructed.contains(&(arm.enum_name.as_str(), arm.variant.as_str())) {
+                continue;
+            }
+            if !reported.insert(arm.line) {
+                continue;
+            }
+            rows.push((
+                file.relative.clone(),
+                arm.line,
+                format!(
+                    "  no construction of `{}::{}` is spelled in this tree, so the arm matching \
+                     it{} at {}:{} can never be entered (the enum is private, so a constructor \
+                     outside this tree cannot spell the variant either)",
+                    arm.enum_name,
+                    arm.variant,
+                    arm_site(&arm.function),
+                    file.relative,
+                    arm.line
+                ),
+            ));
+            variants += 1;
+        }
+    }
+    rows.sort_by(|left, right| (&left.0, left.1).cmp(&(&right.0, right.1)));
+    let total = rows.len();
+    let mut lines = vec![format!(
+        "  branch-level: {total} constructively unreachable arm(s) in this tree ({guards} `false` \
+         guard(s), {variants} never-constructed variant(s); a static read of the source text, not a \
+         coverage measurement)"
+    )];
+    for (_, _, row) in rows.iter().take(SAMPLE) {
+        lines.push(row.clone());
+    }
+    if total > SAMPLE {
+        lines.push(crate::mcp::truncation::withheld(
+            total - SAMPLE,
+            total,
+            SAMPLE,
+            "unreachable arms",
+            "ask per directory to see its own items",
+        ));
+    }
+    lines.push(BRANCH_BOUNDARY.to_owned());
     lines
 }
 
