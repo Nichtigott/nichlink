@@ -1349,6 +1349,8 @@ def normalize_log_record(record):
             "init": bool(argv) and argv[0] == "init",
             "sent": sum(len(part) for part in argv),
             "received": int(received),
+            "argv": argv,
+            "exit": record.get("exit"),
             "bridge": False,
         }
     if record.get("request") is not None:
@@ -1360,6 +1362,8 @@ def normalize_log_record(record):
             "init": tool == "init",
             "sent": sum(len(part) for part in argv),
             "received": len(str(record.get("response", ""))),
+            "argv": argv,
+            "exit": record.get("exit"),
             "bridge": True,
         }
     return {
@@ -1367,11 +1371,55 @@ def normalize_log_record(record):
         "init": record.get("tool") == "init",
         "sent": int(record.get("request_chars", 0)),
         "received": int(record.get("response_chars", 0)),
+        "argv": [str(record.get("tool") or "")],
+        "exit": record.get("exit"),
         "bridge": True,
     }
 
 
-def tokens(target):
+WASTE_DEFINITION = """A call is **wasted** when it is one of exactly three decidable things, read from the log alone:
+  * `empty`               — the reply carries 0 characters;
+  * `repeat`              — the same tool with the same arguments already ran earlier in this log;
+  * `retry-after-refusal` — the previous call refused (exit != 0) and this one asks the same tool.
+Everything else counts as work. A **first** refusal is work: its text is the information. So is a
+second call with different arguments. `init` is index setup and is not judged here.
+A call 是**白跑**，当且仅当它是下面三种**可从日志单独判定**之一：`empty` 回复 0 字符 · `repeat` 同一工具
+同一参数在本日志里已经跑过 · `retry-after-refusal` 上一次被拒（exit != 0）而这一次又用同一个工具。
+其余都算工作：**第一次**被拒是工作（拒绝文案就是信息），换参数的第二次调用也是工作。`init` 是建索引，不在此判定。
+"""
+
+
+def waste_report(rows):
+    """Classify answering calls as wasted, by the definition above and nothing else.
+
+    Round 1's arm reported "9 of 46 wasted" about itself and the audit **refused to accept it**: a
+    self-reported waste list with no definition cannot be re-derived by a reader, so it is not
+    evidence. This is that definition, in code, so the next round's number can be recomputed from the
+    log by anyone — and so a wrong count shows up as a wrong classification rather than a dispute.
+    第一轮那一臂自报"46 次里 9 次白跑"，审计**拒绝采信**：一份没有定义的自报浪费清单，读者无法重新推导，
+    因此它不是证据。这里把定义写成代码，于是下一轮的数任何人都能从日志重算——而数错了会表现为**分类错了**，
+    而不是一场争论。
+    """
+    seen, wasted, previous = set(), [], None
+    for index, row in enumerate(rows, 1):
+        key = (row.get("tool"), tuple(row.get("argv") or []))
+        reason = None
+        if row.get("received", 0) == 0:
+            reason = "empty"
+        elif key in seen:
+            reason = "repeat"
+        elif previous is not None and previous.get("exit") not in (0, None) and previous.get("tool") == row.get("tool"):
+            reason = "retry-after-refusal"
+        if reason:
+            wasted.append({"index": index, "tool": row.get("tool"), "reason": reason})
+        seen.add(key)
+        previous = row
+    counts = {name: sum(1 for row in wasted if row["reason"] == name)
+              for name in ("empty", "repeat", "retry-after-refusal")}
+    return {"wasted_calls": len(wasted), "wasted_breakdown": counts, "wasted_detail": wasted}
+
+
+def tokens(target, tool_name="nichlink-mcp"):
     """Per-axis token account for one session, read **out of band**.
 
     Nothing about the task changes when this runs: it reads the harness's own session log after the
@@ -1403,6 +1451,14 @@ def tokens(target):
         raise SystemExit(f"cannot decompress {path}: {done.stderr[-400:]}")
     label = None
     steps = tool_calls = 0
+    # Steps, read out of band (audit D2). The harness writes one `tool/call` per command, so the step
+    # count never has to come from the arm's own bookkeeping — and asking an arm to keep a shell log
+    # would be a **new deliverable**, i.e. a changed question, which the measuring rule forbids.
+    # 步数**旁路**读（审计 D2）：harness 每条命令都写一条 `tool/call`，因此步数永远不必来自臂自己的记账——
+    # 而要求臂留一份 shell 日志等于**新增交付物**、也就是改了那道题，这是测量纪律禁止的。
+    shell_steps = naming_steps = other_steps = 0
+    shell_chars = naming_chars = 0
+    calls = {}
     prompt = cached = generated = 0
     reasoning = visible = tool_result = 0
     for row in done.stdout.splitlines():
@@ -1431,15 +1487,40 @@ def tokens(target):
                     visible += len(block.get("text") or "")
                 elif block.get("type") == "tool-call":
                     tool_calls += 1
+        elif kind == "tool/call":
+            arguments = data.get("arguments")
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except ValueError:
+                    arguments = {}
+            calls[data.get("callId")] = {
+                "name": data.get("name"),
+                "command": (arguments or {}).get("command") or "",
+            }
         elif kind == "tool/result":
             message = data.get("message")
-            tool_result += len(message if isinstance(message, str)
-                               else json.dumps(message, ensure_ascii=False))
+            body = message if isinstance(message, str) else json.dumps(message, ensure_ascii=False)
+            tool_result += len(body)
+            call = calls.get(m.get("toolCallId") if isinstance(m := data.get("message"), dict) else None)
+            if call and call["name"] == "bash":
+                shell_steps += 1
+                shell_chars += len(body)
+                if tool_name in call["command"]:
+                    naming_steps += 1
+                    naming_chars += len(body)
+                else:
+                    other_steps += 1
     print(json.dumps({
         "label": label,
         "session": str(path),
         "steps": steps,
         "tool_calls": tool_calls,
+        "shell_steps": shell_steps,
+        "shell_steps_naming_tool": naming_steps,
+        "shell_steps_other": other_steps,
+        "shell_output_chars_naming_tool": naming_chars,
+        "shell_output_chars_other": other_chars if False else shell_chars - naming_chars,
         "input_tokens_uncached": prompt,
         "input_tokens_cached": cached,
         "input_tokens_total": prompt + cached,
@@ -1485,6 +1566,7 @@ def score(tree, answer_path, log_path=None):
     if log_path:
         calls = answering = init_calls = 0
         response_chars = request_chars = 0
+        answering_rows = []
         for row in Path(log_path).read_text(encoding="utf-8").splitlines():
             if not row.strip():
                 continue
@@ -1496,6 +1578,7 @@ def score(tree, answer_path, log_path=None):
                 init_calls += 1
             else:
                 answering += 1
+                answering_rows.append(normalized)
             response_chars += normalized["received"]
             request_chars += normalized["sent"]
             bridge_log = bridge_log or normalized["bridge"]
@@ -1522,6 +1605,7 @@ def score(tree, answer_path, log_path=None):
             shortcut = pattern
             break
 
+    waste = waste_report(answering_rows)
     result = {
         "class": truth["class"],
         "tree_sha256": truth.get("apparatus", {}).get("tree_sha256"),
@@ -1532,6 +1616,7 @@ def score(tree, answer_path, log_path=None):
         "mechanism_present": present,
         "mechanism_expected": mechanism,
         "line_within_3": line_hit,
+        **waste,
         "instrument_calls": calls,
         "init_calls": init_calls,
         "answering_calls": answering,
@@ -1578,6 +1663,7 @@ def score(tree, answer_path, log_path=None):
 
 def plan(scoring=False):
     if scoring:
+        print(WASTE_DEFINITION)
         print(SCORING_RULES, end="")
         return 0
     print("hard-bug bench — four classes (spec: docs/design-hardbug-bench-spec.md)")
@@ -1614,7 +1700,8 @@ def main(argv):
     if argv[1] == "tokens":
         if len(argv) < 3:
             raise SystemExit("tokens needs a session directory or a session jsonl.zstd")
-        return tokens(argv[2])
+        named = argv[argv.index("--tool") + 1] if "--tool" in argv else "nichlink-mcp"
+        return tokens(argv[2], named)
     if argv[1] == "score":
         if len(argv) < 4:
             raise SystemExit("score needs a tree and an answer file")
