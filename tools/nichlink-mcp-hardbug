@@ -373,7 +373,14 @@ def checkout_tree(directory):
                     "bench refuses to guess a new one"
                 )
             text = text.replace(old, new)
-        manifest.write_text(text, encoding="utf-8")
+        # An empty `[workspace]` table detaches the package from the enclosing workspace, which is
+        # what keeps a run tree buildable while it lives under the checkout's own `target/`. Without
+        # it cargo refuses with "current package believes it's in a workspace when it's not" — and the
+        # first fix for that was to move the whole run to `/tmp`, where one cleanup deleted it.
+        # 空的 `[workspace]` 表把包从外层工作区摘出来，这正是题树住在检出自己的 `target/` 下仍能构建的原因。
+        # 没有它，cargo 会报 "believes it's in a workspace when it's not"——而当初对这条报错的"修法"是把整轮
+        # 搬到 `/tmp`，结果一次清理就把它删了。
+        manifest.write_text(text + "\n[workspace]\n", encoding="utf-8")
     return host, graft
 
 
@@ -896,7 +903,8 @@ def build_algorithms(directory, klass):
     (directory / "tests").mkdir(parents=True)
     write(
         directory / "Cargo.toml",
-        '[package]\nname = "hardbug-algorithms"\nversion = "0.1.0"\nedition = "2024"\n',
+        '[package]\nname = "hardbug-algorithms"\nversion = "0.1.0"\nedition = "2024"\n'
+        "\n[workspace]\n",
     )
     write(
         directory / "src/lib.rs",
@@ -1058,8 +1066,34 @@ def build_algorithms(directory, klass):
     return 0
 
 
-def build(directory, klass):
+def durable_root(directory):
+    """Refuse to be quiet about a run directory that a reboot can delete.
+
+    Measured the hard way: the whole W8 round lived under `/tmp` — four trees, both arms' logs, the
+    audit — and one cleanup took all of it. The session transcripts survived (they are not in `/tmp`),
+    which is why the numbers could be recovered at all, but a frozen set has to be a file, not a
+    memory. The tree cannot live inside the checkout instead (cargo absorbs it into the workspace),
+    so the durable choice is a directory outside both: `~/.cache/nichlink-hardbug/<run>` or anywhere
+    the user keeps data.
+    这条是**付出代价换来的**：W8 整轮都住在 `/tmp` 下——四棵树、两臂日志、审计——一次清理全没了。会话
+    记录不在 `/tmp` 所以活了下来（数才挖得回来），但冻结集必须是**文件**而不是记忆。题树也不能放进检出
+    （会被 cargo 吸进工作区），所以耐久的落点是两者之外：`~/.cache/nichlink-hardbug/<run>` 或用户自己
+    放数据的地方。
+    """
     directory = Path(directory).resolve()
+    volatile = ("/tmp/", "/var/tmp/", "/run/")
+    if any(str(directory).startswith(prefix) for prefix in volatile):
+        print(
+            f"WARNING: {directory} is under a volatile path — a reboot or a tmp cleanup deletes the "
+            "whole run (this happened once: W8's trees, logs and audit were all lost). Use "
+            f"{CHECKOUT}/target/hardbug-runs/<run> instead.",
+            file=sys.stderr,
+        )
+    return directory
+
+
+def build(directory, klass):
+    directory = durable_root(directory)
     if klass not in {name for name, *_ in CLASSES}:
         raise SystemExit(f"unknown class `{klass}`; `plan` names the four")
     if klass == "h4-one-file-many-algorithms":
@@ -1304,7 +1338,7 @@ def tokens(target):
 
 def score(tree, answer_path, log_path=None):
     """Score one answer against the constructed truth, mechanically."""
-    directory = Path(tree).resolve()
+    directory = durable_root(tree)
     truth = json.loads((directory / ".audit/truth.json").read_text(encoding="utf-8"))
     answer = Path(answer_path).read_text(encoding="utf-8")
     cause = truth["root_cause"]
