@@ -334,8 +334,9 @@ fn next_step(timed_out: bool, code: Option<i32>) -> Option<String> {
         return None;
     }
     Some(
-        "next   the failing assertion's message is a string in this tree: \
-         search {literal: \"<that text>\"} finds where it is produced. If two red things may be \
+        "next   the `why` lines above are the failing assertion's own words: a short, stable \
+         phrase from one is a string literal in this tree, so `search {literal: \"<that phrase>\"}` \
+         finds the line that produced it. If two red things may be \
          independent, two green runs are not the evidence: fix one and re-run, and say which red \
          survived. And a probe you built yourself that disagrees with the source is a reason to \
          re-read that line (`read`, `search {literal}`) before rebuilding — a second look is \
@@ -352,6 +353,60 @@ fn flags(face: &str) -> String {
         "all" => " --all-features".to_owned(),
         feature => format!(" --features {feature}"),
     }
+}
+
+/// The failing assertion's own words, per failing test, read out of the same log.
+/// 失败断言自己的话，按失败的测试逐个，从同一份日志里读出。
+///
+/// Cargo prints them under `---- <name> stdout ----`, and they are the one thing the reply did not
+/// carry. Measured in W8's h1 (step 5): the arm got `verdict failed` and the failing test's name,
+/// then read the raw log itself — "Let's read the check log raw" — while this module's own `next`
+/// line already said the message is a string in the tree. **Knowing what is missing and making the
+/// caller fetch it anyway is a call spent on something we had in hand.**
+/// cargo 把这句话印在 `---- <name> stdout ----` 下面，而它正是回复没有携带的那样东西。W8 的 h1 第 5 步
+/// 量到：那一臂拿到 `verdict failed` 与失败的测试名，随后自己去读原始日志——「Let's read the check log
+/// raw」——而本模块自己的 `next` 行早就写着"那句话是树里的一个字符串"。**知道自己少给了什么、却让调用方
+/// 自己去取，就是把一次调用花在我们手里已有的东西上。**
+fn why_lines(text: &str, names: &[String]) -> Vec<String> {
+    const MESSAGE_LINES: usize = 2;
+    const MESSAGE_CHARS: usize = 200;
+    let lines = text.lines().collect::<Vec<_>>();
+    let mut out = Vec::new();
+    for name in names {
+        let marker = format!("---- {name} stdout ----");
+        let Some(start) = lines.iter().position(|line| line.trim() == marker) else {
+            continue;
+        };
+        let mut said = Vec::new();
+        for line in lines.iter().skip(start + 1) {
+            let trimmed = line.trim();
+            if trimmed.starts_with("----") || trimmed.starts_with("note:") {
+                break;
+            }
+            if trimmed.is_empty() {
+                if said.is_empty() {
+                    continue;
+                }
+                break;
+            }
+            said.push(trimmed);
+            if said.len() == MESSAGE_LINES {
+                break;
+            }
+        }
+        if said.is_empty() {
+            continue;
+        }
+        let message = said.join(" ");
+        let message = if message.chars().count() > MESSAGE_CHARS {
+            let cut = message.chars().take(MESSAGE_CHARS).collect::<String>();
+            format!("{cut}…")
+        } else {
+            message
+        };
+        out.push(format!("why    {name}: {message}"));
+    }
+    out
 }
 
 /// What the log said, as the run said it — and how many `test result:` lines it had, because a log
@@ -420,6 +475,11 @@ fn observation(log: &Path) -> Result<Observation, String> {
             "read the log named above",
         ));
     }
+    // The assertion's own words ride with the name of the test that produced them: the caller asked
+    // what failed, and the answer is these lines, not a pointer to where they live.
+    // 断言自己的话与产出它的测试名同行给出：调用方问的是"什么失败了"，而答案就是这几行，而不是"它们住在哪"
+    // 的一条指引。
+    lines.extend(why_lines(&text, &failed));
     Ok(Observation {
         lines,
         results: results.len(),

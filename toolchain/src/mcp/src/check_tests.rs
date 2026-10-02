@@ -196,3 +196,70 @@ fn a_failing_run_says_where_to_look_next() {
         "a timeout is unknown, not a failure to chase"
     );
 }
+
+/// The failing assertion's own words ride with the failing test's name.
+/// 失败断言自己的话与失败测试的名字同行给出。
+///
+/// Measured in W8's h1 (step 5): the reply carried `verdict failed` and `failed <name>`, and the arm
+/// then read the raw log itself ("Let's read the check log raw") to get the assertion — one call and
+/// one `sed` spent on a line we had already read. The log below is that one, in cargo's own shape;
+/// it is written rather than shelled out because the panic line contains a quote that no `sh -c`
+/// quoting survives intact.
+/// W8 的 h1 第 5 步量到：回复带了 `verdict failed` 与 `failed <name>`，那一臂随后自己去读原始日志
+/// （「Let's read the check log raw」）拿断言——一次调用加一次 `sed`，花在我们早已读过的那一行上。下面这份
+/// 日志就是那一份，按 cargo 自己的形状；直接写盘而不是走 shell，因为那行 panic 里的引号在任何 `sh -c`
+/// 的引法下都活不下来。
+#[test]
+fn a_failing_assertion_rides_with_its_test_name() {
+    let root = scratch("why");
+    let log = root.join("check-default.log");
+    std::fs::write(
+        &log,
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored\n\
+         test the_rendered_offsets_add_up ... FAILED\n\
+         \n\
+         failures:\n\
+         \n\
+         ---- the_rendered_offsets_add_up stdout ----\n\
+         thread 'main' panicked at tests/offsets.rs:19:5:\n\
+         assertion `left == right` failed\n\
+         \x20 left: 24\n\
+         \x20 right: 31\n\
+         note: run with `RUST_BACKTRACE=1` for a backtrace\n",
+    )
+    .expect("the fixture log");
+    let observed = observation(&log).expect("the log reads");
+    let joined = observed.lines.join("\n");
+    assert!(
+        joined.contains("failed the_rendered_offsets_add_up"),
+        "the name is still reported: {joined}"
+    );
+    assert!(
+        joined.contains(
+            "why    the_rendered_offsets_add_up: thread 'main' panicked at tests/offsets.rs:19:5: \
+             assertion `left == right` failed"
+        ),
+        "and the assertion's own words ride with it, capped at two lines: {joined}"
+    );
+    assert!(
+        !joined.contains("RUST_BACKTRACE") && !joined.contains("left: 24"),
+        "the log's advice and the diff below the message are not part of it: {joined}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A run with nothing failing gets no `why` lines: the field is the assertion's, not a template.
+/// 没有失败项的运行不产生 `why` 行：那一栏属于断言，不是模板。
+#[test]
+fn a_green_run_carries_no_assertion_words() {
+    let root = scratch("why-green");
+    let log = root.join("check-default.log");
+    std::fs::write(&log, "test result: ok. 3 passed; 0 failed; 0 ignored\n").expect("log");
+    let observed = observation(&log).expect("the log reads");
+    assert!(
+        !observed.lines.iter().any(|line| line.starts_with("why")),
+        "{:?}",
+        observed.lines
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
