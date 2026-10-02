@@ -17,13 +17,23 @@
 //! 函数命中。
 //!
 //! The verdicts come from `crate::mcp::tree_delta`, the rule `nichlink.diff` states, so
-//! the same face cannot be `added` here and something else there. A root whose
-//! identity namespace cannot be learned still answers the source half and says the
-//! tree half is unavailable, because a refusal the caller cannot act on would be
-//! worse than an answer that names what is missing.
+//! the same face cannot be `added` here and something else there.
+//!
+//! **A root whose identity namespace cannot be learned splits by question.** A **name** query
+//! still answers from the sources, because the file walk does not need the package, and it says
+//! the tree half is unavailable — a refusal the caller cannot act on would be worse than an answer
+//! that names what is missing. A **`literal`** query refuses, because its scope *is* the package:
+//! with no tree to scan there are no matches to report, and a `no matches` printed by a scan that
+//! never ran cannot be told from a conclusion (round 8, A5: `search --literal "slider"` answered
+//! `no matches` for a string the tree contains, with exit 0, while `grep` found it).
 //! 结论来自 `crate::mcp::tree_delta`，也就是 `nichlink.diff` 说出的那条规则，因此同一个面不可能在这里是
-//! `added`、在那里是别的。身份命名空间无从得知的根仍然回答源码那一半，并说明树那一半不可用，因为调用方
-//! 无法据以行动的拒绝会比一个点名缺失之物的回答更糟。
+//! `added`、在那里是别的。
+//!
+//! **命名空间学不到的根按问题分成两半。** **名字**查询仍从源码作答，因为文件遍历不需要那个包，并说明树那一
+//! 半不可用——调用方无法据以行动的拒绝，会比一个点名缺失之物的回答更糟。**`literal`** 查询则拒绝，因为它的
+//! 范围**就是**那个包：没有树可扫时没有命中可报，而由一次从未跑过的扫描印出的 `no matches` 分不出与结论的
+//! 差别（第八轮 A5：`search --literal "slider"` 对树里确实存在的字符串回了 `no matches`、退出码 0，而
+//! `grep` 找得到）。
 //!
 //! A **virtual manifest** is a root, and it is answered as the workspace it is: the census
 //! names every member with its status, each member's matching faces are grouped under it,
@@ -497,7 +507,22 @@ fn literal_search(
                 }
             }
         }
-        Scope::Unresolvable(reason) => results.push(format!("tree  unavailable ({reason})")),
+        // The source scan needs to know which tree it is scanning — its scope comes from the
+        // package. When that cannot be learned, **nothing was searched**, so this is a refusal and
+        // not an empty result: a `no matches` printed by a scan that never ran is a false negative,
+        // and a reader cannot tell it from a conclusion. Measured in round 8 (A5): on a tree whose
+        // manifest could not be loaded, `search --literal "slider"` answered `no matches` for a
+        // string the tree contains, with exit 0, while `grep` found it.
+        // 源码扫描必须先知道自己在扫哪棵树——它的范围来自那个包。学不到时，**什么都没扫**，因此这是
+        // 一次拒绝而不是一个空结果：由一次从未跑过的扫描印出的 `no matches` 是假阴性，而读者分不出它与
+        // 结论。第八轮（A5）量到：清单加载不了的树上，`search --literal "slider"` 对树里确实存在的字
+        // 符串回了 `no matches`、退出码 0，而 `grep` 找得到。
+        Scope::Unresolvable(reason) => {
+            return Err(format!(
+                "nothing was searched: the tree could not be read, so this is **not** `no matches` \
+                 — {reason}"
+            ));
+        }
     }
     if hits == 0 {
         // The moment a caller most needs to know **which tree** was searched is the moment nothing

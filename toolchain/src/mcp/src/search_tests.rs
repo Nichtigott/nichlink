@@ -466,3 +466,66 @@ fn several_names_is_one_call_with_a_group_per_name() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A `literal` search on a tree that cannot be read **refuses** — it must not report "no matches".
+/// 读不了的树上的 `literal` 检索**拒绝**——它不可以报"没有匹配"。
+///
+/// Measured (round 8, A5): a tree whose manifest could not be loaded answered
+/// `no matches in <root>` for a string the tree contains, with exit 0, while `grep` found it. The
+/// scan's scope comes from the package, so with no package there was nothing to scan — and a false
+/// negative a reader cannot tell from a conclusion is worse than a refusal that says so.
+/// 量到的（第八轮 A5）：清单加载不了的树，对树里确实存在的字符串回了 `no matches in <root>`、退出码 0，
+/// 而 `grep` 找得到。扫描的范围来自那个包，因此没有包时根本没有东西可扫——而一个读者分不出与结论的假阴性，
+/// 比一次把话说清的拒绝更糟。
+#[test]
+fn a_literal_search_on_a_tree_that_cannot_be_read_refuses_instead_of_reporting_no_matches() {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "mcp-search-broken-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("source directory");
+    // A manifest that names a dependency which is not there: the tree exists, the package does not.
+    // 一份点名了不存在的依赖的清单：树在，包不在。
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"broken\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nnope = { path = \"../nowhere\" }\n\n[workspace]\n",
+    )
+    .expect("manifest");
+    std::fs::write(root.join("src/widget.rs"), "pub fn widget_spin() {}\n").expect("source file");
+
+    let refused = search(&root, &json!({"literal": "widget_spin"}))
+        .expect_err("a scan that cannot run is a refusal, not an empty result");
+    assert!(
+        refused.contains("nothing was searched") && refused.contains("not** `no matches`"),
+        "the refusal says which of the two it is: {refused}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The counter-proof: a tree that **can** be read still answers `no matches` when it has none.
+/// 反证：读得了的树在没有匹配时**仍然**回 `no matches`。
+#[test]
+fn a_literal_search_on_a_readable_tree_still_reports_no_matches() {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "mcp-search-empty-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("source directory");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"readable\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )
+    .expect("manifest");
+    std::fs::write(root.join("src/lib.rs"), "pub fn present() {}\n").expect("source file");
+
+    let reply = search(&root, &json!({"literal": "absent_thing"})).expect("the search answers");
+    assert!(reply.contains("no matches in"), "{reply}");
+    assert!(!reply.contains("nothing was searched"), "{reply}");
+    let _ = std::fs::remove_dir_all(&root);
+}
