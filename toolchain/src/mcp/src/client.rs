@@ -52,6 +52,33 @@ use serde_json::{Map, Value};
 /// 逐工具散文，而只读每条描述第一小句的 agent 手上没有任何东西说"哪种症状用哪个工具"。表里点名症状、
 /// 该发的调用、以及这次调用答不了的那一件事。
 pub const INSTRUCTIONS: &str = "\
+**Place the request in one of seven shapes first — by what it names and which way it moves, not by \
+its wording.** The signals are structural (how many objects it names, whether it inspects, adds, \
+deepens or moves, and whether the tree is empty yet), and each shape carries an entry call and a \
+**stop condition**:\n\
+  empty tree                -> `new_project`, then `registry`, then `check`; stop when the skeleton \
+compiles and its faces are in `registry`\n\
+  inspect, one object named -> `locate {symptom}` or `search {query}`, then `read`, `why --at`, \
+`check {face}`; stop at a root cause with a file and a line, its smallest fix, and a counter-proof\n\
+  inspect, several named    -> `consistency --parent` **once** for the family, then one object at a \
+time; stop when every named object has a verdict, including the ones with nothing wrong\n\
+  inspect, a range question -> `check` and dispose of every census column; stop when each column is \
+either covered or named as one it does not cover\n\
+  add an object             -> `registry` for the family, `apply {action: \"add\", apply: true}`, `consistency \
+--specimen`, `check`; stop when the new face's shape matches its siblings and the gates are green\n\
+  deepen an object          -> `explain {node}`, `apply {action: \"deepen\", apply: true}`, then `check`; stop \
+when the tree, the public paths and the factory pins are untouched\n\
+  move or merge (refactor)  -> `affected`, the plan half of `why`, `grafts`, `apply`; stop when every \
+layer's impact is disposed of, not when the move compiles\n\
+**先把这个请求放进七种形状之一——按它点名什么、朝哪个方向动，而不是按它的措辞。** 信号是结构性的\
+（点几个对象、是查看/新增/加深/迁移、树还空不空），每种形状带一个入口调用与一个**停止条件**：空树 ⇒ \
+`new_project` 到 `registry`、`check`，停在「骨架编译过且面在 `registry` 里」；查看单对象 ⇒ `locate`/\
+`search` 到 `read`、`why --at`、`check {face}`，停在「根因带文件与行号、最小修、反证」；查看多个 ⇒ \
+`consistency --parent` **一次**比完同族再逐个，停在「每个被点名的对象都有裁定（没问题的也要有依据）」；\
+范围型 ⇒ `check` 并逐栏处置，停在「每栏要么被覆盖、要么被点名为它不覆盖」；新增 ⇒ `registry`、\
+`apply {action: \"add\", apply: true}`、`consistency --specimen`、`check`，停在「新面形状与同族一致且门禁绿」；加深 ⇒ \
+`explain`、`apply {action: \"deepen\", apply: true}`、`check`，停在「树、公开路径与出厂形状钉子都没动」；迁移/合并 ⇒ \
+`affected`、`why` 的计划半边、`grafts`、`apply`，停在「每一层的影响面都已处置」，而不是「能编译过」。\n\
 Read the symptom first, then take the shortest route it names. A failing test? Run the suite you \
 already have (`cargo test`) and keep its output: the failing assertion's own words are the next \
 clue. `check {face}` is the same run aimed at **one face** — reach for it when the default face is \

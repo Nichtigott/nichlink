@@ -239,6 +239,17 @@ fn the_table_only_advertises_shapes_the_tool_accepts() {
         ("nichlink.conformance", json!({"anchor": "root/button"})),
         ("nichlink.consistency", json!({"specimen": "root/button"})),
         ("nichlink.consistency", json!({"parent": "root/control"})),
+        // The shapes the seven-scenario table adds. Acceptance here means the arguments were not
+        // refused — the table promises these spellings work, and the pin that reads this list is what
+        // caught them missing: adding a promise without a check is exactly what it exists to refuse.
+        // 七场景表新增的形状。这里的"接受"指参数没被拒——表承诺这些拼法可用，而读这份清单的那条钉子
+        // 正是抓出它们缺失的那条：加了承诺却没加检查，正是它存在来拒绝的事。
+        (
+            "nichlink.locate",
+            json!({"symptom": "the offsets do not add up"}),
+        ),
+        ("nichlink.why", json!({"at": "src/lib.rs:1"})),
+        ("nichlink.grafts", json!({})),
     ];
     for (tool, arguments) in &shapes {
         let answer = crate::mcp::tools::run_tool(&root, tool, arguments);
@@ -277,7 +288,10 @@ fn every_shape_the_table_names_is_covered_by_an_acceptance_check() {
             // 表里的写法是"工具 {键}"，例如 `check {face}`。
             "check" => keys.contains("face"),
             "search" | "callgraph" | "read" | "inspect" | "affected" | "registry" | "explain"
-            | "diff" => true,
+            | "diff" | "locate" | "why" | "grafts" => true,
+            // `new_project` writes a scaffold, so its schema is the check, the way `apply`'s is.
+            // `new_project` 会写出脚手架，因此检查它的是 schema，与 `apply` 同理。
+            "new_project" => keys.contains("directory"),
             "apply" => keys.contains("apply"),
             // The ledger pair: the table names `conformance {anchor}` and
             // `consistency --specimen <anchor>`, and both are called for real above.
@@ -421,4 +435,54 @@ fn a_log_flag_records_one_line_that_mirrors_the_call() {
     );
 
     let _ = std::fs::remove_dir_all(&temp);
+}
+
+/// The flow table places a request in one of seven shapes, and every shape carries a stop condition.
+/// 流程表把请求放进七种形状之一，而每种形状都带一个停止条件。
+///
+/// Measured need (the maintainer's own words): a flat tool list with no packaged workflow makes the
+/// model rebuild the route from scratch on every question — and the numbers agree (`next` was
+/// followed 28% of the time, and one question spent 14 of its 16 calls before the fact that decided
+/// it). The signals are asserted to be **structural**, not words, because a table keyed on wording
+/// would be the overfitting the same rules forbid.
+/// 量出来的需求（维护者原话）：工具平铺、没有打包的工作流 ⇒ 模型每个问题都要把路线重建一遍——数与之一致
+/// （`next` 被采纳 28%，而有一道题把 16 次调用里的 14 次花在"决定性事实"之前）。这里断言信号是**结构性**
+/// 的而不是词，因为按措辞索引的表正是同一套规则禁止的那种过拟合。
+#[test]
+fn the_flow_table_packages_the_seven_shapes_with_their_stop_conditions() {
+    // One row per shape: the signal as the table spells it, and the stop condition it must carry.
+    // 每种形状一行：表里写的信号，以及它必须携带的停止条件。
+    let rows = [
+        ("empty tree", "stop when the skeleton"),
+        ("one object named", "stop at a root cause"),
+        (
+            "several named",
+            "stop when every named object has a verdict",
+        ),
+        ("a range question", "stop when each column is"),
+        ("add an object", "stop when the new face's shape matches"),
+        (
+            "deepen an object",
+            "stop when the tree, the public paths and the factory pins",
+        ),
+        ("move or merge", "stop when every layer's impact"),
+    ];
+    for (signal, stop) in rows {
+        assert!(
+            INSTRUCTIONS.contains(signal),
+            "the table names the signal `{signal}`: {INSTRUCTIONS}"
+        );
+        assert!(
+            INSTRUCTIONS.contains(stop),
+            "and its stop condition `{stop}`: {INSTRUCTIONS}"
+        );
+    }
+    assert!(
+        INSTRUCTIONS.contains("not by its wording"),
+        "the signals are structural, not words: {INSTRUCTIONS}"
+    );
+    assert!(
+        INSTRUCTIONS.contains("停止条件"),
+        "and the Chinese half carries the same table: {INSTRUCTIONS}"
+    );
 }
