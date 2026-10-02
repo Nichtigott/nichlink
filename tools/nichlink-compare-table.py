@@ -52,12 +52,12 @@ def main_cg26():
     sid, a = cg26_axes()
     if not a:
         print('\n[cg26] 还没跑完或会话未出现 —— 完工后再跑本脚本'); return
-    print(f'\n[cg26] 会话 {sid}：步 {a["steps"]} · 输出 {a["tout"]:,} · 推理 {a["reason"]:,} · 步均 {a["per_step"]:,} · 结束上下文 {a["last"]:,}')
+    print(f'\n[cg26] 会话 {sid}：步 {a["steps"]} · 输出 {a["out"]:,} · 推理 {a["reason"]:,} · 步均 {a["per_step"]:,} · 结束上下文 {a["peak"]:,}')
     # 与我们对齐：我们第九轮的 26 题一会话
     d = S/'aa54ec58-44bf-4f88-a2ed-d0dd11614b93'
     if d.exists():
         o = axes(d)
-        print(f'[我们] 会话 aa54ec58：步 {o["steps"]} · 输出 {o["tout"]:,} · 推理 {o["reason"]:,} · 步均 {o["per_step"]:,} · 结束上下文 {o["last"]:,}')
-        print(f'\n比值（我们 ÷ cg26）：步/题 {o["steps"]/26/(a["steps"]/26):.2f}× · 输出/题 {o["tout"]/(a["tout"]):.2f}× · '
+        print(f'[我们] 会话 aa54ec58：步 {o["steps"]} · 输出 {o["out"]:,} · 推理 {o["reason"]:,} · 步均 {o["per_step"]:,} · 结束上下文 {o["peak"]:,}')
+        print(f'\n比值（我们 ÷ cg26）：步/题 {o["steps"]/26/(a["steps"]/26):.2f}× · 输出/题 {o["out"]/(a["out"]):.2f}× · '
               f'推理/题 {o["reason"]/a["reason"]:.2f}× · 步均上下文 {o["per_step"]/a["per_step"]:.2f}×')
 main_cg26()
