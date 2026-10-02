@@ -49,7 +49,14 @@ def cg26_axes(sid=None):
     return None, None
 
 def main_cg26():
+    # 完工闸：cg26 没写满 26 份答案就不许出比值 ✗
+    # （拿"半截"比"整段"必然得出假数字 —— 这正是本轮反复栽的那个错 ✓）
+    import glob
+    done = len(glob.glob('target/probe-cg26/answers/*.md'))
     sid, a = cg26_axes()
+    if a and done < 26:
+        print(f'\n[cg26] 进行中：会话 {sid} 已 {a["steps"]} 步 · {done}/26 份答案 —— **不出比值** ✗')
+        return
     if not a:
         print('\n[cg26] 还没跑完或会话未出现 —— 完工后再跑本脚本'); return
     print(f'\n[cg26] 会话 {sid}：步 {a["steps"]} · 输出 {a["out"]:,} · 推理 {a["reason"]:,} · 步均 {a["per_step"]:,} · 结束上下文 {a["peak"]:,}')
