@@ -37,3 +37,27 @@ for cls, who, sid, log in ARMS:
     a=axes(sid)
     if not a: print(f'{cls:26s}{who:11s}   （会话不在）'); continue
     print(f'{cls:26s}{who:11s}{a["steps"]:4d}{a["out"]:9,d}{a["reason"]:9,d}{a["peak"]:10,d}{a["per_step"]:8,d}{calls(log):5d}')
+
+# ============ cg26 那一侧（团队跑完后可用）============
+def cg26_axes(sid=None):
+    """cg26 的会话：按标签找 agent-teams:nichlink-cg26:cg26；量步/输出/推理/步均。"""
+    for d in S.iterdir():
+        for f in sorted(d.glob('session*.jsonl.zstd')):
+            head = subprocess.run(['zstd','-dc',str(f)],capture_output=True).stdout[:8000].decode('utf-8','replace')
+            if 'nichlink-cg26:cg26' in head:
+                return d.name, axes(d)
+    return None, None
+
+def main_cg26():
+    sid, a = cg26_axes()
+    if not a:
+        print('\n[cg26] 还没跑完或会话未出现 —— 完工后再跑本脚本'); return
+    print(f'\n[cg26] 会话 {sid}：步 {a["steps"]} · 输出 {a["tout"]:,} · 推理 {a["reason"]:,} · 步均 {a["per_step"]:,} · 结束上下文 {a["last"]:,}')
+    # 与我们对齐：我们第九轮的 26 题一会话
+    d = S/'aa54ec58-44bf-4f88-a2ed-d0dd11614b93'
+    if d.exists():
+        o = axes(d)
+        print(f'[我们] 会话 aa54ec58：步 {o["steps"]} · 输出 {o["tout"]:,} · 推理 {o["reason"]:,} · 步均 {o["per_step"]:,} · 结束上下文 {o["last"]:,}')
+        print(f'\n比值（我们 ÷ cg26）：步/题 {o["steps"]/26/(a["steps"]/26):.2f}× · 输出/题 {o["tout"]/(a["tout"]):.2f}× · '
+              f'推理/题 {o["reason"]/a["reason"]:.2f}× · 步均上下文 {o["per_step"]/a["per_step"]:.2f}×')
+main_cg26()
