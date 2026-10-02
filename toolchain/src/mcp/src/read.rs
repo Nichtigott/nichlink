@@ -36,8 +36,9 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::mcp::note;
 use crate::mcp::protocol::MAX_READ_LINES;
-use crate::mcp::source_index::{load_one, load_text, required_path};
+use crate::mcp::source_index::{contract_lines, contract_text, load_one, load_text, required_path};
 use crate::mcp::truncation::withheld;
 
 /// The most lines an explicit whole-file or span read prints before it says it truncated.
@@ -77,6 +78,10 @@ const DEFAULT_CONTEXT: usize = 8;
 /// 调用方能要求的最大窗口半宽。
 const MAX_CONTEXT: usize = 120;
 
+/// How many function rows the `symbols` line carries before the shared outlet names the rest.
+/// `symbols` 行在共享出口点名"剩下的在哪"之前最多携带多少个函数。
+const SYMBOLS: usize = 12;
+
 /// What a read request asked for, before the file is consulted.
 /// 一次读取请求要什么，在查阅文件之前。
 enum Span {
@@ -108,11 +113,12 @@ pub(crate) fn read_source(root: &Path, arguments: &Value) -> Result<String, Stri
     // `.rs` 走源码索引，好让那些用符号标注行的读者拿得到符号；树里携带的其它东西按文本读。台账就是理由：
     // 它不是 Rust，而拒绝它把那一轮的臂送去了 `cat`——在那个工具的日志之外，于是那段工作离开了账本
     // （审计 T-02，在 W8 的 h2 量到）。
-    let (relative, source) = if relative.ends_with(".rs") {
+    let (relative, source, functions) = if relative.ends_with(".rs") {
         let file = load_one(root, &relative)?;
-        (file.relative, file.source)
+        (file.relative, file.source, file.functions)
     } else {
-        load_text(root, &relative)?
+        let (relative, source) = load_text(root, &relative)?;
+        (relative, source, Vec::new())
     };
     let lines = source.lines().collect::<Vec<_>>();
     // The file's own line count, and the number the header always reports. An empty
@@ -120,8 +126,53 @@ pub(crate) fn read_source(root: &Path, arguments: &Value) -> Result<String, Stri
     // 文件自己的行数，也就是标头始终报告的那个数字。空文件有零行，也仍然有标头："这里没有可读的东西"
     // 本身就是一个答案。
     let total = lines.len();
-    let (start, end, cap) = bounds(requested_span(arguments)?, total);
+    let span = requested_span(arguments)?;
+    let annotated = !matches!(span, Span::Window { .. });
+    let (start, end, cap) = bounds(span, total);
     let mut output = format!("{relative}:{start}-{end} ({total} lines)\n");
+    // The symbols the printed span covers, in the same reply as their source. The control arm's
+    // `node <file>` answers "what is in this file" with source **and** its symbol count in one call,
+    // and the measured cost of our splitting that in two was a second call per file (audit T-04).
+    // A **window stays a peek** — the default is deliberately small — so the annotation rides only on
+    // the shapes where the caller said how much it wants.
+    // 打印区间覆盖到的符号，与其源码在同一次回复里。对照臂的 `node <file>` 用一次调用同时回答"这个文件里
+    // 有什么"的**源码**与**符号数**，而我们把它拆成两次的代价是每个文件多一次调用（审计 T-04）。**窗口仍然是
+    // 一次窥视**——默认有意做小——因此这条注只搭在"调用方说了它要多少"的形状上。
+    if annotated {
+        let pairs = functions
+            .iter()
+            .filter(|function| function.line >= start && function.line <= end)
+            .map(|function| {
+                let contract = contract_lines(&source, function.line)
+                    .iter()
+                    .map(|(_, text)| contract_text(text))
+                    .find(|text| !text.is_empty())
+                    .unwrap_or_default();
+                let tail = if contract.is_empty() {
+                    String::new()
+                } else {
+                    format!(" — {contract}")
+                };
+                (
+                    function.line,
+                    format!(
+                        "`{}` lines {}-{}{tail}",
+                        function.name, function.line, function.end_line
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
+        if !pairs.is_empty() {
+            output.push_str(&format!(
+                "symbols {}\n",
+                note::numbered(
+                    &pairs,
+                    SYMBOLS,
+                    "`digest {file}` lists every function; `read {path, line}` opens one"
+                )
+            ));
+        }
+    }
     let span_lines = if end >= start { end - start + 1 } else { 0 };
     let mut shown = 0usize;
     for (index, line) in lines.iter().enumerate() {

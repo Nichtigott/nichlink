@@ -383,3 +383,53 @@ fn a_text_file_reads_and_a_binary_file_is_refused_with_the_shapes() {
         "the refusal carries the shapes that would work: {refused}"
     );
 }
+
+/// A whole read carries the symbols the span covers **and** their contracts — what `digest` says,
+/// in the same reply as their source.
+/// 整份读取携带该区间覆盖的符号**及其契约**——也就是 `digest` 说的那些，与它们的源码在同一次回复里。
+///
+/// Measured (audit T-04): the control arm's `node <file>` answers "what is in this file" with source
+/// and symbol count in one call, and our splitting that in two cost a second call per file. The pins
+/// are three: the substance matches `digest`, a **window stays a peek** (no annotation), and the line
+/// is rendered by the shared outlet — the coupling half is the literal below plus the structural
+/// assertion, because a value recomputed through the code under test stays green when it changes.
+/// 量到的（审计 T-04）：对照臂的 `node <file>` 用一次调用同时回答"这个文件里有什么"的源码与符号数，而我们
+/// 把它拆成两次的代价是每个文件多一次调用。钉子三条：实质与 `digest` 一致、**窗口仍是一次窥视**（不带注）、
+/// 以及这一行由共享出口渲染——耦合那一半是下面的字面量加结构断言，因为从被测代码再算一遍的值在它改变时
+/// 照样绿。
+#[test]
+fn a_whole_read_carries_the_symbols_and_their_contracts() {
+    let root = root_with_lines("symbols", 0);
+    std::fs::write(
+        root.0.join("src/lib.rs"),
+        "//! A fixture with two documented functions.\n\
+         /// Paint this widget onto the frame it was handed.\n\
+         pub fn paint() -> i32 {\n    1\n}\n\
+         \n\
+         /// This widget's offset.\n\
+         pub fn offset(x: i32) -> i32 {\n    x\n}\n",
+    )
+    .expect("fixture source");
+    let answer = read_source(&root.0, &json!({"path": "src/lib.rs", "whole": true}))
+        .expect("a whole read answers");
+    assert!(
+        answer.contains(
+            "symbols 3: `paint` lines 3-5 — Paint this widget onto the frame it was handed. / \
+             8: `offset` lines 8-10 — This widget's offset."
+        ),
+        "the symbols and their contracts ride in the same reply: {answer}"
+    );
+    let structure = include_str!("read.rs");
+    assert!(
+        structure.contains("note::numbered("),
+        "and the line is rendered by the shared outlet"
+    );
+    // A window is a peek: the annotation rides only on the shapes where the caller said how much.
+    // 窗口是一次窥视：这条注只搭在"调用方说了它要多少"的形状上。
+    let peek =
+        read_source(&root.0, &json!({"path": "src/lib.rs", "line": 8})).expect("a window answers");
+    assert!(!peek.contains("symbols "), "a peek stays a peek: {peek}");
+    let range = read_source(&root.0, &json!({"path": "src/lib.rs", "lines": "7-9"}))
+        .expect("a range answers");
+    assert!(range.contains("symbols 8: `offset` lines 8-10"), "{range}");
+}
