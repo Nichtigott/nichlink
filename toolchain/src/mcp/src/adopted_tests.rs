@@ -68,11 +68,62 @@ fn a_moved_byte_lapses_the_lease_and_the_file_is_named() {
     write_fixture(&root.join("src/lib.rs"), "// entry changed\n");
     let text = adopted(&root, &json!({})).expect("the ledger answers");
     assert!(
-        text.contains("adoption lapsed at src/lib.rs; needs confirmation"),
-        "{text}"
+        text.contains("adoption lapsed at src/lib.rs (recorded ")
+            && text.contains("· now ")
+            && text.contains("); needs confirmation"),
+        "the file that moved is named, beside both fingerprints: {text}"
     );
     assert!(text.contains("provisional 0  lapsed 1"), "{text}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Both fingerprints ride on the entry, and the byte that moves is the byte that changes them.
+/// 两串指纹都挂在条目上，而"动的那个字节就是改变它的那个字节"。
+///
+/// Measured need (W8, h2): the client wanted to know whether the entry's *recorded* fingerprint
+/// described some other file's current bytes. The reply carried neither value, so it read this
+/// tree's sources and rebuilt the kernel's composition rule by hand — **18,177 characters of
+/// reasoning, 11.5% of that arm's whole chain**. Two twelve-character strings remove the reason for
+/// that work to exist.
+/// 量出来的需求（W8 的 h2）：客户端想知道条目的**记录**指纹是否描述了别的文件的当前字节。回复里两个值
+/// 都没有，于是它去读本树的源码、手工把内核的组合规则重拼出来——**18,177 字符的推理，占该臂整条链的
+/// 11.5%**。两串十二个字符，就把那段工作存在的理由去掉了。
+#[test]
+fn an_entry_carries_its_recorded_and_its_current_fingerprint() {
+    let root = package("fingerprints");
+    adopt_current(&root);
+    let unchanged = adopted(&root, &json!({})).expect("the ledger answers");
+    assert!(
+        unchanged.contains("(recorded ") && unchanged.contains("(unchanged)"),
+        "an untouched lease says so once instead of printing the same hash twice: {unchanged}"
+    );
+    let before = fingerprint_named(&unchanged, "now");
+    assert!(
+        before.is_none(),
+        "nothing moved, so no second value is printed: {unchanged}"
+    );
+    // 反证：动一个字节 ⇒ 同一个条目必须给出第二个值，且它不等于记录值。
+    write_fixture(&root.join("src/lib.rs"), "// a single byte moved\n");
+    let moved = adopted(&root, &json!({})).expect("the ledger answers");
+    let recorded = fingerprint_named(&moved, "recorded").expect("the recorded value is printed");
+    let now = fingerprint_named(&moved, "now").expect("the current value is printed beside it");
+    assert_ne!(
+        recorded, now,
+        "the byte that moved is the byte that changes the fingerprint: {moved}"
+    );
+    assert_eq!(recorded.len(), 12, "both are brief forms: {moved}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The twelve characters that follow one of the two labels, when the reply carries them.
+/// 回复带着它们时，两个标签之一后面的那十二个字符。
+fn fingerprint_named(text: &str, label: &str) -> Option<String> {
+    let start = text.find(&format!("{label} "))? + label.len() + 1;
+    let rest = &text[start..];
+    let end = rest
+        .find(|character: char| !character.is_ascii_hexdigit())
+        .unwrap_or(rest.len());
+    Some(rest[..end].to_owned())
 }
 
 #[test]

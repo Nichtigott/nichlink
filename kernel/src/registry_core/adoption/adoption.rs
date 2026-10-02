@@ -157,9 +157,29 @@ pub enum AdoptionVerdict {
     },
 }
 
-/// Decide whether one entry still describes these bytes.
-/// 判定一条条目是否仍在描述这些字节。
-pub fn verdict_of(entry: &AdoptionEntry, current: &[(String, String)]) -> AdoptionVerdict {
+/// The verdict on one entry **and** the fingerprint these bytes give it.
+/// 对一条条目的判定，**以及**这些字节给出的指纹。
+///
+/// `verdict_of` computed this fingerprint and then dropped it, so every reader that wanted to show
+/// *why* a lease holds or lapsed had to produce it again. The one reader that does show it rebuilt
+/// the rule from these sources instead: the W8 round measured **18,177 characters of reasoning —
+/// 11.5% of that arm's whole chain** — spent re-deriving a value this function already held.
+/// `verdict_of` 过去算出这个指纹随后丢掉，于是每个想展示"租约为什么成立/为什么失效"的读者都得再产一次。
+/// 唯一展示它的那个读者干脆**从这些源码里把规则重新推了出来**：W8 实测 **18,177 字符的推理——占该臂
+/// 整条链的 11.5%**——全花在重建这个函数手里本来就有的值上。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdoptionState {
+    /// Whether the entry still holds.
+    /// 条目是否仍然成立。
+    pub verdict: AdoptionVerdict,
+    /// The fingerprint of the bytes the entry names, as they are here now.
+    /// 条目点名的那些字节**现在**给出的指纹。
+    pub current: String,
+}
+
+/// Decide whether one entry still describes these bytes, and say what fingerprint it computed.
+/// 判定一条条目是否仍在描述这些字节，并说出它算出的指纹。
+pub fn state_of(entry: &AdoptionEntry, current: &[(String, String)]) -> AdoptionState {
     let held: BTreeMap<&str, &str> = current
         .iter()
         .map(|(path, contents)| (path.as_str(), contents.as_str()))
@@ -176,16 +196,27 @@ pub fn verdict_of(entry: &AdoptionEntry, current: &[(String, String)]) -> Adopti
         .files
         .iter()
         .find(|file| !held.contains_key(file.as_str()));
-    if let Some(file) = missing {
-        return AdoptionVerdict::Lapsed { file: file.clone() };
-    }
-    if adoption_fingerprint(&named) == entry.fingerprint {
+    let current = adoption_fingerprint(&named);
+    let verdict = if let Some(file) = missing {
+        AdoptionVerdict::Lapsed { file: file.clone() }
+    } else if current == entry.fingerprint {
         AdoptionVerdict::Provisional
     } else {
         AdoptionVerdict::Lapsed {
             file: entry.files[0].clone(),
         }
-    }
+    };
+    AdoptionState { verdict, current }
+}
+
+/// Decide whether one entry still describes these bytes.
+/// 判定一条条目是否仍在描述这些字节。
+///
+/// A thin reading of `state_of`, kept because four callers want only the verdict: the fingerprint is
+/// one rule and lives in one place, so this cannot drift from it.
+/// 对 `state_of` 的薄读法，留着是因为四个调用方只要判定：指纹是一条规则、只住一处，因此这里不会与它漂移。
+pub fn verdict_of(entry: &AdoptionEntry, current: &[(String, String)]) -> AdoptionVerdict {
+    state_of(entry, current).verdict
 }
 
 #[cfg(test)]

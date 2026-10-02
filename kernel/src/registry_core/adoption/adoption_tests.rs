@@ -92,3 +92,63 @@ fn a_missing_file_lapses_the_lease_and_is_the_one_named() {
         }
     );
 }
+
+/// The verdict and the fingerprint it was taken from come out of one call, and the thin reading
+/// cannot drift from it.
+/// 判定与它据以做出的指纹出自同一次调用，而那条薄读法不会与它漂移。
+///
+/// `verdict_of` used to compute the fingerprint and drop it, which is why the one reader that shows
+/// it rebuilt the rule by hand (measured in the W8 round: 18,177 characters of reasoning, 11.5% of
+/// that arm's whole chain).
+/// `verdict_of` 过去算出指纹又丢掉，这正是唯一展示它的那个读者手工重推规则的原因（W8 实测：18,177
+/// 字符的推理，占该臂整条链的 11.5%）。
+#[test]
+fn the_state_carries_the_fingerprint_its_verdict_came_from() {
+    let files = vec![
+        ("a.rs".to_owned(), "alpha".to_owned()),
+        ("b.rs".to_owned(), "beta".to_owned()),
+    ];
+    let recorded = adoption_fingerprint(&files);
+    let held = entry(&["a.rs", "b.rs"], &recorded);
+    let state = state_of(&held, &files);
+    assert_eq!(state.verdict, AdoptionVerdict::Provisional);
+    assert_eq!(
+        state.current, recorded,
+        "an unchanged tree gives back the fingerprint it was taken on"
+    );
+    assert_eq!(
+        state_of(&held, &files).verdict,
+        verdict_of(&held, &files),
+        "the thin reading agrees with the state it is read from"
+    );
+    // 反证：同一个条目、动一个字节 ⇒ 两个值必须不同，且判定要跟着翻。
+    let moved = vec![
+        ("a.rs".to_owned(), "alpha".to_owned()),
+        ("b.rs".to_owned(), "beta!".to_owned()),
+    ];
+    let after = state_of(&held, &moved);
+    assert_ne!(after.current, recorded, "a moved byte changes the value");
+    assert!(matches!(after.verdict, AdoptionVerdict::Lapsed { .. }));
+    assert_eq!(after.verdict, verdict_of(&held, &moved));
+}
+
+/// A file the entry names but the tree no longer has still yields a value, so the reply can show
+/// what the bytes amount to now instead of going silent.
+/// 条目点名而树里已经没有的文件仍然给出一个值，因此回复能显示"这些字节现在算出来是多少"而不是沉默。
+#[test]
+fn a_missing_file_still_yields_a_current_fingerprint() {
+    let files = vec![("a.rs".to_owned(), "alpha".to_owned())];
+    let held = entry(&["a.rs", "gone.rs"], "whatever");
+    let state = state_of(&held, &files);
+    assert_eq!(
+        state.verdict,
+        AdoptionVerdict::Lapsed {
+            file: "gone.rs".to_owned()
+        }
+    );
+    assert_eq!(
+        state.current.len(),
+        64,
+        "a fingerprint, not an empty string"
+    );
+}

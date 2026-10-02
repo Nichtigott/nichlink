@@ -16,7 +16,7 @@
 use std::path::{Path, PathBuf};
 
 use nichlink_kernel::adoption::{
-    AdoptionEntry, AdoptionVerdict, adoption_fingerprint, parse_adoption, verdict_of,
+    AdoptionEntry, AdoptionVerdict, adoption_fingerprint, parse_adoption, state_of,
 };
 use nichlink_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, NICHLINK_DIR};
 use serde_json::Value;
@@ -121,7 +121,8 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
          lease: the newest line wins)",
         history.len()
     )];
-    match verdict_of(effective, &current) {
+    let state = state_of(effective, &current);
+    match &state.verdict {
         AdoptionVerdict::Provisional => lines.push(format!(
             "  in force   provisional — certifies: {} (adopted {} by {})",
             effective.certifies, effective.at, effective.verifier
@@ -132,6 +133,10 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
             effective.at, effective.verifier
         )),
     }
+    lines.push(format!(
+        "  bytes      {}",
+        lease(&effective.fingerprint, &state.current)
+    ));
     lines.push(format!("  covers     {}", effective.files.join(", ")));
     lines.push(
         "not covered here: whether the siblings of this anchor's object follow the same shape (ask \
@@ -146,6 +151,31 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
             .to_owned(),
     );
     Ok(format!("{}\n", lines.join("\n")))
+}
+
+/// The first twelve hex characters of a fingerprint: long enough to tell two apart in a reply,
+/// short enough that four of them do not crowd out the facts beside them.
+/// 指纹的前十二个十六进制字符：长到足以在一次回复里分辨两者，短到四个并排也不会挤掉旁边的事实。
+fn brief(fingerprint: &str) -> &str {
+    fingerprint.get(..12).unwrap_or(fingerprint)
+}
+
+/// The two fingerprints a reader needs to judge a lease without re-deriving the rule.
+/// 读者判断一条租约所需的两串指纹——不必再把规则重推一遍。
+///
+/// Measured need (W8, h2): the client wanted to know whether a lapsed entry's recorded fingerprint
+/// described some *other* file's current bytes, and the reply carried neither value, so it read this
+/// tree's sources and rebuilt the kernel's fingerprint composition by hand — 18,177 characters of
+/// reasoning, 11.5% of that arm's chain.
+/// 量出来的需求（W8 的 h2）：客户端想知道一条失效条目的记录指纹是否描述了**别的文件**的当前字节，而
+/// 回复里两个值都没有，于是它去读本树的源码、手工把内核的指纹组合重新拼出来——18,177 字符的推理，占
+/// 该臂整条链的 11.5%。
+fn lease(recorded: &str, current: &str) -> String {
+    if recorded == current {
+        format!("recorded {} (unchanged)", brief(recorded))
+    } else {
+        format!("recorded {} · now {}", brief(recorded), brief(current))
+    }
 }
 
 pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -168,14 +198,15 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     let (mut provisional, mut lapsed) = (0usize, 0usize);
     for entry in &entries {
         let current = read_files(root, &entry.files)?;
-        match verdict_of(entry, &current) {
+        let state = state_of(entry, &current);
+        let bytes = lease(&entry.fingerprint, &state.current);
+        match &state.verdict {
             AdoptionVerdict::Provisional => {
                 provisional += 1;
                 output.push_str(&format!(
-                    "adopted since {} at {} (provisional) — {}: {} [evidence: {}; confirmed by {}; \
-                     why: {}]\n",
+                    "adopted since {} ({bytes}) (provisional) — {}: {} [evidence: {}; confirmed by \
+                     {}; why: {}]\n",
                     entry.at,
-                    entry.fingerprint,
                     entry.anchor,
                     entry.certifies,
                     entry.evidence,
@@ -186,8 +217,8 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
             AdoptionVerdict::Lapsed { file } => {
                 lapsed += 1;
                 output.push_str(&format!(
-                    "adoption lapsed at {file}; needs confirmation — {}: {} [adopted at {} by {}; \
-                     why: {}]\n",
+                    "adoption lapsed at {file} ({bytes}); needs confirmation — {}: {} [adopted at {} \
+                     by {}; why: {}]\n",
                     entry.anchor, entry.certifies, entry.at, entry.verifier, entry.reason,
                 ));
             }
