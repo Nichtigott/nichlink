@@ -72,6 +72,9 @@ that violates it **fails the build naming the missing requirement**; read it bef
 child, because that failure arrives after the edit\n\
   deepen an object          -> `explain {node}`, `apply {action: \"deepen\", apply: true}`, then `check`; stop \
 when the tree, the public paths and the factory pins are untouched\n\
+  (a part is not a slot)    a cut replaces the **face**, and the parts layer lives in that face's own \
+file — so a part written by `deepen` goes with it and is **not** a graft target of its own; deepening \
+is how a face is changed in place, grafting is how a whole face is replaced\n\
   move or merge (refactor)  -> `affected`, the plan half of `why`, `grafts`, `apply`; stop when every \
 layer's impact is disposed of, not when the move compiles\n\
 **先把这个请求放进七种形状之一——按它点名什么、朝哪个方向动，而不是按它的措辞。** 信号是结构性的\
@@ -83,7 +86,9 @@ layer's impact is disposed of, not when the move compiles\n\
 `apply {action: \"add\", apply: true}`、`consistency --specimen`、`check`，停在「新面形状与同族一致且门禁绿」；\
 **父面自己的规范**写在 `<父>/registry_rule/registry_rule.rs` 里——`search {query: \"REGISTRATION_RULE\"}` 找得到它，\
 违反的子面会**构建失败并点名缺哪条**，因此在新增或改动子面之前先读它（那次失败是在改动之后才到的）；加深 ⇒ \
-`explain`、`apply {action: \"deepen\", apply: true}`、`check`，停在「树、公开路径与出厂形状钉子都没动」；迁移/合并 ⇒ \
+`explain`、`apply {action: \"deepen\", apply: true}`、`check`，停在「树、公开路径与出厂形状钉子都没动」；\
+**零件不是槽位**：切口替换的是**整个面**，而零件层住在那份面自己的文件里——因此 `deepen` 写下的零件随面一起被替换，\
+**它本身不是 graft 的目标**；加深是「就地改一个面」，替换是「换掉一整个面」；迁移/合并 ⇒ \
 `affected`、`why` 的计划半边、`grafts`、`apply`，停在「每一层的影响面都已处置」，而不是「能编译过」。\n\
 Read the symptom first, then take the shortest route it names. A failing test? Run the suite you \
 already have (`cargo test`) and keep its output: the failing assertion's own words are the next \
