@@ -3,6 +3,10 @@
 数据源：会话日志（`assistant/message` 的 reasoning 块 + 配对的工具结果）。**不是**在整份记录上 grep 出来的计数。
 答案长度是切片近似值（有些 bash 步里连跑多条命令），只用来判断厚/薄。
 
+**表里的思考摘录被截到 150 字符，那是为了排版，不是数据。**真实逐步推理：74 步（66 步有思考）、合计 **158,194 字符**、中位 **812**、均值 2,396、**最长一块 31,397**。未截断全文在同目录的
+`target/hardbug-runs/analysis/reasoning-full.jsonl`（逐步）与 `calls.json`（逐调用，含完整答案与前后思考）。
+
+
 | # | 工具 | 参数 | 答案字符 | 调用前它要什么（原文摘） | 调用后它取走了什么（原文摘） | 判定 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `status` | `--root $R --log $L` | 559 | Note: h4's tree root is `/tmp/nichlink-w8/trees/h4-one-file-many-algorithms` itself (no `host` subdir). The task says `--root <树>` = `/tmp/nichlink-w8 … | The log works. Now let me approach h1. h1: "one sibling calls another family of names than its siblings (relative vs world space)". Symptom: rendered  … |  |
