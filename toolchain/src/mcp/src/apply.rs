@@ -583,7 +583,8 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
     Ok(Outcome {
         message: format!(
             "deepened {}: `{kind}` now holds `{kind}Parts` with {} part(s) ({listed}); its \
-             declaration, its public path and its tree row were not touched",
+             declaration, its public path, its tree row and the factory-shape pins were not \
+             touched — `check {{face}}` is what shows those pins still hold",
             face.path,
             fields.len()
         ),

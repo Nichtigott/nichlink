@@ -344,3 +344,36 @@ fn a_request_missing_an_argument_is_refused_by_name() {
     .expect_err("an unknown kind is refused");
     assert!(wrong.contains("`binary` or `library`"), "{wrong}");
 }
+
+/// The preview states the stop condition: what "this project exists" means, and that nothing is
+/// written yet.
+/// 预览说出停止条件："这个项目存在"是什么意思，以及此刻还没写任何东西。
+///
+/// Measured (audit T-11): the seven scenarios' stop conditions were in the flow table but not in the
+/// answers, so a reader had the rule in prose and nothing in the product to check it against. For
+/// this scenario the two facts are `cargo check` compiling the skeleton and `registry` listing its
+/// faces — both are calls the caller can make next, which is what makes it readable rather than felt.
+/// 量到的（审计 T-11）：七个场景的停止条件写在流程表里、却不在答案里，于是读者手里只有散文里的规则、没有
+/// 产物可对照。这个场景的两个事实是 `cargo check` 编译过骨架、`registry` 列出它的面——两者都是调用方能接着
+/// 做的调用，这才叫"读得出来"而不是"感觉够了"。
+#[test]
+fn the_new_project_preview_states_its_stop_condition() {
+    let fixture = root("stop-condition");
+    let (answer, _) = call(
+        &fixture,
+        json!({"directory": "fresh", "kind": "library", "package": "fresh", "apply": false}),
+    );
+    assert!(
+        answer.contains("stop   this project exists when"),
+        "{answer}"
+    );
+    assert!(
+        answer.contains("`cargo check` compiles it")
+            && answer.contains("`registry` lists its faces"),
+        "the stop condition names the two calls that show it: {answer}"
+    );
+    assert!(
+        answer.contains("nothing is written until `apply: true`"),
+        "and says the preview wrote nothing: {answer}"
+    );
+}

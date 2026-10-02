@@ -825,3 +825,45 @@ fn a_missing_required_key_is_refused_with_the_whole_shape() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The deepen preview's stop condition names the factory pins, and the call that shows them.
+/// 加深预览的停止条件点名出厂形状钉子，以及展示它们的那个调用。
+///
+/// Measured (audit T-11): the sentence named the declaration, the public path and the tree row —
+/// the three things `deepen` is *for* not touching — and stopped short of the factory-shape pins,
+/// which are the fourth thing a reader of this scenario is told not to break.
+/// 量到的（审计 T-11）：那句话点名了声明、公开路径与树行——`deepen` 有意不动的三样——却停在出厂形状钉子
+/// 之前，而它正是这个场景的读者被告知不要弄坏的第四样。
+#[test]
+fn the_deepen_preview_names_the_pins_it_leaves_alone() {
+    let (root, _) = package("deepen-pins");
+    apply(
+        &root,
+        &json!({
+            "action": "add",
+            "parent": "root",
+            "apply": true,
+            "fields": {
+                "module": "button",
+                "kind": "Button",
+                "name_en": "Button",
+                "exports": "root.render",
+                "handle_contracts": "ControlHandle",
+            },
+        }),
+    )
+    .expect("the face is created");
+    let preview = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/button", "inside": {"parts": {"phase": "i32"}}}),
+    )
+    .expect("the deepen previews");
+    assert!(
+        preview.contains("the factory-shape pins were not touched"),
+        "the pins are named among what was left alone: {preview}"
+    );
+    assert!(
+        preview.contains("`check {face}` is what shows those pins still hold"),
+        "and the call that shows them is named: {preview}"
+    );
+}

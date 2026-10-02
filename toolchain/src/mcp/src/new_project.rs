@@ -281,7 +281,10 @@ fn preview(
         root.display()
     ));
     report.push_str(&format!(
-        "nothing was written; `apply: true` writes {} file(s) under {}:\n",
+        "stop   this project exists when `cargo check` compiles it and `registry` lists its \
+         faces; the preview below shows every byte that would be written, and nothing is written \
+         until `apply: true`\n\
+         nothing was written; `apply: true` writes {} file(s) under {}:\n",
         files.len(),
         target.display()
     ));
