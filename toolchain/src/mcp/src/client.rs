@@ -59,7 +59,11 @@ deepens or moves, and whether the tree is empty yet), and each shape carries an 
   empty tree                -> `new_project`, then `registry`, then `check`; stop when the skeleton \
 compiles and its faces are in `registry`\n\
   inspect, one object named -> `locate {symptom}` or `search {query}`, then `read`, `why --at`, \
-`check {face}`; stop at a root cause with a file and a line, its smallest fix, and a counter-proof\n\
+`check {face}`; stop at a root cause with a file and a line, its smallest fix, and a counter-proof. \
+**A claim about a path (X reaches Y through Z) is read at each hop's own definition** — a name that \
+looks like the hop is not the hop, and a route guessed from naming is the one an evaluation caught \
+twice (a private helper that is never called, and a type whose fields arrive through its constructor) \
+每条路径断言（X 经 Y 到 Z）都要在**每一跳自己的定义处**读出来\n\
   (an object in a family)   when the object has siblings, `consistency --parent <its parent>` \
 answers `does this one differ from the family?` in **one** call — it compares the siblings' own calls \
 and names the outlier, which beats reading the siblings one at a time\n\

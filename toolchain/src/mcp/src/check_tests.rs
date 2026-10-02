@@ -317,3 +317,72 @@ fn the_next_hint_falls_back_to_a_placeholder_rather_than_inventing_one() {
         "{next}"
     );
 }
+
+/// Every column head survives the sample, with its count.
+/// 每一栏的栏头都活过抽样，连同它的计数。
+///
+/// Measured (round 8, g4): the default sample was "the first five lines", and on that tree the five
+/// were all the numeric-constant column — so the answer never showed `branch-level:` at all, while
+/// that level's whole question is the branch column. A column head carries its own count, which is
+/// what tells a reader whether the part they did not get could matter.
+/// 量到的（第八轮 g4）：默认抽样是"最前面五行"，而在那棵树上那五行全属数值常量栏 ⇒ 答案里**根本看不到**
+/// `branch-level:`，而那一关的全部问题就是分支栏。栏头自带计数，正是它告诉读者"没拿到的部分会不会要紧"。
+#[test]
+fn every_column_head_survives_the_census_sample() {
+    let census: Vec<String> = vec![
+        "  constants: 1 named numeric constant(s)".to_owned(),
+        "  respelled 1000 is written again at src/a.rs:3".to_owned(),
+        "  respelled 1000 is written again at src/b.rs:4".to_owned(),
+        "  unreferenced `LIMIT` is not read anywhere outside tests".to_owned(),
+        "  entry plan: 0 `cut(` site(s)".to_owned(),
+        "  declarations: 4 production `pub fn` name(s) appear in no test file".to_owned(),
+        "  decl   no test names `a` (src/a.rs:1)".to_owned(),
+        "  test-reachable: 1 of 15 production function(s) no test can reach".to_owned(),
+        "  branch-level: 2 constructively unreachable arm(s) in this tree".to_owned(),
+        "  `if false` guards an arm in `word` at src/a.rs:9".to_owned(),
+        "  not covered by the branch-level column: a data-dependent condition".to_owned(),
+        "  not covered: runtime behaviour and performance".to_owned(),
+    ];
+    let sample = super::census_sample(&census);
+    for line in &census {
+        let head = line
+            .split_whitespace()
+            .next()
+            .is_some_and(|word| word.ends_with(':'));
+        if head {
+            assert!(
+                sample.contains(line),
+                "每一栏的头都在：{line}\n--- sample ---\n{}",
+                sample.join("\n")
+            );
+        }
+    }
+    assert!(
+        sample.iter().any(|line| line.contains("withheld")),
+        "扣掉的行要说出来：{}",
+        sample.join("\n")
+    );
+    assert!(
+        sample.len() <= super::CENSUS_SAMPLE + census.len(),
+        "样本仍然有界：{}",
+        sample.len()
+    );
+}
+
+/// The counter-proof, on the same shape: nothing withheld, no truncation line.
+/// 反证（同一形状）：没有扣掉任何行时，不出现截断行。
+#[test]
+fn a_census_that_fits_says_nothing_about_withholding() {
+    let census: Vec<String> = vec![
+        "  branch-level: 1 constructively unreachable arm(s) in this tree".to_owned(),
+        "  `if false` guards an arm in `word` at src/a.rs:9".to_owned(),
+        "  not covered: runtime behaviour".to_owned(),
+    ];
+    let sample = super::census_sample(&census);
+    assert_eq!(sample, census, "装得下就原样给出");
+    assert!(
+        !sample.iter().any(|line| line.contains("withheld")),
+        "没有截断就不许提截断：{}",
+        sample.join("\n")
+    );
+}

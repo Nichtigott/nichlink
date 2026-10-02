@@ -323,7 +323,37 @@ const CENSUS_SAMPLE: usize = 5;
 /// [`crate::mcp::truncation::withheld`]——唯一那个截断出口——计数，因此被扣下的数量、上限与拿到其余
 /// 部分的办法都会被点名。
 fn census_sample(census: &[String]) -> Vec<String> {
-    let mut kept: Vec<String> = census.iter().take(CENSUS_SAMPLE).cloned().collect();
+    // The sample keeps the **head of every column**, its first few rows, and every column's
+    // "not covered" line. A flat take of the first five lines hid a whole column once: on the `g4`
+    // tree the five kept lines were all the numeric-constant column, so the default answer never
+    // showed `branch-level:` or the reachability summary at all — and that level's question *is*
+    // the branch column. The column heads are the unindented lines (rows are indented by two
+    // spaces), and each one carries its own count, which is what a reader needs in order to know
+    // whether the part they did not get could matter.
+    // 抽样保留**每一栏的开头**、它的头几行、以及每栏的 `not covered` 行。曾经"平取前五行"把整整一栏藏掉：
+    // 在 `g4` 那棵树上留下的五行全属数值常量栏，于是默认答案里**根本看不到** `branch-level:` 与可达性汇总
+    // ——而那一关的问题**就是**分支栏。栏头就是不缩进的那些行（数据行缩进两个空格），而每个栏头自带计数，正是
+    // 读者判断"没拿到的部分会不会要紧"所需要的东西。
+    // A column **head** is the line whose first word ends with `:` (`branch-level:`, `declarations:`,
+    // `test-reachable:`, …); the rows under it start with a label or a backtick. Every line in this
+    // vector is indented, which is why the rule cannot key on indentation.
+    // **栏头**是首个词以 `:` 结尾的那些行（`branch-level:`、`declarations:`、`test-reachable:`…），它下面的
+    // 数据行以标签或反引号开头。这个向量里每一行都带缩进，所以规则不能按缩进判定。
+    let mut kept: Vec<String> = Vec::new();
+    for line in census {
+        let head = line
+            .split_whitespace()
+            .next()
+            .is_some_and(|word| word.ends_with(':'));
+        if head && !kept.contains(line) {
+            kept.push(line.clone());
+        }
+    }
+    for line in census.iter().take(CENSUS_SAMPLE) {
+        if !kept.contains(line) {
+            kept.push(line.clone());
+        }
+    }
     for line in census {
         if line.starts_with("  not covered") && !kept.contains(line) {
             kept.push(line.clone());
@@ -335,8 +365,9 @@ fn census_sample(census: &[String]) -> Vec<String> {
             omitted,
             census.len(),
             CENSUS_SAMPLE,
-            "census lines",
-            "pass `census: true` for the whole table",
+            "census rows",
+            "pass `census: true` for the whole table (every column head is already here with its count)",
+
         ));
     }
     kept

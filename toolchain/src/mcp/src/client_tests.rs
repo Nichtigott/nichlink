@@ -713,3 +713,24 @@ fn the_keys_legend_appears_only_when_something_is_starred() {
         "and a tool that does star a key keeps its legend: {check}"
     );
 }
+
+/// The table says a path claim is read at each hop's definition.
+/// 表里写明：路径断言要在每一跳的定义处读出来。
+///
+/// Measured (round 8): two answers claimed a route that the sources contradict — one said a
+/// `buckets.rs` value arrives through `postable` when it arrives through the constructor, another
+/// asserted an inconsistency the implementation does not have. Both are the same failure: a hop
+/// inferred from a name instead of read at its definition.
+/// 量到的（第八轮）：两条答案断言了源码并不支持的路径——一条说 `buckets.rs` 的值经 `postable` 到达，实际
+/// 经构造函数；另一条断言了一处实现里并不存在的不一致。同一个失误：跳数由**名字**推断，而不是在定义处读。
+#[test]
+fn the_table_says_a_path_claim_is_read_at_each_hop() {
+    assert!(
+        INSTRUCTIONS.contains("read at each hop's own definition"),
+        "the rule is on the page every agent reads: {INSTRUCTIONS}"
+    );
+    assert!(
+        INSTRUCTIONS.contains("a name that looks like the hop is not the hop"),
+        "and it says why naming is not enough: {INSTRUCTIONS}"
+    );
+}
