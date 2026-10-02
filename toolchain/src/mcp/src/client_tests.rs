@@ -486,3 +486,87 @@ fn the_flow_table_packages_the_seven_shapes_with_their_stop_conditions() {
         "and the Chinese half carries the same table: {INSTRUCTIONS}"
     );
 }
+
+/// The scenario fixture covers every shape with variants, and it cannot drift from the flow table.
+/// 场景夹具覆盖每个形状且带多种措辞，并且它不会与流程表漂移。
+///
+/// **What this pin does not do**: it does not claim the model picks the right shape for a wording.
+/// That is behaviour, measured only in the run this fixture feeds (T-21) — asserting it here would be
+/// a green nothing earned. What is decidable is the fixture's own contract: seven shapes, at least
+/// four wordings and one discriminating pair each, the shapes named here are exactly the shapes the
+/// table names, and every row carries the three structural signals.
+/// **这条钉子不做什么**：它不声称"模型会为某种措辞选对形状"——那是行为，只在这个夹具所喂的那一轮大测试里量
+/// （T-21）；在这里断言它就是白拿一个绿。可判定的是夹具自己的契约：七个形状、每个至少四条措辞加一个判别对、
+/// 这里的形状名与表里的**逐字相同**、且每行都带那三个结构信号。
+#[test]
+fn the_scenario_fixture_covers_every_shape_and_cannot_drift_from_the_table() {
+    const CASES: &str = include_str!("../../../../docs/design-scenario-cases.md");
+    let shapes = [
+        "S1 空树",
+        "S2 范围型",
+        "S3 查看单对象",
+        "S4 新增对象",
+        "S5 查看多个对象",
+        "S6 加深一个对象",
+        "S7 迁移/合并（重构）",
+    ];
+    for shape in shapes {
+        assert!(
+            CASES.contains(shape),
+            "the fixture covers `{shape}`: it is one of the table's seven"
+        );
+        let section = CASES
+            .split(&format!("## {shape}"))
+            .nth(1)
+            .unwrap_or_default()
+            .split("\n## ")
+            .next()
+            .unwrap_or_default();
+        let rows = section
+            .lines()
+            .filter(|line| {
+                line.starts_with("| ") && !line.contains("---") && !line.contains("说法")
+            })
+            .count();
+        assert!(
+            rows >= 5,
+            "`{shape}` carries four wordings and one discriminating pair, found {rows} rows"
+        );
+        assert!(
+            section.contains("**判别对**"),
+            "and one of them is the pair that separates it from its neighbour: `{shape}`"
+        );
+        for signal in ["| 点名 | 方向 | 树 |", "停止条件"] {
+            assert!(
+                section.contains(signal),
+                "`{shape}` states `{signal}`: the signals are structural and the stop is a fact"
+            );
+        }
+    }
+    // Both ways: a shape the fixture dropped, and a shape the table added, are both drift.
+    // 双向：夹具丢掉的形状与表里新加的形状都是漂移。
+    for row in INSTRUCTIONS
+        .split("  ")
+        .filter(|part| part.contains(" -> "))
+    {
+        let named = row
+            .split_whitespace()
+            .take_while(|word| !word.contains("->"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        if named.is_empty() {
+            continue;
+        }
+        let covered = match named.as_str() {
+            "empty tree" => "S1 空树",
+            "inspect, a range question" => "S2 范围型",
+            "inspect, one object named" => "S3 查看单对象",
+            "add an object" => "S4 新增对象",
+            "inspect, several named" => "S5 查看多个对象",
+            "deepen an object" => "S6 加深一个对象",
+            "move or merge (refactor)" => "S7 迁移/合并（重构）",
+            other => panic!("the table names a shape the fixture does not: `{other}`"),
+        };
+        assert!(CASES.contains(covered), "{covered}");
+    }
+}
