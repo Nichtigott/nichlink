@@ -113,6 +113,7 @@ nichlink-mcp-hardbug build <dir> <class>         derive, inject, self-prove, wri
 nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
 nichlink-mcp-hardbug tokens <session-dir|session.jsonl.zstd>  per-axis token account, out of band
 nichlink-mcp-hardbug freeze <tree>               pre-freeze checklist: non-source artifacts, outside refs
+nichlink-mcp-hardbug report <log> [--session <dir>]  the four columns and the three axes, one call
 
 Specification: docs/design-hardbug-bench-spec.md
 规格见 docs/design-hardbug-bench-spec.md。
@@ -1377,6 +1378,23 @@ def normalize_log_record(record):
     }
 
 
+# The four columns and the three axes, and what each one is read from. One place, because these are
+# the numbers a round is judged by: a reader must be able to re-derive every one of them from the
+# artifacts the run left behind, without a throwaway script.
+# 四栏与三轴各自读自哪里。只写一处，因为这些是一轮被据以评判的数字：读者必须能从这一轮留下的产物把每一个都
+# 重新推出来，而不必再写一个一次性脚本。
+REPORT_DEFINITION = """The four columns, and the artifact each is read from:
+  * calls / wasted — the bridge's own log (`--log`), classified by WASTE_DEFINITION below;
+  * truncated — the count of `... truncated:` lines in replies, i.e. answers that told the caller
+    they were incomplete (an answer that truncates silently is a defect, not a number);
+  * failures — replies whose exit is not 0 (a refusal is work; this column counts it, it does not
+    judge it);
+  * next-taken — of the replies that offered a `next` call, how many were followed by that tool on
+    the very next line of the same log.
+The three axes, read from the harness session log (never summed into one figure — the prices differ):
+  input-uncached / input-cached / output, plus reasoning characters and the step account.
+"""
+
 WASTE_DEFINITION = """A call is **wasted** when it is one of exactly three decidable things, read from the log alone:
   * `empty`               — the reply carries 0 characters;
   * `repeat`              — the same tool with the same arguments already ran earlier in this log;
@@ -1417,6 +1435,70 @@ def waste_report(rows):
     counts = {name: sum(1 for row in wasted if row["reason"] == name)
               for name in ("empty", "repeat", "retry-after-refusal")}
     return {"wasted_calls": len(wasted), "wasted_breakdown": counts, "wasted_detail": wasted}
+
+
+def report(log_path, session=None):
+    """The four columns and the three axes, in one call.
+
+    Written because every one of them was computed by hand, twice, with a throwaway script — and a
+    measurement that has to be re-derived by hand is a measurement the next round will get wrong.
+    Each column is decidable from the bridge's own log; the token axis needs the harness's session
+    log, which is why it is an option rather than a requirement.
+    写它的原因：这四栏此前每一栏都被手写脚本算过两遍——而"每次都要手工重推"的量，下一轮一定会算错。每一栏都能
+    从桥自己的日志判定；token 轴需要 harness 的会话日志，因此它是可选项而不是必需项。
+
+    `next` adoption: for every reply that names a call on its `next` line, does the **next** line of
+    the same log use that tool? That is the measured shape of "the hint was taken".
+    `next` 采纳率：对每一条在 `next` 行点名了某次调用的回复，**同日志的下一条**是否用了那个工具？这就是"提示
+    被采纳"的可测形态。
+    """
+    rows = [json.loads(line) for line in Path(log_path).read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    normalized = [normalize_log_record(row) for row in rows]
+    answering = [row for row in normalized if row["tool"] and not row["init"]]
+    waste = waste_report(answering)
+    truncated = sum(row["response"].count("… truncated:")
+                    for row in rows if isinstance(row.get("response"), str))
+    refused = sum(1 for row in rows if row.get("exit") not in (0, None))
+    tools = [row["tool"] for row in answering]
+    # A tool name in a hint is backtick-quoted, and what follows it is often the **closing** backtick
+    # rather than a space — `registry`, `check {face}`, `callgraph {function}`. The first version
+    # required a space or a brace after the name, so a hint that was plainly taken counted as missed
+    # (measured on the synthetic log below: 0 of 2 where the answer is 1 of 2).
+    # 提示里的工具名用反引号包着，而它后面常常是**收尾**的那个反引号而不是空格——`registry`、`check {face}`、
+    # `callgraph {function}`。第一版要求名字后面是空格或花括号，于是一条显然被采纳的提示被算成没采纳（在下方的
+    # 合成日志上量到：该是 1/2 的地方报了 0/2）。
+    named = re.compile(r"`([a-z_]+)")
+    taken = offered = 0
+    for index, row in enumerate(rows):
+        response = row.get("response")
+        if not isinstance(response, str):
+            continue
+        hint = next((line for line in response.splitlines() if line.startswith("next")), "")
+        if not hint:
+            continue
+        offered += 1
+        following = next((later for later in rows[index + 1:]
+                          if normalize_log_record(later)["tool"]), None)
+        if following is not None and normalize_log_record(following)["tool"] in named.findall(hint):
+            taken += 1
+    print(f"log        {log_path}")
+    print(f"calls      {len(normalized)} ({len(answering)} answering, "
+          f"{len(normalized) - len(answering)} init)")
+    print(f"wasted     {waste['wasted_calls']} of {len(answering)} "
+          f"({waste['wasted_breakdown']['empty']} empty · {waste['wasted_breakdown']['repeat']} repeat · "
+          f"{waste['wasted_breakdown']['retry-after-refusal']} retry-after-refusal)")
+    print(f"truncated  {truncated} reply line(s)")
+    print(f"failures   {refused} refused (exit != 0)")
+    if offered:
+        print(f"next       taken {taken} of {offered} offered ({taken * 100 // offered}%)")
+    else:
+        print("next       no reply offered one")
+    print(f"tools      {', '.join(tools[:12])}")
+    if session:
+        print("--- token axes (provider-reported, never summed into one figure) ---")
+        tokens(session)
+    return 0
 
 
 def tokens(target, tool_name="nichlink-mcp"):
@@ -1664,6 +1746,7 @@ def score(tree, answer_path, log_path=None):
 def plan(scoring=False):
     if scoring:
         print(WASTE_DEFINITION)
+        print(REPORT_DEFINITION)
         print(SCORING_RULES, end="")
         return 0
     print("hard-bug bench — four classes (spec: docs/design-hardbug-bench-spec.md)")
@@ -1693,6 +1776,11 @@ def main(argv):
         if len(argv) < 4:
             raise SystemExit("build needs a directory and a class")
         return build(argv[2], argv[3])
+    if argv[1] == "report":
+        if len(argv) < 3:
+            raise SystemExit("report needs a log file")
+        session = argv[argv.index("--session") + 1] if "--session" in argv else None
+        return report(argv[2], session)
     if argv[1] == "freeze":
         if len(argv) < 3:
             raise SystemExit("freeze needs a tree")
