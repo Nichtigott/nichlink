@@ -546,3 +546,43 @@ fn every_answer_carries_a_quotable_evidence_line() {
     assert!(refused.is_err(), "a bad shape is refused");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The stage decides what the first calls say: a bare tree is told how to start, a faceful one is
+/// not told to start anything.
+/// 阶段决定开场调用说什么：空树被告知怎么起步，有面的树不会被告知去起步。
+///
+/// Measured (T-12): on an empty directory `status` printed `rust_files=0` beside Cargo's "manifest
+/// path … does not exist" and `registry` returned Cargo's own sentence — both naming the failure and
+/// neither naming the way to start, while the flow table's first shape lived only in prose.
+/// 量到的（T-12）：在空目录上，`status` 在 Cargo 的 "manifest path … does not exist" 旁边打印
+/// `rust_files=0`，而 `registry` 回的是 Cargo 自己的句子——两个都点名失败、都不点名起步的方式，而流程表的
+/// 第一个形状只活在散文里。
+#[test]
+fn a_bare_tree_is_told_how_to_start_and_a_faceful_one_is_not() {
+    let bare = std::env::temp_dir().join(format!("nichlink-mcp-bare-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&bare);
+    std::fs::create_dir_all(&bare).expect("scratch dir");
+    let status = super::run_tool(&bare, "nichlink.status", &json!({})).expect("status answers");
+    assert!(
+        status.contains("next   `new_project {directory, kind, package, apply: true}`"),
+        "a tree with no manifest is told how to start: {status}"
+    );
+    let registry =
+        super::run_tool(&bare, "nichlink.registry", &json!({})).expect("registry answers");
+    assert!(
+        registry.contains("no registration tree here yet") && registry.contains("new_project"),
+        "and so is the other opening call: {registry}"
+    );
+    assert!(
+        !registry.contains("explain {node}"),
+        "the catalogue's face hint is not appended to a tree with no faces: {registry}"
+    );
+    let _ = std::fs::remove_dir_all(&bare);
+
+    // A faceful fixture keeps the ordinary hints: the entry point is for the stages that need one.
+    // 有面的夹具保留普通提示：入口只给需要它的那些阶段。
+    let root = scratch_package("stage-faceful");
+    let status = super::run_tool(&root, "nichlink.status", &json!({})).expect("status answers");
+    assert!(!status.contains("new_project"), "{status}");
+    let _ = std::fs::remove_dir_all(&root);
+}

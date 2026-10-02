@@ -324,6 +324,73 @@ impl Member {
 /// it learns there is something above it to point at.
 /// 情景轮量到的失效是"在**成员**根上作答"：在那里问 `callgraph {orphans: true}`，两个调用者在另一个成员
 /// 里的函数被报成孤儿，因为成员根本来看不见它们。答案必须说明这一点，而这个助手让它知道上面还有东西。
+/// How far along a tree is: the one fact that decides which call comes next.
+/// 一棵树走到哪一步了：决定"下一次该调什么"的那一个事实。
+///
+/// Measured (T-12): on an empty directory every tool an agent reaches for first answers about a
+/// **failure** — `status` prints `rust_files=0` beside "manifest path … does not exist", `registry`
+/// returns Cargo's own words about a missing manifest — and none of them says what to do instead.
+/// The flow table's first scenario (`new_project`) was in the prose and not in the answers, so the
+/// agent's opening calls were diagnostics on a tree that has nothing to diagnose yet.
+/// 量到的（T-12）：在一个空目录上，代理最先够到的每个工具答的都是**失败**——`status` 在 "manifest path …
+/// does not exist" 旁边打印 `rust_files=0`，`registry` 回的是 Cargo 自己关于缺清单的话——而没有一句说
+/// 那该怎么办。流程表的第一个场景（`new_project`）在散文里、不在答案里，于是代理的开场调用是在一棵还
+/// 没什么可诊断的树上做诊断。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Stage {
+    /// No manifest here: there is no package to answer about yet.
+    /// 这里没有清单：还没有包可以回答。
+    Bare,
+    /// A package with no registration faces: the tree exists and is empty of roles.
+    /// 有包但没有注册面：树在，角色还空着。
+    Faceless,
+    /// Faces resolve: the tree is the thing the read tools answer about.
+    /// 面能解析出来：这棵树就是那些读工具所回答的东西。
+    Faceful,
+}
+
+/// Which stage the tree at `root` is in, decided by what is on disk rather than by what a tool
+/// happens to need.
+/// `root` 处的树处于哪个阶段——由磁盘上有什么决定，而不是由某个工具恰好需要什么决定。
+pub(crate) fn stage(root: &Path) -> Stage {
+    if !root.join("Cargo.toml").is_file() {
+        return Stage::Bare;
+    }
+    // Decided from the sources, not from Cargo: a tree whose manifest cannot resolve still has to
+    // be placeable, and the answer that matters here is "are there roles declared yet". This is the
+    // same lexical scan the read tools already do, so the stage costs nothing extra.
+    // 由源码决定，而不是由 Cargo 决定：清单解析不出来的树也必须能被定位，而这里要紧的答案是"声明了角色没有"。
+    // 这就是读工具本来就在做的那次词法扫描，因此这个阶段判定不额外花钱。
+    let Ok(sources) = crate::mcp::source_index::load_sources(root) else {
+        return Stage::Faceless;
+    };
+    let declares = sources.iter().any(|file| {
+        nichlink_kernel::syntax::parse_faces(&file.source).is_ok_and(|faces| !faces.is_empty())
+    });
+    if declares {
+        Stage::Faceful
+    } else {
+        Stage::Faceless
+    }
+}
+
+/// The call that moves a tree one stage forward, as a reader would type it.
+/// 把一棵树推进一个阶段的那次调用，按读者会敲的样子写。
+pub(crate) fn entry_point(stage: Stage) -> Option<&'static str> {
+    match stage {
+        Stage::Bare => Some(
+            "`new_project {directory, kind, package, apply: true}` writes the skeleton — the flow \
+             table's first shape, and this tree is at it",
+        ),
+        Stage::Faceless => Some(
+            "`apply {action: \"add\", parent: \"root\", fields: {…}, apply: true}` adds the first \
+             registration face — until one exists there is nothing here for the read tools to \
+             answer about",
+        ),
+        Stage::Faceful => None,
+    }
+}
+
 pub(crate) fn enclosing_workspace(root: &Path) -> Option<std::path::PathBuf> {
     let name = root.file_name()?.to_string_lossy().to_string();
     let mut current = root.parent();

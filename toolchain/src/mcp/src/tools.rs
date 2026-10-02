@@ -716,6 +716,21 @@ fn status_tool(root: &Path, _arguments: &Value) -> Result<String, String> {
 /// default answer leaves out.
 /// `nichlink.registry` 只读一个参数：`full`，它买下虚拟根的默认答案省掉的那些逐成员树。
 fn registry_tool(root: &Path, arguments: &Value) -> Result<String, String> {
+    // The stage decides whether there is a tree to answer about at all, and it is checked here
+    // because this is the entry both spellings share. Measured (T-12): on a directory with no
+    // manifest this tool returned Cargo's own sentence about a missing file — naming the failure and
+    // not the way to start — and this is one of the two calls an agent reaches for first.
+    // 阶段决定这里到底有没有树可答，检查放在这里是因为它是两种拼法共用的入口。量到的（T-12）：在没有清单的
+    // 目录上，这个工具回的是 Cargo 自己关于文件缺失的那句话——点名失败、不点名起步的方式——而它正是代理最先
+    // 够到的两个调用之一。
+    if let Some(entry) = crate::mcp::workspace::entry_point(crate::mcp::workspace::stage(root)) {
+        // The line opens with `next` on purpose: `with_next_hint` adds the catalogue's own hint
+        // only when the answer has none, and for a bare tree that hint ("explain one face's
+        // contract") is about faces that do not exist yet.
+        // 这一行有意以 `next` 开头：`with_next_hint` 只在答案里没有 hint 时才补目录里那条，而对一棵空树，
+        // 那条（"解释某个面的契约"）说的是还不存在的面。
+        return Ok(format!("no registration tree here yet\nnext   {entry}\n"));
+    }
     if arguments.get("full").and_then(Value::as_bool) == Some(true) {
         registry(root)
     } else {
@@ -901,6 +916,15 @@ fn status(root: &Path) -> Result<String, String> {
         functions
     )];
     lines.extend(crate::mcp::faces::faces_lines(root));
+    // The entry point for the stage this tree is actually in. Measured (T-12): on an empty directory
+    // the answers named the failure and never the way to start, so the flow table's first shape was
+    // in the prose and not in the product.
+    // 这棵树**实际所处阶段**的入口。量到的（T-12）：在空目录上答案点名了失败、从不点名起步的方式，于是流程表
+    // 的第一个形状只在散文里、不在产物里。
+    let stage = crate::mcp::workspace::stage(root);
+    if let Some(entry) = crate::mcp::workspace::entry_point(stage) {
+        lines.push(format!("next   {entry}"));
+    }
     Ok(lines.join("\n"))
 }
 
