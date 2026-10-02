@@ -336,3 +336,57 @@ fn a_populated_ledger_names_its_own_file() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A lease over two files can say **which** one moved — and it does, end to end through the writer.
+/// 覆盖两个文件的租约能说出**哪一个**动了——而且从写者到读者是端到端的。
+///
+/// Measured (T-21, h2): the arm spent ~15,000 characters on a ledger whose recorded print belonged to
+/// another file, including `sha256sum` of the covered files and a `sed` over this module's own source
+/// to learn how a fingerprint is composed. A record that keeps **one** print per entry cannot answer
+/// "which file moved" — not because the tool is lazy, but because the bytes are gone — so the print
+/// per file rides beside the entry as a comment line (which an older parser skips, so the record stays
+/// readable in both directions).
+/// 量到的（T-21 的 h2）：那一臂在一份"记录的指纹属于另一个文件"的台账上花了约 15,000 字符，其中包含对被覆盖
+/// 文件跑 `sha256sum`、以及 `sed` 本模块自己的源码去搞清指纹怎么合成。一条条目只留**一个**指纹的记录答不了
+/// "哪个文件动了"——不是工具懒，是那些字节已经不在了——因此逐文件指纹以**注释行**形式跟在条目旁边（更旧的解析器
+/// 会跳过它，于是记录在两个方向上都可读）。
+#[test]
+fn a_two_file_lease_can_say_which_file_moved() {
+    let root = package("per-file");
+    write_fixture(&root.join("src/other.rs"), "// other\n");
+    super::renew(
+        &root,
+        &json!({
+            "anchor": "root/x",
+            "certifies": "two files",
+            "evidence": "e",
+            "verifier": "v",
+            "reason": "r",
+            "files": ["src/lib.rs", "src/other.rs"],
+            "apply": true,
+            "confirm": true,
+        }),
+        &super::ledger_path(&root),
+    )
+    .expect("the lease is written");
+    let ledger = std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("a ledger");
+    assert!(
+        ledger.contains("# prints root/x |"),
+        "the per-file line is written beside the entry: {ledger}"
+    );
+    assert!(
+        ledger.lines().filter(|line| !line.starts_with('#')).count() == 1,
+        "and it is not an entry of its own: {ledger}"
+    );
+    write_fixture(&root.join("src/other.rs"), "// other moved\n");
+    let answer = adopted(&root, &json!({})).expect("the ledger answers");
+    assert!(
+        answer.contains("lapsed at src/other.rs"),
+        "the file that moved is the one named: {answer}"
+    );
+    assert!(
+        answer.contains("1 of 2 covered file(s)"),
+        "and the line still says how much of the entry moved: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

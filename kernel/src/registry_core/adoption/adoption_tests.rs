@@ -152,3 +152,44 @@ fn a_missing_file_still_yields_a_current_fingerprint() {
         "a fingerprint, not an empty string"
     );
 }
+
+/// The per-file line is read back as written, and it is **additive**: an older kernel that only knows
+/// eight-field entries reads a ledger carrying these lines exactly as before.
+/// 逐文件那一行按写下的样子读回，而且它是**加法**：只认八段条目的更旧内核读带着这些行的台账时与从前一样。
+///
+/// The reason it is a comment rather than a ninth field: a ninth segment makes every older reader
+/// reject the whole line, while `#` is skipped by construction. That is the difference between an
+/// additive record and a broken one.
+/// 它是注释而不是第九段的理由：第九段会让每个更旧的读者**拒绝整行**，而 `#` 按构造就会被跳过。这就是"加法记录"
+/// 与"弄坏记录"之间的差别。
+#[test]
+fn the_per_file_prints_round_trip_and_leave_the_entries_untouched() {
+    let pairs = vec![
+        ("src/a.rs".to_owned(), "aa11".to_owned()),
+        ("src/b.rs".to_owned(), "bb22".to_owned()),
+    ];
+    let entry = "root/button|chain|converge: 1 edge|maintainer|2026-10-02T10:00:00Z|src/a.rs,src/b.rs|setprint|why\n";
+    let ledger = format!(
+        "{entry}{}",
+        render_adoption_prints("root/button", "2026-10-02T10:00:00Z", &pairs)
+    );
+    let parsed = parse_adoption_prints(&ledger).expect("the prints parse");
+    assert_eq!(parsed.len(), 1, "{parsed:?}");
+    assert_eq!(parsed[0].anchor, "root/button");
+    assert_eq!(parsed[0].at, "2026-10-02T10:00:00Z");
+    assert_eq!(parsed[0].files, pairs);
+    let entries = parse_adoption(&ledger).expect("the entry still parses");
+    assert_eq!(entries.len(), 1, "the comment line is not an entry");
+    assert_eq!(entries[0].fingerprint, "setprint");
+}
+
+/// A malformed prints line is refused rather than skipped: a reader that silently sees no prints
+/// would read "nothing moved" from a record that was trying to say the opposite.
+/// 畸形的逐文件行被**拒绝**而不是跳过：静默看不到指纹的读者，会从一份想说反话的记录里读出"什么都没动"。
+#[test]
+fn a_malformed_prints_line_is_refused_rather_than_skipped() {
+    let bad = "# prints root/button | 2026-10-02T10:00:00Z | src/a.rs\n";
+    let error = parse_adoption_prints(bad).expect_err("a pair without `=` is not a print");
+    assert!(error.message.contains("`<path>=<print>`"), "{error:?}");
+    assert_eq!(error.line, 1);
+}

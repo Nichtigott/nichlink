@@ -16,7 +16,8 @@
 use std::path::{Path, PathBuf};
 
 use nichlink_kernel::adoption::{
-    AdoptionEntry, AdoptionVerdict, adoption_fingerprint, parse_adoption, state_of,
+    AdoptionEntry, AdoptionPrints, AdoptionVerdict, adoption_fingerprint, parse_adoption,
+    parse_adoption_prints, state_of,
 };
 use nichlink_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, NICHLINK_DIR};
 use serde_json::Value;
@@ -88,6 +89,7 @@ pub(crate) fn entries(root: &Path) -> Result<Vec<AdoptionEntry>, String> {
 /// 同一个 anchor 的**最后一条**生效。
 pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, String> {
     let entries = entries(root)?;
+    let entry_prints = prints_by_entry(root)?;
     let requested = arguments
         .get("anchor")
         .and_then(Value::as_str)
@@ -173,11 +175,23 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
             "  in force   provisional — certifies: {} (adopted {} by {})",
             effective.certifies, effective.at, effective.verifier
         )),
-        AdoptionVerdict::Lapsed { file } => lines.push(format!(
-            "  in force   lapsed at {file}: the bytes moved after the confirmation, so this needs a \
-             **person**, not an edit (adopted {} by {})",
-            effective.at, effective.verifier
-        )),
+        AdoptionVerdict::Lapsed { file } => {
+            // The known answer wins over the kernel's "first covered file": a set print cannot say
+            // which file moved, and a per-file print can.
+            // 以**已知的**为准，而不是内核给的"第一个被覆盖文件"：集合指纹说不出哪个文件动了，逐文件指纹能。
+            let named = match moved_files(
+                entry_prints.get(&(effective.anchor.clone(), effective.at.clone())),
+                &current,
+            ) {
+                Some(list) if !list.is_empty() => list.join(", "),
+                _ => file.clone(),
+            };
+            lines.push(format!(
+                "  in force   lapsed at {named}: the bytes moved after the confirmation, so this needs \
+                 a **person**, not an edit (adopted {} by {})",
+                effective.at, effective.verifier
+            ))
+        }
     }
     lines.push(format!(
         "  bytes      {}",
@@ -185,7 +199,12 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
             &effective.fingerprint,
             &state.current,
             &effective.files,
-            false
+            false,
+            moved_files(
+                entry_prints.get(&(effective.anchor.clone(), effective.at.clone())),
+                &current,
+            )
+            .as_deref(),
         )
     ));
     lines.push(format!("  covers     {}", effective.files.join(", ")));
@@ -230,9 +249,38 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
 /// ——读者既不能拿它去找文件，也不能拿它去改某一行，而它唯一的内容只在两串并排时才出现。读者要的是**逐文件
 /// 的判定**，所以这里印的是判定。记录撑不住这个判定的地方，就如实说出来而不是藏起来：对一组文件只留一个指纹，
 /// 能说"这里面有东西动了"，永远说不出"是这一个"——那是**记录形状**的限制。
-fn lease(recorded: &str, current: &str, files: &[String], file_already_named: bool) -> String {
+fn lease(
+    recorded: &str,
+    current: &str,
+    files: &[String],
+    file_already_named: bool,
+    moved: Option<&[String]>,
+) -> String {
     if recorded == current {
         return "unchanged since the confirmation".to_owned();
+    }
+    // With a print per file the answer is the file's **name**, which is what a reader can act on; the
+    // set print alone could only ever say "something in here moved". When the two disagree — the set
+    // print says changed and no per-file print does — that is said rather than smoothed over, because
+    // the alternative is a reader trusting a verdict nothing supports.
+    // 有逐文件指纹时，答案是那个文件的**名字**——读者能据它做事；只有集合指纹时永远只能说"这里面有东西动了"。
+    // 两者不一致时（集合指纹说变了、逐文件指纹一个都没变）如实说出来而不是抹平：否则读者会去信一个没有依据的判定。
+    if let Some(moved) = moved {
+        return match moved {
+            [] => "changed since the confirmation — and no per-file print names which, so the \
+                   record's two prints disagree; re-confirm rather than trust either"
+                .to_owned(),
+            // The caller's own line already names them in this case, so repeating the path here
+            // would say the same thing twice on one row.
+            // 这种情形下调用方那一行已经点名了，因此这里再写一遍路径就是在同一行上说两遍同一件事。
+            many if file_already_named => format!(
+                "changed since the confirmation ({} of {} covered file(s))",
+                many.len(),
+                files.len()
+            ),
+            [one] => format!("changed since the confirmation ({one})"),
+            many => format!("changed since the confirmation ({})", many.join(", ")),
+        };
     }
     match files {
         [only] if file_already_named => "changed since the confirmation".to_owned(),
@@ -244,6 +292,52 @@ fn lease(recorded: &str, current: &str, files: &[String], file_already_named: bo
             many.len()
         ),
     }
+}
+
+/// One entry's per-file prints, reached by the entry's own `(anchor, at)`.
+/// 一条条目的逐文件指纹，用条目自己的 `(anchor, at)` 取。
+type PrintsByEntry = std::collections::BTreeMap<(String, String), Vec<(String, String)>>;
+
+/// The per-file prints this ledger carries, keyed by the entry they belong to.
+/// 这份台账携带的逐文件指纹，按它们所属的条目索引。
+///
+/// Read through the kernel's own parser, so the spelling has one implementation; an old ledger simply
+/// has none of these lines and comes back empty.
+/// 经内核自己的解析器读，因此拼写只有一份实现；旧台账根本没有这些行，读回来就是空的。
+fn prints_by_entry(root: &Path) -> Result<PrintsByEntry, String> {
+    let ledger = ledger_path(root);
+    let text = std::fs::read_to_string(&ledger).unwrap_or_default();
+    if text.trim().is_empty() {
+        return Ok(PrintsByEntry::new());
+    }
+    let parsed = parse_adoption_prints(&text)
+        .map_err(|error| format!("{}:{} {}", ledger.display(), error.line, error.message))?;
+    Ok(parsed
+        .into_iter()
+        .map(|AdoptionPrints { anchor, at, files }| ((anchor, at), files))
+        .collect())
+}
+
+/// Which covered files' bytes moved, when the record carries a print per file.
+/// 当记录逐文件带着指纹时：**哪几个被覆盖文件的字节动了**。
+fn moved_files(
+    prints: Option<&Vec<(String, String)>>,
+    current: &[(String, String)],
+) -> Option<Vec<String>> {
+    let prints = prints?;
+    let single = |path: &str, contents: &str| {
+        adoption_fingerprint(&[(path.to_owned(), contents.to_owned())])
+    };
+    let mut moved = Vec::new();
+    for (path, contents) in current {
+        let now = single(path, contents);
+        match prints.iter().find(|(recorded, _)| recorded == path) {
+            Some((_, recorded)) if recorded != &now => moved.push(path.clone()),
+            _ => {}
+        }
+    }
+    moved.sort();
+    Some(moved)
 }
 
 pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -269,6 +363,7 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     // 台账**路径**在两种情形下都上第一行。它过去只在台账为空时出现，于是面对一份有内容的台账的读者得自己去找
     // 那个文件——T-21 实测：那一臂先花了若干 shell 调用 `find`/`ls`，才能读它在问的那两行；而要自己去找记录的
     // 读者，就是少了一次调用的读者。
+    let entry_prints = prints_by_entry(root)?;
     let mut output = format!(
         "evidence: adoption ledger at {} (provisional by construction)\n",
         ledger.display()
@@ -292,7 +387,17 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
         let state = state_of(entry, &current);
         // The list row already says `lapsed at <file>`, so the bytes clause does not name it twice.
         // 列表那一行已经说了 `lapsed at <文件>`，因此字节那句不再重复点名。
-        let bytes = lease(&entry.fingerprint, &state.current, &entry.files, true);
+        let moved = moved_files(
+            entry_prints.get(&(entry.anchor.clone(), entry.at.clone())),
+            &current,
+        );
+        let bytes = lease(
+            &entry.fingerprint,
+            &state.current,
+            &entry.files,
+            true,
+            moved.as_deref(),
+        );
         match &state.verdict {
             AdoptionVerdict::Provisional => {
                 provisional += 1;
@@ -319,6 +424,15 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
                     .iter()
                     .find(|(anchor, print)| anchor != &entry.anchor && print == &entry.fingerprint)
                     .map(|(anchor, _)| anchor.clone());
+                // With a print per file, the moved files are **known**, and the kernel's own
+                // `file` is only the first covered one (a set print cannot say which moved) — so the
+                // known answer wins, and the wrong-but-first one is not printed beside it.
+                // 有逐文件指纹时，动过的文件是**可知的**，而内核给的 `file` 只是第一个被覆盖的文件（集合指纹
+                // 说不出哪个动了）⇒ 以已知的为准，不把"排在第一个"的那个印在旁边。
+                let named = match &moved {
+                    Some(list) if !list.is_empty() => list.join(", "),
+                    _ => file.clone(),
+                };
                 let whose = match &borrowed {
                     Some(anchor) => format!(
                         "; the recorded print is `{anchor}`'s current print, not this file's — a \
@@ -327,7 +441,7 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
                     None => String::new(),
                 };
                 output.push_str(&format!(
-                    "adoption lapsed at {file} ({bytes}){whose}; needs confirmation — {}: {} [adopted \
+                    "adoption lapsed at {named} ({bytes}){whose}; needs confirmation — {}: {} [adopted \
                      at {} by {}; why: {}]\n",
                     entry.anchor, entry.certifies, entry.at, entry.verifier, entry.reason,
                 ));
@@ -425,11 +539,26 @@ fn renew(root: &Path, arguments: &Value, ledger: &Path) -> Result<String, String
         entry.fingerprint,
         entry.reason,
     );
+    // The per-file prints ride **beside** the entry, as the kernel's own comment line, so an older
+    // kernel reads this ledger exactly as before and a newer one can name the file that moved.
+    // 逐文件指纹以**内核自己的注释行**形式跟在条目旁边，因此更旧的内核读这份台账与从前一样，而更新的内核能
+    // 点名动了的那一个文件。
+    let per_file = current
+        .iter()
+        .map(|(path, contents)| {
+            (
+                path.clone(),
+                adoption_fingerprint(&[(path.clone(), contents.clone())]),
+            )
+        })
+        .collect::<Vec<_>>();
+    let prints =
+        nichlink_kernel::adoption::render_adoption_prints(&entry.anchor, &entry.at, &per_file);
     let confirmed = arguments.get("apply").and_then(Value::as_bool) == Some(true)
         && arguments.get("confirm").and_then(Value::as_bool) == Some(true);
     if !confirmed {
         return Ok(format!(
-            "preview: would append one adoption line to {}\n  {line}nothing was written; \
+            "preview: would append one adoption line to {}\n  {line}  {prints}nothing was written; \
              `apply: true` and `confirm: true` write it, because a confirmation is a person's\n",
             ledger.display()
         ));
@@ -444,10 +573,11 @@ fn renew(root: &Path, arguments: &Value, ledger: &Path) -> Result<String, String
         next.push('\n');
     }
     next.push_str(&line);
+    next.push_str(&prints);
     std::fs::write(ledger, next)
         .map_err(|error| format!("{} is not writable: {error}", ledger.display()))?;
     Ok(format!(
-        "appended one adoption line to {}\n  {line}confirmed by {verifier}; the ledger is \
+        "appended one adoption line to {}\n  {line}  {prints}confirmed by {verifier}; the ledger is \
          append-only, so this confirmation is one more line rather than a rewrite\n",
         ledger.display()
     ))

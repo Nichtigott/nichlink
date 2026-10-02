@@ -114,6 +114,82 @@ pub fn parse_adoption(ledger: &str) -> Result<Vec<AdoptionEntry>, AdoptionError>
     Ok(entries)
 }
 
+/// The per-file prints a ledger may carry **beside** an entry, so a reader can be told which file
+/// moved instead of only that something did.
+/// 台账可以在条目**旁边**携带的逐文件指纹，好让读者被告知**哪个文件动了**，而不只是"有东西动了"。
+///
+/// Why a comment line rather than a ninth field: `parse_adoption` skips `#`, so a ledger carrying
+/// these lines is read by an **older** kernel exactly as before — the information is additive in both
+/// directions, while a ninth segment would make every older reader reject the whole line. The join key
+/// is `(anchor, at)`, which is what identifies an entry anyway.
+/// 为什么是注释行而不是第九段：`parse_adoption` 跳过 `#`，因此带着这些行的台账被**更旧**的内核读到时与从前
+/// 完全一样——信息在两个方向都是加法；而第九段会让每个更旧的读者**拒绝整行**。连接键是 `(anchor, at)`，
+/// 那本来就是标识一条条目的东西。
+pub fn parse_adoption_prints(ledger: &str) -> Result<Vec<AdoptionPrints>, AdoptionError> {
+    let mut prints = Vec::new();
+    for (index, line) in ledger.lines().enumerate() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("# prints ") else {
+            continue;
+        };
+        let parts = rest.split('|').map(str::trim).collect::<Vec<_>>();
+        if parts.len() != 3 || parts[0].is_empty() || parts[1].is_empty() {
+            return Err(AdoptionError {
+                line: index + 1,
+                message:
+                    "a `# prints` line must read `# prints <anchor> | <at> | <path>=<print>,…`"
+                        .to_owned(),
+            });
+        }
+        let mut files = Vec::new();
+        for pair in parts[2]
+            .split(',')
+            .map(str::trim)
+            .filter(|pair| !pair.is_empty())
+        {
+            let Some((path, print)) = pair.rsplit_once('=') else {
+                return Err(AdoptionError {
+                    line: index + 1,
+                    message: format!("`{pair}` is not `<path>=<print>`"),
+                });
+            };
+            files.push((path.trim().to_owned(), print.trim().to_owned()));
+        }
+        prints.push(AdoptionPrints {
+            anchor: parts[0].to_owned(),
+            at: parts[1].to_owned(),
+            files,
+        });
+    }
+    Ok(prints)
+}
+
+/// The line that carries per-file prints, as `parse_adoption_prints` reads it.
+/// 携带逐文件指纹的那一行，按 `parse_adoption_prints` 读它的样子。
+pub fn render_adoption_prints(anchor: &str, at: &str, files: &[(String, String)]) -> String {
+    let pairs = files
+        .iter()
+        .map(|(path, print)| format!("{path}={print}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("# prints {anchor} | {at} | {pairs}\n")
+}
+
+/// Per-file prints carried beside one entry, keyed by the entry's own `(anchor, at)`.
+/// 一条条目旁边携带的逐文件指纹，按条目自己的 `(anchor, at)` 对应。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdoptionPrints {
+    /// The route's anchor, as the entry spells it.
+    /// 路线的锚点，按条目的写法。
+    pub anchor: String,
+    /// When the entry was written, which is what pairs these prints with it.
+    /// 条目写下的时间——正是它把这批指纹与那条条目配上。
+    pub at: String,
+    /// One `(path, print)` per covered file, in the order the line carried them.
+    /// 每个被覆盖文件一个 `(路径, 指纹)`，按那一行携带的顺序。
+    pub files: Vec<(String, String)>,
+}
+
 /// The fingerprint of the bytes a decision was taken on.
 /// 一次决定据以做出的那些字节的指纹。
 ///
