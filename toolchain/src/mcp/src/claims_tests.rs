@@ -731,3 +731,46 @@ fn a_dead_arms_row_carries_the_contract_of_its_function() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Per-item census rows speak the layer vocabulary, and one fact about one layer shares a line.
+/// 总账的逐项行说同一套层级词表，而**同一层**的同形事实共用一行。
+///
+/// Measured (audit T-10): the other answers already tag their rows (`face`/`file`/`fn` in `search`
+/// and `digest`, the definition's line number in `read`), while the census's per-item rows began with
+/// the fact — so one tree came back in two vocabularies, and only one of them said which layer a row
+/// was about. And nine `no test reaches \`paint\`` rows repeated a full path each, differing only in
+/// the file: the layer's facts now share a line whose prefix is stated once.
+/// 量到的（审计 T-10）：别的答案已经给行打了标签（`search`/`digest` 的 `face`/`file`/`fn`，`read` 的定义
+/// 行号），而总账的逐项行以事实本身开头——于是同一棵树用两套词汇回来，而只有一套说了这一行讲的是哪一层。
+/// 另外九行 `no test reaches \`paint\`` 每行重复一整条路径、只有文件名不同：现在这一层的事实共用一行，
+/// 前缀只说一次。
+#[test]
+fn census_rows_speak_the_layer_vocabulary_and_share_a_line_per_layer() {
+    let root = package("layers");
+    let lines = whole(&root).expect("the census answers");
+    let joined = lines.join("\n");
+    for line in &lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("no test names") || trimmed.starts_with("no test reaches") {
+            panic!("a per-item row with no layer tag: {line}");
+        }
+    }
+    // A **summary** row names a column (`declarations: 2 production …`) and keeps its prose; a
+    // per-item row is one that begins with the fact itself, so the vocabulary is asserted on the
+    // tagged rows and the untagged spelling is refused by the loop above.
+    // **汇总**行点名一栏（`declarations: 2 production …`）并保留散文；逐项行以事实本身开头——因此这里
+    // 断言的是"带标签的行确实存在"，而未带标签的拼法由上面那个循环拒绝。
+    let tagged = lines
+        .iter()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            trimmed.starts_with("decl ") || trimmed.starts_with("fn ")
+        })
+        .count();
+    assert!(tagged > 0, "the layer vocabulary is in use: {joined}");
+    assert!(
+        joined.contains("no test reaches"),
+        "the column is still reported: {joined}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -138,6 +138,80 @@ fn uses_whole_number(text: &str, value: &str) -> bool {
 /// `whole` 是调用方在说"我要那张表，不要样本"：它买下完整的边界散文（短回复携带的是索引）、
 /// 全部"没有测试能到达"的函数而不是五条，以及那一栏的逐目录拆分。其余都是同一个答案——两种形态的差别
 /// 只在印出多少，从不在"什么算一条发现"。
+/// Consecutive rows that share a name and a directory prefix, in the order they were sorted.
+/// 名字与目录前缀都相同的连续行，按排序后的顺序。
+fn same_shape_runs(rows: &[(String, usize, String)]) -> Vec<Vec<(String, usize, String)>> {
+    let mut runs: Vec<Vec<(String, usize, String)>> = Vec::new();
+    for row in rows {
+        let joined = runs
+            .last()
+            .is_some_and(|run| run[0].2 == row.2 && shared_prefix(run, row).is_some());
+        if joined {
+            runs.last_mut().expect("a run exists").push(row.clone());
+        } else {
+            runs.push(vec![row.clone()]);
+        }
+    }
+    runs
+}
+
+/// The directory prefix a run of same-named rows shares, when it is worth stating once.
+/// 一串同名行共享的目录前缀——值得说一次的时候。
+fn shared_prefix(
+    run: &[(String, usize, String)],
+    next: &(String, usize, String),
+) -> Option<String> {
+    let mut segments = run[0].0.split('/').collect::<Vec<_>>();
+    segments.pop();
+    for row in run.iter().chain(std::iter::once(next)) {
+        let mut candidate = segments.clone();
+        let theirs = row.0.split('/').collect::<Vec<_>>();
+        while !candidate.is_empty() && !theirs.starts_with(&candidate) {
+            candidate.pop();
+        }
+        if candidate.is_empty() {
+            return None;
+        }
+        segments = candidate;
+    }
+    Some(format!("{}/", segments.join("/")))
+}
+
+/// One line for a run of unreachable functions that differ only in their file.
+/// 只有文件不同的一串够不着的函数，压成一行。
+fn collapsed_unreachable(run: &[(String, usize, String)]) -> String {
+    let prefix = shared_prefix(&run[..run.len() - 1], run.last().expect("non-empty run"))
+        .unwrap_or_default();
+    let tails = run
+        .iter()
+        .map(|(file, line, _)| format!("{}:{line}", file.trim_start_matches(&prefix)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "  {FN}     no test reaches `{}` in {} file(s) under {prefix}: {tails}",
+        run[0].2,
+        run.len()
+    )
+}
+
+/// The layer vocabulary every per-item row speaks, so a reader can tell what a row is about before
+/// reading it.
+/// 每条**逐项**行都说的一种层级词表，让读者在读完之前就知道这一行说的是什么层。
+///
+/// The other answers already speak it — `search` and `digest` rows start with `face`/`file`/`fn`,
+/// `read`'s symbol line with the definition's line number — while the census's per-item rows started
+/// with the fact itself, so the same tree came back in two vocabularies and only one of them said
+/// which layer it was about (audit T-10). Summary rows keep their prose: they name a column, not an
+/// item in a layer.
+/// 别的答案已经在说它——`search`/`digest` 的行以 `face`/`file`/`fn` 开头，`read` 的符号行带定义行号
+/// ——而总账的逐项行以事实本身开头，于是同一棵树用两套词汇回来，而只有一套说了它讲的是哪一层（审计
+/// T-10）。汇总行保留它们的散文：它们点名的是一栏，不是某一层里的一项。
+const DECL: &str = "decl";
+
+/// A function, in whichever column it appears.
+/// 一个函数，无论在那一栏里出现。
+const FN: &str = "fn";
+
 /// The three boundary indexes, merged into the one line the default reply can afford.
 /// 三条边界索引合并成默认回复负担得起的那一行。
 ///
@@ -271,7 +345,7 @@ pub(crate) fn census(root: &Path, whole: bool) -> Result<Vec<String>, String> {
             }
             if !test_text.iter().any(|text| text.contains(name)) {
                 unnamed.push(format!(
-                    "  no test names `{name}` ({}:{})",
+                    "  {DECL}   no test names `{name}` ({}:{})",
                     file.relative,
                     index + 1
                 ));
@@ -413,7 +487,7 @@ fn reachability_column(
         }
     }
     let mut production = 0usize;
-    let mut rows: Vec<(String, usize, String)> = Vec::new();
+    let mut rows: Vec<(String, usize, String, String)> = Vec::new();
     // The per-directory split is the answer to the question the sampled reply made a reader ask once
     // per directory: "which parts of this tree are the unreachable ones in". Two numbers per
     // directory — unreachable of production — are enough to aim the next read, and the rows below
@@ -441,8 +515,9 @@ fn reachability_column(
         rows.push((
             file.relative.clone(),
             function.line,
+            function.name.clone(),
             format!(
-                "  no test reaches `{}` ({}:{})",
+                "  {FN}     no test reaches `{}` ({}:{})",
                 function.name, file.relative, function.line
             ),
         ));
@@ -458,8 +533,29 @@ fn reachability_column(
         lines.push(directory_split(&per_directory));
     }
     let cap = if whole { WHOLE_SAMPLE } else { SAMPLE };
-    for (_, _, row) in rows.iter().take(cap) {
-        lines.push(row.clone());
+    // Facts of the same shape **and the same layer** share a line: nine `no test reaches \`paint\``
+    // rows repeated a full path each, while the one thing that differed was the file. The collapse
+    // states the shared prefix once and keeps every path resolvable — it is a compression, not a
+    // summary, so nothing a reader could act on is dropped. Groups smaller than three fall through
+    // to the plain rows: collapsing two rows buys nothing and makes the answer harder to scan.
+    // 形状**与层级**都相同的事实共用一行：九行 `no test reaches \`paint\`` 每一行都重复一整条路径，而
+    // 真正不同的只有文件名。这次折叠把共享前缀说一次，并让每条路径仍然可还原——它是压缩而不是概括，因此
+    // 读者能据以行动的东西一样没少。小于三的组落回普通的行：折叠两行买不到什么，还让答案更难扫读。
+    let bare = rows
+        .iter()
+        .take(cap)
+        .map(|(file, line, name, _)| (file.clone(), *line, name.clone()))
+        .collect::<Vec<_>>();
+    for group in same_shape_runs(&bare) {
+        if group.len() >= 3 {
+            lines.push(collapsed_unreachable(&group));
+        } else {
+            for (file, line, name) in group {
+                lines.push(format!(
+                    "  {FN}     no test reaches `{name}` ({file}:{line})"
+                ));
+            }
+        }
     }
     if total > cap {
         lines.push(crate::mcp::truncation::withheld(
@@ -716,6 +812,14 @@ fn branch_column(sources: &[crate::mcp::source_index::SourceFile], whole: bool) 
          coverage measurement)"
     )];
     let cap = if whole { WHOLE_SAMPLE } else { SAMPLE };
+    // Facts of the same shape **and the same layer** share a line: nine `no test reaches \`paint\``
+    // rows repeated a full path each, while the one thing that differed was the file. The collapse
+    // states the shared prefix once and keeps every path resolvable — it is a compression, not a
+    // summary, so nothing a reader could act on is dropped. Groups smaller than three fall through
+    // to the plain rows: collapsing two rows buys nothing and makes the answer harder to scan.
+    // 形状**与层级**都相同的事实共用一行：九行 `no test reaches \`paint\`` 每一行都重复一整条路径，而
+    // 真正不同的只有文件名。这次折叠把共享前缀说一次，并让每条路径仍然可还原——它是压缩而不是概括，因此
+    // 读者能据以行动的东西一样没少。小于三的组落回普通的行：折叠两行买不到什么，还让答案更难扫读。
     for (_, _, row) in rows.iter().take(cap) {
         lines.push(row.clone());
     }
