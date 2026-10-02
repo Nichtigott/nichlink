@@ -63,6 +63,11 @@ compiles and its faces are in `registry`\n\
   (an object in a family)   when the object has siblings, `consistency --parent <its parent>` \
 answers `does this one differ from the family?` in **one** call — it compares the siblings' own calls \
 and names the outlier, which beats reading the siblings one at a time\n\
+  (independent lookups)     lookups whose arguments do not depend on each other may share **one** \
+shell step (`a; b`), each writing its own `--log`; what that saves is a **turn**, and a turn re-sends \
+the whole context — measured on a five-question round: 25 of 73 calls were adjacent lookups of the \
+same kind, so about a third of the turns. Do it only when the next argument does not depend on the \
+last answer\n\
   inspect, several named    -> `consistency --parent` **once** for the family, then one object at a \
 time; stop when every named object has a verdict, including the ones with nothing wrong\n\
   inspect, a range question -> `check` and dispose of every census column; stop when each column is \
@@ -82,7 +87,7 @@ is how a face is changed in place, grafting is how a whole face is replaced\n\
 layer's impact is disposed of, not when the move compiles\n\
 **先把这个请求放进七种形状之一——按它点名什么、朝哪个方向动，而不是按它的措辞。** 信号是结构性的\
 （点几个对象、是查看/新增/加深/迁移、树还空不空），每种形状带一个入口调用与一个**停止条件**：空树 ⇒ \
-`new_project` 到 `registry`、`check`，停在「骨架编译过且面在 `registry` 里」；（**对象有兄弟时**）先问 `consistency --parent <它的父面>`——它一次比完同族各自的调用并点名**异类**，比逐个读兄弟便宜；查看单对象 ⇒ `locate`/\
+`new_project` 到 `registry`、`check`，停在「骨架编译过且面在 `registry` 里」；（**彼此独立的查询**）参数互不依赖的几次查询可以放在**同一条 shell 命令**里（`a; b`），每次调用照旧各写自己的 `--log`；省下的是一**轮**，而一轮要把整个上下文再发一遍——五题实测：73 次调用里有 25 次是相邻的同类查询，约三分之一轮数。**只在`下一个参数不依赖上一个答案`时这么做**；（**对象有兄弟时**）先问 `consistency --parent <它的父面>`——它一次比完同族各自的调用并点名**异类**，比逐个读兄弟便宜；查看单对象 ⇒ `locate`/\
 `search` 到 `read`、`why --at`、`check {face}`，停在「根因带文件与行号、最小修、反证」；查看多个 ⇒ \
 `consistency --parent` **一次**比完同族再逐个，停在「每个被点名的对象都有裁定（没问题的也要有依据）」；\
 范围型 ⇒ `check` 并逐栏处置，停在「每栏要么被覆盖、要么被点名为它不覆盖」；新增 ⇒ `registry`、\

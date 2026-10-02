@@ -624,3 +624,29 @@ fn the_table_points_a_family_question_at_the_family_comparison() {
         );
     }
 }
+
+/// The table says that independent lookups may share one shell step — because a turn is the unit that
+/// costs.
+/// 表里写明"彼此独立的查询可以共用一条 shell 命令"——因为**轮**才是花钱的单位。
+///
+/// Measured (T-21): cache reads were 10,378,112 tokens against 142,869 of output, so a turn costs
+/// roughly 87,000 cached tokens while shortening every answer by a whole line saves hundreds. The
+/// same round's logs show 25 of 73 calls were adjacent lookups of the same kind — about a third of
+/// the turns, and the largest lever left that is not the apparatus itself.
+/// 量到的（T-21）：缓存读 10,378,112 token、输出 142,869 ⇒ 一轮约 87,000 个缓存 token，而把每条答案砍掉一整行
+/// 只省几百。同一轮的日志里 73 次调用有 25 次是相邻的同类查询——约三分之一轮数，也是除装置本身之外最大的杠杆。
+#[test]
+fn the_table_lets_independent_lookups_share_a_turn() {
+    for expected in [
+        "(independent lookups)",
+        "may share **one**",
+        "what that saves is a **turn**",
+        "彼此独立的查询",
+        "只在`下一个参数不依赖上一个答案`时这么做",
+    ] {
+        assert!(
+            INSTRUCTIONS.contains(expected),
+            "the table carries `{expected}`: {INSTRUCTIONS}"
+        );
+    }
+}
