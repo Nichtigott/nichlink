@@ -46,6 +46,73 @@ use crate::mcp::workspace::{self, Scope};
 
 /// Find registration faces, source files, and Rust function declarations by name.
 /// 按名字查找注册面、源码文件与 Rust 函数声明。
+/// What to say when a string looks like several names but a string cannot state that shape.
+/// 当一个字符串看起来像几个名字、而字符串无法声明这个形状时该说什么。
+///
+/// Two words or more, each a bare name, is what a caller writes when it means a bag — and it is also
+/// what a sentence looks like. The layer cannot tell them apart, so the answer points at the shape
+/// that can say it rather than guessing.
+/// 两个词以上、每个都是裸名，既是调用方想说"一串"时的写法，也是一句话的样子。这一层分不开它们，因此答案
+/// 指向那个能声明的形状，而不是猜。
+fn several_names(written: &str) -> Option<String> {
+    let words = written.split_whitespace().collect::<Vec<_>>();
+    if words.len() < 2 || !words.iter().all(|word| is_bare_name(word)) {
+        return None;
+    }
+    let list = words
+        .iter()
+        .map(|word| format!("\"{word}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "hint   a string is one name; for several names state the shape: `names: [{list}]`"
+    ))
+}
+
+/// How many names one bag answers before the shared outlet names the rest.
+/// 一串名字在共享出口点名"剩下的在哪"之前最多答几个。
+const BAG: usize = 8;
+
+/// One group per name, each rendered by the single-name path.
+/// 每个名字一组，每组都由单名字那条路径渲染。
+///
+/// Rendering the groups **by calling the single-name path** is the point: the two spellings cannot
+/// drift into two answers for the same name, which is what a second renderer here would eventually
+/// become.
+/// 各组都**调用单名字那条路径**来渲染，这正是要点：两种拼法不会漂移成"同一个名字两个答案"——而在这
+/// 里再写一个渲染器迟早会变成那样。
+fn name_bag(root: &Path, names: &[&str], limit: usize) -> Result<String, String> {
+    let mut output = String::new();
+    for name in names.iter().take(BAG) {
+        output.push_str(&format!("name {name}\n"));
+        output.push_str(&search(
+            root,
+            &serde_json::json!({"query": (*name).to_owned(), "limit": limit}),
+        )?);
+        // The single-name answer does not end with a newline, so without this the next group's
+        // header lands on its last row: `…prints it.name postable`. A group boundary has to be a
+        // boundary in the text, not only in the code.
+        // 单名字的答案不以换行结尾，因此不补这一下，下一组的表头就落在它最后一行上：
+        // `…prints it.name postable`。组的边界必须在文本里也是边界，而不只是在代码里。
+        if !output.ends_with('\n') {
+            output.push('\n');
+        }
+    }
+    if names.len() > BAG {
+        output.push_str(&format!(
+            "{}\n",
+            crate::mcp::truncation::withheld(
+                names.len() - BAG,
+                names.len(),
+                BAG,
+                "names",
+                "ask again with the rest of the names"
+            )
+        ));
+    }
+    Ok(output)
+}
+
 pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // The convergence layer asks the call graph about the name as it was written: a function name
     // is case-sensitive, and the face matcher below is not.
@@ -95,15 +162,77 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
             .min(10) as usize;
         return literal_search(root, literal, limit, context);
     }
+    // Both spellings of a list are accepted, the way `affected`'s `files` accepts them: an **array**
+    // (what `--json` carries) and a **string** (what the one-shot client produces for `--names a,b`).
+    // Splitting a string is safe *here* because the key itself declares the list shape — which is
+    // exactly what `query` cannot do, and why the first version of this wrongly read a sentence of
+    // bare-looking words as a bag.
+    // 清单的两种写法都收，与 `affected` 的 `files` 一样：**数组**（`--json` 携带的）与**字符串**
+    // （一次性客户端对 `--names a,b` 产出的）。在这里按字符串切是安全的，因为**键本身声明了清单形状**
+    // ——而 `query` 恰恰做不到这一点，这正是这条的第一版把一句"看起来都是裸名"的话错读成一串的原因。
+    if let Some(value) = arguments.get("names") {
+        let names = match value {
+            Value::Array(items) => items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>(),
+            Value::String(text) => text
+                .split([',', ' ', '\t', '\n'])
+                .map(str::to_owned)
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        let names = names
+            .into_iter()
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty())
+            .collect::<Vec<_>>();
+        if names.is_empty() {
+            return Err(
+                "`names` takes several bare names: `--names signed,postable` on the command line, or \
+                 \"names\": [\"signed\", \"postable\"] in `--json`"
+                    .to_owned(),
+            );
+        }
+        let borrowed = names.iter().map(String::as_str).collect::<Vec<_>>();
+        return name_bag(root, &borrowed, limit);
+    }
     let written = arguments
         .get("query")
         .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.search requires `query` (a name) or `literal` (text)".to_owned())?
+        .ok_or_else(|| {
+            "nichlink.search requires `query` (one name), `names` (several names), or `literal` \
+             (text)"
+                .to_owned()
+        })?
         .trim()
         .to_owned();
     let query = written.to_ascii_lowercase();
     if query.is_empty() {
         return Err("query must not be empty".to_owned());
+    }
+    let several = several_names(&written);
+    // Several names is one question with several subjects: the control arm's `explore` takes a string
+    // of symbols and answers with each one's source, and the measured shape of asking one at a time is
+    // one call per name (audit T-06). The shape is an **array**, not a whitespace-separated string,
+    // and the first version of this got that wrong: it read a string whose every word was a bare name
+    // as a bag, so `"the gauge value"` — a sentence — came back as three groups, two of them empty.
+    // A sentence and a bag of symbols are **the same string** as far as this layer can tell, so
+    // guessing is not available: the caller states the shape. A string that looks like several names
+    // gets a pointer to the array instead (see `several_names`).
+    // 几个名字是"一个问题、几个主语"：对照臂的 `explore` 接一串符号并逐个给出源码，而一次问一个的实测形状
+    // 是每个名字一次调用（审计 T-06）。形状是**数组**而不是空格分隔的字符串，而这条的第一版正是错在这里：
+    // 它把"每个词都是裸名"的字符串读成串，于是 `"the gauge value"`——一句话——回成了三组、其中两组是空的。
+    // 在这一层看来，一句话与一串符号**是同一个字符串**，因此猜不可用：形状由调用方声明。看起来像几个名字的
+    // 字符串会得到一条指向数组的指引（见 `several_names`）。
+    if let Some(pointer) = several_names(&written) {
+        // A string of names is a shape we cannot tell from a sentence, so it is answered as one name
+        // and the pointer says how to state the shape. Answering it as a bag is what the first version
+        // did, and it turned a sentence into three groups.
+        // 一串名字是这一层无法与句子区分开的形状，因此按一个名字作答，而指引说出该怎么声明形状。第一版把它
+        // 当串作答，于是把一句话变成了三组。
+        let _ = pointer;
     }
     let mut results = Vec::new();
     // The limit used to cut the scan short with nothing said, so a caller that got
@@ -268,6 +397,12 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
              spelling like `Type::method`) pass `literal`",
             root.display()
         ));
+        // A string that looks like several names is the one shape this layer cannot tell from a
+        // sentence, so the pointer to the array form rides on the answer rather than replacing it.
+        // 看起来像几个名字的字符串是这一层唯一分不开句子的形状，因此指向数组形式的指引搭在答案上，而不是替掉它。
+        if let Some(pointer) = several {
+            results.push(pointer);
+        }
     }
     if withheld_hits > 0 {
         results.push(crate::mcp::truncation::withheld(

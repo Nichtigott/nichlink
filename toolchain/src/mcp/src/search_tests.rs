@@ -414,3 +414,55 @@ fn a_published_record_answers_a_name_without_deriving_the_sources() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Several names is one call, one group per name — and the shape is **stated**, never guessed.
+/// 几个名字是一次调用、每个名字一组——而形状是**声明**出来的，从不靠猜。
+///
+/// Measured (audit T-06): the control arm's `explore "signed postable normalized_account zero_arm
+/// algorithms"` answered with each symbol's source in one call; ours asked one name at a time. The
+/// pins are four, and the fourth is the one that caught the design: a **sentence** whose every word
+/// looks like a bare name (`"the gauge value"`) must not be read as a bag — a sentence and a bag of
+/// symbols are the same string at this layer, so the caller states the shape (`names`) and a string
+/// of names gets a pointer to it instead of a guess.
+/// 量到的（审计 T-06）：对照臂的 `explore "signed postable normalized_account zero_arm algorithms"`
+/// 一次调用给出每个符号的源码；我们一次问一个名字。钉子四条，而第四条正是抓出设计问题的那条：一句
+/// **每个词都像裸名**的话（`"the gauge value"`）**不许**被读成一串——在这一层，一句话与一串符号是同一个
+/// 字符串，因此形状由调用方声明（`names`），而"一串名字"的字符串得到的是一条指向它的指引，而不是一次猜。
+#[test]
+fn several_names_is_one_call_with_a_group_per_name() {
+    let (root, _) = package("bag");
+    // An array (what `--json` carries) and a string (what the one-shot client produces).
+    // 数组（`--json` 携带的）与字符串（一次性客户端产出的）。
+    for request in [
+        json!({"names": ["gauge", "button"]}),
+        json!({"names": "gauge,button"}),
+    ] {
+        let bag = search(&root, &request).expect("several names answer");
+        assert!(bag.contains("name gauge\n"), "{request} ⇒ {bag}");
+        assert!(
+            bag.contains("\nname button\n") || bag.starts_with("name button\n"),
+            "a group header sits on its own line, not glued to the row above it: {bag}"
+        );
+    }
+    // One name keeps its old shape: no group header, nothing wrapped.
+    // 一个名字保持旧形状：没有组表头，也没被包起来。
+    let one = search(&root, &json!({"query": "gauge"})).expect("one name answers");
+    assert!(
+        !one.starts_with("name ") && !one.contains("\nname "),
+        "a single name is not wrapped in a group header: {one}"
+    );
+    // The sentence is not a bag, and it says how to state one.
+    // 那句话不是一串，而它说出了该怎么声明一串。
+    let sentence = search(&root, &json!({"query": "the gauge value"})).expect("one query answers");
+    assert!(
+        !sentence.contains("\nname gauge\n") && !sentence.starts_with("name gauge"),
+        "a sentence of bare-looking words is not read as several names: {sentence}"
+    );
+    assert!(
+        sentence
+            .contains("hint   a string is one name; for several names state the shape: `names: [")
+            && sentence.contains("\"gauge\""),
+        "and it points at the shape that can say it: {sentence}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
