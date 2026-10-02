@@ -423,6 +423,78 @@ impl<'a> GraftVisitor<'a> {
     }
 }
 
+/// Write one graft declaration the way the macro grammar reads it.
+/// 按宏语法的读法写出**一条** graft 声明。
+///
+/// This is the **writing** half of the pair whose reading half is `graft_entries`, and it lives
+/// beside it so the two spellings cannot drift: the pin renders a declaration, parses it back with
+/// `graft_entries`, and requires the same structure.
+/// 这是与 `graft_entries` 成对的那**写出**的一半，摆在它旁边正是为了让两种拼写无法漂移：钉子渲染一条
+/// 声明、用 `graft_entries` 解析回来，并要求结构相同。
+///
+/// **It renders the typed-expression form only, and refuses everything else.** `cut(<expr>)` is what
+/// a tool that knows a face's Rust path can write without guessing; the logical-path forms (`cut
+/// [..]`, `cut "a string"`, ranges of string literals) are shapes whose spelling has a reader's
+/// meaning this function cannot verify, so it refuses them rather than emitting something that
+/// parses into a different declaration than the caller meant. A narrow renderer that refuses beats a
+/// wide one that guesses: this writes **source code into a host**.
+/// **它只渲染类型化表达式那一形，别的形状一律拒绝。** `cut(<表达式>)` 是"知道某个面的 Rust 路径"的工具
+/// 无需猜测就能写出的东西；逻辑路径那些形状（`cut [..]`、`cut "串"`、字符串字面量的区间）的拼写带有读者
+/// 才知道的含义，本函数无法核实，因此**拒绝**而不是发射一条"解析成另一种声明"的文本。窄而会拒绝的渲染器
+/// 胜过宽而会猜的：它写进的是**宿主的源码**。
+///
+/// The one trap the grammar itself has: the parser treats a top-level `to` ident inside `cut(...)` as
+/// a range separator, so a path whose **segment** is `to` would come back as a range. That is
+/// refused, not escaped.
+/// 语法自带的一个陷阱：解析器把 `cut(...)` 里顶层的 `to` 识别符当作区间分隔符，因此**段名**为 `to` 的路径
+/// 会被读回成区间。这里**拒绝**它，而不是转义。
+pub fn render_graft_expression(
+    cut: &str,
+    cut_end: Option<&str>,
+    full: bool,
+    graft: &str,
+) -> Result<String, FaceSyntaxError> {
+    for (what, value) in [("cut", cut), ("graft", graft)] {
+        if value.trim().is_empty() {
+            return Err(spelling_error(format!("{what} must not be empty")));
+        }
+        // The logical-path and literal forms are a different spelling of the same grammar; a value
+        // carrying their punctuation would parse as that spelling instead of an expression.
+        // 逻辑路径与字面量是同一语法的另一种拼写；带它们标点的值会被解析成那种拼写而不是表达式。
+        if value.contains(['"', '[', ']', '\n', '\r']) {
+            return Err(spelling_error(format!(
+                "{what} `{value}` carries punctuation that belongs to another spelling of this \
+                 grammar; this renderer writes the typed-expression form only"
+            )));
+        }
+        if value.split("::").any(|segment| segment.trim() == "to") {
+            return Err(spelling_error(format!(
+                "{what} `{value}` has a `to` segment, which the parser reads as a range separator"
+            )));
+        }
+    }
+    if let Some(end) = cut_end
+        && (end.trim().is_empty() || end.contains(['"', '[', ']', '\n', '\r']))
+    {
+        return Err(spelling_error(format!(
+            "the range end `{end}` is not an expression this renderer can write"
+        )));
+    }
+    let range = cut_end.map_or(String::new(), |end| format!(" to {end}"));
+    let whole = if full { " full" } else { "" };
+    Ok(format!("cut({cut}{range}){whole} graft({graft})"))
+}
+
+/// A spelling this renderer refuses to write, with the reason and no location (the caller has not
+/// written it yet, so there is nothing to point at).
+/// 本渲染器拒绝写出的拼写，带原因、不带位置（调用方还没写下它，因此没有东西可指）。
+fn spelling_error(message: String) -> FaceSyntaxError {
+    FaceSyntaxError {
+        message,
+        location: None,
+    }
+}
+
 /// Parse static and dynamic graft declarations without executing them.
 /// 解析静态和动态 graft 声明，不执行宏。
 pub fn graft_entries(source: &str) -> Result<Vec<GraftSyntax>, FaceSyntaxError> {

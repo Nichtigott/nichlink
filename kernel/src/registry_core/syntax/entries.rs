@@ -15,4 +15,4 @@ mod application;
 mod graft;
 
 pub use application::application_entries;
-pub use graft::{GraftExpressions, GraftSyntax, graft_entries};
+pub use graft::{GraftExpressions, GraftSyntax, graft_entries, render_graft_expression};

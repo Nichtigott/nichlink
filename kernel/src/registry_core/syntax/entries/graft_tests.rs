@@ -1,7 +1,7 @@
 //! Tests for the `graft_plan!` / `static_graft_plan!` entry grammar.
 //! `graft_plan!` / `static_graft_plan!` 入口语法的测试。
 
-use super::graft_entries;
+use super::{graft_entries, render_graft_expression};
 
 #[test]
 fn graft_parser_collects_single_and_full_cuts() {
@@ -163,5 +163,81 @@ fn graft_parser_rejects_mixed_typed_and_string_sides() {
         error.message.contains("both sides"),
         "unexpected message: {}",
         error.message
+    );
+}
+
+/// A rendered declaration parses back into the same structure — the pair cannot drift.
+/// 渲染出来的声明解析回来是同一个结构——这一对无法漂移。
+///
+/// This is the acceptance for the writing half: the bridge is about to write graft declarations
+/// into host sources, and the only thing that keeps a generated spelling honest is that the
+/// repository's own parser reads it back as the declaration the caller meant.
+/// 这是**写出**那一半的验收：桥即将把 graft 声明写进宿主源码，而让生成的拼写保持诚实的唯一办法，是本仓
+/// 自己的解析器把它读回成调用方本意的那条声明。
+#[test]
+fn a_rendered_declaration_parses_back_into_the_same_structure() {
+    let line = render_graft_expression(
+        "crate::control::object::button::NODE_ID",
+        None,
+        true,
+        "control_button_graft::button_fast::NODE_ID",
+    )
+    .expect("the typed-expression form renders");
+    let source = format!("static_graft_plan! {{ {line} }}");
+    let parsed = graft_entries(&source).expect("and parses back");
+    assert_eq!(parsed.len(), 1, "{parsed:?}");
+    assert_eq!(parsed[0].cut, "crate::control::object::button::NODE_ID");
+    assert_eq!(
+        parsed[0].graft,
+        "control_button_graft::button_fast::NODE_ID"
+    );
+    assert!(parsed[0].full, "`full` survives the round trip");
+    assert!(parsed[0].cut_end.is_none());
+    assert!(parsed[0].expressions.is_some(), "it is the typed form");
+}
+
+/// A range keeps both endpoints through the round trip.
+/// 区间经回环后两个端点都在。
+#[test]
+fn a_rendered_range_keeps_both_endpoints() {
+    let line = render_graft_expression(
+        "crate::control::object::button::NODE_ID",
+        Some("crate::control::object::slider::NODE_ID"),
+        false,
+        "control_button_graft::button_fast::NODE_ID",
+    )
+    .expect("a typed range renders");
+    let parsed =
+        graft_entries(&format!("static_graft_plan! {{ {line} }}")).expect("and parses back");
+    assert_eq!(parsed[0].cut, "crate::control::object::button::NODE_ID");
+    assert_eq!(
+        parsed[0].cut_end.as_deref(),
+        Some("crate::control::object::slider::NODE_ID"),
+        "the far endpoint is data, not part of the start path"
+    );
+    assert!(!parsed[0].full);
+}
+
+/// The renderer refuses the spellings it cannot guarantee, and says why.
+/// 渲染器拒绝它无法保证的拼写，并说出原因。
+///
+/// The `to` case is the grammar's own trap: the parser reads a top-level `to` ident as a range
+/// separator, so a path whose segment is `to` would silently become a range. Writing it would put a
+/// declaration in a host that means something else than the caller asked for.
+/// `to` 那一条是语法自带的陷阱：解析器把顶层的 `to` 识别符读成区间分隔符，因此段名为 `to` 的路径会静默变成
+/// 区间。写下去就等于在宿主里放了一条与调用方所求不同的声明。
+#[test]
+fn the_renderer_refuses_a_spelling_it_cannot_guarantee() {
+    let refused = render_graft_expression("crate::to::NODE_ID", None, false, "x::y")
+        .expect_err("a `to` segment is read as a range separator");
+    assert!(refused.message.contains("range separator"), "{refused:?}");
+    let refused = render_graft_expression("crate::a::NODE_ID", None, false, "\"a string\"")
+        .expect_err("the literal spelling is a different shape");
+    assert!(refused.message.contains("another spelling"), "{refused:?}");
+    let refused = render_graft_expression("", None, false, "x::y").expect_err("empty is refused");
+    assert!(refused.message.contains("must not be empty"), "{refused:?}");
+    assert!(
+        refused.location.is_none(),
+        "nothing was written yet, so there is no location to point at"
     );
 }
