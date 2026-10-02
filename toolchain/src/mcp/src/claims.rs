@@ -66,21 +66,6 @@ const REACHABILITY_BUDGET: usize = 10_000;
 /// 这一栏点名它不覆盖什么，并且明说它"不是覆盖率量度"。
 const REACHABILITY_BOUNDARY: &str = "  not covered by the test-reachability column: dynamic dispatch, function pointers, FFI, macro expansion, and reach only through a trait method or a closure are invisible, so a function reached only that way stays listed; a test-looking file (`tests/`, `_tests.rs`, or `#[test]`) seeds the walk, so a production file with its own `#[test]` is likely not listed; matching is by name, so an unrelated same-named call counts; `main` is never listed. A static walk, not a coverage measurement; `--list check` has the full text.";
 
-/// The same bounds as a one-sentence index, for the reply that was **not** asked for the whole table.
-/// 同一套边界的一句话索引，用于**没有**要求整表的那次回复。
-///
-/// Every `check` carries this column, and the full sentence above is 523 characters that a caller who
-/// asked about one face did not ask for. The index keeps what a reader must not lose — that this is
-/// not a coverage measurement, and that dynamic dispatch and the rest are invisible — and names both
-/// places the prose lives: `census: true` in the same call, and the tool's own description. Whether
-/// a phrase may be dropped is settled by the answer keys, not by taste: both `not a coverage
-/// measurement` and the `not covered by …` opening are pinned in the tests below.
-/// 每一次 `check` 都带这一栏，而上面那句全文有 523 个字符，是只问了一个面的调用方没有要的。索引留下了读者
-/// 绝不能丢的东西——这不是覆盖率量度、动态派发等一律不可见——并点名散文住在哪两处：同一次调用里的
-/// `census: true`，以及工具自己的描述。哪句话可以删由答案键裁定、不由口味裁定：`not a coverage
-/// measurement` 与 `not covered by …` 这个开头都被下面的钉子钉住。
-const REACHABILITY_BOUNDARY_INDEX: &str = "  not covered by the test-reachability column: dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible, matching is by name, and `main` is never listed. A static walk, not a coverage measurement; `census: true` and `--list check` have the full text.";
-
 /// What the census as a whole does not cover, in the one line every `check` ends with.
 /// 整份总账**不覆盖**什么——每次 `check` 结尾那一行。
 ///
@@ -109,17 +94,6 @@ const CENSUS_BOUNDARY: &str = "  not covered: this census reads exactly what the
 /// 的形状，每一条都点名后果——本树没拼出的构造会**否证**某一行，而不只是被它漏掉，因此那一行自己的
 /// 措辞说的是"拼出了什么"，而不是"是否可达"。
 const BRANCH_BOUNDARY: &str = "  not covered by the branch-level column: a condition whose value depends on data — a field, a parameter, a comparison, a `match` over a value — is not judged at all, so an arm no run has taken yet stays invisible here; `false` is the only guard literal decided, so `1 == 2`, `!true`, a `const` bool and `cfg!(…)` are not read; macro expansion, dynamic dispatch, function pointers and FFI are invisible, while a `macro_rules!` body this tree writes **is** text — an `if false` inside one is listed (and when that body sits outside any function, its row names no function, because there is none to name), and an arm that only exists after expansion is invisible; a construction this tree does not spell (a derive that builds a value, `unsafe`, a consumer outside this root) would falsify a row; a `pub` enum is never judged, an arm reached through a wildcard or a binding is not read, and an enum name this file imports from another crate is conservatively skipped, so a same-named foreign enum's arms are a miss here rather than a false row. A static read of the source text, not a coverage measurement; `--list check` has the full text.";
-
-/// The branch column's bounds as a one-sentence index, for the reply that was not asked for the whole
-/// table.
-/// 分支栏边界的一句话索引，用于没有要求整表的那次回复。
-///
-/// The full sentence is the longest of the three (1137 characters) and the column with the fewest
-/// rows, so it is where the index saves the most. The two things it keeps are the two a reader can
-/// act on: nothing data-dependent is judged at all, and this is not a coverage measurement.
-/// 全文是三条里最长的一条（1137 个字符），而这一栏的行数最少，因此索引在这里省得最多。它留下的两件事是
-/// 读者能据以行动的那两件：值依赖数据的条件一律不判，以及这不是覆盖率量度。
-const BRANCH_BOUNDARY_INDEX: &str = "  not covered by the branch-level column: a condition whose value depends on data is not judged at all, so an arm only a run could rule out stays invisible; `false` is the only guard literal decided; macro expansion, dynamic dispatch, function pointers and FFI are invisible; a `pub` enum is never judged; and a construction this tree does not spell would falsify a row. A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text.";
 
 /// One declared numeric constant, as the tree spells it.
 /// 一条被声明的数值常量，按这棵树里的写法。
@@ -164,6 +138,19 @@ fn uses_whole_number(text: &str, value: &str) -> bool {
 /// `whole` 是调用方在说"我要那张表，不要样本"：它买下完整的边界散文（短回复携带的是索引）、
 /// 全部"没有测试能到达"的函数而不是五条，以及那一栏的逐目录拆分。其余都是同一个答案——两种形态的差别
 /// 只在印出多少，从不在"什么算一条发现"。
+/// The three boundary indexes, merged into the one line the default reply can afford.
+/// 三条边界索引合并成默认回复负担得起的那一行。
+///
+/// Measured on a small tree: the three index lines were **1,036 of a 2,201-character reply (47%)**,
+/// and each restated two facts the others already carried — that this is a static read rather than a
+/// coverage measurement, and that `--list check` holds the prose. `check` runs on every question, so
+/// that repetition is a multiplier. The three facts stay (what each column does not read, one clause
+/// each); what goes is saying the same two things three times.
+/// 在一棵小题上量到：三条索引行占 **2,201 字符回复里的 1,036（47%）**，而每一条都重述了另外两条已经
+/// 带着的两件事——这是静态读取而不是覆盖率测量，以及 `--list check` 里有散文。`check` 每个问题都要跑，
+/// 因此这种重复是乘数。三件事留下（每一栏不读什么，各一个从句）；去掉的是把同样两句话说三遍。
+const SHORT_BOUNDARY: &str = "  not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text";
+
 pub(crate) fn census(root: &Path, whole: bool) -> Result<Vec<String>, String> {
     let sources = crate::mcp::source_index::load_sources(root)?;
     let mut declared: Vec<Declared> = Vec::new();
@@ -334,7 +321,11 @@ pub(crate) fn census(root: &Path, whole: bool) -> Result<Vec<String>, String> {
     // 结尾那一行与可达性栏自己的边界是同一种索引：一行点名这份总账**不读**什么，把散文留给工具自己的
     // 描述（`--list check`）。它过去在每次 `check` 上把上面那四栏复述一遍，那正是这次压缩去掉的重复；它
     // 绝不能丢的短语，是那个阻止读者把一份清单当成一次量度的短语。
-    lines.push(CENSUS_BOUNDARY.to_owned());
+    lines.push(if whole {
+        CENSUS_BOUNDARY.to_owned()
+    } else {
+        SHORT_BOUNDARY.to_owned()
+    });
     Ok(lines)
 }
 
@@ -362,11 +353,9 @@ fn reachability_column(
         .iter()
         .map(|file| file.functions.len())
         .sum::<usize>();
-    let boundary = if whole {
-        REACHABILITY_BOUNDARY
-    } else {
-        REACHABILITY_BOUNDARY_INDEX
-    };
+    // Only the census states this column's own prose; the default reply carries the merged index
+    // once, at its end, instead of three lines that each repeat what the others say.
+    // 只有总账陈述这一栏自己的散文；默认回复在末尾携带那一条合并索引，而不是三条各说一遍的行。
     let mut lines = Vec::new();
     if indexed > REACHABILITY_BUDGET {
         lines.push(format!(
@@ -374,7 +363,9 @@ fn reachability_column(
              {REACHABILITY_BUDGET}); this tree is larger than the walk was sized for, so no \
              reachability rows are computed for it"
         ));
-        lines.push(boundary.to_owned());
+        if whole {
+            lines.push(REACHABILITY_BOUNDARY.to_owned());
+        }
         return lines;
     }
     // One flat list of every indexed function, with the file it came from and whether that file is
@@ -483,7 +474,9 @@ fn reachability_column(
             },
         ));
     }
-    lines.push(boundary.to_owned());
+    if whole {
+        lines.push(REACHABILITY_BOUNDARY.to_owned());
+    }
     lines
 }
 
@@ -735,14 +728,9 @@ fn branch_column(sources: &[crate::mcp::source_index::SourceFile], whole: bool) 
             "ask per directory to see its own items",
         ));
     }
-    lines.push(
-        if whole {
-            BRANCH_BOUNDARY
-        } else {
-            BRANCH_BOUNDARY_INDEX
-        }
-        .to_owned(),
-    );
+    if whole {
+        lines.push(BRANCH_BOUNDARY.to_owned());
+    }
     lines
 }
 

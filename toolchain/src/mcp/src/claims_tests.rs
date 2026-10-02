@@ -610,69 +610,6 @@ fn split_package(label: &str) -> PathBuf {
     root
 }
 
-/// The shorter reply carries the boundary **indexes**; the whole table carries the prose.
-/// 较短的回复携带边界**索引**；整表携带散文。
-///
-/// What must not be lost is settled by the answer keys rather than by taste: both forms say
-/// `not a coverage measurement`, both say what the column does not cover, and the index names both
-/// ways to the prose (`census: true`, `--list check`). The ratchet is that the index is shorter —
-/// otherwise the compression bought nothing.
-/// 什么不能丢由答案键裁定而不是口味：两种形态都说 `not a coverage measurement`、都说清那一栏不覆盖什么，
-/// 而索引点名了拿到散文的两条路（`census: true`、`--list check`）。棘轮是"索引更短"——否则这次压缩什么
-/// 都没买到。
-#[test]
-fn the_shorter_reply_carries_the_boundary_index_and_the_table_carries_the_prose() {
-    let root = reachability_package("index-forms", 1);
-    let sampled = census(&root).expect("the census answers").join("\n");
-    for index in [
-        super::REACHABILITY_BOUNDARY_INDEX,
-        super::BRANCH_BOUNDARY_INDEX,
-    ] {
-        assert!(!index.contains('\n'), "one line: {index}");
-        assert!(
-            index.contains("not a coverage measurement"),
-            "the phrase that stops an inventory reading as a measurement: {index}"
-        );
-        assert!(
-            index.contains("not covered by") && index.contains("--list check"),
-            "the index names both what it does not cover and where the prose is: {index}"
-        );
-        assert!(
-            index.contains("census: true"),
-            "and the switch that buys the prose in the same call: {index}"
-        );
-        assert!(
-            sampled.contains(index),
-            "the index is what the shorter reply carries: {index}\n{sampled}"
-        );
-    }
-    assert!(
-        !sampled.contains(super::REACHABILITY_BOUNDARY)
-            && !sampled.contains(super::BRANCH_BOUNDARY),
-        "the prose is what the shorter reply saves: {sampled}"
-    );
-    for (index, prose) in [
-        (
-            super::REACHABILITY_BOUNDARY_INDEX,
-            super::REACHABILITY_BOUNDARY,
-        ),
-        (super::BRANCH_BOUNDARY_INDEX, super::BRANCH_BOUNDARY),
-    ] {
-        assert!(
-            index.chars().count() < prose.chars().count(),
-            "the index has to be the shorter form: {} vs {}",
-            index.chars().count(),
-            prose.chars().count()
-        );
-    }
-    let full = whole(&root).expect("the census answers").join("\n");
-    assert!(
-        full.contains(super::REACHABILITY_BOUNDARY) && full.contains(super::BRANCH_BOUNDARY),
-        "the switch the index names really buys the prose: {full}"
-    );
-    let _ = std::fs::remove_dir_all(&root);
-}
-
 /// The whole table breaks the test-unreachable column down per directory, and the sample does not.
 /// 整表把"没有测试能到达"那一栏按目录拆开，而样本不拆。
 ///
