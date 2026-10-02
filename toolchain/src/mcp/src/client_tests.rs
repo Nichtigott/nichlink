@@ -650,3 +650,32 @@ fn the_table_lets_independent_lookups_share_a_turn() {
         );
     }
 }
+
+/// The table's pointer to a parent's rule uses `literal`, because `query` matches names.
+/// 表里指向父面规则的那句用 `literal`，因为 `query` 只匹配**名字**。
+///
+/// Measured (T-21, h2): the table said `search {query: "REGISTRATION_RULE"}` and the arm called
+/// exactly that — `query` matches faces, files and functions, so a `const` is not a name it knows and
+/// the reply was `no matches`. The reader then read the file by hand. `literal` matches text anywhere
+/// (comments and string literals included) and **its reply carries the way to the rest**
+/// (`note   pass context: 2 to print the lines around each hit here`), which is what the requirement
+/// list on the next line needed.
+/// 量到的（T-21 的 h2）：表里写的是 `search {query: "REGISTRATION_RULE"}`，那一臂就照着调了——而 `query`
+/// 匹配的是面、文件与函数，`const` 不是它认识的名字，回复是 `no matches`；读者随后手工 `read` 了那个文件。
+/// `literal` 匹配任意文本（含注释与字符串字面量），并且**它的回复自带"剩下的在哪"**
+/// （`note   pass context: 2 to print the lines around each hit here`）——而下一行那句 `require_exports` 正是
+/// 读者要的东西。
+#[test]
+fn the_pointer_to_a_parents_rule_uses_the_spelling_that_finds_it() {
+    // Only the instructions are asserted here: `pass literal` is what *search's reply* says, and it is
+    // pinned where that reply is built.
+    // 这里只断言指引页：`pass literal` 是 **search 的回复**里的话，钉在生成那条回复的地方。
+    assert!(
+        INSTRUCTIONS.contains("search {literal: \"REGISTRATION_RULE\"}"),
+        "the pointer uses the spelling that finds a const: {INSTRUCTIONS}"
+    );
+    assert!(
+        !INSTRUCTIONS.contains("search {query: \"REGISTRATION_RULE\"}"),
+        "the name-shaped spelling cannot find a const: {INSTRUCTIONS}"
+    );
+}
