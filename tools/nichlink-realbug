@@ -193,7 +193,16 @@ def build(repo_argument, commit, out_argument):
         result = run("cargo", "test", "--test", target, test["name"], cwd=work,
                      env=environment, timeout=1800)
         output = result.stdout + result.stderr
-        proof[label] = {"exit": result.returncode, "tail": output[-400:]}
+        # The name is searched in the **whole** output, not in the tail that goes into the record:
+        # the tail is the last 400 characters, and a failing test's name sits far above it — the
+        # first version checked the tail and reported "does not hold" on a run that plainly did.
+        # 名字在**整份**输出里找，而不是在入记录的那截尾部里：尾部是最后 400 字符，而失败测试的名字远在它上面
+        # ——第一版检查的正是尾部，于是一次显然成立的自证被报成 "does not hold"。
+        proof[label] = {
+            "exit": result.returncode,
+            "named_the_test": test["name"] in output,
+            "tail": output[-400:],
+        }
         if label == "reverted":
             for path in reverted:
                 run("git", "checkout", "-q", commit, "--", path, cwd=work)
@@ -210,7 +219,7 @@ def build(repo_argument, commit, out_argument):
     # passes.
     # 自证不是"先非零再零"：一次运行可能因为与注入毫无关系的原因失败（解析失败、工具链缺失），那是**假红**。
     # 让它成为证据的是：**回退后**的那次运行**点名了这条测试**地失败，而还原后通过。
-    named_the_test = test["name"] in proof["reverted"]["tail"]
+    named_the_test = proof["reverted"]["named_the_test"]
     evidence = {
         "reverted_failed": proof["reverted"]["exit"] != 0,
         "reverted_named_the_test": named_the_test,

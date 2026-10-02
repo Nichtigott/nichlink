@@ -103,6 +103,38 @@ out of the build"）；② **词表收成一份实现** `mechanism_words(klass)`
 **164,674 字符，其中 56%（91,623）来自不经过桥的命令**。这正是"输入侧那 10% 的来路"——以前要手写脚本才算
 得出来，现在一次调用就有。
 
+### 真实社区 bug 语料：`tools/nichlink-realbug`（T-17，2026-10-02）
+
+**配方**（`plan` 逐字打印）：选一笔"消息含 fix/bug/regress **且** 同时改了源码与测试"的提交 ⇒ **在该提交自己的
+检出上** `git apply -R` **只回退源码那一半**（测试留着）⇒ 机械解析"那条测试属于哪个 cargo 目标" ⇒ 红/绿自证 ⇒
+写 truth 与哈希。**题目就是那笔提交本身**：本脚本不写题、不写答案（与四类手工题遵循同一条"不用题库"的规则）。
+
+**端到端实测（ripgrep `de2567a`，2025-10-12，修 issue #3180）**：
+```
+injected  reverted crates/printer/src/util.rs
+test      r3180_look_around_panic in tests/regression.rs
+target    integration (`tests/tests.rs` includes `regression` as a module, and the manifest names it `integration`)
+reverted  exit 101 · restored exit 0
+verdict   holds（reverted_failed ✓ · reverted_named_the_test ✓ · restored_passed ✓）
+```
+
+**三处判据，都是实跑抓出来的**：
+① **测试有两种拼法**——普通 `fn`（通常在 `#[test]` 下）与**首参为测试名的宏调用**（`rgtest!(r3180_look_around_panic, …)`）；
+第一版只认前者，在一笔明显加了测试的提交上报 "adds no test function this generator can name" ✗。
+② **目标解析**——`tests/` 下的文件**默认**是它自己的目标，**除非**清单列出了目标且另一个文件把它作为模块引入
+（ripgrep：`tests/tests.rs` 引入 `regression`，目标名 `integration`）。跑错包是**假绿**，早先手工做这条配方时
+正是为此白跑一轮。
+③ **自证不是"先非零再零"**——任何原因的非零都是非零。三条同时成立才算证据：回退那次**非零** · 那次输出**点名了
+这条测试** · 还原那次**为零**。第一版用 `cargo test --offline`，而刚克隆的仓库依赖不在本地缓存 ⇒ **两次都因解析
+失败而 101**（假红）⇒ 外部语料不加 `--offline`（本检出自己的门禁保持 `--offline`）；随后第一版又把"点名测试"
+搜在输出的**末 400 字符**里，而失败测试名远在它上面 ⇒ 一次显然成立的自证被报成 `does not hold`（假阴性）✗。
+
+**输出落点**：`target/hardbug-runs/realbug/<repo>-<commit>/`（**耐久、gitignore**），`CARGO_HOME` 指到可写目录
+（沙箱里 `~/.cargo` 不可写）。
+
+**语料的意义**：上一轮已经证明那四道旧题**两臂都答得出**，差距只能在代价与形状上；只有题目难度真的上去，
+"能不能答"这一轴才重新有区分度。
+
 ### 校准记录（判据先被真答案校准过一次）
 
 W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个**文档违规，而不是一个：`signed` 的文档写着
