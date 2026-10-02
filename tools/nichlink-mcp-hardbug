@@ -1347,7 +1347,15 @@ def normalize_log_record(record):
             received = int(received) + int(record.get("stderr_chars", 0))
         return {
             "tool": argv[0] if argv else None,
-            "init": bool(argv) and argv[0] == "init",
+            # `init` is spelled differently by the two clients: the bridge names it after the tool
+            # (`nichlink.init`, or a bare `init`), while codegraph's launcher keeps the tool in
+            # `argv[0]` and the subcommand in `argv[1]` (`codegraph init …`) — the first version only
+            # looked at `argv[0]`, so five `codegraph init` calls were counted as answering calls
+            # (measured in T-21's review).
+            # `init` 在两个客户端里拼法不同：桥按工具名前缀（`nichlink.init` 或裸 `init`），而 codegraph
+            # 的启动器把工具名留在 `argv[0]`、子命令放 `argv[1]`（`codegraph init …`）——第一版只看
+            # `argv[0]`，于是五次 `codegraph init` 被算成答题调用（T-21 复核里量到的）。
+            "init": any(part.split(".")[-1] == "init" for part in argv[:2]),
             "sent": sum(len(part) for part in argv),
             "received": int(received),
             "argv": argv,
@@ -1480,9 +1488,26 @@ def report(log_path, session=None):
         offered += 1
         following = next((later for later in rows[index + 1:]
                           if normalize_log_record(later)["tool"]), None)
-        if following is not None and normalize_log_record(following)["tool"] in named.findall(hint):
+        # The comparison is **normalized on both sides**: the log names the tool the way the protocol
+        # does (`nichlink.check`) while a hint names it the way a reader would type it (`check`), and
+        # comparing the two spellings literally made this column report 0% for every round —
+        # measured in T-21: `0/24` literal versus `11/24` normalized on the same logs.
+        # 比对**两侧都要归一化**：日志按协议的写法点名工具（`nichlink.check`），而提示按读者会敲的写法
+        # （`check`），逐字比较会让这一栏每一轮都报 0%——T-21 实测：同一批日志逐字 `0/24`、归一化 `11/24`。
+        following_tool = None if following is None else normalize_log_record(following)["tool"]
+        if following_tool is not None and following_tool.split(".")[-1] in {
+            name.split(".")[-1] for name in named.findall(hint)
+        }:
             taken += 1
+    # The base line: which class of call this log actually records. The two arms of T-21 recorded
+    # **different classes** (one logged only bridge calls, the other logged shell too), and comparing
+    # the two totals as if they were one thing is how a 2.2x difference becomes invisible.
+    # 基数行：这份日志实际记的是哪一类调用。T-21 的两臂记了**不同的类**（一臂只记桥调用，另一臂连 shell 一起记），
+    # 把两个总数当成一回事来比，正是 2.2× 的差别变得看不见的原因。
+    classes = {normalize_log_record(row)["tool"] for row in rows}
+    classes.discard(None)
     print(f"log        {log_path}")
+    print(f"base       {len(classes)} tool(s) recorded here: {', '.join(sorted(classes))}")
     print(f"calls      {len(normalized)} ({len(answering)} answering, "
           f"{len(normalized) - len(answering)} init)")
     print(f"wasted     {waste['wasted_calls']} of {len(answering)} "
