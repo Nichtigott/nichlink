@@ -751,7 +751,39 @@ pub(crate) fn run_tool(root: &Path, name: &str, arguments: &Value) -> Result<Str
     // answer is taken, so the hint rides here — the single place a name becomes a handler.
     // W1.3：每个读答案末尾点名"下一次调用"。两轮实测 `--list` 都是 0 次调用，而写进答案的下一步会被
     // 照做，因此这句话挂在这里 —— 名字变成处理函数的唯一位置。
-    answer.map(|text| with_next_hint(name, text))
+    // T-23: the answer carries a line the caller can **quote** instead of re-running the call. The
+    // measured reason is bookkeeping, not curiosity: the brief demands that every claim come with
+    // the command, its raw output and its exit code, so the round's arm re-ran calls purely to have
+    // something to cite — "I claimed a closing `status` call … I haven't run it. Let me run it", and
+    // "I did NOT actually run explain … to make the claim true". Two calls spent on making a written
+    // sentence true is a call the answer can save.
+    // T-23：答案携带一行**可引用**的东西，让调用方不必为了引用而重跑。量出来的理由是记账而不是好奇：题面
+    // 要求每条声称都给命令、原始输出与退出码，于是那一轮的臂**为了有东西可引**而补跑调用——原文「I claimed
+    // a closing `status` call … I haven't run it. Let me run it」与「I did NOT actually run explain …
+    // to make the claim true」。为让一句写下来的话成真而花掉两次调用，正是答案能替它省下的。
+    //
+    // The line is rendered **from the same `arguments` value the dispatch ran with**, so it cannot
+    // describe a different call than the one that produced this answer; a refusal carries no line,
+    // because the refusal text is its own evidence.
+    // 这一行**由派发实际使用的那个 `arguments` 值**渲染，因此它不可能描述与产出本答案不同的另一次调用；
+    // 被拒的调用不携带这一行——拒绝文案本身就是它的证据。
+    answer.map(|text| with_evidence(name, arguments, with_next_hint(name, text)))
+}
+
+/// The quotable line: this call, and that it answered.
+/// 可引用的那一行：这次调用，以及它作答了。
+fn with_evidence(name: &str, arguments: &Value, text: String) -> String {
+    const BUDGET: usize = 120;
+    let mut request = arguments.to_string();
+    if request.chars().count() > BUDGET {
+        request = request.chars().take(BUDGET).collect::<String>() + "…";
+    }
+    let line = format!("evidence {name} {request} → exit 0");
+    if text.ends_with('\n') {
+        format!("{text}{line}\n")
+    } else {
+        format!("{text}\n{line}\n")
+    }
 }
 
 /// Append the next-call hint, unless the answer already names one.

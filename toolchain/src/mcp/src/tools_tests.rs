@@ -506,3 +506,43 @@ fn a_read_answer_names_the_next_call_exactly_once() {
         assert!(super::next_hint(name).is_some(), "{name} needs a hint");
     }
 }
+
+/// Every answer carries a line the caller can quote; a refusal carries none.
+/// 每个答案都带一行可引用的东西；被拒的调用不带。
+///
+/// Measured (W8): the arm re-ran calls purely to have something to cite — "I claimed a closing
+/// `status` call … I haven't run it. Let me run it" and "I did NOT actually run explain … to make the
+/// claim true". The brief demands a command, its raw output and its exit code per claim, so the line
+/// removes the only reason those re-runs existed.
+/// 实测（W8）：那一臂**为了有东西可引**而补跑调用——「I claimed a closing `status` call … I haven't
+/// run it. Let me run it」与「I did NOT actually run explain … to make the claim true」。题面要求每条
+/// 声称给命令、原始输出与退出码，因此这一行去掉了那些补跑存在的唯一理由。
+#[test]
+fn every_answer_carries_a_quotable_evidence_line() {
+    let root = scratch_package("evidence");
+    let answer = super::run_tool(&root, "nichlink.status", &json!({})).expect("status answers");
+    let last = answer.lines().last().expect("an answer has lines");
+    assert!(
+        last.starts_with("evidence nichlink.status "),
+        "the last line names this call: {answer}"
+    );
+    assert_eq!(
+        last, "evidence nichlink.status {} → exit 0",
+        "a call with no arguments renders an empty object, and says it answered"
+    );
+    let with_arguments =
+        super::run_tool(&root, "nichlink.search", &json!({"query": "nothing-here"}))
+            .expect("search answers, even with no matches");
+    let last = with_arguments.lines().last().expect("an answer has lines");
+    assert!(
+        last.contains("{\"query\":\"nothing-here\"}") && last.ends_with("→ exit 0"),
+        "and a call with arguments carries them: {last}"
+    );
+    // The line is rendered from the same `arguments` value the dispatch used, so it cannot describe
+    // a different call — and a refusal has no line at all, because its own text is the evidence.
+    // 这一行由派发实际使用的那个 `arguments` 值渲染，因此它不可能描述另一次调用——而被拒的调用完全没有
+    // 这一行，因为它的文案本身就是证据。
+    let refused = super::run_tool(&root, "nichlink.read", &json!({"path": 7}));
+    assert!(refused.is_err(), "a bad shape is refused");
+    let _ = std::fs::remove_dir_all(&root);
+}
