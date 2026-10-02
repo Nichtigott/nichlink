@@ -79,12 +79,13 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some(other) => {
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
-                 `rename`, `delete`, and `deepen`"
+                 `rename`, `delete`, `deepen`, and `cut`"
             ));
         }
         None => {
             return Err(
-                "nichlink.apply requires `action` (`add`, `edit`, `rename`, or `delete`)"
+                "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, or \
+                 `cut`)"
                     .to_owned(),
             );
         }

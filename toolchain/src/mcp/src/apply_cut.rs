@@ -86,14 +86,22 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
     std::fs::write(&plan, &edited)
         .map_err(|error| format!("{} is not writable: {error}", plan.display()))?;
     Ok(Outcome {
+        // The direction matters and I had it backwards once (round-9 review caught it by running the
+        // thing): the build's scope **narrows to** the subtrees the cuts name, so a cut is what makes
+        // a subtree part of what this application publishes — without it, a declared face is not
+        // shipped at all. Saying "stops shipping" describes the opposite of what the write does.
+        // 方向要紧，而我说反过一次（第九轮复核靠"跑一遍"抓到）：构建期作用域**收窄到**这些切口命名的子树，
+        // 因此切口正是"让这棵子树进入本应用所发布之物"的那一步——没有它，声明了的面根本不会被发布。说成
+        // "stops shipping" 描述的是这次写入的反面。
         message: format!(
-            "wrote one declaration to {}\n  {entry}\nthe build prunes the subtree this cut names \
-             ⇒ this application stops shipping {}; the build is the authority, so run `check` to \
-             confirm",
+            "wrote one declaration to {}\n  {entry}\nthe build's scope narrows **to** the subtrees \
+             these cuts name, so this cut is what makes {} part of what this application publishes \
+             (a declared face no cut names is not shipped); the build is the authority, so run \
+             `check` to confirm",
             plan.display(),
             if covered.is_empty() {
-                "no face whose module path this expression names (the build decides which records it \
-                 prunes)"
+                "no face whose module path this expression names (the build decides what the \
+                 narrowed scope contains)"
                     .to_owned()
             } else {
                 covered.join(", ")

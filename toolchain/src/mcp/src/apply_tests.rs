@@ -911,8 +911,14 @@ fn a_cut_is_rendered_by_the_kernel_and_read_back_before_it_is_written() {
         "the entry is the kernel's rendering: {reply}"
     );
     assert!(
-        reply.contains("stops shipping root/control/slider"),
-        "and the impact names the face the cut covers: {reply}"
+        reply.contains("part of what this application publishes")
+            && reply.contains("root/control/slider"),
+        "and the impact names the face the cut covers, in the right direction: {reply}"
+    );
+    assert!(
+        !reply.contains("stops shipping"),
+        "a cut **starts** publishing a subtree — the round-9 review caught this message saying the \
+         opposite: {reply}"
     );
     assert_eq!(
         std::fs::read_to_string(root.join("src/lib.rs")).expect("plan"),
@@ -990,4 +996,48 @@ fn a_cut_that_cannot_be_written_is_refused_with_its_reason() {
     );
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&bare);
+}
+
+/// The tool's own enumeration of its actions matches the ones it dispatches.
+/// 工具对自身动作的枚举，与它真正分派的那些一致。
+///
+/// Measured (round-9 review, by running the thing): `--list apply` and the `bogus action` refusal
+/// both omitted `cut` (and one omitted `deepen`), so a reader was told the tool cannot do what it
+/// does. A promise surface that lags the capability surface is the same defect the client's `keys:`
+/// line had — the reader believes the enumeration.
+/// 量到的（第九轮复核，靠真跑）：`--list apply` 与 `bogus action` 的拒绝都漏了 `cut`（其中一个还漏了
+/// `deepen`），于是读者被告知这个工具做不到它其实做得到的事。承诺面落后于能力面，与客户端 `keys:` 行那个
+/// 缺陷同族——读者相信枚举。
+#[test]
+fn the_advertised_actions_match_the_dispatched_ones() {
+    let (root, _name) = package("cut-enum");
+    let refused = super::apply(&root, &json!({"action": "bogus"})).expect_err("bogus is refused");
+    for action in ["add", "edit", "rename", "delete", "deepen", "cut"] {
+        assert!(
+            refused.contains(action),
+            "the refusal names every action it supports, including `{action}`: {refused}"
+        );
+    }
+    let missing = super::apply(&root, &json!({})).expect_err("no action is refused");
+    for action in ["add", "edit", "rename", "delete", "deepen", "cut"] {
+        assert!(
+            missing.contains(action),
+            "and so does the missing-action refusal, including `{action}`: {missing}"
+        );
+    }
+    let listed = crate::mcp::tools::tools();
+    let apply = listed
+        .iter()
+        .find(|tool| tool["name"] == "nichlink.apply")
+        .expect("apply is advertised");
+    let enum_values = apply["inputSchema"]["properties"]["action"]["enum"]
+        .as_array()
+        .expect("the schema enumerates the actions");
+    for action in ["add", "edit", "rename", "delete", "deepen", "cut"] {
+        assert!(
+            enum_values.iter().any(|value| value == action),
+            "the schema's enum carries `{action}`: {enum_values:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
 }
