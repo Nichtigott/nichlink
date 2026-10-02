@@ -867,3 +867,127 @@ fn the_deepen_preview_names_the_pins_it_leaves_alone() {
         "and the call that shows them is named: {preview}"
     );
 }
+
+/// A cut is rendered by the kernel, read back before it is written, and previewed with its impact.
+/// 切口由内核渲染、写盘前先读回、预览里带上影响面。
+///
+/// Measured (maintainer's question): `graft`/`add`/`new` split into "the tool writes it" and "the
+/// author writes it by hand", and cuts were the hand-written half — the bridge only counted them
+/// (`apply.rs` counted `cut(` sites). Now it writes one, through the kernel's renderer, and refuses
+/// to write anything that does not read back as exactly one more declaration.
+/// 量到的（维护者的问题）：`graft`/`add`/`new` 分成"工具写"与"作者手写"两半，而切口正是手写那一半——桥只
+/// 数它们。现在它会写一条，经内核的渲染器，并拒绝写下任何读回来不是"恰好多一条声明"的东西。
+#[test]
+fn a_cut_is_rendered_by_the_kernel_and_read_back_before_it_is_written() {
+    // The host is the repository's own example, copied: a thin fixture has no registration faces,
+    // so the impact line would have nothing to name and the pin would prove less than it claims.
+    // 宿主用本仓自己的示例（复制一份）：薄夹具没有注册面，影响面那行就没有名字可点，钉子会证明得比它声称的少。
+    let root = std::env::temp_dir().join(format!("mcp-apply-cut-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let example = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/control-button");
+    let status = std::process::Command::new("rsync")
+        .args(["-a", "--exclude", "target"])
+        .arg(format!("{}/", example.display()))
+        .arg(format!("{}/", root.display()))
+        .status()
+        .expect("rsync runs");
+    assert!(status.success(), "the example host copies");
+    let plan = std::fs::read_to_string(root.join("src/lib.rs")).expect("host entry");
+
+    let reply = super::apply(
+        &root,
+        &json!({
+            "action": "cut",
+            "cut": "crate::control::object::slider::NODE_ID",
+            "graft": "carrier::slider_fast::NODE_ID",
+            "full": true,
+        }),
+    )
+    .expect("the preview answers");
+    assert!(
+        reply.contains(
+            "cut(crate::control::object::slider::NODE_ID) full graft(carrier::slider_fast::NODE_ID)"
+        ),
+        "the entry is the kernel's rendering: {reply}"
+    );
+    assert!(
+        reply.contains("stops shipping root/control/slider"),
+        "and the impact names the face the cut covers: {reply}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/lib.rs")).expect("plan"),
+        plan,
+        "a preview does not touch the project's own file"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Applying it writes exactly one more declaration, and that declaration parses.
+/// 落盘写下**恰好**多一条声明，而且那条声明是能解析的。
+#[test]
+fn an_applied_cut_adds_exactly_one_parseable_entry() {
+    let (root, _name) = package("cut-apply");
+    let plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+                cut(crate::control::object::button::NODE_ID)\n        \
+                graft(control_button_graft::button_fast::NODE_ID),\n);\n";
+    std::fs::write(root.join("src/lib.rs"), plan).expect("host entry");
+    let before = nichlink_kernel::syntax::entries::graft_entries(plan)
+        .expect("the plan parses")
+        .len();
+
+    super::apply(
+        &root,
+        &json!({
+            "action": "cut",
+            "cut": "crate::control::object::slider::NODE_ID",
+            "graft": "carrier::slider_fast::NODE_ID",
+            "full": true,
+            "apply": true,
+            "confirm": true,
+        }),
+    )
+    .expect("the write happens");
+    let written = std::fs::read_to_string(root.join("src/lib.rs")).expect("plan");
+    let after = nichlink_kernel::syntax::entries::graft_entries(&written)
+        .expect("the written plan still parses");
+    assert_eq!(after.len(), before + 1, "{written}");
+    assert_eq!(after[1].cut, "crate::control::object::slider::NODE_ID");
+    assert_eq!(after[1].graft, "carrier::slider_fast::NODE_ID");
+    assert!(after[1].full, "`full` survives: {written}");
+    assert_eq!(
+        after[0].cut, "crate::control::object::button::NODE_ID",
+        "and the existing entry is untouched"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The two refusals: a spelling the kernel will not write, and a host with no plan.
+/// 两种拒绝：内核不肯写的拼写，以及没有计划的宿主。
+#[test]
+fn a_cut_that_cannot_be_written_is_refused_with_its_reason() {
+    let (root, _name) = package("cut-refuse");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK, cut(a::b::NODE_ID) graft(c::d::NODE_ID),);\n",
+    )
+    .expect("host entry");
+    let refused = super::apply(
+        &root,
+        &json!({"action": "cut", "cut": "crate::to::NODE_ID", "graft": "carrier::x::NODE_ID"}),
+    )
+    .expect_err("a `to` segment is read as a range separator");
+    assert!(refused.contains("range separator"), "{refused}");
+
+    let (bare, _name) = package("cut-no-plan");
+    let refused = super::apply(
+        &bare,
+        &json!({"action": "cut", "cut": "crate::a::NODE_ID", "graft": "carrier::x::NODE_ID"}),
+    )
+    .expect_err("a host with no plan has nothing to add to");
+    assert!(
+        refused.contains("static_graft_plan!"),
+        "and the refusal names the shape a caller needs: {refused}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&bare);
+}

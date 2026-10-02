@@ -22,6 +22,9 @@
 
 use std::path::{Path, PathBuf};
 
+#[path = "apply_cut.rs"]
+mod apply_cut;
+
 use crate::build_time::{face_views, source_layout};
 use crate::runtime::{AuthoringContext, NewModuleFace};
 use nichlink_kernel::Registry;
@@ -50,6 +53,10 @@ enum Action {
     /// Add a layer **inside** one face, leaving its declaration, path and tree row alone.
     /// 在一个面**内部**加一层，不动它的声明、路径与树行。
     Deepen,
+    /// Hand one face's subtree over to another implementation, by writing the declaration the
+    /// build-time plan reads.
+    /// 把一个面的子树交给另一份实现：写进构建期计划读的那条声明。
+    Cut,
 }
 
 /// Run one edit request, previewing unless `apply` is true.
@@ -68,6 +75,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some("rename") => Action::Rename,
         Some("delete") => Action::Delete,
         Some("deepen") => Action::Deepen,
+        Some("cut") => Action::Cut,
         Some(other) => {
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
@@ -98,6 +106,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         }
         Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
         Action::Deepen => run_deepen(target.work_dir(root), &namespace, arguments),
+        Action::Cut => apply_cut::run_cut(target.work_dir(root), arguments),
     };
     let outcome = match outcome {
         // A preview ran in the copy, so the paths the executor reported belong to
