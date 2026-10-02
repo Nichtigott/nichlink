@@ -243,10 +243,20 @@ fn conformance_answers_unknown_lapsed_and_in_force() {
         "the covered files and the bounds ride along: {answer}"
     );
 
-    let missing = super::conformance(&root, &json!({})).expect_err("an anchor is required");
+    // The contract here was **replaced**, not relaxed: asking without an anchor used to be an error
+    // ("an anchor is required"), and it now lists every anchor, one line each. Measured (T-21): two
+    // entries cost two calls, and what a caller wants first is "which of these still hold".
+    // 这条契约是**被替换**而不是被放宽：不带 anchor 以前是错误（"an anchor is required"），现在逐行列出每个
+    // 锚点。量到的（T-21）：两条条目要两次调用，而调用方首先想知道的是"这些里面哪些还成立"。
+    let all = super::conformance(&root, &json!({})).expect("no anchor lists every anchor");
     assert!(
-        missing.contains("`anchor`") && missing.contains("accepted shape"),
-        "{missing}"
+        all.contains("  lapsed      root/control/button")
+            && all.contains("provisional 0  lapsed 1"),
+        "every anchor is listed with its verdict: {all}"
+    );
+    assert!(
+        all.contains("for one anchor\'s history"),
+        "and the way to one anchor's history is named: {all}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

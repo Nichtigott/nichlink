@@ -206,6 +206,23 @@ def build(repo_argument, commit, out_argument):
         if label == "reverted":
             for path in reverted:
                 run("git", "checkout", "-q", commit, "--", path, cwd=work)
+    # **And then put the question back.** The self-proof has to see both states, but what must be left
+    # on disk is the **question** — the source reverted — because that is the tree an arm is asked
+    # about. The first version ended this function in the restored state, and T-21 then measured what
+    # that costs: the arm found the test green, told itself "maybe the tree is NOT reverted at all",
+    # and spent 271,477 characters (72% of its whole chain) on a question whose defect was not there.
+    # **然后把题目放回去。** 自证必须看到两个状态，但留在盘上的必须是**题目**——源码处于回退态——因为那才是
+    # 臂被问的那棵树。第一版在这个函数结束时留下的是还原态，T-21 于是量到了它的代价：那一臂发现测试是绿的、
+    # 对自己说「maybe the tree is NOT reverted at all」，并把 271,477 字符（它整条链的 72%）花在一道**缺陷不在
+    # 树里**的题上。
+    for path in reverted:
+        patch = run("git", "show", commit, "--", path, cwd=work).stdout
+        applied = subprocess.run(["git", "apply", "-R", "-"], input=patch, text=True, cwd=work,
+                                 capture_output=True)
+        if applied.returncode != 0:
+            raise SystemExit(f"cannot leave {path} in the injected state: {applied.stderr.strip()}")
+    state = subprocess.run(["git", "status", "--porcelain", "--", *reverted], text=True, cwd=work,
+                           capture_output=True).stdout.strip().splitlines()
     line = None
     for row in diff.splitlines():
         if row.startswith("@@") and reverted:
@@ -237,6 +254,17 @@ def build(repo_argument, commit, out_argument):
                        "test": test["name"]},
         "target": {"name": target, "why": why},
         "self_proof": proof,
+        # The state the tree is left in, so nobody has to infer it: `injected` means the source is
+        # reverted and the defect is present — that is the question. A record that does not say this
+        # is a record that lets the next reader ask the question T-21's arm had to ask itself.
+        # 树被留下的状态，免得有人要去推断它：`injected` = 源码已回退、缺陷在场——那就是题目。不写明这一点的记录，
+        # 就是让下一个读者去问 T-21 那一臂不得不自己回答的那个问题。
+        "tree_state": {
+            "state": "injected",
+            "means": "the source half is reverted, so the defect is present and the named test fails",
+            "reverted_files": reverted,
+            "working_tree": state,
+        },
         "apparatus": {"tool_sha256": hashlib.sha256(TOOL.read_bytes()).hexdigest()},
     }
     (out / ".audit").mkdir(exist_ok=True)
@@ -247,6 +275,7 @@ def build(repo_argument, commit, out_argument):
     print(f"target    {target} ({why})")
     print(f"reverted  exit {proof['reverted']['exit']} (must be non-zero)")
     print(f"restored  exit {proof['restored']['exit']} (must be zero)")
+    print(f"state     injected (left reverted: {', '.join(reverted)}) — the question is on disk")
     print(f"truth     {out / '.audit/truth.json'}")
     return 0
 

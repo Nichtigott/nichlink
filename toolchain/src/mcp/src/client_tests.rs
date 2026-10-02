@@ -596,3 +596,31 @@ fn the_table_says_where_a_parents_rules_live() {
         );
     }
 }
+
+/// The table points from a one-object question at the family comparison, because that is the call
+/// that answers it.
+/// 表从一个"单个对象"的问题**指向**族比较——因为那才是回答它的调用。
+///
+/// Measured (T-21, h1): the arm read four sibling files in a row to work out that eight siblings add
+/// `to_local(7)` and one adds `to_world(31)`. `consistency --parent root/control` answers exactly
+/// that **in one call** — it prints each sibling's own calls and names the outlier — and it was in
+/// the table already, under the *several-named* row. The capability was there; the pointer from the
+/// one-object row was not, which is the same shape as the parent-rule channel.
+/// 量到的（T-21 的 h1）：那一臂连着读了四个兄弟文件才弄清八个兄弟加 `to_local(7)`、一个加
+/// `to_world(31)`。`consistency --parent root/control` **一次**就答这个——它印出每个兄弟各自的调用并点名异类
+/// ——而它本来就在表里，只是挂在"点名多个"那一行。**能力在，从"单个对象"那一行过去的指路不在**——与父面规则
+/// 那条通道是同一个形状。
+#[test]
+fn the_table_points_a_family_question_at_the_family_comparison() {
+    for expected in [
+        "(an object in a family)",
+        "consistency --parent <its parent>",
+        "names the outlier",
+        "对象有兄弟时",
+    ] {
+        assert!(
+            INSTRUCTIONS.contains(expected),
+            "the table carries `{expected}`: {INSTRUCTIONS}"
+        );
+    }
+}

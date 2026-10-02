@@ -87,17 +87,63 @@ pub(crate) fn entries(root: &Path) -> Result<Vec<AdoptionEntry>, String> {
 /// 这个问题是台账自己的，因此在这里回答，而不是另开一个模块再读一遍同一个文件。租约语义来自内核：
 /// 同一个 anchor 的**最后一条**生效。
 pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, String> {
-    let anchor = arguments
+    let entries = entries(root)?;
+    let requested = arguments
         .get("anchor")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|anchor| !anchor.is_empty())
-        .ok_or_else(|| {
-            "conformance needs `anchor`: the route a ledger entry names — accepted shape: \
-             {\"anchor\":\"<anchor>\",\"root\":\"<path>\"}"
-                .to_owned()
-        })?;
-    let entries = entries(root)?;
+        .filter(|anchor| !anchor.is_empty());
+    // No anchor means **every** anchor, one line each. Measured (T-21): asking about two entries cost
+    // two calls, because the argument was required — and the fact a caller wants is usually "which of
+    // these still hold", not "the third one's history". The per-anchor view below is unchanged.
+    // 不带 anchor 就是**每个**锚点一行。量到的（T-21）：问两条条目要两次调用，因为这个参数是必填的——而调用方
+    // 通常要的是"这些里面哪些还成立"，不是"第三条的历史"。下面的单锚点视图一个字没改。
+    let Some(anchor) = requested else {
+        if entries.is_empty() {
+            return Ok(format!(
+                "no adoption ledger at {}\nAn adoption is provisional and needs a person to \
+                 confirm it: write one with `anchor`, `certifies`, `evidence`, `verifier`, `reason` \
+                 and `files`, plus `apply` and `confirm`.\n",
+                ledger_path(root).display()
+            ));
+        }
+        let mut output = format!(
+            "evidence: adoption ledger at {} (an adoption is a lease: the newest line for an anchor \
+             is the one in force)\n",
+            ledger_path(root).display()
+        );
+        let mut provisional = 0usize;
+        let mut lapsed = 0usize;
+        let mut seen: Vec<&str> = Vec::new();
+        for entry in &entries {
+            if seen.contains(&entry.anchor.as_str()) {
+                continue;
+            }
+            seen.push(&entry.anchor);
+            let in_force = entries
+                .iter()
+                .rfind(|candidate| candidate.anchor == entry.anchor)
+                .expect("the anchor came from this list");
+            let current = read_files(root, &in_force.files)?;
+            let state = state_of(in_force, &current);
+            match &state.verdict {
+                AdoptionVerdict::Lapsed { file } => {
+                    lapsed += 1;
+                    output.push_str(&format!("  lapsed      {} ({file})\n", in_force.anchor));
+                }
+                _ => {
+                    provisional += 1;
+                    output.push_str(&format!("  in force    {}\n", in_force.anchor));
+                }
+            }
+        }
+        output.push_str(&format!(
+            "provisional {provisional}  lapsed {lapsed}\nnext   `conformance {{anchor: \"<one of \
+             the above>\"}}` for one anchor's history, `adopted` for the entries in full\n"
+        ));
+        return Ok(output);
+    };
+
     let history: Vec<&AdoptionEntry> = entries
         .iter()
         .filter(|entry| entry.anchor == anchor)
