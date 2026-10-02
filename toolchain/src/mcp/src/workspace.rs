@@ -353,8 +353,25 @@ pub(crate) enum Stage {
 /// happens to need.
 /// `root` 处的树处于哪个阶段——由磁盘上有什么决定，而不是由某个工具恰好需要什么决定。
 pub(crate) fn stage(root: &Path) -> Stage {
-    if !root.join("Cargo.toml").is_file() {
+    let manifest = root.join("Cargo.toml");
+    if !manifest.is_file() {
         return Stage::Bare;
+    }
+    // A **workspace root** is not a tree that needs starting: it has members, and the roster is a
+    // real answer about it (`registry` lists them). Refusing it as "faceless" swallowed exactly that
+    // answer and turned a member listing into an invitation to run `apply {action: "add"}` on a root
+    // that has no package to add to — measured by this file's own pin going red.
+    // **工作区根**不是一棵需要起步的树：它有成员，而成员清单是关于它的真实答案（`registry` 会列出它们）。
+    // 把它当成"无面"拒绝，恰好吞掉了那个答案，并把一份成员清单变成"对一个没有包可加的根跑
+    // `apply {action: "add"}`"的邀请——这是本文件自己的钉子变红量出来的。
+    let declares_workspace =
+        std::fs::read_to_string(&manifest).is_ok_and(|text| text.contains("[workspace]"));
+    if declares_workspace
+        && !std::fs::read_to_string(&manifest)
+            .unwrap_or_default()
+            .contains("[package]")
+    {
+        return Stage::Faceful;
     }
     // Decided from the sources, not from Cargo: a tree whose manifest cannot resolve still has to
     // be placeable, and the answer that matters here is "are there roles declared yet". This is the
@@ -364,9 +381,10 @@ pub(crate) fn stage(root: &Path) -> Stage {
     let Ok(sources) = crate::mcp::source_index::load_sources(root) else {
         return Stage::Faceless;
     };
-    let declares = sources.iter().any(|file| {
-        nichlink_kernel::syntax::parse_faces(&file.source).is_ok_and(|faces| !faces.is_empty())
-    });
+    let declares = declares_workspace
+        || sources.iter().any(|file| {
+            nichlink_kernel::syntax::parse_faces(&file.source).is_ok_and(|faces| !faces.is_empty())
+        });
     if declares {
         Stage::Faceful
     } else {
