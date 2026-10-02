@@ -1,18 +1,24 @@
 # 第八轮逐题对照表（2026-10-02）
 
-口径：**预设答案**（`tools/nichlink-mcp-eval` 的关卡预设 + 四道 hardbug 的 `truth.json`）· **本轮**（现桥，
-`target/round8/answers/`）· **第七轮同臂**（`answer-mcp-*`，对"回归"最直接的一列）· **第七轮对照臂**
-（`answer-cg-*`）。**四道 hardbug 是第七轮之后新加的题**，第七轮没有它们 ⇒ 那四行的对照换成 **T-21 的对照臂**
+**列名先说清**（先前起得含糊，维护者当场问"同臂指的是 codegraph？"——**不是**）：
+
+| 列 | 是谁 | 文件 |
+| --- | --- | --- |
+| **本轮（我们）** | 第八轮，当前检出的桥 | `target/round8/answers/<id>.md` |
+| **第七轮（我们）** | 第七轮**我们自己那一臂**（原列名"同臂"＝与我们同臂） | `target/round7/answer-mcp-<id>.md` |
+| **第七轮（codegraph）** | 第七轮的**对照臂**＝codegraph CLI | `target/round7/answer-cg-<id>.md` |
+
+口径：**预设答案**（`tools/nichlink-mcp-eval` 的关卡预设 + 四道 hardbug 的 `truth.json`）· 其余三列如上。**四道 hardbug 是第七轮之后新加的题**，第七轮没有它们 ⇒ 那四行的对照换成 **T-21 的对照臂**
 （`target/hardbug-runs/t21/answers/arm-codegraph/`）+ 登记真值。行号都由复核者回源码实核过。
 
 ## 有效 15 题
 
-| 题 | 问题（一句） | 预设 / 真值 | 本轮（现桥） | 第七轮同臂 | 第七轮对照臂 | 判定 |
+| 题 | 问题（一句） | 预设 / 真值 | 本轮（现桥） | 第七轮（我们） | 第七轮（codegraph） | 判定 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `s1` | 谁调用了 `Store::post`（调用者在另一个 crate） | 至少点名 `report.rs` 那三处 | `report.rs:13-15`（唯一调用者）+ 定义 `store.rs:21`；**1 次调用** | `report.rs:11` 的 `store()`，`:13/14/15` 三处 | `report.rs:11` + 三处 `:20/35/44`；**3 次调用** | **持平**（更省：1 vs 3） |
 | `s2` | 全绿但有一个面是红的，是哪个面 | `audit` 面 | 红面 `audit`；病灶 `core/src/audit.rs:9`（`== 0` 应为 `!= 0`）；门控 `lib.rs:8`；断言 `tests/audit.rs:24` | 同上（含失败断言原文） | 同上 | **持平** |
 | `s3` | 哪些函数没有任何测试能到达 | `audit_unused` | 恰好 1 个：`audit_unused`（`core/src/audit.rs:14`）**并写出边界**（测试文件里 5 个同名函数由 harness 调用） | 同上（`test-reachable: 1 of 12`） | 同上 | **持平** |
-| `s4` | 哪些测试文件能到达这个类型、经哪条路 | 三条路，各自经谁 | 命令面**对**；但说"后两个经 `Store::post→postable`" ✗（`buckets.rs:13-14` 实走 `Entry::new`，`model.rs:21`） | **说对了**（`report.rs` 经 `post`；`buckets.rs`/`audit.rs` 经 `Entry::new`） | 只给 `postable ← post ← store()` 那一路 | **变差** ✗（第七轮同臂本来是对的） |
+| `s4` | 哪些测试文件能到达这个类型、经哪条路 | 三条路，各自经谁 | 命令面**对**；但说"后两个经 `Store::post→postable`" ✗（`buckets.rs:13-14` 实走 `Entry::new`，`model.rs:21`） | **说对了**（`report.rs` 经 `post`；`buckets.rs`/`audit.rs` 经 `Entry::new`） | 只给 `postable ← post ← store()` 那一路 | **变差** ✗（第七轮（我们）本来是对的） |
 | `s5` | 渲染缺了什么 | 两处病灶 | `render.rs:7-14` 从不调 `write_count`（`:17-19`，全树 0 调用点）+ `query.rs:27` 下限方向反 | 同上 | 同上 | **持平** |
 | `s6` | 契约与实现一致吗 | 不一致（`\|\|` vs "带凭据且非零"） | 修法**对**（`model.rs:38` → `&&`/`!= 0`）；但"N 无凭据的非零分录变成可入账"与实现矛盾（该格两侧同为 `false`）✗，未覆盖类只写 `has_receipt == false` | 契约/实现在 `model.rs:32-36`/`:37-38`，判**不一致** ✓ 无错述 | `model.rs:33-37`/`:38-39` + 全树 `Entry::new(..., true)` | **变差** ✗（错误断言） |
 | `s7` | 分桶的上限含不含 1000 | 1000 应归 `large` | `buckets.rs:10` `<= 1000` ⇔ `limits.rs:10` `SMALL_LIMIT=1000` + 文档"below" | 同上 | 同上 | **持平** |
@@ -26,7 +32,7 @@
 | `h4-one-file-many-algorithms` | 一条分支不可达 | 真值 `entry.rs:31` | `entry.rs:30-32` 的 `zero_arm` 不看 `self`；`Refuse` 臂不可达；契约 `:34-37` | —（新题） | T-21 对照臂：`entry.rs:31` ✓ | **正确，与对照持平** |
 
 **判定口径的两点更正**（照"分母/口径写清"那条纪律）：
-1. 四道 hardbug 的"**变好**"是相对**第七轮同臂**说的，而那四题第七轮**没有** ⇒ 严格说法是
+1. 四道 hardbug 的"**变好**"是相对**第七轮（我们）**说的，而那四题第七轮**没有** ⇒ 严格说法是
    **"新题且与 T-21 对照臂同为正确"**（不该记进"变好"的分母里）；
 2. 按此重算，**有效 15 题的判定是**：**正确/持平 12 · 变差 2（s4 · s6）· 一处漏列（g4）**，
    另有四道新题**与对照持平**。
