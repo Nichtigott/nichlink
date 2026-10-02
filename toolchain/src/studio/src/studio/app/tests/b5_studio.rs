@@ -35,12 +35,38 @@ fn only_the_four_arrows_ask_for_a_tree_step() {
         );
     }
     // The page's own cursor step uses that mapping and nothing else.
-    let navigation = include_str!("../navigation.rs");
+    //
+    // **This half is structural, and here is its measured ceiling** (audit `N-6`): a mutation that
+    // replaces the guard with `TreeStep::from_key(key).unwrap_or(TreeStep::Right)` **survives every
+    // behaviour pin in this file**, because the only thing the tree arm does after the guard is
+    // `hop_call_tree`, which returns early when there is no call graph — so with the current
+    // fixtures there is no observable difference to assert. A behaviour pin for this arm needs a
+    // fixture carrying a real call graph; until then the strongest available check is on the shape,
+    // and it is written against **tokens** rather than characters so that a rewrite which only moves
+    // whitespace or wraps a call does not silently pass (the audit's own bypass: `M7` escaped once by
+    // changing case).
+    // 这半是**结构性**的，而它的**实测上限**如下（审计 `N-6`）：把守卫换成
+    // `TreeStep::from_key(key).unwrap_or(TreeStep::Right)` 的变异**能存活于本文件里每一条行为钉子**——因为树那一
+    // 支在守卫之后只做 `hop_call_tree`，而没有调用图时它立刻返回，因此在现有夹具下**没有被观察的差别**可断言。要
+    // 给这一支写行为钉子，需要一个带真实调用图的夹具；在那之前，最强可用的检查就落在形状上，而它按**词法单元**而不是
+    // 字符写，好让"只挪空白、只包一层调用"的重写不会静默通过（审计自己举的绕过例子：`M7` 靠改大小写逃过一次）。
+    let navigation = super::flattened(include_str!("../navigation.rs"));
     assert!(
-        navigation.contains("let Some(step) = TreeStep::from_key(key) else {")
-            && !super::flattened(navigation).contains(&super::flattened("_ => TreeStep::Right")),
-        "the cursor step must refuse an unknown key, not default to `Right`"
+        navigation.contains(&super::flattened(
+            "let Some(step) = TreeStep::from_key(key) else"
+        )),
+        "the cursor step must let the mapping decide, with an `else` that refuses"
     );
+    for default in [
+        "unwrap_or(TreeStep::Right)",
+        "unwrap_or_default()",
+        "_ => TreeStep::Right",
+    ] {
+        assert!(
+            !navigation.contains(&super::flattened(default)),
+            "an unknown key must be refused, not defaulted to `Right` (`{default}`)"
+        );
+    }
 }
 
 /// Every path into the editor form goes through the one function.
