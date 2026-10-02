@@ -772,5 +772,25 @@ fn a_dead_arms_row_carries_the_contract_of_its_function() {
         !row.contains("///"),
         "the rendered contract text must not keep its markers, indented or not: {row}"
     );
+    // Coupling pin (T-01), and the first version of it was worthless: it computed the expected
+    // value by calling `note::numbered` itself, so mutating the outlet moved both sides at once and
+    // the assertion stayed green. A **self-referential pin measures nothing**. What has teeth is the
+    // literal below (mutate the outlet's joiner and this fails) plus the structural half (the note
+    // is rendered by the outlet rather than by a second joiner in this file).
+    // 耦合钉子（T-01），而它的第一版毫无价值：它自己调 `note::numbered` 算出期望值，于是变异共享出口时两边
+    // 一起变、断言照样绿。**自指的钉子什么也没量。** 有牙的是下面这个**字面量**（把出口的接法变异掉它就会
+    // 失败），加上结构那一半（这条注由出口渲染，而不是本文件里第二个拼接器）。
+    assert!(
+        row.contains(
+            "the contract above it says 4: Which mode decides the answer. / 6: The second line \
+             carries the promise."
+        ),
+        "the note is the outlet's output, verbatim: {row}"
+    );
+    let source = include_str!("claims.rs");
+    assert!(
+        source.contains("crate::mcp::note::numbered("),
+        "this consumer renders the note through the shared outlet"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

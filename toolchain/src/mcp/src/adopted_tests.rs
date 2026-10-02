@@ -93,6 +93,31 @@ fn an_entry_carries_its_recorded_and_its_current_fingerprint() {
     let root = package("fingerprints");
     adopt_current(&root);
     let unchanged = adopted(&root, &json!({})).expect("the ledger answers");
+    // Coupling pin (T-01): the entry's fingerprints are rendered by the shared outlet's brief form,
+    // so a second twelve-character cut would be caught here rather than by a reader noticing.
+    // 耦合钉子（T-01）：条目上的指纹由共享出口的简短形式渲染，因此第二处"截十二个字符"会在这里被抓住，
+    // 而不是等到读者发现。
+    let ledger =
+        std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("the ledger");
+    let recorded = ledger
+        .lines()
+        .find(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .and_then(|line| line.split('|').nth(6))
+        .expect("a recorded fingerprint")
+        .to_owned();
+    // The expected value is computed **here**, by this test's own cut, not by asking the outlet —
+    // a pin that recomputes through the code under test stays green when that code changes.
+    // 期望值在**这里**由本测试自己截，而不是去问那个出口——从被测代码再算一遍的钉子，在被测代码改变时照样绿。
+    assert_eq!(recorded.len(), 64, "the ledger holds a full fingerprint");
+    assert!(
+        unchanged.contains(&format!("recorded {} (unchanged)", &recorded[..12])),
+        "the row carries a twelve-character form of the ledger's own fingerprint: {unchanged}"
+    );
+    let source = include_str!("adopted.rs");
+    assert!(
+        source.contains("crate::mcp::note::brief("),
+        "this consumer renders the brief form through the shared outlet"
+    );
     assert!(
         unchanged.contains("(recorded ") && unchanged.contains("(unchanged)"),
         "an untouched lease says so once instead of printing the same hash twice: {unchanged}"

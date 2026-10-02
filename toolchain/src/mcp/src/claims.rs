@@ -581,19 +581,9 @@ fn contract_note(file: &crate::mcp::source_index::SourceFile, function: &str) ->
     if shown.is_empty() {
         return String::new();
     }
-    let text = shown
-        .iter()
-        .take(SHOWN)
-        .map(|(line, text)| format!("{line}: {text}"))
-        .collect::<Vec<_>>()
-        .join(" / ");
     format!(
-        "; the contract above it says {text}{}",
-        if shown.len() > SHOWN {
-            format!(" (first {SHOWN} lines; `read {{path, line}}` has the rest)")
-        } else {
-            String::new()
-        }
+        "; the contract above it says {}",
+        crate::mcp::note::numbered(&shown, SHOWN, "`read {path, line}` has the rest")
     )
 }
 

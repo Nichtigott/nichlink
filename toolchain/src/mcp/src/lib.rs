@@ -145,6 +145,9 @@ mod usages;
 
 #[path = "check.rs"]
 mod check;
+#[path = "note.rs"]
+mod note;
+
 #[path = "claims.rs"]
 pub mod claims;
 

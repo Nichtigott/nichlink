@@ -153,13 +153,6 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
     Ok(format!("{}\n", lines.join("\n")))
 }
 
-/// The first twelve hex characters of a fingerprint: long enough to tell two apart in a reply,
-/// short enough that four of them do not crowd out the facts beside them.
-/// 指纹的前十二个十六进制字符：长到足以在一次回复里分辨两者，短到四个并排也不会挤掉旁边的事实。
-fn brief(fingerprint: &str) -> &str {
-    fingerprint.get(..12).unwrap_or(fingerprint)
-}
-
 /// The two fingerprints a reader needs to judge a lease without re-deriving the rule.
 /// 读者判断一条租约所需的两串指纹——不必再把规则重推一遍。
 ///
@@ -172,9 +165,13 @@ fn brief(fingerprint: &str) -> &str {
 /// 该臂整条链的 11.5%。
 fn lease(recorded: &str, current: &str) -> String {
     if recorded == current {
-        format!("recorded {} (unchanged)", brief(recorded))
+        format!("recorded {} (unchanged)", crate::mcp::note::brief(recorded))
     } else {
-        format!("recorded {} · now {}", brief(recorded), brief(current))
+        format!(
+            "recorded {} · now {}",
+            crate::mcp::note::brief(recorded),
+            crate::mcp::note::brief(current)
+        )
     }
 }
 
