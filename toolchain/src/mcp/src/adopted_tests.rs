@@ -233,3 +233,23 @@ fn conformance_answers_unknown_lapsed_and_in_force() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The ledger's next hint names **this** ledger's lapsed anchor, not a placeholder.
+/// 台账的 next 提示点名**这份**台账里失效的那个 anchor，而不是占位符。
+///
+/// Measured (W8): `adopted`'s hint was prose with no call in it at all, and the round's arm spent a
+/// call working out what to ask next. An instantiated `conformance {anchor: "…"}` is copyable.
+/// 实测（W8）：`adopted` 的提示是**一段没有任何调用的散文**，那一轮的臂花了一次调用去弄清下一步该问什么。
+/// 实例化后的 `conformance {anchor: "…"}` 是可粘贴的。
+#[test]
+fn the_ledgers_next_hint_names_the_anchor_that_lapsed() {
+    let root = package("next-anchor");
+    adopt_current(&root);
+    write_fixture(&root.join("src/lib.rs"), "// a byte moved\n");
+    let answer = adopted(&root, &json!({})).expect("the ledger answers");
+    assert!(
+        answer.contains("next   `conformance {anchor: \"root/button\"}` says whether that lease"),
+        "the call names the lapsed anchor: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

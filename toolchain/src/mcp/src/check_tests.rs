@@ -185,14 +185,19 @@ fn the_first_two_lines_are_the_verdict() {
 /// 没有通过的运行会说下一步去哪找，而通过的运行不多说一句。
 #[test]
 fn a_failing_run_says_where_to_look_next() {
-    let failing = next_step(false, Some(101)).expect("a failing run has a next step");
+    // The third argument is this reply's own lines: since T-22 the hint is instantiated from them,
+    // so an empty slice is what a reply with no `why` line carries — and that is the shape that must
+    // still say where to look.
+    // 第三个参数是这次回复自己的那些行：自 T-22 起这条提示由它们实例化，因此空切片就是"没有 `why` 行"的
+    // 回复所携带的形状——而正是它仍须说出下一步去哪找。
+    let failing = next_step(false, Some(101), &[]).expect("a failing run has a next step");
     assert!(failing.contains("search {literal"), "{failing}");
     assert!(
-        next_step(false, Some(0)).is_none(),
+        next_step(false, Some(0), &[]).is_none(),
         "a passing run needs no pointer"
     );
     assert!(
-        next_step(true, None).is_none(),
+        next_step(true, None, &[]).is_none(),
         "a timeout is unknown, not a failure to chase"
     );
 }
@@ -262,4 +267,53 @@ fn a_green_run_carries_no_assertion_words() {
         observed.lines
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The next hint carries a literal taken out of **this reply's own** `why` line, and what is
+/// stripped from it is exactly the three parts that would match nothing.
+/// 这条提示携带的字面量取自**这次回复自己的** `why` 行，而从它身上剥掉的正是那三种"匹配不到任何东西"的部分。
+///
+/// Measured (W8): `next` lines were followed 28% of the time, and the only one followed reliably
+/// named a concrete thing to read. A placeholder (`<that phrase>`) leaves the filling-in to the
+/// caller — which is the thinking the hint exists to remove.
+/// 实测（W8）：`next` 行被采纳 28%，而唯一被稳定采纳的是点名了"具体要读什么"的那条。占位符
+/// （`<that phrase>`）把填空留给调用方——而填空正是这条提示存在来省掉的思考。
+#[test]
+fn the_next_hint_carries_a_searchable_literal_from_this_reply() {
+    // The harness prefix carries a process id; the generic clause is shared by many tests; the
+    // numbers are values. None of the three is in any source file.
+    // harness 前缀带进程号；通用从句被许多测试共用；数字是取值。三者都不在任何源码里。
+    let lines = vec![
+        "why    the_rendered_offsets_add_up: thread 'the_rendered_offsets_add_up' (100729) \
+         panicked at tests/offsets.rs:18:5: assertion `left == right` failed: the rendered offsets \
+         add up to 160, not 136"
+            .to_owned(),
+    ];
+    let phrase = super::literal_to_search(&lines).expect("the message yields a phrase");
+    assert_eq!(
+        phrase, "the rendered offsets add up to",
+        "the process id, the generic clause and the numbers are all gone"
+    );
+    let next = super::next_step(false, Some(101), &lines).expect("a failing run has a next step");
+    assert!(
+        next.contains("`search {literal: \"the rendered offsets add up to\"}`"),
+        "and the hint carries it as a copyable call: {next}"
+    );
+    assert!(
+        !next.contains("<that phrase>"),
+        "no placeholder is left when the reply had the words: {next}"
+    );
+}
+
+/// With nothing to take a phrase from, the hint falls back to the placeholder rather than inventing.
+/// 无从取词时，提示落回占位符，而不是编一句。
+#[test]
+fn the_next_hint_falls_back_to_a_placeholder_rather_than_inventing_one() {
+    let lines = vec!["result test result: FAILED. 1 passed; 1 failed".to_owned()];
+    assert!(super::literal_to_search(&lines).is_none());
+    let next = super::next_step(false, Some(101), &lines).expect("a next step");
+    assert!(
+        next.contains("<a short phrase from the assertion>"),
+        "{next}"
+    );
 }

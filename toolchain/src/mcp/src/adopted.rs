@@ -146,9 +146,11 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
             .to_owned(),
     );
     lines.push(
-        "next   `adopted` for every entry's verdict, `consistency --specimen <anchor>` for whether \
-         the siblings follow this shape"
-            .to_owned(),
+        format!(
+            "next   `adopted` for every entry's verdict, `consistency --specimen {anchor}` for \
+             whether the siblings follow this shape"
+        )
+        .to_owned(),
     );
     Ok(format!("{}\n", lines.join("\n")))
 }
@@ -193,6 +195,7 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
         .map_err(|error| format!("{}:{} {}", ledger.display(), error.line, error.message))?;
     let mut output = String::from("evidence: adoption ledger (provisional by construction)\n");
     let (mut provisional, mut lapsed) = (0usize, 0usize);
+    let mut first_lapsed: Option<String> = None;
     for entry in &entries {
         let current = read_files(root, &entry.files)?;
         let state = state_of(entry, &current);
@@ -213,6 +216,7 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
             }
             AdoptionVerdict::Lapsed { file } => {
                 lapsed += 1;
+                first_lapsed.get_or_insert_with(|| entry.anchor.clone());
                 output.push_str(&format!(
                     "adoption lapsed at {file} ({bytes}); needs confirmation — {}: {} [adopted at {} \
                      by {}; why: {}]\n",
@@ -237,10 +241,26 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     // 什么都没做——而它面对的问题恰恰是"台账没点名的路线该怎么办"。这里把那个动作点出来，不是给伪造
     // 确认发许可证：请求仍然必须说出 `apply` 与 `confirm`，那一行仍然点名是谁确认的。
     output.push_str(
-        "next   a route this ledger does not name is a **new anchor** — a first confirmation, not a \
-         renewal: pass `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` together \
-         with `apply: true` and `confirm: true`, and this tool appends one line whose fingerprint it \
-         computes from those files\n",
+        // Instantiated from this ledger's own state: when an entry has lapsed, the next call is the
+        // one that asks about **that** anchor, named. The prose below stays for the other case —
+        // a route the ledger does not carry at all.
+        // 由这份台账自己的状态实例化：有条目失效时，下一次调用就是问**那一个** anchor 的调用，且点名它。
+        // 下面那段散文留给另一种情形——台账里根本没有这条路线。
+        &match &first_lapsed {
+            Some(anchor) => format!(
+                "next   `conformance {{anchor: \"{anchor}\"}}` says whether that lease still holds \
+                 and where it lapsed; a route the ledger does not name is a **new anchor** — a first \
+                 confirmation, not a renewal: pass `anchor`, `certifies`, `evidence`, `verifier`, \
+                 `reason` and `files` with `apply: true` and `confirm: true`, and this tool appends \
+                 one line whose fingerprint it computes from those files\n"
+            ),
+            None => "next   a route this ledger does not name is a **new anchor** — a first \
+                     confirmation, not a renewal: pass `anchor`, `certifies`, `evidence`, \
+                     `verifier`, `reason` and `files` together with `apply: true` and \
+                     `confirm: true`, and this tool appends one line whose fingerprint it computes \
+                     from those files\n"
+                .to_owned(),
+        },
     );
     Ok(output)
 }

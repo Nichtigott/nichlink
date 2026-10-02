@@ -224,7 +224,7 @@ fn head(
         (false, None) => lines.push("exit   unknown (the process was signalled)".to_owned()),
     }
     lines.extend(observed.lines.iter().cloned());
-    if let Some(next) = next_step(outcome.timed_out, outcome.code) {
+    if let Some(next) = next_step(outcome.timed_out, outcome.code, &observed.lines) {
         lines.push(next);
     }
     lines
@@ -350,20 +350,70 @@ fn census_sample(census: &[String]) -> Vec<String> {
 /// the one shape of guidance this bridge has measured to work.
 /// 失败断言的那句话是树里的一个字符串字面量，因此下一个最便宜的调用就是找出它在哪产出的字面检索；这条指引
 /// 正是 `literal` 存在的理由，也是本桥实测唯一生效的那种指引形态。
-fn next_step(timed_out: bool, code: Option<i32>) -> Option<String> {
+fn next_step(timed_out: bool, code: Option<i32>, lines: &[String]) -> Option<String> {
     if timed_out || code == Some(0) {
         return None;
     }
-    Some(
+    // The hint is **instantiated from this answer's own state**: the literal it tells the caller to
+    // search is taken out of the `why` line this reply just printed, so the next call is copyable
+    // instead of a template. Measured (W8): `next` lines were followed 28% of the time, and the only
+    // one followed reliably named a concrete thing to read — a placeholder leaves the filling-in to
+    // the caller, which is the thinking the hint exists to remove.
+    // 这条提示**由这次答案自己的状态实例化**：它让调用方去搜的那个字面量，取自这次回复刚打印出来的 `why` 行
+    // ——于是下一次调用是**可粘贴的**，而不是一个模板。实测（W8）：`next` 行被采纳 28%，而唯一被稳定采纳的是
+    // 那条点名了"具体要读什么"的——占位符把"填空"留给调用方，而填空正是这条提示存在来省掉的思考。
+    let search = match literal_to_search(lines) {
+        Some(phrase) => format!("`search {{literal: \"{phrase}\"}}`"),
+        None => "`search {literal: \"<a short phrase from the assertion>\"}`".to_owned(),
+    };
+    Some(format!(
         "next   the `why` lines above are the failing assertion's own words: a short, stable \
-         phrase from one is a string literal in this tree, so `search {literal: \"<that phrase>\"}` \
-         finds the line that produced it. If two red things may be \
-         independent, two green runs are not the evidence: fix one and re-run, and say which red \
-         survived. And a probe you built yourself that disagrees with the source is a reason to \
-         re-read that line (`read`, `search {literal}`) before rebuilding — a second look is \
-         cheaper than a second build"
-            .to_owned(),
-    )
+         phrase from one is a string literal in this tree, so {search} finds the line that produced \
+         it. If two red things may be independent, two green runs are not the evidence: fix one and \
+         re-run, and say which red survived. And a probe you built yourself that disagrees with the \
+         source is a reason to re-read that line (`read`, `search {{literal}}`) before rebuilding — a \
+         second look is cheaper than a second build"
+    ))
+}
+
+/// The literal worth searching for, taken out of the `why` line this reply carries.
+/// 值得拿去搜的那个字面量，取自这次回复携带的 `why` 行。
+///
+/// What has to be dropped, and why each part is there: the harness prefix (`thread '<name>'
+/// (<pid>) panicked at <file>:<line>: `) carries a **process id**, which no source contains; the
+/// generic `assertion \`left == right\` failed:` clause is shared by many tests and matches the wrong
+/// one; and the numbers the framework appends are the values, not the words. What is left is the
+/// message the test itself wrote — the phrase that is actually a string literal in this tree.
+/// 必须丢掉的、以及每一部分为什么在：harness 前缀（`thread '<名>' (<pid>) panicked at <文件>:<行>: `）
+/// 里带着**进程号**，任何源码里都没有它；通用的 `assertion \`left == right\` failed:` 从句被许多测试共用，
+/// 会匹到错的那一个；框架追加的数字是取值，不是词。剩下的才是测试自己写下的那句话——也就是这棵树里真正
+/// 作为字符串字面量存在的短语。
+fn literal_to_search(lines: &[String]) -> Option<String> {
+    const WORDS: usize = 6;
+    let message = lines
+        .iter()
+        .find_map(|line| line.strip_prefix("why    "))?
+        .split_once(": ")?
+        .1;
+    let tail = match message.split_once("panicked at ") {
+        Some((_, rest)) => rest.split_once(": ").map_or(rest, |(_, tail)| tail),
+        None => message,
+    };
+    let tail = match tail.split_once("failed: ") {
+        Some((_, rest)) => rest,
+        None => tail,
+    };
+    let phrase = tail
+        .split_whitespace()
+        .filter(|word| {
+            !word
+                .chars()
+                .all(|character| character.is_ascii_digit() || "(),.:;`'\"".contains(character))
+        })
+        .take(WORDS)
+        .collect::<Vec<_>>()
+        .join(" ");
+    (phrase.split_whitespace().count() >= 3).then(|| phrase.replace('"', "'"))
 }
 
 /// The exact flags the command carried, so the answer names what it ran.
