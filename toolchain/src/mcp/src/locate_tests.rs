@@ -90,3 +90,30 @@ fn a_missing_symptom_is_refused_with_the_shape() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A symptom about a whole file gets the file-level shapes, not just "try other words".
+/// 关于**一整个文件**的症状得到文件级的形状，而不只是"换几个词试试"。
+///
+/// Measured (W8, h4): the arm spent a call here on a symptom that was about one file's algorithms
+/// contradicting their own documentation, and the reply named neither that this is a file-level
+/// question nor the tools that answer one. Zero matches is the decidable signal.
+/// 量到的（W8 的 h4）：那一臂在这里花掉一次调用，症状说的是一个文件的算法与它自己的文档相反，而回复既没说
+/// 这是文件级问题，也没说哪些工具答得了。零命中就是可判定的信号。
+#[test]
+fn a_symptom_about_a_whole_file_names_the_file_level_shapes() {
+    let root = scratch("locate-file-level");
+    let answer = super::locate(&root, &json!({"symptom": "zebra quixote walrus"}))
+        .expect("a symptom with no match still answers");
+    for shape in [
+        "file-level question",
+        "`digest {file}`",
+        "`read {path, whole: true}`",
+        "`check {face}`",
+    ] {
+        assert!(
+            answer.contains(shape),
+            "the pointer names `{shape}`: {answer}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

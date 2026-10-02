@@ -177,6 +177,19 @@ fn verdict(timed_out: bool, code: Option<i32>, results: usize) -> String {
 /// thing a reader stops at, and no later section may push it down.
 /// 只有 [`check`] 自己的调用方会看到总账，而它接在这之后：判定是读者会停下的那件事，后面任何一段都不
 /// 能把它挤下去。
+/// The tree's own size, in one line: the fact `status` was opened for.
+/// 这棵树自己的规模，一行：也就是当初为它打开 `status` 的那个事实。
+fn tree_line(root: &Path) -> String {
+    match crate::mcp::source_index::load_sources(root) {
+        Ok(files) => format!(
+            "{} rust file(s), {} function(s)",
+            files.len(),
+            files.iter().map(|file| file.functions.len()).sum::<usize>()
+        ),
+        Err(_) => "not readable as sources".to_owned(),
+    }
+}
+
 fn head(
     root: &Path,
     face: &str,
@@ -189,6 +202,14 @@ fn head(
         format!("check  cargo test{}", flags(face)),
         format!("face   {face}"),
         format!("root   {}", root.display()),
+        // The counts `status` exists for ride on the head of the run they are about. Measured: that
+        // tool was called as an opening and a closing ritual **8 times in 46 calls** (W8), and every
+        // one of those answered "N files, M functions" — which is one line here, on the answer the
+        // caller was going to run anyway.
+        // `status` 存在的理由——那两个计数——搭在这次运行的头部。实测：那个工具在 46 次调用里被当作开场与
+        // 收场的仪式用了 **8 次**（W8），而每一次都只回答了"N 个文件、M 个函数"——它在这里是一行，而且在
+        // 调用方本来就要跑的那次答案上。
+        format!("tree   {}", tree_line(root)),
         format!("elapsed {} ms", outcome.elapsed.as_millis()),
         format!("log    {}", outcome.log.display()),
     ];

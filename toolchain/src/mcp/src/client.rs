@@ -56,7 +56,7 @@ Read the symptom first, then take the shortest route it names. A failing test? R
 already have (`cargo test`) and keep its output: the failing assertion's own words are the next \
 clue. `check {face}` is the same run aimed at **one face** — reach for it when the default face is \
 green and you suspect another one (`face: \"all\"`, or a feature name), because it names the face \
-it ran. **Its verdict is the first line of the reply, not this client's exit code**: the exit code \
+it ran. **Its head carries the tree's size** (`tree   N rust file(s), M function(s)`), so a question does not have to open with `status`. **Its verdict is the first line of the reply, not this client's exit code**: the exit code \
 says only how the call went (`0` answered, `1` refused, `2` a usage error), and `check` answers \
 even about a failing run — so read the `verdict  passed (cargo exit 0)` line or the \
 `verdict  failed (cargo exit 101)` line before anything else. **A range-type question** \

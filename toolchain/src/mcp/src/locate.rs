@@ -162,9 +162,20 @@ pub(crate) fn locate(root: &Path, arguments: &Value) -> Result<String, String> {
     rows.dedup_by(|left, right| left.file == right.file && left.line == right.line);
     let total = rows.len();
     if total == 0 {
+        // Measured (W8, h4): the arm spent a call here on a symptom that was about **a whole file**
+        // ("one algorithm in one file does the opposite of its documentation"), and the reply named
+        // neither that this is a file-level question nor the tools that answer one. Zero matches is
+        // the decidable signal, so the pointer costs nothing on a query that did match.
+        // 量到的（W8 的 h4）：那一臂在这里花掉一次调用，而它的症状说的是**一整个文件**（"一个文件里有一套
+        // 算法与它自己的文档相反"），回复既没说这是文件级问题，也没说哪些工具答得了。零命中就是可判定的
+        // 信号，因此在真正命中的查询上，这条指引不花任何代价。
         return Ok(format!(
             "no matches in {}: none of the symptom's words is in a function name or a doc comment in \
-             this tree — pass fewer or different words, or `search {{literal}}` for a phrase\n",
+             this tree — pass fewer or different words, or `search {{literal}}` for a phrase. If the \
+             symptom is about a **whole file** rather than a symbol (a file whose algorithms \
+             contradict its own docs, a file nothing calls), that is a file-level question: `digest \
+             {{file}}` summarises one file, `read {{path, whole: true}}` prints it with its symbols, \
+             and `check {{face}}` runs a face\n",
             root.display()
         ));
     }

@@ -438,3 +438,42 @@ fn body_of<'a>(source: &'a str, declaration: &str) -> &'a str {
     let end = rest.find("\n}\n").map_or(rest.len(), |end| end + 2);
     &rest[..end]
 }
+
+/// The definitions the cap drops are **named**, by the file each lives in.
+/// 被上限丢掉的定义**被点名**，点的是每个所在的文件。
+///
+/// Measured (W8, h1): nine definitions of `offset`, a default limit of five, and the one the question
+/// was about (`toggle`) among the four cut — the reader only got there because a *callers* sentence
+/// happened to name it. Before this pin the cap sentence gave a count and advice ("raise `limit` or
+/// pass `path`") but never said which four, so an agent had to spend a call to find out.
+/// 量到的（W8 的 h1）：`offset` 九个定义、默认上限五个，而问题所关心的那一个（`toggle`）在被切掉的四个
+/// 里——读者之所以还能找到，只是因为另一条**调用者**的句子碰巧点了它的名。在这条钉子之前，上限那句只给了
+/// 数字与建议（"raise `limit` or pass `path`"），从不说哪四个，于是代理只能再花一次调用去弄清。
+#[test]
+fn the_definition_cap_names_the_files_it_dropped() {
+    let root = crate::mcp::tools::tools_tests::scratch_package("callgraph-cap");
+    for name in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"] {
+        let directory = root.join("src").join(name);
+        std::fs::create_dir_all(&directory).expect("fixture dir");
+        std::fs::write(
+            directory.join(format!("{name}.rs")),
+            format!("pub fn twin() -> i32 {{ 1 }}\npub fn {name}_only() -> i32 {{ 2 }}\n"),
+        )
+        .expect("fixture source");
+    }
+    let answer = super::callgraph(&root, &json!({"function": "twin"})).expect("an answer");
+    assert!(answer.contains("matches 6"), "{answer}");
+    assert!(
+        answer.contains("definitions withheld at the limit of"),
+        "the cap is announced: {answer}"
+    );
+    assert!(
+        answer.contains("src/zeta/zeta.rs") || answer.contains("src/epsilon/epsilon.rs"),
+        "and it names the files it dropped, not just how many: {answer}"
+    );
+    assert!(
+        !answer.contains("`twin`, `twin`"),
+        "naming the function would identify nothing — every one is called `twin`: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

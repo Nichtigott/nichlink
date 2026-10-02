@@ -186,6 +186,22 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
              by name across the whole tree, so for a common name they include unrelated call sites.\n"
         ));
     }
+    // The definitions the cap drops are named, because dropping them **silently** was measured to
+    // cost a whole diagnosis: with nine definitions of `offset` and a default limit of five, the one
+    // the question was about — `toggle`, the outlier — was exactly the one cut, and the reply said
+    // nothing (W8, h1). The reader then recovered only because a *callers* sentence happened to name
+    // it. Naming them turns the cap into a choice the reader can act on (`path`), instead of a gap
+    // they cannot see.
+    // 被上限丢掉的定义要**点名**，因为静默丢掉它们被量到过一次整段诊断的代价：`offset` 有九个定义、
+    // 默认上限五个，而问题所关心的那一个——离群者 `toggle`——恰恰是被切掉的那个，回复对此一言不发
+    // （W8，h1）。读者之所以还能挽回，只是因为另一条**调用者**的句子碰巧点了它的名。点名它们，把这道上限
+    // 变成读者能据以行动的选择（`path`），而不是一个他看不见的缺口。
+    let dropped = found
+        .iter()
+        .skip(limit)
+        .map(|(label, _)| format!("`{label}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
     for (label, function) in found.into_iter().take(limit) {
         // The matched name is cloned into the inner closure: it runs once per candidate file, and
         // borrowing the definition from the outer scope made the closure outlive it. Whether a call
@@ -397,6 +413,15 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
         }
     }
     if total > limit {
+        // The cap was already announced — what it did not do was name **which** definitions it
+        // dropped. Measured (W8, h1): nine definitions of `offset`, a default limit of five, and the
+        // one the question was about (`toggle`) among the four cut; the reader only got there because
+        // a *callers* sentence happened to name it. Naming the files turns the cap into a choice it
+        // can act on: each withheld definition is what `path` takes.
+        // 这道上限本来就**有**提示——它没做的是点名它丢掉了**哪些**定义。实测（W8，h1）：`offset` 九个
+        // 定义、默认上限五个，而问题所关心的那一个（`toggle`）在被切掉的四个里；读者之所以还能找到，只是
+        // 因为另一条**调用者**的句子碰巧点了它的名。点名文件把这道上限变成能据以行动的选择：每条被扣下的
+        // 定义正是 `path` 收的东西。
         output.push_str(&format!(
             "{}\n",
             withheld(
@@ -404,7 +429,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
                 total,
                 limit,
                 "definitions",
-                "raise `limit` or pass `path`"
+                &format!("pass `path` for one of: {dropped}; `limit` raises this cap")
             )
         ));
     }
