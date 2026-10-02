@@ -679,3 +679,37 @@ fn the_pointer_to_a_parents_rule_uses_the_spelling_that_finds_it() {
         "the name-shaped spelling cannot find a const: {INSTRUCTIONS}"
     );
 }
+
+/// The `keys:` legend appears only when something is actually starred.
+/// `keys:` 的图例只在真的画了星号时出现。
+///
+/// Measured (round-8 review): once `conformance` stopped requiring `anchor`, its line read
+/// `keys: anchor, root (* = required)` — a legend explaining a mark it does not use, which a reader
+/// has to undo before trusting the line. Both renderers (the full page and the one-line catalogue) had
+/// the literal hard-coded.
+/// 量到的（第八轮复核）：`conformance` 不再要求 `anchor` 之后，它那一行成了
+/// `keys: anchor, root (* = required)`——解释一个自己没有使用的星号，读者得先撤销它才敢信这一行。两处渲染
+/// （完整页与单行目录）都把这个图例写死了。
+#[test]
+fn the_keys_legend_appears_only_when_something_is_starred() {
+    let lines = list_tool_lines();
+    let line = |name: &str| {
+        lines
+            .iter()
+            .find(|line| {
+                line.starts_with(&format!("{name} ")) || line.starts_with(&format!("{name} —"))
+            })
+            .unwrap_or_else(|| panic!("{name} is in the catalogue: {lines:?}"))
+            .clone()
+    };
+    let conformance = line("nichlink.conformance");
+    assert!(
+        !conformance.contains("= required"),
+        "nothing is starred on this tool, so there is no legend: {conformance}"
+    );
+    let check = line("nichlink.check");
+    assert!(
+        check.contains("face*") && check.contains("= required"),
+        "and a tool that does star a key keeps its legend: {check}"
+    );
+}

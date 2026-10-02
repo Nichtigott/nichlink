@@ -114,7 +114,15 @@ pub(crate) fn tools() -> Vec<Value> {
              whether the siblings follow the same shape (that is `consistency --specimen <anchor>`) \
              and the declared fields a specimen carries (those live in its own source, and \
              `consistency --specimen` reads them from there).",
-            json!({"type":"object","properties":{"anchor":{"type":"string","description":"the route a ledger entry names"},"root":{"type":"string"}},"required":["anchor"]}),
+            // No `required`: without an anchor the tool lists **every** anchor, one line each. The
+            // schema used to demand it, and the client's `keys:` line derives its `*` marks from
+            // `required` — so every reader was told `anchor*` about a call that no longer needs it,
+            // which is a self-description that disagrees with the behaviour (found in the round-8
+            // review, which checked the acceptance shape against the schema).
+            // 不再 `required`：不带 anchor 时该工具**逐行列出每个锚点**。schema 以前要求它，而客户端的 `keys:`
+            // 行正是从 `required` 推出那些 `*` 的——于是每个读者都被告诉 `anchor*`，而那次调用早已不需要它；
+            // 这是**自述与行为不一致**（第八轮复核对着 schema 核接受形状时发现）。
+            json!({"type":"object","properties":{"anchor":{"type":"string","description":"the route a ledger entry names; omit it to list every anchor, one line each"},"root":{"type":"string"}}}),
         ),
         tool(
             "nichlink.consistency",

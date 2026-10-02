@@ -216,6 +216,16 @@ pub fn describe_tool(name: &str) -> Option<String> {
         let mut properties: Vec<String> = Vec::new();
         let mut required: Vec<String> = Vec::new();
         visit_keys(schema, &mut properties, &mut required);
+        // The legend only appears when something is actually marked: a line explaining an asterisk it
+        // does not use is a line the reader has to undo (found in the round-8 review, once
+        // `conformance` stopped requiring `anchor`).
+        // 只有真的画了星号才印图例：解释一个自己没有使用的星号，是读者还得自己撤销的一行（第八轮复核后
+        // `conformance` 不再要求 `anchor` 时暴露）。
+        let legend = if required.is_empty() {
+            ""
+        } else {
+            " (* = required)"
+        };
         let keys = properties
             .iter()
             .map(|key| {
@@ -228,7 +238,7 @@ pub fn describe_tool(name: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join(", ");
         Some(format!(
-            "{tool_name}\n    keys: {keys} (* = required)\n{description}"
+            "{tool_name}\n    keys: {keys}{legend}\n{description}"
         ))
     })
 }
@@ -256,6 +266,13 @@ pub fn list_tool_lines() -> Vec<String> {
             let mut properties: Vec<String> = Vec::new();
             let mut required: Vec<String> = Vec::new();
             visit_keys(schema, &mut properties, &mut required);
+            // Same rule as the full page: the legend exists only when something is starred.
+            // 与完整页同一条规则：只有真画了星号才印图例。
+            let legend = if required.is_empty() {
+                ""
+            } else {
+                " (* = required)"
+            };
             let keys = properties
                 .iter()
                 .map(|key| {
@@ -267,7 +284,7 @@ pub fn list_tool_lines() -> Vec<String> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            Some(format!("{name} — {first}\n    keys: {keys} (* = required)"))
+            Some(format!("{name} — {first}\n    keys: {keys}{legend}"))
         })
         .collect()
 }

@@ -586,3 +586,40 @@ fn a_bare_tree_is_told_how_to_start_and_a_faceful_one_is_not() {
     assert!(!status.contains("new_project"), "{status}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A tool's advertised `required` keys are the ones its own call path insists on.
+/// 一个工具对外声明的 `required` 键，就是它自己的调用路径坚持要的那些。
+///
+/// Measured (round-8 review): `conformance`'s schema still said `required: ["anchor"]` after the
+/// handler learned to list every anchor when none is given — and the client's `keys:` line derives its
+/// `*` marks from that list, so every reader was told `anchor*` about a call that works without it.
+/// A reader that trusts the schema calls a key required; the schema has to be the same contract the
+/// handler enforces.
+/// 量到的（第八轮复核）：处理器已经学会"不给 anchor 就列出全部锚点"之后，`conformance` 的 schema 仍写着
+/// `required: ["anchor"]`——而客户端的 `keys:` 行正是从那份清单推出 `*` 的，于是每个读者都被告诉 `anchor*`，
+/// 而那次调用不带它也能用。**信 schema 的读者会以为那个键是必需的**；schema 必须与处理器执行的契约一致。
+#[test]
+fn the_advertised_required_keys_match_what_the_call_path_insists_on() {
+    let listed = super::tools();
+    let required = |name: &str| {
+        listed
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is advertised"))["inputSchema"]["required"]
+            .as_array()
+            .map(|keys| {
+                keys.iter()
+                    .filter_map(|key| key.as_str())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    assert!(
+        !required("nichlink.conformance").contains(&"anchor"),
+        "conformance works without `anchor` (it lists every anchor), so the schema must not demand it"
+    );
+    assert!(
+        required("nichlink.check").contains(&"face"),
+        "and a key the call path really insists on stays required: check needs `face`"
+    );
+}
