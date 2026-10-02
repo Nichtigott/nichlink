@@ -570,3 +570,29 @@ fn the_scenario_fixture_covers_every_shape_and_cannot_drift_from_the_table() {
         assert!(CASES.contains(covered), "{covered}");
     }
 }
+
+/// The table tells an agent where a parent's rules live, because the failure arrives after the edit.
+/// 表里告诉代理父面的规范住在哪——因为那次失败是在改动**之后**才到的。
+///
+/// Measured (T-14): the mechanism was complete and host-declarable (`<parent>/registry_rule/
+/// registry_rule.rs`, enforced at build time with the missing requirement named — verified by
+/// declaring a rule and watching `spinner` fail with "required handle trait is missing"), and **no
+/// answer ever mentioned it**. A capability whose existence is only discoverable by breaking it is
+/// the same "entrance was not there" shape the whole round is about.
+/// 量到的（T-14）：机制完整且宿主可声明（`<父>/registry_rule/registry_rule.rs`，建树时判定并点名缺哪条——实测：
+/// 声明一条规则后 `spinner` 以 "required handle trait is missing" 失败），而**没有任何答案提过它**。一项只有
+/// 破坏它才会被发现的能力，正是整轮在讲的那个"入口不在"的形状。
+#[test]
+fn the_table_says_where_a_parents_rules_live() {
+    for expected in [
+        "registry_rule/registry_rule.rs",
+        "REGISTRATION_RULE",
+        "fails the build naming the missing requirement",
+        "父面自己的规范",
+    ] {
+        assert!(
+            INSTRUCTIONS.contains(expected),
+            "the table carries `{expected}`: {INSTRUCTIONS}"
+        );
+    }
+}

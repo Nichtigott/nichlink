@@ -66,6 +66,10 @@ time; stop when every named object has a verdict, including the ones with nothin
 either covered or named as one it does not cover\n\
   add an object             -> `registry` for the family, `apply {action: \"add\", apply: true}`, `consistency \
 --specimen`, `check`; stop when the new face's shape matches its siblings and the gates are green\n\
+  (the parent's own rules)  a parent declares what its children must carry in \
+`<parent>/registry_rule/registry_rule.rs` — `search {query: \"REGISTRATION_RULE\"}` finds it, and a child \
+that violates it **fails the build naming the missing requirement**; read it before adding or changing a \
+child, because that failure arrives after the edit\n\
   deepen an object          -> `explain {node}`, `apply {action: \"deepen\", apply: true}`, then `check`; stop \
 when the tree, the public paths and the factory pins are untouched\n\
   move or merge (refactor)  -> `affected`, the plan half of `why`, `grafts`, `apply`; stop when every \
@@ -76,7 +80,9 @@ layer's impact is disposed of, not when the move compiles\n\
 `search` 到 `read`、`why --at`、`check {face}`，停在「根因带文件与行号、最小修、反证」；查看多个 ⇒ \
 `consistency --parent` **一次**比完同族再逐个，停在「每个被点名的对象都有裁定（没问题的也要有依据）」；\
 范围型 ⇒ `check` 并逐栏处置，停在「每栏要么被覆盖、要么被点名为它不覆盖」；新增 ⇒ `registry`、\
-`apply {action: \"add\", apply: true}`、`consistency --specimen`、`check`，停在「新面形状与同族一致且门禁绿」；加深 ⇒ \
+`apply {action: \"add\", apply: true}`、`consistency --specimen`、`check`，停在「新面形状与同族一致且门禁绿」；\
+**父面自己的规范**写在 `<父>/registry_rule/registry_rule.rs` 里——`search {query: \"REGISTRATION_RULE\"}` 找得到它，\
+违反的子面会**构建失败并点名缺哪条**，因此在新增或改动子面之前先读它（那次失败是在改动之后才到的）；加深 ⇒ \
 `explain`、`apply {action: \"deepen\", apply: true}`、`check`，停在「树、公开路径与出厂形状钉子都没动」；迁移/合并 ⇒ \
 `affected`、`why` 的计划半边、`grafts`、`apply`，停在「每一层的影响面都已处置」，而不是「能编译过」。\n\
 Read the symptom first, then take the shortest route it names. A failing test? Run the suite you \
