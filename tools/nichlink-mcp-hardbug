@@ -67,8 +67,8 @@ WORLD_BIAS = 31
 CLASSES = [
     (
         "h1-supply-chain",
-        "one sibling calls another family of names than its siblings (relative vs world space)",
-        "同族里有一个兄弟调用了另一族名字（相对坐标 vs 世界坐标）",
+        "one sibling calls a different family of names than its siblings do",
+        "同族里有一个兄弟调用了与其余兄弟不同的那一族名字",
         "outlier object + the family it calls",
         "离群对象 + 它调用的那一族",
         "consistency --parent root/control --by api",
@@ -87,8 +87,8 @@ CLASSES = [
     ),
     (
         "h3-cross-file-chain",
-        "the entry plan omits the new face's cut, so the build-time scope prunes it",
-        "入口切口故意漏声明新面 ⇒ 构建期作用域把它剪掉",
+        "the entry plan never names the new face, so the build-time scope leaves it out of the build",
+        "入口计划从没点名那个新面 ⇒ 构建期作用域把它排除在构建之外",
         "which declaration is missing (file + line) + the pruned face",
         "缺哪条声明（文件 + 行）+ 被剪掉的面",
         "why --at <symptom line>",
@@ -112,6 +112,7 @@ nichlink-mcp-hardbug plan --scoring              the scoring rules, verbatim
 nichlink-mcp-hardbug build <dir> <class>         derive, inject, self-prove, write .audit/truth.json
 nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
 nichlink-mcp-hardbug tokens <session-dir|session.jsonl.zstd>  per-axis token account, out of band
+nichlink-mcp-hardbug freeze <tree>               pre-freeze checklist: non-source artifacts, outside refs
 
 Specification: docs/design-hardbug-bench-spec.md
 规格见 docs/design-hardbug-bench-spec.md。
@@ -625,6 +626,44 @@ def graft_plan_line(host):
     return text[: text.index("nichlink_toolchain::runtime::static_graft_plan!")].count("\n") + 1
 
 
+def mechanism_words(klass):
+    """The words that name this class's mechanism — the scoring key *and* what the brief may not say.
+
+    One implementation on purpose. The scorer reads this list to ask "did the answer name the
+    mechanism?", so the brief's leak guard has to read the same list: a guard with its own copy would
+    drift, and a guard that drifts either lets a leak through or refuses a clean brief.
+    有意只做一份：判分器读这张表来问"答案有没有点名机制"，因此题面的泄漏守卫必须读同一张表——守卫自带
+    一份副本会漂移，而漂移的守卫要么放走泄漏，要么拒绝一份干净的题面。
+    """
+    if klass == "h1-supply-chain":
+        return ["to_world", "world"]
+    if klass == "h2-claim-unkept":
+        return ["handle_contracts", "handle_traits"]
+    if klass == "h3-cross-file-chain":
+        return [PRUNED, "cut"]
+    return ["ZeroArm::Post", "zero_arm"]
+
+
+def brief_leaks(klass, text):
+    """Every mechanism word this brief spells out, with the line it sits on.
+
+    Audit D6, measured on round 1's own briefs: h1's class line said "relative vs world space" and
+    h3's said "the new face's cut" — one word each, and each word is half of that class's mechanism
+    vocabulary. The agent does not need the mechanism's own name to recognise the shape; naming it
+    hands over the grep.
+    D6，在第一轮自己的题面上量到：h1 的类描述写着 "relative vs world space"，h3 的写着 "the new
+    face's cut"——各一个词，而每个词都是那一类机制词表的一半。认出形状**不需要**机制自己的名字；说出名字
+    等于把那条 grep 递过去。
+    """
+    words = mechanism_words(klass)
+    found = []
+    for index, line in enumerate(text.splitlines(), 1):
+        for word in words:
+            if word in line:
+                found.append((index, word, line.strip()))
+    return found
+
+
 def root_cause_for(klass, host):
     """The injected site, read back out of the file the injection wrote."""
     if klass == "h1-supply-chain":
@@ -637,7 +676,7 @@ def root_cause_for(klass, host):
             "file": relative,
             "line": line,
             "symbol": "offset",
-            "mechanism": ["to_world", "world"],
+            "mechanism": mechanism_words(klass),
         }
     if klass == "h2-claim-unkept":
         relative = f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs"
@@ -658,7 +697,7 @@ def root_cause_for(klass, host):
             "file": relative,
             "line": line,
             "symbol": H2_UNDECLARED,
-            "mechanism": ["handle_contracts", "handle_traits"],
+            "mechanism": mechanism_words(klass),
         }
     if klass == "h3-cross-file-chain":
         # The line is the entry's graft plan, where the missing cut belongs. Leaving it null made
@@ -670,13 +709,13 @@ def root_cause_for(klass, host):
             "file": "src/lib.rs",
             "line": graft_plan_line(host),
             "symbol": "static_graft_plan",
-            "mechanism": ["cut", PRUNED],
+            "mechanism": mechanism_words(klass),
         }
     return {
         "file": "src/model/entry.rs",
         "line": None,
         "symbol": "zero_arm",
-        "mechanism": ["ZeroArm::Post", "zero_arm"],
+        "mechanism": mechanism_words(klass),
     }
 
 
@@ -882,6 +921,13 @@ you ran, its raw output and its exit code — "I verified it" is not evidence.
 Diagnose the cause. Do not rewrite a file, and do not make a symptom disappear by changing a test.
 """
     write(Path(directory) / "BRIEF.md", text)
+    leaks = brief_leaks(klass, text)
+    if leaks:
+        raise SystemExit(
+            "the brief names its own mechanism (audit D6) — rewrite the class line so it describes "
+            "the shape without the mechanism's vocabulary:\n"
+            + "\n".join(f"  line {line}: `{word}` in {row}" for line, word, row in leaks)
+        )
 
 
 def build_algorithms(directory, klass):
@@ -1027,7 +1073,7 @@ def build_algorithms(directory, klass):
             "file": "src/model/entry.rs",
             "line": zero_arm,
             "symbol": "zero_arm",
-            "mechanism": ["ZeroArm::Post", "zero_arm"],
+            "mechanism": mechanism_words(klass),
         },
         "contract": {
             "file": "src/model/entry.rs",
@@ -1090,6 +1136,76 @@ def durable_root(directory):
             file=sys.stderr,
         )
     return directory
+
+
+def freeze(tree):
+    """The pre-freeze checklist: what is in this tree that is not source, and what points outside it.
+
+    Two apparatus defects from round 1, both reported by the control arm rather than by me, both
+    cheap to check and expensive to notice:
+    D7 — a `cp -a` copy is not independent: its manifest still points at the *original* tree's graft
+         directory, so a run in the copy compiles the other arm's crate.
+    D8 — a build-time self-proof leaves `target/nichlink/out/check-default.log` inside the tree; the
+         artifacts have to be listed before the tree is frozen, and scanned for answer-bearing text.
+    第一轮的两个装置缺陷，都是对照臂报出来而不是我发现的，都是"检查很便宜、注意到很贵"：
+    D7 —— `cp -a` 出来的副本不独立：它的清单仍指向**原件**的 graft 目录，于是在副本里跑会编译另一臂的 crate。
+    D8 —— 构建期自证会在树里留下 `target/nichlink/out/check-default.log`；冻结前必须把这些产物列出来，
+    并扫一遍有没有带答案的文本。
+    """
+    root = Path(tree).resolve()
+    if not root.exists():
+        raise SystemExit(f"no tree at {root}")
+    # The boundary is the **run**, not the host package: a tree is `<run>/<class>/{host,graft}`, and
+    # the host's manifest naming its own sibling graft is correct. Taking `host/` as the boundary made
+    # a clean tree report its own graft as an outside reference — the second false positive this check
+    # produced, and the reason to run a new check against a clean tree before trusting it.
+    # 边界是**整个 run**、不是 host 包：题树是 `<run>/<class>/{host,graft}`，host 清单点名它自己的兄弟
+    # graft 是正确的。把 `host/` 当边界，会让一棵干净的树把自己的 graft 报成外部引用——这是这条检查产生的
+    # 第二个假阳性，也正是"新检查先跑干净树"的理由。
+    boundary = root.parent if root.name == "host" else root
+    source = {".rs", ".toml", ".lock", ".md"}
+    artifacts, outside = [], []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        parts = relative.parts
+        if parts[0] in {"target", ".nichlink", ".audit"} or path.suffix not in source:
+            artifacts.append(str(relative))
+        if path.suffix in {".toml", ".lock"} or parts[0] == ".nichlink":
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for needle in ("/tmp/", "/home/", "/Users/"):
+                for line in text.splitlines():
+                    if needle not in line or str(boundary) in line:
+                        continue
+                    # A tree legitimately depends on this checkout's own crates — the bench repoints
+                    # `path` at them on purpose. Only those are allowed; anything else outside the
+                    # tree is the coupling D7 is about. The first version flagged every absolute
+                    # path, so a clean tree reported four references and the check cried wolf — the
+                    # same false positive that makes a gate untrustworthy.
+                    # 题树**本来就该**依赖检出自己的 crate——出题台有意把 `path` 重指到它们。只允许这些；
+                    # 树外其它任何路径都是 D7 说的那种耦合。第一版把所有绝对路径都算上，于是一棵**干净**的树
+                    # 也报 4 条——门禁喊狼来了，正是让门禁失去可信度的那种假阳性。
+                    if any(
+                        f"{CHECKOUT}/{crate}" in line
+                        for crate in ("toolchain", "kernel", "macro", "conventions")
+                    ):
+                        continue
+                    outside.append(f"{relative}: {line.strip()[:120]}")
+    print(f"tree      {root}")
+    print(f"source    {sum(1 for p in root.rglob('*') if p.is_file()) - len(artifacts)} file(s)")
+    print(f"artifacts {len(artifacts)} (non-source or under target/ .nichlink/ .audit/)")
+    for row in artifacts[:12]:
+        print(f"  {row}")
+    if len(artifacts) > 12:
+        print(f"  … and {len(artifacts) - 12} more")
+    print(f"outside   {len(outside)} absolute reference(s) that do not point at this tree (D7)")
+    for row in outside[:12]:
+        print(f"  {row}")
+    return 0
 
 
 def build(directory, klass):
@@ -1491,6 +1607,10 @@ def main(argv):
         if len(argv) < 4:
             raise SystemExit("build needs a directory and a class")
         return build(argv[2], argv[3])
+    if argv[1] == "freeze":
+        if len(argv) < 3:
+            raise SystemExit("freeze needs a tree")
+        return freeze(argv[2])
     if argv[1] == "tokens":
         if len(argv) < 3:
             raise SystemExit("tokens needs a session directory or a session jsonl.zstd")

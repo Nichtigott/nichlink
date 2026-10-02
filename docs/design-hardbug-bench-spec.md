@@ -60,6 +60,26 @@ cacheWriteTokens`（prompt，每一步都要重发）；输出＝`outputTokens`�
 同批的操作事实：会话日志是**多帧拼接的 zstd**，`node:zlib.zstdDecompressSync` 只解第一帧（585 KB 的记录
 只吐出 284 字节并报 `Unknown frame descriptor`）⇒ 用 `zstd -dc`。
 
+### 装置卫生：题面不许点名机制 · 冻结前检查单（D6/D7/D8，2026-10-02）
+
+**D6 题面泄漏**——第一轮的两份题面各泄了一个词：h1 的类描述写 "relative vs world space"、h3 的写
+"the new face's cut"，而每个词都是那一类**机制词表的一半**。认出形状不需要机制自己的名字；说出名字等于把
+那条 grep 递过去。修法两条：① 类描述改成只讲形状（h1 → "one sibling calls a different family of names
+than its siblings do"；h3 → "the entry plan never names the new face, so the build-time scope leaves it
+out of the build"）；② **词表收成一份实现** `mechanism_words(klass)`——**判分器与守卫必须读同一张表**
+（判分器用它问"答案有没有点名机制"，守卫用它问"题面有没有说出来"），副本会漂移，漂移的守卫要么放走泄漏、
+要么拒绝干净题面。`build` 写完 `BRIEF.md` 立刻回读自查，**有泄漏就拒绝构建并点名行号与词**（实证：把 h1
+的类描述改回泄漏版 ⇒ rc=1，`line 22: world`）。独立复核（手写词表 + grep，不导入那份实现）：四类题面
+机制词命中 **0**。
+
+**D7/D8 冻结前检查单** `freeze <tree>`——列两样：① **非源码产物**（`target/`、`.nichlink/`、`.audit/`
+下的一切，含构建期自证留下的 `target/nichlink/out/check-default.log`）；② **指向树外的绝对引用**
+（D7 的跨树耦合）。**这两条检查在写出来之后当场报了两个假阳性**，都靠"新检查先跑一棵干净树"抓到：
+第一版把所有绝对路径都算上 ⇒ 干净树报 4 条（其中 3 条是**合法**的：题树本来就该依赖检出的
+`toolchain`/`kernel`/`macro`/`conventions` crate）⇒ 收紧成只允许检出自己的 crate 目录；第二版把边界取成
+`host/` ⇒ 干净树把自己的兄弟 graft 报成外部引用 ⇒ 边界改成**整个 run 目录**。两向实证：干净树 **0**，
+`cp -a` 副本 **1** 且点名它指的是原件。
+
 ### 校准记录（判据先被真答案校准过一次）
 
 W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个**文档违规，而不是一个：`signed` 的文档写着
