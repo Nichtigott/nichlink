@@ -105,6 +105,27 @@ pub(crate) fn is_call_to(call: &str, name: &str) -> bool {
             .is_some_and(|prefix| prefix.ends_with("::"))
 }
 
+/// Every name a test-looking file in this tree calls, in the order the files were read.
+/// 这棵树里每个像测试的文件所调用的名字，按文件被读到的顺序。
+///
+/// One implementation, two readers: `digest` marks a function "named by a test" with it, and `why`
+/// reports whether anything pins the definition a change is about. The rule is the same one the
+/// other readers use — a name that appears in a call list — so a second copy would be a second rule.
+/// 一份实现、两个读者：`digest` 用它把函数标成"被测试点名"，而 `why` 用它报告"这次改动有没有东西钉着"。
+/// 规则与其它读者用的是同一条——出现在调用列表里的名字——因此写第二份就是第二条规则。
+pub(crate) fn names_tests_call(sources: &[crate::mcp::source_index::SourceFile]) -> Vec<String> {
+    let mut named = Vec::new();
+    for source in sources {
+        if !looks_like_a_test(&source.relative, &source.source) {
+            continue;
+        }
+        for function in &source.functions {
+            named.extend(function.calls.iter().cloned());
+        }
+    }
+    named
+}
+
 pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String> {
     // Two bounds, because this answer is the one that grows without limit: the
     // measurement in the module doc above is the failure they exist against.

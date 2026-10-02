@@ -251,3 +251,39 @@ fn a_line_inside_a_declaration_is_answered_as_a_declaration() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The depth checklist names the two layers a change is easiest to forget: the siblings that must
+/// follow the same shape, and what pins the definition.
+/// 纵深清单点名改动时最容易忘的两层：必须跟着同一形状的兄弟，以及是什么钉着这条定义。
+///
+/// Measured (T-13): the six layers were spread across six tools, so "change this algorithm" had no
+/// single answer that said what each layer needs. The counter-proof is the whole point of the second
+/// half: **a layer with nothing on it must be named as missing**, not left off the list — a sibling
+/// that no test names is exactly the change nothing would catch.
+/// 量到的（T-13）：六层分散在六个工具里，于是"改这个算法"没有一个答案说出每一层各要动什么。反证是后半条的
+/// 全部要点：**没有任何东西的一层必须被点名为缺失**，而不是从清单上消失——没有任何测试点名的兄弟，正是那种
+/// "改了也没有东西会抓住"的改动。
+#[test]
+fn a_definition_answers_with_its_siblings_and_what_pins_it() {
+    let root = face_package("depth");
+    // A family of two: the fixture's own face file, plus a sibling under the same parent.
+    std::fs::create_dir_all(root.join("src/control/object/twin")).expect("sibling dir");
+    std::fs::write(
+        root.join("src/control/object/twin/twin.rs"),
+        "/// The twin's own paint.\npub fn fancy_paint() -> i32 { 2 }\n",
+    )
+    .expect("sibling source");
+    let answer = super::why(
+        &root,
+        &json!({"at": "src/control/object/button/button.rs:3"}),
+    )
+    .expect("the line answers");
+    assert!(
+        answer.contains("siblings   ") && answer.contains("src/control/object/twin/twin.rs"),
+        "the checklist names the sibling under the same parent: {answer}"
+    );
+    assert!(
+        answer.contains("pins       "),
+        "and it always answers what pins the definition, even when the answer is `nothing`: {answer}"
+    );
+}

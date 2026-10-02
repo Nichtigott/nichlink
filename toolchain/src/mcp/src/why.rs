@@ -288,10 +288,71 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
     callers.sort();
     callers.dedup();
     if callers.is_empty() {
+        // T-13's second layer: the siblings that must follow the same shape. A change to one member of a
+        // family is a change to the family, and the fact that decides whether the others still match is
+        // not on this line — it is the set of files that define the same name under the same parent.
+        // T-13 的第二层：必须跟着同一形状的那些兄弟。改动一个族里的成员就是改动整个族，而"其余成员是否还对得上"
+        // 这个事实不在这条定义上——它是同一父目录下定义同一个名字的那组文件。
+        // The family convention is `<prefix>/<name>/<name>.rs`, so a face's siblings live under the
+        // **grandparent**: taking the immediate parent found none of the nine `paint` definitions this
+        // tree actually has — measured by running the line against the fixture, which is why the first
+        // version answered "none" on a family of nine.
+        // 族约定是 `<前缀>/<名>/<名>.rs`，因此一个面的兄弟住在**祖父**目录下：取直接父目录时，这棵树实际有的那九个
+        // `paint` 定义一个都没找到——这是拿真夹具跑这一行量出来的，也是第一版在九个成员的族上答 "none" 的原因。
+        let parent = {
+            let (directory, file) = relative.rsplit_once('/').unwrap_or(("", relative));
+            let stem = file.strip_suffix(".rs").unwrap_or(file);
+            match directory.rsplit_once('/') {
+                Some((grandparent, last)) if last == stem => grandparent.to_owned(),
+                _ => directory.to_owned(),
+            }
+        };
+        let siblings = sources
+            .iter()
+            .filter(|source| {
+                source.relative != relative
+                    && !parent.is_empty()
+                    && source.relative.starts_with(&format!("{parent}/"))
+                    && source
+                        .functions
+                        .iter()
+                        .any(|candidate| candidate.name == function.name)
+            })
+            .map(|source| source.relative.clone())
+            .collect::<Vec<_>>();
+        lines.push(if siblings.is_empty() {
+        "  siblings   none: no other file under this parent defines this name".to_owned()
+    } else {
+        format!(
+            "  siblings   {} file(s) under {parent} define `{}` too: {} — a change here is a change \
+             to the family (`consistency --parent` compares their declared shapes)",
+            siblings.len(),
+            function.name,
+            siblings.join(", ")
+        )
+    });
         lines.push("  callers    0 in this root".to_owned());
     } else {
         lines.push(format!("  callers    {}", callers.join(", ")));
     }
+
+    // T-13's sixth layer: what pins it. "Nothing names it" is the answer that matters most — it is
+    // the difference between a change that a run will catch and one nothing will.
+    // T-13 的第六层：是什么钉着它。"没有任何东西点名它"是最要紧的那个答案——它是"这次改动会有一次运行抓住"
+    // 与"没有任何东西会抓住"之间的差别。
+    let named = crate::mcp::callgraph::names_tests_call(&sources);
+    lines.push(if named.iter().any(|call| call == &function.name) {
+        format!(
+            "  pins       a test names `{}`; `check {{face}}` is the run that shows it still holds",
+            function.name
+        )
+    } else {
+        format!(
+            "  pins       no test names `{}` — nothing pins this, so a change here is unverified \
+             until something does",
+            function.name
+        )
+    });
 
     // The adoption ledger, when this tree carries one: entries that name this file. The verdict is
     // `adopted`'s to compute; this says only which entries name the file, and says so.

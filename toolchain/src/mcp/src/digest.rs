@@ -43,17 +43,7 @@ pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
     let sources = crate::mcp::source_index::load_sources(root)?;
     // Which functions a test file names: the same name-in-a-call-list rule the other readers use.
     // 哪些函数被测试文件点名：与其它读者同一条"调用列表里有这个名字"的规则。
-    let mut named_by_test: Vec<String> = Vec::new();
-    for source in &sources {
-        if !crate::mcp::callgraph::looks_like_a_test(&source.relative, &source.source) {
-            continue;
-        }
-        for function in &source.functions {
-            for call in &function.calls {
-                named_by_test.push(call.clone());
-            }
-        }
-    }
+    let named_by_test: Vec<String> = crate::mcp::callgraph::names_tests_call(&sources);
     let mut lines = vec![format!(
         "file {} — {} function(s), {} line(s)",
         file.relative,
