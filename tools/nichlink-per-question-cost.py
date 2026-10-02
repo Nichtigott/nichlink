@@ -20,10 +20,17 @@ def session_of(tag):
     return None
 CG = session_of('nichlink-cg26:cg26')
 def hits(blob):
-    """命令文本里出现的题号（去重、保序）"""
+    """命令文本里出现的题号（去重、保序）。
+
+    **2026-10-03 修正**：原版用子串 `trees/<id>`，于是 `trees/h1` 命中了 `trees/h1-supply-chain`
+    ⇒ 那道题的每一次调用都被同时算作 `h1`（两个题号）⇒ 双双落进"共享桶"，`h1-supply-chain`
+    的逐题读数（4 步 / 3,194 输出 / 8,521 推理 / 1,112,832 上下文）在旧表里凭空消失。
+    这里改成**带右边界的匹配**（题号后不得紧跟 `-`/字母/数字/下划线）。
+    """
     found=[]
     for i in IDS:
-        if re.search(rf'(trees|answers|logs|CARGO_TARGET_DIR)[^"\\s]*[/=]{i}([/.\s"\']|$)', blob) or f'trees/{i}' in blob or f'answers/{i}.' in blob or f'logs/{i}.' in blob:
+        pat = rf'(trees|answers|logs|CARGO_TARGET_DIR)[^"\\s]*[/=]{re.escape(i)}(?![-A-Za-z0-9_])'
+        if re.search(pat, blob) or f'answers/{i}.' in blob or f'logs/{i}.' in blob:
             found.append(i)
     return found
 def per_question(sid, marker):
