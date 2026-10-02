@@ -253,3 +253,39 @@ fn the_ledgers_next_hint_names_the_anchor_that_lapsed() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A lapsed line says **whose** print its recorded one is, when it is another entry's.
+/// 失效的那一行说出它记录的那串**是谁的**——当那串属于另一个条目时。
+///
+/// Measured (T-21, h2): the arm spent roughly 15,000 characters working out that the `edc72845…`
+/// recorded in a line naming `panel.rs` is `button.rs`'s print. The ledger printed `recorded … ·
+/// now …` and never said whose, so the reader had to recompute the other file's print by hand —
+/// the same family as the round that made `why` hand out both fingerprint strings: a value the
+/// bridge already holds, computed and thrown away.
+/// 量到的（T-21 的 h2）：那一臂花了约 15,000 字符才弄清"点名 `panel.rs` 的那一行里记录的 `edc72845…` 是
+/// `button.rs` 的"。台账印了 `recorded … · now …`，从不说"是谁的"，于是读者得自己把另一个文件的指纹算一遍——
+/// 与"让 `why` 交出两串指纹"那一轮同族：桥本来握着的值，算出来又丢掉。
+#[test]
+fn a_lapsed_line_names_whose_print_it_carries() {
+    let root = package("borrowed-print");
+    // Two entries over two files: the second carries the **first file's** print, which is exactly the
+    // shape that names one file and prints another.
+    // 两条条目覆盖两个文件：第二条带着**第一个文件的**指纹，这正是"点名一个文件、印着另一个文件的指纹"的形状。
+    let borrowed = adopt_current(&root);
+    let fingerprint = borrowed
+        .split('|')
+        .nth(6)
+        .expect("the helper writes the fingerprint in field 7")
+        .to_owned();
+    write_fixture(&root.join("src/other.rs"), "// other\n");
+    let ledger = format!(
+        "{borrowed}root/other|chain+impl|converge: 1 live edge|maintainer|2026-09-30T14:00:00Z|src/other.rs|{fingerprint}|a second adoption\n"
+    );
+    write_fixture(&root.join(".nichlink/adopted/entries"), &ledger);
+    let answer = adopted(&root, &json!({})).expect("the ledger answers");
+    assert!(
+        answer.contains("the recorded print is `root/button`'s current print, not this file's"),
+        "the lapsed line names whose print it carries: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

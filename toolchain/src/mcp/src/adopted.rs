@@ -196,6 +196,18 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     let mut output = String::from("evidence: adoption ledger (provisional by construction)\n");
     let (mut provisional, mut lapsed) = (0usize, 0usize);
     let mut first_lapsed: Option<String> = None;
+    // Every entry's current print, computed once, so a lapsed line can say **whose** print its
+    // recorded one is. Measured (T-21, h2): the arm spent ~15,000 characters working out that
+    // `edc72845…` in a line naming `panel.rs` is `button.rs`'s print — the ledger's two hex strings
+    // say what the bytes are, never whose, and the bridge already holds every covered file.
+    // 每条的当前指纹先算一遍，好让失效的那一行说出它记录的那串**是谁的**。量到的（T-21 的 h2）：那一臂花了
+    // 约 15,000 字符才弄清"点名 `panel.rs` 的那一行里的 `edc72845…` 是 `button.rs` 的"——台账给的两串十六进制
+    // 说了"是什么"，从不说"是谁的"，而桥本来就握着每个被覆盖的文件。
+    let mut currents: Vec<(String, String)> = Vec::new();
+    for entry in &entries {
+        let current = read_files(root, &entry.files)?;
+        currents.push((entry.anchor.clone(), adoption_fingerprint(&current)));
+    }
     for entry in &entries {
         let current = read_files(root, &entry.files)?;
         let state = state_of(entry, &current);
@@ -217,9 +229,25 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
             AdoptionVerdict::Lapsed { file } => {
                 lapsed += 1;
                 first_lapsed.get_or_insert_with(|| entry.anchor.clone());
+                // Whose print the recorded one is, when it is another entry's: that is the difference
+                // between "the bytes moved" and "this line carries a copy of another file's print",
+                // and only the second one explains a ledger that names one file and prints another.
+                // 记录的那串是谁的（当它是别的条目的时）：这就是"字节动了"与"这一行带着另一个文件的指纹副本"
+                // 之间的差别，而只有后者能解释"点名一个文件、却印着另一个文件的指纹"的台账。
+                let borrowed = currents
+                    .iter()
+                    .find(|(anchor, print)| anchor != &entry.anchor && print == &entry.fingerprint)
+                    .map(|(anchor, _)| anchor.clone());
+                let whose = match &borrowed {
+                    Some(anchor) => format!(
+                        "; the recorded print is `{anchor}`'s current print, not this file's — a \
+                         copy of another entry's bytes"
+                    ),
+                    None => String::new(),
+                };
                 output.push_str(&format!(
-                    "adoption lapsed at {file} ({bytes}); needs confirmation — {}: {} [adopted at {} \
-                     by {}; why: {}]\n",
+                    "adoption lapsed at {file} ({bytes}){whose}; needs confirmation — {}: {} [adopted \
+                     at {} by {}; why: {}]\n",
                     entry.anchor, entry.certifies, entry.at, entry.verifier, entry.reason,
                 ));
             }
