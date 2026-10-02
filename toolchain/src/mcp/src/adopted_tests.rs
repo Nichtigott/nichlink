@@ -67,11 +67,17 @@ fn a_moved_byte_lapses_the_lease_and_the_file_is_named() {
     adopt_current(&root);
     write_fixture(&root.join("src/lib.rs"), "// entry changed\n");
     let text = adopted(&root, &json!({})).expect("the ledger answers");
+    // The file that moved is named, and the verdict rides with it. The two prints used to be asserted
+    // here ("beside both fingerprints") — that contract was **replaced**, not relaxed: the answer now
+    // says which file moved instead of quoting two hashes at the reader (see
+    // `an_entry_reads_as_a_verdict_rather_than_a_print` for the other half of the same contract).
+    // 动了的那条被点名，判定跟着它。那两个指纹以前钉在这里（"beside both fingerprints"）——那条契约是**被替换**
+    // 而不是被放宽：答案现在说"哪个文件动了"，而不是把两串散列摆给读者看（同一契约的另一半见
+    // `an_entry_reads_as_a_verdict_rather_than_a_print`）。
     assert!(
-        text.contains("adoption lapsed at src/lib.rs (recorded ")
-            && text.contains("· now ")
+        text.contains("adoption lapsed at src/lib.rs (changed since the confirmation)")
             && text.contains("); needs confirmation"),
-        "the file that moved is named, beside both fingerprints: {text}"
+        "the file that moved is named, with its verdict: {text}"
     );
     assert!(text.contains("provisional 0  lapsed 1"), "{text}");
     let _ = std::fs::remove_dir_all(&root);
@@ -89,67 +95,78 @@ fn a_moved_byte_lapses_the_lease_and_the_file_is_named() {
 /// 都没有，于是它去读本树的源码、手工把内核的组合规则重拼出来——**18,177 字符的推理，占该臂整条链的
 /// 11.5%**。两串十二个字符，就把那段工作存在的理由去掉了。
 #[test]
-fn an_entry_carries_its_recorded_and_its_current_fingerprint() {
-    let root = package("fingerprints");
+fn an_entry_reads_as_a_verdict_rather_than_a_print() {
+    let root = package("verdicts");
     adopt_current(&root);
     let unchanged = adopted(&root, &json!({})).expect("the ledger answers");
-    // Coupling pin (T-01): the entry's fingerprints are rendered by the shared outlet's brief form,
-    // so a second twelve-character cut would be caught here rather than by a reader noticing.
-    // 耦合钉子（T-01）：条目上的指纹由共享出口的简短形式渲染，因此第二处"截十二个字符"会在这里被抓住，
-    // 而不是等到读者发现。
+    assert!(
+        unchanged.contains("(unchanged since the confirmation)"),
+        "an untouched lease says the bytes are the ones it was taken on: {unchanged}"
+    );
+    // The ledger still holds a full sha — that is the record, and the comparison key — but the
+    // **answer** must not lead with it: a twelve-character hex string is a comparison key, not
+    // information, and a reader can neither find a file with it nor change a line with it
+    // (measured in T-21: an arm spent ~15,000 characters deriving what one of these prints meant).
+    // 台账里仍然存着完整的 sha——那是记录、也是比较键——但**答案**不许拿它当主语：十二位十六进制是比较键、
+    // 不是信息，读者既不能拿它找文件、也不能拿它改一行（T-21 实测：某一臂花了约 15,000 字符去推它是什么意思）。
     let ledger =
         std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("the ledger");
     let recorded = ledger
         .lines()
         .find(|line| !line.trim().is_empty() && !line.starts_with('#'))
         .and_then(|line| line.split('|').nth(6))
-        .expect("a recorded fingerprint")
-        .to_owned();
-    // The expected value is computed **here**, by this test's own cut, not by asking the outlet —
-    // a pin that recomputes through the code under test stays green when that code changes.
-    // 期望值在**这里**由本测试自己截，而不是去问那个出口——从被测代码再算一遍的钉子，在被测代码改变时照样绿。
+        .expect("a recorded fingerprint");
     assert_eq!(recorded.len(), 64, "the ledger holds a full fingerprint");
     assert!(
-        unchanged.contains(&format!("recorded {} (unchanged)", &recorded[..12])),
-        "the row carries a twelve-character form of the ledger's own fingerprint: {unchanged}"
+        !unchanged.contains(&recorded[..12]),
+        "no twelve-character print reaches the reader: {unchanged}"
     );
-    let source = include_str!("adopted.rs");
+    // 反证：动一个字节 ⇒ 同一个条目必须说"变了"，并点名那个文件（单文件条目说得出来）。
+    write_fixture(&root.join("src/lib.rs"), "// a byte moved\n");
+    let lapsed = adopted(&root, &json!({})).expect("the ledger answers");
     assert!(
-        source.contains("crate::mcp::note::brief("),
-        "this consumer renders the brief form through the shared outlet"
+        lapsed.contains("changed since the confirmation")
+            && lapsed.contains("lapsed at src/lib.rs"),
+        "a moved byte reads as changed, at a named path: {lapsed}"
     );
     assert!(
-        unchanged.contains("(recorded ") && unchanged.contains("(unchanged)"),
-        "an untouched lease says so once instead of printing the same hash twice: {unchanged}"
+        !lapsed.contains(&recorded[..12]),
+        "and the print still does not reach the reader: {lapsed}"
     );
-    let before = fingerprint_named(&unchanged, "now");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_multi_file_lease_says_that_the_record_cannot_name_the_file_that_moved() {
+    let root = package("multi-file");
+    let contents = std::fs::read_to_string(root.join("src/lib.rs")).expect("fixture source");
+    let other = "// a second covered file\n".to_owned();
+    write_fixture(&root.join("src/other.rs"), &other);
+    let print = nichlink_kernel::adoption::adoption_fingerprint(&[
+        ("src/lib.rs".to_owned(), contents),
+        ("src/other.rs".to_owned(), other),
+    ]);
+    write_fixture(
+        &root.join(".nichlink/adopted/entries"),
+        &format!(
+            "root/button|chain+impl|converge|maintainer|2026-09-29T14:00:00Z|src/lib.rs,src/other.rs|{print}|first adoption\n"
+        ),
+    );
+    write_fixture(&root.join("src/other.rs"), "// this one moved\n");
+    let answer = adopted(&root, &json!({})).expect("the ledger answers");
     assert!(
-        before.is_none(),
-        "nothing moved, so no second value is printed: {unchanged}"
+        answer.contains("which one is **not in the record**"),
+        "the record's own limit is stated rather than hidden: {answer}"
     );
-    // 反证：动一个字节 ⇒ 同一个条目必须给出第二个值，且它不等于记录值。
-    write_fixture(&root.join("src/lib.rs"), "// a single byte moved\n");
-    let moved = adopted(&root, &json!({})).expect("the ledger answers");
-    let recorded = fingerprint_named(&moved, "recorded").expect("the recorded value is printed");
-    let now = fingerprint_named(&moved, "now").expect("the current value is printed beside it");
-    assert_ne!(
-        recorded, now,
-        "the byte that moved is the byte that changes the fingerprint: {moved}"
+    assert!(
+        !answer.contains(&print[..12]),
+        "and the limit is stated without a print: {answer}"
     );
-    assert_eq!(recorded.len(), 12, "both are brief forms: {moved}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The twelve characters that follow one of the two labels, when the reply carries them.
 /// 回复带着它们时，两个标签之一后面的那十二个字符。
-fn fingerprint_named(text: &str, label: &str) -> Option<String> {
-    let start = text.find(&format!("{label} "))? + label.len() + 1;
-    let rest = &text[start..];
-    let end = rest
-        .find(|character: char| !character.is_ascii_hexdigit())
-        .unwrap_or(rest.len());
-    Some(rest[..end].to_owned())
-}
 
 #[test]
 fn a_renewal_is_a_preview_until_it_is_applied_and_confirmed() {

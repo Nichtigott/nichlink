@@ -135,7 +135,12 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
     }
     lines.push(format!(
         "  bytes      {}",
-        lease(&effective.fingerprint, &state.current)
+        lease(
+            &effective.fingerprint,
+            &state.current,
+            &effective.files,
+            false
+        )
     ));
     lines.push(format!("  covers     {}", effective.files.join(", ")));
     lines.push(
@@ -165,15 +170,33 @@ pub(crate) fn conformance(root: &Path, arguments: &Value) -> Result<String, Stri
 /// 量出来的需求（W8 的 h2）：客户端想知道一条失效条目的记录指纹是否描述了**别的文件**的当前字节，而
 /// 回复里两个值都没有，于是它去读本树的源码、手工把内核的指纹组合重新拼出来——18,177 字符的推理，占
 /// 该臂整条链的 11.5%。
-fn lease(recorded: &str, current: &str) -> String {
+/// What the bytes say, in the reader's terms: they are the ones the lease was taken on, or they are
+/// not — and **which file** is not.
+/// 字节在读者眼里是什么：它们还是这份租约当初针对的那一份，或者不是——以及**哪个文件**不是。
+///
+/// The recorded value is a print (a hash over the covered set), and printing it was a mistake: a
+/// twelve-character hex string is a **comparison key**, not information — a reader can neither find a
+/// file with it nor change a line with it, and its only content appears when two of them sit side by
+/// side. What a reader needs is the verdict per file, so that is what this renders. Where the record
+/// cannot support that verdict, it says so instead of hiding it: one print for a set of files can say
+/// "something in here moved" and never "this one did", and that limit belongs to the record's shape.
+/// 记录值是一个指纹（对被覆盖集合取的散列），而把它印出来是错的：一串十二位十六进制是**比较键**，不是信息
+/// ——读者既不能拿它去找文件，也不能拿它去改某一行，而它唯一的内容只在两串并排时才出现。读者要的是**逐文件
+/// 的判定**，所以这里印的是判定。记录撑不住这个判定的地方，就如实说出来而不是藏起来：对一组文件只留一个指纹，
+/// 能说"这里面有东西动了"，永远说不出"是这一个"——那是**记录形状**的限制。
+fn lease(recorded: &str, current: &str, files: &[String], file_already_named: bool) -> String {
     if recorded == current {
-        format!("recorded {} (unchanged)", crate::mcp::note::brief(recorded))
-    } else {
-        format!(
-            "recorded {} · now {}",
-            crate::mcp::note::brief(recorded),
-            crate::mcp::note::brief(current)
-        )
+        return "unchanged since the confirmation".to_owned();
+    }
+    match files {
+        [only] if file_already_named => "changed since the confirmation".to_owned(),
+        [only] => format!("changed since the confirmation ({only})"),
+        many => format!(
+            "changed since the confirmation — one or more of the {} covered files did, and which \
+             one is **not in the record**: a single print covers the set, so it cannot say. A \
+             per-file record would",
+            many.len()
+        ),
     }
 }
 
@@ -211,7 +234,9 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     for entry in &entries {
         let current = read_files(root, &entry.files)?;
         let state = state_of(entry, &current);
-        let bytes = lease(&entry.fingerprint, &state.current);
+        // The list row already says `lapsed at <file>`, so the bytes clause does not name it twice.
+        // 列表那一行已经说了 `lapsed at <文件>`，因此字节那句不再重复点名。
+        let bytes = lease(&entry.fingerprint, &state.current, &entry.files, true);
         match &state.verdict {
             AdoptionVerdict::Provisional => {
                 provisional += 1;

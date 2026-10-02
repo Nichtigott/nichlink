@@ -21,12 +21,3 @@ fn a_bounded_note_says_where_the_rest_is() {
     );
     assert!(numbered(&[], 3, "…").is_empty(), "nothing to attach");
 }
-
-/// The brief form keeps the source line numbers, not positions, and never invents characters.
-/// 简短形式保留**源码行号**而不是位置，且从不凭空造字符。
-#[test]
-fn the_brief_form_takes_twelve_and_gives_back_what_it_has() {
-    assert_eq!(brief("edc72845cc31aabbccdd"), "edc72845cc31");
-    assert_eq!(brief("short"), "short", "a short value is returned whole");
-    assert_eq!(brief(""), "");
-}
