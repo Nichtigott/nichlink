@@ -37,11 +37,21 @@ fn one_call_is_one_command() {
 /// A reader that closes the pipe first is a reader that has enough, not a failure: `--list | head`
 /// must not panic.
 /// 先关掉管道的读者是"读够了"的读者，不是失败：`--list | head` 不得崩溃。
+///
+/// The count is 20 rather than 4 because `--list` **deliberately** prints the instruction page
+/// first and the catalogue after it, and that page grows whenever the guidance does. Pinning the
+/// catalogue to the first four lines was an assumption about the header's length, not about the pipe
+/// — and adding the seven-shape table to the page broke exactly that assumption. Twenty still closes
+/// the pipe long before the end (the listing is well past it), so what this test is *for* is
+/// unchanged.
+/// 取 20 而不是 4：`--list` **有意**先印指引那一页、再印目录，而那一页会随指引增长。把目录钉在"前四行"是对
+/// **页眉长度**的假设，不是对管道的假设——而把七场景表加进那一页恰好打破了它。20 仍然远早于结尾就关掉管道
+/// （目录长得多），因此这条测试**要测的东西**没有变。
 #[test]
 fn a_closed_pipe_is_not_a_failure() {
     let output = Command::new("sh")
         .arg("-c")
-        .arg(format!("{} --list | head -4", binary()))
+        .arg(format!("{} --list | head -20", binary()))
         .output()
         .expect("the shell runs");
     let stderr = String::from_utf8_lossy(&output.stderr);

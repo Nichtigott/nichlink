@@ -216,6 +216,32 @@ while IFS='|' read -r label listed passed failed run_exit; do
   printf '%-40s %8s %8s %8s %6s\n' "$label" "$listed" "$passed" "$failed" "$run_exit"
 done <"$work/table"
 
+# A face that ran nothing is a face that proved nothing, and it reads exactly like a green one:
+# libtest prints `test result: ok. 0 passed; 0 failed`, and the conclusion line already said OK
+# before this check existed (audit `N-8`). This is the automatable half of "read `0 passed` as
+# nothing ran": the human half is in AGENTS.md, and a rule a reader has to remember is a rule that
+# gets forgotten. Today's lowest face runs 155 tests, so this refuses nothing that legitimately
+# exists — a new check must be run against a clean tree first, because a false positive is what
+# gets a check switched off.
+# 跑了 0 条的面就是什么都没证明的面，而它读起来与绿的一模一样：libtest 打印
+# `test result: ok. 0 passed; 0 failed`，而在本条存在之前，结论行早就在说 OK（审计 `N-8`）。这是
+# "把 `0 passed` 读成什么都没跑"里可自动化的那一半：另一半在 AGENTS.md 里，而一条要读者记住的规则就是一条会被
+# 忘掉的规则。今天最低的面跑 155 条，因此这条不拒绝任何合法存在的东西——新检查必须先对着干净树跑，因为假阳性正是
+# 让检查被关掉的原因。
+empty_faces=0
+while IFS='|' read -r label listed passed failed run_exit; do
+  if [ "$passed" -eq 0 ]; then
+    empty_faces=$((empty_faces + 1))
+    printf '  %s: listed %s, ran 0 — `0 passed` means nothing ran, not "nothing failed"\n' \
+      "$label" "$listed"
+  fi
+done <"$work/table"
+if [ "$empty_faces" -gt 0 ]; then
+  echo
+  echo "faces that ran no test: $empty_faces"
+  exit_code=1
+fi
+
 if [ "$grey_total" -gt 0 ]; then
   echo
   echo "grey tests (written but reached by no face): $grey_total"
@@ -227,7 +253,7 @@ fi
 
 if [ "$exit_code" -ne 0 ]; then
   echo
-  echo "conclusion: FAIL — a face failed, a test failed, or $grey_total test(s) are grey"
+  echo "conclusion: FAIL — a face failed, a test failed, $empty_faces face(s) ran nothing, or $grey_total test(s) are grey"
 else
   echo
   echo "conclusion: OK — every face green and every written test reached by at least one face"
