@@ -216,7 +216,17 @@ pub(crate) fn adopted(root: &Path, arguments: &Value) -> Result<String, String> 
     }
     let entries = parse_adoption(&text)
         .map_err(|error| format!("{}:{} {}", ledger.display(), error.line, error.message))?;
-    let mut output = String::from("evidence: adoption ledger (provisional by construction)\n");
+    // The ledger's **path** rides on the first line in both cases. It used to appear only when the
+    // ledger was empty, so a reader with a populated ledger had to go looking for the file — measured
+    // in T-21: the arm spent shell calls on `find`/`ls` before it could read the two lines it was
+    // asking about, and a reader that has to find the record is a reader one call poorer.
+    // 台账**路径**在两种情形下都上第一行。它过去只在台账为空时出现，于是面对一份有内容的台账的读者得自己去找
+    // 那个文件——T-21 实测：那一臂先花了若干 shell 调用 `find`/`ls`，才能读它在问的那两行；而要自己去找记录的
+    // 读者，就是少了一次调用的读者。
+    let mut output = format!(
+        "evidence: adoption ledger at {} (provisional by construction)\n",
+        ledger.display()
+    );
     let (mut provisional, mut lapsed) = (0usize, 0usize);
     let mut first_lapsed: Option<String> = None;
     // Every entry's current print, computed once, so a lapsed line can say **whose** print its

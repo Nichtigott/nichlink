@@ -306,3 +306,23 @@ fn a_lapsed_line_names_whose_print_it_carries() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A populated ledger names its own file, exactly as an empty one does.
+/// 有内容的台账与空台账一样，点名它自己那个文件。
+///
+/// Measured (T-21): the arm spent shell calls on `find`/`ls` to locate `.nichlink/adopted/entries`
+/// before it could read the two lines it was asking about — the path was printed only in the empty
+/// case, so the reader that had something to read was the one that had to go looking.
+/// 量到的（T-21）：那一臂先花了若干 shell 调用 `find`/`ls` 去找 `.nichlink/adopted/entries`，才能读它在问的
+/// 那两行——路径只在空台账时印，于是**有东西可读的读者**恰恰是得自己去找的那一个。
+#[test]
+fn a_populated_ledger_names_its_own_file() {
+    let root = package("names-its-file");
+    adopt_current(&root);
+    let answer = adopted(&root, &json!({})).expect("the ledger answers");
+    assert!(
+        answer.contains(".nichlink/adopted/entries (provisional by construction)"),
+        "the first line carries the path a reader would open: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
