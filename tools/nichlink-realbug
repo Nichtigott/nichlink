@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""A question generator whose questions are **real fixes from real repositories**.
+
+The recipe, and why each step is where it is (all three were measured the hard way):
+
+  1. pick a commit that changes source **and** adds or changes a test — the commit is the truth, so
+     nothing here writes a question or an answer;
+  2. check that commit **out**, then `git apply -R` only its **source** half, so the test stays and
+     the tree goes red on that commit's own test;
+  3. resolve **which cargo test target contains that test** — a file under `tests/` is not a target
+     when the manifest lists its targets and another file `mod`s it (ripgrep: `tests/regression.rs`
+     is included by `tests/tests.rs`, target `integration`). Running the wrong package is a **false
+     green**, which is how the first manual attempt at this wasted a round;
+  4. self-prove: the resolved target is red with the source reverted and green with it restored.
+
+Usage:
+  nichlink-realbug plan                      the selection rule, verbatim
+  nichlink-realbug find <repo-dir>           candidate commits, with their shapes
+  nichlink-realbug build <repo-dir> <commit> <out-dir>   inject, resolve, self-prove, write truth
+
+The output directory should be durable (`<checkout>/target/hardbug-runs/realbug/…`): a run that lives
+in `/tmp` is a run a cleanup can delete, which has cost this project a whole round's evidence already.
+"""
+
+import json
+import hashlib
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+TOOL = Path(__file__).resolve()
+CHECKOUT = TOOL.parent.parent
+
+USAGE = """nichlink-realbug plan                              the selection rule, verbatim
+nichlink-realbug find <repo-dir>                   candidate commits with their shapes
+nichlink-realbug build <repo-dir> <commit> <out>   inject, resolve the target, self-prove, write truth
+"""
+
+RULE = """A candidate commit qualifies when all three hold:
+  * its message matches `fix|bug|regress` (case-insensitive);
+  * it changes at least one `.rs` file **outside** a test path;
+  * it changes at least one file **inside** a test path (`tests/`, `_tests.rs`, or a path containing
+    `test`).
+The question it becomes is the commit itself: the source half is reverted, the test half stays, and
+the truth is `{file, line, test name, target}` read back out of the reverted diff and the resolved
+cargo target. Nothing is authored here — that is the point, and it is the same rule the four hand-made
+classes follow.
+"""
+
+TEST_PATH = re.compile(r"(^|/)(tests?/|.*_tests\.rs$)|test", re.IGNORECASE)
+SOURCE = re.compile(r"\.rs$")
+
+
+def run(*argv, **kwargs):
+    return subprocess.run(argv, capture_output=True, text=True, **kwargs)
+
+
+def cargo_env():
+    """A writable CARGO_HOME: the sandbox's `~/.cargo` is not writable, and cargo fails to unpack.
+    A 可写的 CARGO_HOME：沙箱里的 `~/.cargo` 不可写，cargo 会在解包时失败。"""
+    home = Path(os.environ.get("NICH_LINK_REALBUG_CARGO_HOME", "/tmp/nichlink-realbug-cargo"))
+    home.mkdir(parents=True, exist_ok=True)
+    environment = dict(os.environ)
+    environment["CARGO_HOME"] = str(home)
+    environment.setdefault("CARGO_TARGET_DIR", str(home / "target"))
+    return environment
+
+
+def changed(commit, repo):
+    """The commit's files, split into the source half and the test half."""
+    out = run("git", "show", "--numstat", "--format=", commit, cwd=repo).stdout
+    source, tests = [], []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3 or not SOURCE.search(parts[2]):
+            continue
+        (tests if TEST_PATH.search(parts[2]) else source).append(parts[2])
+    return source, tests
+
+
+def candidates(repo, limit=60):
+    commits = run("git", "log", f"-{limit}", "--pretty=%H", "--grep=fix", "--grep=bug",
+                  "--grep=regress", "-i", cwd=repo).stdout.split()
+    found = []
+    for commit in commits:
+        source, tests = changed(commit, repo)
+        if source and tests:
+            subject = run("git", "show", "-s", "--format=%h %ad %s", "--date=short", commit,
+                          cwd=repo).stdout.strip()
+            found.append({"commit": commit, "subject": subject, "source": source, "tests": tests})
+    return found
+
+
+def test_names(diff):
+    """The tests a diff adds, with the file each lands in.
+
+    Two spellings, because both are how real repositories write a test: a plain `fn` (usually under
+    `#[test]`) and **a macro invocation whose first argument is the test's name** — ripgrep's
+    `rgtest!(r3180_look_around_panic, |dir: Dir, …)` is the measured case, and the first version of
+    this generator saw no test at all in a commit that clearly added one.
+    两种拼法，因为真实仓库两种都用：普通 `fn`（通常在 `#[test]` 下）与**首参为测试名的宏调用**——ripgrep 的
+    `rgtest!(r3180_look_around_panic, |dir: Dir, …)` 就是量到的例子；这个生成器的第一版在一笔明显加了测试的
+    提交上什么也没看到。
+    """
+    names, path = [], None
+    for line in diff.splitlines():
+        if line.startswith("+++ b/"):
+            path = line[len("+++ b/"):]
+        function = re.match(r"\+\s*(?:pub\s+)?fn\s+([A-Za-z0-9_]+)\s*\(", line)
+        macro = re.match(r"\+\s*[a-z_][A-Za-z0-9_]*!\s*\(\s*([A-Za-z0-9_]+)\s*,", line)
+        match = function or macro
+        if match and path:
+            names.append({"file": path, "name": match.group(1)})
+    return names
+
+
+def resolve_target(repo, test_file):
+    """Which cargo test target contains `test_file`.
+
+    A file under `tests/` is its own target **unless** the manifest lists targets and another file
+    includes it as a module. ripgrep is the measured case: `tests/regression.rs` is included by
+    `tests/tests.rs`, whose `[[test]]` entry names the target `integration`.
+    一个 `tests/` 下的文件**默认**是它自己的目标——**除非**清单列出了目标、而另一个文件把它作为模块引入。
+    ripgrep 就是量到的那个例子：`tests/regression.rs` 被 `tests/tests.rs` 引入，而后者在 `[[test]]` 里的
+    名字是 `integration`。
+    """
+    manifest = repo / "Cargo.toml"
+    if not manifest.is_file():
+        return None, "no Cargo.toml at the repository root"
+    text = manifest.read_text(encoding="utf-8", errors="replace")
+    stem = Path(test_file).stem
+    listed = re.findall(r"\[\[test\]\]\s*name\s*=\s*\"([^\"]+)\"\s*path\s*=\s*\"([^\"]+)\"", text)
+    for name, path in listed:
+        if Path(path).name == Path(test_file).name:
+            return name, f"the manifest lists it as `{name}`"
+    for name, path in listed:
+        holder = repo / path
+        if not holder.is_file() or Path(path).name == Path(test_file).name:
+            continue
+        body = holder.read_text(encoding="utf-8", errors="replace")
+        if re.search(rf"^\s*(?:pub\s+)?mod\s+{re.escape(stem)}\s*;", body, re.MULTILINE):
+            return name, f"`{path}` includes `{stem}` as a module, and the manifest names it `{name}`"
+    return stem, "no manifest entry includes it, so the file is its own target"
+
+
+def build(repo_argument, commit, out_argument):
+    repo = Path(repo_argument).resolve()
+    out = Path(out_argument).resolve()
+    if not (repo / ".git").exists():
+        raise SystemExit(f"{repo} is not a git checkout")
+    source, tests = changed(commit, repo)
+    if not source or not tests:
+        raise SystemExit(
+            f"{commit} does not have both halves (source {len(source)}, test {len(tests)}); "
+            "the question is the commit, so both are required"
+        )
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    # The commit's own checkout: reverting on HEAD fails with `patch does not apply` once the file has
+    # moved on, which is how the first attempt at this recipe died.
+    # 该提交自己的检出：文件往前走过之后，在 HEAD 上回退会以 `patch does not apply` 失败——这正是这条配方
+    # 第一次尝试死掉的地方。
+    work = out / "repo"
+    shutil.copytree(repo, work, ignore=shutil.ignore_patterns("target"))
+    run("git", "checkout", "-q", commit, cwd=work)
+    diff = run("git", "show", commit, cwd=work).stdout
+    reverted = []
+    for path in source:
+        patch = run("git", "show", commit, "--", path, cwd=work).stdout
+        applied = subprocess.run(["git", "apply", "-R", "-"], input=patch, text=True, cwd=work,
+                                 capture_output=True)
+        if applied.returncode != 0:
+            raise SystemExit(f"cannot revert {path} cleanly at {commit}: {applied.stderr.strip()}")
+        reverted.append(path)
+    names = test_names(diff)
+    if not names:
+        raise SystemExit(f"{commit} adds no test function this generator can name")
+    test = names[0]
+    target, why = resolve_target(work, test["file"])
+    environment = cargo_env()
+    proof = {}
+    for label in ("reverted", "restored"):
+        # No `--offline`: a freshly cloned repository's dependencies are not in the local cache, and
+        # offline resolution fails on both runs — which is a **false red**, and the first version of
+        # this file "proved" its injection that way. This checkout's own gates keep `--offline`; an
+        # external corpus cannot.
+        # 不加 `--offline`：刚克隆下来的仓库依赖不在本地缓存里，离线解析在两次运行上都会失败——那是**假红**，
+        # 而这个文件的第一版就是这么"自证"的。本检出自己的门禁保持 `--offline`；外部语料做不到。
+        result = run("cargo", "test", "--test", target, test["name"], cwd=work,
+                     env=environment, timeout=1800)
+        output = result.stdout + result.stderr
+        proof[label] = {"exit": result.returncode, "tail": output[-400:]}
+        if label == "reverted":
+            for path in reverted:
+                run("git", "checkout", "-q", commit, "--", path, cwd=work)
+    line = None
+    for row in diff.splitlines():
+        if row.startswith("@@") and reverted:
+            match = re.search(r"\+(\d+)", row)
+            if match:
+                line = int(match.group(1))
+                break
+    # The self-proof is not "non-zero then zero": a run can fail for a reason that has nothing to do
+    # with the injection (a resolution failure, a missing toolchain), and that is a false red. What
+    # makes it evidence is that the **reverted** run fails *by naming this test*, and the restored one
+    # passes.
+    # 自证不是"先非零再零"：一次运行可能因为与注入毫无关系的原因失败（解析失败、工具链缺失），那是**假红**。
+    # 让它成为证据的是：**回退后**的那次运行**点名了这条测试**地失败，而还原后通过。
+    named_the_test = test["name"] in proof["reverted"]["tail"]
+    evidence = {
+        "reverted_failed": proof["reverted"]["exit"] != 0,
+        "reverted_named_the_test": named_the_test,
+        "restored_passed": proof["restored"]["exit"] == 0,
+    }
+    truth = {
+        "class": "realbug",
+        "self_proof_verdict": "holds" if all(evidence.values()) else "does not hold",
+        "self_proof_evidence": evidence,
+        "repo": repo.name,
+        "commit": run("git", "show", "-s", "--format=%H %ad %s", "--date=short", commit,
+                      cwd=repo).stdout.strip(),
+        "injected": {"reverted_source": reverted, "kept_test_file": test["file"]},
+        "root_cause": {"file": reverted[0] if reverted else None, "line": line, "symbol": None,
+                       "test": test["name"]},
+        "target": {"name": target, "why": why},
+        "self_proof": proof,
+        "apparatus": {"tool_sha256": hashlib.sha256(TOOL.read_bytes()).hexdigest()},
+    }
+    (out / ".audit").mkdir(exist_ok=True)
+    (out / ".audit/truth.json").write_text(json.dumps(truth, indent=2, ensure_ascii=False) + "\n",
+                                           encoding="utf-8")
+    print(f"injected  {commit} — reverted {', '.join(reverted)}")
+    print(f"test      {test['name']} in {test['file']}")
+    print(f"target    {target} ({why})")
+    print(f"reverted  exit {proof['reverted']['exit']} (must be non-zero)")
+    print(f"restored  exit {proof['restored']['exit']} (must be zero)")
+    print(f"truth     {out / '.audit/truth.json'}")
+    return 0
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(USAGE, end="", file=sys.stderr)
+        return 2
+    if argv[1] == "plan":
+        print(RULE)
+        return 0
+    if argv[1] == "find":
+        if len(argv) < 3:
+            raise SystemExit("find needs a repository directory")
+        for row in candidates(Path(argv[2]).resolve()):
+            print(f"{row['subject']}")
+            print(f"    source {', '.join(row['source'])}")
+            print(f"    tests  {', '.join(row['tests'])}")
+        return 0
+    if argv[1] == "build":
+        if len(argv) < 5:
+            raise SystemExit("build needs a repository, a commit and an output directory")
+        return build(argv[2], argv[3], argv[4])
+    print(f"unknown argument `{argv[1]}`\n\n{USAGE}", end="", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
