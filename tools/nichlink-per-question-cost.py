@@ -30,7 +30,8 @@ def hits(blob):
     found=[]
     for i in IDS:
         pat = rf'(trees|answers|logs|CARGO_TARGET_DIR)[^"\\s]*[/=]{re.escape(i)}(?![-A-Za-z0-9_])'
-        if re.search(pat, blob) or f'answers/{i}.' in blob or f'logs/{i}.' in blob:
+        cg_arg = re.search(rf'cg\.sh\s+{re.escape(i)}(?![-A-Za-z0-9_])', blob)
+        if re.search(pat, blob) or cg_arg or f'answers/{i}.' in blob or f'logs/{i}.' in blob:
             found.append(i)
     return found
 def per_question(sid, marker):

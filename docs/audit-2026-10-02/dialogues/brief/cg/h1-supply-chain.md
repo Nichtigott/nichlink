@@ -2,11 +2,11 @@
 
 **题面**：hardbug h1：供应链驳杂——同族一个兄弟调用了另一族名字，症状是偏移 160≠136。
 
-> 仪器调用 **10** · 步 2 · 输出 1,488 tok · 推理 1,320 字符 · 累计上下文 314,240
+> 仪器调用 **10** · 步 5 · 输出 3,989 tok · 推理 8,503 字符 · 累计上下文 734,464
 
 ## 仪器调用序列（工具给了什么 + 当时 agent 在想什么）
 
-### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph init .`  · exit 0 · step 58（turn 1）
+### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph init .`  · exit 0 · step 45（turn 1）
 
 **工具返回**：
 ```
@@ -28,24 +28,25 @@ Linking dynamic dispatch...
 
 **当时推理**：
 ```
-h2 confirmed:
-- `spinner.rs:19-23` block is missing the 4th declaration `handle_contracts: [crate::control::ControlHandle],` that every other sibling has (button.rs:23). The constraint "every direct child implements ControlHandle" is declared in control.rs:13-16 (the trait) and repeated in every sibling's `control_object!` via `handle_contracts:` — spinner omits it.
-- The ledger: panel entry lapsed.
-- `callers REGISTRATION_RULE` = 0 (another codegraph resolution gap — the macro presumably references it; not needed here).
+Now the three h-classes. Let me start with h1-supply-chain (the "one sibling calls a different family of names than its siblings do"). 
 
-Also interesting: in h2, `to_world` is not called by anyone (toggle uses to_local in this tree?). Let me not worry; h2's class is the ledger+declaration.
+Tree layout: graft/src/{gauge_fast,toggle_fast,slider_fast,button_fast,timeline_fast,panel_fast,spinner_fast,dial_fast,badge_fast,lib}.rs, host/src/control/object/{slider,panel,button,timeline,badge,dial,toggle,gauge,spinner}/*.rs + control.rs + registry_rule/registry_rule.rs + lib.rs + tests/offsets.rs, build.rs, Cargo.toml, host/.nichlink...
 
-Wait — one thing to check for h2: is the offsets test passing (yes, 1 passed ✓).
+Symptom: "The rendered layout is off. cargo test --offline fails in the offsets test with a total that no single widget's own code explains, and every widget file reads as correct on its own."
 
-Let me now double-check spinner's missing declaration is *exactly one*: diff showed only that one hunk (plus name substitutions) ✓. And the other 7 siblings match the reference modulo names ✓ (from the diff output: only the handle_contracts hunk for spinner).
+Class: "one sibling calls a different family of names than its siblings do" (一个兄弟调用了与其余兄弟不同的那一族名字).
 
-Now, do I need to determine the fingerprint scheme more precisely? Let me try one more approach: maybe the fingerprint is over the whole *file path + the registration block* in some canonical way. Instead of guessing, I can state: "两条记录写了同一个指纹，而两个被指名的文件字节不同（06c45576… / d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着'在 panel 被重写之前记录的'（时间 2026-09-20，早于 button 的 2026-10-01）⇒ 失效的是 panel 那条。" And note the caveat: the ledger's fingerprint scheme isn't in this tree, so I compared the t
-…[推理：此处截断，全文 6744 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+So: among the 9-10 object files, one calls a different family of names. Probably the host object files call graft functions named e.g. `button_fast::…`. Hmm, "family of names" — maybe the graft crate exposes two families: `*_fast` (e.g. `gauge_fast`, `toggle_fast`) and something else. Or the widget files call `parts()`/`slots()`-type API names.
+
+Best approach: use codegraph to get callees of each of the 9 object files (or their primary functions) and compare. Let me first look at the tree: read tests/offsets.rs (the failing test), host/src/lib.rs (entry plan), control.rs, and one or two object files, plus graft/src/lib.rs.
+
+Let me batch: node tests/offsets.rs, node src/lib.rs (host), node src/control/object/butt
+…[推理：此处截断，全文 1669 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-**当时输出**：`Writing the three h-class answers:`
+**当时输出**：`Now **h1-supply-chain**. Reading the symptom test and entry plan:`
 
-### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph files`  · exit 0 · step 67（turn 1）
+### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph files`  · exit 0 · step 46（turn 1）
 
 **工具返回**：
 ```
@@ -96,41 +97,18 @@ Project Structure (24 files):
 
 **当时推理**：
 ```
-I have what I need. Let me write SETUP.md now — comprehensive but readable.
+Now I see the shape: `control.rs` defines two "families of names": `to_local(x) = x + 7` and `to_world(x) = x + 31`. The class: "one sibling calls a different family of names than its siblings do" — so among the widget `offset` functions, one uses `to_world` while the rest use `to_local`.
 
-Content plan:
+The offsets test: EXPECTED_TOTAL = 136, summing offset(10) over 8 widgets = 8 × (10+7) = 136 ✓ if all use `to_local`. So the odd sibling uses `to_world` → 10+31 = 41 → total = 136 - 17 + 41 = 160, which fails the assertion with "160, not 136" — "a total that no single widget's own code explains" ✓ (each widget file looks right on its own: the odd one calls `to_world` which is a legitimate function — but the family mismatch).
 
-# SETUP — codegraph 臂 (cg26) 装置、索引与范围验证
+So I need to find which widget calls `to_world`. Use codegraph: `callers to_world`! And `callers to_local`. 
 
-## 1. 工具
-- `/home/nich/Moirai_N3/nichlink/target/round7/tools-upstream/v1.6.1/bin/codegraph`；`--version` → `1.6.1`；`--help` 列出的子命令: init/index/sync/status/query/explore/context/node/files/callers/callees/impact/affected...
-- 全部调用经 `target/probe-cg26/cg.sh <id> <args>`：cwd = 该题副本，输出逐字追加到 `logs/<id>.txt`，三行格式 `=== CMD` / 原文 / `=== EXIT`。
+Let me do that: `./cg.sh h1-supply-chain callers to_world`, `callers to_local`, and check the widget files' offset functions.
 
-## 2. 副本
-- 命令: `rsync -a --exclude target --exclude .codegraph --exclude .git target/round9/trees/<id> target/probe-cg26/trees/`
-  （多排 `.git`：登记哈希本来就跳过 `.git`；`.git` 不入副本也顺手堵死"翻题树历史"）
-- 24 棵题树 + g1/g2 各一份自己的副本（g1= s3 的字节副本、g2= s5 的字节副本；`diff -r` 已证 IDENTICAL）
-- base 哈希（TREES.json 算法，跳过 {target,.codegraph,.git}）：表
-- 开工前复核: `node /tmp/copycheck.mjs`（原文在 logs/_shared.txt）→ 15/15 OK
-
-## 3. 索引
-- 每棵树在**自己的副本里**建：`cd <copy> && codegraph init .`（从不 `init <别处路径>`）→ `.codegraph/` 落在副本内
-- 索引统计表（files/nodes/edges）: from logs
-- 索引成本: 每棵树 1 次 init（计入该题 logs 的第一条 CMD）
-- r3 的首次 init 是 1.439s（`time` 实测），之后 25 棵同秒级；索引 4–24 文件、19–167 节点
-
-## 4. 范围验证（每个题一条，原文在各自的 logs）
-- 命令: `codegraph files`；判据: 列出的路径都是**树内相对路径**，无 `toolchain/`、`kernel/` 之类外层符号
-- 原文样本 (s1): (quote)
-- 逐题原文: logs/<id>.txt 的第一条 `=== CMD ... files` 记录
-- 源码回读验证: `node <file>` 返回"逐字 line-numbered 源码"（例: s1 的 crates/core/src/store.rs 21 行 post、h2 的 spinner.rs 19-23 块）；这也是排除"符号链接为根时 could not read from disk"的那一步（我的是真副本，全部成功）
-
-## 5. nonbridge 计数规则
-- codegraph step = logs/<id
-…[推理：此处截断，全文 2336 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+Let me run it.
 ```
 
-### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/tests/offsets.rs`  · exit 0 · step 72（turn 1）
+### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/tests/offsets.rs`  · exit 0 · step 47（turn 1）
 
 **工具返回**：
 ```
@@ -163,23 +141,19 @@ Content plan:
 
 **当时推理**：
 ```
-All checks pass:
-- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
-- All logs have matched CMD/EXIT pairs.
-- Nothing written under target/round9 ✓.
+The odd sibling: `host/src/control/object/toggle/toggle.rs:15 fn offset` calls `to_world` (control.rs:8) while the other 8 widget `offset` functions call `to_local` (control.rs:5).
 
-Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
+Let me confirm the numbers: `to_local(10) = 17`, `to_world(10) = 41`. Test sums 8 widgets: 7 × 17 + 41 = 119 + 41 = 160 ≠ 136 (expected = 8×17 = 136) ✓ — the test fails with 160. 
 
-Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
+Let me read toggle.rs:15 and one sibling to confirm the exact line (e.g. button.rs:15) — and get raw evidence with exit codes. Also the failing test's raw output would be nice, but running cargo test on the h1-supply-chain tree requires building nichlink-toolchain (path dep to the workspace) — expensive. The brief demands "evidence: every claim: the command you ran, its raw output and its exit code". For my arm, codegraph commands are the commands. I can cite `callers to_world` output + exit 0.
 
-Now let me finish:
-1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
+Hmm, but the class brief demands raw output for every claim. My codegraph commands give raw output. That's fine — I'm the codegraph arm; but a *stronger* evidence would be an actual cargo test run showing the failure. That's a nonbridge call, builds the toolchain (heavy). Given that the ninth round arm probably ran cargo (its tool was nichlink-mcp, and the brief requires 交付后门必须绿 only for modifiable trees; for read-only diagnosis the evidence requirement says command+output+exit code).
 
-Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first
-…[推理：此处截断，全文 5635 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+Let me consider the budget: building the toolchain offline for h1-supply-chain's host would take maybe 1-3 minutes (the workspace's deps are cach
+…[推理：此处截断，全文 3728 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/src/lib.rs`  · exit 0 · step 75（turn 1）
+### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/src/lib.rs`  · exit 0 · step 58（turn 1）
 
 **工具返回**：
 ```
@@ -285,7 +259,26 @@ Wait — also I must first mark in_progress (I never did that! I claimed, then w
 98
 ```
 
-### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/src/control/control.rs`  · exit 0 · 共享/装置步
+**当时推理**：
+```
+h2 confirmed:
+- `spinner.rs:19-23` block is missing the 4th declaration `handle_contracts: [crate::control::ControlHandle],` that every other sibling has (button.rs:23). The constraint "every direct child implements ControlHandle" is declared in control.rs:13-16 (the trait) and repeated in every sibling's `control_object!` via `handle_contracts:` — spinner omits it.
+- The ledger: panel entry lapsed.
+- `callers REGISTRATION_RULE` = 0 (another codegraph resolution gap — the macro presumably references it; not needed here).
+
+Also interesting: in h2, `to_world` is not called by anyone (toggle uses to_local in this tree?). Let me not worry; h2's class is the ledger+declaration.
+
+Wait — one thing to check for h2: is the offsets test passing (yes, 1 passed ✓).
+
+Let me now double-check spinner's missing declaration is *exactly one*: diff showed only that one hunk (plus name substitutions) ✓. And the other 7 siblings match the reference modulo names ✓ (from the diff output: only the handle_contracts hunk for spinner).
+
+Now, do I need to determine the fingerprint scheme more precisely? Let me try one more approach: maybe the fingerprint is over the whole *file path + the registration block* in some canonical way. Instead of guessing, I can state: "两条记录写了同一个指纹，而两个被指名的文件字节不同（06c45576… / d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着'在 panel 被重写之前记录的'（时间 2026-09-20，早于 button 的 2026-10-01）⇒ 失效的是 panel 那条。" And note the caveat: the ledger's fingerprint scheme isn't in this tree, so I compared the t
+…[推理：此处截断，全文 6744 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**当时输出**：`Writing the three h-class answers:`
+
+### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph node host/src/control/control.rs`  · exit 0 · step 67（turn 1）
 
 **工具返回**：
 ```
@@ -318,7 +311,43 @@ Wait — also I must first mark in_progress (I never did that! I claimed, then w
 25
 ```
 
-### ①6 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph callers to_world`  · exit 0 · 共享/装置步
+**当时推理**：
+```
+I have what I need. Let me write SETUP.md now — comprehensive but readable.
+
+Content plan:
+
+# SETUP — codegraph 臂 (cg26) 装置、索引与范围验证
+
+## 1. 工具
+- `/home/nich/Moirai_N3/nichlink/target/round7/tools-upstream/v1.6.1/bin/codegraph`；`--version` → `1.6.1`；`--help` 列出的子命令: init/index/sync/status/query/explore/context/node/files/callers/callees/impact/affected...
+- 全部调用经 `target/probe-cg26/cg.sh <id> <args>`：cwd = 该题副本，输出逐字追加到 `logs/<id>.txt`，三行格式 `=== CMD` / 原文 / `=== EXIT`。
+
+## 2. 副本
+- 命令: `rsync -a --exclude target --exclude .codegraph --exclude .git target/round9/trees/<id> target/probe-cg26/trees/`
+  （多排 `.git`：登记哈希本来就跳过 `.git`；`.git` 不入副本也顺手堵死"翻题树历史"）
+- 24 棵题树 + g1/g2 各一份自己的副本（g1= s3 的字节副本、g2= s5 的字节副本；`diff -r` 已证 IDENTICAL）
+- base 哈希（TREES.json 算法，跳过 {target,.codegraph,.git}）：表
+- 开工前复核: `node /tmp/copycheck.mjs`（原文在 logs/_shared.txt）→ 15/15 OK
+
+## 3. 索引
+- 每棵树在**自己的副本里**建：`cd <copy> && codegraph init .`（从不 `init <别处路径>`）→ `.codegraph/` 落在副本内
+- 索引统计表（files/nodes/edges）: from logs
+- 索引成本: 每棵树 1 次 init（计入该题 logs 的第一条 CMD）
+- r3 的首次 init 是 1.439s（`time` 实测），之后 25 棵同秒级；索引 4–24 文件、19–167 节点
+
+## 4. 范围验证（每个题一条，原文在各自的 logs）
+- 命令: `codegraph files`；判据: 列出的路径都是**树内相对路径**，无 `toolchain/`、`kernel/` 之类外层符号
+- 原文样本 (s1): (quote)
+- 逐题原文: logs/<id>.txt 的第一条 `=== CMD ... files` 记录
+- 源码回读验证: `node <file>` 返回"逐字 line-numbered 源码"（例: s1 的 crates/core/src/store.rs 21 行 post、h2 的 spinner.rs 19-23 块）；这也是排除"符号链接为根时 could not read from disk"的那一步（我的是真副本，全部成功）
+
+## 5. nonbridge 计数规则
+- codegraph step = logs/<id
+…[推理：此处截断，全文 2336 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①6 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph callers to_world`  · exit 0 · step 72（turn 1）
 
 **工具返回**：
 ```
@@ -329,7 +358,25 @@ function    offset
   host/src/control/object/toggle/toggle.rs:15
 ```
 
-### ①7 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph callers to_local`  · exit 0 · 共享/装置步
+**当时推理**：
+```
+All checks pass:
+- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
+- All logs have matched CMD/EXIT pairs.
+- Nothing written under target/round9 ✓.
+
+Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
+
+Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
+
+Now let me finish:
+1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
+
+Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first
+…[推理：此处截断，全文 5635 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①7 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain && codegraph callers to_local`  · exit 0 · step 75（turn 1）
 
 **工具返回**：
 ```

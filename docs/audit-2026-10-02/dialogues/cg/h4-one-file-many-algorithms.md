@@ -2,13 +2,13 @@
 
 **题面**：hardbug h4：单文件多算法——一个文件三套算法，恰一支写反、恰一支不可达。
 
-> 步 2 · 仪器调用 **9**（逐题日志条数）· 会话里定位到 3 条 · 输出 3,695 tok · 推理 8,429 字符 · 累计上下文 339,328
+> 步 3 · 仪器调用 **9**（逐题日志条数）· 会话里定位到 5 条 · 输出 4,699 tok · 推理 11,300 字符 · 累计上下文 466,688
 
 ## 一、工具给了什么 · 当时 agent 在想什么（逐条配对）
 
-> ⚠️ 日志 9 条 vs 会话定位 3 条：差的那些调用发生在**共享步**（一条命令里跑了多道题）或**装置步**里 —— 这正是"逐题 token 不可归因"的具体形状。
+> ⚠️ 日志 9 条 vs 会话定位 5 条：差的那些调用发生在**共享步**（一条命令里跑了多道题）或**装置步**里 —— 这正是"逐题 token 不可归因"的具体形状。
 
-### ①1 日志第 1 条 · exit 0 · step 63（turn 1）
+### ①1 日志第 1 条 · exit 0 · step 40（turn 1）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph init .`
 
@@ -28,6 +28,103 @@ Linking dynamic dispatch...
 ●  16 nodes, 19 edges in 499ms
 │
 └  Done
+```
+
+**该步推理**（逐字）：
+```
+10 of 15 done (s1-s8, g1, g2). Now:
+- g4 (host tree with crates, "哪些臂是没有任何执行能进入的")
+- h1-supply-chain, h2-claim-unkept, h3-cross-file-chain (host+graft)
+- h4-one-file-many-algorithms (tiny: 4 files)
+
+Let me start with h4 (smallest): tree with src/lib.rs, src/model/entry.rs, src/model/model.rs, tests/postable.rs. Question: one algorithm in one file does the opposite of its docs, and no test covers that branch.
+
+Let me read the tree via codegraph. Also h1-supply-chain/h2/h3 have the same host/graft skeleton with different injections.
+
+Plan for h4: node the 4 files (4 calls) + maybe callees.
+
+Let me also plan the three h-classes: each has host/ (10 object files + lib.rs + control.rs + registry_rule.rs + tests/offsets.rs or shipped.rs) and graft/ (10 files + lib.rs). The classes:
+- h1-supply-chain: "one sibling calls a different family of names than its siblings do" → the symptom: offsets test fails with a total no single widget explains. The defect: one of the host object files (or graft) calls a different family of names (e.g. calls `gauge_fast::…` vs `…::gauge_slow`, or uses the wrong trait method). Let me find it: compare the 10 object files for a family difference, e.g. one file calls `X_fast::new()` while others call something else. Since they're similar, I can look for the odd one out via codegraph (callees of each object) or by reading.
+- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.nichlink/adopted/entries` (a file listing adopted entries). One sibling file missing exactly one declaration (e.g. missing a `claim!`/`declare!` line), and one ledger entry whose fingerprint no longer matches. Need to read the entries file + the object files.
+- h3-cross-file-chain: "the entry plan never names the new face, so the build-time scope leaves it out of the build" → the entry plan (in host/src/lib.rs or build.rs) doesn't name one face → missing from shipped registry. Compare object list vs entry plan.
+- h4: as above.
+
+These need real reading. Let me do them one at a time, starting with h4 (cheap), then h1-supply-chain, h3, h2.
+
+Then g4 (host tree with crates/, "哪些臂是没有任何执行能进入的" — arms that no execution can enter). g4's tree: crates/... let me look at its layout (14 files, crates/). It's probably a nichlink host with crates.
+
+Let me start h4.
+
+For each question I should log codegraph calls into logs/<id>.txt. Note: h4's init is already logged ✓.
+
+h4: 4 files. Let me node all 4.
+```
+
+**该步模型输出**（逐字）：
+```
+Now the hardbug class trees. Starting with **h4** (smallest):
+```
+
+### ①2 日志第 2 条 · exit 0 · step 41（turn 1）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph files`
+
+**工具返回**（逐字）：
+```
+Project Structure (4 files):
+
+├── src
+│   ├── model
+│   │   ├── entry.rs (rust, 10 symbols)
+│   │   └── model.rs (rust, 1 symbols)
+│   └── lib.rs (rust, 1 symbols)
+└── tests
+    └── postable.rs (rust, 4 symbols)
+```
+
+**该步推理**（逐字）：
+```
+h4 analysis:
+
+Three algorithms in one file (src/model/entry.rs): 
+1. `zero_arm()` (line 30) — an arm chooser: returns `ZeroArm::Post` always.
+2. `postable()` (line 38) — contract: "postable when it carries a receipt, and a zero entry never is". The implementation returns true for any receipted entry because `zero_arm()` returns `Post` unconditionally — so `ZeroArm::Refuse` branch at line 44 is DEAD (never taken), and the contract "a zero entry never is [postable]" is violated: `Entry::new("a", 0, true).postable()` → has_receipt true, zero_arm → Post → **true** (should be false).
+3. `signed()` (line 53) — magnitude, always non-negative; matches its doc.
+
+So: exactly one branch inverted = the `zero_arm()` should decide by amount: `if self.amount == 0 { ZeroArm::Refuse } else { ZeroArm::Post }`. Let me check the class statement: "three algorithms in one file, exactly one branch inverted and exactly one branch uncovered". 
+
+The `zero_arm()` function: its doc says "Which arm decides a zero amount" — but it ignores `amount` entirely and always returns `Post`. So the inverted/omitted logic is there: it should return `Refuse` when amount == 0.
+
+Alternatively, the "inverted branch" could be in `signed()`: `if self.amount < 0 { -self.amount }`: for i64::MIN, `-i64::MIN` overflows — but that's not "inverted". The doc says "Always non-negative: a debit prints as its size, never with a sign" — implementation matches. Hmm, wait: is `signed` inverted? For amount = -5 → 5 ✓ non-negative. OK matches.
+
+And `normalized_account`: doc "Accounts are case-insensitive and trimmed" → `trim().to_lowercase()` ✓ matches.
+
+So the defect: `zero_arm()` (entry.rs:30-32) returns `ZeroArm::Post` unconditionally → the `ZeroArm::Refuse` arm (entry.rs:44) is unreachable (no execution can enter it — this is exactly h4's "one branch uncovered") and `postable()` contradicts its own doc for zero-amount entries (entry.rs:36-37 + 42-45). The tests cover only receipted non-zero (post) and unreceipted (refuse early) → the zero case and the Refuse arm are uncovered ✓ "exactly one branch uncovered".
+
+Minimal fix: `fn zero_arm(&self) -> ZeroArm { if self.amount == 0 { ZeroArm::Refuse } else { ZeroArm::Post } }`. Files not touched: tests, model.rs, lib.rs, Cargo.toml.
+
+Evidence via codegraph: `node src/model/entry.rs` (source at lines 30, 42-45), `callers zero_arm` (1 caller: postable), `callees postable`/`callees zero_arm`. Let me run `callers zero_arm` and `callees postable` for evidence. Also `callees an_entry_without_a_receipt_does_not_post` to show the tests' coverage (only 2 tests, neither passes amount 0).
+
+Let me do that, then write the answer.
+
+Also g4's question ("哪些臂是没有任何执行能进入的") is about arms unreachable by any execution — for the g4 tree. Let me handle g4 next; its tree has crates/ (14 files).
+
+Let me run h4 evidence now + look at g4's layout/entry point.
+```
+
+### ①3 日志第 3 条 · exit 0 · step 63（turn 1）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/lib.rs`
+
+**工具返回**（逐字）：
+```
+**src/lib.rs** — 5 lines, 0 symbols · no other indexed file depends on it
+
+1	//! A ledger model.
+2	
+3	#[path = "model/model.rs"]
+4	pub mod model;
+5
 ```
 
 **该步推理**（逐字）：
@@ -57,21 +154,17 @@ Also: for the s-questions, should I have run cargo? Not necessary (the trees' te
 Let me write h4 and then finalize.
 ```
 
-### ①2 日志第 2 条 · exit 0 · step 67（turn 1）
+### ①4 日志第 4 条 · exit 0 · step 67（turn 1）
 
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph files`
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/model.rs`
 
 **工具返回**（逐字）：
 ```
-Project Structure (4 files):
+**src/model/model.rs** — 3 lines, 0 symbols · no other indexed file depends on it
 
-├── src
-│   ├── model
-│   │   ├── entry.rs (rust, 10 symbols)
-│   │   └── model.rs (rust, 1 symbols)
-│   └── lib.rs (rust, 1 symbols)
-└── tests
-    └── postable.rs (rust, 4 symbols)
+1	#[path = "entry.rs"]
+2	pub mod entry;
+3
 ```
 
 **该步推理**（逐字）：
@@ -122,85 +215,7 @@ Also, include the note that the 11 damaged trees were copied+indexed at 22:59 (l
 Let me write the file.
 ```
 
-### ①3 日志第 3 条 · exit 0 · step 72（turn 1）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/lib.rs`
-
-**工具返回**（逐字）：
-```
-**src/lib.rs** — 5 lines, 0 symbols · no other indexed file depends on it
-
-1	//! A ledger model.
-2	
-3	#[path = "model/model.rs"]
-4	pub mod model;
-5
-```
-
-**该步推理**（逐字）：
-```
-All checks pass:
-- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
-- All logs have matched CMD/EXIT pairs.
-- Nothing written under target/round9 ✓.
-
-Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
-
-Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
-
-Now let me finish:
-1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
-
-Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first, then completed"). I should call update_task with status=in_progress first, then completed. Let me do both (in_progress then completed) — two calls. Since claimed → completed isn't allowed, do in_progress now, then completed immediately after.
-
-2. Send the report to the captain (agent_teams_send_message with source_task_id/source_attempt_id), including: 15/26 delivered, file list, key apparatus points, the nonbridge/steps summary useful for their metrics, and the pending 11 awaiting restoration.
-
-Also, the system prompt said: "Before you finish, send your result to that agent with send_message({agent_id: 'session-b86163d1-...'})". The rule in the AgentTeams section says the captain IS my parent and this single message satisfies both duties. I already sent one message to captain (the blocker). Now I need the final report. I'll use agent_teams_send_message(to=captain) — that satisfies both (per rule 4 note).
-
-Hmm, the outer instruction explicitly says to use send_message with agent_id. The AgentTeams note says "The captain is also your parent: this single message satisfies both reporting duties." To be safe, I'll send the final report via agent_teams_send_message(to=captain) (team channel, which the captain reads). That's the designated path and avoids duplicate messaging. Good.
-
-Report content (concise but complete):
-- t1 attempt da6da84d, status: completed (15/26 delivered; 11 待复位).
-- Deliverables: answers/{s1..s8,g1,g2,g4,h1-supply-chain,h2-claim-unkept,h3-cross-file-chain,h4-one-file-many-algorithms}.md, logs/*.txt (三行式), SETUP.md, BATCHING.md, APPARATUS.md, PARTIAL.md.
-- Key per-question headline answers (one line each) so the captain can sanity-check / judge:
-  - s1: 唯一调用者 = crates/report/tests/report.rs:11 store()（ledger_report 集成测试），:13-15 三次调 post。
-  - s2: 红的面 = audit 特性面；根因 audit.rs:9 `== 0` 写反；默认面因 cfg 假绿。
-  - s3: 无测试可达的函数 = audit_unused (core/src/audit.rs:14)；audit_count 只在 --features audit 面可达（工具漏了限定路径边）。
-  - s4: 只有 crates/report/tests/report.rs 能到达 Store，路径 test→store():11→Store::new:15/post:21/entries:31。
-  - s5: 渲染缺 write_count 调用（render.rs:7 的循环里没有它；callers write_count=0）；另 query.rs:27 `>` 反向。
-  - s6: 不一致；model.rs:38 `||` 应为 `&&`（零金额也可入账）。
-  - s7: 含 1000；buckets.rs:10 `<= 1000`（套件要求 1000 归上一档）。
-  - s8: 条数行写在末尾；render.rs:12（循环之后）。
-  - g1: 死函数 audit_unused；条件项 audit_count（默认面）；另有 3 个"没人执行过的分支"：buckets.rs:8-9 debit 支、store.rs:22-24 拒绝支、query.rs:21-25 account 支；看不见什么也列了。
-  - g2: 伪代码 + 差 = 缺 write_count 调用；第二处 query.rs:27。
-  - g4: 判死两支 = bands.rs:36-41（if false）、:54（Band::Frozen，私有枚举无构造）；判不了 = State::Dormant（pub 可见性边界）+ audit 面；执行能进但测试不进 = :42-48、:92。
-  - h1-supply-chain: toggle.rs:16 调 to_world（其余 8 个 to_local）⇒ 160≠136（cargo 实测 exit 101）。
-  - h2-claim-unkept: spinner.rs:19-23 缺 handle_contracts 一条；台账 panel 条目指纹失效（与 button 标本同指纹、自述重写前记录）。
-  - h3-cross-file-chain: lib.rs:48-66 计划未点名 dial ⇒ shipped 测试失败（cargo 实测 exit 101，打印树里无 dial）。
-  - h4: entry.rs:30-32 zero_arm 恒 Post（rustc dead-code 警告点名 Refuse 未构造）；zero+receipt postable=true（scratch 实测）；修法 if amount==0 → Refuse。
-- Numbers for their metrics: codegraph steps per question total (sum of CMD counts minus init): let me compute: s1 17-1=16, s2 6, s3 19, s4 6, s5 6, s6 4, s7 5, s8 4, g1 8-2=6 (g1 had 2 inits), g2 8-2=6, g4 14-1=13, h1 12-1=11, h2 10-1=9, h3 14-1=13, h4 11-1=10 → total steps = 16+6+19+6+6+4+5+4+6+6+13+11+9+13+10 = 134. Plus init calls 17. Let me report: codegraph 调用 = 134 步（不含 17 次 init；含 init 151）。
-  Hmm, careful: the CMD counts include the files calls and init. Let me just report: 每题 `=== CMD` 条数与其中 init 条数, plus tally. 134 question-steps + 17 init = 151 codegraph invocations for the 15 questions. Also nonbridge tally: s-questions 0 own (1 shared diff for s2..s8 + copycheck shared by all 15), g4 1, h1 2, h2 4, h3 1, h4 2 = 10 own + shared.
-  Output bytes: they can measure from the transcript; I could report the total logged bytes: let me compute du of logs for the 15.
-- Base hashes verified 15/15 (SETUP.md §2 + APPARATUS.md §6).
-- The 11 remain untouched, awaiting restoration; PARTIAL.md records the plan.
-
-Let me compute the totals quickly, then do the status updates and the message.
-```
-
-### ①4 日志第 4 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/model.rs`
-
-**工具返回**（逐字）：
-```
-**src/model/model.rs** — 3 lines, 0 symbols · no other indexed file depends on it
-
-1	#[path = "entry.rs"]
-2	pub mod entry;
-3
-```
-
-### ①5 日志第 5 条 · exit 0 · 会话里未定位（共享/装置步）
+### ①5 日志第 5 条 · exit 0 · step 72（turn 1）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/entry.rs`
 
@@ -272,6 +287,56 @@ Let me compute the totals quickly, then do the status updates and the message.
 62	    }
 63	}
 64
+```
+
+**该步推理**（逐字）：
+```
+All checks pass:
+- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
+- All logs have matched CMD/EXIT pairs.
+- Nothing written under target/round9 ✓.
+
+Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
+
+Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
+
+Now let me finish:
+1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
+
+Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first, then completed"). I should call update_task with status=in_progress first, then completed. Let me do both (in_progress then completed) — two calls. Since claimed → completed isn't allowed, do in_progress now, then completed immediately after.
+
+2. Send the report to the captain (agent_teams_send_message with source_task_id/source_attempt_id), including: 15/26 delivered, file list, key apparatus points, the nonbridge/steps summary useful for their metrics, and the pending 11 awaiting restoration.
+
+Also, the system prompt said: "Before you finish, send your result to that agent with send_message({agent_id: 'session-b86163d1-...'})". The rule in the AgentTeams section says the captain IS my parent and this single message satisfies both duties. I already sent one message to captain (the blocker). Now I need the final report. I'll use agent_teams_send_message(to=captain) — that satisfies both (per rule 4 note).
+
+Hmm, the outer instruction explicitly says to use send_message with agent_id. The AgentTeams note says "The captain is also your parent: this single message satisfies both reporting duties." To be safe, I'll send the final report via agent_teams_send_message(to=captain) (team channel, which the captain reads). That's the designated path and avoids duplicate messaging. Good.
+
+Report content (concise but complete):
+- t1 attempt da6da84d, status: completed (15/26 delivered; 11 待复位).
+- Deliverables: answers/{s1..s8,g1,g2,g4,h1-supply-chain,h2-claim-unkept,h3-cross-file-chain,h4-one-file-many-algorithms}.md, logs/*.txt (三行式), SETUP.md, BATCHING.md, APPARATUS.md, PARTIAL.md.
+- Key per-question headline answers (one line each) so the captain can sanity-check / judge:
+  - s1: 唯一调用者 = crates/report/tests/report.rs:11 store()（ledger_report 集成测试），:13-15 三次调 post。
+  - s2: 红的面 = audit 特性面；根因 audit.rs:9 `== 0` 写反；默认面因 cfg 假绿。
+  - s3: 无测试可达的函数 = audit_unused (core/src/audit.rs:14)；audit_count 只在 --features audit 面可达（工具漏了限定路径边）。
+  - s4: 只有 crates/report/tests/report.rs 能到达 Store，路径 test→store():11→Store::new:15/post:21/entries:31。
+  - s5: 渲染缺 write_count 调用（render.rs:7 的循环里没有它；callers write_count=0）；另 query.rs:27 `>` 反向。
+  - s6: 不一致；model.rs:38 `||` 应为 `&&`（零金额也可入账）。
+  - s7: 含 1000；buckets.rs:10 `<= 1000`（套件要求 1000 归上一档）。
+  - s8: 条数行写在末尾；render.rs:12（循环之后）。
+  - g1: 死函数 audit_unused；条件项 audit_count（默认面）；另有 3 个"没人执行过的分支"：buckets.rs:8-9 debit 支、store.rs:22-24 拒绝支、query.rs:21-25 account 支；看不见什么也列了。
+  - g2: 伪代码 + 差 = 缺 write_count 调用；第二处 query.rs:27。
+  - g4: 判死两支 = bands.rs:36-41（if false）、:54（Band::Frozen，私有枚举无构造）；判不了 = State::Dormant（pub 可见性边界）+ audit 面；执行能进但测试不进 = :42-48、:92。
+  - h1-supply-chain: toggle.rs:16 调 to_world（其余 8 个 to_local）⇒ 160≠136（cargo 实测 exit 101）。
+  - h2-claim-unkept: spinner.rs:19-23 缺 handle_contracts 一条；台账 panel 条目指纹失效（与 button 标本同指纹、自述重写前记录）。
+  - h3-cross-file-chain: lib.rs:48-66 计划未点名 dial ⇒ shipped 测试失败（cargo 实测 exit 101，打印树里无 dial）。
+  - h4: entry.rs:30-32 zero_arm 恒 Post（rustc dead-code 警告点名 Refuse 未构造）；zero+receipt postable=true（scratch 实测）；修法 if amount==0 → Refuse。
+- Numbers for their metrics: codegraph steps per question total (sum of CMD counts minus init): let me compute: s1 17-1=16, s2 6, s3 19, s4 6, s5 6, s6 4, s7 5, s8 4, g1 8-2=6 (g1 had 2 inits), g2 8-2=6, g4 14-1=13, h1 12-1=11, h2 10-1=9, h3 14-1=13, h4 11-1=10 → total steps = 16+6+19+6+6+4+5+4+6+6+13+11+9+13+10 = 134. Plus init calls 17. Let me report: codegraph 调用 = 134 步（不含 17 次 init；含 init 151）。
+  Hmm, careful: the CMD counts include the files calls and init. Let me just report: 每题 `=== CMD` 条数与其中 init 条数, plus tally. 134 question-steps + 17 init = 151 codegraph invocations for the 15 questions. Also nonbridge tally: s-questions 0 own (1 shared diff for s2..s8 + copycheck shared by all 15), g4 1, h1 2, h2 4, h3 1, h4 2 = 10 own + shared.
+  Output bytes: they can measure from the transcript; I could report the total logged bytes: let me compute du of logs for the 15.
+- Base hashes verified 15/15 (SETUP.md §2 + APPARATUS.md §6).
+- The 11 remain untouched, awaiting restoration; PARTIAL.md records the plan.
+
+Let me compute the totals quickly, then do the status updates and the message.
 ```
 
 ### ①6 日志第 6 条 · exit 0 · 会话里未定位（共享/装置步）

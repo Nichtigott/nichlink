@@ -1,6 +1,6 @@
 # cg · 跨题共享的步（一次调用点名多题）
 
-> 步 32 · 调用 35 · 输出 45,819 tok · 推理 104,011 字符 · 累计上下文 8,685,568
+> 步 39 · 调用 42 · 输出 56,322 tok · 推理 125,334 字符 · 累计上下文 9,693,568
 
 # cg · 共享
 
@@ -88,6 +88,418 @@ IDENTICAL-s5
 
 ```
 
+### step 30（turn 1）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./cg.sh s4 callers \"Store::new\"; ./cg.sh s4 callers \"Store::post\"; ./cg.sh s4 callers \"Store::entries\"; ./cg.sh s4 callees the_report_agrees_with_the_ledgers_own_limit; ./cg.sh s4 node crates/report/tests/report.rs; echo \">>> g1 <<<\"; ./cg.sh g1 callers audit_unused; ./cg.sh g1 callers audit_count; ./cg.sh g1 callees the_audit_counts_the_non_zero_entries; ./cg.sh g1 explore \"audit_unused unreachable functions test coverage\" 2>&1 | head -22", "description": "s4 and g1 evidence calls", "timeoutMs": 240000}
+```
+
+**结果**：
+```
+
+Callers of "Store::new" (1):
+
+method Store::new (rust) — crates/core/src/store.rs:15
+function    store
+  crates/report/tests/report.rs:11
+
+
+Callers of "Store::post" (1):
+
+method Store::post (rust) — crates/core/src/store.rs:21
+function    store
+  crates/report/tests/report.rs:11
+
+
+Callers of "Store::entries" (3):
+
+method Store::entries (rust) — crates/core/src/store.rs:31
+function    the_report_names_its_count_and_its_entries
+  crates/report/tests/report.rs:44
+
+function    the_minimum_amount_filter_keeps_the_entries_at_or_above_it
+  crates/report/tests/report.rs:20
+
+function    the_report_prints_its_count_before_the_entries
+  crates/report/tests/report.rs:35
+
+
+Callees of "the_report_agrees_with_the_ledgers_own_limit" (2):
+
+function the_report_agrees_with_the_ledgers_own_limit (rust) — crates/report/tests/buckets.rs:11
+function    bucket_lines
+  crates/report/src/buckets.rs:19
+
+method      new
+  crates/core/src/model.rs:21
+
+**crates/report/tests/report.rs** — 51 lines, 4 symbols · no other indexed file depends on it
+
+1	//! The report suite.
+2	//! 报表套件。
+3	
+4	use ledger_core::model::Entry;
+5	use ledger_core::store::Store;
+6	use ledger_report::query::Filter;
+7	use ledger_report::render::render;
+8	
+9	/// Three posted entries.
+10	/// 三条已入账分录。
+11	fn store() -> Store {
+12	    let mut store = Store::new();
+13	    store.post(Entry::new("a", -500, true)).expect("debit posts");
+14	    store.post(Entry::new("a", 500, true)).expect("small posts");
+15	    store.post(Entry::new("b", 5000, true)).expect("large posts");
+16	    store
+17	}
+18	
+19	#[test]
+20	fn the_minimum_amount_filter_keeps_the_entries_at_or_above_it() {
+21	    let store = store();
+22	    let filter = Filter {
+23	        min_amount: Some(0),
+24	        ..Filter::default()
+25	    };
+26	    let kept = store.entries().iter().filter(|entry| filter.matches(entry)).count();
+27	    assert_eq!(kept, 2, "the zero floor keeps the two non-negative entries");
+28	}
+29	
+30	/// What a reader sees first: the count, then the entries. Stated as the printed order rather than
+31	/// as "which call runs first", so the test describes the symptom and not the mechanism.
+32	/// 读者先看到什么：先是条数，然后是分录。断言的是打印出来的顺序，而不是"哪个调用先跑"，因此这条测试
+33	/// 描述的是症状而不是机制。
+34	#[test]
+35	fn the_report_prints_its_count_before_the_entries() {
+36	    let store = store();
+37	    let text = render(store.entries());
+38	    let count = text.find("entries: 3").expect("the count line is printed");
+39	    let first_entry = text.find("a: -500").expect("the first entry i
+…[结果：此处截断，全文 4292 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### step 31（turn 1）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \">>> s2 <<<\"; ./cg.sh s2 node crates/core/src/audit.rs; ./cg.sh s2 node crates/core/tests/audit.rs; ./cg.sh s2 callers audit_count; ./cg.sh s2 callees the_audit_counts_the_non_zero_entries; echo \">>> s5 <<<\"; ./cg.sh s5 node crates/report/src/render.rs; ./cg.sh s5 callers write_count; ./cg.sh s5 callees render; ./cg.sh s5 callees the_report_prints_its_count_before_the_entries", "description": "s2 and s5 evidence calls", "timeoutMs": 240000}
+```
+
+**结果**：
+```
+>>> s2 <<<
+**crates/core/src/audit.rs** — 17 lines, 2 symbols · no other indexed file depends on it
+
+1	//! Audit totals, behind the `audit` feature.
+2	//! 审计合计，门控在 `audit` 特性之后。
+3	
+4	use crate::model::Entry;
+5	
+6	/// How many entries the audit counts.
+7	/// 审计计入多少条分录。
+8	pub fn audit_count(entries: &[Entry]) -> usize {
+9	    entries.iter().filter(|entry| entry.amount == 0).count()
+10	}
+11	
+12	/// The audit's own view, never called by the default build.
+13	/// 审计自己的视图，默认构建从不调用它。
+14	pub fn audit_unused(entries: &[Entry]) -> usize {
+15	    audit_count(entries) + 1
+16	}
+17	
+**crates/core/tests/audit.rs** — 30 lines, 1 symbol · no other indexed file depends on it
+
+1	//! The audit feature's own suite: only compiled with `--features audit`.
+2	//! 审计特性自己的套件：只有 `--features audit` 才编译。
+3	//!
+4	//! The `cfg` is not decoration: without it this file names a module the default build does not
+5	//! compile, so the *default* face would fail to build — the same shape as the grey test that once
+6	//! hid three other tests.
+7	//! 这个 `cfg` 不是装饰：没有它，本文件点名了一个默认构建不编译的模块，于是**默认面**连编译都过不去
+8	//! ——与那条曾经藏掉另外三条测试的灰测试同形。
+9	
+10	#![cfg(feature = "audit")]
+11	
+12	use ledger_core::model::Entry;
+13	
+14	#[test]
+15	fn the_audit_counts_the_non_zero_entries() {
+16	    // Two non-zero entries and one zero: the zero one is not counted, and the two sides of the
+17	    // limit are both present so the count has to be right rather than accidentally right.
+18	    // 两条非零、一条零：零那条不计入，而上限两侧都有数据，因此计数必须真的对，而不是碰巧对。
+19	    let entries = [
+20	        Entry::new("a", 5, true),
+21	        Entry::new("a", 0, true),
+22	        Entry::new("b", 7, true),
+23	    ];
+24	    assert_eq!(
+25	        ledger_core::audit::audit_count(&entries),
+26	        2,
+27	        "the zero entry is not counted"
+28	    );
+29	}
+30	
+
+Callers of "audit_count" (1):
+
+function audit_count (rust) — crates/core/src/audit.rs:8
+function    audit_unused
+  crates/core/src/audit.rs:14
+
+
+Callees of "the_audit_counts_the_non_zero_entries" (1):
+
+function the_audit_counts_the_non_zero_entries (rust) — crates/core/tests/audit.rs:15
+method      new
+  crates/core/src/model.rs:21
+
+>>> s5 <<<
+**crates/report/src/render.rs** — 20 lines, 2 symbols · used by 1 file: crates/report/tests/report.rs
+
+1	//! Rendering.
+2	
+3	use ledger_core::model::Entry;
+4	
+5	/// Render the entries: a header, the count, then one line per entry.
+6	/// 渲染分录：表头、条数，然后每条一行。
+7	pub fn render(entries: &[Entry]) -> String {
+8	    let mut text = String::from("LEDGER REPORT\n");
+9	    for ent
+…[结果：此处截断，全文 3389 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**该步推理**：
+```
+Now I have all evidence for s1, s3, s4, g1. Let me also nail down the `audit_count` question for g1: the test DOES call it (source line 25 in tests/audit.rs: `ledger_core::audit::audit_count(&entries)`), but codegraph misses the edge. I should verify by `node crates/core/tests/audit.rs` in g1's log (I have it in s1's log, but g1's own log needs its own copy of the decisive calls). Let me add that later if needed — the s1 log has it. For g1's log I'll add `node crates/core/tests/audit.rs` + `node crates/core/src/audit.rs` so the evidence is in g1's log.
+
+Also for g1's "看不见什么": 
+- 看不到限定路径调用（`ledger_core::audit::audit_count`）→ 工具把这条边漏了（实证：callees 该测试只给出 Entry::new）。
+- 看不到 feature 面：`#[cfg(feature="audit")]` 是构建期事实，静态图不区分面。
+- 看不到 trait 对象/动态派发后的目标、宏生成的调用、函数指针/闭包间接调用（工具声称 linking dynamic dispatch，但覆盖有限）。
+- 看不到运行时才发生的调用（e.g. 通过字符串/注册表驱动的调用，比如 nichlink 的注册面）。
+- 看不到只有 cargo test 某 target 才编译的测试（`#[cfg(test)]` 模块、集成测试 target、feature 门）。
+- 也看不到"测试是否真的会失败"——没有断言强度分析。
+
+Now let me write the answers for s1, s3, s4, g1, and also s2 (need evidence: its own tree's audit.rs line 9 and the test file + lib.rs gate). Let me first collect s2 evidence calls: `node crates/core/src/audit.rs`, `node crates/core/tests/audit.rs`, `node crates/core/src/lib.rs`, `callees the_audit_counts_the_non_zero_entries`, `callers audit_count`.
+
+And s5, s6, s7, s8 evidence: 
+- s5: `node crates/report/src/render.rs`, `callers write_count`, `callees render`, `node crates/report/tests/report.rs` (test asserting count before entries). Also the query.rs inversion (as extra).
+- s6: `node crates/core/src/model.rs`, `callers Entry::postable`, `callees Entry::postable` (none), `node crates/core/src/store.rs`.
+- s7: `node crates/report/src/buckets.rs`, `node crates/report/tests/buckets.rs`, `callees bucket_name`, `callers bucket_name`.
+- s8: `node crates/report/src/render.rs`, `callees render`, `callers write_count`.
+- g2: `node crates/report/src/render.rs`, `callees render`, `callers write_count`, `node crates/report/tests/report.rs`.
+
+Let me batch: s2 + s5 in one bash call, then s6+s7+s8+g2 in another. Then write the answer files.
+
+Actually, to keep per-question logs well-formed, each cg.sh call appends to its own question log ✓.
+
+Let me run s2 + s5 evidence.
+```
+
+### step 33（turn 1）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \">>> s6 <<<\"; ./cg.sh s6 node crates/core/src/model.rs; ./cg.sh s6 callers \"Entry::postable\"; ./cg.sh s6 node crates/core/src/store.rs 2>&1 | head -30; echo \">>> s7 <<<\"; ./cg.sh s7 node crates/report/src/buckets.rs; ./cg.sh s7 callers bucket_name; ./cg.sh s7 node crates/report/tests/buckets.rs; echo \">>> s8 <<<\"; ./cg.sh s8 node crates/report/src/render.rs; ./cg.sh s8 callers write_count; ./cg.sh s8 callees render; echo \">>> g2 <<<\"; ./cg.sh g2 node crates/report/src/render.rs; ./cg.sh g2 callers write_count; ./cg.sh g2 callees render; ./cg.sh g2 node crates/report/tests/report.rs 2>&1 | head -55", "description": "s6, s7, s8, g2 evidence calls", "timeoutMs": 300000}
+```
+
+**结果**：
+```
+>>> s6 <<<
+**crates/core/src/model.rs** — 41 lines, 3 symbols · used by 8 files: crates/core/src/audit.rs, crates/core/src/store.rs, crates/report/src/buckets.rs, crates/report/src/query.rs, crates/report/src/render.rs, crates/core/tests/audit.rs, crates/report/tests/buckets.rs, crates/report/tests/report.rs
+
+1	//! Entries.
+2	
+3	/// One entry: a signed amount against an account.
+4	/// 一条分录：针对某个账户的一笔带符号金额。
+5	#[derive(Clone, Debug, PartialEq, Eq)]
+6	pub struct Entry {
+7	    /// The account this entry belongs to.
+8	    /// 本分录所属账户。
+9	    pub account: String,
+10	    /// The amount; negative is a debit.
+11	    /// 金额；负数为借方。
+12	    pub amount: i64,
+13	    /// Whether the entry carries a receipt.
+14	    /// 分录是否附带凭据。
+15	    pub has_receipt: bool,
+16	}
+17	
+18	impl Entry {
+19	    /// A new entry.
+20	    /// 新建一条分录。
+21	    pub fn new(account: &str, amount: i64, has_receipt: bool) -> Self {
+22	        Self {
+23	            account: account.to_owned(),
+24	            amount,
+25	            has_receipt,
+26	        }
+27	    }
+28	
+29	    /// Whether this entry may be posted at all.
+30	    /// 本分录是否允许入账。
+31	    ///
+32	    /// The rule the whole service leans on: an entry is postable when it has a receipt, and a zero
+33	    /// entry never is. Callers rely on the refusal, so this is a contract rather than a
+34	    /// convenience.
+35	    /// 整个服务依赖的规则：带凭据的分录可入账，而零金额的分录一律不可。调用方依赖这个拒绝，因此这是一条
+36	    /// 契约而不是便利。
+37	    pub fn postable(&self) -> bool {
+38	        self.has_receipt || self.amount == 0
+39	    }
+40	}
+41	
+
+Callers of "Entry::postable" (1):
+
+method Entry::postable (rust) — crates/core/src/model.rs:37
+method      post
+  crates/core/src/store.rs:21
+
+**crates/core/src/store.rs** — 35 lines, 4 symbols · used by 1 file: crates/report/tests/report.rs
+
+1	//! The store.
+2	
+3	use crate::model::Entry;
+4	
+5	/// Entries held in memory.
+6	/// 内存中保存的分录。
+7	#[derive(Default)]
+8	pub struct Store {
+9	    entries: Vec<Entry>,
+10	}
+11	
+12	impl Store {
+13	    /// An empty store.
+14	    /// 空存储。
+15	    pub fn new() -> Self {
+16	        Self::default()
+17	    }
+18	
+19	    /// Post one entry; `None` when the entry may not be posted.
+20	    /// 入账一条分录；分录不可入账时为 `None`。
+21	    pub fn post(&mut self, entry: Entry) -> Option<usize> {
+22	        if !entry.postable() {
+23	            return None;
+24	        }
+25	        self.entries.push(entry);
+26	        Some(self.entries.len() - 1)
+27	    }
+28	
+>>> s7 <<<
+**crates/report/src/buckets.rs** — 28 lines, 2 symbols · used by 1 file: crates/report/te
+…[结果：此处截断，全文 8216 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### step 34（turn 1）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./cg.sh s2 node crates/core/src/lib.rs >/dev/null; ./cg.sh s5 node crates/report/src/query.rs >/dev/null; ./cg.sh s3 node crates/core/src/audit.rs >/dev/null; ./cg.sh s3 node crates/core/tests/audit.rs >/dev/null; ./cg.sh g1 node crates/core/tests/audit.rs >/dev/null; ./cg.sh g2 node crates/report/src/query.rs >/dev/null; ./cg.sh s7 node crates/core/src/limits.rs >/dev/null; echo \"log-completion done\"; for id in s1 s2 s3 s4 s5 s6 s7 s8 g1 g2; do printf '%s: cmds=%s exit-lines=%s\\n' \"$id\" \"$(grep -c '^=== CMD' logs/$id.txt)\" \"$(grep -c '^=== EXIT' logs/$id.txt)\"; done", "description": "Complete per-question logs with missing decisive calls", "timeoutMs": 180000}
+```
+
+**结果**：
+```
+log-completion done
+s1: cmds=17 exit-lines=17
+s2: cmds=7 exit-lines=7
+s3: cmds=20 exit-lines=20
+s4: cmds=7 exit-lines=7
+s5: cmds=7 exit-lines=7
+s6: cmds=5 exit-lines=5
+s7: cmds=6 exit-lines=6
+s8: cmds=5 exit-lines=5
+g1: cmds=8 exit-lines=8
+g2: cmds=8 exit-lines=8
+
+```
+
+**该步推理**：
+```
+I have all the s-tree evidence. Note s6's tree: model.rs:38 `has_receipt || amount == 0`. Contract doc at model.rs:32-36.
+
+Interesting: does s6's tree have a test that covers this? `crates/report/tests/report.rs` in the s-trees doesn't test postability of a zero entry (the r-tree does: `a_zero_entry_is_not_postable`). So in s6, the violation is uncovered → "契约与实现一致吗" → 不一致 (a): entry with receipt and zero amount → postable (contract: zero never postable); (b): zero amount without receipt → postable (contract requires receipt). Let me double check `postable = has_receipt || amount == 0`:
+- Entry("a", 0, true): has_receipt=true → true. Contract says zero entry never postable → VIOLATION.
+- Entry("a", 0, false): amount==0 → true. Contract: needs receipt AND non-zero → VIOLATION.
+- Entry("a", 10, false): false ✓.
+- Entry("a", 10, true): true ✓.
+So two ways to violate.
+
+Now let me write the 10 answer files (s1..s8, g1, g2) and then move to hardbug + g4.
+
+Let me write them now. I'll write concise files. Keep each ≤20 lines total (including the nonbridge line). Let me be careful to keep line counts low — I'll count roughly.
+
+Let me write s1.
+
+Lines (target ≤20):
+1 `# s1 — ...`
+2 blank? Blank lines count as lines presumably. I'll count all lines including blanks. Let me aim ~16-18 lines.
+
+Let me draft each carefully and then write them.
+
+---
+
+s1.md:
+```
+# s1 — 谁调用了 ledger_core::store::Store::post（调用者在另一个 crate）
+① 症状：跨 crate 的调用点只有一处，且调用者不在 ledger_core 里。
+② 结论：调用者＝`crates/report/tests/report.rs:11 fn store()`（crate `ledger_report`）：`:13`/`:14`/`:15` 三次调用 `Store::post`（定义 `crates/core/src/store.rs:21`）。
+   机制：report 的集成测试 `use ledger_core::store::Store`（report.rs:5）自建 Store 当夹具；report 的 src（buckets/query/render）只用 Entry，不碰 Store。
+③ 最小修/改动：无（只读题）。把调用点搬进 report 的 src 需要给 report 加 Store 依赖面——不属于本题。
+④ 反证：`callers Store::post` 只返回 `store()` 一个；`node crates/report/src/{buckets,query,render}.rs` 无 `post(`。若存在第二个调用者（含限定路径），这两观察任一会被推翻。
+⑤ 调用清单：codegraph files（范围）；query post（符号表）；callers Store::post（唯一调用者）；node crates/core/src/store.rs、node crates/report/tests/report.rs（两端源码+行号）。
+nonbridge: 0 次 / 0 字节（本题只用 codegraph；拷贝/init 记在 SETUP.md 装置账）
+```
+That's 9 lines + header. Good.
+
+s2.md:
+```
+# s2 — 全绿但有一个面是红的，是哪个面
+① 症状：默认面全绿，红的是 **`audit` 特性面**（`cargo test --features audit`，即 all-features 面）。
+② 根因：`crates/core/src/audit.rs:9` `.filter(|entry| entry.amount == 0)` 把"非零"写反（应 `!= 0`）⇒ `crates/core/tests/audit.rs:15 the_audit_counts_the_non_zero_entries`（断言 2，见 :24-28）在该面红。
+   机制（为什么默认面看不到）：该测试被 `#![cfg(feature = "audit")]`（tests/audit.rs:10）挡在默认面外，而模块本身也门控在 `audit` 之后（`crates/core/src/lib.rs:8` `#[cfg(feature = "audit")]`）⇒ 默认面既编译不到 audit 模块也跑不到那条断言 = 假绿。
+③ 最小修：audit.rs:9 改回 `entry.amount != 0`；防假绿可把这条断言放到默认面可达处。
+④ 反证：与同骨架参照树 s1 逐文件 diff，只差 audit.rs:9 这一行 ⇒ 红的面只可能是编译该行唯一测试的那个面（audit 面）；若 lib.rs 第 8 行没有 cfg，该测试就会在默认面编译——已用 node 读到第 8 行排除。
+⑤ 调用清单：node crates/core/src/audit.rs；node crates/core/tests/audit.rs；node crates/core/src/lib.rs（见 s1 同哈希树）；callers audit_count；callees the_audit_counts_the_non_zero_entries；files。
+nonbridge: 0 own / 0 字节 + 1 共享（s1↔s2..s8 的 diff -r，见 batching.md）
+```
+Hmm — `node crates/core/src/lib.rs` for s2: I did that for s1's tree, not s2's (same content since s2 differs only in audit.rs:9; the lib.rs is identical). To be rigorous, I should run `node crates/core/src/lib.rs` in s2's own log. Let me add that call to s2's log later (cheap) — I'll batch it with the s6/s7/s8/g2 leftovers if needed. Actually let me add it now along with any other missing per-question calls when I write files: I'll do a final "log-completion" bash call per question that re-runs the decisive calls in that question's own log. Simpler: for s2 add `node crates/core/src/lib.rs`. Let me note it.
+
+s3.md: as drafted.
+
+s4.md: as drafted.
+
+s5.md:
+```
+# s5 — 渲染缺了什么
+① 症状：render 的输出里没有条数行——`entries: N` 一行整块缺失。
+② 根因：`crates/report/src/render.rs:7 render()` 不再调用 `write_count`；`write_count`（render.rs:17）还在，但 `callers write_count` = 0、`callees render` 里没有它 ⇒ 死函数 + 输出缺块。同一棵树里另有一处：`crates/report/src/query.rs:27` 的 `entry.amount > min`（应为 `<`，见下）。
+③ 最小修：render.rs:8 之后补 `write_count(&mut text, entries);`（回到 s1 参照树的位置）；query.rs:27 改 `entry.amount < min`。
+④ 反证：`callees render` 只给出 `Entry`（引用），没有 `write_count`；而测试 `crates/report/tests/report.rs:35 the_report_prints_its_count_before_the_entries` 断言 count 在首条分录前 ⇒ 该测试在这棵树上必红（documented 症状）。若 render 其实间接调用了 write_count，callers 不会是 0。
+⑤ 调用清单：node crates/report/src/render.rs；callers write_count；callees render；callees the_report_prints_its_count_before_the_entries；files。
+nonbridge: 0 own + 1 共享（同 s2 的 diff -r，它同时暴露 query.rs:27 的第二处差异）
+```
+Wait — is the s5 question ONLY about rendering? "渲染缺了什么" = "what's missing in the rendering" → the count block. I'll lead with that and mention query.rs as secondary.
+
+Hmm, but careful: g2 asks about the same tree's rendering logic. Fine.
+
+s6.md:
+```
+# s6 — 契约与实现一致吗
+① 症状：不一致——`postable` 的实现与它自己的契约文档相反。
+② 根因：`crates/core/src/model.rs:38` `self.has_receipt || self.amount == 0`；契约在 :32-36（"带凭据才可入账，零金额一律不可"）。反例：`Entry::new("a", 0, true)` → true（契约说零金额永不可）；`Entry::new("a", 0, false)` → true（无凭据却可入账）。调用方 `Store::post`（`crates/core/src/store.rs:21-24`，`if !entry.postable() { return None }`）因此会接受本应被拒的分录。
+③ 最小修：model.rs:38 改为 `self.has_receipt && self.amount != 0`。
+④ 反证：若契约另有出处（比如 post 自己再查一遍），症状就不成立——`node crates/core/src/store.rs`（:21-27）显示 post 只依赖 postable 这一个判据，没有二次校验；`callers Entry::postable` 也只有 post 一个调用者。本树测试不覆盖这条（report 套件无零金额用例），故约定不靠测试兜底。
+⑤ 调用清单：node crates/core/src/model.rs；node crates/core/src/store.rs；callers Entry::postable；files。
+nonbridge: 0 own + 1 共享（diff -r）
+```
+
+s7.md:
+```
+# s7 — 分桶的上限含不含 1000
+① 症状：含——1000 落在 "small" 桶里。
+② 结论：`crates/report/src/buckets.rs:10` `else if amount <= 1000`（闭区间上界）⇒ `bucket_of/bucket_name(1000)` = "small"。机制：半开边界被写成闭边界，与套件声明的意图（`crates/report/tests/buckets.rs:7-9`"恰好等于小额上限的金额属于再上一档"）不符。
+   注：`ledger_core::limits::SMALL_LIMIT = 1000`（`crates/core/src/limits.rs:10`），而 buckets.rs:10 把 1000 字面量又写了一遍（limits.rs:7-9 明确说报表应从常量读）。
+③ 最小
+…[推理：此处截断，全文 10680 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
 ### step 39（turn 1）· `write`
 
 ```
@@ -101,6 +513,63 @@ IDENTICAL-s5
 <content>
 Created file
 </content>
+```
+
+### step 41（turn 1）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./cg.sh h4-one-file-many-algorithms callers zero_arm; ./cg.sh h4-one-file-many-algorithms callees postable; ./cg.sh h4-one-file-many-algorithms callees a_receipted_entry_posts; echo \">>> g4 <<<\"; ./cg.sh g4 files; ./cg.sh g4 node Cargo.toml 2>&1 | head -5", "description": "h4 evidence; g4 layout", "timeoutMs": 120000}
+```
+
+**结果**：
+```
+
+Callers of "zero_arm" (1):
+
+method Entry::zero_arm (rust) — src/model/entry.rs:30
+method      postable
+  src/model/entry.rs:38
+
+
+Callees of "postable" (1):
+
+method Entry::postable (rust) — src/model/entry.rs:38
+method      zero_arm
+  src/model/entry.rs:30
+
+
+Callees of "a_receipted_entry_posts" (0):
+
+function a_receipted_entry_posts (rust) — tests/postable.rs:4
+ℹ No callees found for "a_receipted_entry_posts"
+>>> g4 <<<
+
+Project Structure (14 files):
+
+└── crates
+    ├── core
+    │   ├── src
+    │   │   ├── audit.rs (rust, 4 symbols)
+    │   │   ├── bands_tests.rs (rust, 4 symbols)
+    │   │   ├── bands.rs (rust, 11 symbols)
+    │   │   ├── lib.rs (rust, 1 symbols)
+    │   │   ├── limits.rs (rust, 2 symbols)
+    │   │   ├── model.rs (rust, 4 symbols)
+    │   │   └── store.rs (rust, 6 symbols)
+    │   └── tests
+    │       └── audit.rs (rust, 3 symbols)
+    └── report
+        ├── src
+        │   ├── buckets.rs (rust, 4 symbols)
+        │   ├── lib.rs (rust, 1 symbols)
+        │   ├── query.rs (rust, 4 symbols)
+        │   └── render.rs (rust, 4 symbols)
+        └── tests
+            ├── buckets.rs (rust, 4 symbols)
+            └── report.rs (rust, 9 symbols)
+
+Symbol "Cargo.toml" not found in the codebase
+
 ```
 
 ### step 43（turn 1）· `bash`
@@ -495,6 +964,216 @@ test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; 
 -rwxr-xr-x 1 nich users 6887808 10月  2 23:11 cargo-target/debug/deps/ledger-dd0fbfbfb1ed2365
 -rw-r--r-- 1 nich users     873 10月  2 23:11 cargo-target/debug/deps/ledger-dd0fbfbfb1ed2365.d
 
+```
+
+### step 12（turn 2）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \">>> r1 <<<\"; ./cg.sh r1 node src/query/filter.rs 2>&1 | head -45; echo \">>> r2 <<<\"; ./cg.sh r2 node src/report/render.rs; ./cg.sh r2 callers write_totals; ./cg.sh r2 callees render; echo \">>> r2 summary <<<\"; ./cg.sh r2 node src/query/summary.rs 2>&1 | head -40", "description": "r1/r2: read the failing-path sources", "timeoutMs": 180000}
+```
+
+**结果**：
+```
+>>> r1 <<<
+**src/query/filter.rs** — 41 lines, 2 symbols · used by 1 file: tests/ledger.rs
+
+1	//! Filtering entries.
+2	//! 过滤分录。
+3	
+4	use crate::model::entry::Entry;
+5	
+6	/// Which entries a caller wants.
+7	/// 调用方想要哪些分录。
+8	#[derive(Clone, Debug, Default)]
+9	pub struct Filter {
+10	    /// Only entries for this account, when set.
+11	    /// 只保留该账户的分录（若设置）。
+12	    pub account: Option<String>,
+13	    /// Only entries at or above this amount, when set.
+14	    /// 只保留不小于该金额的分录（若设置）。
+15	    pub min_amount: Option<i64>,
+16	    /// Only entries with a receipt, when set.
+17	    /// 只保留带凭据的分录（若设置）。
+18	    pub receipts_only: bool,
+19	}
+20	
+21	impl Filter {
+22	    /// Whether this entry passes.
+23	    /// 本分录是否通过。
+24	    pub fn matches(&self, entry: &Entry) -> bool {
+25	        if let Some(account) = &self.account
+26	            && &entry.account != account
+27	        {
+28	            return false;
+29	        }
+30	        if let Some(min) = self.min_amount
+31	            && entry.amount > min
+32	        {
+33	            return false;
+34	        }
+35	        if self.receipts_only && !entry.has_receipt {
+36	            return false;
+37	        }
+38	        true
+39	    }
+40	}
+41	
+>>> r2 <<<
+**src/report/render.rs** — 28 lines, 2 symbols · used by 1 file: tests/ledger.rs
+
+1	//! Rendering a summary as text.
+2	//! 把汇总结成文本。
+3	
+4	use crate::query::summary::Summary;
+5	
+6	/// Render one summary: a header, the totals, then one line per bucket.
+7	/// 渲染一份汇总：表头、合计，然后每个桶一行。
+8	pub fn render(summary: &Summary) -> String {
+9	    let mut text = String::from("LEDGER REPORT\n");
+10	    for (name, count) in &summary.per_bucket {
+11	        text.push_str(&format!("bucket {name}: {count}\n"));
+12	    }
+13	    text
+14	}
+15	
+16	/// The totals block: entries counted and the sum.
+17	/// 合计块：计入条数与金额合计。
+18	///
+19	/// Split out because a report with a totals block and no bucket lines is exactly
+20	/// what a caller sees when the bucket walk is skipped, and keeping the two in
+21	/// separate functions is what lets the tests name which half went missing.
+22	/// 单独拆出，是因为"有合计块、没有分桶行"正是调用方在分桶遍历被跳过时看到的东西，而把两者放在不同函数里
+23	/// 正是让测试能点名少了哪一半的原因。
+24	pub fn write_totals(text: &mut String, summary: &Summary) {
+25	    text.push_str(&format!("entries: {}\n", summary.count));
+26	    text.push_str(&format!("total: {}\n", summary.total));
+27	}
+28	
+
+Callers of "write_totals" (0):
+
+function write_totals (rust) — src/report/render.rs:24
+ℹ No callers found for "write_totals"
+
+Callees of "render" (1):
+
+function render (r
+…[结果：此处截断，全文 3906 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### step 13（turn 2）· `bash`
+
+```
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \">>> r3 index.rs <<<\"; ./cg.sh r3 node src/store/index.rs; echo \">>> r4 entry.rs <<<\"; ./cg.sh r4 node src/model/entry.rs 2>&1 | head -45; echo \">>> panic messages (fresh runs) <<<\"; for id in r1 r2 r3 r4; do echo \"--- $id\"; grep -a -A4 'panicked at' /tmp/fresh_$id.out | head -6; done", "description": "r3/r4 sources and fresh panic messages", "timeoutMs": 180000}
+```
+
+**结果**：
+```
+>>> r3 index.rs <<<
+**src/store/index.rs** — 54 lines, 4 symbols · used by 2 files: src/query/summary.rs, tests/ledger.rs
+
+1	//! Bucketing entries by amount for reports.
+2	//! 按金额把分录分桶，供报表使用。
+3	
+4	/// One bucket: a half-open range of amounts.
+5	/// 一个桶：一段半开区间的金额。
+6	#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+7	pub struct Bucket {
+8	    /// Inclusive lower bound.
+9	    /// 含下界。
+10	    pub low: i64,
+11	    /// Exclusive upper bound; `None` means unbounded.
+12	    /// 不含上界；`None` 表示无上界。
+13	    pub high: Option<i64>,
+14	}
+15	
+16	impl Bucket {
+17	    /// Whether this bucket holds an amount: at or above `low`, below `high` when it has one.
+18	    /// 本桶是否容纳某个金额：不小于 `low`，有上界时严格小于它。
+19	    pub fn contains(&self, amount: i64) -> bool {
+20	        if amount < self.low {
+21	            return false;
+22	        }
+23	        match self.high {
+24	            Some(high) => amount <= high,
+25	            None => true,
+26	        }
+27	    }
+28	}
+29	
+30	/// The three buckets every report uses.
+31	/// 每份报表都用的三个桶。
+32	pub fn buckets() -> Vec<Bucket> {
+33	    vec![
+34	        Bucket { low: i64::MIN, high: Some(0) },
+35	        Bucket { low: 0, high: Some(1000) },
+36	        Bucket { low: 1000, high: None },
+37	    ]
+38	}
+39	
+40	/// Which bucket a bucket-list places this amount in, by name.
+41	/// 一组桶把这个金额放进哪个桶，按名字给出。
+42	pub fn bucket_of(buckets: &[Bucket], amount: i64) -> &'static str {
+43	    for (index, bucket) in buckets.iter().enumerate() {
+44	        if bucket.contains(amount) {
+45	            return match index {
+46	                0 => "debit",
+47	                1 => "small",
+48	                _ => "large",
+49	            };
+50	        }
+51	    }
+52	    "unbucketed"
+53	}
+54	
+>>> r4 entry.rs <<<
+**src/model/entry.rs** — 42 lines, 3 symbols · used by 4 files: src/query/filter.rs, src/query/summary.rs, src/store/memory.rs, tests/ledger.rs
+
+1	//! One ledger entry.
+2	//! 一条账本分录。
+3	
+4	/// One entry: a signed amount against an account.
+5	/// 一条分录：针对某个账户的一笔带符号金额。
+6	#[derive(Clone, Debug, PartialEq, Eq)]
+7	pub struct Entry {
+8	    /// The account this entry belongs to.
+9	    /// 本分录所属账户。
+10	    pub account: String,
+11	    /// The amount; negative is a debit.
+12	    /// 金额；负数为借方。
+13	    pub amount: i64,
+14	    /// Whether the entry carries a receipt.
+15	    /// 分录是否附带凭据。
+16	    pub has_receipt: bool,
+17	}
+18	
+19	impl Entry {
+20	    /// A new entry.
+21	    /// 新建一条分录。
+22	    pub fn new(account: &str, amount: i64, has_receipt: bool) -> Self {
+23	        Self {
+24	            acc
+…[结果：此处截断，全文 4084 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**该步推理**：
+```
+r1: `src/query/filter.rs:31` `&& entry.amount > min` — should be `<`. Minimal fix: change `>` to `<`.
+
+r2: `src/report/render.rs:8-14`: `render()` never calls `write_totals` (which exists at :24) → callers write_totals = 0, callees render has no write_totals. Fix: add `write_totals(&mut text, summary);` after line 9 (before the bucket loop, since the totals should precede the bucket lines — the test checks `text.contains("entries: 3")` and bucket lines; the doc says "a header, the totals, then one line per bucket" ⇒ insert after the header).
+
+r3: index.rs:24 `Some(high) => amount <= high` should be `<` (half-open). Let me read index.rs + the test to confirm the boundary semantics.
+r4: entry.rs:39 `has_receipt || amount == 0` should be `has_receipt && amount != 0`.
+
+Now, for r3 I need to check `bucket_of` semantics: buckets() list and the test `bucket_boundaries_are_half_open` expects: bucket_of(-1)="debit", 0="small", 999="small", 1000="large". Let me read index.rs r3 to see the injected `<=`.
+
+Let me read r3's index.rs and r4's entry.rs (r4's entry.rs is the same as I read for the h2? no, that was the hardbug tree. Let me read r4's src/model/entry.rs).
+
+Then apply the four fixes and re-run tests.
+
+Also for the answer files, I need the failing test raw evidence (already in the logs: /tmp/fresh_*.out captured into logs) ✓ and the panic messages. Let me extract the panic lines for each r-tree from the new runs (for the answers).
+
+Let me batch: read r3 index.rs, r4 entry.rs, and extract panic messages.
 ```
 
 ### step 15（turn 2）· `bash`

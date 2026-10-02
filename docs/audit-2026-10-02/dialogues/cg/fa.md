@@ -2,11 +2,11 @@
 
 **题面**：五族：「我要加一个新对象，和现有的差不多。」
 
-> 步 7 · 仪器调用 **19**（逐题日志条数）· 会话里定位到 9 条 · 输出 6,822 tok · 推理 9,699 字符 · 累计上下文 2,294,528
+> 步 12 · 仪器调用 **19**（逐题日志条数）· 会话里定位到 14 条 · 输出 17,344 tok · 推理 41,270 字符 · 累计上下文 3,858,304
 
 ## 一、工具给了什么 · 当时 agent 在想什么（逐条配对）
 
-> ⚠️ 日志 19 条 vs 会话定位 9 条：差的那些调用发生在**共享步**（一条命令里跑了多道题）或**装置步**里 —— 这正是"逐题 token 不可归因"的具体形状。
+> ⚠️ 日志 19 条 vs 会话定位 14 条：差的那些调用发生在**共享步**（一条命令里跑了多道题）或**装置步**里 —— 这正是"逐题 token 不可归因"的具体形状。
 
 ### ①1 日志第 1 条 · exit 0 · step 27（turn 2）
 
@@ -163,7 +163,7 @@ The old damaged fb copy (which I saw before restoration) had exactly: `Button { 
 …[推理：此处截断，全文 8743 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①3 日志第 3 条 · exit 0 · step 58（turn 2）
+### ①3 日志第 3 条 · exit 0 · step 35（turn 2）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph init .`
 
@@ -183,6 +183,112 @@ Linking dynamic dispatch...
 ●  102 nodes, 158 edges in 590ms
 │
 └  Done
+```
+
+**该步推理**（逐字）：
+```
+The idiomatic usage (from the toolchain's own test):
+
+```rust
+struct ProbePreset;
+impl PresetContract for ProbePreset { type Output = ...; const REQUIRED_PARTS: &[&str] = &["probe"]; }
+struct ProbeParts;
+impl PartsContract for ProbeParts { type Output = ...; const PROVIDED_PARTS: &[&str] = &["probe"]; }
+
+__control_object! {
+    ...
+    preset: ProbePreset,
+    parts: ProbeParts,
+    ...
+}
+```
+And `REGISTRATION.preset == "ProbePreset"`, `.parts == "ProbeParts"` (defaults from `stringify!` when `preset_name`/`parts_name` omitted ✓), and `contract.required_parts == ["probe"]`, `.provided_parts == ["probe"]`.
+
+Let me read the full file to get the exact shapes (lines 1-46).
+
+Then implement for fb/g3:
+
+```rust
+/// Button 的内部结构：它自己声明的那一层零件（preset 要求什么、parts 供应什么）。
+pub struct ButtonPreset;
+pub struct ButtonParts;
+
+impl nichlink_toolchain::runtime::PresetContract for ButtonPreset {
+    type Output = Button;   // hmm, Output must match PartsContract::Output
+    const REQUIRED_PARTS: &'static [&'static str] = &["label"];
+}
+impl nichlink_toolchain::runtime::PartsContract for ButtonParts {
+    type Output = Button;
+    const PROVIDED_PARTS: &'static [&'static str] = &["label"];
+}
+```
+Hmm: can Output = Button (the face type, a unit struct)? `assert_contract::<P, T>` requires `T: PartsContract<Output = P::Output>` → `ButtonPreset::Output == ButtonParts::Output` ✓ (both Button). Is that meaningful? The preset "requires the label part" and parts "supply label", collectively constructing a `Button`. Semantically: the object is constructed from its parts ✓ nice.
+
+Then in the macro: add `preset: ButtonPreset,` and `parts: ButtonParts,` (names default via stringify ✓ to "ButtonPreset"/"ButtonParts").
+
+And optionally an accessor `impl Button { pub fn parts(&self) -> ... }` — the old arm had that, but with a field. Hmm. Do I need a runtime accessor? The trait is a *declaration*; the PArts type could carry the label:
+```rust
+pub struct ButtonParts { pub label: String }
+```
+With `Output = Button`... but then parts construct a Button from a label? The contract only says PROVIDED_PARTS = ["label"].
+
+Hmm, what's the most defensible "internal structure"? I think:
+- `ButtonParts { label: String }` — a real internal type holding the object's inside (the label).
+- `impl PartsContract for ButtonParts { type Output = ButtonParts; PROVIDED_PARTS = ["label"] }` — the parts construct themselves (as in the old arm's answer: Output = ButtonParts).
+- A preset that requires that label: `impl PresetContract for ButtonPreset { type Output = ButtonParts; REQUIRED_PARTS = ["label"] }`.
+Then the face declares `preset: ButtonPreset, parts: ButtonParts` and the *contract* records required_parts = ["label"] = provided_parts ✓ (a matched pair — the "construction contract" the toolchain checks).
+
+That's semantic and self-consistent: the object's inside is `ButtonParts` (a label), the preset requires the label, the parts supply it, and the output is the parts type.
+
+Hmm, but ideally `Output` should be the *face* (Button). Hmm. Which is more faithful to the framework? Let me look at the runtime test's ProbePreset/ProbeParts Output types (read the file) — if they're a common output type, follow that.
+
+Let me read the full file (46 lines).
+
+Also for **fa** (add a new object): I'll add a third leaf face, e.g. `toggle`:
+- `src/control/object/toggle/toggle.rs` modeled on button.rs/slider.rs (with its own kind, exports, parent, handle_contracts, flow, runtime_checks?).
+- Wire it: the parent (control.rs) — per the docs, "父级不维护子对象清单"; children declare their parent. But how does the face get *registered*? The macro `__control_object!` submits registrations (collector debug) and the build-time scope collects from the entry plan. In the fa tree, is there a graft plan / entry naming? Let me read fa's src/lib.rs (the entry) and Cargo.toml.
+
+Also the tests that pin the tree (registry.rs's `built_in_tree_has_the_expected_paths_and_derived_sources`, static_plan_allocations.rs) will need updating for a new face. Let me read fa's tests/registry.rs to see the pinned path list and the parts/preset test.
+
+Let me read: toolchain/tests/runtime_face_preset_parts.rs (full), fa/src/lib.rs, fa/tests/registry.rs (full, via codegraph).
+
+Let me batch: read the toolchain test (read tool) + codegraph node fa/src/lib.rs + fa/tests/registry.rs.
+
+Careful about output size: registry.rs is ~200 lines. OK.
+```
+
+**同一步并行发出的其它调用**：
+- `read` → 归属 装置：`{"file_path": "/home/nich/Moirai_N3/nichlink/toolchain/tests/runtime_face_preset_parts.rs"}`
+
+### ①4 日志第 4 条 · exit 0 · step 58（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph files`
+
+**工具返回**（逐字）：
+```
+Project Structure (13 files):
+
+├── examples
+│   ├── graft_record.rs (rust, 12 symbols)
+│   ├── health_check.rs (rust, 3 symbols)
+│   └── tree.rs (rust, 2 symbols)
+├── src
+│   ├── control
+│   │   ├── object
+│   │   │   ├── button
+│   │   │   │   └── button.rs (rust, 5 symbols)
+│   │   │   └── slider
+│   │   │       └── slider.rs (rust, 5 symbols)
+│   │   ├── registry_rule
+│   │   │   └── registry_rule.rs (rust, 3 symbols)
+│   │   └── control.rs (rust, 6 symbols)
+│   └── lib.rs (rust, 4 symbols)
+├── tests
+│   ├── health_check.rs (rust, 3 symbols)
+│   ├── ide_mirror.rs (rust, 5 symbols)
+│   ├── registry.rs (rust, 33 symbols)
+│   └── static_plan_allocations.rs (rust, 19 symbols)
+└── build.rs (rust, 2 symbols)
 ```
 
 **该步推理**（逐字）：
@@ -225,54 +331,7 @@ Let me explore.
 Last question: **fa** (add a new object). Reconnaissance of the pinned face set:
 ```
 
-### ①4 日志第 4 条 · exit 0 · step 66（turn 2）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph files`
-
-**工具返回**（逐字）：
-```
-Project Structure (13 files):
-
-├── examples
-│   ├── graft_record.rs (rust, 12 symbols)
-│   ├── health_check.rs (rust, 3 symbols)
-│   └── tree.rs (rust, 2 symbols)
-├── src
-│   ├── control
-│   │   ├── object
-│   │   │   ├── button
-│   │   │   │   └── button.rs (rust, 5 symbols)
-│   │   │   └── slider
-│   │   │       └── slider.rs (rust, 5 symbols)
-│   │   ├── registry_rule
-│   │   │   └── registry_rule.rs (rust, 3 symbols)
-│   │   └── control.rs (rust, 6 symbols)
-│   └── lib.rs (rust, 4 symbols)
-├── tests
-│   ├── health_check.rs (rust, 3 symbols)
-│   ├── ide_mirror.rs (rust, 5 symbols)
-│   ├── registry.rs (rust, 33 symbols)
-│   └── static_plan_allocations.rs (rust, 19 symbols)
-└── build.rs (rust, 2 symbols)
-```
-
-**该步推理**（逐字）：
-```
-fa's gate is green ✓ (rc=0, 25 registry tests pass).
-
-Now let me finish fa with:
-1. `cargo test --offline --all-features` → confirm green.
-2. `cargo run --example tree` → show the 4-row tree (the new object ships) — good evidence.
-3. Log the new face's source via codegraph `node` (post-change evidence) + re-init fa? The index lags; `node src/control/object/toggle/toggle.rs` should work (the watcher indexes new files ~1s). Let me sleep 2 and call it.
-
-Then write fa's answer.
-
-Let me also double check the fa tree's Cargo.toml/graft: no changes needed ✓ (gate green).
-
-Let me run these.
-```
-
-### ①5 日志第 5 条 · exit 0 · step 67（turn 2）
+### ①5 日志第 5 条 · exit 0 · step 59（turn 2）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node src/control/object/button/button.rs`
 
@@ -325,30 +384,18 @@ Let me run these.
 
 **该步推理**（逐字）：
 ```
-The tree now has 4 rows including `root/control/toggle kind=Toggle source=control/object/toggle/toggle.rs` ✓ — the new object ships, and the gate is green (default + all-features) ✓.
+Very interesting! Line 187 of registry.rs: `assert_eq!(kind_at(&registry, "root/control/toggle"), "Toggle");` — the tests reference a **toggle** face! So the tree's tests already contemplate a toggle face (probably for the out-of-project plugin tests or "external object" tests). Let me look at the context of line 187 and line 122 (the `depth_first` at 122).
 
-But the codegraph index doesn't know the new file yet ("No indexed file matches..."). The watcher may need a `sync` or a moment; or the tree copy's index needs a re-sync. Let me run `codegraph sync .` (or re-init) to index the new file, then `node` it (for the log evidence).
+Also line 283: `assert_eq!(plan.faces().len(), 3, "every declared face is retained")` — the static plan retains 3 faces (control, button, slider). If I add a new face, this would become 4 (and the test would need updating).
 
-Note: this is a good honest detail — the index lags the new file; a `sync` fixes it. Let me run `./cg.sh fa sync .` then `node src/control/object/toggle/toggle.rs`.
+Hmm! Wait: `plan.faces()` — the *build-declared static plan*'s faces. Line 187's `root/control/toggle` — let me read the surrounding test (lines 170-210) to understand.
 
-Then write fa's answer.
+Let me read registry.rs lines 110-210 to see these tests (the "external/plugin" ones). This tells me whether "toggle" is a face declared *outside* the project (plugin/external object) — in which case fa's answer might be to add a Toggle face *like the existing ones* (button/slider) — hmm.
 
-fa's answer content:
-① 题面（用户那一句）："我要加一个新对象，和现有的差不多。"
-② 做了什么：新增第三个叶子对象 `Toggle`，与现有 Button/Slider 同形：
-   - 新文件 `src/control/object/toggle/toggle.rs`（`Toggle` + `impl ControlHandle` + `crate::control_object!{ kind: Toggle, exports: ["control.render"], parent: crate::control::NODE_ID, handle_contracts: [ControlHandle], flow: FlowContract::new(ContractId::new("control.render.v1"),1,"ControlInput","ControlFrame") }`）。
-   - 入口 `src/lib.rs`：新增 `pub const PUBLISHED_OBJECT_FACES: [NodeId; 3]`，在代码里拼出三个对象面的路径——构建期作用域从入口的可达源码收窄，而那次扫描忽略 import/字符串/注释（这一步是"对象真的会被发布"的关键；不加就只是多了一个文件）。
-③ 依据：现有两个面（`button.rs`/`slider.rs`）逐字作模板；父级 `control.rs:19-39` 的 `needs_registry`/规则；作用域规则见 `src/lib.rs` 自己的文档（"没被声明的注册面不会被这个应用发布"）；可达性扫描忽略 import/字符串/注释——因此我写的是表达式而不是 `use`。
-④ 改动清单：新增 1 文件 + `src/lib.rs` 的 const；测试期望更新 4 处（`tests/registry.rs`：树行表 3→4、`plan.faces().len()` 3→4、作用域 2→3 且新增 toggle 行断言、把合成样例 `Toggle` 改名为 `Dial` 以避免与真实面撞槽位名）。
-⑤ 命令序列 + 门 + 反证：`cargo test --offline`（先 4 红 → 更新期望后 rc=0，25+1+1 全 ok）、`--all-features` rc=0；`cargo run --example tree` 现在打印 4 行（含 `root/control/toggle kind=Toggle`）⇒ 新对象真的发布了。反证：如果我只加文件、不在入口拼路径，`tree` 仍会是 3 行（作用域不含未声明的面）——那就说明"加对象"没做成；如果命名/父级写错，`parent_rule_*` 与 `built_in_tree_*` 会红。4 处测试期望的更新都写明了理由，不是靠删断言变绿。
-⑥ 总调用 + 调用清单 + nonbridge.
-
-Note fa's codegraph counts will grow after sync/node. Let me recompute the counts for fa after these calls (the script computes from logs).
-
-Let me run sync + node, then recompute fa's numbers, then write the answer.
+Let me read that region of fa's registry.rs.
 ```
 
-### ①6 日志第 6 条 · exit 0 · step 68（turn 2）
+### ①6 日志第 6 条 · exit 0 · step 60（turn 2）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node src/control/control.rs`
 
@@ -400,27 +447,51 @@ Let me run sync + node, then recompute fa's numbers, then write the answer.
 
 **该步推理**（逐字）：
 ```
-The sync indexed the new file ✓ and `node` shows it (27 lines, 2 symbols; "used by 1 file: src/control/control.rs" — hmm, interesting: the tool says the new file is used by control.rs, which is the *generated* module mount).
+The `toggle` in line 187 is just a *synthetic* sibling built in the test (a copy of button's REGISTRATION with kind "Toggle"), not a real face. So the tree has no toggle face — consistent with my plan to add one.
 
-fa's counts: 19 codegraph calls (19 ok, 0 refused), 2 init → 17 steps; nonbridge 5 / 16,159 B; codegraph output bytes 189,725 (inflated by my big reads of registry.rs/static_plan_allocations.rs during exploration).
+Key constraints for adding a face:
+- `tests/registry.rs:54-61`: exact 3-row list (must be updated to 4 rows).
+- `tests/registry.rs:283`: `plan.faces().len() == 3` (the static plan's faces) — must become 4 if the new face lands in the build-declared static plan.
+- `tests/static_plan_allocations.rs:189`: `static_cuts.len()` — unaffected if I don't add a cut.
+- `tests/registry.rs:72-91`: the preset/parts test (control/slider/button) — I may leave it (my new face omits preset/parts → defaults ✓) but the doc says "three built-in faces" — hmm, if my new face has a custom `handle`... Let me keep the new face's declaration minimal and consistent (no preset/parts, so it records NoPreset/NoParts like the others ✓). The test only asserts for control/button/slider ✓ (my new face isn't asserted, so it passes). Its doc comment says "All three built-in faces take that shape" → with 4 faces it's stale; I could update the comment (minor, honest).
 
-Hmm — the fa log's codegraph output is huge (63 KB earlier, now 189 KB?) because I piped large file dumps. That's fine; it's honest.
+Now: does the new face get into the static plan automatically (from the collector/scan) or only if the entry spells it? Let me test empirically:
+1. Create `src/control/object/toggle/toggle.rs` modeled on slider.rs (kind Toggle, exports, parent control::NODE_ID, handle_contracts, flow).
+2. Add a code-spelled mention in the entry? Let me first try WITHOUT any lib.rs change and see what the build produces (`tree` example + `cargo test` failures will tell me).
 
-Wait: cg_out_bytes jumped from 63,745 to 189,725 — because the `sync .` output? No... the `node tests/registry.rs` calls (766 lines each, several times) and `static_plan_allocations.rs`. Yes, big.
+Actually, the build-time scan: `build_time::run()` scans the entry's reachable source — the entry is `src/lib.rs`; does it scan the whole crate or only the entry file + its spelled references? The doc: "构建期作用域从入口的可达源码收窄，没被提到的注册面不会被这个应用发布" + "那次扫描忽略 import、字符串与注释，只把代码里拼出的路径当成一次引用". So the scan starts at the entry and follows *code-spelled paths* (not imports). The entry `src/lib.rs` doesn't spell `crate::control::control::...`? Hmm, but the plan spells `crate::control::object::button::NODE_ID` ✓ and `crate::control::object::slider::NODE_ID` ✓ → those two faces + control (via parent) are in scope. So a new face not spelled in lib.rs would NOT be published.
 
-Now let me write fa's answer, then finish with:
-- Adding `总调用：成功 N / 被拒 M` to the 15 earlier answers + fd/fe/r1-r4/h1 (those already have it? Let me check: r1-r4, h1, fd, fe, fb, g3 answers — I wrote "总调用：" for fb and g3 ✓; r1-r4/h1/fd/fe: I didn't add it! Let me check my earlier r1 answer... I ended with "nonbridge: ..." and no 总调用 line. Right: the captain asked to add `总调用：成功 N / 被拒 M` to all.
-- Update SETUP.md §5 (byte rule + .txt deviation + 总调用 definition) and APPARATUS.md/PARTIAL.md (causal correction).
-- Recompute totals and report.
+To make the new object ship, the entry must spell it. Since it's a *new object* (not necessarily a graft slot), how should it be spelled? Options:
+(a) Add a documented const array in lib.rs listing the published object faces:
+```rust
+/// 本应用发布的对象面：入口**在代码里拼出**它们的路径。
+pub const PUBLISHED_OBJECT_FACES: [NodeId; 3] = [
+    crate::control::object::button::NODE_ID,
+    crate::control::object::slider::NODE_ID,
+    crate::control::object::toggle::NODE_ID,
+];
+```
+(b) Add a `cut(...) graft(...)` pair (needs a graft twin).
+Hmm. Option (a) is a code-spelled path ✓ and semantically "the faces this app declares" — and it's exactly the shape the old damaged fa copy's lib.rs doc suggested ("本应用发布的对象面：入口在代码里拼出它们的路径")! That old copy was a previous arm's answer, which added a doc block + presumably such a list. So (a) matches the intended answer shape.
 
-Let me write fa's answer first.
+Wait, hmm: but would a const array with NodeIds be *reachable* by the scan? The scan looks for code-spelled paths — a const initializer spells `crate::control::object::toggle::NODE_ID` ✓ (a path expression). And the generated plan would then include the toggle face's registration ✓.
 
-fa 总调用 line: 成功 19 / 被拒 0（codegraph；含 2 次 init ⇒ 17 步）; nonbridge 5 / 16,159 B.
+Let me test empirically with option (a).
 
-Let me write it.
+Then update:
+- registry.rs rows list (3 → 4 rows).
+- registry.rs:283 faces().len() 3 → 4 (if the static plan includes the new face).
+- Maybe the preset/parts test doc (no functional change).
+- static_plan_allocations.rs — it measures allocations for the static plan; adding a face might change counts? Let me check line 180-200 of that file for pinned numbers.
+
+Let me look at static_plan_allocations.rs lines 175-210 to see the pinned assertions.
+
+Let me do that quickly, then write the new face + lib.rs mention, then iterate with cargo.
+
+Time is a factor; let me move fast.
 ```
 
-### ①7 日志第 7 条 · exit 0 · step 72（turn 2）
+### ①7 日志第 7 条 · exit 0 · step 63（turn 2）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/static_plan_allocations.rs`
 
@@ -536,7 +607,25 @@ Let me write it.
 …[工具返回：此处截断，全文 14805 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①8 日志第 8 条 · exit 0 · step 75（turn 2）
+**该步推理**（逐字）：
+```
+The new face is being published (it changed the tree), and 4 registry tests fail:
+1. `built_in_tree_has_the_expected_paths_and_derived_sources` — the 3-row list (needs the 4th row) ✓ expected.
+2. `static_plan_carries_faces_and_the_declared_graft` — likely asserts faces().len() == 3 (update to 4).
+3. `the_declared_slots_define_the_build_time_scope` — the scope test (probably lists the scoped faces; needs the toggle).
+4. `parent_rule_admits_a_new_kind_that_satisfies_it` — this one registers a synthetic "Toggle" sibling with registry_name "toggle" → now collides with my real toggle face's slot name! The test asserts `kind_at(&registry, "root/control/toggle")` == "Toggle" — with my real Toggle face at path `root/control/toggle`, the synthetic sibling (registry_name "toggle") would be rejected as a duplicate slot name → the test fails.
+
+Hmm! #4 is interesting: my new face's registry_name defaults to the kind's snake case = "toggle" — colliding with the test's synthetic face. The test's synthetic sibling was designed when no real "toggle" existed. Now that a real Toggle exists, that test needs a different synthetic name (e.g. "dial") — a legitimate test update (the test's point is "the parent rule is not a kind filter: another kind that satisfies the structure may enter" — any name works).
+
+So I need to update 4 spots in registry.rs. Let me look at the failing assertions:
+- #2 `static_plan_carries_faces_and_the_declared_graft` (around line 283: `plan.faces().len() == 3`) → 4.
+- #3 `the_declared_slots_define_the_build_time_scope` (around line 300-330) → let me read.
+- #4 `parent_rule_admits_a_new_kind_that_satisfies_it` (line 176-188) → rename the synthetic sibling's kind/name to something not taken (e.g. "Dial"/"dial").
+
+Let me read those tests (lines 275-330 and around) to patch precisely. Let me print the failure messages first to know exactly what's asserted — that's faster. Let me extract the panics from /tmp/fa_after.out.
+```
+
+### ①8 日志第 8 条 · exit 0 · step 64（turn 2）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node src/lib.rs`
 
@@ -634,6 +723,644 @@ Let me write it.
 
 **该步推理**（逐字）：
 ```
+Now I understand all 4 failures:
+
+1. `built_in_tree_has_the_expected_paths_and_derived_sources` (line 54-61): rows must include the toggle row ✓ (my new face ships — proof it worked!).
+2. `static_plan_carries_faces_and_the_declared_graft` (line 283): `plan.faces().len()` 3 → 4.
+3. `the_declared_slots_define_the_build_time_scope` (line 368): asserts the scope table has exactly 2 slots; now 3 nodes are listed (button, slider, toggle). Let me read that test (lines ~345-380) to update it correctly — it asserts "the entry declares exactly two slots" and compares a rendered table.
+4. `parent_rule_admits_a_new_kind_that_satisfies_it` (line 176-188): the synthetic sibling named "toggle" now collides with my real toggle face. Fix: rename the synthetic to a kind/name not present (e.g. "Dial"/"dial") and assert at `root/control/dial`.
+
+Let me read the scope test (lines 345-380) to patch it.
+
+Note the scope table output includes `# selected 3` and the three rows with NodeIds — that's the *scope* (build-time reachable faces). Let me see the assertion.
+
+Let me print lines 344-395.
+```
+
+### ①9 日志第 9 条 · exit 0 · step 66（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
+
+**工具返回**（逐字）：
+```
+**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
+
+1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
+2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
+3	//! Integration tests: treat the README Control/Button tree as a real host and
+4	//! verify the generated plan, registration, the parent rule, grafting, the
+5	//! out-of-project implementation, and the release-time static plan.
+6	
+7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
+8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
+9	use nichlink_toolchain::runtime::registry_core::lexicon;
+10	use nichlink_toolchain::runtime::registry_core::{
+11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
+12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
+13	};
+14	use nichlink_toolchain::runtime::{
+15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
+16	};
+17	
+18	/// 读取某一逻辑路径上的 kind；找不到就失败。
+19	/// Read the kind at a logical path, failing when the path is absent.
+20	fn kind_at(registry: &Registry, wanted: &str) -> String {
+21	    registry
+22	        .depth_first()
+23	        .iter()
+24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
+25	        .map(|info| info.kind.clone())
+26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
+27	}
+28	
+29	fn slot_plan() -> GraftPlan {
+30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
+31	        .expect("the graft command parses")
+32	}
+33	
+34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
+35	/// `source` is derived at the declaration site now, and must equal what the
+36	/// previous design injected.
+37	#[test]
+38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
+39	    let registry = base_registry();
+40	    let mut rows = registry
+41	        .depth_first()
+42	        .iter()
+43	        .map(|info| {
+44	            format!(
+45	                "{} kind={} source={}",
+46	                registry.path_for(info.id).unwrap_or_default(),
+47	                info.kind,
+48	                info.source.portable_file()
+49	            )
+50	        })
+51	        .collect::<Vec<_>>();
+52	    rows.sort();
+53	
+54	    assert_eq!(
+55	        rows,
+56	        [
+57	            "root/control kind=Control source=control/control.rs",
+58	            "root/control/button kind=Button source=control/object/button/button.rs",
+59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
+60	        ]
+61	    );
+62	}
+63	
+64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
+65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
+66	/// 出厂的那条路径，而不只是单元测试里的形状。
+67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
+68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
+69	/// All three built-in faces take that shape, so this pins the shipped path, not
+70	/// only a shape in a unit test.
+71	#[test]
+72	fn handle_faces_record_plain_default_preset_and_parts_names() {
+73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
+74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
+75	    assert_eq!(
+76	        control_button::control::object::button::REGISTRATION.preset,
+77	        "NoPreset"
+78	    );
+79	    assert_eq!(
+80	        control_button::control::object::button::REGISTRATION.parts,
+81	        "NoParts"
+82	    );
+83	    assert_eq!(
+84	        control_button::control::object::slider::REGISTRATION.preset,
+85	        "NoPreset"
+86	    );
+87	    assert_eq!(
+88	        control_button::control::object::slider::REGISTRATION.parts,
+89	        "NoParts"
+90	    );
+91	}
+92	
+93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
+94	/// A leaf face loads under its own name, so its public module path and type
+95	/// name are unchanged.
+96	#[test]
+97	fn leaf_face_module_path_stays_clean() {
+98	    assert_eq!(
+99	        std::any::type_name::<control_button::control::object::button::Button>(),
+100	        "control_button::control::object::button::Button"
+101	    );
+102	}
+103	
+104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
+105	/// A folder face's items stay addressable at their original path through the
+106	/// same-named child module and its re-export.
+107	#[test]
+108	fn folder_face_items_stay_reachable() {
+109	    let _: NodeId = control_button::control::NODE_ID;
+110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
+111	    let _ = control_button::control::ControlFrame;
+112	}
+113	
+114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
+115	/// 就是仓库相对路径，而不是任何构建副本。
+116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
+117	/// recorded source is the repository-relative path rather than a build copy.
+118	#[test]
+119	fn face_sources_point_at_the_real_files() {
+120	    let registry = base_registry();
+121	    let sources = registry
+122	        .depth_first()
+123	        .iter()
+124	        .map(
+…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**该步推理**（逐字）：
+```
+fa's gate is green ✓ (rc=0, 25 registry tests pass).
+
+Now let me finish fa with:
+1. `cargo test --offline --all-features` → confirm green.
+2. `cargo run --example tree` → show the 4-row tree (the new object ships) — good evidence.
+3. Log the new face's source via codegraph `node` (post-change evidence) + re-init fa? The index lags; `node src/control/object/toggle/toggle.rs` should work (the watcher indexes new files ~1s). Let me sleep 2 and call it.
+
+Then write fa's answer.
+
+Let me also double check the fa tree's Cargo.toml/graft: no changes needed ✓ (gate green).
+
+Let me run these.
+```
+
+### ①10 日志第 10 条 · exit 0 · step 67（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node src/control/object/slider/slider.rs`
+
+**工具返回**（逐字）：
+```
+**src/control/object/slider/slider.rs** — 28 lines, 2 symbols · used by 1 file: src/control/control.rs
+
+1	//! Slider 叶子面：Control 的第二个直接子对象，用来演示同一父级下的兄弟区间替换。
+2	//! Slider leaf face: Control's second direct child, used to demonstrate a graft
+3	//! over a contiguous range of siblings under one parent.
+4	
+5	use crate::control::{ControlFrame, ControlHandle};
+6	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+7	
+8	pub struct Slider;
+9	
+10	impl ControlHandle for Slider {
+11	    fn paint(&self) -> ControlFrame {
+12	        ControlFrame
+13	    }
+14	}
+15	
+16	crate::control_object! {
+17	    kind: Slider,
+18	    exports: ["control.render"],
+19	    parent: crate::control::NODE_ID,
+20	    handle_contracts: [crate::control::ControlHandle],
+21	    flow: FlowContract::new(
+22	        ContractId::new("control.render.v1"),
+23	        1,
+24	        "ControlInput",
+25	        "ControlFrame",
+26	    ),
+27	}
+28
+```
+
+**该步推理**（逐字）：
+```
+The tree now has 4 rows including `root/control/toggle kind=Toggle source=control/object/toggle/toggle.rs` ✓ — the new object ships, and the gate is green (default + all-features) ✓.
+
+But the codegraph index doesn't know the new file yet ("No indexed file matches..."). The watcher may need a `sync` or a moment; or the tree copy's index needs a re-sync. Let me run `codegraph sync .` (or re-init) to index the new file, then `node` it (for the log evidence).
+
+Note: this is a good honest detail — the index lags the new file; a `sync` fixes it. Let me run `./cg.sh fa sync .` then `node src/control/object/toggle/toggle.rs`.
+
+Then write fa's answer.
+
+fa's answer content:
+① 题面（用户那一句）："我要加一个新对象，和现有的差不多。"
+② 做了什么：新增第三个叶子对象 `Toggle`，与现有 Button/Slider 同形：
+   - 新文件 `src/control/object/toggle/toggle.rs`（`Toggle` + `impl ControlHandle` + `crate::control_object!{ kind: Toggle, exports: ["control.render"], parent: crate::control::NODE_ID, handle_contracts: [ControlHandle], flow: FlowContract::new(ContractId::new("control.render.v1"),1,"ControlInput","ControlFrame") }`）。
+   - 入口 `src/lib.rs`：新增 `pub const PUBLISHED_OBJECT_FACES: [NodeId; 3]`，在代码里拼出三个对象面的路径——构建期作用域从入口的可达源码收窄，而那次扫描忽略 import/字符串/注释（这一步是"对象真的会被发布"的关键；不加就只是多了一个文件）。
+③ 依据：现有两个面（`button.rs`/`slider.rs`）逐字作模板；父级 `control.rs:19-39` 的 `needs_registry`/规则；作用域规则见 `src/lib.rs` 自己的文档（"没被声明的注册面不会被这个应用发布"）；可达性扫描忽略 import/字符串/注释——因此我写的是表达式而不是 `use`。
+④ 改动清单：新增 1 文件 + `src/lib.rs` 的 const；测试期望更新 4 处（`tests/registry.rs`：树行表 3→4、`plan.faces().len()` 3→4、作用域 2→3 且新增 toggle 行断言、把合成样例 `Toggle` 改名为 `Dial` 以避免与真实面撞槽位名）。
+⑤ 命令序列 + 门 + 反证：`cargo test --offline`（先 4 红 → 更新期望后 rc=0，25+1+1 全 ok）、`--all-features` rc=0；`cargo run --example tree` 现在打印 4 行（含 `root/control/toggle kind=Toggle`）⇒ 新对象真的发布了。反证：如果我只加文件、不在入口拼路径，`tree` 仍会是 3 行（作用域不含未声明的面）——那就说明"加对象"没做成；如果命名/父级写错，`parent_rule_*` 与 `built_in_tree_*` 会红。4 处测试期望的更新都写明了理由，不是靠删断言变绿。
+⑥ 总调用 + 调用清单 + nonbridge.
+
+Note fa's codegraph counts will grow after sync/node. Let me recompute the counts for fa after these calls (the script computes from logs).
+
+Let me run sync + node, then recompute fa's numbers, then write the answer.
+```
+
+### ①11 日志第 11 条 · exit 0 · step 68（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
+
+**工具返回**（逐字）：
+```
+**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
+
+1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
+2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
+3	//! Integration tests: treat the README Control/Button tree as a real host and
+4	//! verify the generated plan, registration, the parent rule, grafting, the
+5	//! out-of-project implementation, and the release-time static plan.
+6	
+7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
+8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
+9	use nichlink_toolchain::runtime::registry_core::lexicon;
+10	use nichlink_toolchain::runtime::registry_core::{
+11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
+12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
+13	};
+14	use nichlink_toolchain::runtime::{
+15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
+16	};
+17	
+18	/// 读取某一逻辑路径上的 kind；找不到就失败。
+19	/// Read the kind at a logical path, failing when the path is absent.
+20	fn kind_at(registry: &Registry, wanted: &str) -> String {
+21	    registry
+22	        .depth_first()
+23	        .iter()
+24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
+25	        .map(|info| info.kind.clone())
+26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
+27	}
+28	
+29	fn slot_plan() -> GraftPlan {
+30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
+31	        .expect("the graft command parses")
+32	}
+33	
+34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
+35	/// `source` is derived at the declaration site now, and must equal what the
+36	/// previous design injected.
+37	#[test]
+38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
+39	    let registry = base_registry();
+40	    let mut rows = registry
+41	        .depth_first()
+42	        .iter()
+43	        .map(|info| {
+44	            format!(
+45	                "{} kind={} source={}",
+46	                registry.path_for(info.id).unwrap_or_default(),
+47	                info.kind,
+48	                info.source.portable_file()
+49	            )
+50	        })
+51	        .collect::<Vec<_>>();
+52	    rows.sort();
+53	
+54	    assert_eq!(
+55	        rows,
+56	        [
+57	            "root/control kind=Control source=control/control.rs",
+58	            "root/control/button kind=Button source=control/object/button/button.rs",
+59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
+60	        ]
+61	    );
+62	}
+63	
+64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
+65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
+66	/// 出厂的那条路径，而不只是单元测试里的形状。
+67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
+68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
+69	/// All three built-in faces take that shape, so this pins the shipped path, not
+70	/// only a shape in a unit test.
+71	#[test]
+72	fn handle_faces_record_plain_default_preset_and_parts_names() {
+73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
+74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
+75	    assert_eq!(
+76	        control_button::control::object::button::REGISTRATION.preset,
+77	        "NoPreset"
+78	    );
+79	    assert_eq!(
+80	        control_button::control::object::button::REGISTRATION.parts,
+81	        "NoParts"
+82	    );
+83	    assert_eq!(
+84	        control_button::control::object::slider::REGISTRATION.preset,
+85	        "NoPreset"
+86	    );
+87	    assert_eq!(
+88	        control_button::control::object::slider::REGISTRATION.parts,
+89	        "NoParts"
+90	    );
+91	}
+92	
+93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
+94	/// A leaf face loads under its own name, so its public module path and type
+95	/// name are unchanged.
+96	#[test]
+97	fn leaf_face_module_path_stays_clean() {
+98	    assert_eq!(
+99	        std::any::type_name::<control_button::control::object::button::Button>(),
+100	        "control_button::control::object::button::Button"
+101	    );
+102	}
+103	
+104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
+105	/// A folder face's items stay addressable at their original path through the
+106	/// same-named child module and its re-export.
+107	#[test]
+108	fn folder_face_items_stay_reachable() {
+109	    let _: NodeId = control_button::control::NODE_ID;
+110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
+111	    let _ = control_button::control::ControlFrame;
+112	}
+113	
+114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
+115	/// 就是仓库相对路径，而不是任何构建副本。
+116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
+117	/// recorded source is the repository-relative path rather than a build copy.
+118	#[test]
+119	fn face_sources_point_at_the_real_files() {
+120	    let registry = base_registry();
+121	    let sources = registry
+122	        .depth_first()
+123	        .iter()
+124	        .map(
+…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**该步推理**（逐字）：
+```
+The sync indexed the new file ✓ and `node` shows it (27 lines, 2 symbols; "used by 1 file: src/control/control.rs" — hmm, interesting: the tool says the new file is used by control.rs, which is the *generated* module mount).
+
+fa's counts: 19 codegraph calls (19 ok, 0 refused), 2 init → 17 steps; nonbridge 5 / 16,159 B; codegraph output bytes 189,725 (inflated by my big reads of registry.rs/static_plan_allocations.rs during exploration).
+
+Hmm — the fa log's codegraph output is huge (63 KB earlier, now 189 KB?) because I piped large file dumps. That's fine; it's honest.
+
+Wait: cg_out_bytes jumped from 63,745 to 189,725 — because the `sync .` output? No... the `node tests/registry.rs` calls (766 lines each, several times) and `static_plan_allocations.rs`. Yes, big.
+
+Now let me write fa's answer, then finish with:
+- Adding `总调用：成功 N / 被拒 M` to the 15 earlier answers + fd/fe/r1-r4/h1 (those already have it? Let me check: r1-r4, h1, fd, fe, fb, g3 answers — I wrote "总调用：" for fb and g3 ✓; r1-r4/h1/fd/fe: I didn't add it! Let me check my earlier r1 answer... I ended with "nonbridge: ..." and no 总调用 line. Right: the captain asked to add `总调用：成功 N / 被拒 M` to all.
+- Update SETUP.md §5 (byte rule + .txt deviation + 总调用 definition) and APPARATUS.md/PARTIAL.md (causal correction).
+- Recompute totals and report.
+
+Let me write fa's answer first.
+
+fa 总调用 line: 成功 19 / 被拒 0（codegraph；含 2 次 init ⇒ 17 步）; nonbridge 5 / 16,159 B.
+
+Let me write it.
+```
+
+### ①12 日志第 12 条 · exit 0 · step 72（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/static_plan_allocations.rs`
+
+**工具返回**（逐字）：
+```
+**tests/static_plan_allocations.rs** — 310 lines, 14 symbols · no other indexed file depends on it
+
+1	//! Allocation counts for the release read path, measured instead of argued.
+2	//! 发布读路径的分配计数：实测，而不是论证。
+3	
+4	// `README.md`'s cost table makes three claims this file settles:
+5	// `README.md` 的成本表有三条断言由本文件定案：
+6	//
+7	// - "Read-only built-in topology | Static `StaticFace` slice | No startup
+8	//   allocation": every read of the built-in plan must allocate nothing at all.
+9	// - "只读内置拓扑 | 静态 `StaticFace` 切片 | 启动时零分配"：对内置计划的每次读取都必须
+10	//   完全不分配。
+11	// - "Build-declared static graft | Static selector slice inside `StaticPlan` |
+12	//   Reading the declaration allocates nothing": same, for `grafts()`.
+13	// - "构建期声明的静态 graft | `StaticPlan` 内的静态选择器切片 | 读该声明不分配"：同上，
+14	//   针对 `grafts()`。
+15	// - "`overlay_static` allocates no plan but still performs contract, admission,
+16	//   and connector validation once": the honest reading, recorded in
+17	//   `docs/audit-graft-vs-readme.md` as C17, is "allocates no *plan*" rather than
+18	//   "allocates nothing" — so this file measures the static overlay against the
+19	//   dynamic one over the same cut rather than asserting zero.
+20	// - "`overlay_static` 不分配计划，但仍做一次合同/接纳/连接器校验"：诚实的读法（记在
+21	//   `docs/audit-graft-vs-readme.md` 的 C17）是"不分配**计划**"，而不是"什么都不分配"——
+22	//   因此本文件不假设零，而是在同一个切口上把静态 overlay 与动态 overlay 对比测量。
+23	//
+24	// Why a counting global allocator rather than a profiler: the claim is a count of
+25	// heap allocations on one code path, and `dhat` or `valgrind` are not installed
+26	// here. A counting allocator measures exactly that quantity and needs no external
+27	// tool. It is process-global, which is why this file holds only two tests: they
+28	// run in parallel with each other in the same binary, so each one brackets its
+29	// measurement and asserts on it immediately, and the second test's assertion is a
+30	// comparison of two measurements taken under the same conditions.
+31	// 为什么用计数式全局分配器而不是 profiler：这条断言就是某条代码路径上堆分配的次数，而本环境
+32	// 没有装 `dhat` 或 `valgrind`。计数分配器测量的正是这个量，且不需要外部工具。它是进程全局的，
+33	// 因此本文件只放两条测试：它们在同一二进制里彼此并行，所以每条都用自己的括号夹住测量并立刻断言，
+34	// 第二条断言的还是同条件下两次测量的对比。
+35	
+36	use std::alloc::{GlobalAlloc, Layout, System};
+37	use std::sync::atomic::{AtomicUsize, Ordering};
+38	
+39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
+40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
+41	
+42	/// Number of successful allocations since the last reset.
+43	/// 自上次重置以来成功分配的次数。
+44	static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+45	
+46	/// Bytes of those allocations, summed.
+47	/// 这些分配的字节数之和。
+48	static BYTES: AtomicUsize = AtomicUsize::new(0);
+49	
+50	/// A `System` allocator that counts successful allocations.
+51	/// 一个统计成功分配次数的 `System` 分配器。
+52	struct Counting;
+53	
+54	// SAFETY: every method forwards to `System` unchanged and only observes the
+55	// layout size it was given; no allocation decision depends on the counters.
+56	// `dealloc` and `realloc` are not counted, because the question is how many
+57	// allocations a path performs, not how many bytes it holds at the end. A
+58	// `realloc` counts as one more allocation, which is what a growing `Vec` does.
+59	// 安全性：每个方法都原样转发给 `System`，只观察它收到的布局大小；没有任何分配决定依赖这些
+60	// 计数器。`dealloc` 与 `realloc` 不计数，因为问题是一条路径做了多少次分配，而不是它最后占多少
+61	// 字节。`realloc` 计作一次新的分配，增长中的 `Vec` 正是如此。
+62	unsafe impl GlobalAlloc for Counting {
+63	    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+64	        let pointer = unsafe { System.alloc(layout) };
+65	        if !pointer.is_null() {
+66	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+67	            BYTES.fetch_add(layout.size(), Ordering::Relaxed);
+68	        }
+69	        pointer
+70	    }
+71	
+72	    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+73	        let pointer = unsafe { System.alloc_zeroed(layout) };
+74	        if !pointer.is_null() {
+75	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+76	            BYTES.fetch_add(layout.size(), Ordering::Relaxed);
+77	        }
+78	        pointer
+79	    }
+80	
+81	    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+82	        unsafe { System.dealloc(pointer, layout) }
+83	    }
+84	
+85	    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+86	        let moved = unsafe { System.realloc(pointer, layout, new_size) };
+87	        if !moved.is_null() {
+88	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+89	            BYTES.fetch_add(new_size, Ordering::Relaxed);
+90	        }
+91	        moved
+92	    }
+93	}
+94	
+95	#[global_allocator]
+96	static ALLOCATOR: Counting = Counting;
+97	
+98	/// Allocations and bytes performed while `body` runs, as a pair.
+99	/// `body` 运行期间发生的分配次数与字节数，成对给出。
+100	fn measure<T>(body: impl FnOnce() -> T) -> (usize, usize, T) {
+101	    let allocations = ALLOCATIONS.load(Ordering::SeqCst);
+102	    let bytes = BYTES.load(Ordering::SeqCst);
+103	    let value = body();
+104	    (
+105	        ALLOCATIONS.load(Ord
+…[工具返回：此处截断，全文 14805 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①13 日志第 13 条 · exit 0 · step 75（turn 2）
+
+**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
+
+**工具返回**（逐字）：
+```
+**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
+
+1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
+2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
+3	//! Integration tests: treat the README Control/Button tree as a real host and
+4	//! verify the generated plan, registration, the parent rule, grafting, the
+5	//! out-of-project implementation, and the release-time static plan.
+6	
+7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
+8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
+9	use nichlink_toolchain::runtime::registry_core::lexicon;
+10	use nichlink_toolchain::runtime::registry_core::{
+11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
+12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
+13	};
+14	use nichlink_toolchain::runtime::{
+15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
+16	};
+17	
+18	/// 读取某一逻辑路径上的 kind；找不到就失败。
+19	/// Read the kind at a logical path, failing when the path is absent.
+20	fn kind_at(registry: &Registry, wanted: &str) -> String {
+21	    registry
+22	        .depth_first()
+23	        .iter()
+24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
+25	        .map(|info| info.kind.clone())
+26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
+27	}
+28	
+29	fn slot_plan() -> GraftPlan {
+30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
+31	        .expect("the graft command parses")
+32	}
+33	
+34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
+35	/// `source` is derived at the declaration site now, and must equal what the
+36	/// previous design injected.
+37	#[test]
+38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
+39	    let registry = base_registry();
+40	    let mut rows = registry
+41	        .depth_first()
+42	        .iter()
+43	        .map(|info| {
+44	            format!(
+45	                "{} kind={} source={}",
+46	                registry.path_for(info.id).unwrap_or_default(),
+47	                info.kind,
+48	                info.source.portable_file()
+49	            )
+50	        })
+51	        .collect::<Vec<_>>();
+52	    rows.sort();
+53	
+54	    assert_eq!(
+55	        rows,
+56	        [
+57	            "root/control kind=Control source=control/control.rs",
+58	            "root/control/button kind=Button source=control/object/button/button.rs",
+59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
+60	        ]
+61	    );
+62	}
+63	
+64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
+65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
+66	/// 出厂的那条路径，而不只是单元测试里的形状。
+67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
+68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
+69	/// All three built-in faces take that shape, so this pins the shipped path, not
+70	/// only a shape in a unit test.
+71	#[test]
+72	fn handle_faces_record_plain_default_preset_and_parts_names() {
+73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
+74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
+75	    assert_eq!(
+76	        control_button::control::object::button::REGISTRATION.preset,
+77	        "NoPreset"
+78	    );
+79	    assert_eq!(
+80	        control_button::control::object::button::REGISTRATION.parts,
+81	        "NoParts"
+82	    );
+83	    assert_eq!(
+84	        control_button::control::object::slider::REGISTRATION.preset,
+85	        "NoPreset"
+86	    );
+87	    assert_eq!(
+88	        control_button::control::object::slider::REGISTRATION.parts,
+89	        "NoParts"
+90	    );
+91	}
+92	
+93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
+94	/// A leaf face loads under its own name, so its public module path and type
+95	/// name are unchanged.
+96	#[test]
+97	fn leaf_face_module_path_stays_clean() {
+98	    assert_eq!(
+99	        std::any::type_name::<control_button::control::object::button::Button>(),
+100	        "control_button::control::object::button::Button"
+101	    );
+102	}
+103	
+104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
+105	/// A folder face's items stay addressable at their original path through the
+106	/// same-named child module and its re-export.
+107	#[test]
+108	fn folder_face_items_stay_reachable() {
+109	    let _: NodeId = control_button::control::NODE_ID;
+110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
+111	    let _ = control_button::control::ControlFrame;
+112	}
+113	
+114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
+115	/// 就是仓库相对路径，而不是任何构建副本。
+116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
+117	/// recorded source is the repository-relative path rather than a build copy.
+118	#[test]
+119	fn face_sources_point_at_the_real_files() {
+120	    let registry = base_registry();
+121	    let sources = registry
+122	        .depth_first()
+123	        .iter()
+124	        .map(
+…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**该步推理**（逐字）：
+```
 All 25 answers are ≤20 lines, each has exactly one `总调用：` line and the `nonbridge:` last line ✓.
 
 Now let me update BATCHING.md with the second-batch shared calls, then send the report.
@@ -671,7 +1398,7 @@ Note: I must not break the ≤20-line limit: s3 is 11 lines, g1 17 → +1 line e
 Let me write the patch.
 ```
 
-### ①9 日志第 9 条 · exit 0 · step 4（turn 3）
+### ①14 日志第 14 条 · exit 0 · step 4（turn 3）
 
 **命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
 
@@ -853,565 +1580,6 @@ Hmm, so (A) with the ledger twist: keep the door open on whether the new sibling
 
 The BRIEF §3's fc-specific requirement: "`fc` 另加：**台账必须还在**，并写清对既有条目的处置与证据" — "the ledger must still be there, and write clearly the disposition of existing entries
 …[推理：此处截断，全文 9424 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①10 日志第 10 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node src/control/object/slider/slider.rs`
-
-**工具返回**（逐字）：
-```
-**src/control/object/slider/slider.rs** — 28 lines, 2 symbols · used by 1 file: src/control/control.rs
-
-1	//! Slider 叶子面：Control 的第二个直接子对象，用来演示同一父级下的兄弟区间替换。
-2	//! Slider leaf face: Control's second direct child, used to demonstrate a graft
-3	//! over a contiguous range of siblings under one parent.
-4	
-5	use crate::control::{ControlFrame, ControlHandle};
-6	use nichlink_toolchain::runtime::{ContractId, FlowContract};
-7	
-8	pub struct Slider;
-9	
-10	impl ControlHandle for Slider {
-11	    fn paint(&self) -> ControlFrame {
-12	        ControlFrame
-13	    }
-14	}
-15	
-16	crate::control_object! {
-17	    kind: Slider,
-18	    exports: ["control.render"],
-19	    parent: crate::control::NODE_ID,
-20	    handle_contracts: [crate::control::ControlHandle],
-21	    flow: FlowContract::new(
-22	        ContractId::new("control.render.v1"),
-23	        1,
-24	        "ControlInput",
-25	        "ControlFrame",
-26	    ),
-27	}
-28
-```
-
-### ①11 日志第 11 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
-
-**工具返回**（逐字）：
-```
-**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
-
-1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
-2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
-3	//! Integration tests: treat the README Control/Button tree as a real host and
-4	//! verify the generated plan, registration, the parent rule, grafting, the
-5	//! out-of-project implementation, and the release-time static plan.
-6	
-7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
-11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
-12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
-13	};
-14	use nichlink_toolchain::runtime::{
-15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
-16	};
-17	
-18	/// 读取某一逻辑路径上的 kind；找不到就失败。
-19	/// Read the kind at a logical path, failing when the path is absent.
-20	fn kind_at(registry: &Registry, wanted: &str) -> String {
-21	    registry
-22	        .depth_first()
-23	        .iter()
-24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
-25	        .map(|info| info.kind.clone())
-26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
-27	}
-28	
-29	fn slot_plan() -> GraftPlan {
-30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
-31	        .expect("the graft command parses")
-32	}
-33	
-34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
-35	/// `source` is derived at the declaration site now, and must equal what the
-36	/// previous design injected.
-37	#[test]
-38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
-39	    let registry = base_registry();
-40	    let mut rows = registry
-41	        .depth_first()
-42	        .iter()
-43	        .map(|info| {
-44	            format!(
-45	                "{} kind={} source={}",
-46	                registry.path_for(info.id).unwrap_or_default(),
-47	                info.kind,
-48	                info.source.portable_file()
-49	            )
-50	        })
-51	        .collect::<Vec<_>>();
-52	    rows.sort();
-53	
-54	    assert_eq!(
-55	        rows,
-56	        [
-57	            "root/control kind=Control source=control/control.rs",
-58	            "root/control/button kind=Button source=control/object/button/button.rs",
-59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
-60	        ]
-61	    );
-62	}
-63	
-64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
-65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
-66	/// 出厂的那条路径，而不只是单元测试里的形状。
-67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
-68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
-69	/// All three built-in faces take that shape, so this pins the shipped path, not
-70	/// only a shape in a unit test.
-71	#[test]
-72	fn handle_faces_record_plain_default_preset_and_parts_names() {
-73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
-74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
-75	    assert_eq!(
-76	        control_button::control::object::button::REGISTRATION.preset,
-77	        "NoPreset"
-78	    );
-79	    assert_eq!(
-80	        control_button::control::object::button::REGISTRATION.parts,
-81	        "NoParts"
-82	    );
-83	    assert_eq!(
-84	        control_button::control::object::slider::REGISTRATION.preset,
-85	        "NoPreset"
-86	    );
-87	    assert_eq!(
-88	        control_button::control::object::slider::REGISTRATION.parts,
-89	        "NoParts"
-90	    );
-91	}
-92	
-93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
-94	/// A leaf face loads under its own name, so its public module path and type
-95	/// name are unchanged.
-96	#[test]
-97	fn leaf_face_module_path_stays_clean() {
-98	    assert_eq!(
-99	        std::any::type_name::<control_button::control::object::button::Button>(),
-100	        "control_button::control::object::button::Button"
-101	    );
-102	}
-103	
-104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
-105	/// A folder face's items stay addressable at their original path through the
-106	/// same-named child module and its re-export.
-107	#[test]
-108	fn folder_face_items_stay_reachable() {
-109	    let _: NodeId = control_button::control::NODE_ID;
-110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
-111	    let _ = control_button::control::ControlFrame;
-112	}
-113	
-114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
-115	/// 就是仓库相对路径，而不是任何构建副本。
-116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
-117	/// recorded source is the repository-relative path rather than a build copy.
-118	#[test]
-119	fn face_sources_point_at_the_real_files() {
-120	    let registry = base_registry();
-121	    let sources = registry
-122	        .depth_first()
-123	        .iter()
-124	        .map(
-…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①12 日志第 12 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/static_plan_allocations.rs`
-
-**工具返回**（逐字）：
-```
-**tests/static_plan_allocations.rs** — 310 lines, 14 symbols · no other indexed file depends on it
-
-1	//! Allocation counts for the release read path, measured instead of argued.
-2	//! 发布读路径的分配计数：实测，而不是论证。
-3	
-4	// `README.md`'s cost table makes three claims this file settles:
-5	// `README.md` 的成本表有三条断言由本文件定案：
-6	//
-7	// - "Read-only built-in topology | Static `StaticFace` slice | No startup
-8	//   allocation": every read of the built-in plan must allocate nothing at all.
-9	// - "只读内置拓扑 | 静态 `StaticFace` 切片 | 启动时零分配"：对内置计划的每次读取都必须
-10	//   完全不分配。
-11	// - "Build-declared static graft | Static selector slice inside `StaticPlan` |
-12	//   Reading the declaration allocates nothing": same, for `grafts()`.
-13	// - "构建期声明的静态 graft | `StaticPlan` 内的静态选择器切片 | 读该声明不分配"：同上，
-14	//   针对 `grafts()`。
-15	// - "`overlay_static` allocates no plan but still performs contract, admission,
-16	//   and connector validation once": the honest reading, recorded in
-17	//   `docs/audit-graft-vs-readme.md` as C17, is "allocates no *plan*" rather than
-18	//   "allocates nothing" — so this file measures the static overlay against the
-19	//   dynamic one over the same cut rather than asserting zero.
-20	// - "`overlay_static` 不分配计划，但仍做一次合同/接纳/连接器校验"：诚实的读法（记在
-21	//   `docs/audit-graft-vs-readme.md` 的 C17）是"不分配**计划**"，而不是"什么都不分配"——
-22	//   因此本文件不假设零，而是在同一个切口上把静态 overlay 与动态 overlay 对比测量。
-23	//
-24	// Why a counting global allocator rather than a profiler: the claim is a count of
-25	// heap allocations on one code path, and `dhat` or `valgrind` are not installed
-26	// here. A counting allocator measures exactly that quantity and needs no external
-27	// tool. It is process-global, which is why this file holds only two tests: they
-28	// run in parallel with each other in the same binary, so each one brackets its
-29	// measurement and asserts on it immediately, and the second test's assertion is a
-30	// comparison of two measurements taken under the same conditions.
-31	// 为什么用计数式全局分配器而不是 profiler：这条断言就是某条代码路径上堆分配的次数，而本环境
-32	// 没有装 `dhat` 或 `valgrind`。计数分配器测量的正是这个量，且不需要外部工具。它是进程全局的，
-33	// 因此本文件只放两条测试：它们在同一二进制里彼此并行，所以每条都用自己的括号夹住测量并立刻断言，
-34	// 第二条断言的还是同条件下两次测量的对比。
-35	
-36	use std::alloc::{GlobalAlloc, Layout, System};
-37	use std::sync::atomic::{AtomicUsize, Ordering};
-38	
-39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
-41	
-42	/// Number of successful allocations since the last reset.
-43	/// 自上次重置以来成功分配的次数。
-44	static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-45	
-46	/// Bytes of those allocations, summed.
-47	/// 这些分配的字节数之和。
-48	static BYTES: AtomicUsize = AtomicUsize::new(0);
-49	
-50	/// A `System` allocator that counts successful allocations.
-51	/// 一个统计成功分配次数的 `System` 分配器。
-52	struct Counting;
-53	
-54	// SAFETY: every method forwards to `System` unchanged and only observes the
-55	// layout size it was given; no allocation decision depends on the counters.
-56	// `dealloc` and `realloc` are not counted, because the question is how many
-57	// allocations a path performs, not how many bytes it holds at the end. A
-58	// `realloc` counts as one more allocation, which is what a growing `Vec` does.
-59	// 安全性：每个方法都原样转发给 `System`，只观察它收到的布局大小；没有任何分配决定依赖这些
-60	// 计数器。`dealloc` 与 `realloc` 不计数，因为问题是一条路径做了多少次分配，而不是它最后占多少
-61	// 字节。`realloc` 计作一次新的分配，增长中的 `Vec` 正是如此。
-62	unsafe impl GlobalAlloc for Counting {
-63	    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-64	        let pointer = unsafe { System.alloc(layout) };
-65	        if !pointer.is_null() {
-66	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-67	            BYTES.fetch_add(layout.size(), Ordering::Relaxed);
-68	        }
-69	        pointer
-70	    }
-71	
-72	    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-73	        let pointer = unsafe { System.alloc_zeroed(layout) };
-74	        if !pointer.is_null() {
-75	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-76	            BYTES.fetch_add(layout.size(), Ordering::Relaxed);
-77	        }
-78	        pointer
-79	    }
-80	
-81	    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-82	        unsafe { System.dealloc(pointer, layout) }
-83	    }
-84	
-85	    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-86	        let moved = unsafe { System.realloc(pointer, layout, new_size) };
-87	        if !moved.is_null() {
-88	            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-89	            BYTES.fetch_add(new_size, Ordering::Relaxed);
-90	        }
-91	        moved
-92	    }
-93	}
-94	
-95	#[global_allocator]
-96	static ALLOCATOR: Counting = Counting;
-97	
-98	/// Allocations and bytes performed while `body` runs, as a pair.
-99	/// `body` 运行期间发生的分配次数与字节数，成对给出。
-100	fn measure<T>(body: impl FnOnce() -> T) -> (usize, usize, T) {
-101	    let allocations = ALLOCATIONS.load(Ordering::SeqCst);
-102	    let bytes = BYTES.load(Ordering::SeqCst);
-103	    let value = body();
-104	    (
-105	        ALLOCATIONS.load(Ord
-…[工具返回：此处截断，全文 14805 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①13 日志第 13 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
-
-**工具返回**（逐字）：
-```
-**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
-
-1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
-2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
-3	//! Integration tests: treat the README Control/Button tree as a real host and
-4	//! verify the generated plan, registration, the parent rule, grafting, the
-5	//! out-of-project implementation, and the release-time static plan.
-6	
-7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
-11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
-12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
-13	};
-14	use nichlink_toolchain::runtime::{
-15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
-16	};
-17	
-18	/// 读取某一逻辑路径上的 kind；找不到就失败。
-19	/// Read the kind at a logical path, failing when the path is absent.
-20	fn kind_at(registry: &Registry, wanted: &str) -> String {
-21	    registry
-22	        .depth_first()
-23	        .iter()
-24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
-25	        .map(|info| info.kind.clone())
-26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
-27	}
-28	
-29	fn slot_plan() -> GraftPlan {
-30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
-31	        .expect("the graft command parses")
-32	}
-33	
-34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
-35	/// `source` is derived at the declaration site now, and must equal what the
-36	/// previous design injected.
-37	#[test]
-38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
-39	    let registry = base_registry();
-40	    let mut rows = registry
-41	        .depth_first()
-42	        .iter()
-43	        .map(|info| {
-44	            format!(
-45	                "{} kind={} source={}",
-46	                registry.path_for(info.id).unwrap_or_default(),
-47	                info.kind,
-48	                info.source.portable_file()
-49	            )
-50	        })
-51	        .collect::<Vec<_>>();
-52	    rows.sort();
-53	
-54	    assert_eq!(
-55	        rows,
-56	        [
-57	            "root/control kind=Control source=control/control.rs",
-58	            "root/control/button kind=Button source=control/object/button/button.rs",
-59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
-60	        ]
-61	    );
-62	}
-63	
-64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
-65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
-66	/// 出厂的那条路径，而不只是单元测试里的形状。
-67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
-68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
-69	/// All three built-in faces take that shape, so this pins the shipped path, not
-70	/// only a shape in a unit test.
-71	#[test]
-72	fn handle_faces_record_plain_default_preset_and_parts_names() {
-73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
-74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
-75	    assert_eq!(
-76	        control_button::control::object::button::REGISTRATION.preset,
-77	        "NoPreset"
-78	    );
-79	    assert_eq!(
-80	        control_button::control::object::button::REGISTRATION.parts,
-81	        "NoParts"
-82	    );
-83	    assert_eq!(
-84	        control_button::control::object::slider::REGISTRATION.preset,
-85	        "NoPreset"
-86	    );
-87	    assert_eq!(
-88	        control_button::control::object::slider::REGISTRATION.parts,
-89	        "NoParts"
-90	    );
-91	}
-92	
-93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
-94	/// A leaf face loads under its own name, so its public module path and type
-95	/// name are unchanged.
-96	#[test]
-97	fn leaf_face_module_path_stays_clean() {
-98	    assert_eq!(
-99	        std::any::type_name::<control_button::control::object::button::Button>(),
-100	        "control_button::control::object::button::Button"
-101	    );
-102	}
-103	
-104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
-105	/// A folder face's items stay addressable at their original path through the
-106	/// same-named child module and its re-export.
-107	#[test]
-108	fn folder_face_items_stay_reachable() {
-109	    let _: NodeId = control_button::control::NODE_ID;
-110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
-111	    let _ = control_button::control::ControlFrame;
-112	}
-113	
-114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
-115	/// 就是仓库相对路径，而不是任何构建副本。
-116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
-117	/// recorded source is the repository-relative path rather than a build copy.
-118	#[test]
-119	fn face_sources_point_at_the_real_files() {
-120	    let registry = base_registry();
-121	    let sources = registry
-122	        .depth_first()
-123	        .iter()
-124	        .map(
-…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①14 日志第 14 条 · exit 0 · 会话里未定位（共享/装置步）
-
-**命令**：`cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && codegraph node tests/registry.rs`
-
-**工具返回**（逐字）：
-```
-**tests/registry.rs** — 766 lines, 28 symbols · no other indexed file depends on it
-
-1	//! 集成测试：把 README 那棵 Control / Button 树当成真实宿主，逐项验证构建期
-2	//! 生成、注册、父级规则、graft、项目外实现和发布态静态计划。
-3	//! Integration tests: treat the README Control/Button tree as a real host and
-4	//! verify the generated plan, registration, the parent rule, grafting, the
-5	//! out-of-project implementation, and the release-time static plan.
-6	
-7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
-11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
-12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
-13	};
-14	use nichlink_toolchain::runtime::{
-15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
-16	};
-17	
-18	/// 读取某一逻辑路径上的 kind；找不到就失败。
-19	/// Read the kind at a logical path, failing when the path is absent.
-20	fn kind_at(registry: &Registry, wanted: &str) -> String {
-21	    registry
-22	        .depth_first()
-23	        .iter()
-24	        .find(|info| registry.path_for(info.id).as_deref() == Some(wanted))
-25	        .map(|info| info.kind.clone())
-26	        .unwrap_or_else(|| panic!("no registration face at `{wanted}`"))
-27	}
-28	
-29	fn slot_plan() -> GraftPlan {
-30	    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
-31	        .expect("the graft command parses")
-32	}
-33	
-34	/// `source` 现在由声明点推导，但必须与旧方案注入的值完全相同。
-35	/// `source` is derived at the declaration site now, and must equal what the
-36	/// previous design injected.
-37	#[test]
-38	fn built_in_tree_has_the_expected_paths_and_derived_sources() {
-39	    let registry = base_registry();
-40	    let mut rows = registry
-41	        .depth_first()
-42	        .iter()
-43	        .map(|info| {
-44	            format!(
-45	                "{} kind={} source={}",
-46	                registry.path_for(info.id).unwrap_or_default(),
-47	                info.kind,
-48	                info.source.portable_file()
-49	            )
-50	        })
-51	        .collect::<Vec<_>>();
-52	    rows.sort();
-53	
-54	    assert_eq!(
-55	        rows,
-56	        [
-57	            "root/control kind=Control source=control/control.rs",
-58	            "root/control/button kind=Button source=control/object/button/button.rs",
-59	            "root/control/slider kind=Slider source=control/object/slider/slider.rs",
-60	        ]
-61	    );
-62	}
-63	
-64	/// 自定义 `handle` 且省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的
-65	/// `"$crate :: NoPreset"` 字面 token；三个内置面都是这个形态，因此这条断言钉住的是实际
-66	/// 出厂的那条路径，而不只是单元测试里的形状。
-67	/// A face with a custom `handle` and an omitted `preset`/`parts` must record the
-68	/// plain default names, not the expanded `"$crate :: NoPreset"` literal tokens.
-69	/// All three built-in faces take that shape, so this pins the shipped path, not
-70	/// only a shape in a unit test.
-71	#[test]
-72	fn handle_faces_record_plain_default_preset_and_parts_names() {
-73	    assert_eq!(control_button::control::REGISTRATION.preset, "NoPreset");
-74	    assert_eq!(control_button::control::REGISTRATION.parts, "NoParts");
-75	    assert_eq!(
-76	        control_button::control::object::button::REGISTRATION.preset,
-77	        "NoPreset"
-78	    );
-79	    assert_eq!(
-80	        control_button::control::object::button::REGISTRATION.parts,
-81	        "NoParts"
-82	    );
-83	    assert_eq!(
-84	        control_button::control::object::slider::REGISTRATION.preset,
-85	        "NoPreset"
-86	    );
-87	    assert_eq!(
-88	        control_button::control::object::slider::REGISTRATION.parts,
-89	        "NoParts"
-90	    );
-91	}
-92	
-93	/// 叶子面以自身名字载入，公开模块路径和类型名都不变。
-94	/// A leaf face loads under its own name, so its public module path and type
-95	/// name are unchanged.
-96	#[test]
-97	fn leaf_face_module_path_stays_clean() {
-98	    assert_eq!(
-99	        std::any::type_name::<control_button::control::object::button::Button>(),
-100	        "control_button::control::object::button::Button"
-101	    );
-102	}
-103	
-104	/// 文件夹面的条目仍按原有路径可寻址（同名子模块 + 重导出）。
-105	/// A folder face's items stay addressable at their original path through the
-106	/// same-named child module and its re-export.
-107	#[test]
-108	fn folder_face_items_stay_reachable() {
-109	    let _: NodeId = control_button::control::NODE_ID;
-110	    let _ = std::marker::PhantomData::<control_button::control::Control>;
-111	    let _ = control_button::control::ControlFrame;
-112	}
-113	
-114	/// 面文件以 `//!` 开头（见 `src/control/control.rs`）仍然编译，并且源码路径
-115	/// 就是仓库相对路径，而不是任何构建副本。
-116	/// Face files keep their `//!` header (see `src/control/control.rs`), and the
-117	/// recorded source is the repository-relative path rather than a build copy.
-118	#[test]
-119	fn face_sources_point_at_the_real_files() {
-120	    let registry = base_registry();
-121	    let sources = registry
-122	        .depth_first()
-123	        .iter()
-124	        .map(
-…[工具返回：此处截断，全文 32342 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
 ### ①15 日志第 15 条 · exit 0 · 会话里未定位（共享/装置步）

@@ -2,11 +2,11 @@
 
 **题面**：五族：「这个对象内部还不够。」
 
-> 仪器调用 **6** · 步 5 · 输出 8,188 tok · 推理 18,348 字符 · 累计上下文 1,493,504
+> 仪器调用 **6** · 步 6 · 输出 9,196 tok · 推理 21,590 字符 · 累计上下文 1,776,768
 
 ## 仪器调用序列（工具给了什么 + 当时 agent 在想什么）
 
-### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph init .`  · exit 0 · step 53（turn 2）
+### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph init .`  · exit 0 · step 39（turn 2）
 
 **工具返回**：
 ```
@@ -28,26 +28,48 @@ Linking dynamic dispatch...
 
 **当时推理**：
 ```
-Now g3 is perfect:
-- Gate green (default: 6 ok, 0 failed) ✓
-- All three observable artifacts byte-identical before/after ✓ (tree, health_check literally; graft_record modulo the temp-dir PID) — including the NodeId hashes.
-- The internal layer (ButtonPreset/ButtonParts with required/provided ["label"]) is declared and recorded in REGISTRATION.contract ✓, pinned by the updated test.
+Now fb and g3 (same clean host tree): add an internal layer (preset/parts) to the Button face.
 
-Let me also run --all-features once for g3 (the earlier run was pre-move; let me redo for the final state).
+Design (following `toolchain/tests/runtime_face_preset_parts.rs`):
 
-Then write fb and g3 answers, then tackle fa (the new object).
+In `src/control/object/button/button.rs`:
+```rust
+use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 
-Actually, time/context is getting long. Let me be efficient: run g3 --all-features now (1 call), then write both answers, then fa.
+/// Button 的内部结构：它自己声明的那一层零件。
+/// The Button's internal structure: the parts layer it declares for itself.
+pub struct ButtonParts;
 
-For fb, note: fb's final state has the layer *above* the declaration (health_check would show the line shift) — that's fine for fb's question (no invariance requirement), but for consistency I could also move it below in fb. Hmm: fb's deliverable is "内部还不够" — the layer + gate green. The line shift is irrelevant. I'll leave fb as is (and mention the same technique). Hmm, but for cleanliness let me apply the same change to fb (move below + single-line import) so both trees are consistent, then re-verify fb's gate + tree (fb's gate was already green; moving the block requires a re-run).
+impl PresetContract for ButtonParts { ... }
+```
+Hmm, decide the Output types. Let me follow the toolchain's own probe: `ProbePreset::Output = ()`, `ProbeParts::Output = ()` — the simplest conforming pair. For a *meaningful* internal layer, let me model the label:
+```rust
+/// The parts a Button is made of, as this face declares them.
+pub struct ButtonParts { pub label: String }
 
-Hmm, is consistency worth 1 more cargo run? It also makes fb's answer stronger (I can report the same invariance). Let me do it: apply the same rearrangement to fb, re-run the gate.
+impl PresetContract for ButtonPreset {
+    type Output = ButtonParts;
+    const REQUIRED_PARTS: &'static [&'static str] = &["label"];
+}
+impl PartsContract for ButtonParts {
+    type Output = ButtonParts;
+    const PROVIDED_PARTS: &'static [&'static str] = &["label"];
+}
+```
+Wait: for the contract to be meaningful, the preset requires the parts that the parts type supplies:
+- preset requires ["label"] (the label must be given to construct a Button)
+- parts provide ["label"] (the label part comes from ButtonParts)
+- both construct `ButtonParts` (the object's inside).
 
-Both answers then report: layer be
-…[推理：此处截断，全文 1663 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+And declare in the macro: `preset: ButtonPreset, parts: ButtonParts,`.
+
+Hmm, `ButtonParts` h
+…[推理：此处截断，全文 4875 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph files`  · exit 0 · step 56（turn 2）
+**当时输出**：`Now **fb** and **g3** (add an internal layer to the Button face). Checking the observability tools first:`
+
+### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph files`  · exit 0 · step 53（turn 2）
 
 **工具返回**：
 ```
@@ -78,20 +100,26 @@ Project Structure (13 files):
 
 **当时推理**：
 ```
-My computation matches the verifier's number exactly: **106,223 B** for the 15 questions ✓ (excluding my CMD/EXIT bookkeeping lines and nonbridge output). 
+Now g3 is perfect:
+- Gate green (default: 6 ok, 0 failed) ✓
+- All three observable artifacts byte-identical before/after ✓ (tree, health_check literally; graft_record modulo the temp-dir PID) — including the NodeId hashes.
+- The internal layer (ButtonPreset/ButtonParts with required/provided ["label"]) is declared and recorded in REGISTRATION.contract ✓, pinned by the updated test.
 
-Note: `fa` shows 63,745 B of codegraph output — that's from my exploration of the fa/g3 tree (the big `files`/`node tests/registry.rs` outputs, which I read while exploring for both fa and g3). Hmm, that's attributed to fa's log but partly served g3. I'll note that in BATCHING.md (shared exploration).
+Let me also run --all-features once for g3 (the earlier run was pre-move; let me redo for the final state).
 
-Now let me write fb and g3 answers, then do fa.
+Then write fb and g3 answers, then tackle fa (the new object).
 
-Let me write fb's answer now with the 总调用 line.
+Actually, time/context is getting long. Let me be efficient: run g3 --all-features now (1 call), then write both answers, then fa.
 
-fb numbers: codegraph 6 calls (6 ok / 0 refused), 2 init → 4 steps; nonbridge 8 / 16,520 B. Hmm, fb's nb=8/16520 — that includes the baseline tree run, the failed patch test run, the successful test run, the tree-after run, the all-features run, the second all-features run... Let me recount: fb nonbridge calls: (1) baseline tree, (2) cargo test after patch (failed), (3) tree after, (4) all-features, (5) rearranged all-features... plus pre-restoration runs (the earlier premise-check cargo test + diff). The log includes earlier entries. I'll report "本题日志内 nonbridge 8 次 / 16,520 B（含复位前的题目态自检）".
+For fb, note: fb's final state has the layer *above* the declaration (health_check would show the line shift) — that's fine for fb's question (no invariance requirement), but for consistency I could also move it below in fb. Hmm: fb's deliverable is "内部还不够" — the layer + gate green. The line shift is irrelevant. I'll leave fb as is (and mention the same technique). Hmm, but for cleanliness let me apply the same change to fb (move below + single-line import) so both trees are consistent, then re-verify fb's gate + tree (fb's gate was already green; moving the block requires a re-run).
 
-Let me write the files.
+Hmm, is consistency worth 1 more cargo run? It also makes fb's answer stronger (I can report the same invariance). Let me do it: apply the same rearrangement to fb, re-run the gate.
+
+Both answers then report: layer be
+…[推理：此处截断，全文 1663 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph init .`  · exit 0 · step 72（turn 2）
+### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph init .`  · exit 0 · step 56（turn 2）
 
 **工具返回**：
 ```
@@ -111,7 +139,22 @@ Linking dynamic dispatch...
 └  Done
 ```
 
-### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph node examples/tree.rs`  · exit 0 · 共享/装置步
+**当时推理**：
+```
+My computation matches the verifier's number exactly: **106,223 B** for the 15 questions ✓ (excluding my CMD/EXIT bookkeeping lines and nonbridge output). 
+
+Note: `fa` shows 63,745 B of codegraph output — that's from my exploration of the fa/g3 tree (the big `files`/`node tests/registry.rs` outputs, which I read while exploring for both fa and g3). Hmm, that's attributed to fa's log but partly served g3. I'll note that in BATCHING.md (shared exploration).
+
+Now let me write fb and g3 answers, then do fa.
+
+Let me write fb's answer now with the 总调用 line.
+
+fb numbers: codegraph 6 calls (6 ok / 0 refused), 2 init → 4 steps; nonbridge 8 / 16,520 B. Hmm, fb's nb=8/16520 — that includes the baseline tree run, the failed patch test run, the successful test run, the tree-after run, the all-features run, the second all-features run... Let me recount: fb nonbridge calls: (1) baseline tree, (2) cargo test after patch (failed), (3) tree after, (4) all-features, (5) rearranged all-features... plus pre-restoration runs (the earlier premise-check cargo test + diff). The log includes earlier entries. I'll report "本题日志内 nonbridge 8 次 / 16,520 B（含复位前的题目态自检）".
+
+Let me write the files.
+```
+
+### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && codegraph node examples/tree.rs`  · exit 0 · step 72（turn 2）
 
 **工具返回**：
 ```

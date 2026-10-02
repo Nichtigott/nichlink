@@ -2,11 +2,11 @@
 
 **题面**：hardbug h4：单文件多算法——一个文件三套算法，恰一支写反、恰一支不可达。
 
-> 仪器调用 **9** · 步 2 · 输出 3,695 tok · 推理 8,429 字符 · 累计上下文 339,328
+> 仪器调用 **9** · 步 3 · 输出 4,699 tok · 推理 11,300 字符 · 累计上下文 466,688
 
 ## 仪器调用序列（工具给了什么 + 当时 agent 在想什么）
 
-### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph init .`  · exit 0 · step 63（turn 1）
+### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph init .`  · exit 0 · step 40（turn 1）
 
 **工具返回**：
 ```
@@ -28,6 +28,72 @@ Linking dynamic dispatch...
 
 **当时推理**：
 ```
+10 of 15 done (s1-s8, g1, g2). Now:
+- g4 (host tree with crates, "哪些臂是没有任何执行能进入的")
+- h1-supply-chain, h2-claim-unkept, h3-cross-file-chain (host+graft)
+- h4-one-file-many-algorithms (tiny: 4 files)
+
+Let me start with h4 (smallest): tree with src/lib.rs, src/model/entry.rs, src/model/model.rs, tests/postable.rs. Question: one algorithm in one file does the opposite of its docs, and no test covers that branch.
+
+Let me read the tree via codegraph. Also h1-supply-chain/h2/h3 have the same host/graft skeleton with different injections.
+
+Plan for h4: node the 4 files (4 calls) + maybe callees.
+
+Let me also plan the three h-classes: each has host/ (10 object files + lib.rs + control.rs + registry_rule.rs + tests/offsets.rs or shipped.rs) and graft/ (10 files + lib.rs). The classes:
+- h1-supply-chain: "one sibling calls a different family of names than its siblings do" → the symptom: offsets test fails with a total no single widget explains. The defect: one of the host object files (or graft) calls a different family of names (e.g. calls `gauge_fast::…` vs `…::gauge_slow`, or uses the wrong trait method). Let me find it: compare the 10 object files for a family difference, e.g. one file calls `X_fast::new()` while others call something else. Since they're similar, I can look for the odd one out via codegraph (callees of each object) or by reading.
+- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.nichlink/adop
+…[推理：此处截断，全文 2487 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+**当时输出**：`Now the hardbug class trees. Starting with **h4** (smallest):`
+
+### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph files`  · exit 0 · step 41（turn 1）
+
+**工具返回**：
+```
+Project Structure (4 files):
+
+├── src
+│   ├── model
+│   │   ├── entry.rs (rust, 10 symbols)
+│   │   └── model.rs (rust, 1 symbols)
+│   └── lib.rs (rust, 1 symbols)
+└── tests
+    └── postable.rs (rust, 4 symbols)
+```
+
+**当时推理**：
+```
+h4 analysis:
+
+Three algorithms in one file (src/model/entry.rs): 
+1. `zero_arm()` (line 30) — an arm chooser: returns `ZeroArm::Post` always.
+2. `postable()` (line 38) — contract: "postable when it carries a receipt, and a zero entry never is". The implementation returns true for any receipted entry because `zero_arm()` returns `Post` unconditionally — so `ZeroArm::Refuse` branch at line 44 is DEAD (never taken), and the contract "a zero entry never is [postable]" is violated: `Entry::new("a", 0, true).postable()` → has_receipt true, zero_arm → Post → **true** (should be false).
+3. `signed()` (line 53) — magnitude, always non-negative; matches its doc.
+
+So: exactly one branch inverted = the `zero_arm()` should decide by amount: `if self.amount == 0 { ZeroArm::Refuse } else { ZeroArm::Post }`. Let me check the class statement: "three algorithms in one file, exactly one branch inverted and exactly one branch uncovered". 
+
+The `zero_arm()` function: its doc says "Which arm decides a zero amount" — but it ignores `amount` entirely and always returns `Post`. So the inverted/omitted logic is there: it should return `Refuse` when amount == 0.
+
+Alternatively, the "inverted branch" could be in `signed()`: `if self.amount < 0 { -self.amount }`: for i64::MIN, `-i64::MIN` overflows — but that's not "inverted". The doc says "Always non-negative: a debit prints as its size, never with a sign" — implementation matches. Hmm, wait: is `signed` inverted? For amount = -5 → 5 ✓ non-negative. OK 
+…[推理：此处截断，全文 2871 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/lib.rs`  · exit 0 · step 63（turn 1）
+
+**工具返回**：
+```
+**src/lib.rs** — 5 lines, 0 symbols · no other indexed file depends on it
+
+1	//! A ledger model.
+2	
+3	#[path = "model/model.rs"]
+4	pub mod model;
+5
+```
+
+**当时推理**：
+```
 Excellent — decisive runtime evidence for h4:
 - The compiler itself warns: `variant 'Refuse' is never constructed` at entry.rs:9 — that's the "one branch uncovered/unreachable" confirmed by rustc ✓✓. 
 - Runtime: `zero+receipt postable = true` (contract says false) ✗; `zero-no-receipt postable = false` (early return on !has_receipt) — so the Refuse arm is unreachable for another reason too (the receipt check precedes); `five+receipt = true` ✓; `five-no-receipt = false` ✓; `signed(-5) = 5` ✓; `normalized(" A ") = "a"` ✓ (matches doc).
@@ -44,19 +110,15 @@ mechanism: postable() = `if !has_receipt { false }` else match zero_arm() { Post
 …[推理：此处截断，全文 2529 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph files`  · exit 0 · step 67（turn 1）
+### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/model.rs`  · exit 0 · step 67（turn 1）
 
 **工具返回**：
 ```
-Project Structure (4 files):
+**src/model/model.rs** — 3 lines, 0 symbols · no other indexed file depends on it
 
-├── src
-│   ├── model
-│   │   ├── entry.rs (rust, 10 symbols)
-│   │   └── model.rs (rust, 1 symbols)
-│   └── lib.rs (rust, 1 symbols)
-└── tests
-    └── postable.rs (rust, 4 symbols)
+1	#[path = "entry.rs"]
+2	pub mod entry;
+3
 ```
 
 **当时推理**：
@@ -95,49 +157,7 @@ Content plan:
 …[推理：此处截断，全文 2336 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/lib.rs`  · exit 0 · step 72（turn 1）
-
-**工具返回**：
-```
-**src/lib.rs** — 5 lines, 0 symbols · no other indexed file depends on it
-
-1	//! A ledger model.
-2	
-3	#[path = "model/model.rs"]
-4	pub mod model;
-5
-```
-
-**当时推理**：
-```
-All checks pass:
-- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
-- All logs have matched CMD/EXIT pairs.
-- Nothing written under target/round9 ✓.
-
-Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
-
-Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
-
-Now let me finish:
-1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
-
-Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first
-…[推理：此处截断，全文 5635 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/model.rs`  · exit 0 · 共享/装置步
-
-**工具返回**：
-```
-**src/model/model.rs** — 3 lines, 0 symbols · no other indexed file depends on it
-
-1	#[path = "entry.rs"]
-2	pub mod entry;
-3
-```
-
-### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/entry.rs`  · exit 0 · 共享/装置步
+### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node src/model/entry.rs`  · exit 0 · step 72（turn 1）
 
 **工具返回**：
 ```
@@ -207,6 +227,24 @@ Wait — also I must first mark in_progress (I never did that! I claimed, then w
 62	    }
 63	}
 64
+```
+
+**当时推理**：
+```
+All checks pass:
+- 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
+- All logs have matched CMD/EXIT pairs.
+- Nothing written under target/round9 ✓.
+
+Wait, one issue: the `find ../round9 -newermt ...` returned empty — good. But hold on, does that mean nothing under round9 changed at all? The captain said they're restoring trees; if they restored while my find ran... The find output was empty, meaning no files under round9 (excluding target/ and .git/) were modified after 22:55. Hmm, but the trees were modified at 22:50-22:51 (before 22:55) ✓. Fine — and my writes are all in probe-cg26 ✓.
+
+Hmm, but interesting: the captain said they were restoring the 11 trees; maybe they haven't yet.
+
+Now let me finish:
+1. Update the task: in_progress → completed with a precise output, acceptanceResults/commandsRun (this is a "work" kind task, not review — the update_task schema asks for acceptanceResults and commandsRun for implementation/repair/verification/integration kinds; kind=work here. The instruction says: "Quality kinds must submit structured fields: review/requirements... implementation/repair/verification/integration need acceptanceResults and commandsRun". This task is kind=work → not strictly required. But providing acceptance/commands evidence is good practice and harmless. I'll include a few acceptanceResults entries and commandsRun entries.
+
+Wait — also I must first mark in_progress (I never did that! I claimed, then worked; the rules say "Mark in_progress first
+…[推理：此处截断，全文 5635 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
 ### ①6 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h4-one-file-many-algorithms && codegraph node tests/postable.rs`  · exit 0 · 共享/装置步

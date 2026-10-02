@@ -2,11 +2,11 @@
 
 **题面**：hardbug h2：采信未落实——真台账 + 一个同族只缺一条声明 + 一条指纹失效。
 
-> 仪器调用 **7** · 步 5 · 输出 10,418 tok · 推理 28,162 字符 · 累计上下文 1,041,024
+> 仪器调用 **7** · 步 6 · 输出 13,069 tok · 推理 34,906 字符 · 累计上下文 1,201,280
 
 ## 仪器调用序列（工具给了什么 + 当时 agent 在想什么）
 
-### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph init .`  · exit 0 · step 60（turn 1）
+### ①1 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph init .`  · exit 0 · step 57（turn 1）
 
 **工具返回**：
 ```
@@ -28,20 +28,17 @@ Linking dynamic dispatch...
 
 **当时推理**：
 ```
-Now h2-claim-unkept. Content:
+None of my hypotheses match `edc72845…`. So the fingerprint scheme is something else (likely the toolchain's own NodeId hash — e.g. sha256 over the registration-face record: file path + line + kind + ... in some canonical form defined in kernel/src/registry_core/identity).
 
-① 症状：树能编译、测试全绿（offsets 1 passed），但台账里两条记录写了同一个指纹，而其中一个同族少了一条声明。
-② `root cause`：
-   (a) 台账失效条目 = `host/.nichlink/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
-   (b) 少一条声明的兄弟 = `host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 kind/exports/parent 三条，缺 `handle_contracts: [crate::control::ControlHandle],`（参照 `button.rs:23`）。
-   `mechanism`：约束来自 `control.rs:13-16`（"The interface every direct child must implement"）——每个兄弟在自己的注册面里复述一遍 `handle_contracts`；spinner 少了这一条，而 `registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 handle_contracts ⇒ 缺失不被门禁抓到，测试全绿。
-③ `fix`：spinner.rs:23 前补 `handle_contracts: [crate::control::ControlHandle],`；台账里把 panel 那条的指纹按现存字节重录（或删除该失效条目）。不动 `control.rs`、不动 `registry_rule.rs`、不动 offsets 测试。
-④ `counter-proof`：`diff` 把 8 个兄弟逐个与 button 比，只有 spinner 多出一个"缺行"hunk（其它 7 个只差名字替换）⇒ "恰好缺一条"是可核对的；台账侧：若两条记录其实都还描述字节，指纹就不该相同而文件字节不同（两个 sha256 都算过）；若失效的是 button 那条，panel 那条的 note/time 就失去意义——两条互斥，note 与时间戳指向 panel。
-   `evidence`：`cat host/.nichlink/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
-…[推理：此处截断，全文 2305 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+Can I determine it without grepping the workspace? I could use the session's codegraph MCP tool on the workspace (allowed by my toolset, but would contaminate the frozen-CLI-only arm). Hmm.
+
+Alternatively, reason from the brief: the h2 class explicitly says: "真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目" — "one ledger entry whose fingerprint has lapsed". The ledger's own note distinguishes them: button = "the reference sibling shape ... the shape every sibling follows"; panel = "recorded before the panel was rewritten". Since both entries carry the *same* fingerprint and the two files differ, at most one can be current. The panel's note says it was recorded before a rewrite ⇒ the panel's entry is the lapsed one; the button's entry is the specimen ("真标本"), i.e. its fingerprint is the one that matches the button's current shape.
+
+That's a sound diagnosis without needing the exact hash function: the evidence is that the two fingerprints are identical while the two named files' bytes differ (sha256 06c45576 vs d886e9b0 per file bytes), so the ledger cannot describe both; and the panel entry's own note says it predates the rewrite ⇒ the panel entry no longer describes the bytes it names (its fingerprint equals the button's, 
+…[推理：此处截断，全文 6043 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph files`  · exit 0 · step 65（turn 1）
+### ①2 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph files`  · exit 0 · step 60（turn 1）
 
 **工具返回**：
 ```
@@ -92,19 +89,20 @@ Project Structure (24 files):
 
 **当时推理**：
 ```
-All answers are ≤20 lines ✓. Step counts are recorded.
+Now h2-claim-unkept. Content:
 
-Now the supporting docs. Note h2 shows nb=2 but the answer says 4 nonbridge calls — because two of them (the `diff` per-sibling and the earlier `cat`) — let me check: for h2 the logged nb calls are: `cat entries`, `cargo test`, and...? The `sha256sum + diff` call was run with plain bash (not nb.sh) — that one wasn't logged into h2's log! Let me check: I ran `sha256sum ... ; diff ...` in a plain bash call (not via nb.sh). So it's not in the log. Similarly the ledger `cat` was logged ✓ (via nb.sh).
-
-For completeness of the record, let me append the missing nonbridge records to the logs. I can do that honestly by noting them in BATCHING.md (the call outputs are summarized there), or by re-running them through nb.sh (they're deterministic). Re-running is cleaner: the diff/sha256sum call for h2. Let me re-run that one through nb.sh so the log holds it verbatim (it's the key evidence for "exactly one missing declaration").
-
-Similarly, other plain bash calls that contained code inspection:
-- `diff -r s1 vs s2..s8` (served s2..s8) — not logged anywhere. Let me log it once (via nb.sh with a neutral id, e.g. into a shared file `logs/_shared.txt`) and reference it from BATCHING.md. Hmm, the task says per-question logs; shared calls go in batching.md. I'll log the shared diff to `logs/_shared.txt` with CMD/EXIT via nb.sh, and cite it in BATCHING.md.
-- `diff -r r1 r2|r3|r4` etc. — apparatus, logged in APPARATUS.md text. Let me also p
-…[推理：此处截断，全文 2838 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+① 症状：树能编译、测试全绿（offsets 1 passed），但台账里两条记录写了同一个指纹，而其中一个同族少了一条声明。
+② `root cause`：
+   (a) 台账失效条目 = `host/.nichlink/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
+   (b) 少一条声明的兄弟 = `host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 kind/exports/parent 三条，缺 `handle_contracts: [crate::control::ControlHandle],`（参照 `button.rs:23`）。
+   `mechanism`：约束来自 `control.rs:13-16`（"The interface every direct child must implement"）——每个兄弟在自己的注册面里复述一遍 `handle_contracts`；spinner 少了这一条，而 `registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 handle_contracts ⇒ 缺失不被门禁抓到，测试全绿。
+③ `fix`：spinner.rs:23 前补 `handle_contracts: [crate::control::ControlHandle],`；台账里把 panel 那条的指纹按现存字节重录（或删除该失效条目）。不动 `control.rs`、不动 `registry_rule.rs`、不动 offsets 测试。
+④ `counter-proof`：`diff` 把 8 个兄弟逐个与 button 比，只有 spinner 多出一个"缺行"hunk（其它 7 个只差名字替换）⇒ "恰好缺一条"是可核对的；台账侧：若两条记录其实都还描述字节，指纹就不该相同而文件字节不同（两个 sha256 都算过）；若失效的是 button 那条，panel 那条的 note/time 就失去意义——两条互斥，note 与时间戳指向 panel。
+   `evidence`：`cat host/.nichlink/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
+…[推理：此处截断，全文 2305 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/registry_rule/registry_rule.rs`  · exit 0 · step 67（turn 1）
+### ①3 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/registry_rule/registry_rule.rs`  · exit 0 · step 65（turn 1）
 
 **工具返回**：
 ```
@@ -117,6 +115,52 @@ Similarly, other plain bash calls that contained code inspection:
 5	pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
 6	    .require_exports(&["control.render"]);
 7
+```
+
+**当时推理**：
+```
+All answers are ≤20 lines ✓. Step counts are recorded.
+
+Now the supporting docs. Note h2 shows nb=2 but the answer says 4 nonbridge calls — because two of them (the `diff` per-sibling and the earlier `cat`) — let me check: for h2 the logged nb calls are: `cat entries`, `cargo test`, and...? The `sha256sum + diff` call was run with plain bash (not nb.sh) — that one wasn't logged into h2's log! Let me check: I ran `sha256sum ... ; diff ...` in a plain bash call (not via nb.sh). So it's not in the log. Similarly the ledger `cat` was logged ✓ (via nb.sh).
+
+For completeness of the record, let me append the missing nonbridge records to the logs. I can do that honestly by noting them in BATCHING.md (the call outputs are summarized there), or by re-running them through nb.sh (they're deterministic). Re-running is cleaner: the diff/sha256sum call for h2. Let me re-run that one through nb.sh so the log holds it verbatim (it's the key evidence for "exactly one missing declaration").
+
+Similarly, other plain bash calls that contained code inspection:
+- `diff -r s1 vs s2..s8` (served s2..s8) — not logged anywhere. Let me log it once (via nb.sh with a neutral id, e.g. into a shared file `logs/_shared.txt`) and reference it from BATCHING.md. Hmm, the task says per-question logs; shared calls go in batching.md. I'll log the shared diff to `logs/_shared.txt` with CMD/EXIT via nb.sh, and cite it in BATCHING.md.
+- `diff -r r1 r2|r3|r4` etc. — apparatus, logged in APPARATUS.md text. Let me also p
+…[推理：此处截断，全文 2838 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/object/spinner/spinner.rs`  · exit 0 · step 67（turn 1）
+
+**工具返回**：
+```
+**host/src/control/object/spinner/spinner.rs** — 24 lines, 3 symbols · used by 1 file: host/src/control/control.rs
+
+1	//! The spinner face.
+2	
+3	use crate::control::{ControlFrame, ControlHandle, to_local};
+4	
+5	pub struct Spinner;
+6	
+7	impl ControlHandle for Spinner {
+8	    /// Paint this widget onto the frame it was handed.
+9	    fn paint(&self) -> ControlFrame {
+10	        ControlFrame
+11	    }
+12	}
+13	
+14	/// This widget's offset, in the coordinate family its siblings use.
+15	pub fn offset(x: i32) -> i32 {
+16	    to_local(x)
+17	}
+18	
+19	crate::control_object! {
+20	    kind: Spinner,
+21	    exports: ["control.render"],
+22	    parent: crate::control::NODE_ID,
+23	}
+24
 ```
 
 **当时推理**：
@@ -155,60 +199,7 @@ Content plan:
 …[推理：此处截断，全文 2336 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①4 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/object/spinner/spinner.rs`  · exit 0 · step 68（turn 1）
-
-**工具返回**：
-```
-**host/src/control/object/spinner/spinner.rs** — 24 lines, 3 symbols · used by 1 file: host/src/control/control.rs
-
-1	//! The spinner face.
-2	
-3	use crate::control::{ControlFrame, ControlHandle, to_local};
-4	
-5	pub struct Spinner;
-6	
-7	impl ControlHandle for Spinner {
-8	    /// Paint this widget onto the frame it was handed.
-9	    fn paint(&self) -> ControlFrame {
-10	        ControlFrame
-11	    }
-12	}
-13	
-14	/// This widget's offset, in the coordinate family its siblings use.
-15	pub fn offset(x: i32) -> i32 {
-16	    to_local(x)
-17	}
-18	
-19	crate::control_object! {
-20	    kind: Spinner,
-21	    exports: ["control.render"],
-22	    parent: crate::control::NODE_ID,
-23	}
-24
-```
-
-**当时推理**：
-```
-Now BATCHING.md and PARTIAL.md, and update APPARATUS.md with the base-hash-per-question table for the 15 (the captain asked).
-
-BATCHING.md content:
-- Shared nonbridge calls (their outputs live in logs/_shared.txt unless noted):
-  1. `diff -r -x .codegraph s1 <v>` for v in s2..s8 — served s2,s3,s4,s5,s6,s7,s8 (7 questions) — output 1.1KB — logs/_shared.txt. Result: s3/s4 identical to s1; s2 diff = audit.rs:9; s5 diff = query.rs:27 + render.rs:9; s6 = model.rs:38; s7 = buckets.rs:10; s8 = render.rs:9+12.
-  2. `diff -r -x .codegraph trees/s1 trees/g4` — served g4 — 229 B — logs/g4.txt.
-  3. `sha256sum + 逐兄弟 diff` — served h2 — 1.2KB — logs/h2-claim-unkept.txt.
-  4. `cat .nichlink/adopted/entries` — served h2 (already logged).
-  5. Hash checks `node /tmp/copycheck.mjs` — apparatus + all 15 (logs/_shared.txt).
-  6. `node /tmp/treecheck.mjs` — apparatus (11 mismatches) — output in APPARATUS.md.
-- Shared *codegraph* bash batches: each codegraph invocation is logged with its own CMD/EXIT in its question's log, so token attribution stays per question even though one bash call carried several (e.g. one call carried s2+s5 calls; one carried s6+s7+s8+g2; one carried s4+g1). List them.
-
-PARTIAL.md content:
-- What's done: 15/15 of the captain-approved scope; 11 suspended.
-- Per suspended question: why (hash mismatch), what the current tree is (observed), what's needed (restored tree + re-copy + re-init), plus the observation that r1-r4 are green/identical (cargo evidence).
-- Note that the 
-…[推理：此处截断，全文 2000 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
-```
-
-### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/control.rs`  · exit 0 · step 72（turn 1）
+### ①5 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph node host/src/control/control.rs`  · exit 0 · step 68（turn 1）
 
 **工具返回**：
 ```
@@ -243,6 +234,37 @@ PARTIAL.md content:
 
 **当时推理**：
 ```
+Now BATCHING.md and PARTIAL.md, and update APPARATUS.md with the base-hash-per-question table for the 15 (the captain asked).
+
+BATCHING.md content:
+- Shared nonbridge calls (their outputs live in logs/_shared.txt unless noted):
+  1. `diff -r -x .codegraph s1 <v>` for v in s2..s8 — served s2,s3,s4,s5,s6,s7,s8 (7 questions) — output 1.1KB — logs/_shared.txt. Result: s3/s4 identical to s1; s2 diff = audit.rs:9; s5 diff = query.rs:27 + render.rs:9; s6 = model.rs:38; s7 = buckets.rs:10; s8 = render.rs:9+12.
+  2. `diff -r -x .codegraph trees/s1 trees/g4` — served g4 — 229 B — logs/g4.txt.
+  3. `sha256sum + 逐兄弟 diff` — served h2 — 1.2KB — logs/h2-claim-unkept.txt.
+  4. `cat .nichlink/adopted/entries` — served h2 (already logged).
+  5. Hash checks `node /tmp/copycheck.mjs` — apparatus + all 15 (logs/_shared.txt).
+  6. `node /tmp/treecheck.mjs` — apparatus (11 mismatches) — output in APPARATUS.md.
+- Shared *codegraph* bash batches: each codegraph invocation is logged with its own CMD/EXIT in its question's log, so token attribution stays per question even though one bash call carried several (e.g. one call carried s2+s5 calls; one carried s6+s7+s8+g2; one carried s4+g1). List them.
+
+PARTIAL.md content:
+- What's done: 15/15 of the captain-approved scope; 11 suspended.
+- Per suspended question: why (hash mismatch), what the current tree is (observed), what's needed (restored tree + re-copy + re-init), plus the observation that r1-r4 are green/identical (cargo evidence).
+- Note that the 
+…[推理：此处截断，全文 2000 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
+```
+
+### ①6 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph query REGISTRATION_RULE`  · exit 0 · step 72（turn 1）
+
+**工具返回**：
+```
+Search Results for "REGISTRATION_RULE":
+
+variable    REGISTRATION_RULE
+  host/src/control/registry_rule/registry_rule.rs:5
+```
+
+**当时推理**：
+```
 All checks pass:
 - 15 answers, all ≤20 lines, each ends with a `nonbridge:` line.
 - All logs have matched CMD/EXIT pairs.
@@ -259,17 +281,7 @@ Wait — also I must first mark in_progress (I never did that! I claimed, then w
 …[推理：此处截断，全文 5635 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
-### ①6 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph query REGISTRATION_RULE`  · exit 0 · step 75（turn 1）
-
-**工具返回**：
-```
-Search Results for "REGISTRATION_RULE":
-
-variable    REGISTRATION_RULE
-  host/src/control/registry_rule/registry_rule.rs:5
-```
-
-### ①7 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph callers REGISTRATION_RULE`  · exit 0 · 共享/装置步
+### ①7 `cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept && codegraph callers REGISTRATION_RULE`  · exit 0 · step 75（turn 1）
 
 **工具返回**：
 ```
