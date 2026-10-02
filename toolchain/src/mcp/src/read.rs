@@ -37,7 +37,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::mcp::protocol::MAX_READ_LINES;
-use crate::mcp::source_index::{load_one, required_path};
+use crate::mcp::source_index::{load_one, load_text, required_path};
 use crate::mcp::truncation::withheld;
 
 /// The most lines an explicit whole-file or span read prints before it says it truncated.
@@ -91,8 +91,8 @@ enum Span {
     Window { center: usize, context: usize },
 }
 
-/// Read a source file: a window by default, a whole file or an explicit range on request.
-/// 读取一份源码文件：默认是窗口，按要求则给出整份文件或一个显式区间。
+/// Read a file the tree carries — source or text: a window by default, whole or a range on request.
+/// 读取这棵树携带的一份文件——源码或文本：默认是窗口，按要求给整份或一个显式区间。
 ///
 /// The header is always `path:start-end (N lines)`, where `N` is the **file's** total
 /// rather than the printed range: that number is what lets a caller that got a window
@@ -101,15 +101,27 @@ enum Span {
 /// 让只拿到窗口的调用方知道还剩多少，也是整文件读取据以自证的依据。
 pub(crate) fn read_source(root: &Path, arguments: &Value) -> Result<String, String> {
     let relative = required_path(arguments)?;
-    let file = load_one(root, &relative)?;
-    let lines = file.source.lines().collect::<Vec<_>>();
+    // A `.rs` file goes through the source index so its symbols are available to the readers that
+    // annotate lines with them; anything else the tree carries is read as text. The ledger is the
+    // reason: it is not Rust, and refusing it sent the round's arm to `cat` — outside this tool's
+    // log, so that work left the account (audit T-02, measured in W8's h2).
+    // `.rs` 走源码索引，好让那些用符号标注行的读者拿得到符号；树里携带的其它东西按文本读。台账就是理由：
+    // 它不是 Rust，而拒绝它把那一轮的臂送去了 `cat`——在那个工具的日志之外，于是那段工作离开了账本
+    // （审计 T-02，在 W8 的 h2 量到）。
+    let (relative, source) = if relative.ends_with(".rs") {
+        let file = load_one(root, &relative)?;
+        (file.relative, file.source)
+    } else {
+        load_text(root, &relative)?
+    };
+    let lines = source.lines().collect::<Vec<_>>();
     // The file's own line count, and the number the header always reports. An empty
     // file has zero lines and still has a header: "nothing to read here" is an answer.
     // 文件自己的行数，也就是标头始终报告的那个数字。空文件有零行，也仍然有标头："这里没有可读的东西"
     // 本身就是一个答案。
     let total = lines.len();
     let (start, end, cap) = bounds(requested_span(arguments)?, total);
-    let mut output = format!("{}:{}-{} ({} lines)\n", file.relative, start, end, total);
+    let mut output = format!("{relative}:{start}-{end} ({total} lines)\n");
     let span_lines = if end >= start { end - start + 1 } else { 0 };
     let mut shown = 0usize;
     for (index, line) in lines.iter().enumerate() {

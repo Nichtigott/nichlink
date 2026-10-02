@@ -203,6 +203,48 @@ pub(crate) fn load_one(root: &Path, relative: &str) -> Result<SourceFile, String
     load_file(root, &path)
 }
 
+/// Read a text file the tree carries: the ledger, a manifest, a build log.
+/// 读取这棵树携带的一份文本文件：台账、清单、构建日志。
+///
+/// `read` used to refuse anything that was not Rust source, and the one file the second question was
+/// entirely about — `.nichlink/adopted/entries` — is not Rust. The arm went to `cat`, which is
+/// outside this tool's `--log`, so the ledger work left the account altogether (W8, h2 step 42: "The
+/// `read` tool refuses non-Rust files (exit 1). Fine — I used `cat` for the ledger").
+/// The rule now: **any UTF-8 text file inside the root is readable; a `.rs` file additionally gets
+/// the symbol index**. The refusal that remains is the one that is about the file rather than about
+/// its extension, and it names what `read` can print so the caller's next move is not a guess.
+/// `read` 过去拒绝一切非 Rust 源码的东西，而第二个问题整个围绕的那份文件——`.nichlink/adopted/entries`
+/// ——恰恰不是 Rust。那一臂于是去用 `cat`，而 `cat` 在本工具的 `--log` 之外，于是台账那段工作整个离开了
+/// 账本（W8 h2 第 42 步原文：「The `read` tool refuses non-Rust files (exit 1). Fine — I used `cat` for
+/// the ledger」）。现在的规则是：**根内的任何 UTF-8 文本文件都可读；`.rs` 文件额外给出符号索引**。
+/// 保留下来的拒绝是针对**文件本身**而不是扩展名的，并且它会说出 `read` 能打印什么，好让调用方的下一步
+/// 不是猜。
+pub(crate) fn load_text(root: &Path, relative: &str) -> Result<(String, String), String> {
+    let path = root.join(relative);
+    if !is_safe_child(root, &path) {
+        return Err(format!(
+            "path must stay inside the configured source root ({}); with `root` set, a path is \
+             relative to that root, so write it as that root sees it (`src/…`)",
+            root.display()
+        ));
+    }
+    let bytes =
+        std::fs::read(&path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let source = String::from_utf8(bytes).map_err(|_| {
+        format!(
+            "{relative} is not UTF-8 text, and `read` prints numbered text lines — accepted shapes \
+             are a window around `line`, an explicit `lines` range, or `whole: true`; for a binary \
+             artifact ask the tool that produced it"
+        )
+    })?;
+    let shown = path
+        .strip_prefix(root)
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok((shown, source))
+}
+
 fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
     // The `strip_prefix` below only names the file. This is the check that
     // decides whether it may be read at all, and it resolves symbolic links,

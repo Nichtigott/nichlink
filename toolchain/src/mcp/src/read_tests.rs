@@ -326,3 +326,60 @@ fn the_advertised_spelling_is_the_one_read() {
         .expect("the advertised `lines` spelling reads");
     assert_eq!(header(&reply), (2, 4, 5), "{reply}");
 }
+
+/// The ledger is readable, and it was not: `read` refused every non-Rust file and the one file the
+/// second question was about is not Rust.
+/// 台账可读，而它过去不可读：`read` 拒绝一切非 Rust 文件，而第二个问题围绕的那份文件恰恰不是 Rust。
+///
+/// Measured in W8's h2 (step 42): "The `read` tool refuses non-Rust files (exit 1). Fine — I used
+/// `cat` for the ledger" — `cat` is outside this tool's `--log`, so the ledger work left the account
+/// entirely. This pin is that scenario: the exact path, read whole.
+/// W8 的 h2 第 42 步量到的原文：「The `read` tool refuses non-Rust files (exit 1). Fine — I used `cat`
+/// for the ledger」——而 `cat` 在本工具的 `--log` 之外，于是台账那段工作整个离开了账本。这条钉子就是那个
+/// 场景：那个确切的路径，整份读出来。
+#[test]
+fn the_adoption_ledger_is_readable_by_name() {
+    let root = root_with_lines("ledger", 1);
+    std::fs::create_dir_all(root.0.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::write(
+        root.0.join(".nichlink/adopted/entries"),
+        "root/control/button|certifies|traced once|nich|2026-10-01T10:00:00+08:00|src/lib.rs|\
+         deadbeef|certifies it\n",
+    )
+    .expect("the ledger");
+    let answer = read_source(
+        &root.0,
+        &json!({"path": ".nichlink/adopted/entries", "whole": true}),
+    )
+    .expect("the ledger is a text file this tree carries");
+    assert!(
+        answer.starts_with(".nichlink/adopted/entries:1-1 (1 lines)"),
+        "the header names the file and its total: {answer}"
+    );
+    assert!(
+        answer.contains("root/control/button|"),
+        "and prints its bytes with line numbers: {answer}"
+    );
+}
+
+/// A non-Rust text file reads, and a binary one is refused **with the accepted shapes**.
+/// 非 Rust 的文本文件可读；二进制文件被拒，且**带出可接受的形状**。
+#[test]
+fn a_text_file_reads_and_a_binary_file_is_refused_with_the_shapes() {
+    let root = root_with_lines("text", 1);
+    std::fs::write(root.0.join("Cargo.toml"), "[package]\nname = \"fixture\"\n")
+        .expect("a manifest");
+    let manifest = read_source(&root.0, &json!({"path": "Cargo.toml", "lines": "1-2"}))
+        .expect("a manifest is text");
+    assert!(manifest.contains("[package]"), "{manifest}");
+    std::fs::write(root.0.join("blob.bin"), [0xff, 0xfe, 0x00, 0x01]).expect("fixture");
+    let refused = read_source(&root.0, &json!({"path": "blob.bin", "whole": true}))
+        .expect_err("bytes are not lines");
+    assert!(refused.contains("not UTF-8 text"), "{refused}");
+    assert!(
+        refused.contains("window around `line`")
+            && refused.contains("`lines` range")
+            && refused.contains("`whole: true`"),
+        "the refusal carries the shapes that would work: {refused}"
+    );
+}

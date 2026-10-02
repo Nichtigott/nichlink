@@ -187,8 +187,10 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.read",
-            "Read a bounded source window around a line, an explicit `lines` range, or the \
-             `whole` file. **Every header states the file's total**, as `path:START-END (N \
+            "Read a bounded window around a line, an explicit `lines` range, or the \
+             `whole` file — of **any UTF-8 text file this tree carries** (the adoption ledger \
+             and a build log included; the `.rs` ones additionally carry a symbol index). \
+             **Every header states the file's total**, as `path:START-END (N \
              lines)`: `N` is the file's own line count, not the printed range, so a windowed \
              read still says how much of the file is left — which is the fact the old \
              81-line window withheld, forcing six calls for a 473-line file. Default: a \
