@@ -152,3 +152,45 @@ W8 量的是"四类复杂 bug 上两臂的代价与结果"。本轮的能力批�
 
 **对本轮结论的影响**：无。轴二与四项"只看不判"照旧可用；轴一的 `void` 范围与 `partial` 的读法都写清楚了，
 复核者据此判断即可。
+
+### 附记二（`arm-nichlink` 报告后核实）：**语料树根本不含缺陷** ⇒ 轴一本轮对**五题全部 `void`**
+
+**事实（我独立核实）**：
+```
+$ grep -n "let end = if last_match > range.end" target/hardbug-runs/realbug/ripgrep-de2567a/repo/crates/printer/src/util.rs
+580:    let end = if last_match > range.end {
+$ git -C …/repo log --oneline -1   →  de2567a printer: fix panic in replacements in look-around corner case
+$ git -C …/repo status --porcelain →  D HomebrewFormula   （工作区与 de2567a 一致 ⇒ **含修复**）
+```
+⇒ **那棵树检出在"修复提交"上、工作区干净，缺陷不在树里**。两臂都察觉了这一点，并各自**从提交里把缺陷重建出来**才作答：
+`arm-codegraph` 明说"在副本里逐字回退那 4 行守卫"；`arm-nichlink` 则自己构造了 `-U --json` 的模式把 panic 逼出来，并如实记下
+"`r3180_look_around_panic` 在本树**是绿的**（114+328 全过）"。**两臂的行号因此不同（`:527` vs `:580`）——它们是两次不同的重建。**
+
+**根因（生成器侧的缺陷，比泄漏更严重）**：`tools/nichlink-realbug build` 的自证顺序是
+**回退 → 跑红 → 还原 → 跑绿**，于是它**留在盘上的是还原后的那一版**✗。自证的三条判据本身没错（红/绿都真跑过），
+但**没有一条要求"题目要在盘上"**——生成器把题目构造出来、验完、又拆掉了，还写下"injected"的字样。
+⇒ **纪律**：凡"构造出来的题目"，自证之后必须**留在题面状态**（或在副本里自证、盘上留注入态），
+并且 run 记录要**写明树此刻处于哪一态**。
+
+**第二处（同一工具）**：登记的 `root_cause.line` 对这道题是**垃圾值**——`REGISTRATION.json` 里写着 `"line": 4`，
+因为它是从 diff 的**第一个** `@@` 块头算出来的，而实质改动在 `@@ -575,9 +577,13 @@`（`-    let end = std::cmp::min(bytes.len(), range.end);`）。
+⇒ **客观真值只能是"回退块自己"**（`crates/printer/src/util.rs` 的 `let end = …` 那一行），不是那个登记数。
+
+**轴一的最终处置（本轮五题）**：
+
+| 题 | 为什么 `void` |
+| --- | --- |
+| h1 · h2 · h3 · h4 | 真值 `file`+`line`+`mechanism` 在臂的工作目录的 7 份文档里，且 `build` 确定性、`plan` 印缺陷形状 |
+| realbug（ripgrep `de2567a`） | **缺陷不在树里**（检出在修复提交上）；两臂各自重建 ⇒ 它们答的是"那笔提交修了什么"，不是"树里哪里坏了" |
+
+**`arm-nichlink` 报的顺序事实可核，但不恢复盲性**：它称四道 hardbug 的根因**在读那两份文档之前**已由桥的调用独立确立
+（其答案里有逐条调用清单可回放），语料题是**读后开工**。即使这一顺序成立，**配方与真值仍摊在同一个工作目录里**
+（附记一之补），因此轴一不因此转为可用；顺序事实进结论的**观察段**。
+
+**臂报告的副作用（记账用，不需处置）**：跑桥的 `check` 在各树 `<tree>/target/` 下留构建产物与 `target/nichlink/out/check-*.log`
+（四棵 hardbug 树本就有 `target/`；ripgrep 树此前没有，现在约 2G）；臂在工作区新增 `answers/arm-nichlink/`、
+`logs/arm-nichlink/`（含两个副本与 `q5-panic-evidence.txt`）与 `target/hardbug-runs/t21/cargo-home`（`~/.cargo` 的副本，
+沙箱里 `~/.cargo` 只读）。**四棵题树与语料树的源码零改动**（`git status` 已核）。
+
+**本轮还剩什么可用**（不变，且它正是这批能力改的东西）：**轴二（代价三档 / 调用数 / 链长）** 与
+**四项"只看不判"**（首发是否该场景的入口 · `next` 采纳率 · 记账性重跑 · 截断/失败）。
