@@ -150,8 +150,19 @@ pub(crate) fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> Str
     let Some(scope) = scope else {
         return "scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host nichlink** (no `build.rs` calling `build_time::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no nichlink build here at all. For a tree that **does** host it, the file is `<package>/target/nichlink/out/source_scope.tsv` and the **CLI** `nichlink check --root <tree>` writes it (this bridge never builds). Either way `registry` / `why --at` / `read {path, line}` answer without it\n".to_owned();
     };
+    // T-28: the scope is built from the paths the **code** spells out (`cut(<expr>)` and friends),
+    // never from what a file `use`s. The round measured an arm working this out by itself and
+    // writing it into its answer — that is the signal a pointer belongs here, where the question
+    // about scope is actually asked, rather than in a manual nobody opens mid-task.
+    // T-28：作用域是**代码里拼出来的路径**（`cut(<表达式>)` 之类）构成的，从不来自某个文件 `use` 了什么。
+    // 那一轮量到一臂自己摸索出这条规则并写进答案——这正是"该在这里给指路"的信号：问题在**这里**被问，
+    // 而不是在那本人到中途不会翻的手册里。
     if scope.all {
-        return format!("scope selected (all=true, mode={})\n", scope.mode);
+        return format!(
+            "scope selected (all=true, mode={}) — the scope is the set of paths the code spells out \
+             (`cut(<expr>)` and friends), not what a file `use`s: a `use` alone never widens it\n",
+            scope.mode
+        );
     }
     if scope.selected_ids.contains(&face.id) {
         return format!("scope selected (by id, mode={})\n", scope.mode);

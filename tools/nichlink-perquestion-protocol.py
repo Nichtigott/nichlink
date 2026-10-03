@@ -86,7 +86,9 @@ def setup():
         car = R10 / arm / 'trees' / 'carrier'
         if car.exists():
             shutil.rmtree(car)
-        shutil.copytree(R9 / 'carrier', car, ignore=shutil.ignore_patterns('target', '.codegraph', '.git'))
+        # `carrier/` 住在 `target/round9/trees/carrier`（它是 fa/fb/fc/g3 的相对依赖目标）。
+        # 少了 `trees/` 这一层时 `copytree` 会直接报错 —— 这条路径在制备那次没被跑到过。
+        shutil.copytree(R9 / 'trees' / 'carrier', car, ignore=shutil.ignore_patterns('target', '.codegraph', '.git'))
         ok, bad = 0, []
         for i in IDS:
             want = M[ALIAS.get(i, i)]['sha256']
@@ -96,6 +98,16 @@ def setup():
             else:
                 bad.append((i, got[:16], want[:16]))
         print(f'{arm}: 副本 {ok}/{len(IDS)} 对回登记哈希' + ('' if not bad else f'  ✗ 不符 {bad}'))
+        # T-29：`carrier/` 也在这份副本里，而 `fa`/`fb`/`fc`/`g3` 的 Cargo.toml 依赖它
+        # （`../carrier/control-button-graft`）⇒ 不把它算进清单，"装置未被动过"的自证就有洞：
+        # 谁改了 carrier，那些题照样"对回登记哈希" ✓。它登记在 TREES.json 的 `carrier` 键下。
+        # T-29: `carrier/` rides in the same copy and four questions depend on it, so leaving it out
+        # of the manifest leaves a hole in "the apparatus was not touched".
+        if 'carrier' in M:
+            want = M['carrier']['sha256']
+            got = treehash(R10 / arm / 'trees' / 'carrier')
+            mark = '对回' if got == want else f'✗ 不符（实得 {got[:16]}，登记 {want[:16]}）'
+            print(f'{arm}: carrier/ {mark}')
     print(f'装置根：{R10}（ours/ 与 cg/ 各有 trees·logs·answers）')
 
 

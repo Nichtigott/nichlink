@@ -98,6 +98,14 @@ pub(crate) fn looks_like_a_test(label: &str, source: &str) -> bool {
 /// 规则是：调用**就是**该名字，或它以 `::` 加该名字结尾。两种拼法都出现在本索引里——`direct_calls`
 /// 记录 `(` 前最后一个裸标识符，而别的读取方会交来限定路径——而两个视图必须对"哪种算数"一致。拼两遍的
 /// 规则就是会漂移的规则，因此它只在这里拼一遍，两个视图都调它。
+/// T-27（已定位，未修）：这条规则把**裸名**匹配到**任何**限定调用上 —— `is_call_to("Entry::new",
+/// "new")` 命中（`strip_suffix("new")` 得 `"Entry::"`，`ends_with("::")` 成立）。于是 `affected`
+/// 对一个改了 `Store::new` 的文件，会把只调用 `Entry::new` 的测试也报成"受影响"，`s4` 上臂
+/// 因此被迫改用 `search` + `callgraph` + 逐跳读源去排除那两个无关文件（1–3 次核对调用）。
+/// **修法要带"所属类型"**（只有名字时无法区分 `Entry::new` 与 `Store::new`）⇒ 签名要多一个参数，
+/// 三个调用点（`affected` ×2、`digest`、`why`）都要跟着改，属单独一轮。
+/// T-27 (located, not fixed): a bare name matches any qualified call, so `affected` over-reports.
+/// The fix needs the owning type — the signature has to grow, and three call sites with it.
 pub(crate) fn is_call_to(call: &str, name: &str) -> bool {
     call == name
         || call
