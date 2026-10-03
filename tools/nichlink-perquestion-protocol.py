@@ -111,11 +111,21 @@ def setup():
     print(f'装置根：{R10}（ours/ 与 cg/ 各有 trees·logs·answers）')
 
 
+# 第十二轮（干净重跑）的装置根：**新开一棵**，于是上一轮的答案/日志/工作台都不是本轮的目标路径。
+# 这一条就是第十一轮 D1/D5 的修法 —— 路径只在一个常量里决定，不手建目录。
+# The round-12 root: a fresh tree, so the previous round's answers, logs and benches are not this
+# round's target paths. This constant is the one place the paths are decided.
+R12 = ROOT / 'target/round10/r12'
+R12_TAG = 'target/round10/r12'
+R12_IDS = ['h1-supply-chain', 'h2-claim-unkept', 'h3-cross-file-chain',
+           'h4-one-file-many-algorithms', 'r2', 'fd', 'fa', 's7']
+
+
 def brief(arm, i):
     ins = ('./target/debug/nichlink-mcp' if arm == 'ours'
            else f'{ROOT}/target/round7/tools-upstream/v1.6.1/bin/codegraph')
-    log = f'target/round10/{arm}/logs/{i}.' + ('jsonl' if arm == 'ours' else 'txt')
-    root = f'target/round10/{arm}/trees/{i}' + (('/' + PKG_ROOT[i]) if i in PKG_ROOT else '')
+    log = f'{R12_TAG}/{arm}/logs/{i}.' + ('jsonl' if arm == 'ours' else 'txt')
+    root = f'{R12_TAG}/{arm}/trees/{i}' + (('/' + PKG_ROOT[i]) if i in PKG_ROOT else '')
     if arm == 'ours':
         how = (f'- 工具：`{ins} --call <tool> --root {root} …`，**每次调用都带** `--log {log}`。\n'
                f'- 先 `--call status`/`--call registry` 摸树，再用 check/why/callgraph/consistency/conformance/read/digest 等。')
@@ -133,7 +143,7 @@ def brief(arm, i):
 **树**：`{root}`（{ro}）
 {how}
 
-**答案**写到 `target/round10/{arm}/answers/{i}.md`，固定五段形状：
+**答案**写到 `target/round10/r12/{arm}/answers/{i}.md`，固定五段形状：
 ① 症状一句，**并且先把基线写进来**：`cargo test --offline` 的**原始结论**（题目态下按题面应当有红；把原始结论抄进来）。**若基线全绿而题面说有缺陷，立刻停下并上报**——不要从 mtime、增量产物或上一轮的日志里考古（第十轮 r2 为此花了 15 步、
 推理是对方的 5.25×，全部买的是"一个已不在盘上的缺陷态"）；
 ② 根因/结论 `文件:行号` + 机制一句；③ 最小修或改动清单；
@@ -145,22 +155,29 @@ def brief(arm, i):
 第十轮量到为此白花 3 步并在善后里又花 2 步；
 ⑤ 调用清单（工具 + 作用，一行一条）。
 
+**基线一律用树外的 target 目录**（第十一轮最险的一条装置缺陷）：`CARGO_TARGET_DIR=<树外新目录> cargo test --offline`
+—— 还原过的树若留着上一轮的 `target/`，源码 mtime 会旧于产物，cargo 判 fresh、**不重编**、直接跑旧二进制
+⇒ **报全绿而其实是上一轮的二进制**（本轮 `h1s` 与 `fd` 的第一次都这么被骗过）。**判据**：看有没有
+`Compiling` —— `Finished in 0.0x s` 且没有编译行，就是"跑的不是这份源码"。取完基线请把用的那个目录写进交付。
+
 **工具用法**（省一步）：`agent_teams_update_task` 的 `evidence_note` **只对终态任务有效**（第十轮 52 份切片里
 15 份出现过 `evidence_note is for terminal tasks`，每次多花一步）；提交长 payload 可能触发
 `MALFORMED_RESPONSE`（任务被记 failed 而工作白做）⇒ **先交短 completion，再把证据分次 append**
 （`acceptanceResults` / `commandsRun` / `evidence_note` 都是 append-only）。
 
-**禁令**：**不许读 `target/round7`、`target/round8`、`target/round9` 下的任何文件**
-（唯一例外：cg 臂的 codegraph 二进制在 `target/round7/tools-upstream/` 下，那一个可执行文件可用）——
-那些目录里有对照答案、真值与**上一臂的交付态树**，读了就等于抄；也不许拿别的题树做"参照 diff"（用**你自己那棵树**）。
-**并且除 `target/round10/` 之外的整个 `target/` 与整个 `docs/` 都在禁令内** ——
-`target/` 下有对照答案（`round7/answer-*`）、隔离题树（`round8/`）、上一轮的答案与日志（`round9/answers|logs`）、
-早几轮的评测记录（`nichlink-t1/`、`probe-*/`）、真值（`hardbug-runs/**/.audit/`）等；
-本轮因禁令只写到 `round7|8|9` 而**判废 8 题**（含"读了上一轮分析文件/渲染文件"两条）。**唯一例外**：cg 臂的 codegraph 可执行文件在 `target/round7/tools-upstream/` 下。
-**也不许把那些目录作为任何命令的搜索路径**（`grep -r`/`find`/`rg`/`ls -R` 一律限定在 `target/round10/` 内）——
+**禁令（第十二轮收紧）**：**除本轮装置根 `target/round10/r12/` 之外，整个 `target/` 与整个 `docs/`
+都在禁令内** —— 包括 `target/round7|8|9`、以及 `target/round10/` 下**除 `r12/` 外**的一切
+（`ours/answers/`、`ours/logs/`、`ours/work-*`、`_round10_artifacts/`、`deepdive/`、`chain/`、
+`ours/answers-r11/` 等：那里有**上一轮的答案、工作台、逐题分析与渲染**）。
+**为什么写成"除本轮根之外全域"而不是枚举目录**：第十轮枚举 `round7|8|9` ⇒ 漏了 7 个 ⇒ 判废 8 题；
+第十一轮枚举得稍全，但同名的 `answers/`、`logs/` 与 `work-*` 又成了新的泄漏面（5 题中招）。
+枚举必然不全 ✗，所以规则改成**白名单一个根**。
+**唯一可读的例外**：**你自己那一份任务书** `target/round10/briefs/ours-<题号>.md`；cg 臂的 codegraph
+可执行文件在 `target/round7/tools-upstream/` 下，那一个可执行文件可用。
+**也不许把那些目录作为任何命令的搜索路径**（`grep -r`/`find`/`rg`/`ls -R` 一律限定在 `target/round10/r12/` 内）——
 全仓搜索会顺带把对照答案与真值的**片段**打印出来（实测一次 `grep -rn` 就命中了 `round7/answer-*-g2.md` 与对话记录里的答案正文），
 那同样算泄漏、会导致该题判废重跑。不许 `git log/show` 查题树历史；凡断言"某条路径"（X 经 Y 到 Z），每一跳都要回源码定义处核过（不许由命名推断）。
-发现装置问题（树不对、工具异常）单独写 `target/round10/{arm}/answers/APPARATUS-{i}.md` 并说明。"""
+发现装置问题（树不对、工具异常）单独写 `target/round10/r12/{arm}/answers/APPARATUS-{i}.md`：**≤15 行**，只写"症状 / 证据（命令+原始输出）/ 你的判断"。发现装置缺陷仍然要写（那是唯一途径），但**不要写成报告**，把笔墨留给答案本身。"""
 
 
 def _first_user_text(path):
