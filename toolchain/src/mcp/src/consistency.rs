@@ -436,7 +436,41 @@ fn siblings<'a>(
 /// one calls and **no** other sibling calls. The majority line is more than half.
 /// 可判定，而且就这么说：**多数**兄弟都调、而它没调的名字；以及它调了、**别的兄弟都没调**的名字。
 /// 多数线取"超过一半"。
-fn deviations(sets: &[(String, BTreeSet<String>)]) -> Vec<(String, Vec<String>)> {
+/// Which verb this comparison's rows use: the `api` signal talks about calls, the `shape` signal
+/// about declarations. One core, two subjects — the alternative is a second copy of the majority
+/// arithmetic, and two copies of a majority rule is exactly how the two signals would come to
+/// disagree about what "outlier" means.
+/// 这次比较的行用哪个动词：`api` 信号说的是**调用**，`shape` 信号说的是**声明**。一个内核、两种主语
+/// ——另一种做法是把多数表决的算术再抄一份，而两份多数规则正是两个信号会对"离群"的定义产生分歧的来路。
+#[derive(Clone, Copy)]
+enum Wording {
+    /// The `api` signal: names this face's file calls.
+    /// `api` 信号：这个面的文件调用了哪些名字。
+    Calls,
+    /// The `shape` signal: fields this face declares.
+    /// `shape` 信号：这个面声明了哪些字段。
+    Declares,
+}
+
+impl Wording {
+    fn missing(self, name: &str) -> String {
+        match self {
+            Wording::Calls => format!("does not call `{name}`, which the other siblings call"),
+            Wording::Declares => {
+                format!("does not declare `{name}`, which the other siblings declare")
+            }
+        }
+    }
+
+    fn extra(self, name: &str) -> String {
+        match self {
+            Wording::Calls => format!("calls `{name}`, which no sibling calls"),
+            Wording::Declares => format!("declares `{name}`, which no sibling declares"),
+        }
+    }
+}
+
+fn deviations(sets: &[(String, BTreeSet<String>)], wording: Wording) -> Vec<(String, Vec<String>)> {
     let total = sets.len();
     let mut shared: Vec<(String, usize)> = Vec::new();
     let mut seen: BTreeSet<&String> = BTreeSet::new();
@@ -457,9 +491,7 @@ fn deviations(sets: &[(String, BTreeSet<String>)]) -> Vec<(String, Vec<String>)>
         let mut notes: Vec<String> = Vec::new();
         for (name, _) in &shared {
             if !names.contains(name) {
-                notes.push(format!(
-                    "does not call `{name}`, which the other siblings call"
-                ));
+                notes.push(wording.missing(name));
             }
         }
         for name in names {
@@ -468,7 +500,7 @@ fn deviations(sets: &[(String, BTreeSet<String>)]) -> Vec<(String, Vec<String>)>
                 .filter(|(_, other)| other.contains(name))
                 .count();
             if count == 1 {
-                notes.push(format!("calls `{name}`, which no sibling calls"));
+                notes.push(wording.extra(name));
             }
         }
         if !notes.is_empty() {
@@ -512,21 +544,37 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
         .ok_or_else(|| {
             "consistency needs `parent` or `specimen`: `parent` is the logical path whose children \
              to compare, `specimen` is a ledger anchor to compare its siblings against — accepted \
-             shape: {\"parent\":\"<logical path>\",\"by\":\"api|kind|source\",\"root\":\"<path>\"} \
+             shape: {\"parent\":\"<logical path>\",\"by\":\"api|kind|source|shape\",\"root\":\"<path>\"} \
              or {\"specimen\":\"<anchor>\",\"root\":\"<path>\"}"
                 .to_owned()
         })?;
-    let by = arguments
+    // Which signals to run. **Absent `by` runs both `api` and `shape`**: a family outlier can be a
+    // sibling calling something the rest do not, or a sibling **declaring a field the rest do not**,
+    // and the second shape used to be invisible — a family whose only difference was one extra
+    // declared field came back `outliers: 0 of 3`, so the one call this tool promises ("one call
+    // names the outlier") did not name it. An explicit `by` still runs exactly one signal.
+    // 跑哪些信号。**`by` 缺省时同时跑 `api` 与 `shape`**：同族的离群者可能是"调用了别人不调的"，也可能是
+    // "**声明了别人不声明的字段**"，而後一种形状过去是看不见的——一个唯一差别就是多一行声明的同族回的是
+    // `outliers: 0 of 3`，于是这个工具承诺的那一次调用（"一次调用点名离群者"）并没有点到它。显式给 `by`
+    // 时仍然只跑一个信号。
+    let requested = arguments
         .get("by")
         .and_then(Value::as_str)
-        .unwrap_or("api")
-        .to_owned();
-    if !matches!(by.as_str(), "api" | "kind" | "source") {
+        .map(str::to_owned);
+    if let Some(one) = requested
+        .as_deref()
+        .filter(|one| !matches!(*one, "api" | "kind" | "source" | "shape"))
+    {
         return Err(format!(
-            "consistency takes `by` as `api`, `kind` or `source`, got `{by}` — accepted shape: \
-             {{\"parent\":\"<logical path>\",\"by\":\"api|kind|source\",\"root\":\"<path>\"}}"
+            "consistency takes `by` as `api`, `kind`, `source` or `shape`, got `{one}` — \
+                 accepted shape: {{\"parent\":\"<logical path>\",\
+                 \"by\":\"api|kind|source|shape\",\"root\":\"<path>\"}}"
         ));
     }
+    let signals: Vec<&str> = match requested.as_deref() {
+        Some(one) => vec![one],
+        None => vec!["api", "shape"],
+    };
     let members = match crate::mcp::workspace::scope(root)? {
         Scope::Package(namespace) => vec![Member::package(root, namespace)],
         Scope::Workspace(members) => members,
@@ -565,111 +613,150 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
             // 让一句话说清形状，而不是每个成员一句。
             continue;
         }
-        let mut rows: Vec<String> = vec![format!(
-            "family {parent} · member {} · {} member(s)",
-            member.name,
-            set.len()
-        )];
-        let mut sets: Vec<(String, BTreeSet<String>)> = Vec::new();
-        let mut values: Vec<(String, String)> = Vec::new();
-        for face in &set {
-            let label = face
-                .path
-                .rsplit('/')
-                .next()
-                .unwrap_or(&face.path)
-                .to_owned();
-            let value = match by.as_str() {
-                "kind" => face.kind.clone(),
-                "source" => face.source.clone(),
-                _ => {
-                    // The `api` signal: the names this face's own file calls, read from the same
-                    // index every other reader uses.
-                    // `api` 信号：这个面自己的文件调用了哪些名字，取自其它读者用的同一份索引。
-                    // "This sibling's own text" is the whole object directory, not only the face
-                    // file: the face file of a framework object is often one macro invocation, and
-                    // a macro body's text is deliberately not read as calls (the kernel's own rule).
-                    // "这个兄弟自己的文本"是整个对象目录，而不只是那个面文件：框架对象的面文件常常只有一次
-                    // 宏调用，而宏体的文本按内核自己的规则**不算调用**。
-                    let directory = format!("src/{}", face.source.trim_start_matches("./"));
-                    let directory = directory
-                        .rsplit_once('/')
-                        .map(|(dir, _)| dir.to_owned())
-                        .unwrap_or(directory);
-                    let names: BTreeSet<String> = sources
-                        .iter()
-                        .filter(|source| {
-                            // `SourceFile::relative` is already spelled from the package root
-                            // (`src/…`), which is why the directory is built with one `src/` and the
-                            // comparison does not add a second: doing that made every filter miss and
-                            // the whole signal answer `0 call(s)` on every tree — the defect this
-                            // pin was written for.
-                            // `SourceFile::relative` 本来就是从包根拼的（`src/…`），因此目录只加一次
-                            // `src/`，比较时不再加第二次：加第二次会让每一个过滤都落空，于是整个信号在
-                            // 每棵树上都答 `0 call(s)`——这正是这条钉子被写下来的那个缺陷。
-                            source.relative.starts_with(&format!("{directory}/"))
-                        })
-                        .flat_map(|source| source.functions.iter())
-                        .flat_map(|function| function.calls.iter().cloned())
-                        .collect();
-                    let shown = names.iter().cloned().collect::<Vec<_>>().join(", ");
-                    sets.push((label.clone(), names));
-                    rows.push(format!(
-                        "  {label:<24} {} call(s): {}",
-                        shown.split(", ").filter(|part| !part.is_empty()).count(),
-                        if shown.is_empty() {
+        for signal in signals.iter().copied() {
+            let mut rows: Vec<String> = vec![format!(
+                "family {parent} · member {} · {} member(s) · by {signal}",
+                member.name,
+                set.len()
+            )];
+            let mut sets: Vec<(String, BTreeSet<String>)> = Vec::new();
+            let mut values: Vec<(String, String)> = Vec::new();
+            for face in &set {
+                let label = face
+                    .path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&face.path)
+                    .to_owned();
+                let value = match signal {
+                    "kind" => face.kind.clone(),
+                    "source" => face.source.clone(),
+                    // The `shape` signal: **which of the fields this comparison reads the face
+                    // declares at all**. Presence, not value — a family's faces legitimately state
+                    // different names, summaries and parts types, so comparing values would call
+                    // every family an outlier; what is a drift is declaring a field the rest do not.
+                    // Read through the kernel's own parser, the same reader `specimen` uses.
+                    // `shape` 信号：**这个面到底声明了这次比较读的哪些字段**。只看存在，不看取值——同族
+                    // 的面写出不同的名字、摘要与零件类型正是设计，比值会让每一个同族都成离群；而"声明了别人
+                    // 不声明的字段"才是漂移。取值经内核自己的解析器读出，与 `specimen` 用的是同一个读取器。
+                    "shape" => {
+                        let names = match source_text(&sources, &face.source).map(one_face) {
+                            Some(Ok(parsed)) => declared_shape(&parsed)
+                                .into_iter()
+                                .map(|(name, _)| name)
+                                .collect::<BTreeSet<String>>(),
+                            Some(Err(reason)) => {
+                                rows.push(format!("  {label:<24} unreadable: {reason}"));
+                                continue;
+                            }
+                            None => {
+                                rows.push(format!("  {label:<24} its file is not in the index"));
+                                continue;
+                            }
+                        };
+                        let shown = if names.is_empty() {
                             "none".to_owned()
                         } else {
-                            shown
-                        }
-                    ));
-                    continue;
-                }
-            };
-            rows.push(format!("  {label:<24} {value}"));
-            values.push((label.clone(), value.clone()));
-        }
-        let mut outliers = 0usize;
-        if by == "api" {
-            let found = deviations(&sets);
-            for (sibling, notes) in &found {
-                rows.push(format!("  outlier     {sibling}: {}", notes.join("; ")));
-            }
-            outliers = found.len();
-        } else {
-            let mut counts: std::collections::BTreeMap<&str, usize> =
-                std::collections::BTreeMap::new();
-            for (_, value) in &values {
-                *counts.entry(value.as_str()).or_default() += 1;
-            }
-            let majority = counts
-                .iter()
-                .max_by_key(|(value, count)| (**count, std::cmp::Reverse(value.len())))
-                .map(|(value, _)| *value)
-                .unwrap_or_default();
-            for (sibling, value) in &values {
-                if value != majority {
-                    // Ties are not outliers: with no single majority value there is nothing to call
-                    // a deviation.
-                    // 平局不算离群：没有唯一的多数值时，就没有可称为偏离的东西。
-                    if counts
-                        .values()
-                        .filter(|count| **count == counts[value.as_str()])
-                        .count()
-                        > 1
-                        && counts.values().max() == counts.get(value.as_str())
-                    {
+                            names.iter().cloned().collect::<Vec<_>>().join(", ")
+                        };
+                        sets.push((label.clone(), names.clone()));
+                        rows.push(format!("  {label:<24} {} field(s): {shown}", names.len()));
                         continue;
                     }
-                    rows.push(format!(
-                        "  outlier     {sibling}: `{by}` is `{value}` while the majority says `{majority}`"
-                    ));
-                    outliers += 1;
+                    _ => {
+                        // The `api` signal: the names this face's own file calls, read from the same
+                        // index every other reader uses.
+                        // `api` 信号：这个面自己的文件调用了哪些名字，取自其它读者用的同一份索引。
+                        // "This sibling's own text" is the whole object directory, not only the face
+                        // file: the face file of a framework object is often one macro invocation, and
+                        // a macro body's text is deliberately not read as calls (the kernel's own rule).
+                        // "这个兄弟自己的文本"是整个对象目录，而不只是那个面文件：框架对象的面文件常常只有一次
+                        // 宏调用，而宏体的文本按内核自己的规则**不算调用**。
+                        let directory = format!("src/{}", face.source.trim_start_matches("./"));
+                        let directory = directory
+                            .rsplit_once('/')
+                            .map(|(dir, _)| dir.to_owned())
+                            .unwrap_or(directory);
+                        let names: BTreeSet<String> = sources
+                            .iter()
+                            .filter(|source| {
+                                // `SourceFile::relative` is already spelled from the package root
+                                // (`src/…`), which is why the directory is built with one `src/` and the
+                                // comparison does not add a second: doing that made every filter miss and
+                                // the whole signal answer `0 call(s)` on every tree — the defect this
+                                // pin was written for.
+                                // `SourceFile::relative` 本来就是从包根拼的（`src/…`），因此目录只加一次
+                                // `src/`，比较时不再加第二次：加第二次会让每一个过滤都落空，于是整个信号在
+                                // 每棵树上都答 `0 call(s)`——这正是这条钉子被写下来的那个缺陷。
+                                source.relative.starts_with(&format!("{directory}/"))
+                            })
+                            .flat_map(|source| source.functions.iter())
+                            .flat_map(|function| function.calls.iter().cloned())
+                            .collect();
+                        let shown = names.iter().cloned().collect::<Vec<_>>().join(", ");
+                        sets.push((label.clone(), names));
+                        rows.push(format!(
+                            "  {label:<24} {} call(s): {}",
+                            shown.split(", ").filter(|part| !part.is_empty()).count(),
+                            if shown.is_empty() {
+                                "none".to_owned()
+                            } else {
+                                shown
+                            }
+                        ));
+                        continue;
+                    }
+                };
+                rows.push(format!("  {label:<24} {value}"));
+                values.push((label.clone(), value.clone()));
+            }
+            let mut outliers = 0usize;
+            if signal == "api" || signal == "shape" {
+                let wording = if signal == "api" {
+                    Wording::Calls
+                } else {
+                    Wording::Declares
+                };
+                let found = deviations(&sets, wording);
+                for (sibling, notes) in &found {
+                    rows.push(format!("  outlier     {sibling}: {}", notes.join("; ")));
+                }
+                outliers = found.len();
+            } else {
+                let mut counts: std::collections::BTreeMap<&str, usize> =
+                    std::collections::BTreeMap::new();
+                for (_, value) in &values {
+                    *counts.entry(value.as_str()).or_default() += 1;
+                }
+                let majority = counts
+                    .iter()
+                    .max_by_key(|(value, count)| (**count, std::cmp::Reverse(value.len())))
+                    .map(|(value, _)| *value)
+                    .unwrap_or_default();
+                for (sibling, value) in &values {
+                    if value != majority {
+                        // Ties are not outliers: with no single majority value there is nothing to call
+                        // a deviation.
+                        // 平局不算离群：没有唯一的多数值时，就没有可称为偏离的东西。
+                        if counts
+                            .values()
+                            .filter(|count| **count == counts[value.as_str()])
+                            .count()
+                            > 1
+                            && counts.values().max() == counts.get(value.as_str())
+                        {
+                            continue;
+                        }
+                        rows.push(format!(
+                            "  outlier     {sibling}: `{signal}` is `{value}` while the majority says `{majority}`"
+                        ));
+                        outliers += 1;
+                    }
                 }
             }
+            rows.push(format!("outliers: {outliers} of {}", sets.len()));
+            sections.push(rows.join("\n"));
         }
-        rows.push(format!("outliers: {outliers} of {}", sets.len()));
-        sections.push(rows.join("\n"));
     }
     sections.push(
         "not covered by this comparison: it reads the **derived** tree's sibling set and each \
@@ -678,14 +765,16 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
          or the arithmetic — an outlier is a place to look, not a defect; and a call written inside \
          a macro body is not read as a call (the kernel's rule), so an object whose whole body is one \
          macro invocation reads as calling nothing — **on such a tree `api` has nothing to compare, \
-         so use `by: kind` or `by: source` (they compare the declared value, not the calls), or \
-         `specimen` (which compares against the shape a ledger entry certifies)**"
+         but `by: shape` does: it compares which of the fields this comparison reads each \
+         sibling declares at all, so it still names a sibling that declares an extra field; \
+         `by: kind` / `by: source` compare the declared value, `specimen` against a \
+         certified shape**"
             .to_owned(),
     );
     sections.push(
         "next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields, \
-         and on a tree whose members are each one macro invocation `by: kind` / `by: source` / \
-         `specimen` for a signal that does not need calls"
+           and `by: shape` when the difference is a **declaration** rather than a call (an \
+           extra declared field does not show up in `api`)"
             .to_owned(),
     );
     Ok(format!("{}\n", sections.join("\n")))

@@ -336,7 +336,7 @@ fn the_deviating_sibling_is_named_with_the_direction() {
         ("slider".to_owned(), set(&["to_local", "scale_x"])),
         ("timeline".to_owned(), set(&["to_local", "scale_x"])),
     ];
-    let rows = super::deviations(&sets);
+    let rows = super::deviations(&sets, super::Wording::Calls);
     assert_eq!(rows.len(), 1, "one sibling differs: {rows:?}");
     assert_eq!(rows[0].0, "button");
     let notes = rows[0].1.join("; ");
@@ -358,13 +358,16 @@ fn unanimity_and_halves_are_not_outliers() {
         ("a".to_owned(), set(&["x", "y"])),
         ("b".to_owned(), set(&["x", "y"])),
     ];
-    assert!(super::deviations(&same).is_empty(), "unanimous");
+    assert!(
+        super::deviations(&same, super::Wording::Calls).is_empty(),
+        "unanimous"
+    );
 
     let halves = vec![
         ("a".to_owned(), set(&["x", "only_a"])),
         ("b".to_owned(), set(&["x", "only_b"])),
     ];
-    let rows = super::deviations(&halves);
+    let rows = super::deviations(&halves, super::Wording::Calls);
     assert_eq!(
         rows.len(),
         2,
@@ -385,7 +388,8 @@ fn the_refusals_carry_the_shape() {
     let unknown = super::consistency(&root, &json!({"parent": "root/control", "by": "colour"}))
         .expect_err("the signal is checked before the tree is read");
     assert!(
-        unknown.contains("`api`, `kind` or `source`") && unknown.contains("accepted shape"),
+        unknown.contains("`api`, `kind`, `source` or `shape`")
+            && unknown.contains("accepted shape"),
         "{unknown}"
     );
 }
@@ -488,4 +492,71 @@ fn the_comparison_derives_rather_than_reading_the_record() {
         "the answer says which tree it read, and why it derived: {answer}"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A family whose only difference is an **extra declared field** is named — in **one default call**.
+/// 唯一差别是**多声明了一个字段**的同族会被点名 —— 而在**一次缺省调用**里。
+///
+/// The measured failure this guards: S5's family differed exactly this way (one sibling declared
+/// `exports`, the others did not) and `consistency --parent root` answered `outliers: 0 of 3`,
+/// because the only signals were `api` (call names) and a declared-*value* comparison — a sibling
+/// carrying a field the rest do not is neither. The promise the workflow table makes ("one call
+/// names the outlier") therefore did not hold for the drift it most often has to catch.
+/// 这条守着的实测失败：S5 那个同族的差别正是这样（一个兄弟声明了 `exports`，其余没有），而
+/// `consistency --parent root` 回的是 `outliers: 0 of 3` —— 因为当时只有 `api`（调用的名字）与"声明**取值**"
+/// 两种信号，而"兄弟携带了别人没有的字段"两者都不是。于是流程表承诺的那句"一次调用点名离群者"在最常要
+/// 抓的那类漂移上并不成立。
+#[test]
+fn a_family_outlier_that_declares_an_extra_field_is_named() {
+    let root = specimen_package("family-extra-field");
+    let clean = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        clean.contains("by api") && clean.contains("by shape"),
+        "a request without `by` runs both signals: {clean}"
+    );
+    assert!(
+        clean.contains("outliers: 0 of"),
+        "the fixture starts unanimous: {clean}"
+    );
+
+    // The fixture declares `exports` on **every** child, so the S5 shape is reproduced by taking it
+    // away everywhere first and then giving it back to exactly one sibling: the family's only
+    // difference becomes one extra declared field.
+    // 夹具给**每个**子面都声明了 `exports`，因此复现 S5 的形状要先把它从所有兄弟身上取掉、再只还给一个：
+    // 于是这个同族唯一的差别就是"多声明了一个字段"。
+    for name in ["button", "slider", "timeline"] {
+        replace(
+            &root,
+            &format!("src/control/object/{name}/{name}.rs"),
+            "    exports: [\"control.render\"],\n",
+            "",
+        );
+    }
+    let before = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        before.contains("outliers: 0 of"),
+        "with the field gone from every child the family is unanimous again: {before}"
+    );
+    let file = "src/control/object/slider/slider.rs";
+    replace(
+        &root,
+        file,
+        "    parts: SliderParts,\n",
+        "    parts: SliderParts,\n    exports: [\"control.render\"],\n",
+    );
+    let extra = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        extra.contains("declares `exports`, which no sibling declares"),
+        "the extra declaration is named: {extra}"
+    );
+    assert!(
+        extra.contains("outlier") && extra.contains("outliers: 1 of"),
+        "exactly one sibling is the outlier: {extra}"
+    );
+    // And the field itself is shown per sibling, so a reader can see the difference it turned on.
+    // 而且每个兄弟各自声明了哪些字段都印出来，读者看得见这次判定依据的差别。
+    assert!(
+        extra.contains("field(s): exports") || extra.contains("exports"),
+        "the shape signal shows the declared fields: {extra}"
+    );
 }
