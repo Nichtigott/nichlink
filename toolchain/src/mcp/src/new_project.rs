@@ -42,6 +42,10 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     let directory = text(arguments, "directory")?;
     let package = text(arguments, "package")?;
     let kind = kind(arguments)?;
+    // Parsed before anything is written: a bad entry has to be refused while the
+    // destination is still untouched.
+    // 在任何写入之前解析：坏条目必须在目的地还没被动过的时候就被拒绝。
+    let requests = face_requests(arguments)?;
     let apply = arguments
         .get("apply")
         .and_then(Value::as_bool)
@@ -90,29 +94,46 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
         &std::env::current_exe().unwrap_or_default(),
     );
     if apply {
-        scaffold::create_project(&target, &package, kind, &source)?;
-        let files = produced(&target)?;
-        let mut report = format!(
-            "applied: created the {kind} project `{package}` at {}\n",
-            target.display()
-        );
-        report.push_str(&format!(
-            "root {}: the destination is inside it\n",
-            root.display()
-        ));
-        report.push_str(&format!(
-            "wrote {} file(s) under {}:\n",
-            files.len(),
-            target.display()
-        ));
-        for (relative, _) in &files {
-            report.push_str(&format!("  {relative}\n"));
+        if requests.is_empty() {
+            scaffold::create_project(&target, &package, kind, &source)?;
+            return Ok(applied(root, &target, &package, kind, &produced(&target)?, &[]));
         }
-        report.push_str(
-            "the scaffolded manifest declares its own `[workspace]`, so this project is not a \
-             member of the root above\n",
-        );
-        return Ok(report);
+        // Faces make this two steps, so the whole project is built beside the destination and
+        // moved in at the end: one rename, and a face the kernel refuses leaves the
+        // destination exactly as it was.
+        // 面让这次写入变成两步，因此整个项目在目的地旁边建好、最后移进去：一次 rename，而某个面被
+        // 内核拒绝时目的地原封不动。
+        let staging = staging_directory(&target)?;
+        let outcome = scaffold::create_project(&staging, &package, kind, &source)
+            .and_then(|()| add_faces(&staging, &requests))
+            .and_then(|faces| {
+                std::fs::rename(&staging, &target)
+                    .map_err(|error| {
+                        format!(
+                            "cannot move {} to {}: {error}",
+                            staging.display(),
+                            target.display()
+                        )
+                    })
+                    .map(|()| faces)
+            });
+        return match outcome {
+            Ok(faces) => Ok(applied(
+                root,
+                &target,
+                &package,
+                kind,
+                &produced(&target)?,
+                &faces,
+            )),
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&staging);
+                Err(format!(
+                    "{error}; nothing was written to {}",
+                    target.display()
+                ))
+            }
+        };
     }
     // The preview runs the executor for real, in a throwaway directory whose name is the
     // destination's, so the paths it reports are the paths the apply writes, one directory
@@ -124,11 +145,180 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
         || std::ffi::OsString::from("project"),
         std::ffi::OsStr::to_os_string,
     ));
-    let outcome =
-        scaffold::create_project(&staged, &package, kind, &source).and_then(|()| produced(&staged));
-    let report = outcome.map(|files| preview(root, &target, &package, kind, &files));
+    let outcome = scaffold::create_project(&staged, &package, kind, &source)
+        .and_then(|()| add_faces(&staged, &requests))
+        .and_then(|faces| produced(&staged).map(|files| (files, faces)));
+    let report = outcome.map(|(files, faces)| preview(root, &target, &package, kind, &files, &faces));
     remove_copy(root, &work);
     report
+}
+
+/// What an apply says: where the project landed, every file it wrote, the faces it now
+/// derives, and the call that says whether it compiles.
+/// 落盘说的话：项目落在哪、写下的每个文件、它现在推导出的面，以及那句"它能不能编译"的调用。
+fn applied(
+    root: &Path,
+    target: &Path,
+    package: &str,
+    kind: ProjectKind,
+    files: &[(String, String)],
+    faces: &[String],
+) -> String {
+    let mut report = format!(
+        "applied: created the {kind} project `{package}` at {}\n",
+        target.display()
+    );
+    report.push_str(&format!(
+        "root {}: the destination is inside it\n",
+        root.display()
+    ));
+    report.push_str(&format!(
+        "wrote {} file(s) under {}:\n",
+        files.len(),
+        target.display()
+    ));
+    for (relative, _) in files {
+        report.push_str(&format!("  {relative}\n"));
+    }
+    report.push_str(&faces_block(faces));
+    report.push_str(
+        "the scaffolded manifest declares its own `[workspace]`, so this project is not a \
+         member of the root above\n",
+    );
+    report
+}
+
+/// The faces a project derives, as the block every reply about creation carries.
+/// 项目推导出的面，写作每条创建回复都带的那一块。
+///
+/// The faces are reported **here** rather than left to a second `registry` call: the round-13
+/// benchmark measured the create-a-project workflow as five to six round trips, and the tree is
+/// the fact the caller needs next — one call that creates and reports is the consolidation the
+/// community guidance asks for.
+/// 面**在这里**报出来，而不是留给第二次 `registry` 调用：第十三轮量到"新建项目"这条工作流要五到
+/// 六个往返，而这棵树正是调用方接下来需要的事实——一次调用既创建又报告，就是社区指引要求的那种合并。
+fn faces_block(faces: &[String]) -> String {
+    if faces.is_empty() {
+        return String::new();
+    }
+    let mut block = format!("faces {} (this project derives them now):\n", faces.len());
+    for face in faces {
+        block.push_str(face);
+        block.push('\n');
+    }
+    block.push_str(
+        "next   `check {face: \"default\"}` is the run that says whether this compiles\n",
+    );
+    block
+}
+
+/// The registration faces the request asks for **at creation time**.
+/// 请求在**创建时**就要的那些注册面。
+///
+/// One entry is `{"fields": {...}, "parent": "<node>"}` — the same shape `apply add` takes
+/// without its `action`, because the entries run through that very path. `parent` defaults to
+/// the project root, which is what "create a project with these two objects" means. The whole
+/// array is validated here, before anything is written, so a typo in the third entry cannot
+/// leave a project behind with two faces and a half-written third.
+/// 一条是 `{"fields": {...}, "parent": "<node>"}`——与 `apply add` 相同、只少了它的 `action`，
+/// 因为这些条目正是走那条路径。`parent` 默认是项目根，而"用这两个对象建一个项目"就是它。整批在这里、
+/// 在任何写入之前校验，因此第三条的拼写错误不会留下一个"有两个面、第三个写了一半"的项目。
+fn face_requests(arguments: &Value) -> Result<Vec<Value>, String> {
+    let Some(value) = arguments.get("faces") else {
+        return Ok(Vec::new());
+    };
+    let Some(items) = value.as_array() else {
+        return Err(
+            "`faces` must be an array of `{\"fields\": {...}, \"parent\": \"<node>\"}` objects, one per \
+             registration face to create — e.g. \"faces\":[{\"fields\":{\"module\":\"button\",\
+             \"kind\":\"Button\"}},{\"fields\":{\"module\":\"slider\",\"kind\":\"Slider\"}}]"
+                .to_owned(),
+        );
+    };
+    if items.is_empty() {
+        return Err(
+            "`faces` is empty: drop the key to scaffold a project with no registration face yet"
+                .to_owned(),
+        );
+    }
+    let mut requests = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let Some(object) = item.as_object() else {
+            return Err(format!(
+                "`faces[{index}]` must be an object with `fields`; one entry is \
+                 {{\"fields\": {{\"module\": \"button\", \"kind\": \"Button\"}}}}"
+            ));
+        };
+        if !object.get("fields").is_some_and(Value::is_object) {
+            return Err(format!(
+                "`faces[{index}]` requires `fields`, one JSON object holding the new face's fields \
+                 — accepted shape: {{\"module\": \"<snake_case>\", \"kind\": \"<Kind>\"}}"
+            ));
+        }
+        let mut request = serde_json::Map::new();
+        for (key, value) in object {
+            match key.as_str() {
+                "fields" | "parent" => {
+                    request.insert(key.clone(), value.clone());
+                }
+                other => {
+                    return Err(format!(
+                        "`faces[{index}].{other}` is not a key this shape takes; one entry is \
+                         {{\"fields\": {{...}}, \"parent\": \"<node>\"}} — the same shape \
+                         `apply add` takes, without `action`"
+                    ));
+                }
+            }
+        }
+        requests.push(Value::Object(request));
+    }
+    Ok(requests)
+}
+
+/// Add every face the request asked for, **through the executor `apply add` runs**.
+/// 把请求要的每个面加进去——**走 `apply add` 用的那个执行器**。
+///
+/// In order, so a folder face added earlier can be a later entry's `parent`; the fields are the
+/// ones that path already validates, which is why this is a loop over requests rather than a
+/// second mapping of field names.
+/// 按顺序，因此先加进去的文件夹面可以是后一条的 `parent`；字段校验用的是那条路径已经有的那一套，
+/// 因此这里是对请求的循环，而不是第二份字段名映射。
+fn add_faces(staging: &Path, requests: &[Value]) -> Result<Vec<String>, String> {
+    let namespace = crate::mcp::registry::namespace(staging)?;
+    for (index, request) in requests.iter().enumerate() {
+        crate::mcp::apply::run_add(staging, &namespace, request)
+            .map_err(|error| format!("`faces[{index}]` was refused: {error}"))?;
+    }
+    let faces = crate::build_time::face_views(staging, &namespace)?;
+    Ok(faces
+        .iter()
+        .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))
+        .collect())
+}
+
+/// A sibling of the destination to build the project in, so the finished tree can be moved
+/// into place with **one** rename on the same filesystem.
+/// 目的地的一个同级目录，用来在里面把项目建好，于是成品可以用**一次** rename 移到位（同一文件系统）。
+///
+/// A face the kernel refuses makes this a partial project, and a partial scaffold is worse than
+/// none — the reason `create_project` already removes what it wrote. Building beside the
+/// destination extends that promise to the faces: nothing exists under the destination until the
+/// whole thing is there.
+/// 某个面被内核拒绝会让它变成半成品，而半成品项目比没有更糟——这正是 `create_project` 失败时移除自己
+/// 写下的东西的理由。在目的地旁边建，把这个承诺扩展到面：在整棵树都在之前，目的地下面什么都没有。
+fn staging_directory(target: &Path) -> Result<PathBuf, String> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", target.display()))?;
+    let name = target
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "project".to_owned());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    Ok(parent.join(format!(".nichlink-new-{name}-{stamp}")))
 }
 
 /// The one required string argument named `key`.
@@ -271,6 +461,7 @@ fn preview(
     package: &str,
     kind: ProjectKind,
     files: &[(String, String)],
+    faces: &[String],
 ) -> String {
     let mut report = format!(
         "preview: nichlink.new_project would create the {kind} project `{package}` at {}\n",
@@ -288,6 +479,9 @@ fn preview(
         files.len(),
         target.display()
     ));
+    if !faces.is_empty() {
+        report.push_str(&faces_block(faces));
+    }
     for (relative, content) in files {
         report.push_str(&format!("+ {relative}\n"));
         for line in content.lines() {

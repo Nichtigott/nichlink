@@ -280,7 +280,15 @@ pub(crate) fn tools() -> Vec<Value> {
              **virtual workspace root** is answered against that root's own directory — the \
              destination is explicit, so containment in the root is the whole ownership question \
              and no member has to be picked. \
-             `package` is the crate name and `kind` is `binary` or `library`. **A request is \
+             `package` is the crate name and `kind` is `binary` or `library`. `faces` creates \
+             registration faces **in the same call**, so starting a project that already has two \
+             objects is one request rather than a scaffold plus one `apply add` per object: each \
+             entry is `{\"fields\": {\"module\": \"button\", \"kind\": \"Button\"}, \"parent\": \"<node>\"}` \
+             — the shape `apply add` takes, without `action` — and `parent` defaults to the project \
+             root. The entries run through that same executor, in order, and the reply reports the \
+             faces the project now derives, so a second `registry` call is not needed; an entry the \
+             kernel refuses leaves the destination untouched, because the whole project is built \
+             beside it and moved in with one rename. **A request is \
              previewed unless `apply` is true**: the preview runs that executor in a throwaway \
              directory and prints every path it would write, with the bytes, under the real \
              destination and the root it is inside; `apply: true` writes them. A destination that \
@@ -292,6 +300,7 @@ pub(crate) fn tools() -> Vec<Value> {
                 "directory":{"type":"string","description":"where the project is written; relative paths are taken against `root` and a destination outside it is refused"},
                 "package":{"type":"string","description":"the new crate's name (letters, digits, `_` or `-`)"},
                 "kind":{"type":"string","enum":["binary","library"],"description":"the entry the scaffold writes: `src/main.rs` or `src/lib.rs`"},
+                "faces":{"type":"array","description":"registration faces to create in the same call, in order; each entry is `{\"fields\": {\"module\": \"button\", \"kind\": \"Button\"}, \"parent\": \"<node>\"}` (the shape `apply add` takes, without `action`); `parent` defaults to the project root","items":{"type":"object","properties":{"fields":{"type":"object","description":"the new face's fields, the same ones `apply add` takes (`module` is required in practice: a module name is what the executor names the file and directory after)"},"parent":{"type":"string","description":"the logical path or identity of the parent face; defaults to the project root"}},"required":["fields"]}},
                 "apply":{"type":"boolean","description":"false (the default) previews in a throwaway directory; true writes the project"},
                 "confirm":{"type":"boolean","description":"must be true when the destination directory already exists: the write lands in a directory the caller already has, so the request says it rather than the bridge assuming it"},
                 "root":{"type":"string"}

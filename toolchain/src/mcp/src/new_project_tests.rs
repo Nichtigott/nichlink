@@ -377,3 +377,142 @@ fn the_new_project_preview_states_its_stop_condition() {
         "and says the preview wrote nothing: {answer}"
     );
 }
+
+/// `faces` creates the project and its registration faces in **one** call, and the reply
+/// reports the tree the project now derives — so "start a project with these two objects" is
+/// one round trip instead of a scaffold plus one `apply add` per object. Round 13 measured the
+/// old shape at five to six calls for exactly this task.
+/// `faces` 用**一次**调用把项目与它的注册面一起建出来，并且回复报告项目现在推导出的那棵树——因此
+/// "用这两个对象建个项目"是一个往返，而不是一次脚手架加每个对象一次 `apply add`。第十三轮量到旧形状
+/// 在这道题上要五到六次调用。
+#[test]
+fn faces_creates_the_project_and_its_registration_faces_in_one_call() {
+    let fixture = root("faces-one-call");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app",
+            "package": "app",
+            "kind": "library",
+            "faces": [
+                {"fields": {"module": "button", "kind": "Button"}},
+                {"fields": {"module": "slider", "kind": "Slider"}},
+            ],
+            "apply": true,
+        }),
+    );
+    assert!(!failed, "{report}");
+    assert!(
+        fixture.path.join("app/src/button/button.rs").is_file()
+            && fixture.path.join("app/src/slider/slider.rs").is_file(),
+        "both faces are on disk: {report}"
+    );
+    // The tree is reported here rather than left to a second `registry` call: that is the
+    // consolidation, and this assertion is what keeps it from silently going away.
+    // 这棵树在这里报出来，而不是留给第二次 `registry` 调用：那就是这次合并，而这枚断言就是不让它悄悄消失。
+    assert!(
+        report.contains("faces 2") && report.contains("root/button") && report.contains("root/slider"),
+        "the reply names the faces the project derives: {report}"
+    );
+    assert!(
+        report.contains("check"),
+        "and the call that says whether it compiles: {report}"
+    );
+}
+
+/// A preview with `faces` writes **nothing** — not the project and not a face — and it still
+/// prints the faces it would derive. The default stays preview for the whole operation, because
+/// a preview that quietly created the faces would be the one write a caller cannot undo.
+/// 带 `faces` 的预览**什么都不写**——既不写项目也不写面——而它仍然打印它会推导出的面。整个操作的默认仍是
+/// 预览，因为一份悄悄把面建出来的预览会成为调用方唯一撤不回的那次写入。
+#[test]
+fn a_faces_preview_writes_nothing_at_all() {
+    let fixture = root("faces-preview");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app",
+            "package": "app",
+            "kind": "library",
+            "faces": [{"fields": {"module": "button", "kind": "Button"}}],
+        }),
+    );
+    // Read the destination first: the assertion has to fail on the write, not on the reply.
+    // 先读目的地：断言必须失败在那次写入上，而不是失败在回复上。
+    let entries: Vec<_> = std::fs::read_dir(&fixture.path)
+        .expect("fixture root")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        entries.is_empty(),
+        "a preview left {entries:?} behind under {}",
+        fixture.path.display()
+    );
+    assert!(!failed, "{report}");
+    assert!(
+        report.contains("nothing was written") && report.contains("root/button"),
+        "the preview promises the faces without writing them: {report}"
+    );
+}
+
+/// An entry the executor refuses leaves the destination **untouched**: the project is built
+/// beside it and moved in with one rename, so a refused face cannot leave a half-created
+/// project — and it cannot leave a staging directory either.
+/// 被执行器拒绝的条目会让目的地**原封不动**：项目在它旁边建好、用一次 rename 移进去，因此一个被拒的面
+/// 既不会留下半个项目，也不会留下暂存目录。
+#[test]
+fn a_refused_face_leaves_the_destination_and_no_staging_behind() {
+    let fixture = root("faces-refused");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app",
+            "package": "app",
+            "kind": "library",
+            "faces": [
+                {"fields": {"module": "button", "kind": "Button"}},
+                {"parent": "nowhere", "fields": {"module": "slider", "kind": "Slider"}},
+            ],
+            "apply": true,
+        }),
+    );
+    assert!(failed, "a face whose parent does not exist is refused: {report}");
+    let entries: Vec<_> = std::fs::read_dir(&fixture.path)
+        .expect("fixture root")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        entries.is_empty(),
+        "the refused batch left {entries:?} under {}",
+        fixture.path.display()
+    );
+    assert!(
+        report.contains("nothing was written"),
+        "and the refusal says so: {report}"
+    );
+
+    // The shape checks run before anything is built, so a key this entry does not take is
+    // refused by name rather than ignored.
+    // 形状检查发生在建任何东西之前，因此这条条目不接受的键会被点名拒绝，而不是被忽略。
+    let (shape, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app2",
+            "package": "app2",
+            "kind": "library",
+            "faces": [{"fields": {"module": "button"}, "bogus": 1}],
+            "apply": true,
+        }),
+    );
+    assert!(failed, "{shape}");
+    assert!(
+        shape.contains("faces[0].bogus"),
+        "the refusal names the key and the position: {shape}"
+    );
+    assert!(
+        !fixture.path.join("app2").exists(),
+        "and nothing was created for it: {shape}"
+    );
+}

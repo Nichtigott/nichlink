@@ -153,7 +153,13 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
 
 /// What one successful executor call changed.
 /// 一次成功的执行器调用改了什么。
-struct Outcome {
+///
+/// `pub(crate)` because `new_project` runs the same `add` path for the faces a request
+/// asks for at creation time, and that path must stay one implementation rather than
+/// two field mappings that drift.
+/// `pub(crate)` 是因为 `new_project` 对请求在创建时就要的那些面跑的是同一条 `add` 路径——
+/// 这条路径必须只有一份实现，而不是两份会漂移的字段映射。
+pub(crate) struct Outcome {
     message: String,
     /// `<path>:<line>` of the face declaration this change produced, when there is
     /// one (a delete moves the file away and has none).
@@ -277,7 +283,7 @@ fn invalid_field(fields: &Value, action: Action) -> Option<String> {
 
 /// Create a face.
 /// 创建一个注册面。
-fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
+pub(crate) fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
     if let Some(problem) = invalid_field(fields, Action::Add) {
         return Err(problem);
