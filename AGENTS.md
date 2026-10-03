@@ -365,12 +365,22 @@ checkout, repoints their `path` dependencies here, detaches them from the
 workspace and builds them from scratch. Every other check builds the examples
 where the workspace's members, relative paths, shared `target/` and shared
 lockfile all happen to be right; this is the one that fails when a host layout
-assumption only holds in-tree. `tools/nichlink-publish --verify-consumers` is its
-counterpart for published crates, and it needs the index.
+assumption only holds in-tree. It has a third leg for the *generated* host:
+with the checkout's own CLI it scaffolds a binary and a library project outside
+the checkout (one letting the CLI detect this checkout, one told `--path`) and
+runs `cargo test --offline` in each, because a template that names the wrong
+crate compiles nowhere until somebody builds what it writes — which is how five
+mis-anchored paths survived two rename batches.
+`tools/nichlink-publish --verify-consumers` is its counterpart for published
+crates, and it needs the index.
 `tools/nichlink-external-rehearsal` 把两个示例宿主复制到检出之外，把它们的 `path` 依赖指向
 这里，让它们脱离工作区并从零构建。其他所有检查都在"工作区成员、相对路径、共享 `target/` 与
 共享 lockfile 恰好都成立"的地方构建示例；只有这一条会在"宿主布局假设只在树内成立"时失败。
-`tools/nichlink-publish --verify-consumers` 是它在已发布 crate 上的对应物，那条需要 index。
+它还有第三条腿，针对**生成出来**的宿主：用本检出的 CLI 在检出之外生成一个二进制项目与一个库
+项目（一条让 CLI 自行探测本检出，一条显式给 `--path`），并各跑一次 `cargo test --offline`
+——因为一份把 crate 名写错的模板在有人构建它写出的东西之前，在哪里都编译不过，而五处失锚正是
+这样熬过了两个改名批次。`tools/nichlink-publish --verify-consumers` 是它在已发布 crate 上的
+对应物，那条需要 index。
 
 `tools/nichlink-package-audit` checks two different things. Package *contents* —
 every `src/**/*.rs` module and the declared README must be in the package — are
