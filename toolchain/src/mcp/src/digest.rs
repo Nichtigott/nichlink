@@ -105,14 +105,23 @@ pub(crate) fn digest(root: &Path, arguments: &Value) -> Result<String, String> {
         ));
     }
     lines.push(
+        // The contract half used to be listed here as not covered, while this very reply prints a
+        // `contract:` line per function above it — a sentence contradicting its own output, which a
+        // reader then learned as boilerplate. What is genuinely not covered is named instead.
+        // 契约那半曾经被列在这里当"不覆盖"，而这条回复自己在上面逐函数印了 `contract:` 行——一句与
+        // 自己输出矛盾的话，读者随后就把它学成了样板文。这里改为只点名真正不覆盖的。
         "not covered here: which branches are dead and which are covered (ask `check {face}` for \
-         the whole-tree census), the contract in full (ask `read {path, line}`), and whether the \
-         functions are reachable from tests by the static walk (that column is in the same census)"
+         the whole-tree census), and whether the functions are reachable from tests by the static \
+         walk (that column is in the same census)"
             .to_owned(),
     );
     lines.push(
-        "next   `read {path, line}` for a body, `callgraph {function}` for one function's callers \
-         and callees"
+        // `callgraph` used to be named here, but this reply already prints each function's caller
+        // count; what it does not print is the body, so the pointer says only that.
+        // 这里曾经点名 `callgraph`，但这条回复已经逐函数印了调用者数量；它没印的是函数体，所以指引
+        // 只留那一件事。
+        "next   `read {path, line}` for a body, `why --at` for what a line's own definition \
+         depends on"
             .to_owned(),
     );
     Ok(format!("{}\n", lines.join("\n")))

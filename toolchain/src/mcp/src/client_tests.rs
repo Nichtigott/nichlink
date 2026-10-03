@@ -104,6 +104,52 @@ fn the_instructions_name_the_symptom_and_the_call() {
     );
 }
 
+/// The one-line list is the form every session reads, so it is the form with a bound: the round
+/// measured 17 KB being read by 26 of 26 sessions, referenced by none, and truncating under
+/// `head -60` — which cut off the `keys:` line that marks `face` required, so seven of seven
+/// truncating sessions sent a bare `check` and burned a refusal.
+/// 一行式清单是每场都读的形态，因此也是要有上限的形态：那一轮量到 17 KB 被 26/26 场读、被 0 场引用，
+/// 并在 `head -60` 下被截——截掉的恰是标注 `face` 必填的 `keys:` 行，于是七个截断的会话都发了裸
+/// `check`、白吃一次拒绝。
+#[test]
+fn the_one_line_list_stays_small_and_keeps_the_entry_calls() {
+    assert!(
+        SHAPES_SHORT.len() < 2600,
+        "the short page has to fit a reader's first screen: {}",
+        SHAPES_SHORT.len()
+    );
+    for expected in [
+        "new_project",
+        "consistency --parent",
+        "apply {action: \"add\"}",
+        "apply {action: \"deepen\"}",
+        "affected",
+        "Symptom first",
+        "verdict is the first line of its reply",
+        "--shapes",
+    ] {
+        assert!(
+            SHAPES_SHORT.contains(expected),
+            "missing `{expected}`: {SHAPES_SHORT}"
+        );
+    }
+    // The long page is still reachable by name, and still carries what the short one drops.
+    // 长页仍可按名字取到，并且仍带短页省掉的东西。
+    assert!(INSTRUCTIONS.len() > SHAPES_SHORT.len());
+    // And the whole one-line reply — what a session actually reads — has a bound of its own.
+    // 而整条一行式回复——会话真正读到的那个——有自己的上限。
+    let whole = std::iter::once(SHAPES_SHORT.to_owned())
+        .chain(std::iter::once(String::new()))
+        .chain(list_tool_lines())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        whole.len() < 5000,
+        "`--list` is the largest reply of a session and must stay a screenful: {}",
+        whole.len()
+    );
+}
+
 /// The table no longer says the exit code is the verdict: round 7 measured that promise false, and a
 /// reader who believed it read a red face as green.
 /// 流程表不再说"退出码就是判定"：第七轮量出那句承诺是假的，而信了它的读者把红面读成了绿。

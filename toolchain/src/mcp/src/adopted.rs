@@ -505,14 +505,27 @@ fn renew(root: &Path, arguments: &Value, ledger: &Path) -> Result<String, String
     let evidence = text("evidence")?;
     let verifier = text("verifier")?;
     let reason = text("reason")?;
-    let files = arguments
-        .get("files")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "a renewal requires `files`, the paths the decision rests on".to_owned())?
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
+    // A single `--files a` arrives as a string, not as a one-element array: the one-shot client turns
+    // a repeated flag into an array and has no way to know which keys are lists. Refusing it said
+    // "a renewal requires `files`" while `files` **was** given — the round measured that false refusal,
+    // the workaround it drove the caller to (a repeated flag, which reached the ledger as `path,path`
+    // and printed the wrong fingerprint), and the cost of both.
+    // 单个 `--files a` 到手时是字符串而不是单元素数组：一次性客户端把重复的开关收成数组，却无从知道哪些
+    // 键是列表。拒绝它时说"a renewal requires `files`"，而 `files` **明明给了**——那一轮量到这次假拒绝、
+    // 它逼出的绕道写法（重复开关，落到台账里是 `path,path`、印出错指纹），以及两者的代价。
+    let files = match arguments.get("files") {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+        Some(Value::String(one)) => vec![one.clone()],
+        _ => return Err(
+            "`files` names the paths the decision rests on: pass `--files <path>` (repeatable) \
+                 or `files` in `--json`"
+                .to_owned(),
+        ),
+    };
     if files.is_empty() {
         return Err("`files` must name at least one path".to_owned());
     }

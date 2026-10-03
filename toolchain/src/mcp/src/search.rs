@@ -402,9 +402,15 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         // 死路正是调用方最需要下一步的地方：名字与文本是两个问题，而**按名字**失败的拼法
         // （`Type::method`、枚举变体、失败断言印出的那句话）恰恰是 `literal` 能答的那些。评测量出了
         // 这个代价：连着三轮，"范围收窄"那一步都是"去找这句话在哪里产出"，而答案只能来自桥外的 grep。
+        // The dead end names the exact call to make. The round measured "pass `literal`" being read
+        // as a description rather than as an instruction — and a `const` name is exactly the spelling
+        // that fails as a name while succeeding as text.
+        // 这条死路点名要发的**那一次**调用。那一轮量到 "pass `literal`" 被读成描述而非指令——而 `const`
+        // 名恰恰是"按名字失败、按文本成功"的那种拼法。
         results.push(format!(
-            "no matches in {} — names only; for text (a message, an enum variant, a qualified \
-             spelling like `Type::method`) pass `literal`",
+            "no matches in {} — names only. Names and text are different questions: for text (a \
+             message, an enum variant, `Type::method`, a `const` name) run `search {{literal: \
+             \"<your phrase>\"}}`",
             root.display()
         ));
         // A string that looks like several names is the one shape this layer cannot tell from a

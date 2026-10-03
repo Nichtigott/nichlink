@@ -146,7 +146,7 @@ fn the_source_half_still_answers_file_and_function_names() {
     // 意图没变——什么都没匹配上的查询会说出来——而答案现在也点名那个本可以匹配的问题，因为名字与文本
     // 是两种检索。
     assert!(none.starts_with("no matches"), "{none}");
-    assert!(none.contains("pass `literal`"), "{none}");
+    assert!(none.contains("search {literal:"), "{none}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -361,7 +361,15 @@ fn a_name_that_matches_nothing_points_at_the_literal_mode() {
     let (root, _name) = package("hint");
     let text = search(&root, &json!({"query": "FrameworkMismatch"})).expect("an answer");
     assert!(text.contains("no matches"), "{text}");
-    assert!(text.contains("pass `literal`"), "{text}");
+    // The pointer is a pastable call now, not the phrase "pass `literal`": the round measured that
+    // phrase being read as a description, and a `const` name is exactly what fails as a *name*.
+    // 指引现在是一条可粘贴的调用，而不是 "pass `literal`" 这句话：那一轮量到那句被读成描述，而
+    // `const` 名恰恰就是"按名字失败"的那种拼法。
+    assert!(text.contains("search {literal:"), "{text}");
+    assert!(
+        !text.contains("pass `literal`"),
+        "the bare pointer is gone: {text}"
+    );
     assert!(text.contains("Type::method"), "{text}");
     let _ = std::fs::remove_dir_all(&root);
 }

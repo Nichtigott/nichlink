@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""逐题协议（per-question protocol）· 第十轮：**一题一会话、一题一棵树、两臂同形状**。
+
+为什么要换这个跑法：多题一会话时，"逐题 token"在**构造上**就切不出来（两臂都在会话开头做跨题批扫、
+之后用 `cd` 后的相对路径干活），任何切法都是假的；而"整轮"又因两侧回合结构不同而不可比。
+⇒ **一题一会话**之后，每一题的 token 就是**那个会话自己的 usage 合计**（harness 本来就记了，不需要归属切分）。
+
+三个子命令：
+  `setup`   —— 从 `target/round9/trees/` 制备两臂各自的 26 份副本（+ `carrier/`），并**逐棵复算 sha256 对回 `TREES.json`**（含 `g1`=s3、`g2`=s5 的别名）；
+  `brief <arm> <id>` —— 打印该题的 run brief（题面 + 工具 + 记录要求 + 禁令），供一次性会话直接使用；
+  `measure` —— 扫描会话目录，按每题任务书里的探针串 `ROUND10 <arm> <id>` 找到**该题的会话**，
+              从它自己的 `usage` 合计出三档 token / 步 / 推理字符（**无需归属切分** ✓），再与逐题仪器日志对账。
+
+**token 口径**：`usage` 是**每步增量**（`inputTokens` / `cacheReadTokens` / `write` / `outputTokens`），
+一题一会话时**直接求和**就是该题的用量；要分"答题段 / 装置段"就在两个时刻的累计值上**做差**（本轮不需要）。
+两侧同一把尺：同一套字段、同一个求和规则、同样把"索引成本"（codegraph 的 `init`）单列。
+"""
+import argparse, hashlib, json, pathlib, re, shutil, subprocess, sys, collections
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+R9 = ROOT / 'target/round9/trees'
+R10 = ROOT / 'target/round10'
+SESS = pathlib.Path.home() / '.dsh/sessions/--home-nich-Moirai_N3-nichlink--'
+SKIP = {'target', '.codegraph', '.git'}
+
+IDS = ['r1', 'r2', 'r3', 'r4', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8',
+       'g1', 'g2', 'g3', 'g4', 'h1', 'fa', 'fb', 'fc', 'fd', 'fe',
+       'h1-supply-chain', 'h2-claim-unkept', 'h3-cross-file-chain', 'h4-one-file-many-algorithms']
+ALIAS = {'g1': 's3', 'g2': 's5'}                      # 复用根：g1≡s3、g2≡s5（各拷一份独立副本）
+QUESTION = {
+    'r1': '注入缺陷：`cargo test --offline` 恰有 1 条失败。交付＝根因 文件:行号 + 最小修 + 反证。',
+    'r2': '注入缺陷：`cargo test --offline` 恰有 1 条失败。交付＝根因 文件:行号 + 最小修 + 反证。',
+    'r3': '注入缺陷：`cargo test --offline` 恰有 1 条失败。交付＝根因 文件:行号 + 最小修 + 反证。',
+    'r4': '注入缺陷：`cargo test --offline` 恰有 1 条失败。交付＝根因 文件:行号 + 最小修 + 反证。',
+    's1': '谁调用了 `ledger_core::store::Store::post`（调用者在另一个 crate）。',
+    's2': '全绿但有一个面是红的，是哪个面。', 's3': '哪些函数没有任何测试能到达。',
+    # s4 的题面在源 BRIEF 里没有先行词（"这个类型"），实测同一臂两次跑会读成不同实体
+    # （Store vs Entry），而第七轮预设是 Store 口径 ⇒ 本轮把所指写死，保证两臂同题。
+    's4': '哪些测试文件能到达 `ledger_core::store::Store`（即 s1 点名的那个类型）、经哪条路。', 's5': '渲染缺了什么。',
+    's6': '契约与实现一致吗。', 's7': '分桶的上限含不含 1000。', 's8': '条数行的位置。',
+    'g1': '还有哪些地方是没有任何测试能到达的——给可核对的具体函数 文件:行，并说出你看不见什么。',
+    'g2': '用一段伪代码说明这段渲染逻辑想做什么，再指出实现与意图的差。',
+    'g3': '给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿。',
+    'g4': '这棵树里有哪些臂是没有任何执行能进入的；给出每条判据，并说清哪些你判不了、为什么。',
+    'h1': '（范围型）检查这个仓库还有没有别的问题——先给可核对的全树总账、逐栏处置。',
+    'fa': '「我要加一个新对象，和现有的差不多。」', 'fb': '「这个对象内部还不够。」',
+    'fc': '「已经采信了，现在再横向加一个。」（台账必须还在）', 'fd': '「这个对象有问题。」',
+    'fe': '「这几个对象都有问题。」',
+    'h1-supply-chain': '渲染出来的布局不对：`cargo test --offline` 在偏移测试里失败，而那个总和**没有任何单个 widget 自己的代码能解释**——每一个 widget 文件单看都正确。交付＝根因 文件:行号 + 机制 + 最小修 + 反证。',
+    'h2-claim-unkept': '这份设计采纳的一条约束，在**后来的某个兄弟**身上没有成立；并且**有一条台账条目**不再描述它点名的字节。树能构建、它的测试也过——问题在台账与兄弟的形状里，不在测试运行里。',
+    'h3-cross-file-chain': '`every_declared_widget_ships` 失败：源码里有一个面已经写好，但**发布出来的注册树里没有它**。找出为什么、给最小修。',
+    'h4-one-file-many-algorithms': '一个文件里有多套算法，其中有的不对劲。找出问题、给判据，并说清哪一部分你判不了。',
+}
+# 只读题（第九轮 BRIEF §3 的原文口径）：`s*`/`g4` **与四道 hardbug 类**只读；
+# `r1–r4`/`fa–fe`/`g3`/`h1` 可改。本轮我漏了 hardbug 四类（把它们标成可改），是装置错误。
+READ_ONLY = {'s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'g1', 'g2', 'g4',
+             'h1-supply-chain', 'h2-claim-unkept', 'h3-cross-file-chain', 'h4-one-file-many-algorithms'}
+# 这几道题的宿主包在 `host/` 子目录里：`--root` 必须是那个 package 根，指到树根会答成"空树/faces unavailable"
+PKG_ROOT = {'h1-supply-chain': 'host', 'h2-claim-unkept': 'host', 'h3-cross-file-chain': 'host'}
+
+
+def treehash(root):
+    h = hashlib.sha256(); files = []
+    for p in root.rglob('*'):
+        if p.is_file():
+            rel = p.relative_to(root)
+            if not any(x in SKIP for x in rel.parts):
+                files.append((str(rel).replace('\\', '/'), p))
+    for rel, p in sorted(files):
+        b = p.read_bytes()
+        h.update(rel.encode()); h.update(b'\x00'); h.update(str(len(b)).encode()); h.update(b'\x00'); h.update(b); h.update(b'\x00')
+    return h.hexdigest()
+
+
+def setup():
+    M = json.loads((ROOT / 'target/round9/TREES.json').read_text())['trees']
+    for arm in ('ours', 'cg'):
+        for d in ('trees', 'logs', 'answers'):
+            (R10 / arm / d).mkdir(parents=True, exist_ok=True)
+        for i in IDS:
+            src = R9 / ALIAS.get(i, i)
+            dst = R10 / arm / 'trees' / i
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst, ignore=shutil.ignore_patterns('target', '.codegraph', '.git'))
+        car = R10 / arm / 'trees' / 'carrier'
+        if car.exists():
+            shutil.rmtree(car)
+        shutil.copytree(R9 / 'carrier', car, ignore=shutil.ignore_patterns('target', '.codegraph', '.git'))
+        ok, bad = 0, []
+        for i in IDS:
+            want = M[ALIAS.get(i, i)]['sha256']
+            got = treehash(R10 / arm / 'trees' / i)
+            if got == want:
+                ok += 1
+            else:
+                bad.append((i, got[:16], want[:16]))
+        print(f'{arm}: 副本 {ok}/{len(IDS)} 对回登记哈希' + ('' if not bad else f'  ✗ 不符 {bad}'))
+    print(f'装置根：{R10}（ours/ 与 cg/ 各有 trees·logs·answers）')
+
+
+def brief(arm, i):
+    ins = ('./target/debug/nichlink-mcp' if arm == 'ours'
+           else f'{ROOT}/target/round7/tools-upstream/v1.6.1/bin/codegraph')
+    log = f'target/round10/{arm}/logs/{i}.' + ('jsonl' if arm == 'ours' else 'txt')
+    root = f'target/round10/{arm}/trees/{i}' + (('/' + PKG_ROOT[i]) if i in PKG_ROOT else '')
+    if arm == 'ours':
+        how = (f'- 工具：`{ins} --call <tool> --root {root} …`，**每次调用都带** `--log {log}`。\n'
+               f'- 先 `--call status`/`--call registry` 摸树，再用 check/why/callgraph/consistency/conformance/read/digest 等。')
+    else:
+        how = (f'- 工具：`{ins}`（子命令 `init/files/node/query/callers/callees/explore/affected`）。\n'
+               f'- 你在**自己的副本**里工作（`{root}`，可写）：先 `cd {root} && {ins} init .`。\n'
+               f'- 每次调用把原文追加到 `{log}`，三行式：`=== CMD: …` / 原始输出 / `=== EXIT: N`。')
+    ro = '**只读**（不许改这棵树）' if i in READ_ONLY else '可改，但交付后 `cargo test --offline`（cg 臂同样）必须绿'
+    return f"""ROUND10 {arm} {i}
+
+你是「{arm}」这一臂的答题者，**只答这一道题**（一题一会话）。题号 `{i}`。
+
+**题面**：{QUESTION[i]}
+**树**：`{root}`（{ro}）
+{how}
+
+**答案**写到 `target/round10/{arm}/answers/{i}.md`，固定五段形状：
+① 症状一句；② 根因/结论 `文件:行号` + 机制一句；③ 最小修或改动清单；④ 反证（什么观察能证伪你、你实际做了什么排除）；
+⑤ 调用清单（工具 + 作用，一行一条）。
+
+**禁令**：**不许读 `target/round7`、`target/round8`、`target/round9` 下的任何文件**
+（唯一例外：cg 臂的 codegraph 二进制在 `target/round7/tools-upstream/` 下，那一个可执行文件可用）——
+那些目录里有对照答案、真值与**上一臂的交付态树**，读了就等于抄；也不许拿别的题树做"参照 diff"（用**你自己那棵树**）。
+**并且除 `target/round10/` 之外的整个 `target/` 与整个 `docs/` 都在禁令内** ——
+`target/` 下有对照答案（`round7/answer-*`）、隔离题树（`round8/`）、上一轮的答案与日志（`round9/answers|logs`）、
+早几轮的评测记录（`nichlink-t1/`、`probe-*/`）、真值（`hardbug-runs/**/.audit/`）等；
+本轮因禁令只写到 `round7|8|9` 而**判废 8 题**（含"读了上一轮分析文件/渲染文件"两条）。**唯一例外**：cg 臂的 codegraph 可执行文件在 `target/round7/tools-upstream/` 下。
+**也不许把那些目录作为任何命令的搜索路径**（`grep -r`/`find`/`rg`/`ls -R` 一律限定在 `target/round10/` 内）——
+全仓搜索会顺带把对照答案与真值的**片段**打印出来（实测一次 `grep -rn` 就命中了 `round7/answer-*-g2.md` 与对话记录里的答案正文），
+那同样算泄漏、会导致该题判废重跑。不许 `git log/show` 查题树历史；凡断言"某条路径"（X 经 Y 到 Z），每一跳都要回源码定义处核过（不许由命名推断）。
+发现装置问题（树不对、工具异常）单独写 `target/round10/{arm}/answers/APPARATUS-{i}.md` 并说明。"""
+
+
+def _first_user_text(path):
+    """该会话的**第一条 user/message** 的文本 —— 那才是它自己的任务书。
+
+    不能拿"全文含探针串"定位 ✗：别的题的会话、以及队长的会话都可能引用到那个串
+    （实测：`cg-r3` 的会话里出现过 `ROUND10 ours r3`，于是它被算成了 ours-r3）。
+    """
+    proc = subprocess.Popen(['zstd', '-dc', str(path)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    raw = proc.stdout.read(400000).decode('utf-8', 'replace')      # 第一条 user message 就在会话开头
+    proc.kill()
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except Exception:
+            continue
+        if r.get('type') == 'user/message':
+            d = r.get('data') or {}
+            return json.dumps(d.get('content'), ensure_ascii=False) if not isinstance(d.get('content'), str) else d['content']
+    return ''
+
+
+def latest_session(arm, i):
+    """该题该臂**最近一次**运行的会话。
+
+    ⚠️ 不能取 `sessions_for(...)[-1]` —— 那是**按目录名排序**的最后一个，与会话时间无关；
+    重跑过的题会因此取到"中间那次"（第十轮 r2 就取到了树未复位的那次，步数/输出/推理全错位）。
+    """
+    hits = sessions_for(arm, i)
+    return max(hits, key=lambda x: x[1].stat().st_mtime) if hits else None
+
+
+def reset_question(arm, i):
+    """把**可改题**的副本复位回题目态，并移存上一 attempt 的日志与答案。
+
+    重跑前必做：成员做完可改题会**改树**（第九轮就踩过），若不复位，下一 attempt 拿到的是
+    "已修好的树" ⇒ 注入缺陷不可观察，答案只能靠还原实验反推（第十轮 r4/g3 都这样中招）。
+    """
+    if i in READ_ONLY:
+        return 'read-only, nothing to reset'
+    tree = pathlib.Path(f'target/round10/{arm}/trees/{i}')
+    pristine = pathlib.Path(f'target/round9/trees/{i}')
+    if not tree.exists() or not pristine.exists():
+        return 'missing tree'
+    # 注意：**不能排除 `.nichlink`** —— 台账是题目态的一部分（fc 的题面就是"已有采信台账"），
+    # 排除它会让"上一 attempt 追加过台账"的树看起来是干净的（第十轮 fc 就这么漏过）。
+    subprocess.run(['rsync', '-a', '--delete', '--exclude', '.codegraph', '--exclude', '.git',
+                    '--exclude', '.cargo', '--exclude', '.cg-target',
+                    str(pristine) + '/', str(tree) + '/'], check=False)
+    # **树内的 `target/` 必须删掉**：它是上一 attempt 的构建产物，会让第一次 `cargo test --offline`
+    # 假绿（cargo 认为已构建 ⇒ 不重编 ⇒ 跑的是旧二进制，可能已是修复态），
+    # 于是"注入缺陷"看不见（第十轮 r2 干净重跑时实测：fresh 指纹 0.05s 9 passed 假绿）。
+    shutil.rmtree(tree / 'target', ignore_errors=True)
+    for kind, ext in (('logs', 'jsonl' if arm == 'ours' else 'txt'), ('answers', 'md')):
+        src = pathlib.Path(f'target/round10/{arm}/{kind}/{i}.{ext}')
+        if src.exists():
+            src.rename(src.with_suffix(f'.voided.{ext}'))
+    return 'reset'
+
+
+def sessions_for(arm, i):
+    """按**该题任务书里的独特路径**在"第一条 user message"里定位（一题一会话 ⇒ 恰一个）。"""
+    # 两种写法都要认：详细任务书写了 `logs/<id>.…`，简短任务书只写了 `briefs/<arm>-<id>.md`
+    probes = [f'target/round10/{arm}/logs/{i}.', f'target/round10/briefs/{arm}-{i}.md']
+    hits = []
+    for d in sorted(SESS.iterdir()):
+        if not d.is_dir():
+            continue
+        for f in sorted(d.glob('session*.jsonl.zstd')):
+            head = _first_user_text(f)
+            if any(pr in head for pr in probes):
+                hits.append((d.name, f))
+    return hits
+
+
+def measure():
+    M = json.loads((ROOT / 'target/round9/TREES.json').read_text())['trees']
+    print(f'{"题":26s}{"臂":6s}{"会话":38s}{"步":>4s}{"未命中":>10s}{"缓存读":>12s}{"输出":>8s}{"推理字符":>9s}{"仪器":>5s}')
+    agg = collections.defaultdict(collections.Counter)
+    for i in IDS:
+        for arm in ('ours', 'cg'):
+            hits = sessions_for(arm, i)
+            if not hits:
+                print(f'{i:26s}{arm:6s}{"(未找到会话)":38s}')
+                continue
+            sid, f = hits[-1]
+            raw = subprocess.run(['zstd', '-dc', str(f)], capture_output=True).stdout.decode('utf-8', 'replace')
+            u = collections.Counter(); steps = 0
+            for line in raw.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                if r.get('type') != 'assistant/message':
+                    continue
+                us = (r.get('data') or {}).get('usage') or {}
+                if us.get('cacheReadTokens') is None:
+                    continue
+                steps += 1
+                u['in'] += us.get('inputTokens', 0); u['cr'] += us.get('cacheReadTokens', 0)
+                u['out'] += us.get('outputTokens', 0)
+                parts = ((r['data'].get('message') or {}).get('content')) or []
+                u['reason'] += sum(len(p.get('text', '')) for p in parts if isinstance(p, dict) and p.get('type') == 'reasoning')
+            logp = R10 / arm / 'logs' / (f'{i}.jsonl' if arm == 'ours' else f'{i}.txt')
+            inst = 0
+            if logp.exists():
+                t = logp.read_text(errors='replace')
+                inst = len([l for l in t.splitlines() if l.strip()]) if arm == 'ours' else t.count('=== CMD:')
+            agg[arm].update(u); agg[arm]['steps'] += steps; agg[arm]['inst'] += inst; agg[arm]['n'] += 1
+            print(f'{i:26s}{arm:6s}{sid:38s}{steps:>4d}{u["in"]:>10,}{u["cr"]:>12,}{u["out"]:>8,}{u["reason"]:>9,}{inst:>5d}')
+    print()
+    for arm in ('ours', 'cg'):
+        a = agg[arm]
+        den = a['in'] + a['cr']
+        print(f"{arm}: {a['n']} 题 · 步 {a['steps']} · 未命中 {a['in']:,} · 缓存读 {a['cr']:,} · "
+              f"输出 {a['out']:,} · 推理 {a['reason']:,} · 仪器 {a['inst']} · 命中率 {a['cr']/den*100:.2f}%")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('cmd', choices=['setup', 'brief', 'measure', 'sessions'])
+    ap.add_argument('args', nargs='*')
+    a = ap.parse_args()
+    if a.cmd == 'setup':
+        setup()
+    elif a.cmd == 'brief':
+        print(brief(a.args[0], a.args[1]))
+    elif a.cmd == 'sessions':
+        for i in IDS:
+            for arm in ('ours', 'cg'):
+                h = sessions_for(arm, i)
+                print(f'{i:26s}{arm:6s}{[x[0] for x in h]}')
+    else:
+        measure()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

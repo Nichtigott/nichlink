@@ -51,6 +51,35 @@ use serde_json::{Map, Value};
 /// 它是一张**流程表**，因为评测失败的地方正在这里：旧文本是一条 202 字符的句子，对面是约 28,000 字符的
 /// 逐工具散文，而只读每条描述第一小句的 agent 手上没有任何东西说"哪种症状用哪个工具"。表里点名症状、
 /// 该发的调用、以及这次调用答不了的那一件事。
+/// The short form of the guidance page: seven shapes, the symptom rule, and the verdict rule.
+/// 指引页的短形态：七种形状、症状规则、判定规则。
+///
+/// The round measured the long page as read by every session and referenced by none: 17 KB, the
+/// largest single reply of a session, and the sessions that piped it through `head -60` lost the
+/// `keys:` line marking `face` required — so seven of the seven that truncated sent a bare
+/// `check` and burned a refusal. What is kept here changes a decision: the entry call per shape,
+/// and the two rules a reader acts on. The long page is still there, behind `--shapes`.
+/// 那一轮量到长页「每场都读、无一引用」：17 KB、会话里最大的一条回复，而接进 `head -60` 的会话
+/// 丢掉了标注 `face` 必填的 `keys:` 行——截断的七题里七题随后发了裸 `check`、白吃一次拒绝。
+/// 留在这里的是能改变决定的部分：每种形状的入口调用，与读者会照做的两条规则。长页仍在 `--shapes` 后面。
+pub const SHAPES_SHORT: &str = "\
+**Put the request into one of seven shapes first** — by what it names and which way it moves:\n\
+  empty tree          -> `new_project` -> `registry` -> `check`\n\
+  inspect one object  -> `search {query}` / `locate {symptom}` -> `read {path, line}` -> `why --at` -> `check {face}`\n\
+  a family            -> `consistency --parent <parent>` — **one** call names the outlier\n\
+  inspect several     -> `consistency --parent` once, then one object at a time\n\
+  a range question    -> `check` and dispose of every census column\n\
+  add an object       -> `registry` -> `apply {action: \"add\"}` -> `consistency --specimen` -> `check`\n\
+  deepen an object    -> `explain {node}` -> `apply {action: \"deepen\"}` -> `check`\n\
+  move or merge       -> `affected` -> `why` (plan half) -> `grafts` -> `apply`\n\
+**Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the next clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
+**`check`'s verdict is the first line of its reply** (`verdict  passed (cargo exit 0)`), not this client's exit code (`0` answered, `1` refused, `2` a usage error).\n\
+The full guidance page is `--shapes`; one tool's whole description is `--list <tool>`.\n\
+**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
+
+/// The long guidance page: the prose behind every branch above, and still the text an MCP
+/// client is handed at `initialize`. Read it by name with `--shapes`.
+/// 长指引页：上面每一条背后的散文，也是 MCP 客户端在 `initialize` 时拿到的文本。用 `--shapes` 按名字取它。
 pub const INSTRUCTIONS: &str = "\
 **Place the request in one of seven shapes first — by what it names and which way it moves, not by \
 its wording.** The signals are structural (how many objects it names, whether it inspects, adds, \
@@ -260,7 +289,18 @@ pub fn list_tool_lines() -> Vec<String> {
                 .get("description")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let first = first_sentence(description);
+            // The one-line list carries a handle, not the description: ten words are enough to
+            // choose a tool, and `--list <tool>` prints the rest. Truncating by words keeps the
+            // cut off a UTF-8 boundary. The round measured this line as the largest reply of a
+            // session (`--list` at 17 KB, read by 26/26 and referenced by none).
+            // 一行式清单给的是一个把手，不是描述：十个词够挑工具了，剩下的 `--list <tool>` 会印。
+            // 按词截断，避免切在 UTF-8 边界上。那一轮量到这一行是会话里最大的一条回复
+            // （`--list` 17 KB，26/26 读、0/26 引用）。
+            let first: String = first_sentence(description)
+                .split_whitespace()
+                .take(5)
+                .collect::<Vec<_>>()
+                .join(" ");
             // The shape of the call, on the same line as its name: the round measured an arm
             // guessing a key (`--face` where the tool wanted `node`) and burning a refusal on it,
             // because this list named the tool without naming what it takes.
@@ -390,7 +430,7 @@ pub fn run_client(arguments: &[String]) -> Client {
             }
         }
         "--list" | "-l" => {
-            for block in std::iter::once(INSTRUCTIONS.to_owned())
+            for block in std::iter::once(SHAPES_SHORT.to_owned())
                 .chain(std::iter::once(String::new()))
                 .chain(list_tool_lines())
             {
@@ -400,6 +440,10 @@ pub fn run_client(arguments: &[String]) -> Client {
             }
             Client::Called(0)
         }
+        // The long page, by name. The one-line list carries the shapes; this carries the prose,
+        // for a reader who asks for it instead of getting it every session.
+        // 长页，按名字取。一行式清单带形状；这一支带散文，给主动要它的读者，而不是每场都塞给它。
+        "--shapes" => Client::Called(emit_or_stop(INSTRUCTIONS).unwrap_or(0)),
         "--help" | "-h" => Client::Called(emit_or_stop(USAGE).unwrap_or(0)),
         // A bare tool name is a call: `nichlink-mcp callgraph --function x` reads the way a command
         // line reads, and requiring `--call` first cost the round a refused call.

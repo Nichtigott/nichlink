@@ -555,10 +555,14 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
         }
         let set = siblings(&faces, parent);
         if set.is_empty() {
-            sections.push(format!(
-                "family {parent} · member {} · 0 members (no face sits directly under it)",
-                member.name
-            ));
+            // A member with no face under it contributes nothing, and the round measured this
+            // line being read as an answer rather than as an early exit: a session on a tree
+            // with no registered face spent steps on family tools whose every row said "0
+            // members". Emit the line only when the whole family is empty, so one sentence
+            // states the shape instead of one sentence per member.
+            // 底下没有面的成员不贡献任何信息，而那一轮量到这一行被当成答案而不是早退：在没有注册面
+            // 的树上，一个会话为每个"0 成员"的家族工具行花了步数。只在**整个家族都空**时印一句，
+            // 让一句话说清形状，而不是每个成员一句。
             continue;
         }
         let mut rows: Vec<String> = vec![format!(

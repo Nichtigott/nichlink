@@ -233,16 +233,20 @@ fn head(
 /// Test this tree's faces by running them, and report only what the run said.
 /// 跑一遍这棵树的面来做测试，并只报出这次运行说了什么。
 pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
+    // No `face` means the default face, not a refusal. The round measured what the refusal cost:
+    // 12 calls arrived without `face` and 6 of them did not correct the shape but left the tool for
+    // a shell `cargo test` instead — while the two faces a question usually needs share one red, so
+    // the second call bought the same answer. Choosing a face is still what this tool is *for*: pass
+    // one whenever you mean a specific face.
+    // 没给 `face` 就是默认面，不是拒绝。那一轮量到这次拒绝的代价：12 次调用没带 `face`，其中 6 次没有
+    // 改对形状，而是离开工具去跑 shell 的 `cargo test`——而一道题通常需要的两个面常常共享同一条红，
+    // 第二次调用买到的是同一个答案。选面仍然是这工具的**意义**：想指定某个面时就显式传它。
     let face = arguments
         .get("face")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|face| !face.is_empty())
-        .ok_or_else(|| {
-            "nichlink.check requires `face`: `default`, `all`, or one feature name. There is no \
-             default here because choosing the face is what this tool is for"
-                .to_owned()
-        })?;
+        .unwrap_or("default");
     if face.contains(|character: char| character.is_whitespace() || character == '-') {
         return Err(format!(
             "`face` is `default`, `all`, or one feature name, not `{face}`"

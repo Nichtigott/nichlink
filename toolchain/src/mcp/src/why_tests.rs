@@ -163,7 +163,14 @@ fn the_plan_facts_ride_with_the_line() {
         "the attribute and its own line are named: {answer}"
     );
     assert!(
-        answer.contains("scope unknown (no source_scope.tsv; run `nichlink check`)")
+        // The line names the CLI that writes the file (this bridge never builds) and the calls that
+        // answer the same question without it: the round measured readers spending steps trying to
+        // make the bridge run `nichlink check`, which it cannot.
+        // 这一行点名写那个文件的**是 CLI**（本桥从不构建），以及不需要它也能回答同一问题的调用：那一轮
+        // 量到读者花步数想让桥去跑 `nichlink check`，而桥做不到。
+        answer.contains("scope unknown (no source_scope.tsv")
+            && answer.contains("CLI")
+            && answer.contains("registry")
             && answer.contains("pruning unknown (no pruning_manifest.tsv"),
         "an unbuilt tree is answered as unbuilt rather than as out-of-scope: {answer}"
     );

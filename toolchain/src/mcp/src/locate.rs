@@ -200,7 +200,7 @@ pub(crate) fn locate(root: &Path, arguments: &Value) -> Result<String, String> {
             total,
             CANDIDATES,
             "candidate locations",
-            "narrow the symptom's words, or read the ranked few first",
+            "pass a narrower word from the symptom, or `read {path, line}` the top few",
         ));
     }
     lines.push(

@@ -830,7 +830,16 @@ fn next_hint(name: &str) -> Option<&'static str> {
     let hint = match name {
         "nichlink.status" => "next   `registry` lists the tree, `check {face}` runs one face\n",
         "nichlink.registry" => {
-            "next   `explain {node}` for one face's contract, `check {face}` for whether it builds\n"
+            // A tree with no registered face is the case the round measured: `registry` printed
+            // `0 face(s) (no faces)` while this line still sent the reader to `explain {node}`, and
+            // four steps and 37 KB went into working out what "the object" could mean. The line now
+            // covers that branch itself.
+            // 没有任何注册面的树就是那一轮量到的情形：`registry` 印 `0 face(s) (no faces)`，而这一行
+            // 仍把读者送去 `explain {node}`，四步与 37 KB 花在猜"对象"指什么。这一行现在自己覆盖那一支。
+            "next   `explain {node}` for one face's contract, `check {face}` for whether it builds; \
+             on a tree with **no registered face** `explain` can only say `no such node` — there \
+             \"the object\" means a *symbol*, so go `search {query}` / `locate {symptom}` / \
+             `read {path, line}` first\n"
         }
         "nichlink.explain" => {
             "next   `callgraph {function}` for its callers and callees, `read {path, line}` for the body\n"
