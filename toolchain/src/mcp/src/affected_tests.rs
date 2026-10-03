@@ -72,3 +72,36 @@ fn an_empty_file_list_is_a_usage_error() {
     let error = affected(&root, &json!({"files": []})).expect_err("no paths is a usage error");
     assert!(error.contains("at least one path"), "{error}");
 }
+
+/// One path, a comma list, and a JSON array are the same request.
+/// 一个路径、逗号列表、JSON 数组是同一个请求。
+///
+/// The round measured the comma list failing: `--files "a.rs,b.rs"` reached the tool as **one** path
+/// named `a.rs,b.rs` and answered `not in the index`, while the same two paths in a JSON array
+/// worked. Nothing about the argument's type says "one path" — its spelling does.
+/// 那一轮量到逗号列表失败：`--files "a.rs,b.rs"` 以**一个**名为 `a.rs,b.rs` 的路径到达并答
+/// `not in the index`，而同样两个路径写成 JSON 数组就成功。参数的**类型**并没有说"这是一个路径"——
+/// 是它的**拼法**在说。
+#[test]
+fn the_three_spellings_of_several_files_agree() {
+    let root = package("spellings");
+    let one = affected(&root, &json!({"files": ["src/shared.rs"]})).expect("an answer");
+    let comma = affected(&root, &json!({"files": "src/shared.rs"})).expect("an answer");
+    assert_eq!(
+        one, comma,
+        "a one-element string is the same request as a one-element array"
+    );
+    // And a real comma list is read as two paths, not one.
+    // 而真正的逗号列表被读成两个路径，不是一个。
+    write_fixture(&root.join("src/quiet.rs"), "pub fn quiet_helper() {}\n");
+    let two = affected(&root, &json!({"files": "src/shared.rs, src/quiet.rs"})).expect("an answer");
+    assert!(
+        !two.contains("not in the index"),
+        "neither path may be reported as unknown: {two}"
+    );
+    assert!(
+        two.contains("src/shared.rs: 1 definition(s)")
+            && two.contains("src/quiet.rs: 1 definition(s)"),
+        "both paths are answered: {two}"
+    );
+}

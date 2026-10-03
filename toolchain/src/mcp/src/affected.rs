@@ -34,7 +34,20 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
             .filter_map(Value::as_str)
             .map(str::to_owned)
             .collect::<Vec<_>>(),
-        Some(Value::String(path)) => vec![path.clone()],
+        // A comma-separated string is the third spelling of "several files", and the round measured
+        // it failing: `--files "a.rs,b.rs"` reached the tool as **one** path named `a.rs,b.rs` and
+        // answered `not in the index`, while the same two paths in a JSON array worked. Nothing
+        // about the argument's type says "one path" — its spelling does, and a comma is how a list
+        // is written on a command line.
+        // 逗号分隔的字符串是"多个文件"的第三种拼法，而那一轮量到它失败：`--files "a.rs,b.rs"` 以**一个**
+        // 名为 `a.rs,b.rs` 的路径到达，答 `not in the index`，而同样两个路径写成 JSON 数组就成功。参数的
+        // **类型**并没有说"这是一个路径"—— 是它的**拼法**在说，而逗号正是命令行上写列表的方式。
+        Some(Value::String(spelled)) => spelled
+            .split(',')
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
         _ => {
             return Err(
                 "nichlink.affected requires `files`: one path, a list of paths, or repeated \
