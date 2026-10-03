@@ -793,32 +793,26 @@ fn the_table_says_a_path_claim_is_read_at_each_hop() {
 /// `["a","b"]` 的符号去查。恰好能解析成 JSON 的标量仍走标量那条路。
 #[test]
 fn a_value_that_spells_a_json_array_is_read_as_one() {
-    // `Refusal` carries no `Debug`, so the failure arm is spelled out rather than `.expect`-ed.
-    // `Refusal` 没有 `Debug`，所以失败那一支写开来，而不是用 `.expect`。
-    let parsed = match call_from_arguments(&[
-        "callgraph".to_owned(),
-        "--function".to_owned(),
-        "[\"a\",\"b\"]".to_owned(),
-    ]) {
-        Ok(text) => text,
-        Err(_) => panic!("the call must be accepted"),
-    };
-    let request: serde_json::Value = serde_json::from_str(&parsed).expect("json");
+    // Test the reader itself, not someone else's output shape: the first version of this pin
+    // assumed `call_from_arguments` returns JSON and asserted on a string it does not produce.
+    // 测读取器本身，不测别人的输出形状：这条钉子的第一版假设 `call_from_arguments` 返回 JSON，
+    // 结果断言了一个它并不产生的字符串。
     assert_eq!(
-        request.get("function"),
-        Some(&serde_json::json!(["a", "b"])),
-        "an array-shaped value is an array: {parsed}"
+        json_container("[\"a\",\"b\"]"),
+        Some(serde_json::json!(["a", "b"]))
     );
-    // A scalar that happens to parse as JSON stays a scalar: `--function 7` is the name `7`.
-    // 恰好能解析成 JSON 的标量仍是标量：`--function 7` 就是名字 `7`。
-    let scalar = match call_from_arguments(&[
-        "callgraph".to_owned(),
-        "--function".to_owned(),
-        "7".to_owned(),
-    ]) {
-        Ok(text) => text,
-        Err(_) => panic!("the call must be accepted"),
-    };
-    let scalar: serde_json::Value = serde_json::from_str(&scalar).expect("json");
-    assert_eq!(scalar.get("function"), Some(&serde_json::json!(7)));
+    assert_eq!(
+        json_container("{\"a\":1}"),
+        Some(serde_json::json!({"a": 1}))
+    );
+    // Scalars keep the scalar path even when they parse as JSON.
+    // 标量即使能解析成 JSON 也仍走标量那条路。
+    for scalar in ["7", "true", "null", "\"quoted\""] {
+        assert_eq!(json_container(scalar), None, "{scalar}");
+    }
+    // A value that merely starts like a container is still a string.
+    // 只是开头像容器的值仍然是字符串。
+    for text in ["[not json", "{", "plain", ""] {
+        assert_eq!(json_container(text), None, "{text}");
+    }
 }
