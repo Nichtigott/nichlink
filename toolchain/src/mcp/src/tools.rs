@@ -191,7 +191,7 @@ pub(crate) fn tools() -> Vec<Value> {
              `orphans: true` asks the other question — which functions this tree defines and no \
              function here calls — and counts the test-file half separately, because the harness is \
              what calls those.",
-            json!({"type":"object","properties":{"function":{"type":"string"},"orphans":{"type":"boolean","description":"list the functions this tree defines that no function here calls; functions in test files are counted separately because the test harness calls them"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"source":{"type":"boolean","description":"also print each definition's own lines (capped, declared through the truncation outlet)"},"root":{"type":"string"}},"anyOf":[{"required":["function"]},{"required":["orphans"]}]}),
+            json!({"type":"object","properties":{"function":{"oneOf":[{"type":"string"},{"type":"array","items":{"type":"string"},"maxItems":8}],"description":"one symbol name, or up to 8 in one call (each answer is byte-identical to asking alone)"},"orphans":{"type":"boolean","description":"list the functions this tree defines that no function here calls; functions in test files are counted separately because the test harness calls them"},"path":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"source":{"type":"boolean","description":"also print each definition's own lines (capped, declared through the truncation outlet)"},"root":{"type":"string"}},"anyOf":[{"required":["function"]},{"required":["orphans"]}]}),
         ),
         tool(
             "nichlink.read",

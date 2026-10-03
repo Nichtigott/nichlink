@@ -143,6 +143,31 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
     if arguments.get("orphans").and_then(Value::as_bool) == Some(true) {
         return orphan_answer(root, arguments);
     }
+    // Several symbols in one call: `{"function": ["a", "b"]}`. The round measured what asking one at
+    // a time costs — each answer is a whole turn, and a turn re-sends the context — while the work
+    // of "which of these are called, and by whom" is one question about one tree. Every answer here
+    // is byte-identical to asking for that symbol alone; they are joined, not merged.
+    // 一次问几个符号：`{"function": ["a", "b"]}`。那一轮量过"逐个问"的代价——每份答案是一整轮，而一轮要把
+    // 上下文再发一遍——而"这几个谁被调用、被谁调用"本就是关于一棵树的一个问题。这里每份答案与单独问那个
+    // 符号**逐字相同**，只是拼接，不做合并。
+    if let Some(Value::Array(items)) = arguments.get("function") {
+        if items.len() > 8 {
+            return Err(format!(
+                "`function` takes at most 8 names in one call ({} given); repeat the call, or use \
+                 `orphans` for every definition this tree never calls",
+                items.len()
+            ));
+        }
+        let mut answers = Vec::new();
+        for item in items {
+            let mut one = arguments.clone();
+            if let Some(map) = one.as_object_mut() {
+                map.insert("function".to_owned(), item.clone());
+            }
+            answers.push(callgraph(root, &one)?);
+        }
+        return Ok(answers.join("\n"));
+    }
     let query = arguments
         .get("function")
         .and_then(Value::as_str)

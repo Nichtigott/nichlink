@@ -677,11 +677,15 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
          in a parent rule is not visible here; and `api` compares the names called, not the units \
          or the arithmetic — an outlier is a place to look, not a defect; and a call written inside \
          a macro body is not read as a call (the kernel's rule), so an object whose whole body is one \
-         macro invocation reads as calling nothing"
+         macro invocation reads as calling nothing — **on such a tree `api` has nothing to compare, \
+         so use `by: kind` or `by: source` (they compare the declared value, not the calls), or \
+         `specimen` (which compares against the shape a ledger entry certifies)**"
             .to_owned(),
     );
     sections.push(
-        "next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields"
+        "next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields, \
+         and on a tree whose members are each one macro invocation `by: kind` / `by: source` / \
+         `specimen` for a signal that does not need calls"
             .to_owned(),
     );
     Ok(format!("{}\n", sections.join("\n")))

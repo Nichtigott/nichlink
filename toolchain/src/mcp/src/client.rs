@@ -569,6 +569,23 @@ nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage e
 
 /// Assemble and run one `--call`.
 /// 组装并执行一次 `--call`。
+/// A command-line value that spells a JSON array or object, read as one.
+/// 命令行上拼成 JSON 数组或对象的值，按它读。
+///
+/// Only containers qualify: a scalar that happens to parse as JSON (`"7"`, `"true"`) keeps the
+/// scalar path, so a key's own declared type still decides how a plain number or word is read.
+/// 只有容器算数：恰好能解析成 JSON 的标量（`"7"`、`"true"`）仍走标量那条路，因此一个键自己声明的
+/// 类型仍然决定一个普通数字或词该怎么读。
+fn json_container(text: &str) -> Option<Value> {
+    if !text.starts_with('[') && !text.starts_with('{') {
+        return None;
+    }
+    match serde_json::from_str::<Value>(text) {
+        Ok(value @ (Value::Array(_) | Value::Object(_))) => Some(value),
+        _ => None,
+    }
+}
+
 fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
     // The tool name may sit **anywhere** among the flags. A round measured the cost of requiring it
     // first: `--call --json … --root … s3` was refused with "needs a tool name, not `--json`" and
@@ -650,7 +667,20 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         let value = match remaining.get(at) {
             Some(next) if !next.starts_with("--") => {
                 at += 1;
-                scalar_for(&key, next)
+                // A value that spells a JSON array or object **is** one: `--function '["a","b"]'`
+                // is how "several symbols in one call" is written on a command line host, and the
+                // round measured what happens without this — the text arrived as one string, the
+                // tool looked for a symbol literally named `["a","b"]`, and the caller concluded
+                // the array form was unsupported. A value that does not parse, or that parses to a
+                // scalar, still goes through `scalar_for`: a string may legitimately begin with `[`.
+                // 拼成 JSON 数组或对象的值**就是**它：`--function '["a","b"]'` 是命令行宿主上写"一次问
+                // 几个符号"的方式，而那一轮量到了没有它的后果——文本作为一个字符串到达，工具去找一个字面
+                // 名叫 `["a","b"]` 的符号，调用方于是以为不支持数组形式。解析不了、或解析出标量的值仍走
+                // `scalar_for`：字符串本来就可能以 `[` 开头。
+                match json_container(next) {
+                    Some(value) => value,
+                    None => scalar_for(&key, next),
+                }
             }
             _ => Value::Bool(true),
         };

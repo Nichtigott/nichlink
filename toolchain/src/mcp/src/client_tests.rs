@@ -780,3 +780,39 @@ fn the_table_says_a_path_claim_is_read_at_each_hop() {
         "and it says why naming is not enough: {INSTRUCTIONS}"
     );
 }
+
+/// A command-line value that spells a JSON array or object is read as one.
+/// 命令行上拼成 JSON 数组或对象的值，按它读。
+///
+/// The round measured the cost of the alternative three times over: `--files a` arrived as a string
+/// (a false "a renewal requires `files`"), a repeated `--files a --files b` reached the ledger as
+/// `path,path`, and `--function '["a","b"]'` was searched for as one symbol literally named
+/// `["a","b"]`. A scalar that merely parses as JSON keeps the scalar path.
+/// 那一轮的代价量到过三次：`--files a` 以字符串到达（假拒绝"a renewal requires `files`"）、重复的
+/// `--files a --files b` 落到台账里是 `path,path`、`--function '["a","b"]'` 被当成一个字面名叫
+/// `["a","b"]` 的符号去查。恰好能解析成 JSON 的标量仍走标量那条路。
+#[test]
+fn a_value_that_spells_a_json_array_is_read_as_one() {
+    let parsed = call_from_arguments(&[
+        "callgraph".to_owned(),
+        "--function".to_owned(),
+        "[\"a\",\"b\"]".to_owned(),
+    ])
+    .expect("a call");
+    let request: serde_json::Value = serde_json::from_str(&parsed).expect("json");
+    assert_eq!(
+        request.get("function"),
+        Some(&serde_json::json!(["a", "b"])),
+        "an array-shaped value is an array: {parsed}"
+    );
+    // A scalar that happens to parse as JSON stays a scalar: `--function 7` is the name `7`.
+    // 恰好能解析成 JSON 的标量仍是标量：`--function 7` 就是名字 `7`。
+    let scalar = call_from_arguments(&[
+        "callgraph".to_owned(),
+        "--function".to_owned(),
+        "7".to_owned(),
+    ])
+    .expect("a call");
+    let scalar: serde_json::Value = serde_json::from_str(&scalar).expect("json");
+    assert_eq!(scalar.get("function"), Some(&serde_json::json!(7)));
+}
