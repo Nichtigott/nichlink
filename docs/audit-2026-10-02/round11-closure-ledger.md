@@ -15,7 +15,7 @@
 | --- | --- | --- | --- | --- |
 | A1 | `--list` 瘦身 | dd-r4 C3 · fd C3 · gc-refusal W1/W2 | **修掉** | 17,263 → **4,768 字节（−72%）**；长页移 `--shapes`；钉子两道（短表 <2,600 / 整条 <5,000） |
 | A2 | `status` 的 `next` 覆盖 0 面树 | dd-r4 C1 · fd C1/C7 | **修掉** | `tools.rs` 的 `next_hint`：0 面树上"对象"只能指符号 ⇒ 指 `search`/`locate`/`read` |
-| A3 | `locate` 零命中回接本树最近一次 `check` 的 `failed` 行 | fd C2 | **留置** | 要做"跨工具读最近一次 check 的输出"，需要一次设计（缓存位置、新鲜度、多面）；裁定：**下一轮**，因为它只在"零命中"时省 1–2 步 |
+| A3 | `locate` 零命中时回接 `check` 的 `failed` 行 | fd C2 | **修掉** | 零命中文案里点名「**若症状是失败测试，`check` 的 `failed` 行就是症状的原话**」，并解释本工具只排**源码里的词**（那个 `failed` 行里的词在源码里往往不存在）。这比"跨工具读缓存"更便宜也更对 |
 | A4 | `locate` 截断处方点名命令 | gc-boundary ① | **修掉** | 处方改为 `pass a narrower word …, or read {path, line} the top few` |
 | A5 | `digest`/`callgraph` 合并成一次"多符号"调用 | fd C4 | **留置** | 是新工具（对标 cg 的 `explore`），要设计 schema 与截断；裁定：**下一轮独立项** |
 | A6 | 编辑守卫：把"读后被改"变成自愈 | fd C5 | **留置** | 涉及写通道的安全语义（"读到的是不是你要改的那份"），要单独设计；裁定：**下一轮** |
@@ -34,7 +34,7 @@
 | A19 | `inspect`/`digest` 去重 | s7 T4 | **修掉** | `digest` 的 `next` 不再指 `callgraph`（它自己已印调用者数） |
 | **A20** | `explain`/`why` **直接读 OUT_DIR** | dd-r2fa F | **修掉（改文案版）** | 实测：`read_build_scope(&out)` 本来就已读 OUT_DIR，而这桥**从不构建** ⇒ 文件永不存在；改文案点名"那是 **CLI** 的 `nichlink check`" + 给出替代调用（`registry`/`why --at`/`read`）。**"让桥自己触发构建"是能力变更**，裁定：**下一轮** |
 | A21 | `consistency --parent` 在"成员体全是宏调用"的树上没有判据 | dd-r2fa ① | **留置** | 工具自己在 `not covered` 里承认"宏体里的调用读不到"；补它要改词法/宏展开层；裁定：**下一轮独立项** |
-| A22 | `apply` 语法自述不足（4 次被拒中 3 次是 apply） | dd-r2fa ③ | **留置** | 要按 `apply` 的六种 action 各给一份"最小可粘贴形状"；裁定：**下一轮** |
+| A22 | `apply` 语法自述不足（4 次被拒中 3 次是 apply） | dd-r2fa ③ | **修掉** | 逐个动作普查后发现：`add`/`rename`/`deepen` 的拒绝**本来就给** accepted shape，只有 **`edit` 与 `delete` 没给** ⇒ 补上两份最小形状（并指向 `--list apply` 的完整键表）。`apply` 是被拒最多的工具（41 次里 16 次） |
 | A23 | `digest` 的 `not covered here` 与自己输出矛盾 | gc-boundary ④ | **修掉** | 删掉"契约全文不覆盖"那半（它上面刚印了 `contract:`） |
 | **A24** | **workspace note 把根指到另一个工程**（真 bug） | gc-boundary ⑤ | **修掉** | 根因＝`enclosing_workspace` 用**子串**匹配成员名（`fe` 命中 `features`）+ 没判"自己就是 workspace 根"；已重写（自身 `[workspace]` 早退 + 成员按**整段**匹配），实测 `fe` 树不再印那条 note，钉子 `a_tree_that_is_its_own_workspace_has_no_enclosing_one` |
 | A25 | 其余纯声明句改写（gc-boundary 的 ①②③） | gc-boundary | **部分证实** | 已改 A4/A19/A23 三处；**其余分布在各工具**，未逐个普查；裁定：**部分**，下一轮按"这句话能粘成一次调用吗"逐个过 |
@@ -67,7 +67,8 @@
 
 ## 四、本轮结束时的状态
 
-- **修掉 17 条**（工具 14 + 装置 11 中的 10，去重后按条目计）。
+- **修掉 19 条**（工具 16 + 装置 11 中的 10，去重后按条目计）。
 - **部分证实 4 条**：A9 · A11 · A13 · A25（各自写明了"已够用/部分"与下一轮范围）。
-- **明确留置 7 条**：A3 · A5 · A6 · A10 · A20（"让桥自己构建"那半）· A21 · A22，外加行为面 C1–C5。
+- **明确留置 5 条**：A5 · A6 · A10 · A20（"让桥自己构建"那半）· A21，外加行为面 C1–C5。
+  （A3 与 A22 在本轮后续里已修掉，见上表。）
 - **没有一条是"没提到"**：本表即全量。

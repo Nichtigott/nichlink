@@ -171,7 +171,9 @@ pub(crate) fn locate(root: &Path, arguments: &Value) -> Result<String, String> {
         // 信号，因此在真正命中的查询上，这条指引不花任何代价。
         return Ok(format!(
             "no matches in {}: none of the symptom's words is in a function name or a doc comment in \
-             this tree — pass fewer or different words, or `search {{literal}}` for a phrase. If the \
+             this tree — pass fewer or different words, or `search {{literal}}` for a phrase. **If the \
+             symptom is a failing test, `check`'s `failed` line is the symptom's own words** — this \
+             tool ranks *source* words, so paste that line's phrase rather than the framework's summary. \
              symptom is about a **whole file** rather than a symbol (a file whose algorithms \
              contradict its own docs, a file nothing calls), that is a file-level question: `digest \
              {{file}}` summarises one file, `read {{path, whole: true}}` prints it with its symbols, \

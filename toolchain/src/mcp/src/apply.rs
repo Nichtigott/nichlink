@@ -365,7 +365,16 @@ fn run_edit(
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
-        .ok_or_else(|| "edit requires `node`: a logical path or a 32-digit identity".to_owned())?;
+        .ok_or_else(|| {
+            // Every other action names its accepted shape here; `edit` and `delete` did not,
+            // and the round measured `apply` being the most-refused tool (16 of 41 refusals).
+            // 别的动作都在这里点名可接受的形状，`edit` 与 `delete` 没有——而那一轮量到 `apply` 是
+            // 被拒最多的工具（41 次拒绝里占 16 次）。
+            "edit requires `node`: a logical path or a 32-digit identity — accepted shape: \
+             {\"action\":\"edit\",\"node\":\"<node>\",\"fields\":{\"<field>\":\"<value>\"},\"apply\":true} (the \
+             full key list is `--list apply`)"
+                .to_owned()
+        })?;
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
     let registry = load_registry(root, namespace)?;
     let id = resolve_node(root, namespace, target)?;
@@ -447,7 +456,10 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .get("node")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "delete requires `node`: a logical path or a 32-digit identity".to_owned()
+            "delete requires `node`: a logical path or a 32-digit identity — accepted shape: \
+             {\"action\":\"delete\",\"node\":\"<node>\",\"confirm\":true} (a delete previews first; the \
+             confirmation is what writes)"
+                .to_owned()
         })?;
     // The request says `confirm` itself. This used to be appended right here, which made the
     // sentence above — and the declared schema, which had no such key at all — describe something
