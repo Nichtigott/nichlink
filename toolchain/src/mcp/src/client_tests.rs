@@ -793,12 +793,16 @@ fn the_table_says_a_path_claim_is_read_at_each_hop() {
 /// `["a","b"]` 的符号去查。恰好能解析成 JSON 的标量仍走标量那条路。
 #[test]
 fn a_value_that_spells_a_json_array_is_read_as_one() {
-    let parsed = call_from_arguments(&[
+    // `Refusal` carries no `Debug`, so the failure arm is spelled out rather than `.expect`-ed.
+    // `Refusal` 没有 `Debug`，所以失败那一支写开来，而不是用 `.expect`。
+    let parsed = match call_from_arguments(&[
         "callgraph".to_owned(),
         "--function".to_owned(),
         "[\"a\",\"b\"]".to_owned(),
-    ])
-    .expect("a call");
+    ]) {
+        Ok(text) => text,
+        Err(_) => panic!("the call must be accepted"),
+    };
     let request: serde_json::Value = serde_json::from_str(&parsed).expect("json");
     assert_eq!(
         request.get("function"),
@@ -807,12 +811,14 @@ fn a_value_that_spells_a_json_array_is_read_as_one() {
     );
     // A scalar that happens to parse as JSON stays a scalar: `--function 7` is the name `7`.
     // 恰好能解析成 JSON 的标量仍是标量：`--function 7` 就是名字 `7`。
-    let scalar = call_from_arguments(&[
+    let scalar = match call_from_arguments(&[
         "callgraph".to_owned(),
         "--function".to_owned(),
         "7".to_owned(),
-    ])
-    .expect("a call");
+    ]) {
+        Ok(text) => text,
+        Err(_) => panic!("the call must be accepted"),
+    };
     let scalar: serde_json::Value = serde_json::from_str(&scalar).expect("json");
     assert_eq!(scalar.get("function"), Some(&serde_json::json!(7)));
 }
