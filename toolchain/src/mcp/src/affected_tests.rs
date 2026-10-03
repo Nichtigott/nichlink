@@ -73,6 +73,54 @@ fn an_empty_file_list_is_a_usage_error() {
     assert!(error.contains("at least one path"), "{error}");
 }
 
+/// Known defect T-27, pinned as it behaves today: a file whose only definition is `Store::new`
+/// "affects" a test that calls `Entry::new`, because the index records the bare `new` on both
+/// sides and `is_call_to` cannot tell the two owners apart.
+/// 已登记缺陷 T-27，按今天的样子钉住：只定义了 `Store::new` 的文件会"影响"一个只调用 `Entry::new`
+/// 的测试，因为索引两侧记的都是裸名 `new`，`is_call_to` 分不出两个属主。
+#[test]
+fn a_same_named_method_on_another_type_is_reported_as_affected() {
+    let root = package("t27");
+    write_fixture(
+        &root.join("src/entry.rs"),
+        "pub struct Entry;\nimpl Entry {\n    pub fn new() -> Entry { Entry }\n}\n",
+    );
+    write_fixture(
+        &root.join("src/store.rs"),
+        "pub struct Store;\nimpl Store {\n    pub fn new() -> Store { Store }\n}\n",
+    );
+    write_fixture(
+        &root.join("tests/uses_entry.rs"),
+        "#[test]\nfn it_builds_an_entry() {\n    let _ = Entry::new();\n}\n",
+    );
+    let text = affected(&root, &json!({"files": ["src/store.rs"]})).expect("an answer");
+    // The false positive itself: nothing in `tests/uses_entry.rs` touches `Store`.
+    // Flip this assertion when the match carries the owning type.
+    // 误报本体：`tests/uses_entry.rs` 里没有任何东西碰 `Store`。当匹配带上属主类型时翻转这条断言。
+    assert!(
+        text.contains("tests/uses_entry.rs"),
+        "T-27: the test calling `Entry::new` is listed for a change to `Store::new`: {text}"
+    );
+    assert!(
+        !text.contains("uses_shared"),
+        "the unrelated test is not listed, so the answer is not just every test: {text}"
+    );
+    // And the reply carries no self-disclosure of the collision: the `bare_on_qualified` note in
+    // `affected.rs` fires only on a call string containing `::`, while `direct_calls` records just
+    // the bare identifier before `(`, so the note can never fire on this path.
+    // 而回复不带任何关于这次撞名的自证：`affected.rs` 里的 `bare_on_qualified` 注只在调用串含 `::`
+    // 时触发，而 `direct_calls` 只记录 `(` 前的裸标识符，因此这条注在这条路上永远不会出现。
+    assert!(
+        !text.contains("qualified") && !text.contains("bare"),
+        "no wording admits the name collision (fix: record the qualifier in \
+         `kernel::source::direct_calls` and match owner-to-owner in `callgraph::is_call_to`): {text}"
+    );
+    // The true positive still works, so the pin is about the extra row, not the whole list.
+    // 真阳性仍然成立，因此这枚钉子钉的是多出来的那一行，而不是整张清单。
+    let entry = affected(&root, &json!({"files": ["src/entry.rs"]})).expect("an answer");
+    assert!(entry.contains("tests/uses_entry.rs"), "{entry}");
+}
+
 /// One path, a comma list, and a JSON array are the same request.
 /// 一个路径、逗号列表、JSON 数组是同一个请求。
 ///

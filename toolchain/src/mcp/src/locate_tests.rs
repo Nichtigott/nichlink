@@ -91,6 +91,94 @@ fn a_missing_symptom_is_refused_with_the_shape() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Known defect (audit r3), pinned as it behaves today: a symptom whose words live **only** in a
+/// function body's string literal finds nothing at all. The per-function corpus is the name and
+/// the doc comments; the one body reach is the whole-phrase bonus, and a `format!` hole breaks
+/// even that, so the answer is the empty one while the words sit in the tree.
+/// 已登记缺陷（审计 r3），按今天的样子钉住：词只活在**函数体字符串字面量**里的症状一个也找不到。
+/// 逐函数的语料只有名字与文档注释；唯一触及函数体的是整句加成，而一个 `format!` 占位符连它也打破，
+/// 于是答案是空的那一种，尽管这些词就在树里。
+#[test]
+fn a_symptom_that_lives_only_in_a_body_literal_finds_nothing() {
+    let root = scratch("locate-body");
+    std::fs::write(
+        root.join("src/limit.rs"),
+        "pub fn enforce(value: u32) -> Result<(), String> {\n\
+         \x20   if value > 9 {\n\
+         \x20       return Err(format!(\"flurb quota {} exceeded\", value));\n\
+         \x20   }\n\
+         \x20   Ok(())\n\
+         }\n",
+    )
+    .expect("fixture source");
+    let answer =
+        super::locate(&root, &json!({"symptom": "flurb quota exceeded"})).expect("an answer");
+    // Fix: score the masked body text per function in `locate`'s ranking loop; flip this then.
+    // 修法：在 `locate` 的排序循环里对掩码后的函数体文本逐函数计分；修复后翻转这条断言。
+    assert!(
+        answer.starts_with("no matches in"),
+        "the words are a string literal in `enforce`'s body, and the corpus is name + doc only: {answer}"
+    );
+    assert!(
+        !answer.contains("enforce"),
+        "the function that produces the message is never named: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Known defect (audit r1), pinned as it behaves today: the ranking never demotes a test file —
+/// `looks_like_a_test` only appends a `test file` reason to the row — so when a symptom hits five
+/// test files and one real source file, all five visible slots are tests and the file that
+/// produces the symptom is withheld unnamed.
+/// 已登记缺陷（审计 r1），按今天的样子钉住：排序从不给测试文件降权——`looks_like_a_test` 只是给行尾
+/// 追加一个 `test file` 理由——于是当症状命中五个测试文件与一个真因源文件时，五个可见槽位全是测试，
+/// 而产生症状的那个文件被匿名扣下。
+#[test]
+fn the_five_visible_slots_can_all_be_test_files() {
+    let root = scratch("locate-crowded");
+    std::fs::write(
+        root.join("src/grumble.rs"),
+        "pub fn enforce(level: u32) -> Result<(), String> {\n\
+         \x20   if level > 3 {\n\
+         \x20       return Err(\"grumble quota exceeded\".to_owned());\n\
+         \x20   }\n\
+         \x20   Ok(())\n\
+         }\n",
+    )
+    .expect("fixture source");
+    std::fs::create_dir_all(root.join("tests")).expect("fixture test dir");
+    for index in 0..5 {
+        std::fs::write(
+            root.join(format!("tests/t{index}.rs")),
+            "#[test]\nfn grumble_quota_exceeded_surfaces() {\n\
+             \x20   assert_eq!(\"grumble quota exceeded\", \"grumble quota exceeded\");\n\
+             }\n",
+        )
+        .expect("fixture test");
+    }
+    let answer =
+        super::locate(&root, &json!({"symptom": "grumble quota exceeded"})).expect("an answer");
+    assert!(answer.contains("6 candidate(s)"), "{answer}");
+    assert_eq!(
+        answer.matches("test file").count(),
+        5,
+        "all five visible rows are test files: {answer}"
+    );
+    // Fix: demote test rows in `locate`'s `rows.sort_by` (or cap their share of the visible
+    // slots); flip this assertion then.
+    // 修法：在 `locate` 的 `rows.sort_by` 里给测试行降权（或限制它们占可见槽位的份额）；修复后翻转
+    // 这条断言。
+    assert!(
+        !answer.contains("src/grumble.rs"),
+        "the file that produces the symptom is withheld unnamed: {answer}"
+    );
+    assert!(
+        answer.contains("withheld"),
+        "the cap says it cut one row, without naming which: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A symptom about a whole file gets the file-level shapes, not just "try other words".
 /// 关于**一整个文件**的症状得到文件级的形状，而不只是"换几个词试试"。
 ///

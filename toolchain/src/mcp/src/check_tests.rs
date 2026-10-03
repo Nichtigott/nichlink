@@ -386,3 +386,67 @@ fn a_census_that_fits_says_nothing_about_withholding() {
         sample.join("\n")
     );
 }
+
+/// Known defect (audit h4), remainder pinned as it behaves today on a real census: the g4 fix
+/// keeps every column **head** in the default sample (pinned above), but a column's judgement
+/// **rows** still lose to the global first-five take — so when the constants column fills the head
+/// of the census, the one branch row that names the dead arm is withheld unnamed, and only the
+/// head's count survives.
+/// 已登记缺陷（审计 h4），把其余留部分按今天在真实总账上的样子钉住：g4 修复让每一栏的**栏头**都活过
+/// 默认抽样（上方已钉），但一栏的判据**行**仍然输给全局的"取前五行"——于是当数值常量栏占满总账前部时，
+/// 唯一那行点名死臂的分支行被匿名扣下，只有栏头的计数活下来。
+#[test]
+fn the_sample_keeps_the_branch_head_but_drops_the_branch_row() {
+    let root = scratch("census-branch-row");
+    std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"fixture-census-sample\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("fixture manifest");
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub const LIMIT: i64 = 1000;\n\
+         pub fn word(amount: i64) -> i64 {\n\
+         \x20   if false {\n\
+         \x20       return 0;\n\
+         \x20   }\n\
+         \x20   amount\n\
+         }\n",
+    )
+    .expect("fixture source");
+    for name in ["a", "b", "c", "d", "e"] {
+        std::fs::write(
+            root.join(format!("src/{name}.rs")),
+            format!("pub fn {name}() -> i64 {{ 1000 }}\n"),
+        )
+        .expect("fixture source");
+    }
+    let census = crate::mcp::claims::census(&root, false).expect("the census answers");
+    let arm = census
+        .iter()
+        .find(|line| line.contains("`if false` guards an arm"))
+        .unwrap_or_else(|| {
+            panic!(
+                "the fixture must produce a branch row: {}",
+                census.join("\n")
+            )
+        })
+        .clone();
+    let sample = super::census_sample(&census).join("\n");
+    assert!(
+        sample.contains("branch-level: 1 constructively unreachable arm(s)"),
+        "the head survives, with its count: {sample}"
+    );
+    // Fix: keep each column's first row(s) in `census_sample`, not only its head; flip this then.
+    // 修法：让 `census_sample` 保留每一栏的头几**行**，而不只是栏头；修复后翻转这条断言。
+    assert!(
+        !sample.contains(&arm),
+        "but the one row that names the arm is withheld unnamed: {sample}"
+    );
+    assert!(
+        sample.contains("census rows withheld at the limit of 5"),
+        "the sample says how much it cut, never which row: {sample}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
