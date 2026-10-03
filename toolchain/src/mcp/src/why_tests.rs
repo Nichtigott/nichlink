@@ -168,8 +168,12 @@ fn the_plan_facts_ride_with_the_line() {
         // make the bridge run `nichlink check`, which it cannot.
         // 这一行点名写那个文件的**是 CLI**（本桥从不构建），以及不需要它也能回答同一问题的调用：那一轮
         // 量到读者花步数想让桥去跑 `nichlink check`，而桥做不到。
-        answer.contains("scope unknown (no source_scope.tsv")
-            && answer.contains("CLI")
+        // The line now separates the two truths: a tree that does not host nichlink has no scope to
+        // read at all, while one that does names the file and the CLI that writes it.
+        // 这一行现在把两种真相分开：没有接入 nichlink 的树根本没有 scope 可读，接入的树则点名文件与
+        // 写它的 CLI。
+        answer.contains("scope unknown")
+            && answer.contains("does not host nichlink")
             && answer.contains("registry")
             && answer.contains("pruning unknown (no pruning_manifest.tsv"),
         "an unbuilt tree is answered as unbuilt rather than as out-of-scope: {answer}"

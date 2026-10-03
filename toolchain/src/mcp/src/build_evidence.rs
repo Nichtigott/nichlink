@@ -148,7 +148,7 @@ fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence) -> St
 /// 作用域是否选中了这个面，以及原因。
 pub(crate) fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> String {
     let Some(scope) = scope else {
-        return "scope unknown (no source_scope.tsv — this bridge never builds, so the file is not there to read; the **CLI** `nichlink check --root <tree>` writes it). The scope answers one thing: whether the build selected this face. Without it, `registry` / `why --at` / `read {path, line}` still say which faces exist and what depends on a line\n".to_owned();
+        return "scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host nichlink** (no `build.rs` calling `build_time::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no nichlink build here at all. For a tree that **does** host it, the file is `<package>/target/nichlink/out/source_scope.tsv` and the **CLI** `nichlink check --root <tree>` writes it (this bridge never builds). Either way `registry` / `why --at` / `read {path, line}` answer without it\n".to_owned();
     };
     if scope.all {
         return format!("scope selected (all=true, mode={})\n", scope.mode);
@@ -212,7 +212,7 @@ fn tree_report(
             scope.selected_ids.len(),
             scope.selected_sources.len(),
         )),
-        None => output.push_str("scope unknown (no source_scope.tsv — this bridge never builds, so the file is not there to read; the **CLI** `nichlink check --root <tree>` writes it). The scope answers one thing: whether the build selected this face. Without it, `registry` / `why --at` / `read {path, line}` still say which faces exist and what depends on a line\n"),
+        None => output.push_str("scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host nichlink** (no `build.rs` calling `build_time::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no nichlink build here at all. For a tree that **does** host it, the file is `<package>/target/nichlink/out/source_scope.tsv` and the **CLI** `nichlink check --root <tree>` writes it (this bridge never builds). Either way `registry` / `why --at` / `read {path, line}` answer without it\n"),
     }
     // Rows carry the scope verdict each, so the projection answers "what ships"
     // per face rather than only in aggregate. The header names what a row is — a
