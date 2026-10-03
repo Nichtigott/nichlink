@@ -411,7 +411,9 @@ fn faces_creates_the_project_and_its_registration_faces_in_one_call() {
     // consolidation, and this assertion is what keeps it from silently going away.
     // 这棵树在这里报出来，而不是留给第二次 `registry` 调用：那就是这次合并，而这枚断言就是不让它悄悄消失。
     assert!(
-        report.contains("faces 2") && report.contains("root/button") && report.contains("root/slider"),
+        report.contains("faces 2")
+            && report.contains("root/button")
+            && report.contains("root/slider"),
         "the reply names the faces the project derives: {report}"
     );
     assert!(
@@ -477,7 +479,10 @@ fn a_refused_face_leaves_the_destination_and_no_staging_behind() {
             "apply": true,
         }),
     );
-    assert!(failed, "a face whose parent does not exist is refused: {report}");
+    assert!(
+        failed,
+        "a face whose parent does not exist is refused: {report}"
+    );
     let entries: Vec<_> = std::fs::read_dir(&fixture.path)
         .expect("fixture root")
         .filter_map(Result::ok)
@@ -543,7 +548,8 @@ fn an_existing_empty_destination_receives_the_project_and_its_faces() {
     );
     assert!(!failed, "{report}");
     assert!(
-        destination.join("src/button/button.rs").is_file() && destination.join("build.rs").is_file(),
+        destination.join("src/button/button.rs").is_file()
+            && destination.join("build.rs").is_file(),
         "the project landed in the directory the caller made: {report}"
     );
     // And nothing was left beside it: the staging directory is gone with the move.

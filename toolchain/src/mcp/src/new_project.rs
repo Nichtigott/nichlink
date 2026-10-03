@@ -96,7 +96,14 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     if apply {
         if requests.is_empty() {
             scaffold::create_project(&target, &package, kind, &source)?;
-            return Ok(applied(root, &target, &package, kind, &produced(&target)?, &[]));
+            return Ok(applied(
+                root,
+                &target,
+                &package,
+                kind,
+                &produced(&target)?,
+                &[],
+            ));
         }
         // Faces make this two steps, so the whole project is built beside the destination and
         // moved in at the end: one rename, and a face the kernel refuses leaves the
@@ -164,7 +171,8 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     let outcome = scaffold::create_project(&staged, &package, kind, &source)
         .and_then(|()| add_faces(&staged, &requests))
         .and_then(|faces| produced(&staged).map(|files| (files, faces)));
-    let report = outcome.map(|(files, faces)| preview(root, &target, &package, kind, &files, &faces));
+    let report =
+        outcome.map(|(files, faces)| preview(root, &target, &package, kind, &files, &faces));
     remove_copy(root, &work);
     report
 }
