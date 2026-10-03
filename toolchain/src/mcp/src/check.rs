@@ -349,6 +349,28 @@ const CENSUS_SAMPLE: usize = 5;
 /// 的那句话，丢掉它们的抽样恰恰是这份总账要对付的那种假绿。省下的部分经
 /// [`crate::mcp::truncation::withheld`]——唯一那个截断出口——计数，因此被扣下的数量、上限与拿到其余
 /// 部分的办法都会被点名。
+/// The column a head opens, as the name before its colon.
+/// 一个栏头开启的那一栏，取它冒号前的名字。
+fn column_name(line: &str) -> String {
+    line.split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(':')
+        .to_owned()
+}
+
+/// Whether one census line is a column head rather than a row under one.
+/// 一条总账行是**栏头**，而不是它下面的数据行。
+///
+/// The rule is the same one the sample has always used — the first word ends with `:` — factored
+/// out so the heads pass and the "one row under each head" pass cannot drift apart.
+/// 规则就是抽样一直用的那条——首个词以 `:` 结尾——抽成函数，好让"取栏头"与"每栏取一行"两遍不会漂移。
+fn is_column_head(line: &str) -> bool {
+    line.split_whitespace()
+        .next()
+        .is_some_and(|word| word.ends_with(':'))
+}
+
 fn census_sample(census: &[String]) -> Vec<String> {
     // The sample keeps the **head of every column**, its first few rows, and every column's
     // "not covered" line. A flat take of the first five lines hid a whole column once: on the `g4`
@@ -368,11 +390,41 @@ fn census_sample(census: &[String]) -> Vec<String> {
     // 数据行以标签或反引号开头。这个向量里每一行都带缩进，所以规则不能按缩进判定。
     let mut kept: Vec<String> = Vec::new();
     for line in census {
-        let head = line
-            .split_whitespace()
-            .next()
-            .is_some_and(|word| word.ends_with(':'));
-        if head && !kept.contains(line) {
+        if is_column_head(line) && !kept.contains(line) {
+            kept.push(line.clone());
+        }
+    }
+    // **One row under every head**, before the flat take. A column whose head survives while its
+    // decisive row is withheld is a column the reader cannot dispose of without a second call —
+    // and on a census whose first five lines all belong to one column, that is exactly what
+    // happened: the `branch-level:` head came through with its count and the single row naming the
+    // dead arm did not, so "dispose of every column" was impossible from this reply. The audit
+    // registered that as a defect (`the_sample_keeps_the_branch_head_but_drops_the_branch_row`
+    // pinned the broken shape); this keeps one row per column so every head arrives with something
+    // concrete under it.
+    // **每栏保留栏头下面的一行**，先于平取。栏头活下来而它那一行判据被扣下，等于那一栏要第二跳才能处置
+    // ——而一份前五行全属同一栏的总账正是这样：`branch-level:` 栏头带着计数过来了，唯一那行点名死臂的
+    // 数据行没有，于是"逐栏处置"在这份回复里根本做不到。审计把这一点登记为缺陷（那条钉子钉的是坏形状）；
+    // 这里改成每栏留一行，让每个栏头都带着具体的东西到达。
+    let mut served: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut current: Option<String> = None;
+    for line in census {
+        if is_column_head(line) {
+            current = Some(column_name(line));
+            continue;
+        }
+        // A row belongs to the **last head before it**, not to "the line after a head": the heads
+        // arrive consecutively, so index arithmetic takes the next column's row (measured — the
+        // branch column's "row" came out as a `respelled 1000` line, and the row naming the dead
+        // arm only survived by luck of the flat take). Keeping the first row *per column* is what
+        // makes "one row for every column" true on a census big enough for the cap to bite.
+        // 一行属于它**之前的最后一个栏头**，而不是"栏头后面的那一行"：各栏头是连续到达的，用下标算术会取到
+        // 下一栏的行（实测——分支栏的"行"取成了 `respelled 1000`，而点名死臂的那行只是靠平取侥幸活下来）。
+        // 保留**每栏的第一行**，才让"每栏都有一行"在总账大到上限真的咬下去时依然成立。
+        let Some(head) = current.clone() else {
+            continue;
+        };
+        if served.insert(head) && !kept.contains(line) {
             kept.push(line.clone());
         }
     }

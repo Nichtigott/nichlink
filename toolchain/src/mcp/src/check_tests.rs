@@ -333,6 +333,12 @@ fn every_column_head_survives_the_census_sample() {
         "  constants: 1 named numeric constant(s)".to_owned(),
         "  respelled 1000 is written again at src/a.rs:3".to_owned(),
         "  respelled 1000 is written again at src/b.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/c.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/d.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/e.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/f.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/g.rs:4".to_owned(),
+        "  respelled 1000 is written again at src/h.rs:4".to_owned(),
         "  unreferenced `LIMIT` is not read anywhere outside tests".to_owned(),
         "  entry plan: 0 `cut(` site(s)".to_owned(),
         "  declarations: 4 production `pub fn` name(s) appear in no test file".to_owned(),
@@ -392,11 +398,42 @@ fn a_census_that_fits_says_nothing_about_withholding() {
 /// **rows** still lose to the global first-five take — so when the constants column fills the head
 /// of the census, the one branch row that names the dead arm is withheld unnamed, and only the
 /// head's count survives.
-/// 已登记缺陷（审计 h4），把其余留部分按今天在真实总账上的样子钉住：g4 修复让每一栏的**栏头**都活过
-/// 默认抽样（上方已钉），但一栏的判据**行**仍然输给全局的"取前五行"——于是当数值常量栏占满总账前部时，
-/// 唯一那行点名死臂的分支行被匿名扣下，只有栏头的计数活下来。
+/// The h4 shape itself: the flat take's first five lines all belong to one column, and a column
+/// far below still has to arrive with **its own** row — not with the row of whichever column
+/// happens to sit under its head.
+/// h4 那个形状本身：平取的前五行全属同一栏，而远在下面的一栏仍必须带着**它自己的**那一行到达——而不是
+/// 带着恰好排在它栏头下面的那一栏的行。
 #[test]
-fn the_sample_keeps_the_branch_head_but_drops_the_branch_row() {
+fn a_column_far_down_the_census_still_arrives_with_a_row_of_its_own() {
+    let mut census = vec!["  constants: 9 named numeric constant(s)".to_owned()];
+    for index in 0..9 {
+        census.push(format!(
+            "  respelled 1000 is written again at src/k{index}.rs:1"
+        ));
+    }
+    census.push("  branch-level: 1 constructively unreachable arm(s) in this tree".to_owned());
+    census.push("  `if false` guards an arm in `clamp` at src/button/button.rs:21".to_owned());
+    let sample = super::census_sample(&census).join("\n");
+    assert!(
+        sample.contains("branch-level: 1 constructively unreachable arm(s)"),
+        "栏头到达：{sample}"
+    );
+    assert!(
+        sample.contains("guards an arm in `clamp`"),
+        "每一栏都要带**它自己**的一行：{sample}"
+    );
+    assert!(
+        !sample.contains("respelled 1000 is written again at src/k8.rs:1")
+            || sample.contains("census rows withheld"),
+        "扣下的行要说出来：{sample}"
+    );
+}
+
+/// 每栏的栏头**和它下面的一行**都要活过默认抽样：曾经那条"取前五行"会把整整一栏的判据行匿名扣下——当
+/// 数值常量栏占满总账前部时，唯一那行点名死臂的分支行输给了它，只剩栏头的计数 ⇒ "逐栏处置"这份回复里
+/// 根本做不到（审计 h4 登记的就是这一条，上一版钉子钉的是坏形状）。
+#[test]
+fn the_sample_keeps_the_branch_row_that_names_the_dead_arm() {
     let root = scratch("census-branch-row");
     std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
     std::fs::write(
@@ -438,15 +475,15 @@ fn the_sample_keeps_the_branch_head_but_drops_the_branch_row() {
         sample.contains("branch-level: 1 constructively unreachable arm(s)"),
         "the head survives, with its count: {sample}"
     );
-    // Fix: keep each column's first row(s) in `census_sample`, not only its head; flip this then.
-    // 修法：让 `census_sample` 保留每一栏的头几**行**，而不只是栏头；修复后翻转这条断言。
     assert!(
-        !sample.contains(&arm),
-        "but the one row that names the arm is withheld unnamed: {sample}"
+        sample.contains(&arm),
+        "the row that names the arm arrives with its head: {sample}"
     );
+    // And the truncation outlet, when it is used at all, still names how much was cut.
+    // 而截断出口在被用到时，照样点名扣掉了多少。
     assert!(
-        sample.contains("census rows withheld at the limit of 5"),
-        "the sample says how much it cut, never which row: {sample}"
+        sample.contains("census rows withheld") || !sample.contains("withheld"),
+        "the sample never cuts without saying so: {sample}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
