@@ -22,6 +22,32 @@ The declaration macro is exported by `nichlink-toolchain`
 macro stringifies. The application methods live in the kernel
 (`nichlink_kernel::Registry`).
 
+None of the three layers copies source — which is the point, and also the limit: a record is
+*runtime* input, so the external implementation has to exist, and be built, for as long as the
+record is in place. **`nichlink.apply {action: "promote"}` is the fourth step**, and it is the one
+that does copy source: it rewrites the target face's declaration to carry the external
+implementation's fields, retires the `cut(…)` entry that handed the slot over, and moves the record
+directory to `.nichlink/trash/external-grafts/`. Everything else in this document still describes
+the **runtime** overlay; landing is how a slot stops needing one.
+
+Three limits come with it, and each one is a refusal rather than a silent approximation:
+
+- **Generated faces only.** The rewrite goes through the authoring executor, which only rewrites
+  files it generated (`// generated-by=NichLink`). A hand-written face file is refused by name —
+  landing it is a code decision, not a field edit.
+- **Host-relative fields do not travel.** `admission` and a registration rule richer than `ANY`
+  name paths *inside the declaring crate*; copying them would produce a declaration that compiles
+  nowhere. They are refused by name.
+- **`kind` is an identity input.** Landing it renames the marker type (the executor migrates it
+  properly), so `NodeId = hash(namespace, source, name)` changes with it: records keyed by the old
+  identity need re-identifying, and references to the old type in the host need a hand. The reply
+  says both.
+
+See `toolchain/src/mcp/src/apply_promote.rs` for the landing and
+`toolchain/src/mcp/src/apply_promote/source.rs` for how the external declaration is read (through
+the kernel's own face parser, so a hand-written `external_object!` and a generated `*_object!` are
+read by one reader).
+
 ## Which file is the host entry
 
 One entry decides both halves of a graft: pruning keeps the slots it names, and

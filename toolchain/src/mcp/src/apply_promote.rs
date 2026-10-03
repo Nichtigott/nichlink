@@ -1,0 +1,585 @@
+//! The `promote` action: land a confirmed external graft into the base tree.
+//! `promote` 动作：把一条已确认的外部 graft 落地进基树。
+//!
+//! Why this is its own module: `apply.rs` is a ratcheted file (600 code lines) and every action
+//! that grows lives beside it, the same reason `apply_cut.rs` does.
+//! 为什么单独一个模块：`apply.rs` 是受棘轮约束的文件（600 代码行），而每个会长大的动作都住在它旁边
+//! ——与 `apply_cut.rs` 同一个理由。
+//!
+//! **What landing means here.** A graft record is a *runtime* overlay: the base tree keeps its
+//! declaration and the record re-points the slot at an external implementation while the host runs.
+//! Promoting makes that permanent in the source: the target face's declaration is rewritten to
+//! carry the external implementation's fields, the declaration entry that handed the slot over is
+//! retired, and the record moves to the trash. The rewrite goes through **the same executor
+//! `apply edit` uses** (`runtime::edit_module_face`), so the host-form declaration, the field order
+//! and the kind migration are the ones this workspace already ships rather than a second renderer
+//! written here.
+//! **落地在这里的含义。** graft 记录是一层*运行期*覆盖：基树保留自己的声明，而记录在宿主运行时把槽位
+//! 指向外部实现。落地让它固化进源码：目标面的声明被改写成携带外部实现的字段，交出该槽位的那条声明条目
+//! 被退役，记录移入回收目录。这次改写走**`apply edit` 用的同一个执行器**（`runtime::edit_module_face`），
+//! 因此宿主形式的声明、字段顺序与 kind 迁移都是本工作区已经发货的那一套，而不是在这里另写一个渲染器。
+//!
+//! **Refusals, and why they are refusals.** The executor only rewrites files **it generated** — a
+//! hand-written face file is refused by name rather than rewritten into a shape its author never
+//! wrote. Fields that name a path *inside the declaring tree* (`admission`, a non-default
+//! registration rule) cannot move between trees at all: the external spelling means nothing here.
+//! And the record is read from the **project** root, never from a preview's copy, because
+//! `copy_package` skips `.nichlink/` — a preview that read the copy would report a record it never
+//! saw.
+//! **拒绝，以及为什么拒绝。** 执行器只改写**它生成过的**文件——手写的面文件会被点名拒绝，而不是被改写成
+//! 作者从未写过的形状。命名*声明树内部*路径的字段（`admission`、非默认的注册规则）根本无法跨树搬移：
+//! 外部的那套拼法在这里不指任何东西。而记录永远从**项目**根读取，而不是预览的副本，因为 `copy_package`
+//! 会跳过 `.nichlink/`——读副本的预览会报告一条它从未见过的记录。
+
+use std::path::{Path, PathBuf};
+
+use nichlink_kernel::tree::graft_ops::{RecordReport, RecordedGraft, ResolvedRecord};
+use serde_json::Value;
+
+use crate::mcp::apply::{Outcome, load_registry};
+use crate::runtime::AuthoringContext;
+
+#[path = "apply_promote/source.rs"]
+mod source;
+
+use source::{External, crate_and_module, external_file, external_registry, external_root};
+
+/// Land one external graft record, previewing unless the caller is applying.
+/// 把一条外部 graft 记录落地；除非调用方在落盘，否则只预览。
+pub(crate) fn run_promote(
+    root: &Path,
+    work: &Path,
+    applying: bool,
+    arguments: &Value,
+) -> Result<Outcome, String> {
+    let selector = text(arguments, "selector")?;
+    // The record is a source rewrite plus a record retirement, so the request says `confirm`
+    // itself — the same shape `delete` uses, for the same reason: this is the operation whose
+    // preview a caller can step past by accident.
+    // 这是一次源码改写加一次记录退役，因此请求自己说出 `confirm`——与 `delete` 同一种形状、同一个理由：
+    // 这是调用方可能不小心跨过其预览的那个操作。
+    if arguments.get("confirm").and_then(Value::as_bool) != Some(true) {
+        return Err(
+            "promote requires `confirm: true`: it rewrites the host's source and retires the \
+             record, and a preview is the only place to read what it would do"
+                .to_owned(),
+        );
+    }
+    // Read from the project root: a preview's copy has no `.nichlink/`, so reading `work` would
+    // answer as if this package had no records at all.
+    // 从项目根读取：预览的副本里没有 `.nichlink/`，读 `work` 会答成"这个包根本没有记录"。
+    let document = crate::runtime::load_graft_record(root, &selector).map_err(|error| {
+        format!(
+            "{error}; the record is `.nichlink/external-grafts/{selector}/graft.plan` under the \
+             project root this call resolved"
+        )
+    })?;
+    let recorded = RecordedGraft::new(selector.clone(), document.clone());
+    let namespace = crate::mcp::registry::namespace(work)?;
+    let registry = load_registry(work, &namespace)?;
+    let resolved = registry
+        .resolve_record(&recorded)
+        .map_err(|error| format!("this record does not resolve against the tree: {error}"))?;
+    let (slot, path) = match resolved {
+        ResolvedRecord::Slot {
+            slot,
+            path,
+            reports,
+            ..
+        } => {
+            if let Some(drifted) = reports
+                .iter()
+                .find(|report| matches!(report, RecordReport::IdentityDrifted { .. }))
+            {
+                return Err(format!(
+                    "this record's target identity no longer resolves ({drifted}); \
+                     `nichlink.diff {{\"records\": true}}` lists what moved, and re-identifying the \
+                     record is a decision rather than something this action may guess"
+                ));
+            }
+            (slot, path)
+        }
+        ResolvedRecord::Unkept { reports } => {
+            return Err(format!(
+                "no declaration keeps this record's slot alive ({reports:?}), so there is nothing \
+                 to land: the slot is what a `cut(…)` in the host entry hands over"
+            ));
+        }
+    };
+    let faces = crate::build_time::face_views(work, &namespace)?;
+    let face = faces
+        .iter()
+        .find(|face| face.id == slot)
+        .ok_or_else(|| format!("`{path}` is not a face this tree derives"))?;
+    let declared = crate::build_time::declared_grafts(work).map_err(|error| {
+        format!("this tree's graft plan is unreadable, so there is nothing to retire ({error})")
+    })?;
+    let cut = declared
+        .cuts
+        .iter()
+        .find(|cut| cut.names_face(&path, Some(&face.module)))
+        .ok_or_else(|| {
+            format!(
+                "no declaration hands over `{path}`, so this record has nothing to land into — \
+                 `.nichlink/external-grafts/` is not the host entry"
+            )
+        })?;
+    let (crate_path, module) = crate_and_module(cut.expressions.as_ref().ok_or_else(|| {
+        format!(
+            "the declaration for `{path}` names its implementation by string (`cut \"…\" graft \
+             \"{}\"`), and a string names nothing about *where* that implementation lives, so \
+             there is no source to land. Two ways forward: declare it as a Rust path \
+             (`graft(<crate>::<module>::NODE_ID)`), or pass `implementation` with the external \
+             crate's path",
+            cut.graft
+        )
+    })?)?;
+    let external_root = external_root(root, arguments, &crate_path)?;
+    let external_file = external_file(&external_root, &module)?;
+    let external_source = std::fs::read_to_string(&external_file).map_err(|error| {
+        format!(
+            "the external implementation {} is unreadable: {error}",
+            external_file.display()
+        )
+    })?;
+    let external_face = nichlink_kernel::syntax::parse_face(&external_source)
+        .map_err(|error| {
+            format!(
+                "the external implementation {} does not parse: {}",
+                external_file.display(),
+                error.message
+            )
+        })?
+        .ok_or_else(|| {
+            format!(
+                "{} declares no registration face; this action lands one declaration into one \
+                 face, so a file with no face (or several) is not a shape it rewrites",
+                external_file.display()
+            )
+        })?;
+    // The selector has to name *this* face: it is the record's own word for the implementation, and
+    // a file whose face is called something else would silently land the wrong one.
+    // 选择器必须点名**这个**面：它是记录自己对实现的称呼，而一个面叫别的名字的文件会静默落地错的那个。
+    let named = [
+        module.rsplit("::").next().unwrap_or(&module).to_owned(),
+        external_face.field("kind").unwrap_or_default(),
+        external_face.field("registry_name").unwrap_or_default(),
+    ];
+    if !named.iter().any(|name| name == &document.graft) {
+        return Err(format!(
+            "the record selects `{}`, and {} declares a face named {}; this action will not land \
+             a face the record did not select",
+            document.graft,
+            external_file.display(),
+            named
+                .iter()
+                .filter(|name| !name.is_empty())
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" / ")
+        ));
+    }
+    // `flow` comes from the typed snapshot (see `external_registry`); everything else comes from
+    // the declaration's own spellings.
+    // `flow` 来自类型化快照（见 `external_registry`），其余字段来自声明自己的拼法。
+    let kind = external_face.field("kind").unwrap_or_default();
+    let external = external_registry(&external_root)?;
+    let snapshot = external
+        .depth_first()
+        .into_iter()
+        .find(|snapshot| snapshot.kind == kind)
+        .ok_or_else(|| {
+            format!(
+                "{} declares `kind: {kind}`, which the external crate's own registration does not \
+                 carry; this action reads the declaration and the registration, and they disagree",
+                external_file.display()
+            )
+        })?;
+    let flow = if snapshot.flow.id.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "{}|{}|{}|{}",
+            snapshot.flow.id, snapshot.flow.version, snapshot.flow.input, snapshot.flow.output
+        )
+    };
+    let replacement = External::from_syntax(&external_face, &external_file, flow)?;
+    let context = AuthoringContext::new(work.to_path_buf(), namespace.clone());
+    // The executor writes the face, and the entry is retired after it — so a refusal in the second
+    // step would leave a tree that is half-landed: a face whose identity already moved, and a plan
+    // still handing its old slot over. The landing is therefore rolled back by hand if anything
+    // after it fails, and the reply says nothing was written.
+    // 执行器先写面，条目在其后被退役——因此第二步被拒会留下一棵**半落地**的树：身份已经变了的签名面，
+    // 而计划仍在交出自己的旧槽位。因此落地之后任何一步失败都要把它手工撤回，并在回复里说明什么都没写。
+    let face_before = std::fs::read_to_string(
+        faces
+            .iter()
+            .find(|face| face.id == slot)
+            .map(|face| work.join("src").join(&face.source))
+            .ok_or_else(|| format!("`{path}` has no source file"))?,
+    )
+    .map_err(|error| format!("the face's own file is unreadable: {error}"))?;
+    let (change, previous_kind) = context
+        .scope(|| -> Result<_, String> {
+            let mut authored = crate::runtime::authored_face(&registry, slot)?;
+            let previous = authored.kind.clone();
+            overlay(&mut authored, &replacement);
+            let change = crate::runtime::edit_module_face(&registry, slot, &authored.as_patch())?;
+            Ok((change, previous))
+        })
+        .map_err(|error| {
+            format!(
+                "{error}\nway forward: this action rewrites the declaration through the authoring \
+                 executor, which only rewrites files it generated. A hand-written face file has to \
+                 be landed by hand (the external declaration's fields are reported below), or \
+                 scaffolded through `apply add` / `new_project` in the first place"
+            )
+        })?;
+    let retired = match retire_entry(work, &declared.entry, cut, applying) {
+        Ok(retired) => retired,
+        Err(refused) => {
+            // Nothing about the retirement is on disk (its write happens after its own read-back),
+            // so undoing the face rewrite is enough to return this tree to what it was.
+            // 退役本身什么都没落到盘上（它的写入发生在自己的读回之后），因此撤掉面的那次改写就足以让这棵树
+            // 回到原样。
+            std::fs::write(&change.source, &face_before).map_err(|error| {
+                format!("{refused}; and undoing the face rewrite failed: {error}")
+            })?;
+            return Err(format!(
+                "{refused}\nnothing was written: the face rewrite was undone, and the record is \
+                 still in place"
+            ));
+        }
+    };
+    let mut message = format!(
+        "landed `{}` into `{path}`: the declaration in {} now carries the external \
+         implementation's fields, the entry in {} no longer hands that slot over, and the \
+         record {}\n{retired}",
+        document.graft,
+        change.source.display(),
+        declared.entry.display(),
+        if applying {
+            "moved to `.nichlink/trash/external-grafts/`"
+        } else {
+            "would move to `.nichlink/trash/external-grafts/`"
+        }
+    );
+    if applying {
+        let trash = retire_record(root, &selector)?;
+        message.push_str(&format!("\nrecord moved to {}\n", trash.display()));
+    }
+    if previous_kind != replacement.kind {
+        // `kind` is an identity input, so this is the one field whose move has fallout the caller
+        // has to handle: the marker type is renamed by the executor, and every mention of the old
+        // name elsewhere in the package stops compiling.
+        // `kind` 是身份输入，因此这是唯一一个搬移后有调用方必须处理的后果的字段：标记类型会被执行器改名，
+        // 而这个包里别处每一处旧名字都会编译不过。
+        message.push_str(&format!(
+            "note   the kind moved: `{previous_kind}` → `{}`. `kind` is an identity input \
+             (`NodeId = hash(namespace, source, name)`), so this face is no longer `{slot}` — \
+             references to the old type have to be updated by hand, and \
+             `nichlink.diff {{\"records\": true}}` lists records keyed by the old identity\n",
+            replacement.kind
+        ));
+    }
+    Ok(Outcome {
+        message,
+        declaration: None,
+        source: change.source,
+        moved: true,
+        alternative: false,
+    })
+}
+
+/// The one required string argument named `key`.
+/// 名为 `key` 的那一个必填字符串参数。
+fn text(arguments: &Value, key: &str) -> Result<String, String> {
+    match arguments.get(key).and_then(Value::as_str) {
+        Some(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        Some(_) => Err(format!("`{key}` must not be empty")),
+        None => Err(format!(
+            "promote requires `{key}`: the `.nichlink/external-grafts/<selector>/` directory to \
+             land. Accepted shape: {{\"action\":\"promote\",\"selector\":\"<selector>\",\
+             \"apply\":true,\"confirm\":true}}"
+        )),
+    }
+}
+
+/// Overlay the external face's fields onto the host face, keeping what belongs to the host.
+/// 把外部的面的字段覆盖到宿主的面上，同时保留属于宿主的东西。
+///
+/// `module` and `parent` stay the host's: the landed face occupies the slot the base tree already
+/// has, which is what the runtime overlay does with the same fields. `kind` **is** copied, because
+/// the runtime overlay replaces it too — and the executor migrates a kind change properly (marker
+/// type, declaration, and the identity it feeds), which is why the reply warns about identity.
+/// `module` 与 `parent` 保留宿主的：落地的面占据基树本来就有的那个槽位，而运行期覆盖对同样的字段也是
+/// 这么做的。`kind` **会被复制**，因为运行期覆盖也替换它——而执行器会正确地迁移 kind 变化（标记类型、
+/// 声明，以及它喂给的身份），这也是回复要警告身份变化的原因。
+fn overlay(authored: &mut crate::runtime::AuthoredFace, replacement: &External) {
+    authored.kind = replacement.kind.clone();
+    authored.preset = replacement.preset.clone();
+    authored.parts = replacement.parts.clone();
+    authored.name_zh = replacement.name_zh.clone();
+    authored.name_en = replacement.name_en.clone();
+    authored.summary_zh = replacement.summary_zh.clone();
+    authored.summary_en = replacement.summary_en.clone();
+    authored.exports = replacement.exports.clone();
+    authored.stable_name = replacement.stable_name.clone();
+    authored.needs_registry = replacement.needs_registry;
+    authored.registration_rule = replacement.registration_rule.clone();
+    authored.handle_traits = replacement.handle_traits.clone();
+    authored.handle_contracts = replacement.handle_contracts.clone();
+    authored.part_traits = replacement.part_traits.clone();
+    authored.part_contracts = replacement.part_contracts.clone();
+    authored.requires = replacement.requires.clone();
+    authored.provides = replacement.provides.clone();
+    authored.runtime_checks = replacement.runtime_checks.clone();
+    authored.flow = replacement.flow.clone();
+    authored.flow_provider = replacement.flow_provider.clone();
+}
+
+/// Remove the declaration entry that handed this slot over, and read the result back.
+/// 移除交出该槽位的那条声明条目，并把结果读回来。
+///
+/// The removal is decided by the kernel's own parser: the source before and after must parse, and
+/// the entries that remain must be **the same entries in the same order** with exactly the
+/// promoted one gone. A rewrite that reformatted, reordered or dropped a neighbour is refused
+/// before it reaches the author's file.
+/// 这次移除由内核自己的解析器裁决：改前与改后的源码都必须解析，而剩下的条目必须是**同样的条目、同样的
+/// 顺序**，恰好少了被落地的那一条。重排、改动格式或顺手丢掉邻居的改写会在抵达作者文件之前被拒绝。
+fn retire_entry(
+    work: &Path,
+    entry: &Path,
+    cut: &crate::build_time::DeclaredGraft,
+    applying: bool,
+) -> Result<String, String> {
+    let source = std::fs::read_to_string(entry)
+        .map_err(|error| format!("{} is not readable: {error}", entry.display()))?;
+    let before = nichlink_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
+        format!(
+            "the entry does not parse before the write: {}",
+            error.message
+        )
+    })?;
+    let index = before
+        .iter()
+        .position(|item| item.cut == cut.cut && item.graft == cut.graft)
+        .ok_or_else(|| {
+            format!(
+                "the declaration at {}:{} (`cut({}) graft({})`) is not in the parsed entry list, so \
+                 this action will not guess which text to remove",
+                entry.display(),
+                cut.line,
+                cut.cut,
+                cut.graft
+            )
+        })?;
+    let edited = remove_entry(&source, &cut.cut, &cut.graft)?;
+    let after = nichlink_kernel::syntax::entries::graft_entries(&edited)
+        .map_err(|error| format!("the rewritten entry does not parse: {}", error.message))?;
+    if after.len() + 1 != before.len() {
+        return Err(format!(
+            "the rewrite left {} entries where it should have left {}",
+            after.len(),
+            before.len() - 1
+        ));
+    }
+    let mut expected = before.clone();
+    expected.remove(index);
+    for (kept, want) in after.iter().zip(expected.iter()) {
+        if kept.cut != want.cut || kept.graft != want.graft || kept.full != want.full {
+            return Err(format!(
+                "the rewrite changed an entry it was not asked to touch (`{}` graft `{}`)",
+                want.cut, want.graft
+            ));
+        }
+    }
+    if applying {
+        // The backup is written before the new text, and the read-back above ran on the text we
+        // are about to write — so a refusal cannot leave half an entry behind.
+        // 备份先于新文本写下，而上面的读回是在"即将写入的文本"上跑的——因此拒绝不会留下半条条目。
+        backup(work, entry)?;
+    }
+    std::fs::write(entry, &edited)
+        .map_err(|error| format!("{} is not writable: {error}", entry.display()))?;
+    Ok(format!(
+        "the entry at {}:{} was removed and read back ({} → {} entries)",
+        entry.display(),
+        cut.line,
+        before.len(),
+        after.len()
+    ))
+}
+
+/// Copy the file being rewritten into the project's trash before it changes.
+/// 在改写之前，把即将被改写的文件复制进项目的回收目录。
+fn backup(work: &Path, file: &Path) -> Result<(), String> {
+    let relative = file.strip_prefix(work).unwrap_or(file);
+    let trash = work
+        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join("trash")
+        .join("promoted")
+        .join(stamp().to_string())
+        .join(relative);
+    if let Some(parent) = trash.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    std::fs::copy(file, &trash)
+        .map_err(|error| format!("cannot back {} up: {error}", file.display()))?;
+    Ok(())
+}
+
+/// Move the record directory into the trash, the same discipline `remove_external_graft` uses.
+/// 把记录目录移进回收目录——与 `remove_external_graft` 相同的回收纪律。
+fn retire_record(root: &Path, selector: &str) -> Result<PathBuf, String> {
+    let from = root
+        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join(nichlink_kernel::lexicon::EXTERNAL_GRAFT_DIR)
+        .join(selector);
+    let to = root
+        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join("trash")
+        .join(nichlink_kernel::lexicon::EXTERNAL_GRAFT_DIR)
+        .join(format!("{selector}-{}", stamp()));
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
+    }
+    std::fs::rename(&from, &to).map_err(|error| {
+        format!(
+            "cannot move {} to {}: {error}",
+            from.display(),
+            to.display()
+        )
+    })?;
+    Ok(to)
+}
+
+/// A nanosecond stamp, for a trash path that does not collide.
+/// 一个纳秒时间戳，用于不会撞车的回收路径。
+fn stamp() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0)
+}
+
+/// Delete one declaration from the plan, located by the expressions the kernel parsed.
+/// 从计划里删掉一条声明，位置由内核解析出的表达式确定。
+///
+/// **Why not line numbers.** `GraftSyntax::location` reports line 1 for an entry inside
+/// `static_graft_plan!`, so a line-based deletion of the *middle* entry of a three-entry plan
+/// deletes everything up to the call's closing line — the neighbours go with it. The span is
+/// therefore found in the bytes: scan for `cut(…)`, its matching `graft(…)`, and check that what
+/// was found carries the very expressions the parser reported. The result is still judged by the
+/// kernel: the caller re-parses before and after and refuses unless exactly one entry left and the
+/// rest are unchanged.
+/// **为什么不用行号。** `static_graft_plan!` 里条目的 `GraftSyntax::location` 报的是第 1 行，因此按行
+/// 删除三条目计划的**中间**那一条会连着把邻居一起删到调用的结束行。所以跨度在字节里找：扫 `cut(…)`、
+/// 它配对的 `graft(…)`，并核对找到的东西携带的正是解析器报出的那些表达式。结果仍由内核裁决：调用方在
+/// 改前改后各解析一次，除非恰好少了一条、其余原样，否则拒绝。
+fn remove_entry(source: &str, cut: &str, graft: &str) -> Result<String, String> {
+    let span = entry_span(source, cut, graft)?;
+    // The comma that separated this entry goes with it, so the neighbouring separators stay
+    // correct. A trailing comma before the call's `)` is legal Rust, so the last entry needs none.
+    // 分隔这条条目的那个逗号随它一起走，因此邻居的分隔符仍然正确。调用 `)` 前的尾随逗号在 Rust 里合法，
+    // 所以最后一条不需要补。
+    let mut end = span.1;
+    let rest = &source[end..];
+    let trimmed = rest.trim_start();
+    if let Some(after) = trimmed.strip_prefix(',') {
+        end = source.len() - after.len();
+    }
+    let mut edited = String::with_capacity(source.len());
+    edited.push_str(&source[..span.0]);
+    edited.push_str(&source[end..]);
+    Ok(edited)
+}
+
+/// The byte span of one `cut(…) graft(…)` entry, matched by the expressions the parser reported.
+/// 一条 `cut(…) graft(…)` 条目的字节跨度，按解析器报出的表达式匹配。
+fn entry_span(source: &str, cut: &str, graft: &str) -> Result<(usize, usize), String> {
+    let bytes = source.as_bytes();
+    let wanted_cut = squeeze(cut);
+    let wanted_graft = squeeze(graft);
+    let mut index = 0;
+    while let Some(found) = source[index..].find("cut") {
+        let start = index + found;
+        index = start + 3;
+        // `cut` has to be a word of its own, followed by its group.
+        if start > 0 && is_word_byte(bytes[start - 1]) {
+            continue;
+        }
+        let Some(open) = source[start + 3..].find('(').map(|at| start + 3 + at) else {
+            continue;
+        };
+        if !source[start + 3..open].trim().is_empty() {
+            continue;
+        }
+        let Some(cut_end) = matching(source, open) else {
+            continue;
+        };
+        if squeeze(&source[open + 1..cut_end]) != wanted_cut {
+            continue;
+        }
+        let Some(graft_at) = source[cut_end + 1..]
+            .find("graft")
+            .map(|at| cut_end + 1 + at)
+        else {
+            continue;
+        };
+        let Some(gopen) = source[graft_at + 5..].find('(').map(|at| graft_at + 5 + at) else {
+            continue;
+        };
+        if !source[graft_at + 5..gopen].trim().is_empty() {
+            continue;
+        }
+        let Some(gclose) = matching(source, gopen) else {
+            continue;
+        };
+        if squeeze(&source[gopen + 1..gclose]) != wanted_graft {
+            continue;
+        }
+        return Ok((start, gclose + 1));
+    }
+    Err(format!(
+        "the parsed declaration `cut({cut}) graft({graft})` is not in the entry file; this action \
+         will not remove a declaration it cannot point at"
+    ))
+}
+
+/// The byte after the group that `open` opens, or `None` when it never closes.
+/// `open` 打开的组之后的那个字节；永不闭合时为 `None`。
+fn matching(source: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, character) in source[open..].char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Source text with every whitespace run collapsed, for comparing two spellings of one expression.
+/// 把每一段空白折叠后的源码文本，用于比较同一个表达式的两种拼法。
+fn squeeze(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a byte can be part of a Rust word.
+/// 一个字节是否可以属于一个 Rust 词。
+fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+#[cfg(test)]
+#[path = "apply_promote_tests.rs"]
+mod apply_promote_tests;

@@ -25,6 +25,9 @@ use std::path::{Path, PathBuf};
 #[path = "apply_cut.rs"]
 mod apply_cut;
 
+#[path = "apply_promote.rs"]
+mod apply_promote;
+
 use crate::build_time::{face_views, source_layout};
 use crate::runtime::{AuthoringContext, NewModuleFace};
 use nichlink_kernel::Registry;
@@ -57,6 +60,12 @@ enum Action {
     /// build-time plan reads.
     /// 把一个面的子树交给另一份实现：写进构建期计划读的那条声明。
     Cut,
+    /// Land a confirmed external graft record: rewrite the target face's declaration with the
+    /// external implementation's fields, retire the declaration entry, and move the record to the
+    /// trash.
+    /// 把一条已确认的外部 graft 记录落地：用外部实现的字段改写目标面的声明、退役那条声明条目，并把
+    /// 记录移进回收目录。
+    Promote,
 }
 
 /// Run one edit request, previewing unless `apply` is true.
@@ -76,6 +85,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some("delete") => Action::Delete,
         Some("deepen") => Action::Deepen,
         Some("cut") => Action::Cut,
+        Some("promote") => Action::Promote,
         Some(other) => {
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
@@ -84,8 +94,8 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         }
         None => {
             return Err(
-                "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, or \
-                 `cut`)"
+                "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, \
+                 `cut`, or `promote`)"
                     .to_owned(),
             );
         }
@@ -108,6 +118,17 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
         Action::Deepen => run_deepen(target.work_dir(root), &namespace, arguments),
         Action::Cut => apply_cut::run_cut(target.work_dir(root), arguments),
+        // `promote` reads the record from the project root and rewrites source in the work
+        // directory, so it is the one action that needs both — and the one that has to know
+        // whether it is applying, because only then may the record move.
+        // `promote` 从项目根读记录、在工作目录里改写源码，因此它是唯一同时需要两者的动作——也是必须知道
+        // 自己是否在落盘的那个，因为只有落盘时才可以把记录移走。
+        Action::Promote => apply_promote::run_promote(
+            root,
+            target.work_dir(root),
+            matches!(target, Target::Project),
+            arguments,
+        ),
     };
     let outcome = match outcome {
         // A preview ran in the copy, so the paths the executor reported belong to

@@ -76,7 +76,7 @@ const NO_KEYS: &[&str] = &[];
 /// request.
 /// `fields.parent` 是 `resolve::parent_id` 接受的别名，因此把所有取值放进一个对象的 `add` 在这里
 /// 仍然点名了一个父级，而不会被读成没有主体的请求。
-const WRITE_KEYS: &[&str] = &["node", "parent", "fields.parent"];
+const WRITE_KEYS: &[&str] = &["node", "parent", "fields.parent", "selector"];
 
 /// What a tool's request names, which is what decides who answers it on a virtual root.
 /// 一个工具的请求点名了什么，而这决定了在虚拟根上由谁回答。
