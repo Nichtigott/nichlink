@@ -61,6 +61,10 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
     }
     let wanted = target.trim_start_matches('/');
     let mut faces = derived_faces(root, namespace)?.0;
+    // The count is taken before the retain below: the refusal has to say how big the tree
+    // actually is, and after the filter that number is always zero.
+    // 计数在下面的 retain 之前取：拒绝文案要说的是这棵树到底有多大，而过滤之后那个数永远是零。
+    let derived = faces.len();
     // The registry root has no face row of its own unless something declares it,
     // so `root` is answered from the namespace directly.
     // 注册树根没有自己的面行（除非有东西声明了它），因此 `root` 直接由命名空间作答。
@@ -69,7 +73,18 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
     }
     faces.retain(|face| face.path == wanted);
     match faces.len() {
-        0 => Err(format!("no registration face at `{target}`")),
+        // A bare "no such face" leaves the caller guessing the tree's shape, and the
+        // round-13 benchmark measured what that costs: a fresh agent spent five calls
+        // trying `control`, `control::`, `crate`, `control::control` and an empty value
+        // before it found `root`. Naming the root and the derived count is the way
+        // forward, and `registry` is the call that lists the rest.
+        // 干巴巴一句"没有这个面"把树的形状留给调用方去猜，第十三轮量出了代价：一个新代理试了
+        // `control`、`control::`、`crate`、`control::control` 与空值共五次才摸到 `root`。点名根与
+        // 推导出的面数就是那条继续走的路，而列出其余的是 `registry`。
+        0 => Err(format!(
+            "no registration face at `{target}`; this tree's root is `root` and it derives \
+             {derived} face(s) — `registry` lists every face's logical path and kind"
+        )),
         1 => Ok(faces[0].id),
         _ => Err(format!("`{target}` is ambiguous")),
     }
@@ -144,3 +159,7 @@ pub(crate) fn derived_faces(
     };
     Ok((faces, line))
 }
+
+#[cfg(test)]
+#[path = "resolve_tests.rs"]
+mod resolve_tests;

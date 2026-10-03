@@ -631,20 +631,23 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
     let mut base: Option<Map<String, Value>> = None;
     while at < remaining.len() {
         let flag = remaining[at];
-        let key = match flag.strip_prefix("--") {
-            Some(key) if !key.is_empty() => key.to_owned(),
-            _ => {
-                return Err(Refusal::Usage(format!(
-                    "expected `--<key>`, got `{flag}`\n\n{USAGE}"
-                )));
-            }
+        let Some((key, inline)) = flag_pair(flag) else {
+            return Err(Refusal::Usage(format!(
+                "expected `--<key>`, got `{flag}`\n\n{USAGE}"
+            )));
         };
         at += 1;
         if key == "json" {
-            let Some(text) = remaining.get(at) else {
-                return Err(Refusal::Usage("`--json` needs an object".to_owned()));
+            let text = match &inline {
+                Some(text) => text.as_str(),
+                None => {
+                    let Some(text) = remaining.get(at) else {
+                        return Err(Refusal::Usage("`--json` needs an object".to_owned()));
+                    };
+                    at += 1;
+                    text.as_str()
+                }
             };
-            at += 1;
             let parsed: Value = serde_json::from_str(text)
                 .map_err(|error| Refusal::Usage(format!("`--json` is not valid JSON: {error}")))?;
             match parsed {
@@ -664,25 +667,31 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         // 布尔就是开关：`--orphans` 单独出现意为 true，只有不是另一个 `--flag` 的记号才被当作取值。
         // 那轮量出了"这里必须给值"的代价——流程表推荐的形状恰恰是 `--orphans`，而它回的是 "needs a
         // value"。
-        let value = match remaining.get(at) {
-            Some(next) if !next.starts_with("--") => {
-                at += 1;
-                // A value that spells a JSON array or object **is** one: `--function '["a","b"]'`
-                // is how "several symbols in one call" is written on a command line host, and the
-                // round measured what happens without this — the text arrived as one string, the
-                // tool looked for a symbol literally named `["a","b"]`, and the caller concluded
-                // the array form was unsupported. A value that does not parse, or that parses to a
-                // scalar, still goes through `scalar_for`: a string may legitimately begin with `[`.
-                // 拼成 JSON 数组或对象的值**就是**它：`--function '["a","b"]'` 是命令行宿主上写"一次问
-                // 几个符号"的方式，而那一轮量到了没有它的后果——文本作为一个字符串到达，工具去找一个字面
-                // 名叫 `["a","b"]` 的符号，调用方于是以为不支持数组形式。解析不了、或解析出标量的值仍走
-                // `scalar_for`：字符串本来就可能以 `[` 开头。
-                match json_container(next) {
-                    Some(value) => value,
-                    None => scalar_for(&key, next),
+        let value = match inline {
+            Some(text) => match json_container(&text) {
+                Some(value) => value,
+                None => scalar_for(&key, &text),
+            },
+            None => match remaining.get(at) {
+                Some(next) if !next.starts_with("--") => {
+                    at += 1;
+                    // A value that spells a JSON array or object **is** one: `--function '["a","b"]'`
+                    // is how "several symbols in one call" is written on a command line host, and the
+                    // round measured what happens without this — the text arrived as one string, the
+                    // tool looked for a symbol literally named `["a","b"]`, and the caller concluded
+                    // the array form was unsupported. A value that does not parse, or that parses to a
+                    // scalar, still goes through `scalar_for`: a string may legitimately begin with `[`.
+                    // 拼成 JSON 数组或对象的值**就是**它：`--function '["a","b"]'` 是命令行宿主上写"一次问
+                    // 几个符号"的方式，而那一轮量到了没有它的后果——文本作为一个字符串到达，工具去找一个字面
+                    // 名叫 `["a","b"]` 的符号，调用方于是以为不支持数组形式。解析不了、或解析出标量的值仍走
+                    // `scalar_for`：字符串本来就可能以 `[` 开头。
+                    match json_container(next) {
+                        Some(value) => value,
+                        None => scalar_for(&key, next),
+                    }
                 }
-            }
-            _ => Value::Bool(true),
+                _ => Value::Bool(true),
+            },
         };
         overrides.push((key, value));
     }
@@ -706,6 +715,17 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
             }
         }
     }
+    // A dotted key is the command line's way of writing one field of an object-valued
+    // argument: `--fields.module button` means `--fields '{"module":"button"}'`. Leaving it
+    // as a key literally named `fields.module` makes the tool see no `fields` object at all
+    // and refuse the request — the round-13 benchmark measured exactly that: a fresh agent's
+    // first `apply add` on a new project spent three refused calls, then a fourth on the
+    // `=` spelling, before it found the object form.
+    // 点号键是命令行写"对象取值里的一个字段"的方式：`--fields.module button` 就是
+    // `--fields '{"module":"button"}'`。把它留成一个字面名叫 `fields.module` 的键，会让工具根本
+    // 看不到 `fields` 对象、直接拒绝——第十三轮量到的正是这件事：一个新代理在新项目上的第一次
+    // `apply add` 连吃三次拒绝，再用 `=` 的写法又吃一次，才摸到对象形式。
+    fold_dotted_keys(&mut object);
     // `--root` names the tree the question is about, so it decides the base every other argument is
     // resolved against. Forwarding it as an argument instead made it a path *inside* the caller's own
     // root, and a scenario round measured what that costs: a call made from the wrong directory got a
@@ -736,6 +756,94 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
         None => crate::mcp::protocol::package_root(),
     };
     call_tool(&base, name, &Value::Object(object)).map_err(Refusal::Tool)
+}
+
+/// Fold every `a.b` key into a nested object under `a`.
+/// 把每个 `a.b` 键折进 `a` 底下的嵌套对象。
+///
+/// The fold is on the *spelling*, which is what a command line is: `--fields.module button`
+/// and `--fields '{"module":"button"}'` are the same request, and only one of them reached
+/// the tool before this existed. It is recursive, so `--inside.parts.width u32` nests two
+/// levels, and a repeated dotted flag merges into an array exactly as a repeated plain flag
+/// does.
+/// 折的是**拼法**，而命令行本来就是拼法：`--fields.module button` 与
+/// `--fields '{"module":"button"}'` 是同一个请求，而这个函数存在之前只有后者能到达工具。它是递归的，
+/// 因此 `--inside.parts.width u32` 会嵌两层；重复的点号开关与重复的普通开关一样合并成数组。
+fn fold_dotted_keys(object: &mut serde_json::Map<String, Value>) {
+    let dotted: Vec<String> = object
+        .keys()
+        .filter(|key| key.contains('.'))
+        .cloned()
+        .collect();
+    for key in dotted {
+        // A key that must stay as written: the removal below has to know that before it
+        // takes the value out, so the two ends of a leading/trailing dot are checked here.
+        // 必须按原样保留的键：下面的移除要先知道这一点，因此开头或结尾的点在这里判掉。
+        let segments: Vec<&str> = key.split('.').collect();
+        if segments.iter().any(|segment| segment.is_empty()) {
+            continue;
+        }
+        // A head that is already a scalar cannot hold the dotted key's tail: the caller
+        // wrote two things that contradict each other, and the honest move is to leave both
+        // as written so one of them is reported rather than silently dropped.
+        // 头已经是个标量时装不下点号键的尾：调用方写下了互相矛盾的两样东西，诚实的做法是两者都按原样留着，
+        // 让其中一个被报出来，而不是静默丢掉一个。
+        let holds_object = object
+            .get(segments[0])
+            .is_none_or(|existing| existing.is_object());
+        if !holds_object {
+            continue;
+        }
+        let Some(value) = object.remove(&key) else {
+            continue;
+        };
+        let mut cursor = &mut *object;
+        for segment in &segments[..segments.len() - 1] {
+            cursor = cursor
+                .entry((*segment).to_owned())
+                .or_insert_with(|| Value::Object(serde_json::Map::new()))
+                .as_object_mut()
+                .expect("the fold only descends into objects it created or checked");
+        }
+        let leaf = segments[segments.len() - 1].to_owned();
+        match cursor.get_mut(&leaf) {
+            Some(Value::Array(items)) => items.push(value),
+            Some(existing) => {
+                let first = std::mem::take(existing);
+                cursor.insert(leaf, Value::Array(vec![first, value]));
+            }
+            None => {
+                cursor.insert(leaf, value);
+            }
+        }
+    }
+}
+
+/// The key and optional inline value of one `--flag` token.
+/// 一个 `--flag` 记号里的键与可选的行内取值。
+///
+/// `--key value` and `--key=value` are the two standard spellings of the same pair, and the
+/// round-13 benchmark measured a fresh agent trying the second one right after the dotted
+/// spelling on `apply add`: untreated the key arrives as `fields.module=button`, the fold turns
+/// it into a field literally named `module=button`, and the refusal names a field nobody wrote.
+/// Only the key side is split, so a value that contains `=` (`--query a=b`) survives.
+/// `--key value` 与 `--key=value` 是同一个键值对的两条标准拼法，而第十三轮量到一个新代理在
+/// `apply add` 上紧跟着点号拼法就试了第二条：不处理时键到达为 `fields.module=button`，折叠把它变成
+/// 一个名叫 `module=button` 的字段，拒绝文案于是点名一个没人写过的字段。只拆键那一侧，因此取值里含
+/// `=`（`--query a=b`）能活下来。
+fn flag_pair(flag: &str) -> Option<(String, Option<String>)> {
+    let key = flag.strip_prefix("--")?;
+    // A token with nothing before its `=` (`--=x`) has no key either way, so it is refused as
+    // a flag rather than handed on as a key literally named `=x`.
+    // `=` 之前什么都没有的记号（`--=x`）两边都没有键，因此按"不是开关"拒绝，而不是当成一个名叫
+    // `=x` 的键交给下游。
+    if key.is_empty() || key.starts_with('=') {
+        return None;
+    }
+    Some(match key.split_once('=') {
+        Some((key, value)) if !key.is_empty() => (key.to_owned(), Some(value.to_owned())),
+        _ => (key.to_owned(), None),
+    })
 }
 
 /// A command-line value with the type its **key** implies.

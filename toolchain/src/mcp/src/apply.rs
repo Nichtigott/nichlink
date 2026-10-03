@@ -284,12 +284,26 @@ fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, S
     }
     let module = text(fields, "module");
     if module.is_empty() {
-        return Err(
+        // Two different mistakes used to share one sentence, and that sentence named
+        // `fields.module` even when the caller had sent exactly that — as a dotted key,
+        // which the tool never sees as a `fields` object at all. The round-13 benchmark
+        // measured the cost: three refusals in a row on a fresh agent's first `apply add`.
+        // 两种不同的错过去共用一句话，而那句话在调用方**确实**发了 `fields.module` 时（以点号键的
+        // 形式，工具根本看不到 `fields` 对象）也照说 `fields.module`。第十三轮量出了代价：一个新代理
+        // 的第一次 `apply add` 连吃三次拒绝。
+        return Err(if arguments.get("fields").is_none() {
+            "add requires `fields`: one JSON object holding the new face's fields — accepted \
+             shape: {\"action\":\"add\",\"parent\":\"<node>\",\"fields\":{\"module\":\
+             \"<snake_case>\",\"kind\":\"<Kind>\",\"exports\":\"<export>\"},\"apply\":true}; on a \
+             command line that object is written `--fields '{\"module\":\"button\",\"kind\":\
+             \"Object\"}'`, and one field of it may also be written `--fields.module button`"
+                .to_owned()
+        } else {
             "add requires `fields.module`, the new module's name — accepted shape: \
              {\"action\":\"add\",\"parent\":\"<node>\",\"fields\":{\"module\":\"<snake_case>\",\
              \"kind\":\"<Kind>\",\"exports\":\"<export>\"},\"apply\":true}"
-                .to_owned(),
-        );
+                .to_owned()
+        });
     }
     let registry = load_registry(root, namespace)?;
     let parent = parent_id(root, namespace, arguments, fields)?;

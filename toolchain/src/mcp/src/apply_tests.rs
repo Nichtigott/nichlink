@@ -1041,3 +1041,35 @@ fn the_advertised_actions_match_the_dispatched_ones() {
     }
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A request that carries **no `fields` object** is a different mistake from a `fields`
+/// object missing `module`, and one shared sentence made the first one unreadable: it named
+/// `fields.module`, which the caller had sent — as a dotted key the tool never sees as an
+/// object. The round-13 benchmark measured the cost (three refusals in a row).
+/// 请求里**没有 `fields` 对象**与"`fields` 里缺 `module`"是两种不同的错，而共用一句话让前一种读不懂：
+/// 那句话点名 `fields.module`，而调用方**确实**发了它——以工具根本看不到的点号键形式。第十三轮量出了
+/// 代价（连吃三次拒绝）。
+#[test]
+fn a_request_without_a_fields_object_is_refused_with_the_object_spelling() {
+    let (root, _) = package("fields-object-shape");
+    let refused = apply(&root, &json!({"action": "add", "parent": "root"}))
+        .expect_err("add without a `fields` object is refused");
+    assert!(
+        refused.contains("`fields`")
+            && refused.contains("--fields '{")
+            && refused.contains("accepted shape"),
+        "the refusal names the object spelling to paste: {refused}"
+    );
+    // The reverse: with a `fields` object present, the other branch keeps its own wording
+    // and does not offer the object spelling again.
+    // 反向：`fields` 对象在时，另一支保持自己的措辞，不再提对象拼法。
+    let missing_module = apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "fields": {"kind": "Button"}}),
+    )
+    .expect_err("add without `fields.module` is refused");
+    assert!(
+        missing_module.contains("`fields.module`") && !missing_module.contains("--fields '{"),
+        "the two branches stay distinguishable: {missing_module}"
+    );
+}

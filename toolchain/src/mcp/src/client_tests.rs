@@ -856,3 +856,94 @@ fn check_says_the_face_may_be_omitted_because_it_is() {
         "`face` is not required, so the keys line must not star it: {line}"
     );
 }
+
+/// A dotted flag is the command line's spelling of one field inside an object-valued
+/// argument, so it must reach the tool as that object: `--fields.module button` and
+/// `--fields '{"module":"button"}'` are the same request. Leaving it as a key literally
+/// named `fields.module` made the tool see no `fields` object and refuse — the round-13
+/// benchmark measured a fresh agent's first `apply add` eating three refusals on exactly
+/// that shape.
+/// 点号开关是命令行写"对象取值里的一个字段"的拼法，因此它必须以那个对象的形式到达工具：
+/// `--fields.module button` 与 `--fields '{"module":"button"}'` 是同一个请求。把它留成一个字面
+/// 名叫 `fields.module` 的键，会让工具看不到 `fields` 对象、直接拒绝——第十三轮量到的新代理第一次
+/// `apply add` 正是为这个形状连吃三次拒绝。
+#[test]
+fn a_dotted_flag_folds_into_the_object_it_names() {
+    let mut object = serde_json::Map::new();
+    object.insert("fields.module".to_owned(), json!("button"));
+    object.insert("fields.kind".to_owned(), json!("Object"));
+    fold_dotted_keys(&mut object);
+    assert_eq!(
+        object.get("fields"),
+        Some(&json!({"module": "button", "kind": "Object"})),
+        "{object:?}"
+    );
+    // The reverse direction: the dotted key must not survive beside the object it folded
+    // into, because a lingering one is what the tool used to be handed.
+    // 反向：点号键不许与它折进的那个对象并存在一起，因为工具过去接到的正是那个残留的键。
+    assert!(!object.contains_key("fields.module"), "{object:?}");
+
+    // Two levels nest, and a repeated flag merges into an array exactly as a repeated plain
+    // flag does — that merge already happens before this fold, so the array is what arrives.
+    // 两层会嵌起来，而重复的开关与重复的普通开关一样合并成数组——那次合并在本折叠之前就发生了，
+    // 因此到达这里的就是那个数组。
+    let mut nested = serde_json::Map::new();
+    nested.insert("inside.parts.width".to_owned(), json!("u32"));
+    nested.insert("files.a".to_owned(), json!(["x", "y"]));
+    fold_dotted_keys(&mut nested);
+    assert_eq!(
+        nested.get("inside"),
+        Some(&json!({"parts": {"width": "u32"}})),
+        "{nested:?}"
+    );
+    assert_eq!(
+        nested.get("files"),
+        Some(&json!({"a": ["x", "y"]})),
+        "{nested:?}"
+    );
+
+    // A head that is already a scalar cannot hold a tail: both spellings stay as written so
+    // the tool reports one of them rather than this fold silently dropping the other.
+    // 头已经是个标量时装不下尾：两种拼法都按原样留着，让工具报出其中一个，而不是让本折叠静默丢掉另一个。
+    let mut conflicting = serde_json::Map::new();
+    conflicting.insert("fields".to_owned(), json!("scalar"));
+    conflicting.insert("fields.module".to_owned(), json!("button"));
+    fold_dotted_keys(&mut conflicting);
+    assert_eq!(
+        conflicting.get("fields"),
+        Some(&json!("scalar")),
+        "{conflicting:?}"
+    );
+    assert_eq!(
+        conflicting.get("fields.module"),
+        Some(&json!("button")),
+        "a conflicting pair is left for the tool to refuse, not resolved here: {conflicting:?}"
+    );
+}
+
+/// The two standard spellings of one pair, and the one thing that must not be split: only the
+/// key side. `--fields.module=button` used to arrive as a field named `module=button` (round-13
+/// measured a fresh agent trying exactly that), while `--query a=b` must keep its `=`.
+/// 同一个键值对的两条标准拼法，以及唯一不许被拆的地方：只拆键那一侧。`--fields.module=button`
+/// 过去会到达成一个名叫 `module=button` 的字段（第十三轮量到一个新代理正是这么试的），而
+/// `--query a=b` 必须保住它的 `=`。
+#[test]
+fn a_flag_is_split_at_its_first_equals_only() {
+    assert_eq!(
+        flag_pair("--fields.module=button"),
+        Some(("fields.module".to_owned(), Some("button".to_owned())))
+    );
+    assert_eq!(
+        flag_pair("--fields.module"),
+        Some(("fields.module".to_owned(), None)),
+        "a spaced pair keeps the value for the next token"
+    );
+    assert_eq!(
+        flag_pair("--query=a=b"),
+        Some(("query".to_owned(), Some("a=b".to_owned()))),
+        "only the first `=` splits, so a value with `=` survives"
+    );
+    assert_eq!(flag_pair("--"), None);
+    assert_eq!(flag_pair("--=x"), None);
+    assert_eq!(flag_pair("face"), None);
+}
