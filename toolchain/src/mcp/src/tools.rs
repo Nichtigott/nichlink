@@ -676,7 +676,95 @@ pub(crate) fn tools() -> Vec<Value> {
 }
 
 fn tool(name: &str, description: &str, input_schema: Value) -> Value {
-    json!({ "name": name, "description": description, "inputSchema": input_schema })
+    // `title` and `annotations` are built **here**, in the one constructor every entry goes
+    // through, so an entry cannot be added without them — the MCP spec's `annotations` are how a
+    // client learns which tools make destructive changes (`readOnlyHint`, `destructiveHint`,
+    // `idempotentHint`, `openWorldHint`), and a hint that has to be remembered per entry is a
+    // hint that goes missing. Verified: all four hints and a non-empty title on every entry.
+    // `title` 与 `annotations` 就建在**这里**——每个条目都要经过的唯一构造器，因此新条目不可能漏掉它们：
+    // MCP 规范的 `annotations` 是客户端据以知道"哪些工具会做破坏性改动"的东西（`readOnlyHint`、
+    // `destructiveHint`、`idempotentHint`、`openWorldHint`），而一条要靠每条自己记得写的提示，就是一条
+    // 会缺席的提示。已验：每个条目四个提示齐全、标题非空。
+    json!({
+        "name": name,
+        "title": title(name),
+        "description": description,
+        "inputSchema": input_schema,
+        "annotations": annotations(name),
+    })
+}
+
+/// What a tool does to the tree, as `annotations` discloses it.
+/// 一个工具对这棵树做了什么，按 `annotations` 披露的那样。
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Effect {
+    /// Reads only.
+    /// 只读。
+    Read,
+    /// Adds something that was not there, and removes nothing.
+    /// 增添原本不存在的东西，且不移除任何东西。
+    Add,
+    /// Rewrites or removes what is there.
+    /// 改写或移除已有的东西。
+    Rewrite,
+}
+
+/// The effect of one tool.
+/// 一个工具的效果。
+///
+/// Three names write and the rest read, and this is the **one** place that says which: the
+/// alternative is a hint per catalogue entry, which drifts from the dispatch the first time a
+/// tool is added. `a_write_tool_is_the_one_the_write_path_knows` pins it against
+/// `ownership`'s own classification, so the two cannot disagree silently.
+/// 三个名字会写、其余只读，而**这里**是唯一说清楚是哪三个的地方：另一种做法是每条目录项各写一遍提示，
+/// 而那样的东西会在第一次新增工具时与分派漂移。`a_write_tool_is_the_one_the_write_path_knows` 把它
+/// 与 `ownership` 自己的分类钉在一起，因此两者不会无声地不一致。
+pub(crate) fn effect(tool: &str) -> Effect {
+    match tool {
+        // `plugin` appends (and promotes) a catalog record: it adds, and removes nothing.
+        // `plugin` 追加（并升级）一条目录记录：它只增添，不移除任何东西。
+        "nichlink.new_project" | "nichlink.plugin" => Effect::Add,
+        // `apply` can move a subtree into the trash (`delete`), which is the one action here
+        // that takes something away from the caller.
+        // `apply` 能把一棵子树移进回收目录（`delete`）——这是这里唯一一个把东西从调用方手里拿走的动作。
+        "nichlink.apply" => Effect::Rewrite,
+        _ => Effect::Read,
+    }
+}
+
+/// The MCP annotations for one tool.
+/// 一个工具的 MCP `annotations`。
+///
+/// `destructiveHint` is set **explicitly on every tool** rather than left to the protocol's
+/// default (which is `true`): a read tool that omits it is telling a client the opposite of the
+/// truth, and `apply` really does move subtrees into the trash, so it says `true` while
+/// `new_project` says `false` — additive and destructive are not the same permission.
+/// `destructiveHint` **每个工具都显式写出**，而不是留给协议默认值（默认是 `true`）：一个省略它的读工具
+/// 等于对客户端说了反话；而 `apply` 确实会把子树移进回收目录，因此它写 `true`，`new_project` 写
+/// `false`——"新增"与"破坏"不是同一种许可。
+fn annotations(tool: &str) -> Value {
+    let read_only = effect(tool) == Effect::Read;
+    json!({
+        "readOnlyHint": read_only,
+        "destructiveHint": matches!(effect(tool), Effect::Rewrite),
+        "idempotentHint": read_only,
+        "openWorldHint": false,
+    })
+}
+
+/// A human-readable title for one tool, derived from its name.
+/// 一个工具的人类可读标题，由它的名字推导。
+///
+/// Derived rather than written per entry: a title is a display name, and a second list of
+/// eighteen names is a second list that drifts.
+/// 推导而不是逐条写：标题是显示名，而第二份十八个名字的清单就是一份会漂移的清单。
+fn title(tool: &str) -> String {
+    let bare = tool.strip_prefix("nichlink.").unwrap_or(tool);
+    let mut spaced = bare.replace('_', " ");
+    if let Some(first) = spaced.get(0..1) {
+        spaced.replace_range(0..1, &first.to_uppercase());
+    }
+    spaced
 }
 
 /// One tool's implementation: the package root plus the `arguments` object.

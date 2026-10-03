@@ -629,3 +629,109 @@ fn the_advertised_required_keys_match_what_the_call_path_insists_on() {
          this half, emptying every `required` would pass"
     );
 }
+
+/// Every catalogue entry discloses what it does to the tree, and the three names that write
+/// are exactly the ones the write path knows.
+/// 每个目录条目都披露它对这棵树做了什么，而会写的那三个名字正是写入路径认识的那三个。
+///
+/// The MCP spec's `annotations` are how a client decides what needs a human in the loop
+/// (`readOnlyHint`, `destructiveHint`), so a hint that is missing, or a `destructiveHint` left
+/// to the protocol's default (`true`), tells a client the opposite of the truth. And the
+/// classification is pinned against `ownership::subject`, because that is the other place the
+/// bridge says which tools write — two lists that disagree silently is the defect this pin
+/// exists to prevent.
+/// MCP 规范的 `annotations` 是客户端据以决定"什么需要人在环里"的东西（`readOnlyHint`、
+/// `destructiveHint`），因此一条缺席的提示、或一条被留给协议默认值（`true`）的 `destructiveHint`，
+/// 都在对客户端说反话。而这个分类与 `ownership::subject` 钉在一起，因为那是桥说"哪些工具会写"的另一个
+/// 地方——两份清单无声地不一致，正是这枚钉子要防的缺陷。
+#[test]
+fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
+    let mut readers = Vec::new();
+    let mut writers = Vec::new();
+    for entry in crate::mcp::tools::tools() {
+        let name = entry["name"].as_str().expect("every entry has a name");
+        let title = entry["title"].as_str().unwrap_or_default();
+        assert!(!title.is_empty(), "`{name}` has a title");
+        let hints = &entry["annotations"];
+        for hint in [
+            "readOnlyHint",
+            "destructiveHint",
+            "idempotentHint",
+            "openWorldHint",
+        ] {
+            assert!(
+                hints[hint].is_boolean(),
+                "`{name}` discloses `{hint}`: {entry}"
+            );
+        }
+        if hints["readOnlyHint"].as_bool() == Some(true) {
+            assert_eq!(
+                hints["destructiveHint"].as_bool(),
+                Some(false),
+                "a read-only tool is not destructive: {name}"
+            );
+            readers.push(name.to_owned());
+        } else {
+            writers.push(name.to_owned());
+        }
+    }
+    writers.sort();
+    assert_eq!(
+        writers,
+        vec![
+            "nichlink.apply".to_owned(),
+            "nichlink.new_project".to_owned(),
+            "nichlink.plugin".to_owned(),
+        ],
+        "the tools that are not read-only are the ones that write"
+    );
+    // The other half of the same fact: every writer is one `ownership` already treats as a
+    // write, or the scaffold that names its own destination.
+    // 同一个事实的另一半：每个写工具要么是 `ownership` 已当作写入的那个，要么是自己点名目的地的脚手架。
+    for name in &writers {
+        assert!(
+            crate::mcp::ownership::subject(name) == crate::mcp::ownership::Subject::Write
+                || name == "nichlink.new_project",
+            "`{name}` is a writer the write path knows"
+        );
+    }
+    // `apply` is the one that can remove what is there (`delete` moves a subtree into the
+    // trash), so it is the one that says `destructiveHint: true`.
+    // `apply` 是唯一能移除已有东西的（`delete` 把子树移进回收目录），因此它是唯一写
+    // `destructiveHint: true` 的那个。
+    let catalogue = crate::mcp::tools::tools();
+    let destructive: Vec<&str> = catalogue
+        .iter()
+        .filter(|entry| entry["annotations"]["destructiveHint"].as_bool() == Some(true))
+        .filter_map(|entry| entry["name"].as_str())
+        .collect();
+    assert_eq!(destructive, vec!["nichlink.apply"], "{destructive:?}");
+    assert!(readers.len() > writers.len(), "most tools only read");
+}
+
+/// The JSON-RPC `tools/list` reply carries them, because a client never sees the catalogue in
+/// any other shape.
+/// JSON-RPC 的 `tools/list` 回复里带着它们，因为客户端看不到目录的其它形状。
+#[test]
+fn the_tools_list_reply_carries_the_annotations() {
+    // Through the real stdio entry point, because that is the only shape a client sees.
+    // 走真正的 stdio 入口，因为那是客户端唯一看得到的形状。
+    let mut input = std::io::Cursor::new(
+        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n".to_vec(),
+    );
+    let mut output = Vec::new();
+    crate::mcp::protocol::run_with(&mut input, &mut output).expect("the server answers");
+    let line = String::from_utf8(output).expect("the reply is utf-8");
+    let reply: serde_json::Value =
+        serde_json::from_str(line.lines().next().unwrap_or_default()).expect("one JSON reply");
+    let tools = reply["result"]["tools"]
+        .as_array()
+        .expect("tools/list answers with an array");
+    assert_eq!(tools.len(), crate::mcp::tools::tools().len());
+    for entry in tools {
+        assert!(
+            entry["annotations"]["readOnlyHint"].is_boolean() && entry["title"].is_string(),
+            "the wire reply carries the annotations and the title: {entry}"
+        );
+    }
+}

@@ -80,6 +80,7 @@ const WRITE_KEYS: &[&str] = &["node", "parent", "fields.parent"];
 
 /// What a tool's request names, which is what decides who answers it on a virtual root.
 /// 一个工具的请求点名了什么，而这决定了在虚拟根上由谁回答。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Subject {
     /// The request names a filesystem path; exactly one member owns it.
     /// 请求点名一个文件系统路径；恰好一个成员拥有它。

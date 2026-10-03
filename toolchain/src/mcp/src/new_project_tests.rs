@@ -516,3 +516,46 @@ fn a_refused_face_leaves_the_destination_and_no_staging_behind() {
         "and nothing was created for it: {shape}"
     );
 }
+
+/// A destination that **already exists and is empty** still gets the project — including its
+/// faces. It is the one destination shape this tool has always accepted (the caller made the
+/// directory), and the staged-then-renamed write broke it: `rename` cannot replace a directory,
+/// so the call failed with `EBUSY` after the whole project had been built beside it. The
+/// round-13 v2 arm measured it from the caller's side (`--directory .`).
+/// **已经存在且为空**的目的地照样拿到项目——包括它的面。这是本工具一直接受的唯一一种目的地形状（目录是
+/// 调用方建的），而"旁边建好再 rename"的写法把它弄坏了：`rename` 无法替换目录，于是整个项目在旁边建好
+/// 之后调用以 `EBUSY` 失败。第十三轮 v2 的臂从调用方那一侧量到了它（`--directory .`）。
+#[test]
+fn an_existing_empty_destination_receives_the_project_and_its_faces() {
+    let fixture = root("faces-existing-empty");
+    let destination = fixture.path.join("app");
+    std::fs::create_dir_all(&destination).expect("the caller's empty directory");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app",
+            "package": "app",
+            "kind": "library",
+            "faces": [{"fields": {"module": "button", "kind": "Button"}}],
+            "apply": true,
+            "confirm": true,
+        }),
+    );
+    assert!(!failed, "{report}");
+    assert!(
+        destination.join("src/button/button.rs").is_file() && destination.join("build.rs").is_file(),
+        "the project landed in the directory the caller made: {report}"
+    );
+    // And nothing was left beside it: the staging directory is gone with the move.
+    // 而它旁边什么都没留下：暂存目录随这次移动消失。
+    let siblings: Vec<_> = std::fs::read_dir(&fixture.path)
+        .expect("fixture root")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        siblings,
+        vec!["app".to_owned()],
+        "only the project remains: {siblings:?}"
+    );
+}

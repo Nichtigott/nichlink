@@ -107,6 +107,22 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
         let outcome = scaffold::create_project(&staging, &package, kind, &source)
             .and_then(|()| add_faces(&staging, &requests))
             .and_then(|faces| {
+                // A destination that already exists is **empty** (the check above ran), and
+                // `rename` cannot replace a directory — so the empty one is removed first and
+                // the finished tree takes its name. Without this, the one destination shape the
+                // tool always accepted (an empty directory the caller made, `--directory .`)
+                // failed with `EBUSY`; the round-13 v2 arm measured exactly that, from the
+                // caller's side: destination equal to the root was refused after the whole
+                // project had been built.
+                // 已经存在的目的地是**空的**（上面的检查跑过），而 `rename` 无法替换一个目录——因此先把
+                // 那个空目录移走，让成品接管它的名字。没有这一步，这个工具一直接受的唯一一种目的地形状
+                // （调用方建好的空目录、`--directory .`）会以 `EBUSY` 失败；第十三轮 v2 的臂正是从调用方
+                // 那一侧量到了它：目的地等于根时，整个项目已经建好却被拒绝。
+                if target.exists() {
+                    std::fs::remove_dir(&target).map_err(|error| {
+                        format!("cannot clear the empty {}: {error}", target.display())
+                    })?;
+                }
                 std::fs::rename(&staging, &target)
                     .map_err(|error| {
                         format!(
