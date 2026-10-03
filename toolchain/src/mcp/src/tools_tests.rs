@@ -619,7 +619,13 @@ fn the_advertised_required_keys_match_what_the_call_path_insists_on() {
         "conformance works without `anchor` (it lists every anchor), so the schema must not demand it"
     );
     assert!(
-        required("nichlink.check").contains(&"face"),
-        "and a key the call path really insists on stays required: check needs `face`"
+        !required("nichlink.check").contains(&"face"),
+        "the call path defaults `face` to `default`, so the schema must not demand it: a schema that \
+         still stars it teaches every reader a shape the tool accepts without it"
+    );
+    assert!(
+        required("nichlink.apply").contains(&"action"),
+        "and a key the call path really insists on stays required: `apply` needs `action` — without \
+         this half, emptying every `required` would pass"
     );
 }

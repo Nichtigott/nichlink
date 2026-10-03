@@ -577,9 +577,12 @@ pub(crate) fn tools() -> Vec<Value> {
         ),
         tool(
             "nichlink.check",
-            "Test this tree by **running** the face you name: `face` is `default`, `all`, or one \
-             feature name, and there is no default face here because choosing it is what this tool \
-             is for. It is the one tool that runs a process (`cargo test` in the root), and it \
+            "Test this tree by **running** a face: `face` is `default`, `all`, or one feature name, \
+             and it **may be omitted** — then it runs `default`. Naming a face is still what this \
+             tool is *for*: the round measured 12 calls arriving without `face`, 6 of which left the \
+             tool for a shell `cargo test` instead of naming one, while the two faces a question \
+             usually needs often share one red — so the default is a convenience, not the point. \
+             It is the one tool that runs a process (`cargo test` in the root), and it \
              exists because the alternative was measured: a defect compiled only under a \
              non-default feature cannot fail on the default face, so a green default run is not \
              evidence about that feature. `nichlink.status` says which faces exist; this says what \
@@ -636,7 +639,7 @@ pub(crate) fn tools() -> Vec<Value> {
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
                 "census":{"type":"boolean","description":"print the whole census table instead of the sampled rows and the one-sentence boundary indexes; the whole table also names every test-unreachable function and splits that column per directory (default false)"},
                 "root":{"type":"string"}
-            },"required":["face"]}),
+            }}),
         ),
         tool(
             "nichlink.verify",

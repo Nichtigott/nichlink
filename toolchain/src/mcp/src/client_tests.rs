@@ -753,10 +753,17 @@ fn the_keys_legend_appears_only_when_something_is_starred() {
         !conformance.contains("= required"),
         "nothing is starred on this tool, so there is no legend: {conformance}"
     );
-    let check = line("nichlink.check");
+    // `check` used to be the example here; it no longer stars `face` because the call path defaults
+    // it to `default` (the round measured 12 face-less calls, 6 of which left the tool for a shell).
+    // The example moves to a tool whose keys really are required, so this pin still has teeth — a
+    // version that lost the legend everywhere would clear the assertion above and fail here.
+    // `check` 从前是这里的例子；它不再给 `face` 打星，因为调用路径把它缺省成 `default`（那一轮量到 12 次
+    // 无 face 的调用，其中 6 次离开工具去了 shell）。例子换成**真的必需**键的工具，这条钉子因此仍有牙 ——
+    // 一个"到处都丢了图例"的版本会通过上面那条、在这里失败。
+    let apply = line("nichlink.apply");
     assert!(
-        check.contains("face*") && check.contains("= required"),
-        "and a tool that does star a key keeps its legend: {check}"
+        apply.contains("action*") && apply.contains("= required"),
+        "and a tool that does star a key keeps its legend: {apply}"
     );
 }
 
@@ -815,4 +822,37 @@ fn a_value_that_spells_a_json_array_is_read_as_one() {
     for text in ["[not json", "{", "plain", ""] {
         assert_eq!(json_container(text), None, "{text}");
     }
+}
+
+/// `check` says the face may be omitted, because it runs `default` when it is.
+/// `check` 说面可以省略，因为省略时它跑 `default`。
+///
+/// Three members of the round-11 verification independently reported the drift this pins: the tool's
+/// behaviour was changed (a missing `face` runs `default`, because 6 of 12 face-less calls left the
+/// tool for a shell) while two descriptions still said "there is no default face here" and the
+/// schema still marked `face` required — so the `keys:` line printed `face*` to every reader.
+/// 第十一轮验证里有**三位成员独立报出**这条钉子守的漂移：工具的行为改了（缺 `face` 跑 `default`，
+/// 因为 12 次无 `face` 的调用里有 6 次离开工具去了 shell），而两处描述仍写着 "there is no default
+/// face here"、schema 仍把 `face` 标为必需 —— 于是 `keys:` 行给每个读者印的是 `face*`。
+#[test]
+fn check_says_the_face_may_be_omitted_because_it_is() {
+    let described = describe_tool("check").expect("a description");
+    assert!(
+        !described.contains("there is no default face"),
+        "the refusal wording is gone from the description: {described}"
+    );
+    assert!(
+        described.contains("may be omitted"),
+        "the description has to say the face may be omitted: {described}"
+    );
+    // And the keys line must not mark it required.
+    // 而 keys 行不许把它标成必需。
+    let line = list_tool_lines()
+        .into_iter()
+        .find(|row| row.contains("nichlink.check"))
+        .expect("check is listed");
+    assert!(
+        !line.contains("face*"),
+        "`face` is not required, so the keys line must not star it: {line}"
+    );
 }

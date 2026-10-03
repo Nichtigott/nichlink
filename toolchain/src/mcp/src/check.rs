@@ -15,9 +15,13 @@
 //! Three rules keep observation honest, and each one is a pin:
 //! 三条规矩让"观测"保持诚实，每一条都有钉子：
 //!
-//! - **The request says the face.** There is no default face here: a caller who does not say which
-//!   face to test is refused by name, because that choice is the whole point of the tool.
-//!   **请求要说出面。** 这里没有默认面：不说测哪个面的调用方会被按名拒绝，因为那个选择正是这个工具的意义。
+//! - **Naming a face is the point, but the default is a convenience.** A caller who says no face
+//!   gets `default`: the round measured 12 such calls and **6 of them left the tool for a shell
+//!   `cargo test`** instead of naming one — a refusal that costs a turn to learn nothing. The
+//!   face still decides the answer, and `status` says which faces exist.
+//!   **点名面是要点，但缺省是便利。** 不说面的调用方拿到 `default`：那一轮量到 12 次这样的调用，
+//!   其中 **6 次离开工具去 shell 跑 `cargo test`**，而不是补上一个面名——一次白花一轮的拒绝。面仍然
+//!   决定答案，而 `status` 说出有哪些面。
 //! - **A timeout is `unknown`, never a pass**, and the answer says what was killed (the direct child
 //!   only — its own children may survive) and where the log so far is.
 //!   **超时是 `unknown`，绝不是通过**，而且答案说清杀的是什么（只杀直接子进程——它自己的子进程可能还活着）
