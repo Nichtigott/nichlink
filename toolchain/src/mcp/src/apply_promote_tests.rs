@@ -13,7 +13,7 @@
 use serde_json::json;
 
 use super::source::External;
-use super::{remove_entry, run_promote};
+use super::{repoint_graft, run_promote};
 
 /// The refusal text of one call, without asking the shared `Outcome` to be `Debug`.
 /// 一次调用的拒绝文本；不去要求共享的 `Outcome` 实现 `Debug`。
@@ -183,11 +183,15 @@ external_object! {
     );
 }
 
-/// Removing one declaration leaves the neighbours exactly as they were — the kernel's own parser
-/// is what decides, so a rewrite that reformatted or dropped a neighbour cannot reach the file.
-/// 移除一条声明后邻居保持不变——由内核自己的解析器裁决，因此重排或丢掉邻居的改写到不了文件。
+/// Rewriting one declaration leaves the neighbours exactly as they were, and **keeps the entry**:
+/// the plan's naming is what keeps a face in the generated tree, so this action never removes one.
+/// 改写一条声明时邻居逐字不变，而且**条目保留**：计划的点名才是面留在生成树里的原因，因此这个动作从不删条目。
+///
+/// The location is found in the bytes rather than by line, because `GraftSyntax::location` reports
+/// line 1 for every entry here — which a line-based rewrite would get wrong.
+/// 位置在字节里找而不是按行，因为这里每个条目的 `GraftSyntax::location` 都报第 1 行——按行改写会改错。
 #[test]
-fn removing_one_entry_keeps_the_others_as_they_were() {
+fn repointing_one_entry_keeps_the_others_as_they_were() {
     let source = "\
 static_graft_plan!(
     FRAMEWORK,
@@ -199,30 +203,38 @@ static_graft_plan!(
 ";
     let before = nichlink_kernel::syntax::entries::graft_entries(source).expect("parses");
     assert_eq!(before.len(), 3, "three entries to start");
-    // `GraftSyntax::location` reports line 1 for every entry here — which is exactly why the
-    // removal locates the declaration by its expressions instead of by lines.
-    // 这里每个条目的 `GraftSyntax::location` 都报第 1 行——这正是移除按表达式定位而不是按行的原因。
     assert!(
         before.iter().all(|item| item.location.line == 1),
         "the premise of this pin: the parser reports one line for every entry"
     );
-    let edited = remove_entry(source, &before[1].cut, &before[1].graft).expect("the span closes");
-    let after = nichlink_kernel::syntax::entries::graft_entries(&edited).expect("still parses");
-    assert_eq!(after.len(), 2, "one entry is gone: {edited}");
-    assert_eq!(after[0].graft, "ext::a_fast::NODE_ID", "{edited}");
-    assert_eq!(after[1].graft, "ext::c_fast::NODE_ID", "{edited}");
-    // And the one that was asked for is the one that left.
-    // 而被要求移除的那条正是离开的那条。
+
+    // The middle entry, spread over two lines: the neighbours must come back untouched.
+    // 中间那条（摊在两行上）：邻居必须原样回来。
+    let middle = repoint_graft(source, &before[1].cut, &before[1].graft).expect("the span closes");
+    let after = nichlink_kernel::syntax::entries::graft_entries(&middle).expect("still parses");
+    assert_eq!(after.len(), 3, "the entry count is unchanged: {middle}");
+    assert_eq!(after[0].graft, "ext::a_fast::NODE_ID", "{middle}");
+    assert_eq!(after[2].graft, "ext::c_fast::NODE_ID", "{middle}");
+    assert_eq!(
+        after[1].graft, before[1].cut,
+        "the promoted entry names its own cut expression: {middle}"
+    );
     assert!(
-        !edited.contains("b_fast"),
-        "the promoted entry is the one that left: {edited}"
+        !middle.contains("b_fast"),
+        "the external implementation is gone from that entry: {middle}"
     );
 
-    // The **first** entry of a two-entry plan, with the long expressions the real plans carry:
-    // this is the shape the end-to-end demonstration failed on, and the reason the landing itself
-    // has to be rolled back when the retirement refuses.
-    // 两条目计划里的**第一条**，带真实计划里的长表达式：这正是端到端演示失败的那个形状，也是"退役被拒时
-    // 落地本身必须回滚"的原因。
+    // The last entry: no next entry to bound anything, and no comma to take with it.
+    // 最后一条：没有下一条可以框定边界，也没有逗号可以带走。
+    let last =
+        repoint_graft(&middle, &after[2].cut, &after[2].graft).expect("the last span closes");
+    let rest = nichlink_kernel::syntax::entries::graft_entries(&last).expect("still parses");
+    assert_eq!(rest.len(), 3, "still three entries: {last}");
+    assert_eq!(rest[2].graft, rest[2].cut, "{last}");
+    assert_eq!(rest[0].graft, "ext::a_fast::NODE_ID", "{last}");
+
+    // The real plan's shape: two entries, the first one promoted, long expressions.
+    // 真实计划的形状：两条目、改第一条、长表达式。
     let two = "\
 static_graft_plan!(
     FRAMEWORK,
@@ -231,21 +243,14 @@ static_graft_plan!(
 );
 ";
     let parsed = nichlink_kernel::syntax::entries::graft_entries(two).expect("parses");
-    assert_eq!(parsed.len(), 2);
-    let first = remove_entry(two, &parsed[0].cut, &parsed[0].graft).expect("the first span closes");
+    let first =
+        repoint_graft(two, &parsed[0].cut, &parsed[0].graft).expect("the first span closes");
     let left = nichlink_kernel::syntax::entries::graft_entries(&first).expect("still parses");
-    assert_eq!(left.len(), 1, "the first entry left the other one: {first}");
+    assert_eq!(left.len(), 2, "{first}");
+    assert_eq!(left[0].graft, left[0].cut, "{first}");
     assert_eq!(
-        left[0].graft, "control_button_graft::slider_fast::NODE_ID",
+        left[1].graft, "control_button_graft::slider_fast::NODE_ID",
         "{first}"
     );
-
-    // The **last** entry is the other shape: no next entry to bound the span, and no trailing
-    // comma to take with it. Deleting it must leave the two by name.
-    // **最后一条**是另一种形状：没有下一条来框定跨度，也没有尾随逗号可以带走。删掉它必须按名留下两条。
-    let last = remove_entry(&edited, &after[1].cut, &after[1].graft).expect("the last span closes");
-    let rest = nichlink_kernel::syntax::entries::graft_entries(&last).expect("still parses");
-    assert_eq!(rest.len(), 1, "one entry is left: {last}");
-    assert_eq!(rest[0].graft, "ext::a_fast::NODE_ID", "{last}");
-    assert!(!last.contains("c_fast"), "the last entry left: {last}");
+    assert!(!first.contains("button_fast"), "{first}");
 }

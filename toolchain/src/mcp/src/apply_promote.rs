@@ -235,7 +235,7 @@ pub(crate) fn run_promote(
                  scaffolded through `apply add` / `new_project` in the first place"
             )
         })?;
-    let retired = match retire_entry(work, &declared.entry, cut, applying) {
+    let retired = match repoint_entry(work, &declared.entry, cut, applying) {
         Ok(retired) => retired,
         Err(refused) => {
             // Nothing about the retirement is on disk (its write happens after its own read-back),
@@ -253,8 +253,9 @@ pub(crate) fn run_promote(
     };
     let mut message = format!(
         "landed `{}` into `{path}`: the declaration in {} now carries the external \
-         implementation's fields, the entry in {} no longer hands that slot over, and the \
-         record {}\n{retired}",
+         implementation's fields, the entry in {} now points that slot at **this face itself** \
+         (so the plan still names it — that naming is what keeps a face in the generated tree), \
+         and the record {}\n{retired}",
         document.graft,
         change.source.display(),
         declared.entry.display(),
@@ -338,16 +339,29 @@ fn overlay(authored: &mut crate::runtime::AuthoredFace, replacement: &External) 
     authored.flow_provider = replacement.flow_provider.clone();
 }
 
-/// Remove the declaration entry that handed this slot over, and read the result back.
-/// 移除交出该槽位的那条声明条目，并把结果读回来。
+/// Point the declaration entry at the face itself, and read the result back.
+/// 把那条声明条目改指向这个面自己，并把结果读回来。
 ///
-/// The removal is decided by the kernel's own parser: the source before and after must parse, and
-/// the entries that remain must be **the same entries in the same order** with exactly the
-/// promoted one gone. A rewrite that reformatted, reordered or dropped a neighbour is refused
-/// before it reaches the author's file.
-/// 这次移除由内核自己的解析器裁决：改前与改后的源码都必须解析，而剩下的条目必须是**同样的条目、同样的
-/// 顺序**，恰好少了被落地的那一条。重排、改动格式或顺手丢掉邻居的改写会在抵达作者文件之前被拒绝。
-fn retire_entry(
+/// **Why the entry is rewritten rather than removed.** In a host that declares a plan, being
+/// named by the plan is the only way a face enters the generated tree — so deleting the entry
+/// does not "clean up the graft", it **drops the face out of the build** (measured: the generated
+/// plan mounts the neighbours and not this face, and `source_scope` counts one fewer). The
+/// external implementation is what has to go, and the expressible form that keeps the naming is
+/// the self-graft: `cut(<expr>) graft(<expr>)`. A bare `cut(…)` is not legal syntax, so this is
+/// not a stylistic choice.
+/// **为什么改写条目而不是删掉它。** 在声明了计划的宿主里，"被计划点名"是面进入生成树的唯一方式——
+/// 因此删条目不是"清理掉 graft"，而是**把那个面从构建里丢掉**（实测：生成计划挂载邻居而不挂载它，
+/// `source_scope` 少一个）。要走的是那份外部实现，而保住点名的可表达形式就是自嫁接
+/// `cut(<expr>) graft(<expr>)`。裸 `cut(…)` 不是合法语法，所以这不是风格选择。
+///
+/// The rewrite is decided by the kernel's own parser: the source before and after must parse, the
+/// entry count must be **unchanged**, the promoted entry must name the cut expression, and every
+/// other entry must be byte-identical in what the parser reports. A rewrite that reformatted,
+/// reordered or dropped a neighbour is refused before it reaches the author's file.
+/// 这次改写由内核自己的解析器裁决：改前与改后的源码都必须解析，条目数必须**不变**，被改的那条必须点名
+/// 切口表达式，而其余条目在解析器报出的内容上必须逐字未变。重排、改动格式或丢掉邻居的改写会在抵达作者
+/// 文件之前被拒绝。
+fn repoint_entry(
     work: &Path,
     entry: &Path,
     cut: &crate::build_time::DeclaredGraft,
@@ -367,26 +381,35 @@ fn retire_entry(
         .ok_or_else(|| {
             format!(
                 "the declaration at {}:{} (`cut({}) graft({})`) is not in the parsed entry list, so \
-                 this action will not guess which text to remove",
+                 this action will not guess which text to rewrite",
                 entry.display(),
                 cut.line,
                 cut.cut,
                 cut.graft
             )
         })?;
-    let edited = remove_entry(&source, &cut.cut, &cut.graft)?;
+    let edited = repoint_graft(&source, &cut.cut, &cut.graft)?;
     let after = nichlink_kernel::syntax::entries::graft_entries(&edited)
         .map_err(|error| format!("the rewritten entry does not parse: {}", error.message))?;
-    if after.len() + 1 != before.len() {
+    if after.len() != before.len() {
         return Err(format!(
-            "the rewrite left {} entries where it should have left {}",
+            "the rewrite left {} entries where it should have left {}: the plan's naming is what \
+             keeps a face in the generated tree, so this action never removes one",
             after.len(),
-            before.len() - 1
+            before.len()
         ));
     }
-    let mut expected = before.clone();
-    expected.remove(index);
-    for (kept, want) in after.iter().zip(expected.iter()) {
+    for (position, (kept, want)) in after.iter().zip(before.iter()).enumerate() {
+        if position == index {
+            if kept.graft != want.cut {
+                return Err(format!(
+                    "the rewritten entry names `{}` as the implementation where it should name \
+                     its own cut expression `{}`",
+                    kept.graft, want.cut
+                ));
+            }
+            continue;
+        }
         if kept.cut != want.cut || kept.graft != want.graft || kept.full != want.full {
             return Err(format!(
                 "the rewrite changed an entry it was not asked to touch (`{}` graft `{}`)",
@@ -403,12 +426,114 @@ fn retire_entry(
     std::fs::write(entry, &edited)
         .map_err(|error| format!("{} is not writable: {error}", entry.display()))?;
     Ok(format!(
-        "the entry at {}:{} was removed and read back ({} → {} entries)",
+        "the entry at {}:{} now reads `cut({}) graft({})`: the plan still names this face, and the \
+         declaration no longer names the external crate ({} → {} entries, unchanged)",
         entry.display(),
         cut.line,
+        cut.cut,
+        cut.cut,
         before.len(),
         after.len()
     ))
+}
+
+/// Rewrite one entry's implementation expression to the cut expression it is paired with.
+/// 把某一条条目的实现表达式改写成与它配对的切口表达式。
+///
+/// Located in the bytes, not by line: `GraftSyntax::location` reports line 1 for an entry inside
+/// `static_graft_plan!`, so line arithmetic would rewrite the wrong text. What was found is checked
+/// against the expressions the parser reported, and the result is re-parsed by the caller.
+/// 在字节里定位，不按行：`static_graft_plan!` 里条目的 `GraftSyntax::location` 报的是第 1 行，按行算会改
+/// 错文本。找到的东西要与解析器报出的表达式核对，而结果由调用方重新解析。
+fn repoint_graft(source: &str, cut: &str, graft: &str) -> Result<String, String> {
+    let (open, close) = graft_group(source, cut, graft)?;
+    let mut edited = String::with_capacity(source.len());
+    edited.push_str(&source[..open]);
+    edited.push_str(cut);
+    edited.push_str(&source[close..]);
+    Ok(edited)
+}
+
+/// The parentheses of the `graft(…)` group that belongs to the entry with these expressions.
+/// 属于这两个表达式那条条目的 `graft(…)` 组的括号位置。
+fn graft_group(source: &str, cut: &str, graft: &str) -> Result<(usize, usize), String> {
+    let bytes = source.as_bytes();
+    let wanted_cut = squeeze(cut);
+    let wanted_graft = squeeze(graft);
+    let mut index = 0;
+    while let Some(found) = source[index..].find("cut") {
+        let start = index + found;
+        index = start + 3;
+        if start > 0 && is_word_byte(bytes[start - 1]) {
+            continue;
+        }
+        let Some(open) = source[start + 3..].find('(').map(|at| start + 3 + at) else {
+            continue;
+        };
+        if !source[start + 3..open].trim().is_empty() {
+            continue;
+        }
+        let Some(cut_end) = matching(source, open) else {
+            continue;
+        };
+        if squeeze(&source[open + 1..cut_end]) != wanted_cut {
+            continue;
+        }
+        let Some(graft_at) = source[cut_end + 1..]
+            .find("graft")
+            .map(|at| cut_end + 1 + at)
+        else {
+            continue;
+        };
+        let Some(gopen) = source[graft_at + 5..].find('(').map(|at| graft_at + 5 + at) else {
+            continue;
+        };
+        if !source[graft_at + 5..gopen].trim().is_empty() {
+            continue;
+        }
+        let Some(gclose) = matching(source, gopen) else {
+            continue;
+        };
+        if squeeze(&source[gopen + 1..gclose]) != wanted_graft {
+            continue;
+        }
+        return Ok((gopen + 1, gclose));
+    }
+    Err(format!(
+        "the parsed declaration `cut({cut}) graft({graft})` is not in the entry file; this action \
+         will not rewrite a declaration it cannot point at"
+    ))
+}
+
+/// The byte after the group that `open` opens, or `None` when it never closes.
+/// `open` 打开的组之后的那个字节；永不闭合时为 `None`。
+fn matching(source: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, character) in source[open..].char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Source text with every whitespace run collapsed, for comparing two spellings of one expression.
+/// 把每一段空白折叠后的源码文本，用于比较同一个表达式的两种拼法。
+fn squeeze(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a byte can be part of a Rust word.
+/// 一个字节是否可以属于一个 Rust 词。
+fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 /// Copy the file being rewritten into the project's trash before it changes.
@@ -463,121 +588,6 @@ fn stamp() -> u128 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0)
-}
-
-/// Delete one declaration from the plan, located by the expressions the kernel parsed.
-/// 从计划里删掉一条声明，位置由内核解析出的表达式确定。
-///
-/// **Why not line numbers.** `GraftSyntax::location` reports line 1 for an entry inside
-/// `static_graft_plan!`, so a line-based deletion of the *middle* entry of a three-entry plan
-/// deletes everything up to the call's closing line — the neighbours go with it. The span is
-/// therefore found in the bytes: scan for `cut(…)`, its matching `graft(…)`, and check that what
-/// was found carries the very expressions the parser reported. The result is still judged by the
-/// kernel: the caller re-parses before and after and refuses unless exactly one entry left and the
-/// rest are unchanged.
-/// **为什么不用行号。** `static_graft_plan!` 里条目的 `GraftSyntax::location` 报的是第 1 行，因此按行
-/// 删除三条目计划的**中间**那一条会连着把邻居一起删到调用的结束行。所以跨度在字节里找：扫 `cut(…)`、
-/// 它配对的 `graft(…)`，并核对找到的东西携带的正是解析器报出的那些表达式。结果仍由内核裁决：调用方在
-/// 改前改后各解析一次，除非恰好少了一条、其余原样，否则拒绝。
-fn remove_entry(source: &str, cut: &str, graft: &str) -> Result<String, String> {
-    let span = entry_span(source, cut, graft)?;
-    // The comma that separated this entry goes with it, so the neighbouring separators stay
-    // correct. A trailing comma before the call's `)` is legal Rust, so the last entry needs none.
-    // 分隔这条条目的那个逗号随它一起走，因此邻居的分隔符仍然正确。调用 `)` 前的尾随逗号在 Rust 里合法，
-    // 所以最后一条不需要补。
-    let mut end = span.1;
-    let rest = &source[end..];
-    let trimmed = rest.trim_start();
-    if let Some(after) = trimmed.strip_prefix(',') {
-        end = source.len() - after.len();
-    }
-    let mut edited = String::with_capacity(source.len());
-    edited.push_str(&source[..span.0]);
-    edited.push_str(&source[end..]);
-    Ok(edited)
-}
-
-/// The byte span of one `cut(…) graft(…)` entry, matched by the expressions the parser reported.
-/// 一条 `cut(…) graft(…)` 条目的字节跨度，按解析器报出的表达式匹配。
-fn entry_span(source: &str, cut: &str, graft: &str) -> Result<(usize, usize), String> {
-    let bytes = source.as_bytes();
-    let wanted_cut = squeeze(cut);
-    let wanted_graft = squeeze(graft);
-    let mut index = 0;
-    while let Some(found) = source[index..].find("cut") {
-        let start = index + found;
-        index = start + 3;
-        // `cut` has to be a word of its own, followed by its group.
-        if start > 0 && is_word_byte(bytes[start - 1]) {
-            continue;
-        }
-        let Some(open) = source[start + 3..].find('(').map(|at| start + 3 + at) else {
-            continue;
-        };
-        if !source[start + 3..open].trim().is_empty() {
-            continue;
-        }
-        let Some(cut_end) = matching(source, open) else {
-            continue;
-        };
-        if squeeze(&source[open + 1..cut_end]) != wanted_cut {
-            continue;
-        }
-        let Some(graft_at) = source[cut_end + 1..]
-            .find("graft")
-            .map(|at| cut_end + 1 + at)
-        else {
-            continue;
-        };
-        let Some(gopen) = source[graft_at + 5..].find('(').map(|at| graft_at + 5 + at) else {
-            continue;
-        };
-        if !source[graft_at + 5..gopen].trim().is_empty() {
-            continue;
-        }
-        let Some(gclose) = matching(source, gopen) else {
-            continue;
-        };
-        if squeeze(&source[gopen + 1..gclose]) != wanted_graft {
-            continue;
-        }
-        return Ok((start, gclose + 1));
-    }
-    Err(format!(
-        "the parsed declaration `cut({cut}) graft({graft})` is not in the entry file; this action \
-         will not remove a declaration it cannot point at"
-    ))
-}
-
-/// The byte after the group that `open` opens, or `None` when it never closes.
-/// `open` 打开的组之后的那个字节；永不闭合时为 `None`。
-fn matching(source: &str, open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for (offset, character) in source[open..].char_indices() {
-        match character {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(open + offset);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Source text with every whitespace run collapsed, for comparing two spellings of one expression.
-/// 把每一段空白折叠后的源码文本，用于比较同一个表达式的两种拼法。
-fn squeeze(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Whether a byte can be part of a Rust word.
-/// 一个字节是否可以属于一个 Rust 词。
-fn is_word_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]
