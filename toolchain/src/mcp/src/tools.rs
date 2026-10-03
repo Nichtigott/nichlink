@@ -635,8 +635,9 @@ pub(crate) fn tools() -> Vec<Value> {
              miss here rather than a false row. Each row names the line it decided — the guard's own \
              line, or the arm's pattern line.",
             json!({"type":"object","properties":{
-                "face":{"type":"string","description":"`default`, `all`, or one feature name; required, because choosing the face is the point"},
+                "face":{"type":"string","description":"`default`, `all`, or one feature name; omit it to run `default` (naming a face is still the point, but the round measured 6 of 12 face-less calls leaving the tool for a shell)"},
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
+                "target_dir":{"type":"string","description":"`CARGO_TARGET_DIR` for this run — pass a directory OUTSIDE the tree; without it cargo writes `target/` inside the tree, and on a tree that was restored (sources older than the leftover artifacts) the next run reuses the old binary and reports a green that belongs to the previous code"},
                 "census":{"type":"boolean","description":"print the whole census table instead of the sampled rows and the one-sentence boundary indexes; the whole table also names every test-unreachable function and splits that column per directory (default false)"},
                 "root":{"type":"string"}
             }}),

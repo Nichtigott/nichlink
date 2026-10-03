@@ -265,6 +265,17 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
     );
     let mut command = Command::new("cargo");
     command.arg("test").current_dir(root);
+    // Cargo writes its products inside the tree unless told otherwise, and the round measured what
+    // that costs: `check` on a restored tree leaves a `target/` whose artifacts are NEWER than the
+    // sources, so the next `cargo test` (or the next `check`) reuses the old binary and reports a
+    // green that belongs to the previous round's code. A verifier asked to take every baseline with
+    // an out-of-tree target had no way to do it through this tool at all.
+    // 不特别指定时，cargo 把产物写在树内，而那一轮量到了它的代价：在还原过的树上跑 `check`，会留下一个
+    // 产物**新于**源码的 `target/`，于是下一次 `cargo test`（或下一次 `check`）复用旧二进制、报出一个
+    // 属于**上一轮代码**的绿。有验证者被要求"基线一律用树外 target"，而通过这个工具**根本做不到**。
+    if let Some(directory) = arguments.get("target_dir").and_then(Value::as_str) {
+        command.env("CARGO_TARGET_DIR", directory);
+    }
     match face {
         "default" => {}
         "all" => {
@@ -274,7 +285,15 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
             command.arg("--features").arg(feature);
         }
     }
-    let log = out_dir(root).join(format!("check-{face}.log"));
+    // The log is the second reason a tree gets a `target/`: `out_dir(root)` is *inside* the tree, so
+    // even with cargo redirected the tool would leave `<root>/target/nichlink/out/` behind. When the
+    // caller names a tree-external target, the log rides with it.
+    // 日志是"树里长出 `target/`"的第二个原因：`out_dir(root)` 在树**内**，所以即使 cargo 被改道，工具
+    // 仍会留下 `<root>/target/nichlink/out/`。调用方指定了树外 target 时，日志跟着它走。
+    let log = match arguments.get("target_dir").and_then(Value::as_str) {
+        Some(directory) => std::path::Path::new(directory).join(format!("check-{face}.log")),
+        None => out_dir(root).join(format!("check-{face}.log")),
+    };
     let outcome = run_command(&mut command, timeout, &log)?;
     let observed = observation(&outcome.log)?;
     // The verdict is line 1 (see `verdict`), ahead of everything the run produced, because round 7
