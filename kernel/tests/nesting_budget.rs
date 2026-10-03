@@ -115,7 +115,15 @@ fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
     // 本测试随已发布 crate 出厂，而消费者周围没有工作区：从 registry 解包后父目录是 registry
     // 的 `src/`，于是遍历过去靠"恰好解包在旁边的无关 crate"来"通过"。现在它说明情况并退出——
     // 它守的承诺（"守卫不拒绝本仓库出厂的任何东西"）是关于本仓库的。
-    if !root.join("core").is_dir() || !root.join("build_method").is_dir() {
+    // The two directory names are the ones a checkout has *today*: `kernel/` and
+    // `toolchain/`. They used to be `core/` and `build_method/`, and after batches 1 and
+    // 2 renamed them this gate did not stand down for a consumer — it stood down for
+    // this repository too, so the promise it keeps went unchecked for two batches while
+    // the test reported success.
+    // 这两个目录名是**今天**的检出才有的：`kernel/` 与 `toolchain/`。它们过去是 `core/` 与
+    // `build_method/`，而批 1 与批 2 改名之后，这道门禁不只是对消费者退出——它对**本仓库**也
+    // 退出了，于是它守的承诺有两个批次无人检查，而测试一直报成功。
+    if !root.join("kernel").is_dir() || !root.join("toolchain").is_dir() {
         eprintln!(
             "skipping: {} is not a NichLink checkout; this gate is about that repository",
             root.display()

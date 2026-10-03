@@ -113,9 +113,64 @@ else
   cli_half="skipped: $BIN is not built"
 fi
 
+# The third leg: the project a user actually gets from `nichlink new` has to compile.
+# No other check reached this half. Every NichLink path in the generated templates was
+# spelled `crate::…` — the *host's* own crate — while the macros and trace APIs live in
+# `nichlink-toolchain`, so every scaffolded host was dead on arrival, and the one pin
+# that mentioned the output asserted only that a version string appeared in the
+# manifest. Two batches of renames (core → kernel, nine crates → toolchain) went
+# unnoticed for the same reason: nothing ever built a generated project.
+# 第三条腿：用户真正从 `nichlink new` 拿到的项目必须编译得过。别的检查都到不了这一半。
+# 生成模板里每一处 NichLink 路径都写成 `crate::…`——那是**宿主**自己的 crate——而宏与
+# trace API 住在 `nichlink-toolchain` 里，于是每个生成的宿主一出生就是坏的，而唯一提到这些
+# 产物的钉子只断言清单里出现了一个版本字符串。批 1 与批 2 的两次改名（core → kernel、九个
+# crate → toolchain）因此都没被发现，理由相同：从来没有东西构建过一个生成出来的项目。
+#
+# Both kinds are generated because the two entries are different templates: the binary
+# one also demonstrates the runtime-evidence chain (`CallTrace::runtime`,
+# `trace_artifact_path`, `write_trace_artifact`), which is exactly where the
+# mis-anchored spellings were, and the library one is the entry most hosts start from.
+# They also take the two dependency-source paths, one each: the binary host lets the
+# CLI detect the checkout it is running from (the probe that keys on `kernel/` and
+# `toolchain/`), and the library host is told `--path` explicitly (the checkout
+# validation). Both were mis-anchored, and neither was reachable by the other.
+# The generated projects share one target directory outside both of them: cargo
+# artifacts reused from a checkout's own `target/` are what this script exists to
+# avoid, but artifacts shared between two throwaway projects of the same source are
+# not.
+# 两种都生成，因为两个入口是两份不同的模板：二进制那份还演示运行期证据链
+# （`CallTrace::runtime`、`trace_artifact_path`、`write_trace_artifact`），而失锚的拼法
+# 恰恰在那里；库那份是多数宿主的起点。两者还各走一条依赖来源路径：二进制宿主让 CLI 自行
+# 探测它所在的检出（那条按 `kernel/` 与 `toolchain/` 判断的探测），库宿主则被显式告知
+# `--path`（检出校验）。两处都曾失锚，而且谁也到不了对方那条。两个生成项目共用一个位于它们
+# 之外的 target 目录：本脚本要避免的是复用**本检出** `target/` 里的产物，而同一份源码的两个
+# 一次性项目之间共用产物不是那回事。
+#
+# The generation happens with the working directory set to the rehearsal root: `new`
+# resolves the project directory against the current directory, and this script is
+# `cd`-ed into the subject host by then — the first version wrote both projects inside
+# it and then failed to find them.
+# 生成时把工作目录设为演练根：`new` 以当前目录解析项目目录，而本脚本那时已经 `cd` 进了示例
+# 宿主——第一版于是把两个项目写进了它里面，随后又找不到它们。
+scaffold_half="skipped: $BIN is not built"
+if [ -x "$BIN" ]; then
+  for kind in binary library; do
+    generated="$WORK/scaffold-$kind"
+    if [ "$kind" = "library" ]; then
+      ( cd "$WORK" && "$BIN" new "scaffold-$kind" --lib --path "$ROOT" >/dev/null )
+    else
+      ( cd "$WORK" && "$BIN" new "scaffold-$kind" >/dev/null )
+    fi
+    echo "cargo test $CARGO_FLAGS (generated $kind host in $generated)" >&2
+    # shellcheck disable=SC2086  # the flags are a deliberate word list
+    ( cd "$generated" && CARGO_TARGET_DIR="$WORK/scaffold-target" cargo test $CARGO_FLAGS )
+  done
+  scaffold_half="ran"
+fi
+
 # The last line says which halves ran. It used to claim an unqualified pass while the CLI half was
 # skipped, so a green rehearsal meant two different things depending on whether someone had built
 # the binary first (audit `RC5`).
 # 最后一行说明跑了哪几半。它过去在跳过 CLI 那一半时仍宣称无条件通过，于是"演练是绿的"会因为
 # 之前有没有人构建过这个二进制而意味着两件不同的事（审计 `RC5`）。
-echo "external rehearsal passed: $SUBJECT built and tested outside the checkout (CLI half: $cli_half)"
+echo "external rehearsal passed: $SUBJECT built and tested outside the checkout (CLI half: $cli_half; scaffold half: $scaffold_half)"

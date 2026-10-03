@@ -195,12 +195,15 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
         .expect("clock")
         .as_nanos();
     let checkout = std::env::temp_dir().join(format!("cargo-git-checkout-{suffix}"));
-    std::fs::create_dir_all(checkout.join("core")).expect("core sibling");
-    std::fs::create_dir_all(checkout.join("build_method")).expect("build sibling");
-    std::fs::create_dir_all(checkout.join("studio")).expect("studio sibling");
+    // The two siblings are the ones a checkout has today; the fixture used to lay out
+    // `core/` and `build_method/`, so it described a checkout that no longer exists.
+    // 这两个同级目录是今天的检出才有的；这个夹具过去摆的是 `core/` 与 `build_method/`，
+    // 描述的是一份已经不存在的检出。
+    std::fs::create_dir_all(checkout.join("kernel")).expect("kernel sibling");
+    std::fs::create_dir_all(checkout.join("toolchain")).expect("toolchain sibling");
 
     let source = crate::build_time::scaffold::detected_source(
-        &checkout.join("studio"),
+        &checkout.join("toolchain"),
         &checkout.join("outside-bin/nichlink-toolchain"),
     );
     let (core, build) = crate::build_time::scaffold::dependency_specs(&source);

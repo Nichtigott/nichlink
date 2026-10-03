@@ -100,15 +100,6 @@ pub(crate) fn new(
     Ok(())
 }
 
-/// Whether a directory is a NichLink checkout this scaffold can point at.
-/// 某个目录是否是脚手架可以指向的 NichLink 检出。
-///
-/// The check lives here rather than in `build_method` because the scaffold writes a
-/// *dependency* into someone else's manifest: the predicate has to be enforced by the
-/// caller that is about to write it, and keeping it local means the packaged CLI does
-/// not need a symbol newer than the published `nichlink-toolchain`.
-/// 这个判断放在这里而不是 `build_method`，因为脚手架是把一条**依赖**写进别人的清单：判断必须
-/// 由即将写下它的调用方执行，而放在本地意味着打包后的 CLI 不需要一个比已发布
 /// The checkout `--path` names, resolved, or the reason it cannot be one.
 /// `--path` 点名的检出（已解析），或它不成其为检出的原因。
 fn checkout_root(value: &Path) -> Result<PathBuf, String> {
@@ -116,27 +107,44 @@ fn checkout_root(value: &Path) -> Result<PathBuf, String> {
         .map_err(|error| format!("--path {}: {error}", value.display()))?;
     if !is_checkout(&directory) {
         return Err(format!(
-            "--path {} is not a NichLink checkout: it has no core/, build_method/ and run_method/",
+            "--path {} is not a NichLink checkout: it has no kernel/ and toolchain/",
             value.display()
         ));
     }
     Ok(directory)
 }
 
+/// Whether a directory is a NichLink checkout this scaffold can point at.
+/// 某个目录是否是脚手架可以指向的 NichLink 检出。
+///
+/// The check lives here rather than in `build_time` because the scaffold writes a
+/// *dependency* into someone else's manifest: the predicate has to be enforced by the
+/// caller that is about to write it, and keeping it local means the packaged CLI does
+/// not need a symbol newer than the published `nichlink-toolchain`.
+/// 这个判断放在这里而不是 `build_time`，因为脚手架是把一条**依赖**写进别人的清单：判断必须
+/// 由即将写下它的调用方执行，而放在本地意味着打包后的 CLI 不需要一个比已发布
 /// `nichlink-toolchain` 更新的符号。
+///
+/// The two directories are the two halves a generated host depends on. They replaced
+/// `core/`, `build_method/` and `run_method/` in batches 1 and 2, and this predicate
+/// stayed on the old names — which is why `--path` refused this very checkout for as
+/// long as nothing compiled a generated project. `tools/nichlink-external-rehearsal`
+/// now does, so the names here cannot drift again unnoticed.
+/// 这两个目录是生成的宿主所依赖的两半。它们在批 1 与批 2 里取代了 `core/`、`build_method/`
+/// 与 `run_method/`，而这个判断留在了旧名字上——只要没有任何东西去编译一个生成出来的项目，
+/// `--path` 就会一直拒绝本检出自己。如今 `tools/nichlink-external-rehearsal` 会去编译，
+/// 因此这里的名字不会再无声漂移。
 fn is_checkout(workspace: &Path) -> bool {
-    workspace.join("core").is_dir()
-        && workspace.join("build_method").is_dir()
-        && workspace.join("run_method").is_dir()
+    workspace.join("kernel").is_dir() && workspace.join("toolchain").is_dir()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A directory is a checkout only when the three crates a scaffold points at are
-    /// there; an empty or unrelated directory is refused before anything is written.
-    /// 只有当脚手架要指向的三个 crate 都在时目录才算检出；空目录或无关目录会在写下任何东西之前
+    /// A directory is a checkout only when both crates a scaffold points at are there;
+    /// an empty or unrelated directory is refused before anything is written.
+    /// 只有当脚手架要指向的两个 crate 都在时目录才算检出；空目录或无关目录会在写下任何东西之前
     /// 被拒绝。
     #[test]
     fn only_a_real_checkout_is_accepted() {
@@ -144,10 +152,15 @@ mod tests {
             std::env::temp_dir().join(format!("nichlink-new-checkout-{}", std::process::id()));
         std::fs::create_dir_all(&root).expect("fixture directory");
         assert!(!is_checkout(&root), "an empty directory is not a checkout");
-        for directory in ["core", "build_method", "run_method"] {
-            std::fs::create_dir_all(root.join(directory)).expect("fixture directory");
-        }
-        assert!(is_checkout(&root), "the three crates make it a checkout");
+        // The stale half is refused too: `kernel/` alone is what batch 1 left the old
+        // spellings looking like, and accepting it would point the generated manifest
+        // at a directory the merge removed.
+        // 陈旧的那一半同样被拒：只有 `kernel/` 正是批 1 之后旧拼法看到的样子，接受它就会让
+        // 生成的清单指向一个在合并里被移除的目录。
+        std::fs::create_dir_all(root.join("kernel")).expect("fixture directory");
+        assert!(!is_checkout(&root), "one half is not a checkout: {root:?}");
+        std::fs::create_dir_all(root.join("toolchain")).expect("fixture directory");
+        assert!(is_checkout(&root), "both halves make it a checkout");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

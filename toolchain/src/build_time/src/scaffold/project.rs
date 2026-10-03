@@ -10,6 +10,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use nichlink_kernel::lexicon;
+
 use super::snippets::{Editor, write_editor_snippets};
 
 const NICHLINK_REPOSITORY: &str = "https://github.com/Nichtigott/nichlink";
@@ -74,7 +76,7 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
     let workspace = tool_manifest_dir.parent().unwrap_or_else(|| Path::new("."));
     let runs_from_workspace = current_exe.starts_with(workspace.join("target"))
         && workspace.join("kernel").is_dir()
-        && workspace.join("build_method").is_dir();
+        && workspace.join("toolchain").is_dir();
     if runs_from_workspace {
         DependencySource::Local {
             workspace: workspace.to_path_buf(),
@@ -108,8 +110,13 @@ const RELEASE_REQUIREMENT: &str = env!("CARGO_PKG_VERSION");
 pub fn dependency_specs(source: &DependencySource) -> (String, String) {
     match source {
         DependencySource::Local { workspace } => {
-            let runtime = toml_path(&workspace.join("run_method"));
-            let build = toml_path(&workspace.join("build_method"));
+            // Both halves now name the same directory: batch 2 merged the nine
+            // execution-surface crates into `toolchain/`, and the generated manifest
+            // depends on that one crate from both tables.
+            // 两半现在指向同一个目录：批 2 把九个执行面 crate 合并成了 `toolchain/`，而生成的
+            // 清单在两个表里依赖的是同一个 crate。
+            let runtime = toml_path(&workspace.join("toolchain"));
+            let build = toml_path(&workspace.join("toolchain"));
             (
                 format!(
                     "nichlink-toolchain = {{ package = \"nichlink-toolchain\", path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
@@ -150,29 +157,46 @@ pub fn project_files(
     // `.nichlink/traces/nichlink.trace`）。在有人 opt-in 之前它是惰性的——`CallTrace::runtime()`
     // 在 release 构建里是 `off`、在 debug 里是 `errors-only`——因此发布路径什么都不收集；意义在于那条
     // 链可见且可跑，而不是永远存在证据。
+    // Every NichLink path in the generated source is spelled from the crate the
+    // generated manifest depends on. The host crate does re-export the kernel's
+    // `registry_core` at its root — that is what `host!()` emits, and it is why the
+    // bare `lexicon`/`root_node_id` spellings below resolve — but the trace APIs are
+    // not part of that re-export, so `crate::CallTrace` was a mis-anchor: it made every
+    // scaffolded binary host fail to compile. The crate name itself comes from the same
+    // kernel constant the build-time renderer spells its generated code with, so a
+    // rename moves it in one place.
+    // 生成源码里每一处 NichLink 路径都从生成清单所依赖的那个 crate 写起。宿主 crate 确实在根上
+    // 重导出了内核的 `registry_core`——`host!()` 发射的就是它，也正是下面裸写 `lexicon` /
+    // `root_node_id` 能解析的原因——但 trace 那组 API 不在那份重导出里，因此 `crate::CallTrace`
+    // 是一处失锚：它让每个脚手架生成的二进制宿主都编译不过。crate 名本身取自构建期渲染器发射生成
+    // 代码时所用的同一个内核常量，一次改名只动一处。
+    let toolchain = lexicon::RUN_METHOD_CRATE;
+    let binary_body = format!(
+        "\nfn main() {{\n    \
+         // Evidence is opt-in: neither `NICH_LINK_TRACE` (the collection mode) nor\n    \
+         // `NICH_LINK_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
+         // host records and writes nothing at all.\n    \
+         let asked = std::env::var_os({toolchain}::lexicon::TRACE_FILE_ENV).is_some()\n        \
+         || std::env::var_os({toolchain}::lexicon::TRACE_MODE_ENV).is_some();\n    \
+         let mut trace = {toolchain}::CallTrace::runtime();\n    \
+         let root = {toolchain}::root_node_id(env!(\"CARGO_PKG_NAME\"));\n    \
+         let faces = trace.with(root, \"main\", |_| builtin_static_plan().len());\n    \
+         println!(\"registered faces: {{faces}}\");\n    \
+         if !asked {{\n        return;\n    }}\n    \
+         let path = {toolchain}::trace_artifact_path(std::path::Path::new(env!(\n        \
+         \"CARGO_MANIFEST_DIR\",\n    )));\n    \
+         match {toolchain}::write_trace_artifact(&trace, &path, env!(\"CARGO_PKG_NAME\")) {{\n        \
+         Ok(()) => println!(\"trace written: {{}}\", path.display()),\n        \
+         Err(error) => eprintln!(\"nichlink: trace not written: {{error}}\"),\n    }}\n}}\n"
+    );
     let prelude = format!(
-        "crate::host!();\n{}",
+        "{toolchain}::runtime::host!();\n{}",
         if kind == ProjectKind::Library {
             "\n// A library host has no `main` to write at the end of: record around the work you\n\
              // actually run (`CallTrace::runtime`, `trace_call!`), then write it with\n\
              // `trace_artifact_path` + `write_trace_artifact`, or scaffold a binary for the demo.\n"
         } else {
-            "\nfn main() {\n    \
-             // Evidence is opt-in: neither `NICH_LINK_TRACE` (the collection mode) nor\n    \
-             // `NICH_LINK_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
-             // host records and writes nothing at all.\n    \
-             let asked = std::env::var_os(crate::lexicon::TRACE_FILE_ENV).is_some()\n        \
-             || std::env::var_os(crate::lexicon::TRACE_MODE_ENV).is_some();\n    \
-             let mut trace = crate::CallTrace::runtime();\n    \
-             let root = crate::root_node_id(env!(\"CARGO_PKG_NAME\"));\n    \
-             let faces = trace.with(root, \"main\", |_| builtin_static_plan().len());\n    \
-             println!(\"registered faces: {faces}\");\n    \
-             if !asked {\n        return;\n    }\n    \
-             let path = crate::trace_artifact_path(std::path::Path::new(env!(\n        \
-             \"CARGO_MANIFEST_DIR\",\n    )));\n    \
-             match crate::write_trace_artifact(&trace, &path, env!(\"CARGO_PKG_NAME\")) {\n        \
-             Ok(()) => println!(\"trace written: {}\", path.display()),\n        \
-             Err(error) => eprintln!(\"nichlink: trace not written: {error}\"),\n    }\n}\n"
+            binary_body.as_str()
         }
     );
     // The inner `[workspace]` table makes the generated manifest its own workspace root.
@@ -187,7 +211,10 @@ pub fn project_files(
     );
     vec![
         ("Cargo.toml", cargo),
-        ("build.rs", "fn main() { crate::run(); }\n".to_owned()),
+        (
+            "build.rs",
+            format!("fn main() {{\n    {toolchain}::build_time::run();\n}}\n"),
+        ),
         (kind.entry_file(), prelude),
     ]
 }
@@ -332,6 +359,65 @@ mod tests {
         assert!(!library.contains("fn main"), "{library}");
         assert!(library.contains("trace_artifact_path"), "{library}");
         assert!(library.contains("CallTrace::runtime"), "{library}");
+    }
+
+    /// Every NichLink path a scaffold writes is spelled from the crate the generated
+    /// manifest depends on, and each old spelling is asserted **absent**: the templates
+    /// said `crate::host!()`, `crate::run()` and `crate::CallTrace` for two batches while
+    /// nothing compiled a generated project, so every scaffolded host was dead on
+    /// arrival. Listing only the new spelling would let a later edit add the old one back
+    /// beside it — the same "a description that reads well in both directions" trap the
+    /// `apply cut` wording fell into.
+    /// 脚手架写下的每一处 NichLink 路径都从生成清单所依赖的那个 crate 写起，并且每一处旧拼法都被
+    /// **反向断言不许出现**：模板用 `crate::host!()`、`crate::run()` 与 `crate::CallTrace`
+    /// 写了两批，而没有任何东西去编译生成物，于是每个生成的宿主一出生就是坏的。只列出新拼法的钉子
+    /// 会让后来的改动把旧拼法加回它旁边——正是 `apply cut` 的措辞栽进去的那个"两个方向读起来都通顺"的坑。
+    #[test]
+    fn a_generated_host_spells_every_nichlink_path_from_its_dependency() {
+        let crate_name = nichlink_kernel::lexicon::RUN_METHOD_CRATE;
+        let source = DependencySource::Local {
+            workspace: PathBuf::from("/checkout"),
+        };
+        let content = |kind, name: &str| {
+            project_files("probe", kind, &source)
+                .into_iter()
+                .find(|(file, _)| *file == name)
+                .unwrap_or_else(|| panic!("{name} is generated"))
+                .1
+        };
+        let build = content(ProjectKind::Binary, "build.rs");
+        assert!(
+            build.contains(&format!("{crate_name}::build_time::run()")),
+            "the build script calls the merged crate by its full path: {build}"
+        );
+        for kind in [ProjectKind::Binary, ProjectKind::Library] {
+            let entry = content(kind, kind.entry_file());
+            assert!(
+                entry.contains(&format!("{crate_name}::runtime::host!()")),
+                "the entry pulls in the generated plan by its full path: {entry}"
+            );
+            for stale in [
+                "crate::host!",
+                "crate::run()",
+                "crate::CallTrace",
+                "crate::trace_artifact_path",
+                "crate::write_trace_artifact",
+            ] {
+                assert!(
+                    !entry.contains(stale) && !build.contains(stale),
+                    "`{stale}` is the old spelling and does not resolve in a host: {entry}"
+                );
+            }
+        }
+        // The local source points both tables at the one crate the merge produced.
+        // 本地来源把两个表都指向合并之后的那一个 crate。
+        let (runtime, build_dependency) = dependency_specs(&source);
+        for spec in [&runtime, &build_dependency] {
+            assert!(spec.contains("/checkout/toolchain"), "{spec}");
+            for stale in ["run_method", "build_method"] {
+                assert!(!spec.contains(stale), "{stale} no longer exists: {spec}");
+            }
+        }
     }
 
     fn temporary_directory(label: &str) -> PathBuf {
