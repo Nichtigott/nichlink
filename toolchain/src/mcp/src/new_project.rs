@@ -370,6 +370,23 @@ fn kind(arguments: &Value) -> Result<ProjectKind, String> {
 
 /// The destination, refused unless it is inside the root this call runs in.
 /// 目的地；除非它落在本次调用所运行之根内部，否则拒绝。
+/// The same path with `.` components folded away.
+/// 把 `.` 分量折掉后的同一个路径。
+fn folded(path: PathBuf) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    if out.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        out
+    }
+}
+
 fn destination(root: &Path, requested: &str) -> Result<PathBuf, String> {
     let path = Path::new(requested);
     // `..` is refused by name rather than resolved: a destination that walks out and back
@@ -392,6 +409,16 @@ fn destination(root: &Path, requested: &str) -> Result<PathBuf, String> {
     } else {
         root.join(path)
     };
+    // Fold `.` components away before anything uses this path. `--directory .` is a spelling the
+    // tool accepts, and it produced `/root/.` — a path that reads correctly in every message and
+    // then fails the one operation that is not pure path arithmetic: `remove_dir("/root/.")` is
+    // `EINVAL`, so the destination-exists branch refused with "cannot clear the empty /root/." and
+    // nothing landed. Normalizing once here covers every later use (scaffold, staging, rename).
+    // 在任何人使用这个路径之前把 `.` 分量折掉。`--directory .` 是本工具接受的拼法，而它会产出
+    // `/root/.` —— 这个路径在每一条消息里读起来都对，却会让唯一一个不属于纯路径运算的操作失败：
+    // `remove_dir("/root/.")` 是 `EINVAL`，于是"目的地已存在"那一支报 "cannot clear the empty
+    // /root/." 并且什么都没落地。在这里归一一次，就覆盖了之后每一处用途（脚手架、暂存、rename）。
+    let target = folded(target);
     if !inside(root, &target) {
         return Err(format!(
             "REFUSED: `{requested}` resolves to {}, which is outside the root this call runs in \

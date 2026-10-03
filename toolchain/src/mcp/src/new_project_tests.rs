@@ -565,3 +565,32 @@ fn an_existing_empty_destination_receives_the_project_and_its_faces() {
         "only the project remains: {siblings:?}"
     );
 }
+
+/// A destination spelled with a `.` component still lands — and it is not cosmetic: `--directory .`
+/// on an empty root used to fail in the destination-exists branch, because `remove_dir("/root/.")`
+/// is `EINVAL` while every message about it read correctly. Found by building the S6 scenario's
+/// fixture, which is the first caller to spell it that way.
+/// 带 `.` 分量的目的地照样落地——而且这不是装饰问题：在空根上用 `--directory .` 以前会在"目的地已存在"
+/// 那一支失败，因为 `remove_dir("/root/.")` 是 `EINVAL`，而关于它的每一条消息读起来都对。它是在搭 S6
+/// 场景夹具时被发现的——那是第一个这么拼的调用方。
+#[test]
+fn a_destination_spelled_with_a_current_directory_component_still_lands() {
+    let fixture = root("faces-dot-destination");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": ".",
+            "package": "control",
+            "kind": "library",
+            "faces": [{"fields": {"module": "button", "kind": "Button"}}],
+            "confirm": true,
+            "apply": true,
+        }),
+    );
+    assert!(!failed, "{report}");
+    assert!(
+        fixture.path.join("src/button/button.rs").is_file()
+            && fixture.path.join("Cargo.toml").is_file(),
+        "the project landed in the root itself: {report}"
+    );
+}
