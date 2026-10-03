@@ -409,6 +409,48 @@ pub(crate) fn entry_point(stage: Stage) -> Option<&'static str> {
     }
 }
 
+/// Whether this tree hosts nichlink at all — a `build.rs` plus a `nichlink-toolchain` dependency.
+/// 这棵树到底有没有宿主 nichlink —— 一个 `build.rs` 加一条 `nichlink-toolchain` 依赖。
+///
+/// This is the question that decides what "a face" can even mean. The round measured the whole
+/// evaluation corpus: **the trees under test do not host nichlink** (no `build.rs`, no `host!()`;
+/// only `examples/control-button` does), so on them there is no build-time scope, no derived
+/// registration tree, and `0 faces` is not a defect to explain but the answer. A tool that prints
+/// "0 faces" without saying that leaves the reader to infer it — and the same reader then asks a
+/// face-shaped question about a symbol.
+/// 这个问题决定了"面"能意味着什么。那一轮量遍了评测语料：**被测的树不宿主 nichlink**（没有
+/// `build.rs`、没有 `host!()`；只有 `examples/control-button` 有），因此那些树上既没有构建期作用域、
+/// 也没有派生注册树，而 `0 faces` 不是要解释的缺陷、就是答案本身。只印 "0 faces" 而不说这一点的工具
+/// 把推断留给读者 —— 而那位读者随后会用一个"面"形状的问题去问一个符号。
+pub(crate) fn hosts_nichlink(root: &Path) -> bool {
+    let mut dirs = vec![root.to_path_buf()];
+    // Three levels covers `<root>`, a member, and a member's crate — deeper than any host layout
+    // this repository ships, and it stops at the first manifest that names the dependency.
+    // 三层够覆盖 `<root>`、一个成员、成员里的 crate —— 比本仓出厂的任何宿主布局都深，而且一旦有清单
+    // 点名了那条依赖就停下。
+    for _ in 0..3 {
+        let mut next = Vec::new();
+        for dir in dirs {
+            if dir.join("build.rs").is_file()
+                && std::fs::read_to_string(dir.join("Cargo.toml"))
+                    .is_ok_and(|manifest| manifest.contains("nichlink-toolchain"))
+            {
+                return true;
+            }
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.file_name().is_some_and(|name| name != "target") {
+                        next.push(path);
+                    }
+                }
+            }
+        }
+        dirs = next;
+    }
+    false
+}
+
 pub(crate) fn enclosing_workspace(root: &Path) -> Option<std::path::PathBuf> {
     // A root whose own manifest declares `[workspace]` **is** a workspace root, so there is no
     // enclosing one to name. Without this check a tree nested under an unrelated project got a note

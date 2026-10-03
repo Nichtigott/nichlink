@@ -97,6 +97,22 @@ fn members_and_faces(root: &Path, members: &[Member]) -> String {
         root.display(),
         members.len(),
     );
+
+    // The round measured the whole corpus: the trees under test **do not host nichlink**, so on them
+    // `0 faces` is the answer rather than a defect — and a reader who is not told that asks a
+    // face-shaped question about a symbol. Saying it once, before the per-member rows, is the whole
+    // fix; it costs one line and removes an inference nobody should have to make.
+    // 那一轮量遍语料：被测的树**不宿主 nichlink**，因此在它们身上 `0 faces` 是答案而不是缺陷 —— 而没被
+    // 告知这一点的读者会用一个"面"形状的问题去问一个符号。在逐成员行**之前**说一次就是全部修法：一行
+    // 的成本，去掉一次本不该由读者做的推断。
+    if !crate::mcp::workspace::hosts_nichlink(root) {
+        output.push_str(
+            "note   this tree does not host nichlink (no `build.rs` + `nichlink-toolchain` \
+             dependency), so it has no registration tree to read and `0 faces` below is the answer \
+             rather than a defect. Ask about *symbols*: `search {query}` / `locate {symptom}` / \
+             `read {path, line}` / `callgraph {function}`.\n",
+        );
+    }
     for member in members {
         output.push_str(&format!(
             "  {:<32} {:<14} ({})\n",

@@ -524,3 +524,33 @@ fn a_tree_that_is_its_own_workspace_has_no_enclosing_one() {
     );
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// A tree hosts nichlink only when a `build.rs` **and** the dependency are both there.
+/// 一棵树只有在 `build.rs` **与**那条依赖同时存在时才算宿主 nichlink。
+///
+/// The round measured the corpus: the trees under test have neither, so on them `0 faces` is the
+/// answer rather than a defect — which is why `registry` says so before its per-member rows.
+/// 那一轮量遍了语料：被测的树两者都没有，因此在它们身上 `0 faces` 是答案而不是缺陷 —— 这也是
+/// `registry` 在逐成员行**之前**先说明这一点的原因。
+#[test]
+fn hosts_nichlink_reads_the_manifest_and_the_build_script_together() {
+    let base = std::env::temp_dir().join(format!("ws-host-{}", std::process::id()));
+    let crate_dir = base.join("crates").join("app");
+    std::fs::create_dir_all(&crate_dir).expect("tree");
+    // Neither half: not a host.
+    // 两半都没有：不是宿主。
+    assert!(!super::hosts_nichlink(&base));
+    // Only the manifest half: still not a host.
+    // 只有清单那一半：仍不是宿主。
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"app\"\n\n[dependencies]\nnichlink-toolchain = \"0.2.0\"\n",
+    )
+    .expect("manifest");
+    assert!(!super::hosts_nichlink(&base));
+    // Both halves: a host, found two levels down from the root.
+    // 两半都有：是宿主，且从根往下两层就能找到。
+    std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").expect("build script");
+    assert!(super::hosts_nichlink(&base));
+    let _ = std::fs::remove_dir_all(&base);
+}
