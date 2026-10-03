@@ -18,7 +18,7 @@
 | A3 | `locate` 零命中时回接 `check` 的 `failed` 行 | fd C2 | **修掉** | 零命中文案里点名「**若症状是失败测试，`check` 的 `failed` 行就是症状的原话**」，并解释本工具只排**源码里的词**（那个 `failed` 行里的词在源码里往往不存在）。这比"跨工具读缓存"更便宜也更对 |
 | A4 | `locate` 截断处方点名命令 | gc-boundary ① | **修掉** | 处方改为 `pass a narrower word …, or read {path, line} the top few` |
 | A5 | `digest`/`callgraph` 合并成一次"多符号"调用 | fd C4 | **留置** | 是新工具（对标 cg 的 `explore`），要设计 schema 与截断；裁定：**下一轮独立项** |
-| A6 | 编辑守卫：把"读后被改"变成自愈 | fd C5 | **留置** | 涉及写通道的安全语义（"读到的是不是你要改的那份"），要单独设计；裁定：**下一轮** |
+| A6 | 编辑守卫：把"读后被改"变成自愈 | fd C5 | **判定不在本仓 ⇒ 装置侧处置** | `grep` 全仓为 **0**：`file changed since it was read` 是 **harness 的 `edit` 工具**报的，不是 nichlink 的 ⇒ 本仓无处可改 ✓。装置侧：任务书里把 `sed -i` 禁令扩成「**还原也不要用 `cp` 备份/回拷**」（那正是 `fd` 步 27–28 那笔与题目无关的纯工具税），并要求"要撤销就用 `edit` 反向改回去" |
 | A7 | 引导层：题面词汇 + 0 面树的显式桥接 | fd C7 | **修掉（部分）** | 见 A2 + t8：入口短表写明"没有注册面的树上『对象』只能指符号" |
 | A8 | `adopted` 的单个 `--files` 假拒绝 | gc-refusal R1 | **修掉** | `adopted.rs` 容忍 `Value::String`；拒绝文案同时给出两种可接受形状 |
 | A9 | 拒绝文案：accepted shape 之后教 `--json` | gc-refusal R2 | **部分证实** | 已在 `adopted`/`apply` 的拒绝里存在（`files` 那条新文案给了 `--files` 与 `--json` 两形）；**未逐个工具普查**，裁定：**部分**，剩余工具下一轮 |
@@ -32,7 +32,7 @@
 | A17 | `check` 不硬要 `--face`（两面同一条红） | s7 T2 | **修掉** | 同 A12 |
 | A18 | 0 面 family 工具一句话退场 | s7 T3 | **修掉** | `consistency` 在 0 成员的面上不再逐条印样板行 |
 | A19 | `inspect`/`digest` 去重 | s7 T4 | **修掉** | `digest` 的 `next` 不再指 `callgraph`（它自己已印调用者数） |
-| **A20** | `explain`/`why` **直接读 OUT_DIR** | dd-r2fa F | **修掉（改文案版）** | 实测：`read_build_scope(&out)` 本来就已读 OUT_DIR，而这桥**从不构建** ⇒ 文件永不存在；改文案点名"那是 **CLI** 的 `nichlink check`" + 给出替代调用（`registry`/`why --at`/`read`）。**"让桥自己触发构建"是能力变更**，裁定：**下一轮** |
+| **A20** | `explain`/`why` 读到 scope | dd-r2fa F | **修掉** | 实测把真相查清了：题树（如 `s1`）**根本没有接入 nichlink**（无 `build.rs`、无 `host!()`；对照 `examples/control-button` 两者都有）⇒ 那些树上 build-time scope **不是一个概念**，不是"文件没生成"。文案现在分开两种真相：未接入的树直说 `a tree that does not host nichlink`（没有 nichlink 构建，就没有 scope），接入的树给出确切路径与写它的 CLI（本桥从不构建），两路都补"`registry` / `why --at` / `read` 照样答"。另一条入口（`explain`）走的是 `not built (cannot read <path>: No such file or directory)` —— 它已给出确切路径与原因，属于本来就准确的那一类 |
 | A21 | `consistency --parent` 在"成员体全是宏调用"的树上没有判据 | dd-r2fa ① | **留置** | 工具自己在 `not covered` 里承认"宏体里的调用读不到"；补它要改词法/宏展开层；裁定：**下一轮独立项** |
 | A22 | `apply` 语法自述不足（4 次被拒中 3 次是 apply） | dd-r2fa ③ | **修掉** | 逐个动作普查后发现：`add`/`rename`/`deepen` 的拒绝**本来就给** accepted shape，只有 **`edit` 与 `delete` 没给** ⇒ 补上两份最小形状（并指向 `--list apply` 的完整键表）。`apply` 是被拒最多的工具（41 次里 16 次） |
 | A23 | `digest` 的 `not covered here` 与自己输出矛盾 | gc-boundary ④ | **修掉** | 删掉"契约全文不覆盖"那半（它上面刚印了 `contract:`） |
@@ -67,8 +67,8 @@
 
 ## 四、本轮结束时的状态
 
-- **修掉 20 条**（工具 17 + 装置 11 中的 10，去重后按条目计）。
+- **修掉 22 条**（工具 19 + 装置 11 中的 10，去重后按条目计）。
 - **部分证实 4 条**：A9 · A11 · A13 · A25（各自写明了"已够用/部分"与下一轮范围）。
-- **明确留置 4 条**：A5 · A6 · A20（"让桥自己构建"那半）· A21，外加行为面 C1–C5。
-  （A3 与 A22 在本轮后续里已修掉，见上表。）
+- **留置 0 条**：A5 · A21 · A3 · A22 · A20 已修；A6 判定为"不在本仓"并在装置侧处置。**工具面清空** ✓
+  余下只有行为面 C1–C5（agent 侧，只能观察 + 减少诱因）。
 - **没有一条是"没提到"**：本表即全量。
