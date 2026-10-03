@@ -377,12 +377,12 @@ Registry fails before generated code is compiled.
 
 Four layers validate this declaration:
 
-| Check | Enforced by | What it proves here |
-| --- | --- | --- |
-| Parent topology | `nichlink-toolchain` | Button's macro, folder, and `parent` all point to Control |
-| Rust type contract | rustc | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
-| Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum |
-| External admission | Registry connector | Cross-tree `requires` stay within Control's allowed `admission` paths |
+| Check                    | Enforced by                                                                        | What it proves here                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Parent topology          | `nichlink-toolchain`                                                               | Button's macro, folder, and `parent` all point to Control                        |
+| Rust type contract       | rustc                                                                              | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
+| Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum           |
+| External admission       | Registry connector                                                                 | Cross-tree `requires` stay within Control's allowed `admission` paths            |
 
 `handle_traits` and `part_traits` are interface names retained in registration
 metadata. The matching `handle_contracts` and `part_contracts` are Rust trait
@@ -415,13 +415,13 @@ implementation without pretending they are the same error.
 Parentage is not selected by a kind filter, and external use is not controlled
 by the registration rule:
 
-| Layer | Question it answers |
-| --- | --- |
-| Rust `struct` / `impl` | How does the object actually work? |
-| `parent` + parent-specific macro | Where is the object registered? |
-| `registry_rule` | What is the minimum shape accepted by the parent Registry? |
-| `admission` | Which external paths may this branch depend on? |
-| `FlowContract` | Are both sides of a graft data-compatible? |
+| Layer                            | Question it answers                                        |
+| -------------------------------- | ---------------------------------------------------------- |
+| Rust `struct` / `impl`           | How does the object actually work?                         |
+| `parent` + parent-specific macro | Where is the object registered?                            |
+| `registry_rule`                  | What is the minimum shape accepted by the parent Registry? |
+| `admission`                      | Which external paths may this branch depend on?            |
+| `FlowContract`                   | Are both sides of a graft data-compatible?                 |
 
 Older prototypes used `RegistrationRule::new(&["Button"], &[])`. That form is
 gone. Replace it with `RegistrationRule::new()` plus only the required shape
@@ -652,13 +652,13 @@ taken and what each check asserts.
 [`docs/performance-baseline.md`](docs/performance-baseline.md) 记录了它们如何测得、以及每项检查
 断言了什么。
 
-| Usage | Runtime representation | Cost boundary |
-| --- | --- | --- |
-| Read-only built-in topology | Static `StaticFace` slice | No startup allocation; `find` and `children_of` both scan the slice in O(n), because the table follows registry-tree order |
-| Mutable development Registry | `Arc` header, 32 entry pages, and indexes | Cloning increments `Arc` counts; the first write copies only the touched page, not the tree |
-| Build-declared static graft | Static selector slice inside `StaticPlan` | Reading the declaration allocates nothing; a framework with statically bound implementations needs no Registry overlay |
-| Post-release plugin/graft | Selected dynamic metadata and an effective Registry | `overlay_static` allocates no plan but still performs contract, admission, and connector validation once |
-| `CallTrace::runtime()` | `errors-only` in debug, `off` in release | Off collects no evidence; code that still calls tracing APIs is not promised instruction-level zero overhead |
+| Usage                        | Runtime representation                              | Cost boundary                                                                                                              |
+| ---------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Read-only built-in topology  | Static `StaticFace` slice                           | No startup allocation; `find` and `children_of` both scan the slice in O(n), because the table follows registry-tree order |
+| Mutable development Registry | `Arc` header, 32 entry pages, and indexes           | Cloning increments `Arc` counts; the first write copies only the touched page, not the tree                                |
+| Build-declared static graft  | Static selector slice inside `StaticPlan`           | Reading the declaration allocates nothing; a framework with statically bound implementations needs no Registry overlay     |
+| Post-release plugin/graft    | Selected dynamic metadata and an effective Registry | `overlay_static` allocates no plan but still performs contract, admission, and connector validation once                   |
+| `CallTrace::runtime()`       | `errors-only` in debug, `off` in release            | Off collects no evidence; code that still calls tracing APIs is not promised instruction-level zero overhead               |
 
 The Registry page-copy concern therefore does not affect startup when an
 application only reads the built-in static plan. Page-level COW is used only
@@ -698,19 +698,19 @@ on input, resize, or a file event.
 
 ![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
 
-| Key | Action |
-| --- | --- |
-| `n` | New binary/library project |
-| `a` / `e` / `d` | Add, edit, or delete a face |
-| `g` | Compose an external graft plan for the selected face |
-| `/` | Search files and functions |
-| `1`–`3` | Search, inspect, data pages |
-| `Tab` | Move focus between the tree and the data pane |
-| `p` | Select a plugin and record it in the lock |
-| arrows / `j` `k` | Move or resize the focused panel |
-| `r` / `F5` | Reload the project |
-| `b` / `F9` | Run the build check |
-| `q` / `Ctrl-C` | Quit |
+| Key              | Action                                               |
+| ---------------- | ---------------------------------------------------- |
+| `n`              | New binary/library project                           |
+| `a` / `e` / `d`  | Add, edit, or delete a face                          |
+| `g`              | Compose an external graft plan for the selected face |
+| `/`              | Search files and functions                           |
+| `1`–`3`          | Search, inspect, data pages                          |
+| `Tab`            | Move focus between the tree and the data pane        |
+| `p`              | Select a plugin and record it in the lock            |
+| arrows / `j` `k` | Move or resize the focused panel                     |
+| `r` / `F5`       | Reload the project                                   |
+| `b` / `F9`       | Run the build check                                  |
+| `q` / `Ctrl-C`   | Quit                                                 |
 
 For source-driven hot rebuild while working on Studio itself:
 
@@ -809,13 +809,13 @@ choice.
 
 ## Comparison
 
-| Approach | Solves well | Leaves to the application |
-| --- | --- | --- |
-| Modules, traits, DI | Namespaces, static behaviour, explicit construction | Discovery, parent closure, admission, replacement policy |
-| `inventory` / `linkme` | Distributed collection of static items | Tree semantics, contracts, provenance, atomic grafts |
-| Bevy-style plugins | Explicit composition of an application | Generic source paths and middle-layer contract checks |
-| CodeGraph / CodeQL | Symbol and call evidence | Runtime registration and replacement decisions |
-| NichLink | Passive recursive tree, contracts, admission, graft validation, Studio views, and MCP source queries with previewed writes | Rust's own rules for dynamic dispatch and optimised values |
+| Approach               | Solves well                                                                                                                | Leaves to the application                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Modules, traits, DI    | Namespaces, static behaviour, explicit construction                                                                        | Discovery, parent closure, admission, replacement policy   |
+| `inventory` / `linkme` | Distributed collection of static items                                                                                     | Tree semantics, contracts, provenance, atomic grafts       |
+| Bevy-style plugins     | Explicit composition of an application                                                                                     | Generic source paths and middle-layer contract checks      |
+| CodeGraph / CodeQL     | Symbol and call evidence                                                                                                   | Runtime registration and replacement decisions             |
+| NichLink               | Passive recursive tree, contracts, admission, graft validation, Studio views, and MCP source queries with previewed writes | Rust's own rules for dynamic dispatch and optimised values |
 
 ## Boundaries
 
@@ -866,15 +866,15 @@ declaration, parsing, tree operations, policy, and rendering. Nothing in the
 kernel performs I/O or binds to the environment, so every tool can reuse the
 same methods.
 
-| Crate | Directory | Execution surface |
-| --- | --- | --- |
-| `nichlink-toolchain` | `toolchain/build_time/` | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives |
-| `nichlink-toolchain` | `toolchain/runtime/` | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor |
+| Crate                | Directory                  | Execution surface                                                                                                                                                                                          |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nichlink-toolchain` | `toolchain/build_time/`    | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives                                                  |
+| `nichlink-toolchain` | `toolchain/runtime/`       | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor                                                                            |
 | `nichlink-toolchain` | `toolchain/call_evidence/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
-| `nichlink-toolchain` | `toolchain/plugin_host/` | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table |
-| `nichlink-toolchain` | `toolchain/studio/` | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods |
-| `nichlink-toolchain` | `toolchain/mcp/` | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding |
-| `nichlink-toolchain` | `toolchain/cli/` | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding |
+| `nichlink-toolchain` | `toolchain/plugin_host/`   | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table                                                                                                 |
+| `nichlink-toolchain` | `toolchain/studio/`        | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods                                                                                                 |
+| `nichlink-toolchain` | `toolchain/mcp/`           | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding                                                                                                                                         |
+| `nichlink-toolchain` | `toolchain/cli/`           | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding                                                                                                                                     |
 
 `nichlink-macro` is the ninth published crate: a proc-macro crate that
 normalises face fields at compile time (tolerant separators and order, spanned
@@ -922,4 +922,4 @@ NichLink is released under the [MIT License](LICENSE). Contributions, design
 critique, and real-world failure reports are welcome in GitHub Issues and
 Discussions.
 
-[简体中文](README.zh-CN.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md) · [Graft records](docs/graft.md)
+[简体中文](README.zh-CN.md) 

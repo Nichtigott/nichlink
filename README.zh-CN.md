@@ -352,12 +352,12 @@ crate::control_object! {
 
 这份声明会经过四层验证：
 
-| 检查 | 由谁执行 | 在本例中验证什么 |
-| --- | --- | --- |
-| 父子拓扑 | `nichlink-toolchain` | Button 的宏名、目录位置和 `parent` 是否都指向 Control |
-| Rust 类型合同 | rustc | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
-| 父级注册规范 | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则 |
-| 外部准入 | Registry 连接器 | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内 |
+| 检查          | 由谁执行                                                 | 在本例中验证什么                                                                                    |
+| ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 父子拓扑      | `nichlink-toolchain`                                     | Button 的宏名、目录位置和 `parent` 是否都指向 Control                                               |
+| Rust 类型合同 | rustc                                                    | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
+| 父级注册规范  | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则                                               |
+| 外部准入      | Registry 连接器                                          | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内                                 |
 
 `handle_traits` / `part_traits` 是可存入注册元数据的接口名；对应的
 `handle_contracts` / `part_contracts` 是 Rust trait 路径，负责让 rustc 证明
@@ -386,13 +386,13 @@ crate::control_object! {
 
 父子归属不由规则筛选 kind，外部对象能否被调用也不由规则决定：
 
-| 层次 | 负责的问题 |
-| --- | --- |
-| Rust `struct` / `impl` | 对象真正如何工作 |
-| `parent` + 父级专属宏 | 对象注册到哪里 |
-| `registry_rule` | 进入父 Registry 的对象至少长什么样 |
-| `admission` | 这个分支允许依赖哪些外部路径 |
-| `FlowContract` | graft 接口两端的数据是否兼容 |
+| 层次                   | 负责的问题                         |
+| ---------------------- | ---------------------------------- |
+| Rust `struct` / `impl` | 对象真正如何工作                   |
+| `parent` + 父级专属宏  | 对象注册到哪里                     |
+| `registry_rule`        | 进入父 Registry 的对象至少长什么样 |
+| `admission`            | 这个分支允许依赖哪些外部路径       |
+| `FlowContract`         | graft 接口两端的数据是否兼容       |
 
 早期原型里的 `RegistrationRule::new(&["Button"], &[])` 已经删除。迁移时改成
 `RegistrationRule::new()`，只追加上面这些最低结构要求。外部分支的 allow/deny
@@ -583,13 +583,13 @@ NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
 [`docs/performance-baseline.md`](docs/performance-baseline.md) 记录了它们如何测得、以及每项检查
 断言了什么。
 
-| 使用方式 | 运行时保留什么 | 成本边界 |
-| --- | --- | --- |
-| 只读内置拓扑 | `StaticFace` 静态切片 | 启动零分配；`find` 与 `children_of` 都按注册树顺序线性扫描切片，均为 O(n) |
-| 开发态可变 Registry | `Arc` header、32 页 entries 和索引 | clone 只增加 `Arc` 引用；首次修改只复制命中的页，不复制整棵树 |
-| 编译前静态 graft | `StaticPlan` 内的静态 selector 切片 | 声明读取零分配；框架若已静态绑定实现，不需要构造 Registry overlay |
-| 发布后启用 plugin/graft | 所选动态元数据和 effective Registry | `overlay_static` 不分配计划，但仍要做一次合同、准入和连接器检查 |
-| `CallTrace::runtime()` | debug 默认 `errors-only`，release 默认 `off` | off 不收集证据；应用仍显式调用追踪 API 时，不承诺指令级零开销 |
+| 使用方式                | 运行时保留什么                               | 成本边界                                                                  |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
+| 只读内置拓扑            | `StaticFace` 静态切片                        | 启动零分配；`find` 与 `children_of` 都按注册树顺序线性扫描切片，均为 O(n) |
+| 开发态可变 Registry     | `Arc` header、32 页 entries 和索引           | clone 只增加 `Arc` 引用；首次修改只复制命中的页，不复制整棵树             |
+| 编译前静态 graft        | `StaticPlan` 内的静态 selector 切片          | 声明读取零分配；框架若已静态绑定实现，不需要构造 Registry overlay         |
+| 发布后启用 plugin/graft | 所选动态元数据和 effective Registry          | `overlay_static` 不分配计划，但仍要做一次合同、准入和连接器检查           |
+| `CallTrace::runtime()`  | debug 默认 `errors-only`，release 默认 `off` | off 不收集证据；应用仍显式调用追踪 API 时，不承诺指令级零开销             |
 
 因此，先前担心的 Registry 复制页不会出现在“只使用内置静态计划”的发布启动
 路径；只有应用明确构建可变 Registry、启用运行时插件或执行 graft 时才使用页级
@@ -623,18 +623,18 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 
 ![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
 
-| 按键 | 操作 |
-| --- | --- |
-| `n` | 新建 binary/library 项目 |
-| `a` / `e` / `d` | 添加、编辑、删除注册面 |
-| `g` | 为选中注册面创建并编辑外部 graft 计划 |
-| `/` | 搜索文件和函数 |
-| `1`–`3` | 搜索、检视、数据页面 |
-| `Tab` | 在树和详情之间切换焦点 |
-| 方向键 / `j` `k` | 移动选择或调整当前面板 |
-| `r` / `F5` | 重新加载项目 |
-| `b` / `F9` | 执行构建检查 |
-| `q` / `Ctrl-C` | 退出 |
+| 按键             | 操作                                  |
+| ---------------- | ------------------------------------- |
+| `n`              | 新建 binary/library 项目              |
+| `a` / `e` / `d`  | 添加、编辑、删除注册面                |
+| `g`              | 为选中注册面创建并编辑外部 graft 计划 |
+| `/`              | 搜索文件和函数                        |
+| `1`–`3`          | 搜索、检视、数据页面                  |
+| `Tab`            | 在树和详情之间切换焦点                |
+| 方向键 / `j` `k` | 移动选择或调整当前面板                |
+| `r` / `F5`       | 重新加载项目                          |
+| `b` / `F9`       | 执行构建检查                          |
+| `q` / `Ctrl-C`   | 退出                                  |
 
 开发 Studio 自身时，可以让监督器在源码变化后重建并重启子进程：
 
@@ -705,13 +705,13 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 
 ## 对比
 
-| 方案 | 擅长解决 | 仍需应用自己处理 |
-| --- | --- | --- |
-| 模块、trait、依赖注入 | 命名空间、静态行为、显式构造 | 发现、父链闭合、准入、替换策略 |
-| `inventory` / `linkme` | 分布式收集静态条目 | 树语义、合同、溯源、原子嫁接 |
-| Bevy 风格插件 | 显式组合一个应用 | 通用源码路径和中间层合同校验 |
-| CodeGraph / CodeQL | 符号和调用证据 | 运行时注册与替换决策 |
-| NichLink | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与带预览写入的 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
+| 方案                   | 擅长解决                                                                     | 仍需应用自己处理                             |
+| ---------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| 模块、trait、依赖注入  | 命名空间、静态行为、显式构造                                                 | 发现、父链闭合、准入、替换策略               |
+| `inventory` / `linkme` | 分布式收集静态条目                                                           | 树语义、合同、溯源、原子嫁接                 |
+| Bevy 风格插件          | 显式组合一个应用                                                             | 通用源码路径和中间层合同校验                 |
+| CodeGraph / CodeQL     | 符号和调用证据                                                               | 运行时注册与替换决策                         |
+| NichLink               | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与带预览写入的 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
 
 ## 边界
 
@@ -755,15 +755,15 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 声明、解析、树操作、策略、渲染。kernel 内不做任何 I/O，也不绑定环境，因此
 每个工具复用的都是同一套方法。
 
-| Crate | 目录 | 执行面职责 |
-| --- | --- | --- |
-| `nichlink-toolchain` | `toolchain/build_time/` | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令 |
-| `nichlink-toolchain` | `toolchain/runtime/` | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器 |
+| Crate                | 目录                       | 执行面职责                                                                                                                                                                   |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nichlink-toolchain` | `toolchain/build_time/`    | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令                                                                      |
+| `nichlink-toolchain` | `toolchain/runtime/`       | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器                                                                                        |
 | `nichlink-toolchain` | `toolchain/call_evidence/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
-| `nichlink-toolchain` | `toolchain/plugin_host/` | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表 |
-| `nichlink-toolchain` | `toolchain/studio/` | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法 |
-| `nichlink-toolchain` | `toolchain/mcp/` | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护 |
-| `nichlink-toolchain` | `toolchain/cli/` | 进程胶水：argv 分发、cargo 子进程、子命令转发 |
+| `nichlink-toolchain` | `toolchain/plugin_host/`   | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表                                                                                                                      |
+| `nichlink-toolchain` | `toolchain/studio/`        | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法                                                                                                              |
+| `nichlink-toolchain` | `toolchain/mcp/`           | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护                                                                                                                          |
+| `nichlink-toolchain` | `toolchain/cli/`           | 进程胶水：argv 分发、cargo 子进程、子命令转发                                                                                                                                |
 
 `nichlink-macro` 是第九个发布的 crate：一个在编译期归一化注册面字段的过程宏
 crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像）。它是构建期前端而不是
@@ -805,4 +805,4 @@ cargo clippy --workspace --all-targets --offline -- -D warnings
 NichLink 使用 [MIT License](LICENSE)。欢迎提交真实项目中的失败案例、设计
 质疑和改进 PR，也欢迎在 GitHub Issues / Discussions 讨论边界问题。
 
-[English](README.md) · [Roadmap](docs/ROADMAP.md) · [中文路线图](docs/ROADMAP.zh-CN.md) · [Graft 记录](docs/graft.zh-CN.md)
+[English](README.md) 
