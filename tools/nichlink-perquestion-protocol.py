@@ -117,12 +117,23 @@ def brief(arm, i):
 你是「{arm}」这一臂的答题者，**只答这一道题**（一题一会话）。题号 `{i}`。
 
 **题面**：{QUESTION[i]}
+
 **树**：`{root}`（{ro}）
 {how}
 
 **答案**写到 `target/round10/{arm}/answers/{i}.md`，固定五段形状：
-① 症状一句；② 根因/结论 `文件:行号` + 机制一句；③ 最小修或改动清单；④ 反证（什么观察能证伪你、你实际做了什么排除）；
+① 症状一句，**并且先把基线写进来**：`cargo test --offline` 的**原始结论**（题目态下按题面应当有红；把原始结论抄进来）。**若基线全绿而题面说有缺陷，立刻停下并上报**——不要从 mtime、增量产物或上一轮的日志里考古（第十轮 r2 为此花了 15 步、
+推理是对方的 5.25×，全部买的是"一个已不在盘上的缺陷态"）；
+② 根因/结论 `文件:行号` + 机制一句；③ 最小修或改动清单；
+④ 反证：**只改一处**、重跑、观察**同一条**症状是否仍在（独立性实验允许"**一次改两处 + 反向变异确认**"，
+不必逐个隔离到只剩一处）。改源码**用 `edit` 工具，不许用 `sed -i`**——它会吃掉未转义的 `&`，
+第十轮量到为此白花 3 步并在善后里又花 2 步；
 ⑤ 调用清单（工具 + 作用，一行一条）。
+
+**工具用法**（省一步）：`agent_teams_update_task` 的 `evidence_note` **只对终态任务有效**（第十轮 52 份切片里
+15 份出现过 `evidence_note is for terminal tasks`，每次多花一步）；提交长 payload 可能触发
+`MALFORMED_RESPONSE`（任务被记 failed 而工作白做）⇒ **先交短 completion，再把证据分次 append**
+（`acceptanceResults` / `commandsRun` / `evidence_note` 都是 append-only）。
 
 **禁令**：**不许读 `target/round7`、`target/round8`、`target/round9` 下的任何文件**
 （唯一例外：cg 臂的 codegraph 二进制在 `target/round7/tools-upstream/` 下，那一个可执行文件可用）——
@@ -157,6 +168,83 @@ def _first_user_text(path):
             d = r.get('data') or {}
             return json.dumps(d.get('content'), ensure_ascii=False) if not isinstance(d.get('content'), str) else d['content']
     return ''
+
+
+SLICE_LIMIT = 1100
+
+
+def _clip(text, limit=SLICE_LIMIT):
+    """截断**必须带标记**。
+
+    第十轮切片对每条返回硬截在 ~901 可见字符且**无标记**，1207 条里 661 条（55%）被截 ——
+    于是所有"逐行统计元信息"的结果只能给下界，而读者无法分辨"原文没有这行"与"被我切掉了"。
+    """
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"…（截断：本条共 {len(text)} 字符）"
+
+
+SLICE_LIMIT = 1100
+SLICE_IDS = ['r1','r2','r3','r4','s1','s2','s3','s4','s5','s6','s7','s8','g1','g2','g3','g4',
+             'h1','fa','fb','fc','fd','fe','h1-supply-chain','h2-claim-unkept','h3-cross-file-chain',
+             'h4-one-file-many-algorithms']
+
+
+def _clip(text, limit=SLICE_LIMIT):
+    """截断**必须带标记**。
+
+    第十轮切片对每条返回硬截在 ~901 可见字符且**无标记**：1207 条里 661 条（55%）被截 ⇒ 所有
+    "逐行统计元信息"的结果只能给下界，而读者分不清"原文没有这行"与"被我切掉了"。标上总数之后，
+    读者至少知道自己看到的是片段。
+    """
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"…（截断：本条共 {len(text)} 字符）"
+
+
+def slices(out_dir='target/round10/dialogues'):
+    """把每题每臂**最新一次**会话切成"逐条配对"的对话（推理 / 调用 / 返回），供归因分析用。"""
+    out = pathlib.Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    made = []
+    for i in SLICE_IDS:
+        for arm in ('ours', 'cg'):
+            h = latest_session(arm, i)
+            if not h:
+                continue
+            sid, f = h
+            proc = subprocess.Popen(['zstd', '-dc', str(f)], stdout=subprocess.PIPE)
+            raw = proc.stdout.read().decode('utf-8', 'replace')
+            proc.kill()
+            lines = []
+            step = 0
+            for line in raw.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                kind = row.get('type')
+                data = row.get('data') or {}
+                if kind == 'assistant/message':
+                    step += 1
+                    for part in ((data.get('message') or {}).get('content') or []):
+                        if not isinstance(part, dict):
+                            continue
+                        if part.get('type') == 'reasoning' and part.get('text', '').strip():
+                            lines.append(f'**[{step}] 想**：{_clip(part["text"].strip(), 900)}')
+                        elif part.get('type') == 'text' and part.get('text', '').strip():
+                            lines.append(f'**[{step}] 说**：{_clip(part["text"].strip(), 500)}')
+                        elif part.get('type') == 'tool-call':
+                            args = json.dumps(part.get('arguments'), ensure_ascii=False)
+                            lines.append(f'**[{step}] 调** `{part.get("name")}` {args[:600]}')
+                elif kind == 'tool/result':
+                    msg = json.dumps(data.get('message'), ensure_ascii=False)
+                    lines.append(f'**[{step}] 返**（{len(msg)} 字符）：{_clip(msg)}')
+            (out / f'{arm}-{i}.md').write_text(f'# {arm} · `{i}`\n\n会话 {sid}\n\n' + '\n\n'.join(lines) + '\n')
+            made.append(f'{arm}-{i}')
+    return made
 
 
 def latest_session(arm, i):

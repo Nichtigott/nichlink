@@ -65,7 +65,7 @@ use serde_json::{Map, Value};
 pub const SHAPES_SHORT: &str = "\
 **Put the request into one of seven shapes first** — by what it names and which way it moves:\n\
   empty tree          -> `new_project` -> `registry` -> `check`\n\
-  inspect one object  -> `search {query}` / `locate {symptom}` -> `read {path, line}` -> `why --at` -> `check {face}`\n\
+  inspect one object  -> `search {query}` / `locate {symptom}` -> `read {path, line}` -> `why --at` -> `check`\n\
   a family            -> `consistency --parent <parent>` — **one** call names the outlier\n\
   inspect several     -> `consistency --parent` once, then one object at a time\n\
   a range question    -> `check` and dispose of every census column\n\

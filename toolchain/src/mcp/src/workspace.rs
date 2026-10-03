@@ -410,18 +410,59 @@ pub(crate) fn entry_point(stage: Stage) -> Option<&'static str> {
 }
 
 pub(crate) fn enclosing_workspace(root: &Path) -> Option<std::path::PathBuf> {
+    // A root whose own manifest declares `[workspace]` **is** a workspace root, so there is no
+    // enclosing one to name. Without this check a tree nested under an unrelated project got a note
+    // pointing at that project: measured on `target/round10/ours/trees/fe`, whose own `Cargo.toml`
+    // says `[workspace] members = ["crates/core","crates/report"]` (and `cargo metadata` agrees its
+    // `workspace_root` is the tree itself), while the note said the root was the member `fe` of the
+    // workspace at `/home/nich/Moirai_N3` — a different project entirely.
+    // 自己的清单就声明了 `[workspace]` 的根**就是** workspace 根，没有"外层"可点名。缺这一道检查，
+    // 嵌在不相干工程下的树会拿到一条指向那个工程的提示：`target/round10/ours/trees/fe` 实测——它自己的
+    // `Cargo.toml` 写着 `[workspace] members = ["crates/core","crates/report"]`（`cargo metadata` 也
+    // 确认 `workspace_root` 就是这棵树），而提示却说这个根是 `/home/nich/Moirai_N3` 那个 workspace 的
+    // 成员 `fe`——那是**另一个工程**。
+    if std::fs::read_to_string(root.join("Cargo.toml"))
+        .is_ok_and(|own| workspace_table(&own).is_some())
+    {
+        return None;
+    }
     let name = root.file_name()?.to_string_lossy().to_string();
     let mut current = root.parent();
     while let Some(directory) = current {
         if let Ok(text) = std::fs::read_to_string(directory.join("Cargo.toml"))
-            && text.contains("[workspace]")
-            && text.contains(&name)
+            && let Some(members) = workspace_table(&text)
+            && members.iter().any(|entry| entry == &name)
         {
             return Some(directory.to_path_buf());
         }
         current = directory.parent();
     }
     None
+}
+
+/// The last path segment of every entry in a manifest's `[workspace] members` array.
+/// 一份清单 `[workspace] members` 数组里每个条目的最后一段路径。
+///
+/// Compared by **whole segment**, never by substring: the round measured `fe` matching the word
+/// `features` in an unrelated manifest, which made a tree look like a member of another project.
+/// 按**整段**比较，绝不按子串：那一轮量到 `fe` 命中了不相干清单里的 `features` 一词，于是这棵树看起来
+/// 成了另一个工程的成员。
+fn workspace_table(manifest: &str) -> Option<Vec<String>> {
+    let at = manifest.find("members")?;
+    let open = manifest[at..].find('[')? + at;
+    let close = manifest[open..].find(']')? + open;
+    Some(
+        manifest[open + 1..close]
+            .split(',')
+            .filter_map(|entry| {
+                let entry = entry.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+                if entry.is_empty() {
+                    return None;
+                }
+                Some(entry.rsplit('/').next().unwrap_or(entry).to_owned())
+            })
+            .collect(),
+    )
 }
 
 pub(crate) fn scope(root: &Path) -> Result<Scope, String> {

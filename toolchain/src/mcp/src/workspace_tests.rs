@@ -470,3 +470,57 @@ fn a_root_cargo_cannot_resolve_says_why_in_the_body() {
     assert!(search.contains("file  src/widget.rs"), "{search}");
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// A tree that declares its own `[workspace]` is a workspace root, so nothing encloses it; and a
+/// member is recognised by a whole path segment, never by a substring.
+/// 自己声明 `[workspace]` 的树就是 workspace 根，没有东西包着它；而成员是按**整段路径**认的，
+/// 绝不按子串。
+#[test]
+fn a_tree_that_is_its_own_workspace_has_no_enclosing_one() {
+    let base = std::env::temp_dir().join(format!("ws-note-{}", std::process::id()));
+    let member = base.join("fe");
+    let nested = member.join("crates").join("core");
+    std::fs::create_dir_all(&nested).expect("tree");
+    // The member is its own workspace, exactly like `target/round10/ours/trees/fe`.
+    // 这个成员就是它自己的 workspace，与 `target/round10/ours/trees/fe` 一样。
+    std::fs::write(
+        member.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/core\"]\n\n[workspace.package]\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest");
+    // The unrelated parent mentions `features`, which used to make the member look like its child
+    // by substring: `fe` matched inside `features`.
+    // 不相干的父工程含 `features` 一词，从前正是它让这个成员看起来像它的孩子：`fe` 命中了 `features`。
+    std::fs::write(
+        base.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/app\"]\nresolver = \"2\"\n\n[workspace.lints]\nfeatures = []\n",
+    )
+    .expect("parent manifest");
+    assert_eq!(
+        super::enclosing_workspace(&member),
+        None,
+        "a root that declares [workspace] itself has no enclosing workspace"
+    );
+    // A real member *of that workspace* is still recognised, by its whole segment.
+    // 那个 workspace 的**真成员**仍被认出——按整段。
+    std::fs::write(
+        base.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"fe\", \"crates/app\", \"plain\"]\n",
+    )
+    .expect("parent manifest");
+    assert_eq!(
+        super::enclosing_workspace(&member),
+        None,
+        "still its own workspace"
+    );
+    let plain = base.join("plain");
+    std::fs::create_dir_all(&plain).expect("plain");
+    std::fs::write(plain.join("Cargo.toml"), "[package]\nname = \"plain\"\n")
+        .expect("plain manifest");
+    assert_eq!(
+        super::enclosing_workspace(&plain),
+        Some(base.clone()),
+        "a member without its own [workspace] is named by its parent"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}

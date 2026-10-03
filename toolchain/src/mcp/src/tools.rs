@@ -828,7 +828,12 @@ fn with_next_hint(name: &str, text: String) -> String {
 /// 一个读工具的答案应当点名的那次调用；没有就什么都不加。
 fn next_hint(name: &str) -> Option<&'static str> {
     let hint = match name {
-        "nichlink.status" => "next   `registry` lists the tree, `check {face}` runs one face\n",
+        "nichlink.status" => {
+            "next   `registry` lists the tree, `check` runs one face (`face` defaults to `default`; pass \
+             `all` or a feature name for another). On a tree with **no registered face**, \
+             \"the object\" means a *symbol*: go `search {query}` / `locate {symptom}` / \
+             `read {path, line}` first\n"
+        }
         "nichlink.registry" => {
             // A tree with no registered face is the case the round measured: `registry` printed
             // `0 face(s) (no faces)` while this line still sent the reader to `explain {node}`, and
