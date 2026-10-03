@@ -462,6 +462,27 @@ pub fn run_client(arguments: &[String]) -> Client {
 
 /// Emit one call's answer, and write the log line when the caller asked for one.
 /// 输出一次调用的答案；调用方要了日志就写一行。
+/// A refusal says what it wanted; this says what it got.
+/// 拒绝文案说它要什么，这个说它**收到了什么**。
+///
+/// The round measured 41 refusals and classified what followed each one: 20 corrected the shape,
+/// **13 left the tool for a shell** (6 of the 12 `check` refusals went to `cargo test`), 3 re-sent
+/// the same shape and 4 gave up. A refusal that names the missing key without showing the supplied
+/// ones leaves the reader to re-read its own command line from the transcript.
+/// 那一轮量了 41 次拒绝并分类了每次之后发生了什么：20 次改对了形状，**13 次离开工具去 shell**
+/// （12 次 `check` 的拒绝里有 6 次转去 `cargo test`），3 次原样重发，4 次放弃。一条只说"缺哪个键"、
+/// 不显示"给了哪些"的拒绝，会让读者回去翻自己的命令行。
+fn with_echo(text: String, request: &[&str]) -> String {
+    let shown = request
+        .iter()
+        .take(8)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let more = if request.len() > 8 { " …" } else { "" };
+    format!("{text}\nyou passed: {shown}{more}\n")
+}
+
 fn answered(
     log: &Option<std::path::PathBuf>,
     request: &[&str],
@@ -469,8 +490,8 @@ fn answered(
 ) -> Client {
     let (text, code) = match outcome {
         Ok(text) => (text, 0),
-        Err(Refusal::Tool(text)) => (text, 1),
-        Err(Refusal::Usage(text)) => (text, 2),
+        Err(Refusal::Tool(text)) => (with_echo(text, request), 1),
+        Err(Refusal::Usage(text)) => (with_echo(text, request), 2),
     };
     if let Some(path) = log {
         let line = serde_json::json!({
