@@ -144,6 +144,38 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
         }
         tests.sort();
         tests.dedup();
+        // T-27: `is_call_to` matches a **bare** definition name against a **qualified** call — which
+        // is right (`Store::new` does call the `new` defined on `Store`) but loses the owner, so a
+        // file defining `new` also "affects" every test calling some *other* type's `new`. Making the
+        // rule bare-matches-bare would trade that over-report for an under-report, and "no test
+        // covers this" is the answer a reader acts on — so the list stays and the ambiguity is named.
+        // T-27：`is_call_to` 把**裸名**定义匹配到**限定**调用上 —— 这是对的（`Store::new` 确实调用了
+        // `Store` 上那个 `new`），但它丢掉了属主，于是一个定义了 `new` 的文件也会"影响"所有调用**别的**
+        // 类型的 `new` 的测试。改成"裸名只匹配裸名"会把误报换成漏报，而"没有测试覆盖它"是读者会照做的
+        // 答案 —— 因此清单保留，改为点头这处歧义。
+        let mut bare_on_qualified: Vec<String> = sources
+            .iter()
+            .flat_map(|file| file.functions.iter())
+            .flat_map(|function| function.calls.iter())
+            .filter(|call| call.contains("::"))
+            .filter(|call| {
+                names
+                    .iter()
+                    .any(|name| !name.contains("::") && is_call_to(call, name))
+            })
+            .cloned()
+            .collect();
+        bare_on_qualified.sort();
+        bare_on_qualified.dedup();
+        if !bare_on_qualified.is_empty() {
+            output.push_str(&format!(
+                "note   {} call(s) matched a **bare** definition name on a qualified call ({}), so a \
+                 definition named here and another type's same-named one are indistinguishable from \
+                 this list alone — check those first\n",
+                bare_on_qualified.len(),
+                display_list(&bare_on_qualified[..bare_on_qualified.len().min(6)])
+            ));
+        }
         output.push_str(&format!(
             "{}: {} definition(s)\n",
             touched.relative,
