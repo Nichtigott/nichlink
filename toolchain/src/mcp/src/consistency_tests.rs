@@ -702,3 +702,56 @@ fn an_outlier_carries_the_lines_it_deviates_on() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The answer opens with the tree's size and closes with a conservative verdict plus real commands.
+/// 答案以树的大小开头，以保守的裁定与真实命令收尾。
+///
+/// Audit `W4-5`: the debug battery's sessions could not tell an answer that was finished from one
+/// that had stopped early — both ended on a `next` line. The rule here is the conservative half: a
+/// clean family is `closed`, anything named as a deviation or unreadable is `open` with the call
+/// that resolves it, and every such call is one a reader can paste.
+/// 审计 `W4-5`：debug 电池里的会话分不出"答完了"与"提早停了"——两者都以 `next` 行收尾。这里的规则是保守的
+/// 那一半：干净的同族是 `closed`，任何被点名的偏离或读不了的文件都是 `open`，并附上解决它的那次调用，而
+/// 每一个这样的调用都是读者可以照抄的。
+#[test]
+fn the_answer_opens_with_the_census_and_closes_conservatively() {
+    let root = specimen_package("closure");
+    let closed = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        closed.starts_with("tree: ")
+            && closed.contains(" face(s), ")
+            && closed.contains(" file(s)"),
+        "the census is the first line: {closed}"
+    );
+    assert!(
+        closed.contains("closure    closed"),
+        "a family nobody deviates from and every file read is closed: {closed}"
+    );
+    assert_eq!(
+        closed.matches("closure    ").count(),
+        1,
+        "exactly one closure line: {closed}"
+    );
+
+    // Take a declaration away: the answer is now open, and the call it leaves is a real coordinate.
+    // 取走一条声明：答案变成开的，而它留下的调用是一个真实坐标。
+    let file = "src/control/object/slider/slider.rs";
+    replace(&root, file, "    exports: [\"control.render\"],\n", "");
+    let open = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        open.contains("closure    open"),
+        "a named deviation is not a closed answer: {open}"
+    );
+    assert!(
+        open.contains("remaining  read src/control/object/slider/slider.rs:")
+            || open.contains("remaining  read src/control/object/button/button.rs:"),
+        "and it carries a runnable `read` for the line that decides it: {open}"
+    );
+    for line in open.lines().filter(|line| line.starts_with("remaining")) {
+        assert!(
+            !line.contains('{') && !line.contains('<'),
+            "no template in a command a reader is told to run: {line}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

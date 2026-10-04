@@ -99,7 +99,13 @@ fn declaration_at(source: &str, line: usize) -> Option<(String, usize, usize)> {
 /// 每一条分支都作答而不是沉默。缺 `source_scope.tsv` 是"这棵树从未构建过"，没有面拥有的文件是"作用域
 /// 点名的是面，因此这个文件在不在其中在这里不可判定"，入口没有任何切口是"没有东西替换这个面的槽位"
 /// ——每一条都是关于这棵树的事实，而不是没有答案。
-fn plan_facts(root: &Path, relative: &str, source: &str, definition: usize) -> Vec<String> {
+fn plan_facts(
+    root: &Path,
+    relative: &str,
+    source: &str,
+    definition: usize,
+    remaining: &mut Vec<String>,
+) -> (Vec<String>, Option<String>) {
     let mut lines = Vec::new();
     lines.push(match gate(source, definition) {
         Some((line, attribute)) => format!(
@@ -131,8 +137,19 @@ fn plan_facts(root: &Path, relative: &str, source: &str, definition: usize) -> V
              scope names faces — so whether it ships is `check {{face}}`'s question rather than one \
              this line can answer"
         ));
-        return lines;
+        // Nothing here can say which face owns this file, so the answer is open and the call that
+        // answers it is the one that lists them.
+        // 这里没有东西能说出这个文件归哪个面，因此答案是开的，而回答它的那次调用就是列出面清单的那次。
+        remaining.push("registry".to_owned());
+        return (lines, None);
     };
+    if evidence.scope.is_none() {
+        // A tree that was never built has no published scope; that is a fact, and the call that
+        // produces one is `check`.
+        // 一棵从未构建过的树没有已发布的作用域；那是一个事实，而产生它的调用是 `check`。
+        remaining.push(format!("check {}", face.path));
+    }
+    let owning = face.path.clone();
     lines.push(format!(
         "  scope      {}",
         crate::mcp::build_evidence::scope_line(evidence.scope.as_ref(), &face).trim_end()
@@ -145,9 +162,12 @@ fn plan_facts(root: &Path, relative: &str, source: &str, definition: usize) -> V
     // rather than by a second path comparison written here.
     // 接线：宿主入口自己的声明，按 graft 视图的规则匹配到这个面，而不是在这里另写一次路径比较。
     match declared_grafts(root) {
-        Err(reason) => lines.push(format!(
-            "  wiring     the host entry's declarations could not be read ({reason})"
-        )),
+        Err(reason) => {
+            lines.push(format!(
+                "  wiring     the host entry's declarations could not be read ({reason})"
+            ));
+            remaining.push("grafts".to_owned());
+        }
         Ok(declared) if declared.cuts.is_empty() => lines.push(format!(
             "  wiring     the host entry {} declares no graft cut, so nothing replaces this face's \
              slot (`grafts` reads the same declarations)",
@@ -182,7 +202,7 @@ fn plan_facts(root: &Path, relative: &str, source: &str, definition: usize) -> V
             }
         }
     }
-    lines
+    (lines, Some(owning))
 }
 
 /// Answer "what does this line depend on?" for a `path:line`.
@@ -229,8 +249,12 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
                  (its `kind` is a token in it), and `explain {{node}}` reports what it declares\n"
             )
         });
-        return Ok(format!(
-            "no function covers {}:{line} in {}\n{inside}the functions in this file are:\n{}\n",
+        let mut lines = Vec::new();
+        if let Some(census) = crate::mcp::consistency::tree_census(root) {
+            lines.push(census);
+        }
+        lines.push(format!(
+            "no function covers {}:{line} in {}\n{inside}the functions in this file are:\n{}",
             file.relative,
             root.display(),
             file.functions
@@ -242,12 +266,32 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
                 .collect::<Vec<_>>()
                 .join("\n")
         ));
+        // The answer names the functions, so it is open in a way the reader can close in one call:
+        // the first one's own line is a real coordinate, not a template.
+        // 这个答案点名了这些函数，因此它是"一次调用就能合上"的开：第一个函数自己的行号是一个真实坐标，
+        // 而不是模板。
+        let remaining = match file.functions.first() {
+            Some(first) => vec![format!("read {}:{}", file.relative, first.line)],
+            None => vec![format!("inspect {{file:\"{}\"}}", file.relative)],
+        };
+        lines.push(
+            crate::mcp::tools::closure(false, &remaining)
+                .trim_end()
+                .to_owned(),
+        );
+        return Ok(format!("{}\n", lines.join("\n")));
     };
 
-    let mut lines = vec![format!(
+    let mut lines = Vec::new();
+    // W1-2: the tree's size rides on the first answer instead of costing an opening `status` call.
+    // W1-2：树的大小随第一个答案一起到达，而不是先花一次 `status` 调用。
+    if let Some(census) = crate::mcp::consistency::tree_census(root) {
+        lines.push(census);
+    }
+    lines.push(format!(
         "at {}:{} — the definition `{}` (lines {}-{})",
         file.relative, line, function.name, function.line, function.end_line
-    )];
+    ));
     let contract: Vec<(usize, String)> =
         crate::mcp::source_index::contract_lines(&file.source, function.line)
             .into_iter()
@@ -400,17 +444,35 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
     // reply stays "what this line is, who calls it, what the build did with it, what is not here".
     // 计划那一半：症状的**原因**常常住在这里，离显出症状的代码一到三跳。放在源码事实之后、边界之前，
     // 因此回复的形状仍是"这一行是什么、谁调用它、构建对它做了什么、这里没有什么"。
-    lines.extend(plan_facts(root, &file.relative, &file.source, line));
-
+    let mut remaining: Vec<String> = Vec::new();
+    let (plan, owning_face) = plan_facts(root, &file.relative, &file.source, line, &mut remaining);
+    lines.extend(plan);
+    // W1-2: the `next` line names calls this answer can already fill in — the face that compiles
+    // this file, this function's own name, this definition's own first line. A placeholder sends the
+    // reader back to the tree to look up what the line was about to hand them.
+    // W1-2：`next` 行点名的是这个答案**已经能填好**的调用——编译这个文件的那个面、这个函数自己的名字、
+    // 这个定义自己的首行。占位符等于把读者打发回树上，去查这一行本来正要交给他的东西。
     lines.push(
         "not covered here: how a grafted subtree looks at runtime (ask `trace`), and whether the \
          declarations above describe the tree **as it is now** — the scope and pruning lines are the \
          build's own output, and a tree built before the last edit says so on the `scope` line"
             .to_owned(),
     );
+    lines.push(match &owning_face {
+        Some(face) => format!(
+            "next   `check {face}` to run the face that compiles this file, `callgraph {}` for the \
+             whole chain, `read {}:{}` for the body",
+            function.name, file.relative, function.line
+        ),
+        None => format!(
+            "next   `registry` lists this tree's faces (one of them owns this file), `callgraph {}` \
+             for the whole chain, `read {}:{}` for the body",
+            function.name, file.relative, function.line
+        ),
+    });
     lines.push(
-        "next   `check {face}` to run the face that compiles it, `grafts` for every declared cut, \
-         `locate {symptom}` for sibling places to compare it with"
+        crate::mcp::tools::closure(remaining.is_empty(), &remaining)
+            .trim_end()
             .to_owned(),
     );
     Ok(format!("{}\n", lines.join("\n")))

@@ -180,6 +180,34 @@ fn trait_shape(
     Some((spelling, value))
 }
 
+/// A `read` call for the first quoted line of one excerpt block.
+/// 一个摘录块里第一行引用所对应的 `read` 调用。
+///
+/// The excerpt is already a coordinate (`src/x.rs:12  text`), so the call that opens it is a
+/// substring away — and a command a reader has to assemble is the thing `W4-5` measured as an extra
+/// step.
+/// 摘录本身就是坐标（`src/x.rs:12  text`），因此打开它的调用只差一次截取——而"要读者自己拼的命令"
+/// 正是 `W4-5` 量到的那多出来的一步。
+fn read_command(shown: &[String]) -> Option<String> {
+    let coordinate = shown.first()?.trim().split_once("  ")?.0;
+    Some(format!("read {coordinate}"))
+}
+
+/// The tree census every answer about a tree can open with.
+/// 每个关于一棵树的答案都可以用它开头的那行普查。
+///
+/// Audit `W4-5`/`W1-2`: the round measured sessions opening with `status` just to learn how big the
+/// tree is, then asking the real question. The size is a fact every one of these tools already
+/// holds, so it rides on the answer instead of costing a call.
+/// 审计 `W4-5`/`W1-2`：那一轮量到会话先发一次 `status`、只为知道树有多大，然后再问真正的问题。这个大小是
+/// 这些工具**本来就持有**的事实，因此它随答案一起走，而不是花掉一次调用。
+pub(crate) fn tree_census(root: &Path) -> Option<String> {
+    let files = load_sources(root).ok()?.len();
+    let namespace = crate::mcp::registry::namespace(root).ok()?;
+    let (faces, _) = crate::mcp::resolve::derived_faces(root, &namespace).ok()?;
+    Some(format!("tree: {} face(s), {files} file(s)", faces.len()))
+}
+
 /// One parsed face's declared shape: the shape fields it carries, in the order of [`SHAPE_FIELDS`].
 /// 一个已解析注册面的已声明形状：它携带的形状字段，按 [`SHAPE_FIELDS`] 的顺序。
 fn declared_shape(face: &FaceSyntax) -> Vec<DeclaredField> {
@@ -443,6 +471,9 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
         ));
     };
     let current = crate::mcp::adopted::read_files(root, &effective.files)?;
+    let mut remaining: Vec<String> = Vec::new();
+    let mut differing = 0usize;
+    let mut unread = 0usize;
     let mut lines = vec![format!(
         "specimen {anchor} — ledger revision {} is the one in force (an adoption is a lease: the \
          newest line wins)",
@@ -531,8 +562,6 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             continue;
         }
         let mut rows: Vec<String> = Vec::new();
-        let mut differing = 0usize;
-        let mut unread = 0usize;
         for face in &siblings {
             let label = face
                 .path
@@ -546,6 +575,8 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
                     Err(reason) => {
                         unread += 1;
                         rows.push(format!("  unreadable  {label}: {reason}"));
+                        remaining
+                            .push(format!("read src/{}", face.source.trim_start_matches("./")));
                         continue;
                     }
                 },
@@ -596,6 +627,10 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
                     EXCERPT_LIMIT.saturating_sub(shown.len()),
                 ));
             }
+            if let Some(command) = read_command(&shown) {
+                remaining.push(command);
+            }
+            remaining.push(format!("check {anchor}"));
             rows.extend(shown);
         }
         lines.push(format!(
@@ -615,6 +650,14 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
         ));
     }
     lines.extend(specimen_bounds());
+    if let Some(census) = tree_census(root) {
+        lines.insert(0, census);
+    }
+    lines.push(
+        crate::mcp::tools::closure(differing == 0 && unread == 0, &remaining)
+            .trim_end()
+            .to_owned(),
+    );
     Ok(format!("{}\n", lines.join("\n")))
 }
 
@@ -819,6 +862,9 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
     // "**声明了别人不声明的字段**"，而後一种形状过去是看不见的——一个唯一差别就是多一行声明的同族回的是
     // `outliers: 0 of 3`，于是这个工具承诺的那一次调用（"一次调用点名离群者"）并没有点到它。显式给 `by`
     // 时仍然只跑一个信号。
+    let mut remaining: Vec<String> = Vec::new();
+    let mut any_outlier = false;
+    let mut unread_rows = 0usize;
     let requested = arguments
         .get("by")
         .and_then(Value::as_str)
@@ -908,10 +954,12 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                                 .map(|field| field.key.to_owned())
                                 .collect::<BTreeSet<String>>(),
                             Some(Err(reason)) => {
+                                unread_rows += 1;
                                 rows.push(format!("  {label:<24} unreadable: {reason}"));
                                 continue;
                             }
                             None => {
+                                unread_rows += 1;
                                 rows.push(format!("  {label:<24} its file is not in the index"));
                                 continue;
                             }
@@ -1024,9 +1072,13 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                             EXCERPT_LIMIT.saturating_sub(shown.len()),
                         ));
                     }
+                    if let Some(command) = read_command(&shown) {
+                        remaining.push(command);
+                    }
                     rows.extend(shown);
                 }
                 outliers = found.len();
+                any_outlier |= outliers > 0;
             } else {
                 let mut counts: std::collections::BTreeMap<&str, usize> =
                     std::collections::BTreeMap::new();
@@ -1059,6 +1111,7 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                     }
                 }
             }
+            any_outlier |= outliers > 0;
             rows.push(format!("outliers: {outliers} of {}", sets.len()));
             sections.push(rows.join("\n"));
         }
@@ -1080,6 +1133,19 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
         "next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields, \
            and `by: shape` when the difference is a **declaration** rather than a call (an \
            extra declared field does not show up in `api`)"
+            .to_owned(),
+    );
+    // W4-5: the census first, so the answer carries the tree's size instead of a second call, and
+    // the closure last, judged conservatively — a family nobody deviates from and no unreadable file
+    // is the one case that closes.
+    // W4-5：普查在最前，答案自带树的大小而不必再花一次调用；闭合行在最后，判定从保守——没有任何兄弟
+    // 偏离、也没有读不了的文件，才是唯一闭合的情形。
+    if let Some(census) = tree_census(root) {
+        sections.insert(0, census);
+    }
+    sections.push(
+        crate::mcp::tools::closure(!any_outlier && unread_rows == 0, &remaining)
+            .trim_end()
             .to_owned(),
     );
     Ok(format!("{}\n", sections.join("\n")))

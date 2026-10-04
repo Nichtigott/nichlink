@@ -977,6 +977,39 @@ fn next_hint(name: &str) -> Option<&'static str> {
     Some(hint)
 }
 
+/// The closure line: whether this answer is everything, and the calls left when it is not.
+/// 闭合行：这个答案是不是全部；不是时还剩下哪些调用。
+///
+/// Audit `W4-5` measured both failure directions on the debug battery: an answer that stopped at a
+/// deviation and said nothing about the rest left the agent guessing whether to keep going, and an
+/// answer that always appended a `next` line made every answer look unfinished. So this is stated as
+/// one of exactly two things, and it is judged **conservatively** — `closed` is written only when
+/// every question the answer's own shape raises has been answered; anything the tool could not read,
+/// or a deviation it named, is `open` with the call that resolves it.
+/// 审计 `W4-5` 在 debug 电池上量到了两个方向的失败：一个停在一处偏离、对其余只字不提的答案，让代理猜
+/// 要不要继续；而一个总是追加 `next` 行的答案，让每个答案看起来都没做完。因此这里只说两种之一，而且判定
+/// **从保守**——只有"这个答案自己的形状会提出的每个问题都已被回答"时才写 `closed`；任何工具读不了的
+/// 东西、或它点名的一处偏离，都是 `open` 并附上解决它的那次调用。
+pub(crate) fn closure(closed: bool, remaining: &[String]) -> String {
+    if closed {
+        return "closure    closed — nothing this answer leaves open\n".to_owned();
+    }
+    let mut text = String::from("closure    open\n");
+    if remaining.is_empty() {
+        // An `open` with nothing to do would be the worst of both: it says "unfinished" and gives
+        // no call. The invariant is checked rather than assumed, because a caller that forgets to
+        // collect a command is exactly how that shape would ship.
+        // 一个没有下文的 `open` 是两者中最糟的：它说"没做完"，又不给调用。这条不变量是**检查**出来的而
+        // 不是假设的，因为"调用方忘了收集一条命令"正是那种形状出厂的方式。
+        text.push_str("remaining  (nothing to run — this answer's own gaps are named above)\n");
+        return text;
+    }
+    for command in remaining {
+        text.push_str(&format!("remaining  {command}\n"));
+    }
+    text
+}
+
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
         return error_response(id, -32602, "tools/call requires name".to_owned());

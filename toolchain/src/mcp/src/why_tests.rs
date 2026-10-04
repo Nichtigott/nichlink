@@ -298,3 +298,46 @@ fn a_definition_answers_with_its_siblings_and_what_pins_it() {
         "and it always answers what pins the definition, even when the answer is `nothing`: {answer}"
     );
 }
+
+/// The answer carries the tree's size and says whether it left anything open.
+/// 答案自带树的大小，并说出它有没有留下没做完的事。
+///
+/// Audit `W4-5`/`W1-2`: sessions opened with `status` only to learn how big the tree was, and an
+/// answer that ended on a `next` line gave no way to tell "done" from "you should keep going". Both
+/// facts are ones this tool already holds.
+/// 审计 `W4-5`/`W1-2`：会话先发一次 `status`、只为知道树有多大；而一个以 `next` 行收尾的答案，分不出
+/// "做完了"与"你还得继续"。两件事都是这个工具本来就持有的事实。
+#[test]
+fn the_answer_carries_the_census_and_a_closure_line() {
+    let root = scratch("why-closure");
+    let answer = super::why(&root, &json!({"at": "src/lib.rs:3"})).expect("an answer");
+    assert!(
+        answer.starts_with("tree: ") && answer.contains(" file(s)"),
+        "the census is the first line: {answer}"
+    );
+    assert_eq!(
+        answer.matches("closure    ").count(),
+        1,
+        "exactly one closure line: {answer}"
+    );
+    assert!(
+        answer.contains("closure    closed") || answer.contains("closure    open"),
+        "and it is one of the two words: {answer}"
+    );
+    // The `next` line names calls this answer can already fill in: no `{face}`/`{function}` braces.
+    let next = answer
+        .lines()
+        .find(|line| line.starts_with("next"))
+        .expect("a next line");
+    assert!(
+        !next.contains('{') && next.contains("used") && next.contains("src/lib.rs:3"),
+        "the next line is instantiated with this answer's own names: {next}"
+    );
+    // An open answer names a command; none of them is a template.
+    for line in answer.lines().filter(|line| line.starts_with("remaining")) {
+        assert!(
+            !line.contains('{') && !line.contains('<'),
+            "a remaining command is one a reader can run: {line}"
+        );
+    }
+}
