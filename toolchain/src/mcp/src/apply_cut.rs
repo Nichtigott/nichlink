@@ -64,15 +64,24 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
     let plan = declared.entry.clone();
     let source = std::fs::read_to_string(&plan)
         .map_err(|error| format!("{} is not readable: {error}", plan.display()))?;
+    let existing = nichlink_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
+        format!(
+            "the plan does not parse before the write: {}",
+            error.message
+        )
+    })?;
+    // F6: an entry has to be written in the class the plan already uses. Checked on the input,
+    // before the read-back, because the renderer would happily splice a logical path into
+    // `cut(…)` and the parser would read it as an **expression** — a different declaration than
+    // the caller meant, in a host's own source.
+    // F6：一条条目必须写成这份计划已经在用的那一类。检查落在**输入**上、在读回之前，因为渲染器会照直把
+    // 一个逻辑路径拼进 `cut(…)`，而解析器会把它读成**表达式**——一条与调用方本意不同的声明，写进的是
+    // 宿主自己的源码。
+    if let Some(refusal) = path_class_refusal(root, &cut, &existing) {
+        return Err(refusal);
+    }
+    let before = existing.len();
     let edited = insert_plan_entry(&source, &entry)?;
-    let before = nichlink_kernel::syntax::entries::graft_entries(&source)
-        .map_err(|error| {
-            format!(
-                "the plan does not parse before the write: {}",
-                error.message
-            )
-        })?
-        .len();
     let after = nichlink_kernel::syntax::entries::graft_entries(&edited)
         .map_err(|error| format!("the written plan does not parse: {}", error.message))?;
     if after.len() != before + 1 {
@@ -171,6 +180,106 @@ fn insert_plan_entry(source: &str, entry: &str) -> Result<String, String> {
     edited.push('\n');
     edited.push_str(&source[close..]);
     Ok(edited)
+}
+
+/// F6: the refusal when an entry joins a plan written in another class of spelling.
+/// F6：一条条目要加入一份用**另一类拼写**写成的计划时给出的拒绝。
+///
+/// The gap this closes, measured by audit `F6`: `apply {action: "cut"}` accepted the logical path a
+/// reader has in hand (`root/control/dial`) and rendered `cut(root/control/dial)` into a plan whose
+/// every other entry is a Rust path (`cut(crate::control::object::button::NODE_ID)`). Both spellings
+/// exist in this grammar, but they mean different things: the logical path names a face the
+/// **build-time selector** resolves, while the typed form is the expression the compiler resolves.
+/// So the entry that comes back is not the entry the caller asked for, and what was written is a
+/// host's source code. The refusal names the class the plan uses and, derived from this tree's own
+/// face list, the exact spelling to paste instead.
+/// 这里补上的缺口由审计 `F6` 量到：`apply {action: "cut"}` 接受读者手上的逻辑路径
+/// （`root/control/dial`），并把 `cut(root/control/dial)` 渲染进一份**其余每条**都是 Rust 路径
+/// （`cut(crate::control::object::button::NODE_ID)`）的计划。两种拼写都在这套语法里，但含义不同：
+/// 逻辑路径点名的是**构建期选择器**解析的面，类型化那一形是**编译器**解析的表达式。于是读回来的条目
+/// 并不是调用方要的那条，而写进去的是宿主的源码。拒绝文案点名这份计划用的是哪一类，并从**本棵树自己的
+/// 面清单**推导出应当照抄的那个拼写。
+///
+/// It refuses only when the plan is typed **throughout** (an empty plan has no class to join, and a
+/// plan that already mixes the two spellings is not this check's business): the asymmetry is
+/// deliberate — the other direction would refuse a request the grammar accepts.
+/// 只在计划**通篇**类型化时拒绝（空计划没有类可加入，而一份本来就混用两种拼写的计划不归这条检查管）：
+/// 这个不对称是刻意的——反方向会拒绝一个这套语法本来就接受的请求。
+fn path_class_refusal(
+    root: &Path,
+    cut: &str,
+    existing: &[nichlink_kernel::syntax::entries::GraftSyntax],
+) -> Option<String> {
+    if cut.starts_with("crate::") || existing.is_empty() {
+        return None;
+    }
+    if !existing
+        .iter()
+        .all(|entry| entry.cut.starts_with("crate::"))
+    {
+        return None;
+    }
+    let head = format!(
+        "`{cut}` is a logical path, but every cut in this plan is written as the Rust path of the \
+         face it names (`crate::…::NODE_ID`), so this entry belongs to another class and would be \
+         written as an expression rather than as the selector you meant"
+    );
+    Some(match typed_spelling(root, cut) {
+        Some(spelling) => format!(
+            "{head}; write `{spelling}` — derived from this tree's own faces, where `{cut}` is the \
+             face at src/{}. A plan is source code in the host, so this tool refuses a spelling it \
+             cannot verify rather than one it can only guess at",
+            face_source(root, cut).unwrap_or_else(|| "its declared source".to_owned())
+        ),
+        None => format!(
+            "{head}, and `{cut}` does not name a face in this tree's derived registry, so the typed \
+             spelling cannot be derived here — `registry` lists the faces and the source each one \
+             lives in"
+        ),
+    })
+}
+
+/// The source file this tree's face at one logical path lives in, when the derivation found it.
+/// 本棵树里某个逻辑路径上的面所住的源文件，推导找得到时给出。
+fn face_source(root: &Path, logical: &str) -> Option<String> {
+    let namespace = crate::mcp::registry::namespace(root).ok()?;
+    let views = face_views(root, &namespace).ok()?;
+    views
+        .iter()
+        .find(|view| view.path.trim_end_matches('/') == logical.trim_end_matches('/'))
+        .map(|view| view.source.clone())
+}
+
+/// The typed `crate::…::NODE_ID` spelling of the face a logical path names, from the face tree.
+/// 某个逻辑路径点名的面，按面树推导出的类型化 `crate::…::NODE_ID` 拼写。
+///
+/// Derived rather than assembled from the logical path: the two are different namespaces. A face's
+/// logical path says where it sits in the **tree**, and its module path says where it sits in the
+/// **crate** — the example's `root/control/button` is `crate::control::object::button::NODE_ID`
+/// because the source layout inserts an `object` directory that the logical path never mentions.
+/// Guessing that mapping would be exactly the kind of guess this module refuses to write into a
+/// host, so the face's own `source` is the authority and a path this tree does not derive has no
+/// spelling to offer.
+/// 从面树推导而不是由逻辑路径拼装：两者是不同的命名空间。一个面的**逻辑路径**说的是它在**树**里的位置，
+/// 模块路径说的是它在 **crate** 里的位置——示例里 `root/control/button` 是
+/// `crate::control::object::button::NODE_ID`，因为源码布局插进了一个逻辑路径从不提及的 `object` 目录。
+/// 猜这个映射，正是本模块拒绝写进宿主的猜法，因此以面自己的 `source` 为权威；本棵树推导不出的路径，
+/// 就没有拼写可给。
+fn typed_spelling(root: &Path, logical: &str) -> Option<String> {
+    let source = face_source(root, logical)?;
+    let module = source.trim_start_matches("./").strip_suffix(".rs")?;
+    // A face file under a directory of its own name (`…/dial/dial.rs`) is that directory's module;
+    // anything else (`…/dial.rs`, `lib.rs`) is named by the file itself.
+    // 住在与自己同名的目录下的面文件（`…/dial/dial.rs`）就是那个目录的模块；别的（`…/dial.rs`、
+    // `lib.rs`）由文件自己命名。
+    let mut segments: Vec<&str> = module.split('/').collect();
+    if segments.len() >= 2 && segments[segments.len() - 1] == segments[segments.len() - 2] {
+        segments.pop();
+    }
+    if segments == ["lib"] {
+        return Some("crate::NODE_ID".to_owned());
+    }
+    Some(format!("crate::{}::NODE_ID", segments.join("::")))
 }
 
 /// The faces a cut expression's module path covers, named by their node paths.

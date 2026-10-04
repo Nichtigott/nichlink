@@ -1073,3 +1073,143 @@ fn a_request_without_a_fields_object_is_refused_with_the_object_spelling() {
         "the two branches stay distinguishable: {missing_module}"
     );
 }
+
+/// A package that really derives one child face, so a cut's class check has a tree to read.
+/// 一个真的推导得出一个子面的包，好让切口的类别检查有棵树可读。
+///
+/// The layout is the build's own (`<name>/<name>.rs`), which is what the derivation reads; a
+/// description of a tree would pin nothing here, because the refusal's whole value is the spelling
+/// it derives from the face's real source path.
+/// 布局就是构建自己那一套（`<name>/<name>.rs`），也正是推导读的东西；在这里描述一棵树什么都钉不住，
+/// 因为这条拒绝的全部价值就在于它从面**真实的**源文件路径推导出的那个拼写。
+fn face_package(label: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "mcp-apply-faces-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let write = |relative: &str, text: &str| {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("fixture dirs");
+        std::fs::write(path, text).expect("fixture file");
+    };
+    write(
+        "Cargo.toml",
+        &format!(
+            "[package]\nname = \"fixture-{label}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+        ),
+    );
+    write("src/lib.rs", "//! fixture\npub mod control;\n");
+    write(
+        "src/control/control.rs",
+        "pub struct Control;\npub struct ControlParts;\n\ncrate::root_object! {\n    kind: Control,\n    \
+         parts: ControlParts,\n    needs_registry: true,\n    parent: \
+         crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+    );
+    write("src/control/object/object.rs", "pub mod dial;\n");
+    write(
+        "src/control/object/dial/dial.rs",
+        "pub struct Dial;\npub struct DialParts;\n\ncrate::control_object! {\n    kind: Dial,\n    \
+         parts: DialParts,\n    parent: crate::control::NODE_ID,\n}\n",
+    );
+    root
+}
+
+/// F6: a logical path cannot join a plan written in the typed spelling, and the refusal hands back
+/// the spelling to paste instead.
+/// F6：逻辑路径不能加入一份用类型化拼写写成的计划，而拒绝会把应当照抄的拼写交回给调用方。
+///
+/// Both halves are the acceptance: the refusal names `crate::control::object::dial::NODE_ID`
+/// — derived from the face's own `src/control/object/dial/dial.rs`, not assembled from the logical
+/// path, which never mentions `object` — and the same request written in that spelling goes through
+/// in one call. Nothing is written on the refused path, which is what makes this a refusal rather
+/// than an error after the fact.
+/// 两半都是验收：拒绝里点名 `crate::control::object::dial::NODE_ID`——由面自己的
+/// `src/control/object/dial/dial.rs` 推导，而不是从从不提及 `object` 的逻辑路径拼装——而同一个请求用
+/// 那个拼写写出来，一次就过。被拒的那条路上什么都没写，这正是"拒绝"与"事后报错"的区别。
+#[test]
+fn a_logical_path_is_refused_by_a_typed_plan_with_the_spelling_to_use() {
+    let root = face_package("cut-class");
+    let plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+                cut(crate::control::object::button::NODE_ID)\n        \
+                graft(control_button_graft::button_fast::NODE_ID),\n);\n";
+    std::fs::write(root.join("src/lib.rs"), plan).expect("host entry");
+
+    let refused = super::apply(
+        &root,
+        &json!({
+            "action": "cut",
+            "cut": "root/control/dial",
+            "graft": "carrier::dial_fast::NODE_ID",
+            "apply": true,
+            "confirm": true,
+        }),
+    )
+    .expect_err("a logical path does not join a typed plan");
+    assert!(
+        refused.contains("crate::control::object::dial::NODE_ID"),
+        "the refusal hands back the spelling derived from this tree: {refused}"
+    );
+    assert!(
+        refused.contains("src/control/object/dial/dial.rs"),
+        "and the file it derived it from, so a reader can check it: {refused}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/lib.rs")).expect("plan"),
+        plan,
+        "the refused request wrote nothing"
+    );
+
+    super::apply(
+        &root,
+        &json!({
+            "action": "cut",
+            "cut": "crate::control::object::dial::NODE_ID",
+            "graft": "carrier::dial_fast::NODE_ID",
+            "apply": true,
+            "confirm": true,
+        }),
+    )
+    .expect("the typed spelling goes through in one call");
+    let written = std::fs::read_to_string(root.join("src/lib.rs")).expect("plan");
+    assert!(
+        written.contains(
+            "cut(crate::control::object::dial::NODE_ID) graft(carrier::dial_fast::NODE_ID)"
+        ),
+        "and lands as the entry the caller asked for: {written}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The class check stays quiet when there is no class to join, or when the plan already mixes both.
+/// 没有类可加入、或计划本来就混用两类时，这条检查保持沉默。
+///
+/// The asymmetry is deliberate and is the half that keeps the tool from refusing a request the
+/// grammar accepts: a plan whose entries are logical paths is a legal plan, and the typed form is
+/// one of its spellings rather than a replacement for it.
+/// 这个不对称是刻意的，也正是"不拒绝语法本就接受的请求"的那一半：条目为逻辑路径的计划是合法计划，而
+/// 类型化那一形是它的拼写之一，不是它的替代品。
+#[test]
+fn the_class_check_is_silent_without_a_class_to_join() {
+    let root = face_package("cut-class-quiet");
+    // A plan that names its cuts by logical path: the same `root/control/dial` request is its own
+    // class, so it is not this check's business.
+    let string_plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+                       cut \"root/control/button\" graft \"button_fast\",\n);\n";
+    std::fs::write(root.join("src/lib.rs"), string_plan).expect("host entry");
+    let reply = super::apply(
+        &root,
+        &json!({
+            "action": "cut",
+            "cut": "root/control/dial",
+            "graft": "dial_fast",
+        }),
+    );
+    assert!(
+        reply.is_ok(),
+        "a logical path joins a logical-path plan: {reply:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
