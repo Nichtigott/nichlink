@@ -117,11 +117,21 @@ pub(super) fn consequences(
          of them — whether the application ships it is the plan's own business\n",
         if shipped_by_a_cut { "one" } else { "none" }
     ));
-    report.push_str(
+    // Audit `W2-5` (D3): the two lines above are a **constant** block — worth reading once. From the
+    // second write in the same session the disclaimer is one line pointing at the first, the same
+    // rule `consistency`'s bounds follow (`session::first_time`, keyed by root).
+    // 审计 `W2-5`（D3）：上面两行是**常量**块——值得读一次。同一会话里的第二次写入起，免责声明就是一行
+    // 指向第一次的回指，与 `consistency` 的边界同一条规则（`session::first_time`，键带根）。
+    let first =
+        crate::mcp::session::first_time(&format!("apply-consequences:{}", project.display()));
+    report.push_str(if first {
         "  not covered: this lists test lines that spell the face's name; a test that counts faces \
          without naming it, or reaches it through another spelling, does not appear here — run the \
-         suite before believing either list\n",
-    );
+         suite before believing either list\n"
+    } else {
+        "  not covered: unchanged from this session's earlier write (`--list apply` has the full \
+         text)\n"
+    });
     Ok(report)
 }
 
@@ -284,3 +294,7 @@ pub(super) fn refused_with_a_way_forward(error: String) -> String {
     }
     error
 }
+
+#[cfg(test)]
+#[path = "apply_refusals_tests.rs"]
+pub(crate) mod apply_refusals_tests;

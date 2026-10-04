@@ -117,6 +117,13 @@ fn replace(root: &Path, file: &str, from: &str, to: &str) {
 /// 两个方向都走：取走一条声明 ⇒ 恰好一行出现；放回去 ⇒ 答案重新干净。回不去的比较就是单向断言。
 #[test]
 fn the_specimen_comparison_names_the_declaration_a_sibling_lacks() {
+    // This pin is about the comparison, not about what the session has already been told (audit
+    // `W2-2` shortens the bounds block from the second call on, which `the_bounds_are_said_once`
+    // pins on its own). Forgetting makes each call below a first call, so the assertion is about
+    // the answer rather than about the ledger.
+    // 这条钉子比的是**比对**，不是这个会话已经被说过什么（审计 `W2-2` 让第二次调用起的边界块变短，那件事
+    // 由 `the_bounds_are_said_once` 自己钉）。先忘掉，让下面每次调用都是第一次，于是断言比的是答案而不是账本。
+    crate::mcp::session::forget();
     let root = specimen_package("specimen-lacks");
     adopt(
         &root,
@@ -176,6 +183,7 @@ fn the_specimen_comparison_names_the_declaration_a_sibling_lacks() {
         "    exports: [\"control.render\", \"control.own\"],\n",
         "    parts: SliderParts,\n    exports: [\"control.render\"],\n",
     );
+    crate::mcp::session::forget();
     let restored = super::consistency(&root, &json!({"specimen": anchor})).expect("an answer");
     assert!(
         restored.contains("conformance: 0 of 2 sibling(s)"),
@@ -756,4 +764,53 @@ fn the_answer_opens_with_the_census_and_closes_conservatively() {
         );
     }
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The comparison's boundary block is printed once per session, and referred back to afterwards.
+/// 比对的边界块每个会话印一次，此后只回指。
+///
+/// Audit `W2-2`: this block is a constant, and the round measured constant blocks as the payload
+/// every answer pays for. The second comparison in the same session gets one line that points at the
+/// first — and a **different root** gets its own first time, which is what keeps two trees (or two
+/// tests' scratch directories) from sharing a ledger.
+/// 审计 `W2-2`：这个块是常量，而那一轮量到常量块正是每条答案都在付费的载荷。同一会话里的第二次比对拿到一行
+/// 指向第一次的回指——而**另一个根**有自己的第一次，正是这一条让两棵树（或两个测试的临时目录）不共享账本。
+#[test]
+fn the_bounds_are_said_once_per_session_and_root() {
+    crate::mcp::session::forget();
+    let first = specimen_package("bounds-once");
+    let whole = super::consistency(&first, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        whole.contains("not covered by this comparison"),
+        "the first answer carries the whole block: {whole}"
+    );
+    let second = super::consistency(&first, &json!({"parent": "root/control"})).expect("an answer");
+    assert!(
+        second.contains("not covered: unchanged from this session's earlier comparison")
+            && !second.contains("not covered by this comparison"),
+        "the second refers back instead of repeating: {second}"
+    );
+    assert!(
+        second.len() < whole.len(),
+        "and it is shorter ({} vs {})",
+        second.len(),
+        whole.len()
+    );
+    let elsewhere = specimen_package("bounds-once-elsewhere");
+    let other = super::consistency(&elsewhere, &json!({"parent": "root/control"})).expect("answer");
+    assert!(
+        other.contains("not covered by this comparison"),
+        "another root has its own first time: {other}"
+    );
+    // Both paths of the comparison follow the rule, and the specimen path shares the key with the
+    // parent path: one tree's boundary is one boundary.
+    // 比对的两条路都守这条规则，而且标本那一支与父面那一支共用键：一棵树的边界就是一条边界。
+    let specimen =
+        super::consistency(&first, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        !specimen.contains("not covered by this comparison"),
+        "the specimen path refers back too: {specimen}"
+    );
+    let _ = std::fs::remove_dir_all(&first);
+    let _ = std::fs::remove_dir_all(&elsewhere);
 }

@@ -145,7 +145,7 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             "no siblings: `{anchor}` is a root path, and this comparison needs a parent to gather \
              the sibling set from"
         ));
-        lines.extend(specimen_bounds());
+        lines.extend(specimen_bounds(root));
         return Ok(format!("{}\n", lines.join("\n")));
     };
     let members = match crate::mcp::workspace::scope(root)? {
@@ -153,7 +153,7 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
         Scope::Workspace(members) => members,
         Scope::Unresolvable(reason) => {
             lines.push(format!("no siblings: {reason}"));
-            lines.extend(specimen_bounds());
+            lines.extend(specimen_bounds(root));
             return Ok(format!("{}\n", lines.join("\n")));
         }
     };
@@ -270,7 +270,7 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             }
         ));
     }
-    lines.extend(specimen_bounds());
+    lines.extend(specimen_bounds(root));
     if let Some(census) = tree_census(root) {
         lines.insert(0, census);
     }
@@ -284,7 +284,18 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
 
 /// What the specimen comparison does not read, and the next call it points at.
 /// 标本比对该读不到什么，以及它指向的下一次调用。
-fn specimen_bounds() -> Vec<String> {
+fn specimen_bounds(root: &Path) -> Vec<String> {
+    // Audit `W2-2`: this is a **constant** block, worth reading once. From the second comparison in
+    // the same session it is one line pointing at the first — the same rule the write path's
+    // `consequences` block follows (`session::first_time`, keyed by root so two trees never share it).
+    // 审计 `W2-2`：这是一个**常量**块，值得读一次。同一会话里的第二次比对起，它就是一行指向第一次的回指
+    // ——与写入路径的 `consequences` 块同一条规则（`session::first_time`，键带根，因此两棵树不共享）。
+    if !crate::mcp::session::first_time(&format!("consistency-bounds:{}", root.display())) {
+        return vec![
+            "not covered: unchanged from this session's earlier comparison — the columns, the              derived-tree caveat and the `api` boundary are the ones printed then"
+                .to_owned(),
+        ];
+    }
     vec![
         "quoted lines are an excerpt, not the file: at most 10 per deviating sibling, trimmed, and cut at 200 \
          characters with `…` — they are the lines the deviation is about, so `read {path, line}` is \
@@ -737,7 +748,10 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
             sections.push(rows.join("\n"));
         }
     }
-    sections.push(
+    sections.push(if crate::mcp::session::first_time(&format!(
+        "consistency-bounds:{}",
+        root.display()
+    )) {
         "not covered by this comparison: it reads the **derived** tree's sibling set and each \
          sibling's own text, so a convention that lives in a shared helper, in generated code, or \
          in a parent rule is not visible here; and `api` compares the names called, not the units \
@@ -748,8 +762,12 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
          sibling declares at all, so it still names a sibling that declares an extra field; \
          `by: kind` / `by: source` compare the declared value, `specimen` against a \
          certified shape**"
-            .to_owned(),
-    );
+            .to_owned()
+    } else {
+        "not covered: unchanged from this session's earlier comparison — the derived-tree caveat \
+         and the meaning of an outlier are the ones printed then"
+            .to_owned()
+    });
     sections.push(
         "next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields, \
            and `by: shape` when the difference is a **declaration** rather than a call (an \

@@ -195,3 +195,10 @@ mod tree_delta;
 
 #[path = "truncation.rs"]
 mod truncation;
+
+// What this server has already told this session (audit `W2-2`/`W2-5`): a fixed block is worth
+// reading once, and from the second call on it is repetition paid for in every answer.
+// 这个服务器在这个会话里已经说过的话（审计 `W2-2`/`W2-5`）：固定块值得读一次，而从第二次调用起它就是
+// 在每条答案里被付费的重复。
+#[path = "session.rs"]
+mod session;
