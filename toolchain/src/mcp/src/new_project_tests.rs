@@ -594,3 +594,84 @@ fn a_destination_spelled_with_a_current_directory_component_still_lands() {
         "the project landed in the root itself: {report}"
     );
 }
+
+/// The dependency source is a decision the request makes, and `git` is the one it must name.
+/// 依赖来源是请求自己做的决定，而 `git` 是它必须点名的那一个。
+///
+/// Audit `F8`: an installed copy used to write a `git = …` manifest without being asked, so a project
+/// generated offline could not resolve. Now the default is the one this binary's position detects —
+/// this checkout by path, or the published release — and a repository is reachable only by spelling
+/// `dependency: "git"`. A `git` URL on its own is refused rather than obeyed: one value cannot say
+/// whether it was meant as this project's source, and the write it would cause lands in a new
+/// project's manifest.
+/// 审计 `F8`：装出来的副本过去会**未经要求**写下 `git = …` 的清单，于是离线生成的项目解析不了。现在的
+/// 默认值由这个二进制自己的位置检测——本检出按 path，否则是已发布的那一版——而仓库只能靠写出
+/// `dependency: "git"` 到达。单独一个 `git` URL 会被拒绝而不是照办：一个值说不清它是不是本意要当这个
+/// 项目的来源，而它会造成的那次写入落在新项目的清单里。
+#[test]
+fn the_dependency_source_is_named_by_the_request_and_git_is_explicit() {
+    let fixture = root("dependency");
+    let base = json!({"directory": "app", "package": "app", "kind": "library", "apply": false});
+
+    // An unnamed source: the preview renders whatever this binary's position detects, which in a
+    // test run is this checkout (the test binary lives under `target/`).
+    // 没点名来源：预览渲染的是这个二进制位置检测出来的那一个，而在测试运行里就是本检出（测试二进制品住在
+    // `target/` 下）。
+    let (answer, failed) = call(&fixture, base.clone());
+    assert!(!failed, "{answer}");
+    assert!(
+        answer.contains("path = \""),
+        "a tool running from a checkout points at it by path: {answer}"
+    );
+
+    // A URL without the word `git` is refused, and the refusal says the request has to name it.
+    // 给了 URL 却没说 `git`：拒绝，而且拒绝说明请求必须点名。
+    let (unnamed, failed) = call(
+        &fixture,
+        json!({"directory": "app", "package": "app", "kind": "library", "apply": true,
+               "git": "https://example.invalid/x"}),
+    );
+    assert!(failed, "a bare `git` URL is refused: {unnamed}");
+    assert!(unnamed.contains("dependency: \"git\""), "{unnamed}");
+    assert!(
+        !fixture.path.join("app").exists(),
+        "and the refusal comes before anything is created"
+    );
+
+    // Named: the URL is what the manifest carries.
+    // 点名了：清单带的就是那个 URL。
+    let (named, failed) = call(
+        &fixture,
+        json!({"directory": "from-git", "package": "from-git", "kind": "library", "apply": false,
+               "dependency": "git", "git": "https://example.invalid/x"}),
+    );
+    assert!(!failed, "{named}");
+    assert!(
+        named.contains("git = \"https://example.invalid/x\""),
+        "a named repository is what gets written: {named}"
+    );
+
+    // `registry` is the released version alone — the spelling that resolves with no network.
+    // `registry` 只写已发布的那一版——不需要联网就能解析的那一种拼写。
+    let (registry, failed) = call(
+        &fixture,
+        json!({"directory": "from-registry", "package": "from-registry", "kind": "library",
+               "apply": false, "dependency": "registry"}),
+    );
+    assert!(!failed, "{registry}");
+    assert!(
+        !registry.contains("path = \"") && !registry.contains("git = \""),
+        "nothing that has to be fetched or found on this machine: {registry}"
+    );
+
+    // And an unknown spelling names the three that exist.
+    // 未知拼写会点名存在的三种。
+    let (unknown, failed) = call(
+        &fixture,
+        json!({"directory": "app", "package": "app", "kind": "library", "dependency": "crates-io"}),
+    );
+    assert!(failed, "{unknown}");
+    for spelling in ["path", "registry", "git"] {
+        assert!(unknown.contains(spelling), "{unknown}");
+    }
+}

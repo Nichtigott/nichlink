@@ -89,10 +89,20 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
             target.display()
         ));
     }
-    let source = scaffold::detected_source(
+    // Audit `F8`: the generated manifest's dependency source is a **decision**, and the one that
+    // needs the network (a git fetch) is never guessed. The default is what this binary's own
+    // position detects — this checkout by path when it runs from one, the published release
+    // otherwise — so a generated project builds offline in the normal case, and a caller that wants
+    // a repository says so.
+    // 审计 `F8`：生成清单的依赖来源是一个**决定**，而唯一需要联网的那一个（拉 git 仓库）从不被猜。
+    // 默认值由这个二进制自己的位置检测——从检出里跑就是本检出的 path 依赖，否则是已发布的那一版——因此
+    // 正常情况下生成的项目能离线构建，而想要仓库的调用方自己说出来。
+    let source = scaffold::requested_source(
+        arguments.get("dependency").and_then(Value::as_str),
+        arguments.get("git").and_then(Value::as_str),
         Path::new(env!("CARGO_MANIFEST_DIR")),
         &std::env::current_exe().unwrap_or_default(),
-    );
+    )?;
     if apply {
         if requests.is_empty() {
             scaffold::create_project(&target, &package, kind, &source)?;

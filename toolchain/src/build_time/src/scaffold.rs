@@ -22,7 +22,8 @@ pub use install::{
     nvim_config_dir, nvim_config_dir_in, snippet_targets,
 };
 pub use project::{
-    DependencySource, ProjectKind, create_project, dependency_specs, detected_source, project_files,
+    DependencySource, ProjectKind, create_project, dependency_specs, detected_source,
+    project_files, requested_source,
 };
 pub use snippets::{
     BLINK_SNIPPET_FILE, Editor, NVIM_SNIPPET_FILE, SNIPPET_FILE, editor_snippets,

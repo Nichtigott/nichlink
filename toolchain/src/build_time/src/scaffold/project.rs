@@ -57,9 +57,23 @@ pub enum DependencySource {
         /// 生成清单指向的检出目录。
         workspace: PathBuf,
     },
+    /// The published release, by version requirement alone — what `cargo add nichlink-toolchain`
+    /// would write. It needs neither this checkout's paths nor a git remote, so a project generated
+    /// this way builds offline from a warm registry cache; that is why it, and not `Git`, is the
+    /// fallback for a tool that is not running inside a checkout.
+    /// 只按版本要求指向**已发布**的那一版——`cargo add nichlink-toolchain` 会写下的东西。它既不需要本
+    /// 检出的路径、也不需要 git 远端，因此这样生成的项目能靠一份已预热的注册表缓存**离线**构建；这正是不在
+    /// 检出内运行的工具回落到这里、而不是回落到 `Git` 的原因。
+    Registry,
     /// Git dependencies; Cargo can resolve the same version from crates.io
     /// once a matching release is published.
     /// Git 依赖；发布匹配版本后 Cargo 可将同一版本解析到 crates.io。
+    ///
+    /// Never chosen for a caller: fetching a repository is a network round trip that a caller asking
+    /// for a project did not ask for, so this variant is reachable only by naming it (`--git`, or the
+    /// bridge's `dependency: "git"` with its URL).
+    /// 从不替调用方选择：拉一个仓库是调用方没要求的网络往返，因此这一支只能**点名**到达（`--git`，或桥的
+    /// `dependency: "git"` 加上它的 URL）。
     Git {
         /// The repository the generated manifest pulls from.
         /// 生成清单拉取的仓库地址。
@@ -69,9 +83,15 @@ pub enum DependencySource {
 
 /// Detect the dependency source for a running tool binary: path dependencies
 /// when the binary lives inside a NichLink checkout's own target directory;
-/// portable Git dependencies otherwise.
+/// the published release otherwise.
 /// 根据运行中的工具二进制位置检测依赖来源：位于 NichLink checkout 自身
-/// target 目录内时使用 path 依赖，否则使用可移植的 Git 依赖。
+/// target 目录内时使用 path 依赖，否则使用已发布的那一版。
+///
+/// The fallback used to be `Git`, which made every installed copy write a manifest that needs the
+/// network to resolve — audit `F8`. `Git` is still one of the spellings a caller may name; it is no
+/// longer one this function guesses.
+/// 过去这里回落到 `Git`，于是每一份装出来的副本都会写下一份需要联网才能解析的清单——审计 `F8`。`Git`
+/// 仍是调用方可以点名的一种拼写，只是不再是这个函数会去猜的那一种。
 pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> DependencySource {
     let workspace = tool_manifest_dir.parent().unwrap_or_else(|| Path::new("."));
     let runs_from_workspace = current_exe.starts_with(workspace.join("target"))
@@ -82,9 +102,64 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
             workspace: workspace.to_path_buf(),
         }
     } else {
-        DependencySource::Git {
-            url: NICHLINK_REPOSITORY.to_owned(),
+        DependencySource::Registry
+    }
+}
+
+/// The dependency source a **request** names, or the detected default when it names none.
+/// 一次**请求**点名的依赖来源；一个都没点名时用检测出来的默认值。
+///
+/// It lives beside [`detected_source`] because the vocabulary is one rule: `path`, `registry` and
+/// `git` are the three spellings a request may use, and `git` — the only one that needs the network
+/// — is reachable only by naming it. A request that passes a git URL without saying `dependency:
+/// "git"` is refused rather than obeyed, because the two ways to read it (a URL the caller wants, or
+/// a value meant for another tool) are not distinguishable from the value alone.
+/// 它与 [`detected_source`] 摆在一起，因为这套词表是一条规则：`path`、`registry`、`git` 是请求可以用的
+/// 三种拼写，而 `git`——唯一需要联网的那一个——只能靠点名到达。给了 git URL 却没说 `dependency:
+/// "git"` 的请求会被拒绝而不是照办：光看那个值，两种读法（调用方要的 URL，还是本意给别的工具的值）
+/// 分不开。
+pub fn requested_source(
+    dependency: Option<&str>,
+    git: Option<&str>,
+    tool_manifest_dir: &Path,
+    current_exe: &Path,
+) -> Result<DependencySource, String> {
+    let detected = || detected_source(tool_manifest_dir, current_exe);
+    let url = git.map(str::trim).filter(|value| !value.is_empty());
+    let Some(kind) = dependency.map(str::trim).filter(|value| !value.is_empty()) else {
+        if url.is_some() {
+            return Err(
+                "`git` names a repository, so the request has to say `dependency: \"git\"` as well; \
+                 it is not a spelling this tool picks for you. Nothing was created"
+                    .to_owned(),
+            );
         }
+        return Ok(detected());
+    };
+    match kind {
+        "path" => match detected() {
+            source @ DependencySource::Local { .. } => Ok(source),
+            // Not a fallback to `registry`: the caller asked for this checkout's crates, and
+            // quietly handing back a published release would be a different project.
+            // 不回落到 `registry`：调用方要的是**本检出**的 crate，而悄悄换成已发布的那一版会是另一个项目。
+            _ => Err(
+                "`dependency: \"path\"` needs this tool to be running from a NichLink checkout \
+                 (a binary under its own `target/`, with `kernel/` and `toolchain/` beside it); this \
+                 one is not, so there is no checkout to point at. Use `dependency: \"registry\"` for \
+                 the published release. Nothing was created"
+                    .to_owned(),
+            ),
+        },
+        "registry" => Ok(DependencySource::Registry),
+        "git" => Ok(DependencySource::Git {
+            url: url.unwrap_or(NICHLINK_REPOSITORY).to_owned(),
+        }),
+        other => Err(format!(
+            "`dependency` is `path`, `registry` or `git`, not `{other}`: `path` points at the \
+             checkout this tool runs from, `registry` at the published release, and `git` at a \
+             repository (its URL comes from `git`, and defaults to this project's own). Nothing was \
+             created"
+        )),
     }
 }
 
@@ -126,6 +201,12 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
                 ),
             )
         }
+        DependencySource::Registry => (
+            format!(
+                "nichlink-toolchain = {{ package = \"nichlink-toolchain\", version = \"{RELEASE_REQUIREMENT}\" }}"
+            ),
+            format!("nichlink-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
+        ),
         DependencySource::Git { url } => (
             format!(
                 "nichlink-toolchain = {{ package = \"nichlink-toolchain\", git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
@@ -308,7 +389,12 @@ fn toml_path(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{DependencySource, ProjectKind, create_project, dependency_specs, project_files};
+    use std::path::Path;
+
+    use super::{
+        DependencySource, NICHLINK_REPOSITORY, ProjectKind, create_project, dependency_specs,
+        project_files, requested_source,
+    };
     use crate::build_time::scaffold::{Editor, SNIPPET_FILE, editor_snippets};
     use std::fs;
     use std::path::PathBuf;
@@ -527,6 +613,88 @@ mod tests {
                 cargo.starts_with("[workspace]"),
                 "the generated manifest is its own workspace root: {cargo}"
             );
+        }
+    }
+
+    /// The registry source is a version requirement alone: no path, no repository to fetch.
+    /// registry 那一支只写版本要求：没有 path，也没有要拉的仓库。
+    ///
+    /// Audit `F8`: the generated manifest's dependency source is what decides whether the project
+    /// builds at all without a network. `path` needs a checkout on this machine, `git` needs a fetch;
+    /// the published release needs neither, so those two lines must carry **only** the version.
+    /// 审计 `F8`：生成清单的依赖来源决定了这个项目**能不能离线**构建。`path` 需要本机有检出、`git` 需要
+    /// 一次拉取，而已发布的那一版两者都不需要，因此那两行只能带版本要求。
+    #[test]
+    fn the_registry_source_needs_neither_a_checkout_nor_a_fetch() {
+        let (runtime, build) = dependency_specs(&DependencySource::Registry);
+        for spec in [&runtime, &build] {
+            assert!(
+                spec.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
+                "the released requirement is what a registry line states: {spec}"
+            );
+            assert!(
+                !spec.contains("path =") && !spec.contains("git ="),
+                "and nothing that has to be resolved outside the registry cache: {spec}"
+            );
+        }
+        assert!(
+            runtime.contains("package = \"nichlink-toolchain\""),
+            "both tables name the one crate the merge produced: {runtime}"
+        );
+    }
+
+    /// The request vocabulary: detected by default, git only when named, and one way to be wrong.
+    /// 请求词表：默认用检测值；git 只在**点名**时使用；错的方式只有一种。
+    #[test]
+    fn a_request_names_the_source_and_git_is_never_guessed() {
+        let manifest = Path::new("/nowhere/nichlink/toolchain");
+        let exe = Path::new("/usr/local/bin/nichlink-mcp");
+        // Nothing named: the detected default, and here that is the registry — not a git fetch.
+        // 什么都没点名：用检测出来的默认值，而这里它是 registry——不是一次 git 拉取。
+        let detected = requested_source(None, None, manifest, exe).expect("the default answers");
+        assert!(
+            matches!(detected, DependencySource::Registry),
+            "an installed binary must not write a manifest that needs a fetch"
+        );
+        // A URL without the word `git`: refused, because the value alone cannot say what it meant.
+        // 给了 URL 却没说 `git`：拒绝，因为光看那个值说不清它是什么意思。
+        let unnamed = requested_source(None, Some("https://example.invalid/x"), manifest, exe)
+            .expect_err("a URL alone is not a decision");
+        assert!(unnamed.contains("dependency: \"git\""), "{unnamed}");
+        // Named: the URL is used, and with no URL the project's own repository is.
+        // 点名了：用给的 URL；没给 URL 时用本项目自己的仓库。
+        let named = requested_source(
+            Some("git"),
+            Some("https://example.invalid/x"),
+            manifest,
+            exe,
+        )
+        .expect("a named git source answers");
+        assert!(
+            matches!(&named, DependencySource::Git { url } if url == "https://example.invalid/x"),
+            "{named:?}"
+        );
+        let default_url =
+            requested_source(Some("git"), None, manifest, exe).expect("a default URL");
+        assert!(
+            matches!(&default_url, DependencySource::Git { url } if url == NICHLINK_REPOSITORY),
+            "{default_url:?}"
+        );
+        // `path` without a checkout is refused rather than silently turned into the registry.
+        // 没有检出时 `path` 被拒绝，而不是悄悄换成 registry。
+        let no_checkout = requested_source(Some("path"), None, manifest, exe)
+            .expect_err("an installed binary has no checkout to point at");
+        assert!(
+            no_checkout.contains("dependency: \"registry\"")
+                && no_checkout.contains("Nothing was created"),
+            "{no_checkout}"
+        );
+        // And an unknown spelling names the three that exist.
+        // 未知拼写会点名存在的三种。
+        let unknown = requested_source(Some("crates-io"), None, manifest, exe)
+            .expect_err("only three spellings exist");
+        for spelling in ["path", "registry", "git"] {
+            assert!(unknown.contains(spelling), "{unknown}");
         }
     }
 }
