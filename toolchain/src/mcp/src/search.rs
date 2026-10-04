@@ -52,7 +52,7 @@ use nichlink_kernel::identity::NodeId;
 use serde_json::Value;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
-use crate::mcp::source_index::load_sources;
+use crate::mcp::source_index::load_sources_matching;
 use crate::mcp::tree_delta::{FaceStatus, TreeDelta};
 use crate::mcp::workspace::{self, Scope};
 
@@ -354,7 +354,14 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     // The source half is unchanged: file paths and function declarations by name.
     // 源码那一半不变：按名字匹配的文件路径与函数声明。
-    let files = load_sources(root)?;
+    //
+    // Audit `W6-2` step two: a **name** that is not in a file's bytes cannot be a declaration in
+    // them, so only the files whose text mentions the query are lexed. Every file is still listed —
+    // the path half below sees all of them — which is the property the pre-filter must not touch.
+    // 审计 `W6-2` 第②步：不在一个文件的字节里的**名字**，不可能是那个文件里的声明，因此只对文本提到该
+    // 查询的文件做词法。每个文件仍然被列出——下面的路径那一半看得到全部——这是预筛绝不能碰的性质。
+    let needle = query.to_ascii_lowercase();
+    let files = load_sources_matching(root, |_, text| text.to_ascii_lowercase().contains(&needle))?;
     for file in &files {
         if file.relative.to_ascii_lowercase().contains(&query) {
             if hits < limit {
@@ -581,7 +588,11 @@ fn literal_lines(
     record: &mut impl FnMut(&str, usize, &str, &mut Vec<String>) -> bool,
 ) -> Result<usize, String> {
     let mut found = 0usize;
-    for file in load_sources(root)? {
+    // Audit `W6-2` step two: `literal` matches **text**, so every file's text is read and no file is
+    // lexed — the symbol scan this mode never looks at is the whole saving.
+    // 审计 `W6-2` 第②步：`literal` 匹配的是**文本**，因此每个文件的文本照样读，而一个文件都不做词法
+    // ——这一模式从不查看的符号扫描正是省下来的全部。
+    for file in load_sources_matching(root, |_, _| false)? {
         let lines = file.source.lines().collect::<Vec<_>>();
         for (index, line) in lines.iter().enumerate() {
             if !line.contains(literal) {

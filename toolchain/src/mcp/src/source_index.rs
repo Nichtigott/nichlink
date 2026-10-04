@@ -46,6 +46,26 @@ pub(crate) fn required_path(arguments: &Value) -> Result<String, String> {
 }
 
 pub(crate) fn load_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
+    load_sources_matching(root, |_, _| true)
+}
+
+/// The same index, with the **parsing** decided per file (audit `W6-2`, step two).
+/// 同一份索引，但**解析**与否按文件决定（审计 `W6-2` 第②步）。
+///
+/// `keep` sees each file's relative path and its text, and answers whether that file is worth
+/// lexing. A caller whose question is "does this text appear anywhere" passes `false` for everything
+/// and still gets every path and every line — only the symbol scan is skipped; a caller whose question
+/// is "where is this **name** defined" passes "the text mentions it", because a name that is not in
+/// the bytes cannot be a declaration in them. Both callers still see **every file**, which is the
+/// property the index owes its readers: a pre-filter decides what to *lex*, never what to *list*.
+/// `keep` 拿到每个文件的相对路径与文本，回答"这个文件值不值得词法一遍"。问题是"这段文本出现在哪儿"的
+/// 调用方对一切回 `false`，照样拿到每条路径与每一行——只是跳过符号扫描；问题是"这个**名字**定义在哪"的
+/// 调用方回"文本里提到它"，因为不在字节里的名字不可能是字节里的声明。两类调用方仍然看到**每个文件**，而
+/// 这正是索引欠读者的性质：预筛决定**词法什么**，绝不决定**列出什么**。
+pub(crate) fn load_sources_matching(
+    root: &Path,
+    mut keep: impl FnMut(&str, &str) -> bool,
+) -> Result<Vec<SourceFile>, String> {
     if !root.is_dir() {
         return Err(format!("source root does not exist: {}", root.display()));
     }
@@ -64,8 +84,31 @@ pub(crate) fn load_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
     paths
         .into_iter()
         .filter(|path| is_safe_child(root, path))
-        .map(|path| load_file(root, &path))
+        .map(|path| load_filtered_file(root, &path, &mut keep))
         .collect()
+}
+
+/// Read one indexed file, lexing it only when the caller's filter says so.
+/// 读一个被索引的文件，只在调用方的筛选说"值得"时才词法一遍。
+fn load_filtered_file(
+    root: &Path,
+    path: &Path,
+    keep: &mut impl FnMut(&str, &str) -> bool,
+) -> Result<SourceFile, String> {
+    let text = read_source(root, path)?;
+    let relative = portable_path(
+        path.strip_prefix(root)
+            .map_err(|_| "source path escaped root".to_owned())?,
+    );
+    if !keep(&relative, &text) {
+        return Ok(SourceFile {
+            relative,
+            source: text,
+            functions: Vec::new(),
+            branches: nichlink_kernel::source::branch_facts(""),
+        });
+    }
+    Ok(index_file(relative, text))
 }
 
 /// The indexed text of exactly these directories, without walking the tree (audit `W6-2`).
@@ -316,30 +359,41 @@ pub(crate) fn load_text(root: &Path, relative: &str) -> Result<(String, String),
 }
 
 fn load_file(root: &Path, path: &Path) -> Result<SourceFile, String> {
-    // The `strip_prefix` below only names the file. This is the check that
-    // decides whether it may be read at all, and it resolves symbolic links,
-    // which a prefix comparison cannot: a link inside the root that points out of
-    // it passes the prefix test and fails this one.
-    // 下面的 `strip_prefix` 只用来给文件命名。决定它是否可读的是这道检查，而它解析符号
-    // 链接——前缀比较做不到：根内指向根外的链接能通过前缀检查，但过不了这一道。
+    let source = read_source(root, path)?;
+    let relative = portable_path(
+        path.strip_prefix(root)
+            .map_err(|_| "source path escaped root".to_owned())?,
+    );
+    Ok(index_file(relative, source))
+}
+
+/// The text of one indexed file, after the path-safety check.
+/// 一个被索引文件的文本，已过路径安全检查。
+///
+/// The `strip_prefix` at the call sites only names the file; this is the check that decides whether it
+/// may be read at all, and it resolves symbolic links, which a prefix comparison cannot: a link inside
+/// the root that points out of it passes the prefix test and fails this one.
+/// 调用点的 `strip_prefix` 只用来给文件命名；决定它是否可读的是这道检查，而它解析符号链接——前缀比较
+/// 做不到：根内指向根外的链接能通过前缀检查，但过不了这一道。
+fn read_source(root: &Path, path: &Path) -> Result<String, String> {
     if !is_safe_child(root, path) {
         return Err(format!(
             "{} cannot be resolved inside the configured source root",
             path.display()
         ));
     }
-    let source =
-        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
-    let relative = portable_path(
-        path.strip_prefix(root)
-            .map_err(|_| "source path escaped root".to_owned())?,
-    );
-    Ok(SourceFile {
+    fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))
+}
+
+/// One indexed entry: the text plus the two lexical readings this index carries.
+/// 一个被索引的条目：文本，加上这份索引搬运的两种词法读数。
+fn index_file(relative: String, source: String) -> SourceFile {
+    SourceFile {
         branches: nichlink_kernel::source::branch_facts(&source),
         functions: parse_functions(&source),
         relative,
         source,
-    })
+    }
 }
 
 /// Render a tree-relative path with `/` separators on every platform.

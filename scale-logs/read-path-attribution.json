@@ -48,5 +48,15 @@
     "one_member_2501_files_s": 12.617,
     "correctness_fixed": "the verdict went from `outliers: 0 of 0` to `outliers: 0 of 2500`: the whole-tree read used to be taken from the workspace root, so a member's `src/...` paths never matched the index and the sibling set came back empty — the workspace answers were **vacuous**",
     "still_open": "the family itself is 2,500 files in this fixture, and reading it is ~12.6 s; the remaining gradient is the declaration-level record (step 3), which would let the majority be computed from records and the sources be read only for the outliers"
+  },
+  "after_step_two": {
+    "change": "source_index::load_sources_matching(root, keep): the pre-filter decides what to **lex**, never what to **list**. `search --query` lexes only files whose text mentions the query; `search --literal` reads every file's text and lexes none (that mode never looks at symbols).",
+    "search_query_workspace_50k_s": 14.632,
+    "search_query_bytes": 10802,
+    "search_query_note": "same bytes as before the change, 24.0 s -> 14.6 s",
+    "search_query_one_member_2501_files_s": 0.587,
+    "search_literal_one_member_s": 0.422,
+    "safety_pin": "search_tests::a_file_is_listed_by_path_even_when_its_text_never_mentions_the_query — the fixture spells the query in a file's **path** and never in its **text**, so a pre-filter that narrowed the file list instead of the lexing would fail it",
+    "still_open": "step three: a declaration-level record, which is what a family of thousands needs (the family's own files are still read)"
   }
 }

@@ -537,3 +537,46 @@ fn a_literal_search_on_a_readable_tree_still_reports_no_matches() {
     assert!(!reply.contains("nothing was searched"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The pre-filter decides what to **lex**, never what to **list** (audit `W6-2`, step two).
+/// 预筛决定**词法什么**，绝不决定**列出什么**（审计 `W6-2` 第②步）。
+///
+/// The saving is real only if it is safe: `search --query` now lexes a file only when its text
+/// mentions the query, and the property that must survive is that **every file is still listed** by
+/// path. The fixture is built to make that sharp — `widget/widget.rs` spells `widget` in its **path**
+/// and never in its **text**, so the filter skips lexing it while the path half must still find it.
+/// A pre-filter that quietly narrowed the file list would pass a naive "the function was found" pin
+/// and fail this one.
+/// 只有安全时这份节省才算数：`search --query` 现在只在文件**文本**提到查询时才词法它，而必须活下来的
+/// 性质是**每个文件仍然按路径列出**。夹具刻意把这一点做尖——`widget/widget.rs` 把 `widget` 拼在**路径**里、
+/// 从不拼在**文本**里，于是筛选跳过它的词法，而路径那一半仍必须找到它。一个悄悄缩小了文件清单的预筛，
+/// 能骗过一条天真的"函数找到了"的钉子，但骗不过这一条。
+#[test]
+fn a_file_is_listed_by_path_even_when_its_text_never_mentions_the_query() {
+    let (root, _) = package("prefilter");
+    face(
+        &root,
+        "widget/widget.rs",
+        "Widget",
+        "pub fn held() -> u8 { 7 }\n\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+    );
+    let text = std::fs::read_to_string(root.join("src/widget/widget.rs")).expect("the file");
+    assert!(
+        !text.to_ascii_lowercase().contains("widget") || text.contains("Widget"),
+        "the fixture's own text names the kind, so the check below is about the path half"
+    );
+
+    let by_path = search(&root, &json!({"query": "widget"})).expect("an answer");
+    assert!(
+        by_path.contains("src/widget/widget.rs"),
+        "the file is listed by its path although the lexer skipped it: {by_path}"
+    );
+
+    // And the function half still works for a name that **is** in a file's text.
+    // 而"名字确实在文件文本里"时，函数那一半照旧工作。
+    let by_name = search(&root, &json!({"query": "held"})).expect("an answer");
+    assert!(
+        by_name.contains("held") && by_name.contains("src/widget/widget.rs"),
+        "a function name in the text is still found: {by_name}"
+    );
+}
