@@ -68,6 +68,48 @@ pub(crate) fn load_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
         .collect()
 }
 
+/// The indexed text of exactly these directories, without walking the tree (audit `W6-2`).
+/// 只要这些目录的已索引文本，**不遍历整棵树**（审计 `W6-2`）。
+///
+/// `consistency` knows which family it is about to compare before it needs any text — the derived tree
+/// told it — so reading the whole root to then use a few hundred files is work the question never
+/// asked for. Measured on a 50,000-file workspace: the whole-tree read is ~24 s of a ~167 s answer,
+/// and it is the part that scales with the **tree** rather than with the **family**.
+/// `consistency` 在需要任何文本之前就知道自己要比较哪一家——推导树已经告诉它了——因此先读整个根、再从中
+/// 用上几百个文件，是问题从没要求过的工作。在五万文件的工作区上实测：整棵树那次读取约占 ~167 s 答案里的
+/// ~24 s，而且它正是**跟树走**、不跟家族走的那一部分。
+///
+/// The directories are relative to `root` and are each read on their own; a directory that is not
+/// there contributes nothing rather than failing the answer, because a sibling whose file the index
+/// cannot read is a case every caller already reports.
+/// 目录相对 `root`，各自单独读；不存在的目录不贡献任何东西、也不让答案失败，因为"索引读不到某个兄弟的文件"
+/// 是每个调用方本来就会报出来的情形。
+pub(crate) fn load_directories(
+    root: &Path,
+    directories: &[String],
+) -> Result<Vec<SourceFile>, String> {
+    let mut paths = Vec::new();
+    for directory in directories {
+        let joined = root.join(directory);
+        let Ok(entries) = fs::read_dir(&joined) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|extension| extension == "rs") {
+                paths.push(path);
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+        .into_iter()
+        .filter(|path| is_safe_child(root, path))
+        .map(|path| load_file(root, &path))
+        .collect()
+}
+
 /// The filesystem facts the kernel's source walk asks this surface for.
 /// 内核源码遍历向本执行面索取的文件系统事实。
 ///
