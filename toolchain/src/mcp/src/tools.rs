@@ -232,6 +232,15 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.apply",
             "Edit this package's registration faces through the same authoring executor Studio \
              uses, so the kernel's admission, parent-rule, and topology checks run on the change. \
+             **The seven actions fall into two classes, and the class decides whether a \
+             hand-written face is a legal subject**: `add`, `deepen`, `cut` and `promote` are \
+             **additive** — they write declarations (a new face, a layer inside one, the entry a \
+             graft plan reads, a landed record) and reach an existing hand-written face fine; \
+             `edit`, `rename` and `delete` are **rewrites** — they rewrite the face's own file, and \
+             the executor only rewrites what it generated, so a hand-written face is refused by \
+             name (taking one over is a separate, explicit adoption, not a spelling these actions \
+             accept). Read this before choosing an action, because the refusal arrives after the \
+             request. \
              `action` is `add` (create `fields.module` under `parent`), `edit` (change the \
              `fields` the request names and keep the rest), `rename` (change `fields.module`), or \
              `delete` (move the face's module into NichLink's recoverable trash). `node` names \

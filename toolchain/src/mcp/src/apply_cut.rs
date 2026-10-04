@@ -43,8 +43,8 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
             .map(str::to_owned)
             .ok_or_else(|| format!("`cut` requires `{key}`"))
     };
-    let cut = text("cut")?;
-    let graft = text("graft")?;
+    let cut = text("cut").map_err(|error| format!("{error}\n{}", cut_example(root)))?;
+    let graft = text("graft").map_err(|error| format!("{error}\n{}", cut_example(root)))?;
     let cut_end = arguments
         .get("to")
         .and_then(Value::as_str)
@@ -182,6 +182,60 @@ fn insert_plan_entry(source: &str, entry: &str) -> Result<String, String> {
     Ok(edited)
 }
 
+/// A complete cut request, with this tree's own face path and its plan's own graft spelling.
+/// 一个完整的 cut 请求，里面填的是这棵树自己的面路径与它计划自己的 graft 拼写。
+///
+/// Both halves are read from the tree rather than templated: the `cut` side from the face the build
+/// derives (`typed_spelling`), the `graft` side from the plan already on disk — so a reader who
+/// pastes it gets a request that names things this host really has. A tree with no faces, or a plan
+/// with no entries, falls back to the explicit placeholder, which at least says which value is the
+/// reader's to supply.
+/// 两半都从树上读、而不是套模板：`cut` 那一半取自构建推导出的面（`typed_spelling`），`graft` 那一半
+/// 取自盘上已有的计划——因此照抄的读者得到的是一个点名了本宿主**真有**的东西的请求。没有面的树、或没有
+/// 条目的计划，回落到显式占位符，那至少说清了哪个值该由读者提供。
+fn cut_example(root: &Path) -> String {
+    let cut = example_face(root)
+        .and_then(|path| typed_spelling(root, &path))
+        .unwrap_or_else(|| "crate::<the face's module>::NODE_ID".to_owned());
+    let graft = plan_graft_example(root)
+        .unwrap_or_else(|| "<the replacing crate>::<face>_fast::NODE_ID".to_owned());
+    format!(
+        "accepted shape  {{\"action\":\"cut\",\"cut\":\"{cut}\",\"graft\":\"{graft}\",\"apply\":true}}"
+    )
+}
+
+/// One face path this tree derives, preferring a leaf: a cut hands a subtree over, and a leaf is the
+/// shape an example can show without arguing about a parent's children.
+/// 这棵树推导得出的一个面路径，优先叶子：切口交出的是一棵子树，而叶子是示例不用讨论某个父面的子级就能展示的
+/// 形状。
+fn example_face(root: &Path) -> Option<String> {
+    let namespace = crate::mcp::registry::namespace(root).ok()?;
+    let views = face_views(root, &namespace).ok()?;
+    views
+        .iter()
+        .find(|view| !view.owns_registry)
+        .or_else(|| views.first())
+        .map(|view| view.path.clone())
+}
+
+/// The `graft` spelling this tree's own plan already uses, when it uses one.
+/// 这棵树自己的计划已经在用的那个 `graft` 拼写（在用时）。
+///
+/// Read back through the kernel's parser rather than by text search, so what an example offers is
+/// the spelling the build reads, not a line that looks like one. `None` when the host has no plan or
+/// its entries name nothing — an example is a hint, and an empty one is worse than a placeholder.
+/// 经内核的解析器读回，而不是按文本搜索，因此示例给出的拼写就是构建读的那个，而不是一行长得像它的东西。
+/// 宿主没有计划、或条目一个名字都没点时给 `None`——示例是提示，而空的示例比占位符更糟。
+pub(crate) fn plan_graft_example(root: &Path) -> Option<String> {
+    let plan = crate::build_time::declared_grafts(root).ok()?.entry;
+    let source = std::fs::read_to_string(plan).ok()?;
+    let entries = nichlink_kernel::syntax::entries::graft_entries(&source).ok()?;
+    entries
+        .first()
+        .map(|entry| entry.graft.clone())
+        .filter(|graft| !graft.trim().is_empty())
+}
+
 /// F6: the refusal when an entry joins a plan written in another class of spelling.
 /// F6：一条条目要加入一份用**另一类拼写**写成的计划时给出的拒绝。
 ///
@@ -265,21 +319,16 @@ fn face_source(root: &Path, logical: &str) -> Option<String> {
 /// `crate::control::object::button::NODE_ID`，因为源码布局插进了一个逻辑路径从不提及的 `object` 目录。
 /// 猜这个映射，正是本模块拒绝写进宿主的猜法，因此以面自己的 `source` 为权威；本棵树推导不出的路径，
 /// 就没有拼写可给。
+///
+/// The mapping itself is the build's own function (`build_time::source_module_path`), not a second
+/// spelling of it written here: this file's whole job is writing a spelling the build will read back,
+/// so a local copy of that rule is a copy that can disagree with the reader.
+/// 映射本身用的是**构建自己的**函数（`build_time::source_module_path`），而不是在这里写第二份：本文件的
+/// 全部工作就是写出构建会读回的拼写，因此这条规则的本地副本就是一份可能与读取方不一致的副本。
 fn typed_spelling(root: &Path, logical: &str) -> Option<String> {
     let source = face_source(root, logical)?;
-    let module = source.trim_start_matches("./").strip_suffix(".rs")?;
-    // A face file under a directory of its own name (`…/dial/dial.rs`) is that directory's module;
-    // anything else (`…/dial.rs`, `lib.rs`) is named by the file itself.
-    // 住在与自己同名的目录下的面文件（`…/dial/dial.rs`）就是那个目录的模块；别的（`…/dial.rs`、
-    // `lib.rs`）由文件自己命名。
-    let mut segments: Vec<&str> = module.split('/').collect();
-    if segments.len() >= 2 && segments[segments.len() - 1] == segments[segments.len() - 2] {
-        segments.pop();
-    }
-    if segments == ["lib"] {
-        return Some("crate::NODE_ID".to_owned());
-    }
-    Some(format!("crate::{}::NODE_ID", segments.join("::")))
+    let module = crate::build_time::source_module_path(source.trim_start_matches("./"));
+    Some(format!("crate::{module}::NODE_ID"))
 }
 
 /// The faces a cut expression's module path covers, named by their node paths.

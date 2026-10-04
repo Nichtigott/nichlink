@@ -39,9 +39,18 @@ use crate::mcp::source_index::portable_path;
 /// Run one `nichlink.new_project` request, previewing unless `apply` is true.
 /// 执行一次 `nichlink.new_project` 请求；除非 `apply` 为真，否则只预览。
 pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, String> {
-    let directory = text(arguments, "directory")?;
-    let package = text(arguments, "package")?;
-    let kind = kind(arguments)?;
+    // Every refusal about the request itself carries a complete, executable request — built from
+    // the values the caller already sent, so what it shows is one edit away from what they meant.
+    // The measured cost this closes: a refusal that named only the missing key left the reader to
+    // assemble the rest, and the round counted those as wasted calls.
+    // 关于请求本身的每条拒绝都带一个完整、可执行的请求——用调用方已经发来的值搭出来，因此它显示的东西离
+    // 调用方的本意只差一次编辑。这里关掉的实测代价：只点名缺了哪个键的拒绝，剩下的要读者自己拼，而那一轮
+    // 把这些算成了白跑的调用。
+    let example = || format!("\naccepted shape  {}", example_request(arguments));
+    let directory =
+        text(arguments, "directory").map_err(|error| format!("{error}{}", example()))?;
+    let package = text(arguments, "package").map_err(|error| format!("{error}{}", example()))?;
+    let kind = kind(arguments).map_err(|error| format!("{error}{}", example()))?;
     // Parsed before anything is written: a bad entry has to be refused while the
     // destination is still untouched.
     // 在任何写入之前解析：坏条目必须在目的地还没被动过的时候就被拒绝。
@@ -353,6 +362,34 @@ fn staging_directory(target: &Path) -> Result<PathBuf, String> {
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
     Ok(parent.join(format!(".nichlink-new-{name}-{stamp}")))
+}
+
+/// The complete request this tool accepts, filled with whatever the caller already sent.
+/// 这个工具接受的完整请求，填的是调用方已经发来的值。
+///
+/// A refusal's job is to be the last thing the reader has to work out: showing the whole request,
+/// with their own `directory`/`package`/`kind` in it, turns "which key was missing" into a call
+/// they can run. The defaults name a project rather than a placeholder, because `<package>` is
+/// not something a shell can run.
+/// 拒绝文案的职责是让读者不必再推敲：把整个请求连同他们自己的 `directory`/`package`/`kind` 一起
+/// 显示出来，于是"缺了哪个键"变成一次可以直接跑的调用。默认值给的是一个真项目名而不是占位符，因为
+/// `<package>` 不是 shell 能跑的东西。
+fn example_request(arguments: &Value) -> String {
+    let given = |key: &str, fallback: &str| {
+        arguments
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or(fallback)
+            .to_owned()
+    };
+    let directory = given("directory", "app");
+    let package = given("package", "app");
+    let kind = given("kind", "library");
+    format!(
+        "{{\"directory\":\"{directory}\",\"package\":\"{package}\",\"kind\":\"{kind}\",\
+         \"apply\":true}}"
+    )
 }
 
 /// The one required string argument named `key`.

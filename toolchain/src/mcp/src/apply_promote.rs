@@ -52,18 +52,19 @@ pub(crate) fn run_promote(
     applying: bool,
     arguments: &Value,
 ) -> Result<Outcome, String> {
-    let selector = text(arguments, "selector")?;
+    let selector = text(arguments, "selector")
+        .map_err(|error| format!("{error}\n{}", promote_example(root)))?;
     // The record is a source rewrite plus a record retirement, so the request says `confirm`
     // itself — the same shape `delete` uses, for the same reason: this is the operation whose
     // preview a caller can step past by accident.
     // 这是一次源码改写加一次记录退役，因此请求自己说出 `confirm`——与 `delete` 同一种形状、同一个理由：
     // 这是调用方可能不小心跨过其预览的那个操作。
     if arguments.get("confirm").and_then(Value::as_bool) != Some(true) {
-        return Err(
+        return Err(format!(
             "promote requires `confirm: true`: it rewrites the host's source and retires the \
-             record, and a preview is the only place to read what it would do"
-                .to_owned(),
-        );
+             record, and a preview is the only place to read what it would do\n{}",
+            promote_example(root)
+        ));
     }
     // Read from the project root: a preview's copy has no `.nichlink/`, so reading `work` would
     // answer as if this package had no records at all.
@@ -292,6 +293,31 @@ pub(crate) fn run_promote(
     })
 }
 
+/// A complete promote request, with one of this package's real record directories in it.
+/// 一个完整的 promote 请求，里面填的是这个包里**真实存在**的一个记录目录。
+///
+/// A refusal that offers `<selector>` makes the reader go and list the directory before the request
+/// becomes a call; this reads the directory it is standing in. `add`'s example has the same rule —
+/// see `apply::write_example` — and here the values are the only ones the tool needs.
+/// 一个只给出 `<selector>` 的拒绝，会让读者在请求变成调用之前先去列一遍目录；这里读的就是它所在的那个目录。
+/// `add` 的示例遵循同一条规则——见 `apply::write_example`——而这里工具需要的值就这一个。
+fn promote_example(root: &Path) -> String {
+    let selector = std::fs::read_dir(root.join(".nichlink/external-grafts"))
+        .ok()
+        .and_then(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| entry.path().is_dir())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .min()
+        })
+        .unwrap_or_else(|| "<selector>".to_owned());
+    format!(
+        "accepted shape  {{\"action\":\"promote\",\"selector\":\"{selector}\",\"apply\":true,\
+         \"confirm\":true}}"
+    )
+}
+
 /// The one required string argument named `key`.
 /// 名为 `key` 的那一个必填字符串参数。
 fn text(arguments: &Value, key: &str) -> Result<String, String> {
@@ -300,8 +326,7 @@ fn text(arguments: &Value, key: &str) -> Result<String, String> {
         Some(_) => Err(format!("`{key}` must not be empty")),
         None => Err(format!(
             "promote requires `{key}`: the `.nichlink/external-grafts/<selector>/` directory to \
-             land. Accepted shape: {{\"action\":\"promote\",\"selector\":\"<selector>\",\
-             \"apply\":true,\"confirm\":true}}"
+             land"
         )),
     }
 }

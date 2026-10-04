@@ -31,7 +31,7 @@ mod apply_promote;
 use crate::build_time::{face_views, source_layout};
 use crate::runtime::{AuthoringContext, NewModuleFace};
 use nichlink_kernel::Registry;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::mcp::apply_target::Target;
 use crate::mcp::preview::{copy_package, declaration_line, diff_package};
@@ -40,6 +40,7 @@ use crate::mcp::resolve::{parent_id, resolve_node};
 
 /// One `nichlink.apply` request.
 /// 一次 `nichlink.apply` 请求。
+#[derive(Clone, Copy)]
 enum Action {
     /// Create a module registration face.
     /// 创建一个模块注册面。
@@ -87,17 +88,29 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some("cut") => Action::Cut,
         Some("promote") => Action::Promote,
         Some(other) => {
+            // The example is built from this tree, so the refusal is one paste away from a call
+            // rather than one research step away. A root whose namespace cannot be read still gets
+            // the sentence, without the example — the namespace error is a different refusal.
+            // 示例由**这棵树**搭出来，因此这条拒绝离一次调用只差一次粘贴，而不是差一次调研。命名空间读不出来
+            // 的包根照样拿到这句话，只是没有示例——那是另一种拒绝。
+            let example = namespace(root)
+                .ok()
+                .map(|namespace| write_example(root, &namespace, Action::Add));
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
-                 `rename`, `delete`, `deepen`, and `cut`"
+                 `rename`, `delete`, `deepen`, `cut` and `promote`{}",
+                example.map_or(String::new(), |example| format!("\n{example}"))
             ));
         }
         None => {
-            return Err(
+            let example = namespace(root)
+                .ok()
+                .map(|namespace| write_example(root, &namespace, Action::Add));
+            return Err(format!(
                 "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, \
-                 `cut`, or `promote`)"
-                    .to_owned(),
-            );
+                 `cut`, or `promote`){}",
+                example.map_or(String::new(), |example| format!("\n{example}"))
+            ));
         }
     };
     let namespace = namespace(root)?;
@@ -319,17 +332,17 @@ pub(crate) fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result
         // 形式，工具根本看不到 `fields` 对象）也照说 `fields.module`。第十三轮量出了代价：一个新代理
         // 的第一次 `apply add` 连吃三次拒绝。
         return Err(if arguments.get("fields").is_none() {
-            "add requires `fields`: one JSON object holding the new face's fields — accepted \
-             shape: {\"action\":\"add\",\"parent\":\"<node>\",\"fields\":{\"module\":\
-             \"<snake_case>\",\"kind\":\"<Kind>\",\"exports\":\"<export>\"},\"apply\":true}; on a \
-             command line that object is written `--fields '{\"module\":\"button\",\"kind\":\
-             \"Object\"}'`, and one field of it may also be written `--fields.module button`"
-                .to_owned()
+            format!(
+                "add requires `fields`: one JSON object holding the new face's fields; on a command \
+                 line that object is written `--fields '{{\"module\":\"button\",\"kind\":\
+                 \"Object\"}}'`, and one field of it may also be written `--fields.module button`\n{}",
+                write_example(root, namespace, Action::Add)
+            )
         } else {
-            "add requires `fields.module`, the new module's name — accepted shape: \
-             {\"action\":\"add\",\"parent\":\"<node>\",\"fields\":{\"module\":\"<snake_case>\",\
-             \"kind\":\"<Kind>\",\"exports\":\"<export>\"},\"apply\":true}"
-                .to_owned()
+            format!(
+                "add requires `fields.module`, the new module's name\n{}",
+                write_example(root, namespace, Action::Add)
+            )
         });
     }
     let registry = load_registry(root, namespace)?;
@@ -411,10 +424,16 @@ fn run_edit(
             // and the round measured `apply` being the most-refused tool (16 of 41 refusals).
             // 别的动作都在这里点名可接受的形状，`edit` 与 `delete` 没有——而那一轮量到 `apply` 是
             // 被拒最多的工具（41 次拒绝里占 16 次）。
-            "edit requires `node`: a logical path or a 32-digit identity — accepted shape: \
-             {\"action\":\"edit\",\"node\":\"<node>\",\"fields\":{\"<field>\":\"<value>\"},\"apply\":true} (the \
-             full key list is `--list apply`)"
-                .to_owned()
+            format!(
+                "{} requires `node`: a logical path or a 32-digit identity (the full key list is \
+                 `--list apply`)\n{}",
+                if matches!(action, Action::Rename) {
+                    "rename"
+                } else {
+                    "edit"
+                },
+                write_example(root, namespace, action)
+            )
         })?;
     let fields = arguments.get("fields").unwrap_or(&Value::Null);
     let registry = load_registry(root, namespace)?;
@@ -422,12 +441,10 @@ fn run_edit(
     if matches!(action, Action::Rename) {
         let module = fields.get("module").and_then(Value::as_str).unwrap_or("");
         if module.is_empty() {
-            return Err(
-                "rename requires `fields.module`, the new module name — accepted shape: \
-                 {\"action\":\"rename\",\"node\":\"<node>\",\"fields\":{\"module\":\"<snake_case>\"},\
-                 \"apply\":true}"
-                    .to_owned(),
-            );
+            return Err(format!(
+                "rename requires `fields.module`, the new module name\n{}",
+                write_example(root, namespace, Action::Rename)
+            ));
         }
     }
     // Both halves run inside one context, and not only the write: reading the face
@@ -497,10 +514,11 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .get("node")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "delete requires `node`: a logical path or a 32-digit identity — accepted shape: \
-             {\"action\":\"delete\",\"node\":\"<node>\",\"confirm\":true} (a delete previews first; the \
-             confirmation is what writes)"
-                .to_owned()
+            format!(
+                "delete requires `node`: a logical path or a 32-digit identity (a delete previews \
+                 first; the confirmation is what writes)\n{}",
+                write_example(root, namespace, Action::Delete)
+            )
         })?;
     // The request says `confirm` itself. This used to be appended right here, which made the
     // sentence above — and the declared schema, which had no such key at all — describe something
@@ -509,11 +527,11 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
     // 请求自己说出 `confirm`。过去是在这里就地拼上去的，于是上面那句话——以及根本没有这个键的声明
     // schema——描述的是桥并不做的事：调用方可以省掉它，删除照样执行（审计 `m5`）。
     if arguments.get("confirm").and_then(Value::as_bool) != Some(true) {
-        return Err(
+        return Err(format!(
             "delete requires `confirm: true`: a delete is the one operation whose preview a caller \
-             can step past by accident"
-                .to_owned(),
-        );
+             can step past by accident\n{}",
+            write_example(root, namespace, Action::Delete)
+        ));
     }
     let registry = load_registry(root, namespace)?;
     let id = resolve_node(root, namespace, target)?;
@@ -547,7 +565,10 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .get("node")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "deepen requires `node`: the face, by logical path or identity".to_owned()
+            format!(
+                "deepen requires `node`: the face, by logical path or identity\n{}",
+                write_example(root, namespace, Action::Deepen)
+            )
         })?;
     let parts = arguments
         .get("inside")
@@ -555,10 +576,10 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         .and_then(Value::as_object)
         .filter(|parts| !parts.is_empty())
         .ok_or_else(|| {
-            "deepen requires `inside.parts`: an object of `field: Type` pairs, at least one — \
-             accepted shape: {\"action\":\"deepen\",\"node\":\"<node>\",\
-             \"inside\":{\"parts\":{\"<field>\":\"<Type>\"}},\"apply\":true}"
-                .to_owned()
+            format!(
+                "deepen requires `inside.parts`: an object of `field: Type` pairs, at least one\n{}",
+                write_example(root, namespace, Action::Deepen)
+            )
         })?;
     let mut fields: Vec<(String, String)> = Vec::new();
     for (name, value) in parts {
@@ -955,6 +976,111 @@ fn consequences(
     Ok(report)
 }
 
+/// A complete, executable request for one write action, built from **this tree's own** names.
+/// 某个写入动作的完整、可执行请求，用的是**这棵树自己的**名字。
+///
+/// Audit `W4-4` (measured across S1/S6/S7): every refusal already named the shape, but in
+/// placeholders — `<node>`, `<snake_case>`, `<Kind>` — so a reader still had to find a legal parent,
+/// invent a module name that is free, and work out the typed spelling of a cut before the refusal
+/// became a call. This builds the example out of what the tree already says: a real `parent` (the
+/// first face that owns a registry), a `module` name nothing in the tree uses, and for a cut the
+/// `crate::…::NODE_ID` spelling the build itself derives (`FaceView::module`) plus the `graft`
+/// spelling the plan already carries when it carries one.
+/// 审计 `W4-4`（在 S1/S6/S7 上量到）：过去的每条拒绝都点了形状，但用的是占位符——`<node>`、
+/// `<snake_case>`、`<Kind>`——于是读者还得自己找一个合法父面、想一个不撞的模块名、把切口的类型化拼写
+/// 推出来，这条拒绝才变成一次调用。这里用树本来就说出来的东西搭出示例：真实的 `parent`（第一个拥有注册机
+/// 的面）、一个树里没人用的 `module` 名，切口则用构建自己推导的 `crate::…::NODE_ID`（`FaceView::module`）
+/// 加上计划本来就带着的那个 `graft` 拼写（有的话）。
+///
+/// It is a **hint, not a promise**: the executor still decides, and the example is only as good as
+/// the tree it was read from — a tree with no faces gets the placeholders back.
+/// 它是**提示，不是承诺**：仍然由执行器决定，而这个示例的好坏取决于它读的那棵树——没有面的树拿回占位符。
+fn write_example(root: &Path, namespace: &str, action: Action) -> String {
+    let views = face_views(root, namespace).unwrap_or_default();
+    let leaf = views
+        .iter()
+        .find(|view| !view.owns_registry)
+        .or_else(|| views.first());
+    let parent = views
+        .iter()
+        .find(|view| view.owns_registry)
+        .or(leaf)
+        .map(|view| view.path.clone())
+        .unwrap_or_else(|| "root".to_owned());
+    let node = leaf
+        .map(|view| view.path.clone())
+        .unwrap_or_else(|| "root".to_owned());
+    let module = free_module(&views);
+    let kind = {
+        let mut chars = module.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            None => String::new(),
+        }
+    };
+    let cut = leaf
+        .map(|view| format!("crate::{}::NODE_ID", view.module))
+        .unwrap_or_else(|| "crate::<the face's module>::NODE_ID".to_owned());
+    let graft = apply_cut::plan_graft_example(root)
+        .unwrap_or_else(|| "<the replacing crate>::<face>_fast::NODE_ID".to_owned());
+    let request = match action {
+        Action::Add => json!({
+            "action": "add",
+            "parent": parent,
+            "fields": {"module": module, "kind": kind},
+            "apply": true
+        }),
+        Action::Edit => json!({
+            "action": "edit",
+            "node": node,
+            "fields": {"stable_name": "probe"},
+            "apply": true
+        }),
+        Action::Rename => json!({
+            "action": "rename",
+            "node": node,
+            "fields": {"module": free_module(&views)},
+            "apply": true
+        }),
+        Action::Delete => json!({
+            "action": "delete",
+            "node": node,
+            "apply": true,
+            "confirm": true
+        }),
+        Action::Deepen => json!({
+            "action": "deepen",
+            "node": node,
+            "inside": {"parts": {"size": "u32", "label": "String"}},
+            "apply": true
+        }),
+        Action::Cut => json!({"action": "cut", "cut": cut, "graft": graft, "apply": true}),
+        Action::Promote => json!({
+            "action": "promote",
+            "selector": "<.nichlink/external-grafts/<selector>>",
+            "apply": true,
+            "confirm": true
+        }),
+    };
+    format!("accepted shape  {request}")
+}
+
+/// A bare snake_case module name nothing in this tree uses yet.
+/// 一个这棵树还没用过的裸 snake_case 模块名。
+fn free_module(views: &[crate::build_time::FaceView]) -> String {
+    for candidate in ["widget", "widget2", "widget3"] {
+        let taken = views.iter().any(|view| {
+            view.module.rsplit("::").next() == Some(candidate)
+                || view.path.rsplit('/').next() == Some(candidate)
+                || view.registry_name == candidate
+        });
+        if !taken {
+            return candidate.to_owned();
+        }
+    }
+    "widget".to_owned()
+}
+
 /// An executor refusal, plus the way forward when the wall is one the round measured.
 /// 执行器的拒绝；当这堵墙是那轮量到的那一堵时，附上继续走的两条路。
 ///
@@ -986,6 +1112,25 @@ fn refused_with_a_way_forward(error: String) -> String {
              full replacement (`cut(…) full graft(…)`) rather than a plain cut, or those children \
              have to move out from under it — the factory assertions move with either decision, and \
              that is the decision, not a workaround"
+        );
+    }
+    // The append/rewrite boundary, said where it is hit. `add`, `deepen`, `cut` and `promote` are
+    // additive: they hand a face over or hang something under it, and each is its own declaration
+    // change, so a hand-written face is a legal subject. `edit`, `rename` and `delete` rewrite a
+    // file, and the executor only rewrites what it generated — a hand-written face is authorship,
+    // and taking one over is a different decision rather than a spelling fix.
+    // 追加/改写的分界，就在被撞到的地方说出来。`add`、`deepen`、`cut`、`promote` 是**追加**类：它们把
+    // 一个面交出去或在它下面挂东西，各自都是一次声明改动，因此手写面是合法主体。`edit`、`rename`、
+    // `delete` 改写文件，而执行器只改写它生成过的东西——手写面是作者身份，收编它是另一个决定，不是
+    // 拼写修正。
+    if folded.contains("was not generated by nichlink") {
+        return format!(
+            "{error}\nboundary: this tool rewrites only faces it generated. `add`/`deepen`/`cut`/\
+             `promote` are additive — they change declarations and reach an existing hand-written \
+             face fine — while `edit`/`rename`/`delete` rewrite the file, so a hand-written face is \
+             refused here. Taking one over is an explicit operation of its own (a face-by-face \
+             adoption that shows the field-by-field diff first and asks for confirmation), not a \
+             spelling the rewrite actions accept"
         );
     }
     error
