@@ -292,6 +292,47 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
     Ok(rows)
 }
 
+/// One field a declaration spelled, as the shape record carries it (audit `W6-2`, step three).
+/// 一条声明拼出的一个字段，按形状记录携带的样子（审计 `W6-2` 第③步）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShapeRow {
+    /// The face's source path, relative to `src/`.
+    /// 该面的源码路径，相对 `src/`。
+    pub source: String,
+    /// The field's name, or `-` for a face that declares none of the fields the record covers.
+    /// 字段名；一个面在记录覆盖的字段里什么都没声明时是 `-`。
+    pub field: String,
+    /// The text the declaration spelled.
+    /// 声明拼出的文本。
+    pub value: String,
+}
+
+/// Read the declaration-shaped facts the last build published.
+/// 读取上一次构建发布的"声明形状"事实。
+pub fn read_shape_manifest(out_dir: &Path) -> Result<Vec<ShapeRow>, String> {
+    let path = out_dir.join("shape_manifest.tsv");
+    let text = fs::read_to_string(&path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let mut rows = Vec::new();
+    for line in text.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut fields = line.split('\t');
+        let (Some(source), Some(field), Some(value)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        rows.push(ShapeRow {
+            source: source.to_owned(),
+            field: field.to_owned(),
+            value: value.to_owned(),
+        });
+    }
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

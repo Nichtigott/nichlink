@@ -4,7 +4,8 @@ use super::{
     aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root_reporting,
     emit_rerun_paths, face_syntax_errors, graft_plan_check, prime_node_id_cache, render_lib,
     static_plan, unplaced_face_errors, update_discovery_cache, write_function_manifest,
-    write_graft_manifest, write_if_changed, write_pruning_manifest, write_source_scope_manifest,
+    write_graft_manifest, write_if_changed, write_pruning_manifest, write_shape_manifest,
+    write_source_scope_manifest,
 };
 use nichlink_kernel::lexicon;
 
@@ -172,6 +173,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         write_pruning_manifest(src, &nodes, out_dir),
         write_function_manifest(src, &nodes, out_dir),
         write_source_scope_manifest(src, &nodes, &scope, out_dir),
+        write_shape_manifest(src, &nodes, out_dir),
         write_graft_manifest(out_dir, &graft_entries.enabled),
         write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
     ] {

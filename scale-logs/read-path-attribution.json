@@ -58,5 +58,11 @@
     "search_literal_one_member_s": 0.422,
     "safety_pin": "search_tests::a_file_is_listed_by_path_even_when_its_text_never_mentions_the_query — the fixture spells the query in a file's **path** and never in its **text**, so a pre-filter that narrowed the file list instead of the lexing would fail it",
     "still_open": "step three: a declaration-level record, which is what a family of thousands needs (the family's own files are still read)"
+  },
+  "step_three_part_one": {
+    "change": "the build now publishes `shape_manifest.tsv`: one row per (source, declared field, raw text) for every field the declaration spells in the kernel's FACE_FIELD_ORDER, plus a `-` row for a face that spells none. The comparison vocabulary stays in the bridge — the record carries **declarations**, not verdicts.",
+    "evidence": "real build on a 50-face member: 104 rows, header `# source\tfield\tvalue`, e.g. `control/control.rs  kind  Control`",
+    "not_yet": "the family comparison does not read it yet; that is the second half of step three (it must also decide freshness, and excerpts still come from the sources for the outliers only)",
+    "why_this_shape": "keyed by source path and carrying raw text, because normalizing or interpreting here would be the bridge's second implementation of its own shape vocabulary"
   }
 }

@@ -246,6 +246,57 @@ fn called_names(source: &str) -> String {
     }
 }
 
+/// Write the declaration-shaped facts this build can see (audit `W6-2`, step three).
+/// 写下这次构建看得见的"声明形状"事实（审计 `W6-2` 第③步）。
+///
+/// The bridge's family comparison needs to know **which fields each face declares** before it decides
+/// who is the outlier — and today it learns that by lexing every sibling's file. The build already has
+/// the same parse in hand, so it publishes the **raw pair** it saw (`field` and the text the
+/// declaration spelled) and leaves the interpretation where it belongs: the comparison vocabulary
+/// (`SHAPE_FIELDS`, its comparison kinds) stays in the bridge, which is why this record carries
+/// declarations rather than verdicts.
+/// 桥的家族比对在判定"谁是离群者"之前需要知道**每个面声明了哪些字段**——而今天它是靠词法每个兄弟的文件学到的。
+/// 构建手里本来就有同一次解析，因此它发布**看见的那对原始值**（字段名与声明拼出的文本），把解释留在它该在的
+/// 地方：比对词汇（`SHAPE_FIELDS` 与它的比较种类）留在桥里——这正是这份记录携带的是**声明**而不是**结论**的
+/// 原因。
+///
+/// Every face gets a row even when it declares none (`field = -`), for the same reason the pruning
+/// manifest does: a reader that counts must be able to see the whole family.
+/// 每个面都有一行，哪怕它什么都没声明（`field = -`），理由与剪枝清单相同：要计数的读者必须看得见整个家族。
+pub(crate) fn write_shape_manifest(
+    src: &Path,
+    nodes: &[Node],
+    out_dir: &Path,
+) -> Result<(), String> {
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    visit_shape_fields(src, nodes, &mut rows);
+    write_shape_rows(out_dir.join("shape_manifest.tsv"), rows)
+}
+
+fn visit_shape_fields(src: &Path, nodes: &[Node], rows: &mut Vec<(String, String, String)>) {
+    for node in nodes {
+        if let Some(file) = &node.file {
+            let relative = relative_display(src, file);
+            if let Ok(source) = fs::read_to_string(file)
+                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let mut declared = 0usize;
+                for name in nichlink_kernel::declaration::FACE_FIELD_ORDER {
+                    if let Some(raw) = face.field(name) {
+                        declared += 1;
+                        rows.push((relative.clone(), (*name).to_owned(), raw));
+                    }
+                }
+                if declared == 0 {
+                    rows.push((relative, "-".to_owned(), "-".to_owned()));
+                }
+            }
+        }
+        visit_shape_fields(src, &node.children, rows);
+    }
+}
+
 pub(crate) fn write_function_manifest(
     src: &Path,
     nodes: &[Node],
@@ -360,6 +411,21 @@ fn write_rows(
     let mut output = String::from("# node\tsource\tsymbol\n");
     for (id, source, symbol) in rows {
         writeln!(output, "{id}\t{source}\t{symbol}").unwrap();
+    }
+    write_if_changed(path.as_ref(), &output)
+}
+
+/// The rows of a record keyed by source path rather than by identity (audit `W6-2`, step three).
+/// 一份按源码路径而不是按身份做键的记录行（审计 `W6-2` 第③步）。
+fn write_shape_rows(
+    path: impl AsRef<Path>,
+    mut rows: Vec<(String, String, String)>,
+) -> Result<(), String> {
+    rows.sort();
+    rows.dedup();
+    let mut output = String::from("# source\tfield\tvalue\n");
+    for (source, field, value) in rows {
+        writeln!(output, "{source}\t{field}\t{value}").unwrap();
     }
     write_if_changed(path.as_ref(), &output)
 }

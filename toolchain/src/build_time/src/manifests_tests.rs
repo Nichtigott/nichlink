@@ -361,3 +361,64 @@ fn a_module_named_parent_resolves_to_its_identity() {
     );
     let _ = fs::remove_dir_all(&root);
 }
+
+/// The shape record carries what each declaration spelled, and reads back whole (audit `W6-2`, step three).
+/// 形状记录携带每条声明拼出的东西，并能整份读回（审计 `W6-2` 第③步）。
+///
+/// This is the record the family comparison will read instead of lexing every sibling: the bridge's
+/// `SHAPE_FIELDS` vocabulary decides what the pairs **mean**, and this side only publishes the pairs —
+/// which is why the file is keyed by source path and carries raw text rather than a verdict.
+/// 这是家族比对将要读、以取代"词法每个兄弟"的那份记录：桥的 `SHAPE_FIELDS` 词汇决定这些配对**意味着什么**，
+/// 而这一侧只发布配对——这正是文件按源码路径做键、携带原始文本而不是结论的原因。
+#[test]
+fn the_shape_record_carries_the_declared_fields_and_reads_back() {
+    let (root, src) = package("shape-record", "pub fn paint(&self) -> i32 { 7 }\n");
+    fs::write(
+        src.join("dial/dial.rs"),
+        "crate::root_object! {\n    kind: Dial,\n    exports: [\"a\", \"b\"],\n    \
+         handle_traits: [\"DialHandle\"],\n}\n",
+    )
+    .expect("the face with two families of fields");
+    let out = root.join("out");
+    fs::create_dir_all(&out).expect("out directory");
+    let nodes = crate::build_time::source_walk::discover_root(&src);
+    crate::build_time::write_shape_manifest(&src, &nodes, &out).expect("the record writes");
+    let record = fs::read_to_string(out.join("shape_manifest.tsv")).expect("the record");
+    assert_eq!(
+        record.lines().next().unwrap_or_default(),
+        "# source\tfield\tvalue",
+        "the columns are the record's contract"
+    );
+
+    let rows = crate::build_time::read_shape_manifest(&out).expect("the record reads");
+    let fields: Vec<(&str, &str)> = rows
+        .iter()
+        .filter(|row| row.source == "dial/dial.rs")
+        .map(|row| (row.field.as_str(), row.value.as_str()))
+        .collect();
+    // The record carries the **raw** text the parser re-joined (`["a" , "b"]`), not a normalized
+    // spelling: what the declaration said is the build-time fact; what it *means* is the bridge's
+    // vocabulary (`SHAPE_FIELDS`), and normalizing here would be that second implementation.
+    // 记录携带的是解析器重新拼出的**原始**文本（`["a" , "b"]`），不是规范化的拼写：声明说了什么是构建期
+    // 事实，"它意味着什么"是桥的词汇（`SHAPE_FIELDS`），在这里做规范化就是那第二份实现。
+    assert!(
+        fields.contains(&("exports", "[\"a\" , \"b\"]"))
+            && fields.contains(&("handle_traits", "[\"DialHandle\"]")),
+        "the declaration's own text reads back: {fields:?}"
+    );
+    assert!(
+        fields.contains(&("kind", "Dial")),
+        "and `kind`, which the family comparison also reads: {fields:?}"
+    );
+
+    // A file with no registration face is not in the record at all, and a face that spells none of the
+    // covered fields still gets a row — a reader that counts must see the whole family.
+    // 没有注册面的文件根本不在记录里，而一个没声明任何被覆盖字段的面照样有一行——要计数的读者必须看得见整个家族。
+    assert!(
+        !rows
+            .iter()
+            .any(|row| row.source == "src/lib.rs" || row.source == "lib.rs"),
+        "a non-face file has no row: {rows:?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
