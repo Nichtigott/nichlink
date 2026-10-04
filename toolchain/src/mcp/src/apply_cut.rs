@@ -123,6 +123,7 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
         // state the other reading of its request.
         // 切口只有一种读法：把这棵子树交出去。需要说出请求的另一种读法的是 `deepen`。
         alternative: false,
+        consumers: Vec::new(),
     })
 }
 

@@ -39,7 +39,8 @@
 | M4 W5-2 | affected 补计划层 | **完成** | 本轮 | `affected_tests::a_changed_face_names_the_plan_entries_that_target_it` |
 | M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
 | M4 W5-5 | check 失败按类型路由 | **完成** | 本轮 | `check_tests::a_red_routes_by_its_kind_rather_than_to_the_default_hint` |
-| M4 W5-1 / W5-3 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
+| M4 W5-3 | deepen 预览附消费方 diff | **完成** | 本轮 | `apply_consumers_tests::the_consumer_story_is_the_same_in_the_preview_and_after_the_write` |
+| M4 W5-1 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
@@ -668,3 +669,24 @@ names this face`"（沉默会被读成"根本没有计划"）；**没有计划�
 位置、且**不**落到断言检索（那里根本没有断言可搜）；坐标族路由到该面的**父级**比对；默认那一种保留原提示。
 **一处刻意的负断言**：名字里凑巧提到 offsets、但回复的 `why` 行不含族名词的失败测试**不得**被当成坐标的红
 ——路由的信号是这棵树自己的词汇，而不是测试名的联想。
+
+### W5-3 deepen 预览附消费方 diff（完成，本轮）
+
+**改动**：每次 `deepen` 的回复（**预览与落盘都带**）多两行消费方说法——
+`slots      the layer adds N filling option(s) inside \`Kind\`: …`（这一层提供的槽位填充选项）与
+`consumers  K of N graft plan entry(ies) target this face or its subtree (…) — this layer leaves every
+target and path alone, so those plans keep pointing where they point and gain the options above`。
+消费方＝**从面自己的文件之外读它的东西**：针对它/它子树的 graft 计划条目，以及填充它零件层槽位的那些。
+计划目录不存在的树只印 `slots` 一行（"没有消费方"不需要一句噪声）。
+
+**验收的实质**是"预览不是广告"，钉子就照这个写：`preview` 与 `applied` 两条回复的
+`slots`/`consumers` 行**逐字相等**。
+
+**它当场抓到一处真缺陷（这枚钉子的价值所在）**：预览在**副本**里跑，而副本按设计**跳过 `.nichlink`**
+（`preview::skipped_directory` 与 `target`/`.git` 同列）⇒ 我第一版在**工作目录**里读计划，于是预览说
+"没有计划针对这个面"、落盘说"1 of 1 条针对它"——**正是"预览是广告"那个缺陷**。修法：两半各读各的树——
+面取自工作树（被做深的那个面在那里），**计划取自项目**（入口在那里）。`deepen` 因此与 `promote` 一样
+同时拿到工作目录与项目根，签名与注释都写明理由。
+
+**顺带**：新代码把 `apply_tests.rs` 顶到 820 行代码行（超 800 的测试上限），把这条钉子拆进
+`apply_consumers_tests.rs`（`package` 提为 `pub(crate)` 复用）。

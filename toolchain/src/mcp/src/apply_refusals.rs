@@ -15,7 +15,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use crate::build_time::face_views;
+use crate::build_time::{declared_grafts, face_views, graft_plan_rows};
 
 use super::apply_cut;
 use super::{Action, EDITABLE_FIELDS, Outcome};
@@ -300,3 +300,94 @@ pub(super) fn refused_with_a_way_forward(error: String) -> String {
 #[cfg(test)]
 #[path = "apply_refusals_tests.rs"]
 pub(crate) mod apply_refusals_tests;
+
+/// What a change does to the tree's **consumers**, computed from the tree (audit `W5-3`).
+/// 一次改动对树的**消费方**做了什么，从树上算出（审计 `W5-3`）。
+///
+/// "Consumers" here are the two things that read this face from outside its own file: the **graft plan
+/// entries** that target it or its subtree, and whatever fills the slots its parts layer provides. A
+/// preview that showed the new file but not the consumers would be showing half the change — and the
+/// half it hid is the one a caller cannot see by reading the file it is about to write.
+/// 这里的"消费方"是从这个面自己的文件之外读它的两样东西：针对它或它子树的 **graft 计划条目**，以及填充
+/// 它零件层所提供的槽位的那些东西。一个只显示新文件、不显示消费方的预览，只显示了这次改动的一半——而它藏
+/// 起来的那一半，正是调用方靠读它即将写入的那个文件看不见的那一半。
+///
+/// Only **plans that exist** are reported: a tree with no plan directory pays nothing (the same
+/// ordering `affected`'s plan layer uses), and a face nothing targets says so rather than staying
+/// silent, because silence there would read as "the consumers were not checked".
+/// 只报**确实存在**的计划：没有计划目录的树不付任何代价（与 `affected` 的计划层同一个次序），而没有任何
+/// 条目针对的面会把这件事说出来，而不是保持沉默——那里的沉默会被读成"消费方没查过"。
+pub(super) fn consumer_diff(
+    work: &Path,
+    project: &Path,
+    namespace: &str,
+    node: &str,
+    kind: &str,
+    parts: &[(String, String)],
+) -> Vec<String> {
+    let mut lines = vec![format!(
+        "slots      the layer adds {} filling option(s) inside `{kind}`: {}",
+        parts.len(),
+        parts
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )];
+    // The plans are read from the **project**, never from the work directory: a preview copy skips
+    // `.nichlink` (`preview::skipped_directory`), so reading them there would make the preview say
+    // "no plan targets this face" and the write say the opposite.
+    // 计划读的是**项目**，绝不是工作目录：预览副本跳过 `.nichlink`（`preview::skipped_directory`），
+    // 在那里读会让预览说"没有计划针对这个面"、而写入说相反的话。
+    let plans = project
+        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join(nichlink_kernel::lexicon::EXTERNAL_GRAFT_DIR);
+    if !plans.is_dir() {
+        return lines;
+    }
+    // The faces come from the work tree (that is where the deepened face is) and the declaration from
+    // the project (that is where the entry is).
+    // 面取自工作树（被做深的那个面在那里），而声明取自项目（入口在那里）。
+    let Ok(faces) = face_views(work, namespace) else {
+        return lines;
+    };
+    let declared = declared_grafts(project);
+    let Ok(rows) = graft_plan_rows(project, &faces, declared.as_ref().ok()) else {
+        return lines;
+    };
+    let prefix = format!("{}/", node.trim_end_matches('/'));
+    let mut targeting: Vec<String> = rows
+        .iter()
+        .filter(|row| {
+            row.target_path
+                .as_deref()
+                .is_some_and(|path| path == node || path.starts_with(&prefix))
+        })
+        .map(|row| {
+            format!(
+                "{} targets {}",
+                row.selector,
+                row.target_path.as_deref().unwrap_or("-")
+            )
+        })
+        .collect();
+    targeting.sort();
+    targeting.dedup();
+    if targeting.is_empty() {
+        lines.push(format!(
+            "consumers  none of the {} graft plan entry(ies) here targets this face or its subtree, \
+             so this change moves no plan",
+            rows.len()
+        ));
+    } else {
+        lines.push(format!(
+            "consumers  {} of {} graft plan entry(ies) target this face or its subtree ({}) — this \
+             layer leaves every target and path alone, so those plans keep pointing where they point \
+             and gain the options above",
+            targeting.len(),
+            rows.len(),
+            targeting.join(", ")
+        ));
+    }
+    lines
+}

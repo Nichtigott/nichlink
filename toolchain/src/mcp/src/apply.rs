@@ -129,7 +129,15 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
             run_edit(target.work_dir(root), &namespace, arguments, action)
         }
         Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
-        Action::Deepen => run_deepen(target.work_dir(root), &namespace, arguments),
+        // `deepen`'s consumer story has two halves that live in different trees: the face it
+        // deepened is in the **work** directory (a copy, in a preview), while the graft plans it must
+        // name are in the **project** — the preview copy skips `.nichlink` by design. Passing both is
+        // what keeps the preview from telling a different consumer story than the write, which is the
+        // one thing a preview must never do (audit `W5-3`).
+        // `deepen` 的消费方说法有两半，住在两棵不同的树上：它做深的那个面在**工作**目录里（预览时是副本），
+        // 而它必须点名的 graft 计划在**项目**里——预览副本按设计跳过 `.nichlink`。两棵都传进去，才让预览
+        // 不讲述一个与写入不同的消费方故事，而那正是预览绝不能做的事（审计 `W5-3`）。
+        Action::Deepen => run_deepen(target.work_dir(root), root, &namespace, arguments),
         Action::Cut => apply_cut::run_cut(target.work_dir(root), arguments),
         // `promote` reads the record from the project root and rewrites source in the work
         // directory, so it is the one action that needs both — and the one that has to know
@@ -216,6 +224,16 @@ pub(crate) struct Outcome {
     /// "make it deeper" and what that one costs.
     /// 这次改动是否来自 `deepen`——它的回复还会说出"把它做深"的**另一种读法**及那种读法的代价。
     alternative: bool,
+    /// What this change does to the tree's **consumers**, computed from the tree (audit `W5-3`).
+    /// 这次改动对树的**消费方**做了什么，从树上算出（审计 `W5-3`）。
+    ///
+    /// Empty for an action that has no consumer story to tell. Filled by the executor rather than by
+    /// the report because the executor is the one holding the facts — and because the preview runs the
+    /// same executor on a copy, which is what makes the preview and the landed reply say the **same**
+    /// thing instead of two hand-kept variants of it.
+    /// 对"没有消费方故事可说"的动作是空的。由执行器而不是报告来填，因为事实在执行器手里——也因为预览在
+    /// 副本上跑的是同一个执行器，这正是预览与落盘回复说**同一件事**（而不是两句各自维护的话）的原因。
+    consumers: Vec<String>,
 }
 
 /// The face fields a request may carry, which is the set `overlay` matches by name.
@@ -399,6 +417,7 @@ pub(crate) fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result
         declaration: None,
         moved: false,
         alternative: false,
+        consumers: Vec::new(),
     })
 }
 
@@ -503,6 +522,7 @@ fn run_edit(
         declaration: None,
         moved: false,
         alternative: false,
+        consumers: Vec::new(),
     })
 }
 
@@ -549,6 +569,7 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         declaration: None,
         moved: true,
         alternative: false,
+        consumers: Vec::new(),
     })
 }
 
@@ -566,7 +587,12 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
 /// （`add`）作用在注册树上——于是"更深"只能被读成"它下面再挂一个面"。那条路会移动四类按出厂形状
 /// 钉死的断言、并让公开模块路径多一段，于是守住门的那一臂交不出东西、只写了一篇"为什么不可能"。
 /// 本动作加的是对象自己契约已经说到的那一层，只碰一个文件，树、公开路径与钉子都不动。
-fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome, String> {
+fn run_deepen(
+    root: &Path,
+    project: &Path,
+    namespace: &str,
+    arguments: &Value,
+) -> Result<Outcome, String> {
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
@@ -682,6 +708,7 @@ fn run_deepen(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
         declaration: None,
         moved: false,
         alternative: true,
+        consumers: consumer_diff(root, project, namespace, &face.path, &kind, &fields),
     })
 }
 
@@ -891,6 +918,15 @@ fn report(
         outcome.source.display(),
         faces.len()
     );
+    // Audit `W5-3`: the consumer story rides in **both** modes, because a preview that told a
+    // different story from the one that lands would be an advertisement rather than a preview. The
+    // executor computed it on whichever tree it ran on, so the two are the same computation.
+    // 审计 `W5-3`：消费方的说法**两种模式都带**，因为一个与落盘时说法不同的预览是广告而不是预览。执行器
+    // 在它实际跑的那棵树上算出了它，因此两边是同一次计算。
+    for line in &outcome.consumers {
+        reply.push_str(line);
+        reply.push('\n');
+    }
     if outcome.alternative && applied {
         // Audit `W5-7`: the two blocks below are a **decision aid** — they belong where the decision
         // is still open. Once the write has happened the caller has already chosen, so repeating the
@@ -939,9 +975,13 @@ fn report(
 mod apply_refusals;
 
 use apply_refusals::{
-    consequences, editable_fields_line, refused_with_a_way_forward, write_example,
+    consequences, consumer_diff, editable_fields_line, refused_with_a_way_forward, write_example,
 };
 
 #[cfg(test)]
 #[path = "apply_tests.rs"]
-mod apply_tests;
+pub(crate) mod apply_tests;
+
+#[cfg(test)]
+#[path = "apply_consumers_tests.rs"]
+mod apply_consumers_tests;

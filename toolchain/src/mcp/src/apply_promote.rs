@@ -290,6 +290,7 @@ pub(crate) fn run_promote(
         source: change.source,
         moved: true,
         alternative: false,
+        consumers: Vec::new(),
     })
 }
 
