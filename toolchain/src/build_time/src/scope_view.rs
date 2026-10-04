@@ -98,6 +98,26 @@ pub struct PruningRow {
     /// The parent the declaration spelled, as a Rust path, when published.
     /// 已发布时，声明拼出的父级（Rust 路径）。
     pub parent: Option<String>,
+    /// The sha256 of the face's own source bytes, when published (audit `W3-1`).
+    /// 该面自己那份源码字节的 sha256，已发布时才有（审计 `W3-1`）。
+    ///
+    /// `None` means the record predates the column. A reader that needs freshness compares this
+    /// against the file it can read now; the build never publishes a hash it did not compute from
+    /// the bytes it was looking at.
+    /// `None` 意为记录早于该列。需要新鲜度的读者拿它与此刻能读到的文件比对；构建从不发布一个不是从它当时
+    /// 看着的那份字节算出的散列。
+    pub source_hash: Option<String>,
+    /// The declaration's field fingerprint, when published (audit `W3-1`).
+    /// 声明字段的指纹，已发布时才有（审计 `W3-1`）。
+    pub fields: Option<String>,
+    /// The names the face's own file calls directly, when published (audit `W3-1`).
+    /// 该面自己那份文件直接调用的名字，已发布时才有（审计 `W3-1`）。
+    ///
+    /// The reader drops `-`, so a face that calls nothing reads as `None` — the same answer a
+    /// derivation gives for a file with no calls, which is what keeps the two paths comparable.
+    /// 读取方会滤掉 `-`，因此"什么都没调用"的面读出来也是 `None`——与推导对一份没有调用的文件给出的答案
+    /// 相同，正是这一点让两条路可比。
+    pub calls: Option<String>,
 }
 
 /// The build scope the last pipeline run published in `out_dir`.
@@ -238,6 +258,9 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
             kind: column(),
             registry_name: column(),
             parent: column(),
+            source_hash: column(),
+            fields: column(),
+            calls: column(),
         });
     }
     Ok(rows)

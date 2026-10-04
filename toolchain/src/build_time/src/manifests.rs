@@ -66,19 +66,74 @@ struct FaceColumns {
     kind: String,
     registry_name: String,
     parent: String,
+    /// The hash of the face's own source bytes (audit `W3-1`).
+    /// 该面自己那份源码字节的散列（审计 `W3-1`）。
+    source_hash: String,
+    /// The fingerprint of the declaration's fields (audit `W3-1`).
+    /// 声明字段的指纹（审计 `W3-1`）。
+    fields: String,
+    /// The names this file calls directly, comma-separated, `-` when it calls none.
+    /// 这份文件直接调用的名字，逗号分隔，一个都没有时写 `-`。
+    calls: String,
 }
 
 impl FaceColumns {
-    /// The four facts as this face spells them, with `-` where it names none.
-    /// 本面拼出的四项事实，未声明的写作 `-`。
-    fn declared(face: &FaceSyntax, kind: &str) -> Self {
+    /// The facts as this face spells them, with `-` where it names none.
+    /// 本面拼出的各项事实，未声明的写作 `-`。
+    fn declared(face: &FaceSyntax, kind: &str, source: &str) -> Self {
         let spelled = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
         Self {
             path: spelled(face.string("path")),
             kind: kind.to_owned(),
             registry_name: spelled(face.string("registry_name")),
             parent: spelled(face.path("parent")),
+            source_hash: nichlink_kernel::sha256_hex(source.as_bytes()),
+            fields: field_fingerprint(face, kind),
+            calls: called_names(source),
         }
+    }
+}
+
+/// The declaration's own fingerprint, over the fields it spells (audit `W3-1`).
+/// 声明自己的指纹，取自它写下的那些字段（审计 `W3-1`）。
+///
+/// The kernel's own field order is the enumerator, so a field the vocabulary does not carry
+/// cannot enter the fingerprint, and a field the face does not spell cannot either. `kind` is
+/// folded in because it is an identity input and is not always written down: two faces with the
+/// same fields and different kinds are different faces, and a record that hashed only what was
+/// spelled would call them equal.
+/// 以内核自己的字段顺序为枚举器，因此词表不携带的字段进不了这个指纹，面没写的字段同样进不了。`kind` 折在
+/// 里面，因为它是身份输入且并不总被写下来：字段相同、kind 不同的两个面是不同的面，而只散列"写下来的东西"的
+/// 记录会把它们判成相等。
+fn field_fingerprint(face: &FaceSyntax, kind: &str) -> String {
+    let mut declared: Vec<String> = nichlink_kernel::declaration::FACE_FIELD_ORDER
+        .iter()
+        .filter_map(|name| face.field(name).map(|raw| format!("{name}={raw}")))
+        .collect();
+    declared.push(format!("kind={kind}"));
+    declared.sort();
+    declared.dedup();
+    nichlink_kernel::sha256_hex(declared.join("\n").as_bytes())
+}
+
+/// The names one source file calls directly, sorted and deduplicated (audit `W3-1`).
+/// 一份源码文件直接调用的名字，排序去重（审计 `W3-1`）。
+///
+/// The rule is the kernel's `direct_calls`, the same one every reader in the bridge uses, so a
+/// record and a derivation cannot answer differently about what this file calls.
+/// 规则用的是内核的 `direct_calls`，也就是桥里每个读者用的那一条，因此记录与推导对"这份文件调用了什么"
+/// 不可能给出不同答案。
+fn called_names(source: &str) -> String {
+    let mut calls: Vec<String> = nichlink_kernel::source::function_symbols(source)
+        .into_iter()
+        .flat_map(|function| nichlink_kernel::source::direct_calls(&function.body, &function.name))
+        .collect();
+    calls.sort();
+    calls.dedup();
+    if calls.is_empty() {
+        "-".to_owned()
+    } else {
+        calls.join(",")
     }
 }
 
@@ -164,12 +219,20 @@ fn write_face_rows(
 ) -> Result<(), String> {
     rows.sort();
     rows.dedup();
-    let mut output = String::from("# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\n");
+    let mut output = String::from(
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\n",
+    );
     for (id, source, symbol, columns) in rows {
         writeln!(
             output,
-            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}",
-            columns.path, columns.kind, columns.registry_name, columns.parent
+            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            columns.path,
+            columns.kind,
+            columns.registry_name,
+            columns.parent,
+            columns.source_hash,
+            columns.fields,
+            columns.calls
         )
         .unwrap();
     }
@@ -239,7 +302,7 @@ fn visit_pruning_symbols(
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
                 let id = super::registry_identity::package_node_id(&relative, &kind);
                 let module = source_module_path(&relative);
-                let columns = FaceColumns::declared(&face, &kind);
+                let columns = FaceColumns::declared(&face, &kind, &source);
                 let mut found = false;
                 for item in source.lines().filter_map(parse_pruning_item) {
                     found = true;
