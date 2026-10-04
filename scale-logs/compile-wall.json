@@ -1,0 +1,23 @@
+{
+  "what": "W6-1 compile-wall attribution for a single-crate NichLink host, measured 2026-10-04",
+  "tree": "tools/gen_scale_tree.py <dir> <faces> --host (minimal faces: root_object + control_object with NoParts, one file per face in its own directory)",
+  "machine": "same checkout, --offline, debug profile, warm dependency cache unless noted",
+  "protocol": "cargo build (warm) -> touch src/lib.rs -> time cargo build = total; then time the build-script binary itself with cargo's own CARGO_MANIFEST_DIR/OUT_DIR/CARGO_PKG_NAME = buildrs; rustc share = total - buildrs; generated = bytes of generated_lib.rs",
+  "rows": [
+    {"faces": 103,   "total_s": 1.561,  "build_rs_s": 1.152,  "rustc_s": 0.409,  "generated_bytes": 127961},
+    {"faces": 1003,  "total_s": 11.656, "build_rs_s": 9.694,  "rustc_s": 1.962,  "generated_bytes": 1214713},
+    {"faces": 4644,  "total_s": 59.781, "build_rs_s": 45.534, "rustc_s": 14.247, "generated_bytes": 5609815},
+    {"faces": 10003, "total_s": 141.635,"build_rs_s": 103.885,"rustc_s": 37.750, "generated_bytes": 12049064}
+  ],
+  "cold": [
+    {"faces": 1003, "total_s": 91.120, "note": "rm -rf target first: this is the toolchain dependency compile plus the tree, so the fixed dependency cost is ~80 s"}
+  ],
+  "attribution": {
+    "build_script_share_at_10k": 0.733,
+    "rustc_share_at_10k": 0.267,
+    "build_script_scaling": "near linear: 1.15 / 9.69 / 45.53 / 103.89 s for 103 / 1003 / 4644 / 10003 faces",
+    "rustc_scaling": "super-linear: 0.41 / 1.96 / 14.25 / 37.75 s, ratio ~3.3x per 4.6x faces at the top",
+    "verdict_10k_under_5min": "met: 141.6 s warm, and ~222 s if the ~80 s cold dependency cost is added"
+  },
+  "not_reproduced": "the checklist's '4,641 faces in 15-18 min' is not reproduced by this generator: 4,644 minimal faces cost 59.8 s warm (91 s including a cold 1000-face dependency compile). A heavier face shape (parts/trait bodies per face) or a different invocation (cargo test per family) is what would move it there; the attribution above says the lever is the build script, not codegen."
+}
