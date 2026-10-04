@@ -70,14 +70,42 @@ fn registry_with(root: &Path, full: bool) -> Result<String, String> {
     match workspace::scope(root)? {
         Scope::Package(namespace) => {
             let member = Member::package(root, namespace);
-            registry_body(&member, &serde_json::json!({}))
+            registry_body(&member, &serde_json::json!({"full": full}))
         }
         Scope::Workspace(members) if full => {
-            let arguments = serde_json::json!({});
+            let arguments = serde_json::json!({"full": true});
             workspace::merge(root, &members, &arguments, registry_body)
         }
         Scope::Workspace(members) => Ok(members_and_faces(root, &members)),
         Scope::Unresolvable(reason) => Ok(workspace::unresolvable(root, &reason)),
+    }
+}
+
+/// One page of the list, for the caller that asked for the rows (audit `W2-1`).
+/// 清单的一页，给要那些行的调用方（审计 `W2-1`）。
+///
+/// The workspace case is answered by the merged full view: a page index across members would be a
+/// second coordinate system for the same tree, and the 50,000-face case this exists for is a single
+/// package.
+/// 工作区那一支由合并后的完整视图作答：跨成员的页索引会是同一棵树的第二套坐标，而这条条目为之存在的
+/// 五万面情形是单个包。
+pub(crate) fn registry_page(root: &Path, offset: usize, limit: usize) -> Result<String, String> {
+    match workspace::scope(root)? {
+        Scope::Package(namespace) => {
+            let member = Member::package(root, namespace);
+            match member.tree()? {
+                Tree::Published(tree) => Ok(render_published(&member.name, tree)),
+                Tree::Derived { faces, unparsable } => Ok(render_page(
+                    &member.name,
+                    faces,
+                    unparsable,
+                    &member.evidence_line(""),
+                    offset,
+                    limit,
+                )),
+            }
+        }
+        _ => registry(root),
     }
 }
 
@@ -154,15 +182,35 @@ fn faces_word(member: &Member) -> String {
 /// 证据在这里被选一次，下面两种渲染只共享命名空间那一行：它们用不同的事实作答，并且说出来。
 /// 一个在发布过的成员之上悄悄推导的主体会让本页的性能注记变成假话，因此这个分支是一个读者看得见
 /// 的 `match`。
-pub(crate) fn registry_body(member: &Member, _arguments: &Value) -> Result<String, String> {
+pub(crate) fn registry_body(member: &Member, arguments: &Value) -> Result<String, String> {
+    let flag = |key: &str| arguments.get(key).and_then(Value::as_bool) == Some(true);
+    let full = flag("full");
     match member.tree()? {
         Tree::Published(tree) => Ok(render_published(&member.name, tree)),
-        Tree::Derived { faces, unparsable } => Ok(render_registry(
+        // Audit `W2-1`: the census is the default and the rows are bought — by `full: true`, a page
+        // at a time (`offset`/`limit`).
+        // 审计 `W2-1`：普查是默认，行是**买**来的——`full: true`，一次一页（`offset`/`limit`）。
+        Tree::Derived { faces, unparsable } if !full => Ok(render_census(
             &member.name,
             faces,
             unparsable,
             &member.evidence_line(""),
         )),
+        Tree::Derived { faces, unparsable } => {
+            let offset = arguments.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let limit = arguments
+                .get("limit")
+                .and_then(Value::as_u64)
+                .map_or(PAGE_ROWS, |value| (value as usize).clamp(1, PAGE_ROWS));
+            Ok(render_page(
+                &member.name,
+                faces,
+                unparsable,
+                &member.evidence_line(""),
+                offset,
+                limit,
+            ))
+        }
     }
 }
 
@@ -231,44 +279,128 @@ pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<St
     })
 }
 
-/// One line per derived face, plus the namespace the identities live in.
-/// 每个推导出的面一行，外加这些身份所属的命名空间。
+/// How many level rows the census prints before withholding the rest.
+/// 普查在扣下其余之前印多少行层级。
+const CENSUS_LEVELS: usize = 20;
+
+/// How many face rows one page of the list carries.
+/// 清单的一页带多少行面。
+pub(crate) const PAGE_ROWS: usize = 200;
+
+/// The **census**: the tree's shape without its rows (audit `W2-1`).
+/// **普查**：树的形状，不带它的行（审计 `W2-1`）。
 ///
-/// The namespace heads the report because every id below it is meaningless
-/// without it: a reader comparing these rows against a built tree has to know
-/// which identity domain they are in.
-/// 命名空间写在报告开头，因为下面的每个 id 离开它都没有意义：把这些行与已构建的树对照的读取方
-/// 必须知道它们处在哪个身份域。
-fn render_registry(
+/// The measured reason: a package root's `registry` printed one line per face, so a 50,000-face tree
+/// answered with a 5 MB list whose first screen already said everything a reader needed to choose the
+/// next call. What stays here is the shape — how many faces, and how many sit at each level — and the
+/// rows are one word away (`full: true`), paged at [`PAGE_ROWS`].
+/// 量到的理由：包根的 `registry` 每个面印一行，因此五万面的树回的是 5 MB 的清单，而它第一屏就已经说完了
+/// 读者选择下一个调用所需的一切。留在这里的是形状——多少个面、每一层各有多少——而行离一个词
+/// （`full: true`），按 [`PAGE_ROWS`] 分页。
+fn render_census(namespace: &str, faces: &[FaceView], unparsable: &str, evidence: &str) -> String {
+    let mut output = header(namespace, faces.len(), unparsable, evidence);
+    if faces.is_empty() {
+        output.push_str("no registration face is declared under the package's src/\n");
+        return output;
+    }
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for face in faces {
+        let level = face
+            .path
+            .rsplit_once('/')
+            .map_or("<root>", |(above, _)| above);
+        *counts.entry(level).or_default() += 1;
+    }
+    output.push_str("level (path prefix) and how many faces sit directly under it:\n");
+    for (level, count) in counts.iter().take(CENSUS_LEVELS) {
+        output.push_str(&format!("  {level:<44} {count} face(s)\n"));
+    }
+    if counts.len() > CENSUS_LEVELS {
+        output.push_str(&crate::mcp::truncation::withheld(
+            counts.len() - CENSUS_LEVELS,
+            counts.len(),
+            CENSUS_LEVELS,
+            "level(s)",
+            "`full: true` prints the rows themselves; a deeper level is also `search --root`'s business",
+        ));
+        output.push('\n');
+    }
+    output.push_str(&format!(
+        "faces {} across {} level(s); `full: true` prints the rows, {PAGE_ROWS} per page and \
+         `offset: <n>` for the next\n",
+        faces.len(),
+        counts.len()
+    ));
+    output
+}
+
+/// The header every registry answer opens with: the namespace the identities live in, the evidence
+/// line, the files the derivation could not read, and the face count.
+/// 每条注册树答案开头的标头：身份所属的命名空间、证据行、推导读不了的文件、以及面的数量。
+fn header(namespace: &str, faces: usize, unparsable: &str, evidence: &str) -> String {
+    format!("namespace {namespace}\n{evidence}{unparsable}faces {faces}\n")
+}
+
+/// One page of the face list, for the reader that asked for the rows.
+/// 面清单的一页，给要那些行的读者。
+///
+/// Audit `W2-1`: the list is bought explicitly, and it arrives a page at a time so the answer stays a
+/// screenful even when the tree is 50,000 faces. Every page says which slice it is and names the call
+/// that prints the next one.
+/// 审计 `W2-1`：清单是显式购买的，而且一次一页，因此即使树有五万面，答案也还是一屏。每一页都说出它是哪
+/// 一段，并点名印出下一页的那次调用。
+fn render_page(
     namespace: &str,
     faces: &[FaceView],
     unparsable: &str,
     evidence: &str,
+    offset: usize,
+    limit: usize,
 ) -> String {
-    let mut output = format!(
-        "namespace {namespace}\n{evidence}{unparsable}faces {}\n",
-        faces.len()
-    );
-    for face in faces {
-        // An unresolved parent is named rather than hidden: the face is real,
-        // and the fact that its parent is not is the answer to "why is this node
-        // not in my tree".
-        // 未解析的父级被点名而不是藏起来：这个面是真的，而"它的父级不是"正是"为什么这个节点不在
-        // 我的树里"的答案。
-        let unresolved = if face.parent_resolved {
-            ""
-        } else {
-            "  parent-unresolved"
-        };
-        output.push_str(&format!(
-            "{:<40} {:<14} {:<38} {}{}\n",
-            face.path, face.kind, face.source, face.id, unresolved
-        ));
-    }
+    let mut output = header(namespace, faces.len(), unparsable, evidence);
     if faces.is_empty() {
         output.push_str("no registration face is declared under the package's src/\n");
+        return output;
+    }
+    let start = offset.min(faces.len());
+    let end = start.saturating_add(limit.max(1)).min(faces.len());
+    output.push_str(&format!("rows {}-{} of {}\n", start + 1, end, faces.len()));
+    for face in &faces[start..end] {
+        output.push_str(&face_row(face));
+    }
+    if end < faces.len() {
+        output.push_str(&crate::mcp::truncation::withheld(
+            faces.len() - end,
+            faces.len(),
+            limit.max(1),
+            "face(s)",
+            &format!(
+                "pass `offset: {end}` for the next page, or `registry --all-slim`-style narrowing \
+                 by `search --root`"
+            ),
+        ));
+        output.push('\n');
     }
     output
+}
+
+/// One row of the list, as the whole list and every page spell it.
+/// 清单的一行，整份清单与每一页都这样拼。
+fn face_row(face: &FaceView) -> String {
+    // An unresolved parent is named rather than hidden: the face is real,
+    // and the fact that its parent is not is the answer to "why is this node
+    // not in my tree".
+    // 未解析的父级被点名而不是藏起来：这个面是真的，而"它的父级不是"正是"为什么这个节点不在
+    // 我的树里"的答案。
+    let unresolved = if face.parent_resolved {
+        ""
+    } else {
+        "  parent-unresolved"
+    };
+    format!(
+        "{:<40} {:<14} {:<38} {}{}\n",
+        face.path, face.kind, face.source, face.id, unresolved
+    )
 }
 
 /// The record's own rows: an identity, a source, a symbol, and the scope's verdict.

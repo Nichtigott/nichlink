@@ -298,3 +298,86 @@ fn the_new_granularity_switches_are_advertised_and_the_registry_one_is_accepted(
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A wide tree's default answer is the **census**, and its size follows the levels, not the faces.
+/// 一棵很宽的树默认回的是**普查**，而它的大小跟层级走，不跟面数走。
+///
+/// Audit `W2-1`: the default printed one row per face, so a 50,000-face package answered with a
+/// multi-megabyte list whose first screen already decided the next call. The census is that first
+/// screen — how many faces, and how many sit at each level — and it is bought back with
+/// `full: true`. The load-bearing assertion is the **flatness**: doubling the faces must not grow
+/// the default answer, because that is what makes it hold at 50,000.
+/// 审计 `W2-1`：默认每个面印一行，因此五万面的包回的是几 MB 的清单，而它第一屏就已经决定了下一个调用。
+/// 普查就是那一屏——多少个面、每一层各有多少——而它由 `full: true` 买回。承重的断言是**拍平**：面数翻倍
+/// 不能让默认答案变大，正是这一条让它在五万面上成立。
+#[test]
+fn the_default_is_a_census_whose_size_follows_the_levels() {
+    fn wide(label: &str, per_directory: usize) -> PathBuf {
+        let root = fixture(label);
+        for index in 0..per_directory {
+            let directory = root.join(format!("src/control/object/child{index}"));
+            std::fs::create_dir_all(&directory).expect("child directory");
+            std::fs::write(
+                directory.join(format!("child{index}.rs")),
+                format!(
+                    "crate::control_object! {{\n    kind: Child{index},\n    parent: \
+                     crate::control::NODE_ID,\n}}\n"
+                ),
+            )
+            .expect("child face");
+        }
+        root
+    }
+    let small = wide("census-small", 4);
+    let large = wide("census-wide", 120);
+    let (small, large) = (
+        super::registry_brief(&small).expect("a census"),
+        super::registry_brief(&large).expect("a census"),
+    );
+    for (label, answer) in [("small", &small), ("wide", &large)] {
+        assert!(
+            answer.contains("level (path prefix)") && answer.contains("face(s)"),
+            "the {label} default is the census: {answer}"
+        );
+        assert!(
+            answer.contains("`full: true` prints the rows"),
+            "and it names the way to the rows: {answer}"
+        );
+        assert!(
+            answer.len() <= 2048,
+            "the {label} census is ≤2 KB: {} bytes",
+            answer.len()
+        );
+        assert!(
+            !answer.contains("control/object/child0/child0.rs"),
+            "the {label} default prints no row: {answer}"
+        );
+    }
+    // The level count is the same in both fixtures, so the answers are within a byte or two: the
+    // size follows the shape of the tree, not how many faces hang off it.
+    // 两个夹具的层级数相同，因此答案只差一两个字节：大小跟着树的形状走，而不是挂着多少个面。
+    let growth = large.len() as i64 - small.len() as i64;
+    assert!(
+        growth.abs() < 40,
+        "•120 faces must not grow the census (small {} vs wide {})",
+        small.len(),
+        large.len()
+    );
+
+    // And `full: true` is a page: at most 200 rows, with the cursor naming the next one.
+    // 而 `full: true` 是一页：最多 200 行，并带点名下一页的游标。
+    let page = super::registry_page(&wide("census-page", 260), 0, 200).expect("a page");
+    assert!(
+        page.contains("rows 1-200 of 261") && page.contains("withheld at the limit of 200"),
+        "the page is bounded and says which slice it is: {page}"
+    );
+    assert!(
+        page.contains("offset: 200"),
+        "and the cursor names the next page: {page}"
+    );
+    let second = super::registry_page(&wide("census-page-2", 260), 200, 200).expect("a page");
+    assert!(
+        second.contains("rows 201-261 of 261") && !second.contains("withheld"),
+        "the last page is short and withholds nothing: {second}"
+    );
+}

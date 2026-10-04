@@ -61,7 +61,7 @@ use crate::mcp::overlay::overlay;
 use crate::mcp::plugin::plugin;
 use crate::mcp::protocol::{error_response, success};
 use crate::mcp::read::read_source;
-use crate::mcp::registry::{registry, registry_brief};
+use crate::mcp::registry::registry_brief;
 use crate::mcp::search::search;
 use crate::mcp::source_index::{load_one, load_sources, required_path, resolve_root};
 use crate::mcp::trace::trace;
@@ -382,7 +382,12 @@ pub(crate) fn tools() -> Vec<Value> {
              trees are what that default leaves out: pass `full: true` for one section per member \
              under that member's own package name, as the build sees it. Point `root` at one member \
              for that package's own answer, which is always the whole tree.",
-            json!({"type":"object","properties":{"root":{"type":"string"},"full":{"type":"boolean","description":"virtual root: print each member's own tree instead of the member-to-faces default (default false)"}}}),
+            json!({"type":"object","properties":{
+                "root":{"type":"string"},
+                "full":{"type":"boolean","description":"print the face rows (default: the census — the count and how many sit at each level), one page at a time"},
+                "offset":{"type":"integer","description":"with `full`: the first row of this page (default 0)"},
+                "limit":{"type":"integer","minimum":1,"maximum":200,"description":"with `full`: rows per page (default 200, capped at 200)"}
+            }}),
         ),
         tool(
             "nichlink.explain",
@@ -971,7 +976,17 @@ fn registry_tool(root: &Path, arguments: &Value) -> Result<String, String> {
         return Ok(format!("no registration tree here yet\nnext   {entry}\n"));
     }
     if arguments.get("full").and_then(Value::as_bool) == Some(true) {
-        registry(root)
+        // Audit `W2-1`: the rows are bought, and they arrive a page at a time so a 50,000-face tree
+        // does not answer with a 5 MB list.
+        // 审计 `W2-1`：行是买来的，而且一次一页，因此五万面的树不会回一份 5 MB 的清单。
+        let offset = arguments.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let limit = arguments
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map_or(crate::mcp::registry::PAGE_ROWS, |value| {
+                (value as usize).clamp(1, crate::mcp::registry::PAGE_ROWS)
+            });
+        crate::mcp::registry::registry_page(root, offset, limit)
     } else {
         registry_brief(root)
     }

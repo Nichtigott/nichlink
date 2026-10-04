@@ -72,11 +72,11 @@ pub const SHAPES_SHORT: &str = "\
   add an object       -> `registry` -> `apply {action: \"add\"}` -> `consistency --specimen` -> `check`\n\
   deepen an object    -> `explain {node}` -> `apply {action: \"deepen\"}` -> `check`\n\
   move or merge       -> `affected` -> `why` (plan half) -> `grafts` -> `apply`\n\
-**Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the next clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
+**Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
 **`check`'s verdict is the first line of its reply** (`verdict  passed (cargo exit 0)`), not this client's exit code (`0` answered, `1` refused, `2` a usage error).\n\
 **Answer shape**: understanding -> `read --whole`; structural -> bounded.\n\
 One tool's page is `--list <tool>`; the long page is `--shapes`.\n\
-**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。答案形状：理解型⇒read --whole，结构型⇒有界。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
+**先把请求放进七种形状之一**：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。答案形状：理解型⇒read --whole，结构型⇒有界。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
 
 /// The handshake text: the capability map, the routing rule, and the one gate a writer must know.
 /// 握手文本：能力地图、路由规则、以及写者必须知道的那一道门。
