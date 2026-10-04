@@ -39,7 +39,7 @@ thread_local! {
     /// 因此生产环境里"这个会话"与"这个线程"是同一件事——而在一个**并行跑测试的进程**里，进程级账本正是两个
     /// 测试会互相抢的共享状态。那场争抢不是假设：它让 `the_bounds_are_said_once_…` 只在全量跑时失败
     /// （审计 `W2-2`）。
-    static SAID: RefCell<BTreeSet<String>> = RefCell::new(BTreeSet::new());
+    static SAID: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
 }
 
 /// Whether this is the first time this session is being told `key`; records it when it is.
