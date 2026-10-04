@@ -361,3 +361,7 @@ fn covered_faces(root: &Path, cut: &str) -> Vec<String> {
     covered.sort();
     covered
 }
+
+#[cfg(test)]
+#[path = "apply_cut_tests.rs"]
+pub(crate) mod apply_cut_tests;
