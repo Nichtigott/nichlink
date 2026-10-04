@@ -39,19 +39,46 @@
 
 ## 阶段 0：测量地基
 
-### 0-1 bench 进仓
+### 0-1 bench 进仓（规模 bench 已新写；两套既有 bench 确认可用）
 
 执行清单说"`scale-logs/gen_scale_tree.py`、`scale-logs/scale_bench.py` 移入 `tools/`"。**这两个文件
-在本检出不存**（`scale-logs/` 目录不存在，全盘也没有这两个名字）⇒ 规模 bench 的生成器与量器要**新写**，
-不是搬家。已在 `target/bench-scenarios/` 确认可用的是另外两套：`tools/nichlink-mcp-hardbug`
-（四类题配方 + 旁路 tokens 账 + `report`）与 S1–S7 夹具（`build-s*.sh` / `write-briefs.py` /
+在本检出不存**（`scale-logs/` 目录不存在，全盘也没有这两个名字）⇒ **新写**，不是搬家：
+`tools/gen_scale_tree.py`（按面数生成一棵规模题树：直接写 `src/`，不走 `new_project`/`apply`——生成器
+造规模，被测的是**读**那条路；生成的清单带空的 `[workspace]` 表，否则 Cargo 拒绝给包命名）与
+`tools/scale_bench.py`（五档 `t1:100 / t2:1000 / t3:5000 / t4:20000 / t5:50000`，每个读数 = 一次
+`--call` 的墙钟毫秒与回复字节，取 `--repeat` 次中位数，落 `scale-logs/scale-bench.json`）。
+
+**注意**：按维护者 2026-10-04 的指示 `*.py` 不入库，因此这两个脚本**只活在本地**；它们的**口径**写在
+本文件与脚本头部（可据此重建），而不是靠"仓库里有那个文件"。
+
+另外两套既有 bench 已确认可用：`tools/nichlink-mcp-hardbug`（四类题配方 + 旁路 tokens 账 + `report`；
+本轮 `build` 四类各建一棵并**自证**成功）与 S1–S7 夹具（`build-s*.sh` / `write-briefs.py` /
 `score-s*.py` / `axes2.py`）。
 
-### 0-3 基线落盘
+### 0-3 基线落盘：规模曲线（2026-10-04 实测）
 
-清单给的基线是四轴估算 §3（写入 175,959 / 未命中 17,683 / 命中 36,226 / 输出 9,824 / 成本
-291,967）。那份文档不在检出里，因此基线要**从会话日志重算**——方法已有（`tools/nichlink-mcp-hardbug
-tokens <session>`，或 `target/bench-scenarios/axes2.py`），语料是那 12 个会话。
+`tools/scale_bench.py --binary target/debug/nichlink-mcp --all --tiers t1:100,t2:1000,t3:5000
+--repeat 2`（本机，debug 二进制；中位数）：
+
+| 档 | 面数 | `registry` 默认 | `registry --full --limit 200` | `status` | `search` | `read` | `why` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| t1 | 101 | 317ms / **863 B** | 339ms / 13.8 KB | 142ms | 334ms | 71ms | 390ms |
+| t2 | 1001 | 2923ms / **866 B** | 3099ms / 26.9 KB | 874ms | 2966ms | 51ms | 2927ms |
+| t3 | 5001 | 14102ms / **866 B** | 14365ms / 26.9 KB | 3773ms | 14233ms | 51ms | 14517ms |
+
+**两条读数**：
+
+1. **W2-1 的"拍平"成立** ✓：默认 `registry` 的**字节数**在 101 / 1001 / 5001 面上是 863 / 866 / 866
+   ——它是普查（计数 + 逐层），不是清单；`--full` 也在 26.9 KB 封顶（200 行一页）。清单要求"50k 档
+   registry 默认 ≤2 KB"，按这条曲线它由**层级数**决定而与面数无关。
+2. **读路径是 O(面数)/次调用** ✗✗：`registry`/`search`/`why`/`status` 每次都重走一遍 `src/` 的推导，
+   317ms → 2.9s → 14.1s（≈2.8ms/面）⇒ **外推到 50k ≈ 140s**，与清单里"t4 读延迟 211s"是同一个
+   现象。只有 `read` 是平的（51ms，它只读一个文件）。**这就是 M3（记录路径）要消灭的东西**，而它现在
+   有了一台可复现的量器与一条基线。
+
+四轴预算基线（写入 175,959 / 未命中 17,683 / 命中 36,226 / 输出 9,824 / 成本 291,967）来自四轴估算
+§3，那份文档不在检出里，因此要在两臂重跑时**从会话日志重算**（方法已有：`tools/nichlink-mcp-hardbug
+tokens <session>` 或 `target/bench-scenarios/axes2.py`，语料是那 12 个会话）。
 
 ## 阶段 M1：信任清零
 
