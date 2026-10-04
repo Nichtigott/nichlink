@@ -410,3 +410,34 @@ check 343/4847 · apply 433/4579 · search 466/2282 · consistency 435/1329 ⇒ 
 3. `status` / `search` / `why` 随后；注意它们慢在 **`load_sources` 遍历源码**（函数与调用面），不是慢在
    面的推导——记录里没有函数级数据，那半边要另想办法（`function_manifest.tsv` 只有「面 → 符号」）。
 4. `check`/`verify` **永远 derive**（清单红线），不接记录。
+
+### W3-2 第一刀：发布路径也普查，并**显示记录本来就携带的**声明事实（本轮）
+
+**对着代码与真构建设施核到的三件事**（都写进注释与本节，免得下一轮再猜）：
+
+1. **记录真的会被写出来**：把 `examples/control-button` 的 build script 逼着重跑（`touch build.rs`）后，
+   新写下的 `pruning_manifest.tsv` 表头就是十列，`source_hash`/`fields` 是 64 位十六进制真值，
+   `calls` 是内核规则算出来的。**它落在 cargo 的 `OUT_DIR`**（`target/debug/build/<pkg>-<hash>/out/`），
+   而**桥读的是 `<包根>/target/nichlink/out/`**（`check`/CLI 刷新的位置）——同一棵树的两份记录住两个地方，
+   这一点以前没写下来过。本轮把新鲜的那份拷到桥读的位置，验到端到端。
+2. **发布路径过去既无界又少用**：`registry` 在已构建的树上每个面印一行、**没有分页**（W2-1 的普查只做在
+   推导那支），而且它的注里写着 `path`/`kind`/`registry_name`/`parent`"are derived facts and are not in
+   the record"——**这句从 2026-09-29 起就不成立**（剪枝行一直在发布它们）。这是一句**落后于行为**的自述。
+3. **`path` 常常是 `-`**：示例的三个面都没声明 `path`（逻辑路径是宏在运行期派生的），因此普查的层级只能
+   按**源码目录**数，答案里明写 `this record predates the \`path\` column` 之外还多一句
+   `level (source directory)`——两条坐标不混在一张计数表里。
+
+**改法**：`render_published` 接上 `full`/`offset`/`limit`（与推导那支同一套分页常量与
+`truncation::withheld` 出路）；默认给**普查**（层级计数，按已发布 `path`，缺失时按源码目录并明说）；
+`full: true` 给**分页的行**，每行附记录携带的 `path=`/`kind=`/`registry_name=`/`parent=`/`calls=`；
+`source_hash` 与 `fields` **不逐行重印**（64 位十六进制 × 每行 = 一屏噪声），注里说清它们发布在
+`pruning_manifest.tsv` 里、以及新鲜度是 `check` 的问题。注重写成两半：记录**携带**什么、读者**还要**推导
+什么（构建之后新增的面）。
+
+**端到端证据**（拷入本轮 build script 真写出的记录后，`--call registry --full` 对示例树的输出）：
+`kind=Slider/Control/Button`、`parent=crate::control::NODE_ID` **直接来自记录**——这些事实过去被那句话
+否认，读者只能自己推导。
+
+**钉子**：`published_tests::a_current_record_is_shown_and_its_levels_are_counted`（默认是普查且按**已发布
+的**逻辑路径计数、默认不印行；`full` 页显示五个声明列与 `calls`，`calls=-` 的情形也钉住；注里说出两个
+哈希住哪）、`records_that_do_not_describe_these_sources_are_reported_stale`（注的两半都断言）。

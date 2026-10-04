@@ -108,6 +108,32 @@ impl Fixture {
         );
     }
 
+    /// Publish the record a **current** build writes: the ten columns audit `W3-1` left the
+    /// pruning row carrying, so the answer can show the declaration facts instead of denying them.
+    /// 发布一份**当前**构建写下的记录：审计 `W3-1` 之后剪枝行携带的那十列，于是答案能显示声明事实，
+    /// 而不是否认它们。
+    fn publish_current_record(&self) {
+        let button = self.id("button/button.rs", "Button");
+        let slider = self.id("slider/slider.rs", "Slider");
+        self.publish(
+            "source_scope.tsv",
+            &format!(
+                "# mode\tauto\n# selected\t2\n# node\tsource\tmodule\n{button}\tbutton/button.rs\t\
+                 button\n{slider}\tslider/slider.rs\tslider\n"
+            ),
+        );
+        self.publish(
+            "pruning_manifest.tsv",
+            &format!(
+                "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\n\
+                 {button}\tbutton/button.rs\t-\troot/button\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\n\
+                 {slider}\tslider/slider.rs\t-\troot/control/slider\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\n",
+                hash = "a".repeat(64),
+                fingerprint = "b".repeat(64),
+            ),
+        );
+    }
+
     /// Publish the record a framework crate writes: every face in scope, and the
     /// build's own reason that there are none.
     /// 发布框架 crate 写的那份记录：每个面都在作用域内，以及构建自己给出的"一个都没有"的原因。
@@ -167,9 +193,19 @@ fn records_that_do_not_describe_these_sources_are_reported_stale() {
         report.contains("build stale (run `nichlink check`)"),
         "the freshness rule the records already have must be stated: {report}"
     );
+    // The note was rewritten on 2026-10-04: it used to say `path`/`kind`/`registry_name`/`parent`
+    // "are derived facts and are not in the record", which stopped being true on 2026-09-29 and was
+    // a self-description running **behind** the behaviour. What it has to name now is both halves —
+    // what the record carries and what a reader still has to derive.
+    // 这句话 2026-10-04 重写了：它过去说 `path`/`kind`/`registry_name`/`parent`"是推导事实、不在记录
+    // 里"，而那句从 2026-09-29 起就不成立，是一句**落后于**行为的自述。现在它要说两半——记录携带什么、
+    // 读者还要推导什么。
     assert!(
-        report.contains("note: these are the build's published rows"),
-        "the fields the record does not carry must be named: {report}"
+        report.contains("note: these are the build's **published** rows")
+            && report.contains("the declaration facts the record carries")
+            && report
+                .contains("What the record does **not** carry is a face added since the build"),
+        "the note names both what the record carries and what it does not: {report}"
     );
 }
 
@@ -408,4 +444,58 @@ fn an_unreadable_face_manifest_is_unknown_rather_than_empty() {
         !report.contains("no registration face is recorded"),
         "an unreadable manifest must not be reported as a package with no faces: {report}"
     );
+}
+
+/// The published rows show the declaration facts the record carries, and the census counts levels.
+/// 已发布的行显示记录携带的声明事实，而普查按层计数。
+///
+/// Audit `W2-1`/`W3-1` together: the published path used to print one unbounded row per face and to
+/// say in a note that `path`/`kind`/`registry_name`/`parent` were "not in the record" — while the
+/// record had published them since 2026-09-29. Both halves are pinned here: the default is a census
+/// counted from the **published** logical path, and `full: true` shows those columns.
+/// 审计 `W2-1`/`W3-1` 合起来：发布路径过去每个面无上限地印一行，并在注里说
+/// `path`/`kind`/`registry_name`/`parent`"不在记录里"——而记录从 2026-09-29 起就发布了它们。两半都在
+/// 这里钉住：默认是按**已发布的**逻辑路径计数的普查，`full: true` 显示那几列。
+#[test]
+fn a_current_record_is_shown_and_its_levels_are_counted() {
+    let fixture = fixture("current-record");
+    fixture.publish_current_record();
+    // `registry_brief` is the **default** the tool answers with (`registry` is the full one).
+    // `registry_brief` 是工具**默认**作答的那一支（`registry` 是完整的那一支）。
+    let census =
+        crate::mcp::registry::registry_brief(&fixture.root).expect("a published member answers");
+    assert!(
+        census.contains("level (logical path prefix)"),
+        "the census counts the published logical paths: {census}"
+    );
+    assert!(
+        census.contains("root/control")
+            && census.contains("`full: true` prints the rows, 200 per page"),
+        "and it names the level and the way to the rows: {census}"
+    );
+    assert!(
+        !census.contains("  selected     "),
+        "the default prints no row: {census}"
+    );
+
+    let full =
+        crate::mcp::registry::registry_page(&fixture.root, 0, 200).expect("the page answers");
+    assert!(
+        full.contains("rows 1-2 of 2")
+            && full.contains("path=root/button")
+            && full.contains("kind=Button")
+            && full.contains("registry_name=button")
+            && full.contains("parent=rc"),
+        "the rows show the declaration facts the record carries: {full}"
+    );
+    assert!(
+        full.contains("calls=helper") && full.contains("calls=-"),
+        "and the direct calls audit `W3-1` added, `-` where a file calls nothing: {full}"
+    );
+    assert!(
+        full.contains("`source_hash` and declaration `fields` fingerprint are published **in**")
+            && full.contains("freshness is"),
+        "the note says where the two hashes live and why they are not reprinted: {full}"
+    );
+    let _ = &fixture.namespace;
 }

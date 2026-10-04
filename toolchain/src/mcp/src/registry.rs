@@ -26,7 +26,7 @@
 
 use std::path::Path;
 
-use crate::build_time::FaceView;
+use crate::build_time::{FaceView, PruningRow};
 use nichlink_kernel::lexicon;
 use serde_json::Value;
 
@@ -94,7 +94,9 @@ pub(crate) fn registry_page(root: &Path, offset: usize, limit: usize) -> Result<
         Scope::Package(namespace) => {
             let member = Member::package(root, namespace);
             match member.tree()? {
-                Tree::Published(tree) => Ok(render_published(&member.name, tree)),
+                Tree::Published(tree) => {
+                    Ok(render_published(&member.name, tree, true, offset, limit))
+                }
                 Tree::Derived { faces, unparsable } => Ok(render_page(
                     &member.name,
                     faces,
@@ -185,8 +187,13 @@ fn faces_word(member: &Member) -> String {
 pub(crate) fn registry_body(member: &Member, arguments: &Value) -> Result<String, String> {
     let flag = |key: &str| arguments.get(key).and_then(Value::as_bool) == Some(true);
     let full = flag("full");
+    let offset = arguments.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(PAGE_ROWS, |value| (value as usize).clamp(1, PAGE_ROWS));
     match member.tree()? {
-        Tree::Published(tree) => Ok(render_published(&member.name, tree)),
+        Tree::Published(tree) => Ok(render_published(&member.name, tree, full, offset, limit)),
         // Audit `W2-1`: the census is the default and the rows are bought — by `full: true`, a page
         // at a time (`offset`/`limit`).
         // 审计 `W2-1`：普查是默认，行是**买**来的——`full: true`，一次一页（`offset`/`limit`）。
@@ -416,7 +423,13 @@ fn face_row(face: &FaceView) -> String {
 /// `source_scope.tsv` 的，后者只列收窄作用域选中的**根**（在 `examples/control-button` 上实测：
 /// 三个面的包只有两行）。把作用域那份清单读成树会少报，而最后一行说出推导投影住在哪里，因此没人
 /// 需要猜为什么没有 `path`。
-fn render_published(namespace: &str, tree: &PublishedTree) -> String {
+fn render_published(
+    namespace: &str,
+    tree: &PublishedTree,
+    full: bool,
+    offset: usize,
+    limit: usize,
+) -> String {
     let mut output = format!(
         "namespace {namespace}\n{}{}\n",
         tree.evidence_line(),
@@ -435,30 +448,132 @@ fn render_published(namespace: &str, tree: &PublishedTree) -> String {
     if tree.faces_unknown() {
         output.push_str(FACES_UNKNOWN);
         output.push('\n');
-    } else {
-        output.push_str(&format!("faces {}\n", rows.len()));
+        output.push_str(PUBLISHED_NOTE);
+        return output;
     }
-    for row in rows {
-        let verdict = if tree.selected(row) {
-            "selected"
-        } else {
-            "not-selected"
-        };
+    output.push_str(&format!("faces {}\n", rows.len()));
+    if full {
+        let start = offset.min(rows.len());
+        let end = start.saturating_add(limit.max(1)).min(rows.len());
+        output.push_str(&format!("rows {}-{} of {}\n", start + 1, end, rows.len()));
+        for row in &rows[start..end] {
+            output.push_str(&published_row(tree, row));
+        }
+        if end < rows.len() {
+            output.push_str(&crate::mcp::truncation::withheld(
+                rows.len() - end,
+                rows.len(),
+                limit.max(1),
+                "row(s)",
+                &format!("pass `offset: {end}` for the next page"),
+            ));
+            output.push('\n');
+        }
+    } else {
+        // Audit `W2-1` reaches the published path too: a built tree's `registry` used to print one
+        // row per face with no bound at all, which is the same defect the derived path had. The
+        // census is the same shape on both paths — the count and how many sit at each level — and it
+        // is counted from the **published** `path` column when the record carries one.
+        // 审计 `W2-1` 同样落到发布路径上：已构建的树的 `registry` 过去每个面印一行、毫无上限，与推导路径
+        // 当初的缺陷是同一个。普查在两条路上是同一个形状——总数与逐层计数——而记录携带 `path` 列时就用
+        // **已发布的**那一个来数。
+        let by_path = rows.iter().any(|row| row.path.is_some());
         output.push_str(&format!(
-            "  {:<13} {:<38} {:<44} {}\n",
-            verdict, row.id, row.source, row.symbol
+            "level ({}) and how many recorded faces sit directly under it:\n",
+            if by_path {
+                "logical path prefix"
+            } else {
+                "source directory; this record predates the `path` column"
+            }
+        ));
+        let mut counts: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for row in rows {
+            let level = match (&row.path, by_path) {
+                (Some(path), true) => path
+                    .rsplit_once('/')
+                    .map_or("<root>", |(above, _)| above)
+                    .to_owned(),
+                _ => row
+                    .source
+                    .rsplit_once('/')
+                    .map_or("<src>", |(dir, _)| dir)
+                    .to_owned(),
+            };
+            *counts.entry(level).or_default() += 1;
+        }
+        for (level, count) in counts.iter().take(CENSUS_LEVELS) {
+            output.push_str(&format!("  {level:<44} {count} face(s)\n"));
+        }
+        if counts.len() > CENSUS_LEVELS {
+            output.push_str(&crate::mcp::truncation::withheld(
+                counts.len() - CENSUS_LEVELS,
+                counts.len(),
+                CENSUS_LEVELS,
+                "level(s)",
+                "`full: true` prints the rows themselves",
+            ));
+            output.push('\n');
+        }
+        output.push_str(&format!(
+            "faces {} across {} level(s); `full: true` prints the rows, {PAGE_ROWS} per page and \
+             `offset: <n>` for the next\n",
+            rows.len(),
+            counts.len()
         ));
     }
-    if rows.is_empty() && !tree.faces_unknown() {
+    if rows.is_empty() {
         output.push_str("no registration face is recorded for this package — the sources may still declare `external_object!` faces, which this package's generated tree deliberately does not contain; `nichlink.search` derives and names them\n");
     }
-    output.push_str(
-        "note: these are the build's published rows (node, source, tracked symbol, scope verdict). \
-         `path`, `kind`, `registry_name` and `parent` are derived facts and are not in the record — \
-         `nichlink.explain` reports that derived projection.\n",
-    );
+    output.push_str(PUBLISHED_NOTE);
     output
 }
+
+/// One published row, with the declaration facts the record carries when it carries them.
+/// 一条已发布的行，记录携带声明事实时就带上它们。
+fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
+    let verdict = if tree.selected(row) {
+        "selected"
+    } else {
+        "not-selected"
+    };
+    let mut line = format!(
+        "  {:<13} {:<38} {:<44} {}",
+        verdict, row.id, row.source, row.symbol
+    );
+    fn spelled(value: &Option<String>) -> &str {
+        value.as_deref().unwrap_or("-")
+    }
+    line.push_str(&format!(
+        "  path={} kind={} registry_name={} parent={} calls={}",
+        spelled(&row.path),
+        spelled(&row.kind),
+        spelled(&row.registry_name),
+        spelled(&row.parent),
+        spelled(&row.calls)
+    ));
+    line.push('\n');
+    line
+}
+
+/// What a published answer is, and what a reader still has to derive.
+/// 一条已发布答案是什么，以及读者还需要推导什么。
+///
+/// The sentence here used to say `path`, `kind`, `registry_name` and `parent` "are derived facts and
+/// are not in the record" — untrue since 2026-09-29, when the pruning row began publishing them
+/// (audit `W3-1` then added the source hash, the declaration fingerprint and the direct calls). It
+/// is a self-description that ran **behind** the behaviour, which is the same defect as one that
+/// runs ahead of it: a reader believed the columns were not there and derived them by hand.
+/// 这句话过去说 `path`、`kind`、`registry_name`、`parent`"是推导事实、不在记录里"——从 2026-09-29 剪枝行
+/// 开始发布它们起就不成立（审计 `W3-1` 又加了源码哈希、声明指纹与直接调用名）。这是一句**落后于**行为的
+/// 自述，与"跑在行为前面"的自述是同一个缺陷：读者以为那几列不在，于是手工推导。
+const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. Each row also shows \
+     the declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`) and the \
+     names its file calls (`calls`); `-` means the declaration named none. The per-face \
+     `source_hash` and declaration `fields` fingerprint are published **in** `pruning_manifest.tsv` \
+     and are not reprinted here — a 64-hex column per row is a screenful of noise, and freshness is \
+     `nichlink.check`'s question. What the record does **not** carry is a face added since the build: \
+     one it has never seen is `nichlink.search`'s to derive.\n";
 
 #[cfg(test)]
 #[path = "registry_tests.rs"]
