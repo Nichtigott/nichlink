@@ -739,7 +739,9 @@ fn catalogue_entry() -> Value {
          列出这个桥的整个能力面：不给参数 ⇒ 每个工具一行（名字、它接受的键、`*` = 必填）；\
          `tool: \"nichlink.consistency\"` ⇒ 那个工具的**完整**描述与 schema（即 `--list <tool>`）。",
         json!({"type":"object","properties":{
-            "tool":{"type":"string","description":"a tool name from the no-argument listing; omit it to list them all"}
+            "tool":{"type":"string","description":"a tool name from the no-argument listing; omit it to list them all"},
+            "full":{"type":"boolean","description":"the whole description, not the bounded page"},
+            "slim":{"type":"boolean","description":"with no `tool`: the thirteen entry tools"}
         }}),
     )
 }
@@ -754,16 +756,14 @@ fn catalogue_entry() -> Value {
 /// 留在这里的是决定**要不要调它**与**传什么**的东西。
 const ADVERTISED_CHECK: &str = "\
 **Runs** `cargo test` on one face and puts the run's own verdict on the reply's first line \
-(`verdict  passed (cargo exit 0)` / `failed (exit 101)`) — never this client's exit code. `face` is `default` (what omitting it runs), `all`, or one feature name; naming one is still \
-the point, because a defect compiled only under a non-default feature cannot fail on the default \
-face. The reply also carries a sampled whole-tree census for \"what else is wrong here\" \
-(`census: true` for the whole table). Full text: `nichlink_tools {tool: \"nichlink.check\"}`. \
-跑一个面的 `cargo test`，判定在回复第一行；`face` 为 `default`（缺省即它）/`all`/某个特性名。";
+(`verdict  passed (cargo exit 0)` / `failed (exit 101)`) — never this client's exit code. `face` is \
+`default` (what omitting it runs), `all`, or a feature name: a defect compiled only under a \
+non-default feature cannot fail on the default face. It also carries a sampled whole-tree census.";
 
 const ADVERTISED_APPLY: &str = "\
 **The only write path** for this tree's registration faces. Seven actions in two classes: \
-`add`/`deepen`/`cut`/`promote` are **additive** (declarations; a hand-written face is a legal \
-subject), `edit`/`rename`/`delete` are **rewrites** (the face's own file; generated faces only). \
+`add`/`deepen`/`cut`/`promote` are **additive** (a hand-written face is fine), \
+`edit`/`rename`/`delete` are **rewrites** (generated faces only). \
 **Previewed unless `apply: true`**; `delete`/`promote` also need `confirm: true`.";
 
 /// The slim schema of an advertised tool: the keys that decide the call, one line each.
@@ -784,17 +784,17 @@ fn advertised_schema(tool: &str) -> Value {
             "root":{"type":"string"}
         }}),
         "nichlink.apply" => json!({"type":"object","properties":{
-            "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: the file (generated only)"},
+            "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: generated files"},
             "node":{"type":"string","description":"edit/rename/delete/deepen: the face"},
-            "parent":{"type":"string","description":"add: parent (default: the root)"},
-            "fields":{"type":"object","description":"the face's fields; strings except `needs_registry`; `module` is a bare snake_case name","properties":{"needs_registry":{"type":"boolean"}},"additionalProperties":{"type":"string"}},
-            "inside":{"type":"object","description":"deepen: the layer to add","properties":{"parts":{"type":"object","additionalProperties":{"type":"string"}}},"required":["parts"]},
+            "parent":{"type":"string","description":"add: parent (default root)"},
+            "fields":{"type":"object","description":"the face's fields; strings except `needs_registry`; `module` is bare snake_case","properties":{"needs_registry":{"type":"boolean"}},"additionalProperties":{"type":"string"}},
+            "inside":{"type":"object","description":"deepen: the layer","properties":{"parts":{"type":"object","additionalProperties":{"type":"string"}}},"required":["parts"]},
             "cut":{"type":"string","description":"cut: the face handed over (`crate::…::NODE_ID`)"},
             "graft":{"type":"string","description":"cut: what replaces it"},
             "to":{"type":"string","description":"cut: range end"},
-            "full":{"type":"boolean","description":"cut: the replacement covers the subtree"},
-            "selector":{"type":"string","description":"promote: the record directory to land"},
-            "implementation":{"type":"string","description":"promote: the implementation crate"},
+            "full":{"type":"boolean","description":"cut: covers the subtree"},
+            "selector":{"type":"string","description":"promote: the record to land"},
+            "implementation":{"type":"string","description":"promote: the crate"},
             "apply":{"type":"boolean","description":"false previews; true writes"},
             "full":{"type":"boolean","description":"print every face of the tree, not the census and the changed one"},
             "confirm":{"type":"boolean","description":"delete/promote: must be true"},
@@ -1136,15 +1136,29 @@ pub(crate) fn closure(closed: bool, remaining: &[String]) -> String {
 /// 它读的是**同一份**目录、印的是 `--list` 印的那张**同一份**一行式清单（`client::list_tool_lines`）与
 /// `--list <tool>` 印的**同一页**（`client::describe_tool`），因此广告与手册不可能漂移：各自只有一份实现。
 fn catalogue(_root: &Path, arguments: &Value) -> Result<String, String> {
-    match arguments.get("tool").and_then(Value::as_str) {
-        Some(name) => crate::mcp::client::describe_tool(name).ok_or_else(|| {
-            format!(
-                "`{name}` is not a tool this bridge has; call `nichlink_tools` with no `tool` to list \
-                 them, or `--list` for the same list (plus the workflow table)"
-            )
-        }),
-        None => Ok(crate::mcp::client::list_tool_lines().join("\n") + "\n"),
-    }
+    let flag = |key: &str| arguments.get(key).and_then(Value::as_bool) == Some(true);
+    let Some(name) = arguments.get("tool").and_then(Value::as_str) else {
+        return Ok(if flag("slim") {
+            crate::mcp::client::slim_tools_page()
+        } else {
+            crate::mcp::client::list_tool_lines().join("\n") + "\n"
+        });
+    };
+    // `full: true` prints the whole description (audit `W2-6`); the default page is bounded and says
+    // so, so the manual is requested rather than paid for by every session.
+    // `full: true` 印完整描述（审计 `W2-6`）；默认页有界并且自己说出来，因此手册是被**索取**的，而不是
+    // 每个会话都为它付费。
+    let page = if flag("full") {
+        crate::mcp::client::describe_tool_fully(name)
+    } else {
+        crate::mcp::client::describe_tool(name)
+    };
+    page.ok_or_else(|| {
+        format!(
+            "`{name}` is not a tool this bridge has; call `nichlink_tools` with no `tool` to list \
+             them, or `--list` for the same list (plus the workflow table)"
+        )
+    })
 }
 
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {

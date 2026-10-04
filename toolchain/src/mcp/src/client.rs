@@ -252,15 +252,83 @@ fn visit_keys(schema: Option<&Value>, names: &mut Vec<String>, required: &mut Ve
     }
 }
 
-/// One tool's whole description, for the caller that needs the shape the one-line list truncates.
-/// 一个工具的完整描述，供需要"一行式清单所截掉的那部分形状"的调用方使用。
+/// How much of one tool's description the **default** discovery page prints, in bytes.
+/// **默认**发现页印一个工具描述多少字节。
 ///
-/// The round measured what the truncation costs: the `apply` description already spells out that the
-/// values live under `fields` and that every value must be a string, and an arm still spent four
-/// refusals discovering it, because the one-shot client only ever showed the first sentence.
-/// 那一轮量出了截断的代价：`apply` 的描述本来就写明"取值在 `fields` 下、每个值必须是字符串"，而一个臂
-/// 仍花了四次被拒才发现它——因为一次性客户端从来只显示第一句。
+/// Audit `W2-6` resolved the two entries that looked contradictory: `W1-4` says the long text moves
+/// *into* `--list`, `W2-6` says the discovery payload halves. Both hold if the page is **bounded by
+/// default and unbounded on request** — the text still lives here (nothing moved out), and the
+/// default call pays for the part that decides whether to call the tool. The number is set so the
+/// measured page for `why` lands near the ratio `W2-6` asked for.
+/// 审计 `W2-6` 把两条看起来矛盾的条目解开了：`W1-4` 说长文**迁入** `--list`，`W2-6` 说发现载荷减半。
+/// 两者同时成立，只要这一页**默认有界、按需无界**——长文仍住在这里（没有搬走），而默认那次调用只为
+/// "要不要调这个工具"付费。这个数字是按 `why` 的实测页落在 `W2-6` 要的比例附近定的。
+const DISCOVERY_LIMIT: usize = 250;
+
+/// The thirteen tools the seven shapes enter through, in the catalogue's own order.
+/// 七种形状进入时用到的十三个工具，按目录自己的顺序。
+///
+/// Audit `W2-7`: a session that needs a second instrument should not have to read the whole
+/// catalogue again. This is that set — the union of the shapes' entry calls in
+/// `SHAPES_SHORT` — and it is a **view**, not a second catalogue: `--list` still lists every tool.
+/// 审计 `W2-7`：一个会话需要第二件仪器时，不该把整份目录再读一遍。这就是那个集合——`SHAPES_SHORT`
+/// 里七种形状入口调用的并集——而它是一**视图**，不是第二份目录：`--list` 仍列出每个工具。
+pub const COMMON_TOOLS: &[&str] = &[
+    "nichlink.check",
+    "nichlink.apply",
+    "nichlink.new_project",
+    "nichlink.registry",
+    "nichlink.search",
+    "nichlink.locate",
+    "nichlink.read",
+    "nichlink.callgraph",
+    "nichlink.why",
+    "nichlink.consistency",
+    "nichlink.explain",
+    "nichlink.affected",
+    "nichlink.grafts",
+];
+
+/// One tool's discovery page: its keys, its decision text, and the way to the rest.
+/// 一个工具的发现页：它的键、它的决策文本，以及拿到其余部分的出路。
+///
+/// The round measured what unbounded discovery costs (`--list` at 17 KB, read by every session and
+/// referenced by none) **and** what truncation costs (an arm spent four refusals on `apply`, whose
+/// description already spelled the shape out). The resolution is the same one every other bounded
+/// answer here uses: print what decides the call, say that more exists, and name the call that
+/// prints it — `--list <tool> --full`.
+/// 那一轮既量到了无界发现的代价（`--list` 17 KB，每场都读、无一引用），也量到了截断的代价（一个臂在
+/// `apply` 上白吃四次被拒，而它的描述本就写明了形状）。解法与这里每一条有界答案相同：印出决定这次调用的
+/// 东西、说明还有更多、并点名印出它的那次调用——`--list <tool> --full`。
 pub fn describe_tool(name: &str) -> Option<String> {
+    describe_tool_within(name, DISCOVERY_LIMIT)
+}
+
+/// One tool's **whole** description, for the caller that asked for it by name.
+/// 一个工具的**完整**描述，供按名字要它的调用方使用。
+pub fn describe_tool_fully(name: &str) -> Option<String> {
+    describe_tool_within(name, usize::MAX)
+}
+
+/// The thirteen-tool discovery view, one line each, plus where the other fifteen are.
+/// 十三件工具的发现视图，每个一行，外加其余十五个在哪。
+pub fn slim_tools_page() -> String {
+    let mut lines = vec![format!(
+        "{} tools the seven shapes enter through (one line each; `*` = required):",
+        COMMON_TOOLS.len()
+    )];
+    lines.extend(short_lines(|name| COMMON_TOOLS.contains(&name)));
+    lines.push(format!(
+        "the other {} tool(s) — `--list` lists them all, `--list <tool>` prints one page\
+",
+        crate::mcp::tools::tools().len() - COMMON_TOOLS.len()
+    ));
+    lines.join("\n")
+}
+
+/// The page itself, with the description kept inside `limit` bytes.
+/// 页面本身，描述保持在 `limit` 字节之内。
+fn describe_tool_within(name: &str, limit: usize) -> Option<String> {
     let wanted = resolve_name(name);
     crate::mcp::tools::tools().into_iter().find_map(|tool| {
         let tool_name = tool.get("name")?.as_str()?;
@@ -296,9 +364,47 @@ pub fn describe_tool(name: &str) -> Option<String> {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        Some(format!(
-            "{tool_name}\n    keys: {keys}{legend}\n{description}"
-        ))
+        // The bound is stated with its way out, like every other bounded answer here: a reader is
+        // told how much was withheld and which call prints it. The cut prefers a sentence end so the
+        // page reads as a page rather than as a broken line — but it never goes below half the
+        // budget looking for one.
+        // 上限连同出路一起说出来，与本处每条有界答案一致：读者被告知扣下多少、以及哪次调用印出它。切点
+        // 优先落在句末，好让这一页读起来像一页而不是断掉的一行——但为了找句末最多只退到预算的一半。
+        // A truncation costs a call, so it has to be worth one: the page is bounded only when that
+        // saves at least 44% of the text (the withheld line is a fixed cost, and on a description
+        // that only just exceeds the budget it would eat the saving). Otherwise the whole text is
+        // printed — a page that is shorter by a tenth and costs a second call is worse than a longer
+        // one that answers.
+        // 一次截断要花掉一次调用，因此它得值那一次：只有当省下至少 44% 文本时才收窄这一页（那句截断说明是
+        // 固定成本，在刚过预算的描述上会把省下的吃掉）。否则整段印出来——短十分之一、却要多花一次调用的页面，
+        // 比长一点但能作答的页面更糟。
+        let shown = if description.len() > limit {
+            let mut cut = limit;
+            while cut > 0 && !description.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            if let Some((at, _)) = description[..cut].rmatch_indices(['.', ';', '\n']).next()
+                && at >= limit / 2
+            {
+                cut = at + 1;
+            }
+            let withheld = crate::mcp::truncation::withheld(
+                description.len() - cut,
+                description.len(),
+                limit,
+                "byte(s) of this description",
+                &format!("`--list {tool_name} --full` prints all of it"),
+            );
+            let candidate = format!("{}\n{withheld}", &description[..cut]);
+            if candidate.len() * 100 <= description.len() * 56 {
+                candidate
+            } else {
+                description.to_owned()
+            }
+        } else {
+            description.to_owned()
+        };
+        Some(format!("{tool_name}\n    keys: {keys}{legend}\n{shown}"))
     })
 }
 
@@ -327,10 +433,25 @@ pub fn resolve_name(spelled: &str) -> String {
 /// 每个工具一行：名字、描述第一小句，以及它接受的键（`*` = 必填），这样调用方不必靠猜键名、再花一次
 /// 被拒来学会它。
 pub fn list_tool_lines() -> Vec<String> {
+    short_lines(|_| true)
+}
+
+/// The short catalogue lines for the tools `wanted` selects.
+/// `wanted` 选中的那些工具的短目录行。
+///
+/// One implementation for `--list` and the thirteen-tool view (`--all-slim`), because two renderings
+/// of "name, what it answers, what it takes" is how the two views would start disagreeing about the
+/// same tool.
+/// `--list` 与十三件工具视图（`--all-slim`）共用一份实现，因为"名字、它答什么、它收什么"的两份渲染
+/// 正是两个视图开始对同一个工具各说各话的方式。
+fn short_lines(wanted: impl Fn(&str) -> bool) -> Vec<String> {
     crate::mcp::tools::tools()
         .into_iter()
         .filter_map(|tool| {
             let name = tool.get("name")?.as_str()?.to_owned();
+            if !wanted(&name) {
+                return None;
+            }
             let description = tool
                 .get("description")
                 .and_then(Value::as_str)
@@ -467,13 +588,27 @@ pub fn run_client(arguments: &[String]) -> Client {
         // 截掉的形状"就能调用。
         "--list" | "-l" if arguments.get(1).is_some_and(|name| !name.starts_with('-')) => {
             let name = arguments.get(1).map(String::as_str).unwrap_or_default();
-            match describe_tool(name) {
+            // `--full` is the way back to the whole description (audit `W2-6`): the default page is
+            // bounded, so the reader that needs the manual asks for it by name instead of paying for
+            // it in every session.
+            // `--full` 是回到完整描述的路（审计 `W2-6`）：默认页有界，因此需要手册的读者按名字要它，
+            // 而不是每个会话都为它付费。
+            let full = arguments.iter().any(|flag| flag == "--full");
+            let page = if full {
+                describe_tool_fully(name)
+            } else {
+                describe_tool(name)
+            };
+            match page {
                 Some(text) => Client::Called(emit_or_stop(&text).unwrap_or(0)),
                 None => {
                     eprintln!("unknown tool `{name}`; --list names them all");
                     Client::Called(1)
                 }
             }
+        }
+        "--list" | "-l" if arguments.iter().any(|flag| flag == "--all-slim") => {
+            Client::Called(emit_or_stop(&slim_tools_page()).unwrap_or(0))
         }
         "--list" | "-l" => {
             for block in std::iter::once(SHAPES_SHORT.to_owned())

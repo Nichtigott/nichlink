@@ -56,7 +56,7 @@ fn the_list_is_the_catalogue_one_entry_each() {
     // refusals on `apply`: its description already spelled the shape out.
     // `--list <tool>` 是不截断的形态，因为正是"一行式清单"让一个臂在 `apply` 上白吃四次被拒：它的描述
     // 本来就把形状写清楚了。
-    let apply = describe_tool("apply").expect("a described tool");
+    let apply = describe_tool_fully("apply").expect("a described tool");
     // 用描述里**真实存在**的那半句（我第一次钉的是自己编的句子 ✗）：`apply` 的描述写明除
     // `needs_registry` 外每个 `fields` 值都是字符串。
     assert!(
@@ -197,7 +197,9 @@ fn the_table_does_not_read_the_exit_code_as_the_verdict() {
 /// `--list check` 说明判定落在哪一行、以及客户端的退出码是什么意思，因为量到的缺陷正是 agent 把退出码当判定。
 #[test]
 fn the_check_description_names_the_verdict_line_and_the_exit_code() {
-    let check = describe_tool("check").expect("the check tool is described");
+    // Audit `W2-6` bounded the **default** page, so a pin about the manual asks for the manual.
+    // 审计 `W2-6` 把**默认**页收成有界，因此关于手册的钉子按名字要手册。
+    let check = describe_tool_fully("check").expect("the check tool is described");
     for expected in [
         "The reply's first line is the run's verdict",
         "verdict  passed (cargo exit 0)",
@@ -1026,4 +1028,102 @@ fn the_catalogue_tool_resolves_by_its_advertised_name() {
     .expect_err("an unknown name is refused, not invented");
     assert!(unknown.contains("not a tool this bridge has"), "{unknown}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The discovery page is bounded **and** the manual is one flag away, for every tool.
+/// 发现页有界，而手册离一个开关，对每个工具都成立。
+///
+/// Audit `W2-6` resolved a pair of entries that read as contradictory (`W1-4`: the long text moves
+/// into `--list`; `W2-6`: the discovery payload halves). The resolution is that the page is bounded
+/// by default and unbounded on request, and this pin holds both halves at once over the **whole**
+/// catalogue: the default never grows the text, the ratio holds wherever there was something to
+/// withhold, and every truncation names the call that prints the rest.
+/// 审计 `W2-6` 解开了一对读起来矛盾的条目（`W1-4`：长文迁入 `--list`；`W2-6`：发现载荷减半）。解法是
+/// "默认有界、按需无界"，而这条钉子在**整份**目录上同时钉两半：默认页从不把文本变长、在真有东西可扣的
+/// 地方比例成立、每次截断都点名印出其余部分的那次调用。
+#[test]
+fn every_discovery_page_is_bounded_with_a_way_to_the_whole_text() {
+    let mut truncated = 0usize;
+    for entry in crate::mcp::tools::tools() {
+        let name = entry["name"].as_str().expect("a name");
+        let short = describe_tool(name).expect("a default page");
+        let full = describe_tool_fully(name).expect("the whole page");
+        assert!(
+            short.len() <= full.len() + 1,
+            "`{name}`: the default page is not the longer one ({} vs {})",
+            short.len(),
+            full.len()
+        );
+        if short == full {
+            // The rule is "bounded only when bounding is worth a call": a description that just
+            // exceeds the budget is printed whole rather than shortened by a tenth at the price of
+            // a second call. Such a tool is `continue`d here, and the count below keeps the ratio
+            // from passing vacuously.
+            // 规则是"只有收窄值一次调用时才收窄"：刚过预算的描述整段印出，而不是短十分之一、却要再花一次
+            // 调用。这样的工具在这里跳过，而下面的计数保证比例不是空过。
+            continue;
+        }
+        truncated += 1;
+        assert!(
+            (short.len() as f64) <= (full.len() as f64) * 0.6,
+            "`{name}`: the discovery page is ≤60% of the manual ({} vs {})",
+            short.len(),
+            full.len()
+        );
+        assert!(
+            short.contains("--full") && short.contains("withheld at"),
+            "`{name}`: the truncation names its way out: {short}"
+        );
+        assert!(
+            !full.contains("withheld at"),
+            "`{name}`: the manual withholds nothing"
+        );
+    }
+    assert!(
+        truncated >= 3,
+        "the ratio is exercised, not vacuous: only {truncated} tool(s) were bounded"
+    );
+}
+
+/// The thirteen-tool view is one call, is small, and says where the rest are.
+/// 十三件工具的视图是一次调用、很小，并且说出其余的在哪儿。
+///
+/// Audit `W2-7`: a session's second instrument should not cost the whole catalogue again. The view
+/// is a selection over the **same** short-line implementation, so it cannot disagree with `--list`
+/// about a tool they both print.
+/// 审计 `W2-7`：一个会话的第二件仪器不该再花掉整份目录。这个视图是**同一份**短行实现上的选择，因此
+/// 它与 `--list` 不可能对两者都印的同一个工具各说各话。
+#[test]
+fn the_thirteen_tool_view_is_one_small_call() {
+    let page = super::slim_tools_page();
+    assert!(
+        page.len() <= 3250,
+        "the slim view is a screenful: {} bytes",
+        page.len()
+    );
+    assert_eq!(
+        super::COMMON_TOOLS.len(),
+        13,
+        "the view is the thirteen the shapes enter through"
+    );
+    for name in super::COMMON_TOOLS {
+        assert!(
+            page.contains(&format!("{name} — ")),
+            "`{name}` is in the view"
+        );
+    }
+    assert!(
+        page.contains("lists them all"),
+        "and the page says where the other tools are: {page}"
+    );
+    // The same lines `--list` prints, for the tools both show: one implementation, two selections.
+    // 两者都显示的工具，行文与 `--list` 一致：一份实现，两种选择。
+    let all = list_tool_lines();
+    for name in super::COMMON_TOOLS {
+        let from_all = all
+            .iter()
+            .find(|line| line.starts_with(&format!("{name} — ")))
+            .expect("`--list` has every tool");
+        assert!(page.contains(from_all.as_str()), "{from_all}");
+    }
 }
