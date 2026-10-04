@@ -37,6 +37,7 @@ pub(crate) use support::tree_census;
 // "what does this declaration declare" rather than two (audit `W5-6`).
 // 写入路径的家族判定所读的形状词汇，重导出以便"这条声明声明了什么"只有一份拼写而不是两份（审计 `W5-6`）。
 pub(crate) use support::declared_shape;
+pub(super) use support::deviations;
 
 use support::*;
 
@@ -456,49 +457,6 @@ impl Wording {
     }
 }
 
-pub(super) fn deviations(
-    sets: &[(String, BTreeSet<String>)],
-    wording: Wording,
-) -> Vec<(String, Vec<String>)> {
-    let total = sets.len();
-    let mut shared: Vec<(String, usize)> = Vec::new();
-    let mut seen: BTreeSet<&String> = BTreeSet::new();
-    for (_, names) in sets {
-        seen.extend(names.iter());
-    }
-    for name in seen {
-        let count = sets
-            .iter()
-            .filter(|(_, names)| names.contains(name))
-            .count();
-        if count * 2 > total {
-            shared.push((name.clone(), count));
-        }
-    }
-    let mut rows = Vec::new();
-    for (sibling, names) in sets {
-        let mut notes: Vec<String> = Vec::new();
-        for (name, _) in &shared {
-            if !names.contains(name) {
-                notes.push(wording.missing(name));
-            }
-        }
-        for name in names {
-            let count = sets
-                .iter()
-                .filter(|(_, other)| other.contains(name))
-                .count();
-            if count == 1 {
-                notes.push(wording.extra(name));
-            }
-        }
-        if !notes.is_empty() {
-            rows.push((sibling.clone(), notes));
-        }
-    }
-    rows
-}
-
 /// Answer "which of these siblings differs?" for one parent.
 /// 对一个父级回答"这些兄弟里谁不一样"。
 pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, String> {
@@ -596,7 +554,17 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
         // Audit `W6-2`: only this family's own directories, read from **this member's** root.
         // 审计 `W6-2`：只读这一家自己的目录，且从**本成员的**根读起。
         let directories = crate::mcp::source_index::face_directories(set.iter().copied());
-        let sources = crate::mcp::source_index::load_directories(&member.dir, &directories)?;
+        let sources = LazySources::new(&member.dir);
+        let record_shapes = if signals.contains(&"shape")
+            && crate::mcp::build_evidence::build_evidence(&member.dir).current
+        {
+            shape_names_from_record(&member.dir)
+        } else {
+            None
+        };
+        if !sections.is_empty() && signals.contains(&"shape") {
+            sections.push(shape_source_line(&member.name, record_shapes.is_some()));
+        }
         if set.is_empty() {
             // A member with no face under it contributes nothing, and the round measured this
             // line being read as an answer rather than as an early exit: a session on a tree
@@ -643,7 +611,28 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                     // 的面写出不同的名字、摘要与零件类型正是设计，比值会让每一个同族都成离群；而"声明了别人
                     // 不声明的字段"才是漂移。取值经内核自己的解析器读出，与 `specimen` 用的是同一个读取器。
                     "shape" => {
-                        let names = match source_text(&sources, &face.source).map(one_face) {
+                        // Record first, sources otherwise; the `shapes from` line says which.
+                        // 先记录、否则源码；`shapes from` 那行说明用的是哪一个。
+                        let recorded = record_shapes.as_ref().and_then(|shapes| {
+                            shapes
+                                .get(&format!("src/{}", face.source.trim_start_matches("./")))
+                                .cloned()
+                        });
+                        if let Some(names) = recorded {
+                            sets.push((label.clone(), names));
+                            rows.push(format!(
+                                "  {label:<24} {} field(s){}",
+                                sets.last().map_or(0, |(_, names)| names.len()),
+                                if sets.last().is_some_and(|(_, names)| names.is_empty()) {
+                                    ": none".to_owned()
+                                } else {
+                                    String::new()
+                                }
+                            ));
+                            continue;
+                        }
+                        let text = sources.text_of(&directories, &face.source);
+                        let names = match text.as_deref().map(one_face) {
                             Some(Ok(parsed)) => declared_shape(&parsed)
                                 .into_iter()
                                 .map(|field| field.key.to_owned())
@@ -682,22 +671,22 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                             .rsplit_once('/')
                             .map(|(dir, _)| dir.to_owned())
                             .unwrap_or(directory);
-                        let names: BTreeSet<String> = sources
-                            .iter()
-                            .filter(|source| {
-                                // `SourceFile::relative` is already spelled from the package root
-                                // (`src/…`), which is why the directory is built with one `src/` and the
-                                // comparison does not add a second: doing that made every filter miss and
-                                // the whole signal answer `0 call(s)` on every tree — the defect this
-                                // pin was written for.
-                                // `SourceFile::relative` 本来就是从包根拼的（`src/…`），因此目录只加一次
-                                // `src/`，比较时不再加第二次：加第二次会让每一个过滤都落空，于是整个信号在
-                                // 每棵树上都答 `0 call(s)`——这正是这条钉子被写下来的那个缺陷。
-                                source.relative.starts_with(&format!("{directory}/"))
-                            })
-                            .flat_map(|source| source.functions.iter())
-                            .flat_map(|function| function.calls.iter().cloned())
-                            .collect();
+                        let names: BTreeSet<String> =
+                            sources.with_files(&directories, |files| {
+                                files
+                                    .iter()
+                                    .filter(|source| {
+                                        // `SourceFile::relative` is already spelled from the package
+                                        // root (`src/…`), which is why the directory is built with one
+                                        // `src/` and the comparison does not add a second.
+                                        // `SourceFile::relative` 本来就是从包根拼的（`src/…`），因此目录
+                                        // 只加一次 `src/`，比较时不再加第二次。
+                                        source.relative.starts_with(&format!("{directory}/"))
+                                    })
+                                    .flat_map(|source| source.functions.iter())
+                                    .flat_map(|function| function.calls.iter().cloned())
+                                    .collect()
+                            })?;
                         let shown = names.iter().cloned().collect::<Vec<_>>().join(", ");
                         sets.push((label.clone(), names));
                         rows.push(format!(
@@ -756,12 +745,12 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                         let Some(face) = set.iter().find(|face| label_of(face) == target) else {
                             continue;
                         };
-                        let Some(text) = source_text(&sources, &face.source) else {
+                        let Some(text) = sources.text_of(&directories, &face.source) else {
                             continue;
                         };
                         let needles = [name.to_owned()];
                         shown.extend(lines_naming(
-                            text,
+                            &text,
                             &format!("src/{}", face.source.trim_start_matches("./")),
                             &needles,
                             EXCERPT_LIMIT.saturating_sub(shown.len()),

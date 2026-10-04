@@ -64,5 +64,18 @@
     "evidence": "real build on a 50-face member: 104 rows, header `# source\tfield\tvalue`, e.g. `control/control.rs  kind  Control`",
     "not_yet": "the family comparison does not read it yet; that is the second half of step three (it must also decide freshness, and excerpts still come from the sources for the outliers only)",
     "why_this_shape": "keyed by source path and carrying raw text, because normalizing or interpreting here would be the bridge's second implementation of its own shape vocabulary"
+  },
+  "step_three_lower_half": {
+    "change": "consistency's shape signal reads the build's declaration record (shape_manifest.tsv) when it is current, and the sibling sources became **lazy** (read only if something asks: the api signal or an outlier's excerpt). The section states which tree answered: `shapes from  member <m>: the build's declaration record (shape_manifest.tsv), current` vs `the sources, derived now (no current declaration record)`.",
+    "correctness": "verified end-to-end on a 50-face member with a real `verify`: the record path and the derived path both answer `outliers: 0 of 50`, and the evidence line differs",
+    "not_a_speedup_yet": {
+      "one_2501_face_member": {
+        "record_path_s": 11.071,
+        "derived_path_s": 10.372
+      },
+      "why": "the wall is neither the reading nor the rendering: the same member answers `registry` in **0.97 s** (it takes its faces from the pruning record) and `search` in **0.68 s**, while `consistency` still calls `member_faces`, which **derives** the tree — parsing 2,500 face files per member",
+      "also_fixed": "deviations' majority arithmetic was O(sets^2 x names) and is now one counting pass (it is not the wall on this shape, but it was quadratic)"
+    },
+    "next_step": "take the **sibling set** from the record too (the same W3-2 rule `registry` already uses): with the pruning manifest current, the family's faces come from its rows, and the derivation is paid only when the record cannot answer"
   }
 }

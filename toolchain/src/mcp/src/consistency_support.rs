@@ -541,3 +541,160 @@ pub(super) fn is_member_row(line: &str) -> bool {
         && !line.starts_with("  outlier")
         && !line.trim_start().starts_with("src/")
 }
+
+/// The declared field names per source, from the build's own declaration record (audit `W6-2`).
+/// 按源码路径索引的"声明了哪些字段"，取自构建自己的声明记录（审计 `W6-2`）。
+///
+/// The record is keyed by the source path **relative to `src/`** (`FaceView.source`'s own spelling),
+/// and one row per declared field; a face that declares none carries a `-` row and maps to the empty
+/// set, which is a different answer from "the record has never heard of this face" — the distinction
+/// the caller relies on when it falls back to the sources.
+/// 记录按**相对 `src/`** 的源码路径做键（也就是 `FaceView.source` 自己的拼写），每个声明字段一行；什么都
+/// 没声明的面带一行 `-`、映射到空集合——这与"记录从没听说过这个面"是两个不同的答案，而调用方正是靠这个
+/// 区别决定要不要回退到源码。
+///
+/// `None` when the record is unreadable or empty: a partial record would let the comparison judge a
+/// family against a smaller one, and the sources are the honest answer there.
+/// 记录读不了或为空时回 `None`：残缺的记录会让比对拿一个更小的家族去比，那种情况下源码才是诚实的答案。
+pub(super) fn shape_names_from_record(
+    member: &std::path::Path,
+) -> Option<std::collections::BTreeMap<String, std::collections::BTreeSet<String>>> {
+    let out = crate::mcp::build_evidence::out_dir(member);
+    let rows = crate::build_time::read_shape_manifest(&out).ok()?;
+    if rows.is_empty() {
+        return None;
+    }
+    let mut shapes: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        let entry = shapes.entry(row.source).or_default();
+        if row.field != "-" {
+            entry.insert(row.field);
+        }
+    }
+    Some(shapes)
+}
+
+/// The sibling sources, read at most once and **only if something asks for them** (audit `W6-2`).
+/// 兄弟源码，至多读一次，而且**只有在有人要时才读**（审计 `W6-2`）。
+///
+/// The shape signal can be answered from the build's declaration record, in which case reading the
+/// family's files to then use none of them is the work step three exists to remove — measured on one
+/// 2,501-face member: eager reading made the record path 12.4 s against 12.6 s derived, i.e. no
+/// saving. `api` (and the excerpts of outliers) still ask, and they pay once per member.
+/// 形状信号可以由构建的声明记录回答，那种情况下为"一个都不用"而读这个家族的文件，正是第③步要拿掉的工作
+/// ——在一个 2,501 面的成员上实测：急切读取让记录路径 12.4 s、推导 12.6 s，等于没省。`api`（以及离群者的
+/// 原文片段）仍然要，它们每个成员付一次。
+pub(super) struct LazySources<'a> {
+    member: &'a std::path::Path,
+    held: std::cell::RefCell<Option<Vec<crate::mcp::source_index::SourceFile>>>,
+}
+
+impl<'a> LazySources<'a> {
+    /// A reader that has not opened anything yet.
+    /// 一个还什么都没打开的读取方。
+    pub(super) fn new(member: &'a std::path::Path) -> Self {
+        Self {
+            member,
+            held: std::cell::RefCell::new(None),
+        }
+    }
+
+    /// Read the listed directories, unless they were already read.
+    /// 读列出的那些目录，除非已经读过。
+    pub(super) fn ensure(&self, directories: &[String]) -> Result<(), String> {
+        if self.held.borrow().is_none() {
+            let loaded = crate::mcp::source_index::load_directories(self.member, directories)?;
+            *self.held.borrow_mut() = Some(loaded);
+        }
+        Ok(())
+    }
+
+    /// The text of one face's own file, reading the directories on first use.
+    /// 某个面自己那个文件的文本；首次使用时才读目录。
+    pub(super) fn text_of(&self, directories: &[String], face_source: &str) -> Option<String> {
+        self.ensure(directories).ok()?;
+        let wanted = format!("src/{}", face_source.trim_start_matches("./"));
+        self.held
+            .borrow()
+            .as_ref()?
+            .iter()
+            .find(|file| file.relative == wanted)
+            .map(|file| file.source.clone())
+    }
+
+    /// Run `read` over every held file, reading the directories on first use.
+    /// 对每个已持有的文件跑 `read`；首次使用时才读目录。
+    pub(super) fn with_files<T>(
+        &self,
+        directories: &[String],
+        read: impl FnOnce(&[crate::mcp::source_index::SourceFile]) -> T,
+    ) -> Result<T, String> {
+        self.ensure(directories)?;
+        let held = self.held.borrow();
+        Ok(read(held.as_deref().unwrap_or_default()))
+    }
+}
+
+/// The line that says **which tree** answered the shape signal (audit `W6-2`).
+/// 说明**哪棵树**回答了形状信号的那一行（审计 `W6-2`）。
+///
+/// An answer that read the record and an answer that derived are both correct and are not the same
+/// claim, so the section states which one it used — the same rule every other reader in this bridge
+/// follows when it says `tree published from …` or `tree derived now …`.
+/// 读记录的答案与推导的答案都对，但不是同一个主张，因此本节说出它用的是哪一个——与本桥其它每个读者说出
+/// `tree published from …` / `tree derived now …` 是同一条规则。
+pub(super) fn shape_source_line(member: &str, from_record: bool) -> String {
+    format!(
+        "shapes from  member {member}: {}",
+        if from_record {
+            "the build's declaration record (shape_manifest.tsv), current"
+        } else {
+            "the sources, derived now (no current declaration record)"
+        }
+    )
+}
+
+pub(crate) fn deviations(
+    sets: &[(String, std::collections::BTreeSet<String>)],
+    wording: super::Wording,
+) -> Vec<(String, Vec<String>)> {
+    let total = sets.len();
+    // How many siblings state each name, **counted once** (audit `W6-2`). The per-name and per-sibling
+    // scans this replaces were both O(sets) each, inside loops over names and siblings — i.e.
+    // O(sets^2 x names) for the whole call, which on a 2,500-member family is tens of millions of
+    // `contains` calls and measured as the entire cost of the answer (the record path and the derived
+    // path were within 0.7 s of each other because neither was the wall; this was).
+    // 每个名字被多少兄弟声明，**只数一次**（审计 `W6-2`）。它替换掉的两处扫描各自是 O(sets)，又都套在
+    // 遍历名字与遍历兄弟的循环里——整次调用是 O(sets² × names)：在 2,500 成员的家族上是数千万次
+    // `contains`，而实测它就是整个答案的成本（记录路径与推导路径只差 0.7 s，因为两者都不是那堵墙，它才是）。
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for (_, names) in sets {
+        for name in names {
+            *counts.entry(name.as_str()).or_default() += 1;
+        }
+    }
+    let shared: Vec<&str> = counts
+        .iter()
+        .filter(|(_, count)| **count * 2 > total)
+        .map(|(name, _)| *name)
+        .collect();
+    let mut rows = Vec::new();
+    for (sibling, names) in sets {
+        let mut notes: Vec<String> = Vec::new();
+        for name in &shared {
+            if !names.contains(*name) {
+                notes.push(wording.missing(name));
+            }
+        }
+        for name in names {
+            if counts.get(name.as_str()).copied().unwrap_or(0) == 1 {
+                notes.push(wording.extra(name));
+            }
+        }
+        if !notes.is_empty() {
+            rows.push((sibling.clone(), notes));
+        }
+    }
+    rows
+}

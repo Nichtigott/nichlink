@@ -909,3 +909,27 @@ workspace 树 `registry`/`consistency`/`search` p95 <3s 且响应拍平）。
 
 **这一步的下半（仍开）**：让家族比对**读**这条记录（并在读之前判新鲜度——陈旧的记录会给出错的多数派），
 源码只用于给**离群者**取原文片段。那才是"几千成员的家族回到 3 s 内"的那一半。
+
+### W6-2 三步走之第③步（下半）：家族形状读声明记录 + 源码惰性化（完成，**但如实说：这一形状上它不是那堵墙**）
+
+**改动**：`consistency` 的 `--by shape` 在构建的**声明记录新鲜时**从 `shape_manifest.tsv` 读每个兄弟声明了哪些
+字段（新鲜度走构建自己的 `build_output_is_current`，不另写一条规则）；兄弟源码改为**惰性**（`LazySources`：只有
+`api` 信号或离群者取原文片段时才读）。本节明确说出用的是哪棵树：
+`shapes from  member <m>: the build's declaration record (shape_manifest.tsv), current` ／
+`the sources, derived now (no current declaration record)`。
+
+**端到端验证**（真 `verify` 过的 50 面成员）：两条路都答 `outliers: 0 of 50`，而 `shapes from` 行不同 ✓。
+钉子 `consistency_tests::the_declaration_record_answers_which_fields_a_face_declares`（记录按 `src/…` 做键、
+"什么都没声明"映射到**空集合**而不是缺失条目、空记录回 `None` 让调用方回退）。
+
+**但实测说这条在这一形状上不是那堵墙（如实记）**：同一个 **2,501 面成员**——记录路径 **11.07 s** vs 推导路径
+**10.37 s**（惰性化之前是 12.4 vs 12.6）。而**同一个成员**上：`registry` **0.97 s**（它从剪枝记录取面）、
+`search` **0.68 s**。⇒ **墙是 `member_faces` 的推导本身**（每个成员解析 2,500 个面文件），不是读源码、也不是渲染
+（后者已在上一轮被"字节降 266× 而时间不动"排除）。
+
+**顺带修掉一处二次复杂度**：`deviations`（多数派算术）过去对每个名字、每个兄弟都重扫一遍集合，是
+O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形状上不是主项，但它在几千成员的家族上是数千万次
+`contains`。
+
+**下一步（已由上述对比定死）**：让**兄弟集合**也从记录取——即 `registry` 已经在用的那条 W3-2 规则（剪枝清单
+新鲜时按它的行构面），推导只在记录答不了时付费。那才是让 `consistency` 在几千成员家族上回到 3 s 内的那一步。

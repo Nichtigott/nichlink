@@ -971,3 +971,55 @@ fn the_member_rows_are_bought_not_given() {
         "`full: true` prints every member's own value: {full}"
     );
 }
+
+/// The declaration record answers "which fields does this face declare" (audit `W6-2`, step three).
+/// 声明记录回答"这个面声明了哪些字段"（审计 `W6-2` 第③步）。
+///
+/// The map is keyed the way the comparison indexes it — `src/…`, the spelling `source_text` builds —
+/// and a face that declares **none** of the covered fields maps to the **empty set**, which is a
+/// different answer from "the record never heard of this face". That distinction is what the caller
+/// relies on when it decides between the record and the sources, so it is pinned here rather than
+/// left to the reader of a `-` row.
+/// 映射的键与比对索引它的方式一致——`src/…`，也就是 `source_text` 拼出来的那种写法——而一个在被覆盖字段上
+/// **什么都没声明**的面映射到**空集合**，这与"记录从没听说过这个面"是两个不同的答案。调用方正是靠这个区别
+/// 在记录与源码之间做选择，因此这里把它钉住，而不是留给读者去看那行 `-`。
+#[test]
+fn the_declaration_record_answers_which_fields_a_face_declares() {
+    let root = specimen_package("shape-record");
+    let out = crate::mcp::build_evidence::out_dir(&root);
+    std::fs::create_dir_all(&out).expect("the record directory");
+    std::fs::write(
+        out.join("shape_manifest.tsv"),
+        "# source\tfield\tvalue\n\
+         src/control/object/slider/slider.rs\texports\tcontrol.render\n\
+         src/control/object/slider/slider.rs\tparts\tSliderParts\n\
+         src/control/object/button/button.rs\t-\t-\n",
+    )
+    .expect("the record");
+
+    let shapes = super::shape_names_from_record(&root).expect("the record answers");
+    let slider = shapes
+        .get("src/control/object/slider/slider.rs")
+        .expect("the face with two declared fields");
+    assert!(
+        slider.contains("exports") && slider.contains("parts") && slider.len() == 2,
+        "the declared names read back: {slider:?}"
+    );
+    let button = shapes
+        .get("src/control/object/button/button.rs")
+        .expect("the face that declares none of them");
+    assert!(
+        button.is_empty(),
+        "a face with no covered field maps to the empty set, not to a missing entry: {button:?}"
+    );
+
+    // An unreadable record answers with nothing, so the caller falls back to the sources rather than
+    // comparing a family against a smaller one.
+    // 读不了的记录什么都不答，于是调用方回退到源码，而不是拿一个更小的家族去比。
+    std::fs::write(out.join("shape_manifest.tsv"), "# source\tfield\tvalue\n")
+        .expect("empty record");
+    assert!(
+        super::shape_names_from_record(&root).is_none(),
+        "an empty record is not an answer"
+    );
+}
