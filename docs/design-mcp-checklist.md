@@ -27,11 +27,12 @@
 | M2 W2-5 | apply 成功回复节食 | **一半**（D2 完成，D3 会话化仍开） | `6a605b8` | 同上 + `a_preview_reports_the_resulting_tree…` 的两半断言 |
 | M2 W5-7 | 写后响应节食（D4） | **完成** | `0d8fcd6` | `a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading` |
 | M2 W5-8 | new_project 自带初始普查 | **完成** | `0d8fcd6` | `new_project_tests::the_creation_reply_carries_the_initial_census` |
-| M2 W1-3 | cargo 输出瘦身 | 待做 | — | — |
-| M2 W2-1 | registry 分页/普查化 | 待做 | — | — |
-| M2 W2-2 | consistency 免责文本会话化 | 待做 | — | — |
-| M2 W2-6 | `--list` 瘦身 schema | 待定（与 W1-4 的口径冲突，见下） | — | — |
-| M2 W2-7 | `--list --all-slim` | 待定（同上） | — | — |
+| M2 W1-3 | cargo 输出瘦身 | **完成**（边界索引合并已是现状，本次做分组折叠） | `15ab15b` | `check_tests::the_passing_groups_fold_and_verbose_undoes_it` |
+| M2 W2-1 | registry 默认档普查化 | **完成** | `40cf6ca` | `registry_tests::the_default_is_a_census_whose_size_follows_the_levels` |
+| M2 W2-2 | consistency 免责文本会话化 | **完成** | `0785094` | `consistency_tests::the_bounds_are_said_once_per_session_and_root` |
+| M2 W2-5 | apply 成功回复节食 | **完成**（D2+D3） | `6a605b8` `0785094` | 见 `apply_refusals_tests::the_write_disclaimer_is_said_once_per_session_and_project` |
+| M2 W2-6 | `--list` 瘦身 schema | **完成**（口径已裁：默认有界、按需无界） | `9f06025` | `client_tests::every_discovery_page_is_bounded_with_a_way_to_the_whole_text` |
+| M2 W2-7 | `--list --all-slim` | **完成** | `9f06025` | `client_tests::the_thirteen_tool_view_is_one_small_call` |
 | M3 | W3-1 / W3-2 / W3-3 | 待做 | — | — |
 | M4 | W5-1 / W5-2 / W5-3 / W5-4 / W5-5 / W5-6 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
@@ -292,3 +293,49 @@ external-rehearsal` 绿（W4-3 的验收）。
 | W2-6 / W2-7 | 与 W1-4 的口径冲突（"细则迁入 `--list`" vs "`--list` 返回瘦身 schema"），先裁口径再动手 |
 | DP-1 / DP-2 / DP-3 | 要门禁实测才裁，不许预设 |
 | M3 / M4 / M5 | 未开始（W5-1 `adopt` 按清单要求"单独设计评审后动工"） |
+
+## 阶段 M2 收尾（本轮补完）
+
+### W1-3 cargo 输出瘦身（`15ab15b`）
+
+**第一半已是现状**：三条边界索引早已并成一条 `SHORT_BOUNDARY`（`not covered: the reachability
+column (…) · the branch column (…) · this census (…)`），默认只带它，逐栏全文只在 `census: true`
+时出现——如实记，不重复做一遍。
+
+**第二半动手**：一次 `cargo test` 每个测试二进制品一组，每组印自己的 `test result:` 行。现在**带失败的**
+逐行印（上限 12，超出走 `truncation::withheld`），**通过的**折成
+`result N group(s) passed — pass \`verbose: true\` for each line; first: …`；`verbose: true` 全印。
+schema 两处同步。
+
+### W2-1 registry 默认档普查化（`40cf6ca`）
+
+默认 = 普查（`faces N` + 逐层计数，最多 20 层，超出 withheld）+ 一行"`full: true` prints the rows,
+200 per page and `offset: <n>` for the next"；`full: true` = 行，一次一页（`rows 1-200 of N` +
+游标，`limit` 1–200）。**拍平是承重的**：普查大小跟**层级数**走、不跟面数走（实测 4 面 vs 120 面，
+答案长度只差 <40 字节，两者都 ≤2 KB）。工作区的 `full` 仍走合并视图（跨成员的页索引会是同一棵树的
+第二套坐标）。原"整份清单"渲染器被分页路径取代并删除。
+
+### W2-2 + W2-5(D3) 常量块会话化（`0785094`）
+
+**"什么算同一个会话"这个设计决定先定下来**：单位是**服务一个客户端的那一个进程**——stdio 服务活一条
+连接，"已经说过"= "已经对这个客户端说过"；一次性 `--call` 是它自己的进程，因此永远是第一次（它没有更早
+的答案可回指）。新增 `mcp/src/session.rs`（进程级 `static`，键里带根 ⇒ 两棵树各有自己的第一次，测试的
+临时目录不会互相污染）。接上两处常量块：`consistency` 的两支共用 `consistency-bounds:<root>`；
+写入路径的 `consequences` 用 `apply-consequences:<project>`。
+
+### W2-6 + W2-7 发现载荷（`9f06025`，口径冲突已裁）
+
+**裁法**：`W1-4`（"细则迁入 `--list`"）与 `W2-6`（"`--list` 返回瘦身 schema"）同时成立的读法是
+**默认有界、按需无界**——长文仍住在 `--list`（没搬走），而默认那次调用只为"要不要调这个工具"付费。
+实现：`describe_tool` 把描述压在 250 字节，截断句**必须**走 `truncation::withheld`（本仓有一条钉子钉
+这句话的唯一拼写——我第一版手写了一句，当场被它抓住）；外加一条**自适应规则**：只有省下 ≥44% 才收窄
+这一页（"短十分之一、却多花一次调用"比长一点但能作答更糟）。全文：`--list <tool> --full` /
+`nichlink_tools {tool, full: true}`。实测默认/全文（字节）：why 429/759 · digest 330/578 ·
+check 343/4847 · apply 433/4579 · search 466/2282 · consistency 435/1329 ⇒ 每次截断都 ≤60%。
+`W2-7`：`COMMON_TOOLS`（七种形状入口的并集，13 件）+ `slim_tools_page()`，由**同一份** `short_lines`
+渲染（不可能与 `--list` 各说各话），末尾一行说出其余 15 件在哪；CLI `--list --all-slim`、桥
+`nichlink_tools {slim: true}`。
+
+### M2 余下
+
+`DP-1`/`DP-2`/`DP-3` 与门禁 M2 的四轴重算都要**两臂实机**数据，仍按 §门禁 M1 的决定合并成一次跑。
