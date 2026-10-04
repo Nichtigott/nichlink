@@ -70,6 +70,23 @@ pub(crate) struct Observation {
     /// How many `test result:` lines the log had; zero means nothing ran.
     /// 日志里有几条 `test result:` 行；零意味着什么都没跑。
     pub(crate) results: usize,
+    /// The names of the tests that failed, in the order the log carried them.
+    /// 失败的测试名，按日志里的顺序排列。
+    ///
+    /// Audit `W5-5`: routing by failure **kind** needs to know which tests failed, not only how many
+    /// result lines there were. A family-shaped red and a missing build product are the two cases
+    /// where the cheapest next call is not the literal search the default hint names.
+    /// 审计 `W5-5`：按失败**种类**路由需要知道失败的是哪些测试，而不只是有几条结果行。同族形状的红与
+    /// 缺席的构建产物，正是"最便宜的下一次调用不是默认那条字面检索"的两种情形。
+    pub(crate) failed: Vec<String>,
+    /// The first `path:line` a compiler or runtime diagnostic named, when the log carried one.
+    /// 日志里编译器或运行期诊断点名的第一个 `path:line`（若日志里有）。
+    ///
+    /// This is what makes the "nothing ran" route a **call** rather than a shrug: `why` needs a
+    /// location, and rustc's own `--> file:line` is one.
+    /// 正是它让"什么都没跑"那条路由成为一次**调用**而不是耸肩：`why` 需要一个位置，而 rustc 自己的
+    /// `--> file:line` 就是一个。
+    pub(crate) first_location: Option<String>,
 }
 
 /// What one finished (or killed) command produced.
@@ -230,7 +247,7 @@ fn head(
         (false, None) => lines.push("exit   unknown (the process was signalled)".to_owned()),
     }
     lines.extend(observed.lines.iter().cloned());
-    if let Some(next) = next_step(outcome.timed_out, outcome.code, &observed.lines) {
+    if let Some(next) = next_step(face, outcome.timed_out, outcome.code, observed) {
         lines.push(next);
     }
     lines
@@ -465,9 +482,62 @@ fn census_sample(census: &[String]) -> Vec<String> {
 /// the one shape of guidance this bridge has measured to work.
 /// 失败断言的那句话是树里的一个字符串字面量，因此下一个最便宜的调用就是找出它在哪产出的字面检索；这条指引
 /// 正是 `literal` 存在的理由，也是本桥实测唯一生效的那种指引形态。
-fn next_step(timed_out: bool, code: Option<i32>, lines: &[String]) -> Option<String> {
+fn next_step(
+    face: &str,
+    timed_out: bool,
+    code: Option<i32>,
+    observed: &Observation,
+) -> Option<String> {
     if timed_out || code == Some(0) {
         return None;
+    }
+    let lines = &observed.lines;
+    // Audit `W5-5`: route by **what kind of red this is**, because the cheapest next call differs by
+    // kind, and a battery that has to rediscover which kind it is pays for that every run. The
+    // default (an assertion's words) keeps the literal search below; the other two kinds are the ones
+    // this bridge already has a purpose-built tool for.
+    // 审计 `W5-5`：按**这是哪一种红**路由，因为最便宜的下一次调用因种类而异，而一套每次都要重新发现
+    // "这是哪一种"的电池会为此反复付费。默认（断言自己的话）走下面的字面检索；另外两种正是本桥已经有
+    // 专用工具的情形。
+    if observed.results == 0 {
+        let at = observed
+            .first_location
+            .clone()
+            .unwrap_or_else(|| format!("{face}/<the file the error names>:<line>"));
+        return Some(format!(
+            "next   **nothing ran**: the log has no `test result:` line, so this red is the build's, \
+             not a test's — `why {{at: \"{at}\"}}` gathers the upstream facts at that location, and \
+             `check {{verbose: true}}` prints the compiler's own lines whole"
+        ));
+    }
+    // The signal is the tree's **own** vocabulary for that family, not a guess: the kernel exports
+    // the runtime-check nouns, and a red in this family carries the one that names the check. The
+    // words are matched case-insensitively because a failure message is prose an author wrote.
+    // 信号是这棵树**自己的**族词汇，不是猜的：内核导出了运行期校验的名词，而这个族的红携带点名那条校验
+    // 的那一个。匹配不分大小写，因为失败消息是作者写的散文。
+    let coordinates = observed
+        .failed
+        .iter()
+        .chain(observed.lines.iter())
+        .any(|line| {
+            let lowered = line.to_lowercase();
+            // The check's own spelling, taken from the kernel rather than typed here.
+            // 这条校验自己的拼写，取自内核而不是在这里手打。
+            lowered.contains(nichlink_kernel::RuntimeCheckSpec::CoordinatesInViewport.name())
+                || lowered.contains("coordinate")
+                || lowered.contains("viewport")
+        });
+    if coordinates {
+        let parent = face
+            .trim_end_matches('/')
+            .rsplit_once('/')
+            .map_or("root", |(above, _)| above);
+        return Some(format!(
+            "next   this red is in the **coordinates family**: `consistency {{parent: \"{parent}\"}}` \
+             compares the siblings that must agree on those values and names the one that drifted, \
+             and it hands back the `fix` request that pulls it back — one call instead of a hunt \
+             through the family by hand"
+        ));
     }
     // The hint is **instantiated from this answer's own state**: the literal it tells the caller to
     // search is taken out of the `why` line this reply just printed, so the next call is copyable
@@ -694,9 +764,26 @@ fn observation(log: &Path, verbose: bool) -> Result<Observation, String> {
     // 断言自己的话与产出它的测试名同行给出：调用方问的是"什么失败了"，而答案就是这几行，而不是"它们住在哪"
     // 的一条指引。
     lines.extend(why_lines(&text, &failed));
+    // The routing facts, read from the same text: a diagnostic's own location (rustc's `--> file:line`)
+    // and whether the failing tests look like the coordinates family. Both are **observed**, never
+    // guessed from the face's name.
+    // 路由所需的事实，同样取自这段文本：诊断自己的位置（rustc 的 `--> file:line`），以及失败的测试是否
+    // 像坐标族。两者都是**观察到的**，从不按面的名字去猜。
+    let first_location = text.lines().find_map(|line| {
+        let trimmed = line.trim();
+        let rest = trimmed.strip_prefix("--> ")?;
+        let (path, _) = rest.rsplit_once(':')?;
+        Some(rest.trim().to_owned()).filter(|_| !path.is_empty())
+    });
+    let failed = failed
+        .iter()
+        .map(|name| (*name).clone())
+        .collect::<Vec<_>>();
     Ok(Observation {
         lines,
         results: results.len(),
+        failed,
+        first_location,
     })
 }
 

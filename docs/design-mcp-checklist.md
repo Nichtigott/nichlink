@@ -38,7 +38,8 @@
 | M3 W3-3 | 在线分析评审规则（门禁 `online_analysis`） | **完成**（21 个桥文件各写了理由） | 本轮 | `conventions::online_analysis_tests::every_online_answer_says_why_the_build_cannot` |
 | M4 W5-2 | affected 补计划层 | **完成** | 本轮 | `affected_tests::a_changed_face_names_the_plan_entries_that_target_it` |
 | M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
-| M4 W5-1 / W5-3 / W5-5 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
+| M4 W5-5 | check 失败按类型路由 | **完成** | 本轮 | `check_tests::a_red_routes_by_its_kind_rather_than_to_the_default_hint` |
+| M4 W5-1 / W5-3 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
@@ -648,3 +649,22 @@ names this face`"（沉默会被读成"根本没有计划"）；**没有计划�
 
 **顺带满足 600 行棘轮**：新代码把 `consistency.rs` 顶到 649 行，把三个修复辅助函数（`repair_value` /
 `repair_request` / `manual_repair`）移进 `consistency_support.rs`（形状词汇本来就住那里）。
+
+### W5-5 debug 入口路由（完成，本轮）
+
+清单要"check 失败按**失败类型**路由（坐标族→`consistency --parent`；产物缺席→`why`）"，验收是"dbg 电池
+步数方差收敛到 1-2"。因此 `next_step` 从"一条固定提示"变成**按种类路由**，三种：
+
+| 种类 | 判据（**观察到的**，不是猜的） | 路由 |
+| --- | --- | --- |
+| 产物缺席 / 构建的红 | 日志里**没有** `test result:` 行（`results == 0`） | `why {at: "<编译器点名的 path:line>"}` + `check {verbose: true}` |
+| 坐标族 | 失败测试名或回复自己的 `why` 行里出现**这棵树自己的**族名词（内核的 `RuntimeCheckSpec::CoordinatesInViewport.name()`，不分大小写，另收 "coordinate"/"viewport" 两种散文写法） | `consistency {parent: "<该面的父级>"}` |
+| 默认（断言的红） | 其余 | 那条实测会被采纳的字面检索（T-22 起由本次答复自己实例化） |
+
+**为此 `Observation` 多带两个事实**：`failed`（失败测试名清单）与 `first_location`（日志里第一个
+`--> path:line`）——两者都在**读日志那一次**顺便取到，因此路由不额外读盘。
+
+**钉子**（`a_red_routes_by_its_kind_rather_than_to_the_default_hint`）三种都走：构建的红路由到编译器点名的
+位置、且**不**落到断言检索（那里根本没有断言可搜）；坐标族路由到该面的**父级**比对；默认那一种保留原提示。
+**一处刻意的负断言**：名字里凑巧提到 offsets、但回复的 `why` 行不含族名词的失败测试**不得**被当成坐标的红
+——路由的信号是这棵树自己的词汇，而不是测试名的联想。

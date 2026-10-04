@@ -104,6 +104,30 @@ fn observed(lines: &[&str], results: usize) -> Observation {
     Observation {
         lines: lines.iter().map(|line| (*line).to_owned()).collect(),
         results,
+        failed: Vec::new(),
+        first_location: None,
+    }
+}
+
+/// One observed log with the routing facts filled in (audit `W5-5`).
+/// 一份把路由事实填好的被观测日志（审计 `W5-5`）。
+fn routed(results: usize, failed: &[&str], first_location: Option<&str>) -> Observation {
+    routed_with(results, failed, first_location, &[])
+}
+
+/// The same, with the reply's own lines, for a route that reads them (audit `W5-5`).
+/// 同上，外加回复自己的那些行，供读它们的那种路由（审计 `W5-5`）使用。
+fn routed_with(
+    results: usize,
+    failed: &[&str],
+    first_location: Option<&str>,
+    lines: &[&str],
+) -> Observation {
+    Observation {
+        lines: lines.iter().map(|line| (*line).to_owned()).collect(),
+        results,
+        failed: failed.iter().map(|name| (*name).to_owned()).collect(),
+        first_location: first_location.map(str::to_owned),
     }
 }
 
@@ -193,14 +217,16 @@ fn a_failing_run_says_where_to_look_next() {
     // still say where to look.
     // 第三个参数是这次回复自己的那些行：自 T-22 起这条提示由它们实例化，因此空切片就是"没有 `why` 行"的
     // 回复所携带的形状——而正是它仍须说出下一步去哪找。
-    let failing = next_step(false, Some(101), &[]).expect("a failing run has a next step");
+    let empty = routed(1, &[], None);
+    let failing =
+        next_step("default", false, Some(101), &empty).expect("a failing run has a next step");
     assert!(failing.contains("search {literal"), "{failing}");
     assert!(
-        next_step(false, Some(0), &[]).is_none(),
+        next_step("default", false, Some(0), &empty).is_none(),
         "a passing run needs no pointer"
     );
     assert!(
-        next_step(true, None, &[]).is_none(),
+        next_step("default", true, None, &empty).is_none(),
         "a timeout is unknown, not a failure to chase"
     );
 }
@@ -297,7 +323,14 @@ fn the_next_hint_carries_a_searchable_literal_from_this_reply() {
         phrase, "the rendered offsets add up to",
         "the process id, the generic clause and the numbers are all gone"
     );
-    let next = super::next_step(false, Some(101), &lines).expect("a failing run has a next step");
+    let observed = Observation {
+        lines: lines.clone(),
+        results: 1,
+        failed: Vec::new(),
+        first_location: None,
+    };
+    let next = super::next_step("default", false, Some(101), &observed)
+        .expect("a failing run has a next step");
     assert!(
         next.contains("`search {literal: \"the rendered offsets add up to\"}`"),
         "and the hint carries it as a copyable call: {next}"
@@ -314,7 +347,13 @@ fn the_next_hint_carries_a_searchable_literal_from_this_reply() {
 fn the_next_hint_falls_back_to_a_placeholder_rather_than_inventing_one() {
     let lines = vec!["result test result: FAILED. 1 passed; 1 failed".to_owned()];
     assert!(super::literal_to_search(&lines).is_none());
-    let next = super::next_step(false, Some(101), &lines).expect("a next step");
+    let observed = Observation {
+        lines: lines.clone(),
+        results: 1,
+        failed: Vec::new(),
+        first_location: None,
+    };
+    let next = super::next_step("default", false, Some(101), &observed).expect("a next step");
     assert!(
         next.contains("<a short phrase from the assertion>"),
         "{next}"
@@ -543,4 +582,61 @@ fn the_passing_groups_fold_and_verbose_undoes_it() {
         "and nothing is folded when it does: {text}"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A build red routes to the build's own answer, and a family red routes to the comparison (audit `W5-5`).
+/// 构建的红路由到构建自己的答案，同族的红路由到比对（审计 `W5-5`）。
+///
+/// The acceptance the checklist asks for is a battery whose step count stops varying, and that only
+/// happens if the first call after a red is the right **kind** of call. Two kinds are pinned here
+/// because the bridge already has a purpose-built tool for each: a red with no `test result:` line is
+/// the build's (route to `why` at the location the compiler named), and a red whose failing test
+/// mentions coordinates is the family's (route to `consistency` for that face's parent).
+/// 清单要的验收是一套步数不再抖动的电池，而那只在"红之后第一次调用是对的**那种**调用"时才发生。
+/// 这里钉两种，因为本桥对每一种都已经有专用工具：没有 `test result:` 行的红是构建的（路由到编译器点名那个
+/// 位置的 `why`），失败测试提到坐标的红是同族的（路由到那个面的父级的 `consistency`）。
+#[test]
+fn a_red_routes_by_its_kind_rather_than_to_the_default_hint() {
+    // The build never produced a test binary: zero result lines, and rustc named a location.
+    // 构建从未产出测试二进制：零条结果行，而 rustc 点名了一个位置。
+    let build = routed(0, &[], Some("src/control/object/slider/slider.rs:18:5"));
+    let next = super::next_step("default", false, Some(101), &build).expect("a next step");
+    assert!(
+        next.contains("**nothing ran**")
+            && next.contains("why {at: \"src/control/object/slider/slider.rs:18:5\"}"),
+        "the build red routes to the location the compiler named: {next}"
+    );
+    assert!(
+        !next.contains("search {literal"),
+        "and not to the assertion hunt, which has no assertion to hunt for: {next}"
+    );
+
+    // A family red: the failing test is about the coordinates the siblings must agree on.
+    // 同族的红：失败的测试是关于兄弟之间必须一致的坐标。
+    // The family's own noun, in the reply's `why` line, is what carries the signal — a failing test
+    // whose *name* happens to mention offsets is not a coordinates red, and must not be routed as one.
+    // 携带信号的是这个族自己的名词、出现在回复的 `why` 行里——一个名字里凑巧提到 offsets 的失败测试不是
+    // 坐标的红，也不该按它路由。
+    let family = routed_with(
+        1,
+        &["the_rendered_offsets_add_up"],
+        Some("tests/offsets.rs:18:5"),
+        &[&format!(
+            "why    the_rendered_offsets_add_up: assertion failed: {} (160, not 136)",
+            nichlink_kernel::RuntimeCheckSpec::CoordinatesInViewport.name()
+        )],
+    );
+    let next = super::next_step("root/control/object/slider", false, Some(101), &family)
+        .expect("a next step");
+    assert!(
+        next.contains("coordinates family")
+            && next.contains("consistency {parent: \"root/control/object\"}"),
+        "the family red routes to the comparison of the face's own parent: {next}"
+    );
+
+    // And the default kind keeps the hint that was measured to be followed.
+    // 而默认那一种保留那条实测会被采纳的提示。
+    let assertion = routed(1, &["some_other_test"], Some("tests/other.rs:3:5"));
+    let next = super::next_step("default", false, Some(101), &assertion).expect("a next step");
+    assert!(next.contains("search {literal"), "{next}");
 }
