@@ -415,22 +415,6 @@ fn siblings<'a>(
         .collect()
 }
 
-/// Whether one rendered line is a plain per-member value row (audit `W6-2`).
-/// 某一行是不是"每个成员的取值行"（审计 `W6-2`）。
-///
-/// The family header, the outlier rows and the excerpt lines that follow an outlier all carry a word
-/// of their own (`family`, `outlier`, `src/…`); a plain row is the one that is only indentation plus a
-/// label and a value. Getting this predicate wrong in either direction is visible: too wide drops the
-/// outliers, too narrow leaves the payload unbounded.
-/// 家族头、离群行、以及跟在离群者后面的原文行各有自己的词（`family`、`outlier`、`src/…`）；而"普通行"就是
-/// 只有缩进加一个标签与一个取值的那种。这个判据两个方向都会露馅：太宽会连离群者一起丢掉，太窄则载荷不封顶。
-fn is_member_row(line: &str) -> bool {
-    line.starts_with("  ")
-        && !line.starts_with("   ")
-        && !line.starts_with("  outlier")
-        && !line.trim_start().starts_with("src/")
-}
-
 /// Which siblings differ from the majority, and what they differ by.
 /// 哪些兄弟与多数派不同，以及差在哪。
 ///

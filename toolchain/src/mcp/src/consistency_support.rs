@@ -528,3 +528,16 @@ pub(super) fn repair_request(
         "apply": true,
     }))
 }
+
+/// Whether one rendered line is a plain per-member value row (audit `W6-2`).
+/// 某一行是不是"每个成员的取值行"（审计 `W6-2`）。
+///
+/// The family header, the outlier rows and the excerpt lines each carry a word of their own
+/// (`family`, `outlier`, `src/…`); too wide drops the outliers, too narrow leaves the payload unbounded.
+/// 家族头、离群行与原文行各有自己的词（`family`、`outlier`、`src/…`）；太宽会连离群者一起丢掉，太窄则载荷不封顶。
+pub(super) fn is_member_row(line: &str) -> bool {
+    line.starts_with("  ")
+        && !line.starts_with("   ")
+        && !line.starts_with("  outlier")
+        && !line.trim_start().starts_with("src/")
+}
