@@ -638,3 +638,67 @@ fn a_family_outlier_that_declares_an_extra_field_is_named() {
         "the shape signal shows the declared fields: {extra}"
     );
 }
+
+/// An outlier carries the **lines** it deviates on, and only those.
+/// 离群者带上它偏离的那些**行**，也只带那些行。
+///
+/// Audit `W4-6` measured the two ways this can go: the row named a field and left the reader to open
+/// the file (a second instrument call), while the compared tool answered the same question with a
+/// 6,781-character slab of the whole file. This is the middle: the decisive line, quoted with its
+/// neighbour's counterpart, capped at [`super::EXCERPT_LIMIT`].
+/// 审计 `W4-6` 量到这条路的两种走法：一行只点名字段、把开文件留给读者（于是多一次仪器调用），而对照工具对
+/// 同一个问题回的是整份文件 6,781 字符的片段。这里是中间那一种：决定性的那一行，连着对位的那一行一起引用，
+/// 上限是 [`super::EXCERPT_LIMIT`]。
+#[test]
+fn an_outlier_carries_the_lines_it_deviates_on() {
+    let root = specimen_package("outlier-lines");
+    // The specimen path: the ledger certifies `button`, and `timeline` loses the declaration.
+    adopt(
+        &root,
+        "root/control/button",
+        "src/control/object/button/button.rs",
+    );
+    let timeline = "src/control/object/timeline/timeline.rs";
+    replace(&root, timeline, "    exports: [\"control.render\"],\n", "");
+    let specimen =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        specimen.contains("outlier     timeline: lacks `exports`"),
+        "the row still names the field: {specimen}"
+    );
+    assert!(
+        specimen.contains("src/control/object/timeline/timeline.rs:")
+            && specimen.contains("src/control/object/button/button.rs:"),
+        "and quotes the outlier's own declaration beside the specimen's: {specimen}"
+    );
+
+    // The parent path: only the sibling that really carries the extra field is quoted, and no more
+    // than the cap.
+    // 父面那一支：只有真的多声明了字段的那个兄弟被引用，而且不超过上限。
+    let slider = "src/control/object/slider/slider.rs";
+    replace(&root, slider, "    exports: [\"control.render\"],\n", "");
+    replace(
+        &root,
+        slider,
+        "    parts: SliderParts,\n",
+        "    parts: SliderParts,\n    exports: [\"control.render\"],\n",
+    );
+    let parent = super::consistency(&root, &json!({"parent": "root/control"})).expect("an answer");
+    let quoted = parent
+        .lines()
+        .filter(|line| line.trim_start().starts_with("src/") && line.contains(".rs:"))
+        .count();
+    assert!(
+        quoted > 0 && quoted <= super::EXCERPT_LIMIT,
+        "some line is quoted, within the cap: {parent}"
+    );
+    assert!(
+        parent
+            .lines()
+            .any(|line| line.trim_start().starts_with("src/")
+                && line.contains(".rs:")
+                && line.contains("exports")),
+        "and the quoted line is the declaration the deviation is about: {parent}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

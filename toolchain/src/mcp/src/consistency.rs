@@ -24,6 +24,7 @@ use nichlink_kernel::adoption::{AdoptionVerdict, verdict_of};
 use nichlink_kernel::syntax::{FaceSyntax, parse_faces};
 use serde_json::Value;
 
+use crate::build_time::FaceView;
 use crate::mcp::source_index::{SourceFile, load_sources};
 use crate::mcp::workspace::{Member, Scope};
 
@@ -249,6 +250,129 @@ fn shape_gaps(specimen: &[DeclaredField], sibling: &[DeclaredField]) -> Vec<Stri
     notes
 }
 
+/// How many source lines one outlier may carry.
+/// 一个离群者最多可以带几行源码。
+///
+/// The round that measured the alternative (codegraph answered the same question with a 6,781-character
+/// slab) is why this is a count and not "the file": what decides the answer is the one line that
+/// deviates, and ten lines is enough to show it with its neighbours.
+/// 量到另一种做法的那一轮（codegraph 对同一个问题给了 6,781 字符的整片）正是这里写"行数"而不是写"整个
+/// 文件"的原因：决定答案的是偏离的那一行，而十行足够把它和邻居一起显示出来。
+const EXCERPT_LIMIT: usize = 10;
+
+/// The field names a specimen's gap notes name.
+/// 标本的差异注里点名的字段名。
+///
+/// `lacks \`handle_contracts: ControlHandle\`` and `lacks \`parts\`` both carry the field before the
+/// colon; the label after it is a value, not a name to search the source for.
+/// `lacks \`handle_contracts: ControlHandle\`` 与 `lacks \`parts\`` 都在冒号前带字段名；冒号后那个是取值，
+/// 不是要在源码里找的名字。
+fn gap_fields(gaps: &[String]) -> Vec<String> {
+    gaps.iter()
+        .filter_map(|gap| backticked(gap))
+        .map(|named| {
+            named
+                .split_once(':')
+                .map_or(named, |(field, _)| field)
+                .trim()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The first backticked word in a note, when it has one.
+/// 一条注里第一个反引号包起来的词（有时）。
+fn backticked(note: &str) -> Option<&str> {
+    let start = note.find('`')? + 1;
+    let rest = &note[start..];
+    let end = rest.find('`')?;
+    Some(rest[..end].trim())
+}
+
+/// The label one face is reported under: its own path's last segment.
+/// 一个面被报告时用的标签：它自己路径的最后一段。
+fn label_of(face: &FaceView) -> String {
+    face.path
+        .rsplit('/')
+        .next()
+        .unwrap_or(&face.path)
+        .to_owned()
+}
+
+/// Up to `limit` lines of one file's text that mention any needle, as `path:line  text`.
+/// 一份文件文本里提到任一 needle 的最多 `limit` 行，形如 `path:line  text`。
+///
+/// A line is trimmed and cut at [`LINE_LIMIT`] characters: the point is the decisive line, and one
+/// generated declaration can be a thousand characters wide — quoting it whole would put back the
+/// slab this excerpt exists to replace.
+/// 每行去掉首尾空白、并在 [`LINE_LIMIT`] 字符处截断：要点是那一行决定性的内容，而一条生成出来的声
+/// 明可以宽达上千字符——整条引用会把这段摘录本要替代掉的整片又装回来。
+fn lines_naming(text: &str, path: &str, needles: &[String], limit: usize) -> Vec<String> {
+    if limit == 0 || needles.is_empty() {
+        return Vec::new();
+    }
+    let mut rows = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        if rows.len() >= limit {
+            break;
+        }
+        if !needles.iter().any(|needle| line.contains(needle.as_str())) {
+            continue;
+        }
+        let trimmed = line.trim();
+        let shown = if trimmed.chars().count() > LINE_LIMIT {
+            trimmed.chars().take(LINE_LIMIT).collect::<String>() + "…"
+        } else {
+            trimmed.to_owned()
+        };
+        rows.push(format!("    {path}:{}  {shown}", index + 1));
+    }
+    rows
+}
+
+/// How wide one quoted source line may be, in characters.
+/// 引用的一行源码最多多宽（字符）。
+const LINE_LIMIT: usize = 200;
+
+/// The registration declaration one file carries, as quoted lines, up to `limit`.
+/// 一份文件携带的那条注册声明，按行引用，最多 `limit` 行。
+///
+/// It exists for the deviation that has **no line of its own**: a field the face does not declare
+/// cannot be quoted, so what a reader gets instead is the declaration it does have. The block runs
+/// from the macro invocation to its closing brace, which is the whole declaration by this grammar's
+/// own shape.
+/// 它是为**自己没有行**的那种偏离而存在的：一个面没声明的字段引不出来，于是读者拿到的是它**确实**有的那条
+/// 声明。块从宏调用起到它的收尾大括号，按这套语法自己的形状，那就是整条声明。
+fn declaration_block(text: &str, path: &str, limit: usize) -> Vec<String> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut rows = Vec::new();
+    let mut inside = false;
+    for (index, line) in text.lines().enumerate() {
+        if !inside {
+            if !line.contains('!') || !line.contains('{') {
+                continue;
+            }
+            inside = true;
+        }
+        let trimmed = line.trim();
+        let shown = if trimmed.chars().count() > LINE_LIMIT {
+            trimmed.chars().take(LINE_LIMIT).collect::<String>() + "…"
+        } else {
+            trimmed.to_owned()
+        };
+        rows.push(format!("    {path}:{}  {shown}", index + 1));
+        if rows.len() >= limit {
+            break;
+        }
+        if trimmed.starts_with('}') {
+            break;
+        }
+    }
+    rows
+}
+
 /// The one face a ledger-named file declares, or why the shape could not be read from it.
 /// 台账点名的一个文件所声明的那个注册面；读不出形状时给出原因。
 ///
@@ -440,6 +564,39 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             }
             differing += 1;
             rows.push(format!("  outlier     {label}: {}", gaps.join("; ")));
+            // W4-6: the row names the field; the bytes that carry it are what a reader then opens a
+            // file to find. The outlier's own line comes first and the specimen's (the majority's)
+            // beside it, because "lacks X" is only actionable next to the declaration that has X.
+            // W4-6：这一行点名了字段，而承载它的字节正是读者随后要打开文件去找的东西。离群者自己的行在前、
+            // 标本（多数派）的在旁，因为"缺 X"只有在有 X 的那条声明旁边才是可行动的。
+            let fields = gap_fields(&gaps);
+            let mut shown: Vec<String> = Vec::new();
+            if let Some(text) = source_text(&sources, &face.source) {
+                let path = format!("src/{}", face.source.trim_start_matches("./"));
+                shown.extend(lines_naming(text, &path, &fields, EXCERPT_LIMIT));
+                // A field that is *absent* has no line to quote, so the sibling's own declaration
+                // block stands in for it: "this is what it declares, next to what it does not" is
+                // the pair a reader needs, and without it the row would show only the specimen's
+                // half and leave the file to be opened anyway.
+                // **缺**掉的字段没有行可引，于是用这个兄弟自己的声明块代替它："这是它声明的，旁边是它没声明的"
+                // 才是读者需要的那一对；没有它，这一行只会显示标本那一半，文件还是得打开。
+                if shown.is_empty() {
+                    shown.extend(declaration_block(
+                        text,
+                        &path,
+                        EXCERPT_LIMIT.saturating_sub(shown.len()),
+                    ));
+                }
+            }
+            for (file, text) in &current {
+                shown.extend(lines_naming(
+                    text,
+                    file,
+                    &fields,
+                    EXCERPT_LIMIT.saturating_sub(shown.len()),
+                ));
+            }
+            rows.extend(shown);
         }
         lines.push(format!(
             "family {parent} · member {} · {} sibling(s)",
@@ -465,6 +622,9 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
 /// 标本比对该读不到什么，以及它指向的下一次调用。
 fn specimen_bounds() -> Vec<String> {
     vec![
+        "quoted lines are an excerpt, not the file: at most 10 per deviating sibling, trimmed, and cut at 200 \
+         characters with `…` — they are the lines the deviation is about, so `read {path, line}` is \
+         still what a reader opens when the surrounding code is the question".to_owned(),
         "not covered by this comparison: it reads the shape the ledger's files declare (parts, \
          exports, handle_traits, part_traits) through the kernel's face parser and compares each \
          sibling's own file against it, so a shape stated in a shared helper, produced by a macro \
@@ -822,6 +982,49 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                 let found = deviations(&sets, wording);
                 for (sibling, notes) in &found {
                     rows.push(format!("  outlier     {sibling}: {}", notes.join("; ")));
+                    // W4-6: the names are in the row; the lines that carry them are what the reader
+                    // would open files for. A name this sibling calls but no other does is shown in
+                    // **its** file; a name the others call and this one does not is shown where the
+                    // majority states it, because an absent line cannot be quoted.
+                    // W4-6：名字已经在那一行里，而承载它们的源码行才是读者要打开文件去找的东西。本兄弟调了、
+                    // 别人都没调的名字，在**它自己**的文件里显示；别人都调、它没调的名字，显示在多数派写它的
+                    // 地方——缺掉的那一行没有东西可引。
+                    let mut shown: Vec<String> = Vec::new();
+                    for note in notes {
+                        if shown.len() >= EXCERPT_LIMIT {
+                            break;
+                        }
+                        let Some(name) = backticked(note) else {
+                            continue;
+                        };
+                        let target = if note.starts_with("calls") || note.starts_with("declares") {
+                            Some(sibling.clone())
+                        } else {
+                            set.iter().map(|face| label_of(face)).find(|other| {
+                                other != sibling
+                                    && sets.iter().any(|(label, names)| {
+                                        label == other && names.contains(name)
+                                    })
+                            })
+                        };
+                        let Some(target) = target else {
+                            continue;
+                        };
+                        let Some(face) = set.iter().find(|face| label_of(face) == target) else {
+                            continue;
+                        };
+                        let Some(text) = source_text(&sources, &face.source) else {
+                            continue;
+                        };
+                        let needles = [name.to_owned()];
+                        shown.extend(lines_naming(
+                            text,
+                            &format!("src/{}", face.source.trim_start_matches("./")),
+                            &needles,
+                            EXCERPT_LIMIT.saturating_sub(shown.len()),
+                        ));
+                    }
+                    rows.extend(shown);
                 }
                 outliers = found.len();
             } else {
