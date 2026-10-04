@@ -170,7 +170,13 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
             return Err(refused_with_a_way_forward(error));
         }
     };
-    let report = report(root, &target, &namespace, &outcome)?;
+    let report = report(
+        root,
+        &target,
+        &namespace,
+        &outcome,
+        arguments.get("full").and_then(Value::as_bool) == Some(true),
+    )?;
     // The copy's diff is computed before it goes away.
     let diff = match &target {
         Target::Project => String::new(),
@@ -793,6 +799,7 @@ fn report(
     target: &Target,
     namespace: &str,
     outcome: &Outcome,
+    full: bool,
 ) -> Result<String, String> {
     let applied = target.applied();
     let verb = match (outcome.moved, applied) {
@@ -807,11 +814,50 @@ fn report(
     // 变更产生的树是预览最强的部分：它与注册树查询报告的是同一份推导，只是跑在执行器刚改过的
     // 那棵树上，因此校验失败会在这里出现，而不是在写入之后。
     let faces = face_views(target.work_dir(root), namespace)?;
-    let list = faces
+    // Audit `W2-4`: the reply used to print **every** face of the tree on every write. On the
+    // nine-face fixtures that is a few lines; on the 50,000-face tree the same sentence is the
+    // whole payload — and the reader of a write is looking at *what changed*, not at an
+    // inventory. What arrives unasked is the census, the face that changed, and the rest is
+    // withheld with the call that buys it (`full: true`).
+    // 审计 `W2-4`：回复过去在每次写入时印出**整棵树的每个面**。在九面的夹具上那是几行；在五万面的树上
+    // 同一句话就是整份载荷——而写入的读者看的是**改了什么**，不是一份清单。不请自来的是普查与发生变动的
+    // 那个面，其余被扣下，并附上买下它的那次调用（`full: true`）。
+    let changed = outcome
+        .source
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let changed_face = faces
         .iter()
-        .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))
-        .collect::<Vec<_>>()
-        .join("\n");
+        .find(|face| !changed.is_empty() && face.source.ends_with(&changed));
+    let list = if full {
+        faces
+            .iter()
+            .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        let shown = changed_face
+            .map(|face| format!("changed  {}  {}  {}", face.path, face.kind, face.source))
+            .unwrap_or_else(|| {
+                "changed  (this action moves the file rather than rewriting a face)".to_owned()
+            });
+        let hidden = faces
+            .len()
+            .saturating_sub(usize::from(changed_face.is_some()));
+        if hidden == 0 {
+            shown
+        } else {
+            let withheld = crate::mcp::truncation::withheld(
+                hidden,
+                faces.len(),
+                1,
+                "face(s)",
+                "pass `full: true` for the whole tree; `registry` prints it with the members grouped",
+            );
+            format!("{shown}\n{withheld}")
+        }
+    };
     let declaration = outcome
         .declaration
         .as_ref()
@@ -831,10 +877,17 @@ fn report(
         format!("preview effect: {}", outcome.message)
     };
     let consequences = consequences(target.work_dir(root), root, namespace, outcome)?;
+    // Audit `W2-5` (D2): the editable-field list is a **refusal** aid — it exists so a caller who
+    // guessed a key learns the shape instead of guessing again — and it was being reprinted in every
+    // successful reply, where the round measured it as a constant block nobody needed twice. The
+    // refusal paths still carry it (`invalid_field`, `run_add`, `run_edit`), so the shape is one
+    // mistake away rather than one reply away.
+    // 审计 `W2-5`（D2）：可编辑字段清单是**拒绝**的辅助——它的存在是为了让猜错键的调用方学会形状、而不是
+    // 再猜一次——而它过去在每条成功回复里重印，那一轮量到它是一个"没人需要第二次"的常量块。拒绝路径仍然带着
+    // 它（`invalid_field`、`run_add`、`run_edit`），因此那形状离一次犯错，而不是离一条回复。
     let mut reply = format!(
-        "action {}\nnamespace {namespace}\n{}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
+        "action {}\nnamespace {namespace}\n{verb} {}\n{declaration}{reported}\nfaces {}\n{list}\n{consequences}",
         if applied { "apply" } else { "preview" },
-        editable_fields_line(),
         outcome.source.display(),
         faces.len()
     );

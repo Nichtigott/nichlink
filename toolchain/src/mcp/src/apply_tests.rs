@@ -140,12 +140,25 @@ fn a_preview_reports_the_resulting_tree_and_leaves_the_project_alone() {
     .expect("the preview runs");
     assert!(reply.contains("action preview"), "{reply}");
     assert!(reply.contains("namespace "), "{reply}");
-    // Every reply carries the shape a request must spell, because the round measured that the one
-    // place listing it (`--list <tool>`) was never called.
-    // 每次回复都带上"请求必须写出的形状"——那轮量到唯一列出它的地方（`--list <tool>`）一次都没被调用。
+    // Audit `W2-5` (D2) reversed an older pin here: the editable-field list used to ride on every
+    // reply because `--list <tool>` was never called. It is a **refusal** aid, so it lives where the
+    // mistake is made — a successful reply prints the change, and one call away (the next refusal)
+    // is the shape. Both halves are asserted, or "removed" and "gone" would look the same.
+    // 审计 `W2-5`（D2）推翻了这里更早的一条钉子：可编辑字段清单过去搭在每条回复上，因为 `--list <tool>` 从没
+    // 被调用过。它是**拒绝**的辅助，因此它住在犯错的地方——成功回复印的是这次改动，而形状离一次调用（下一次被拒）。
+    // 两半都要断言，否则"搬走了"与"没了"看起来一样。
     assert!(
-        reply.contains("fields: module kind preset parts") && reply.contains("one boolean"),
-        "the reply states the editable-field shape: {reply}"
+        !reply.contains("fields: module kind preset parts"),
+        "a successful reply does not reprint the field list: {reply}"
+    );
+    let refused = apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "fields": {"knd": "Button"}}),
+    )
+    .expect_err("a misspelled key is refused");
+    assert!(
+        refused.contains("fields: module kind preset parts"),
+        "the refusal still states the shape: {refused}"
     );
     assert!(reply.contains("faces 1"), "{reply}");
     assert!(reply.contains("root/button"), "{reply}");
@@ -969,4 +982,73 @@ fn the_write_description_states_which_actions_reach_hand_written_faces() {
         wall.contains("boundary:") && wall.contains("additive") && wall.contains("adoption"),
         "the wall itself says which class of action reached it: {wall}"
     );
+}
+
+/// The write reply is bounded: the census, the face that changed, and `full: true` for the rest.
+/// 写入回复是有界的：普查、发生变动的那个面，其余靠 `full: true`。
+///
+/// Audit `W2-4`: every write printed the whole tree, which on the nine-face fixtures is a few lines
+/// and on the 50,000-face tree is the entire payload. The acceptance is a byte budget on the *small*
+/// fixture (≤4.4K preview / ≤2.2K apply) plus the two halves of the rule: the list is withheld by
+/// default and bought back by `full: true`.
+/// 审计 `W2-4`：每次写入都印整棵树，在九面夹具上是几行，在五万面的树上就是整份载荷。验收是**小**夹具上的
+/// 字节预算（预览 ≤4.4K / 落盘 ≤2.2K）加上那条规则的两半：清单默认被扣下，`full: true` 把它买回来。
+#[test]
+fn the_write_reply_is_bounded_and_full_buys_the_tree_back() {
+    let (root, _) = package("bounded-faces");
+    apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "apply": true,
+                "fields": {"module": "control", "kind": "Control", "needs_registry": true}}),
+    )
+    .expect("the parent face");
+    for (module, kind) in [("button", "Button"), ("slider", "Slider"), ("dial", "Dial")] {
+        apply(
+            &root,
+            &json!({"action": "add", "parent": "root/control", "apply": true,
+                    "fields": {"module": module, "kind": kind}}),
+        )
+        .expect("a child face");
+    }
+    let preview = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button",
+                "inside": {"parts": {"label": "String"}}}),
+    )
+    .expect("the preview runs");
+    assert!(
+        preview.contains("changed  root/control/button")
+            && preview.contains("withheld")
+            && !preview.contains("  root/control/slider  Slider"),
+        "the default answer is the census and the changed face: {preview}"
+    );
+    assert!(
+        preview.len() <= 4400,
+        "the preview stays inside its budget: {} bytes",
+        preview.len()
+    );
+    let applied = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/button", "apply": true,
+                "inside": {"parts": {"label": "String"}}}),
+    )
+    .expect("the apply runs");
+    assert!(
+        applied.len() <= 2200,
+        "and so does the write: {} bytes",
+        applied.len()
+    );
+
+    let full = apply(
+        &root,
+        &json!({"action": "deepen", "node": "root/control/slider", "full": true,
+                "inside": {"parts": {"label": "String"}}}),
+    )
+    .expect("the preview runs");
+    assert!(
+        full.contains("  root/control/slider  Slider")
+            && full.contains("  root/control/button  Button"),
+        "`full: true` prints the whole tree again: {full}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }

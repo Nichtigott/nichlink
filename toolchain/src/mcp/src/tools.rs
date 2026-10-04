@@ -275,6 +275,7 @@ pub(crate) fn tools() -> Vec<Value> {
                 "parent":{"type":"string","description":"add: the parent's logical path or identity; defaults to the registry root"},
                 "fields":{"type":"object","description":"the face's fields; edit and rename change only the keys given, add takes the rest as defaults. Values are strings unless noted: `module` is a bare snake_case name, `exports` one export per call, `requires` entries `capability=>provider`, `handle_traits` entries rule labels","properties":{"needs_registry":{"type":"boolean","description":"the one non-string field"}},"additionalProperties":{"type":"string"}},
                 "apply":{"type":"boolean","description":"false (the default) previews on a copy; true writes to the project"},
+                "full":{"type":"boolean","description":"print every face of the resulting tree instead of the census row and the face that changed (default false)"},
                 "confirm":{"type":"boolean","description":"delete and promote: must be true. A delete is the one operation whose preview a caller can step past by accident, so the request says it rather than the bridge adding it"},
                 "root":{"type":"string"}
             },"required":["action"]}),
@@ -796,6 +797,7 @@ fn advertised_schema(tool: &str) -> Value {
             "selector":{"type":"string","description":"promote: the record directory to land"},
             "implementation":{"type":"string","description":"promote: the implementation crate"},
             "apply":{"type":"boolean","description":"false previews; true writes"},
+            "full":{"type":"boolean","description":"print every face of the tree, not the census and the changed one"},
             "confirm":{"type":"boolean","description":"delete/promote: must be true"},
             "root":{"type":"string"}
         },"required":["action"]}),
