@@ -8,7 +8,7 @@
 use serde_json::json;
 
 use super::apply;
-use super::apply_tests::package;
+use super::apply_tests::{package, written};
 
 /// The consumer story a deepen tells is the **same** in the preview and after the write (audit `W5-3`).
 /// deepen 讲的消费方说法，在预览里与写入之后是**同一件**（审计 `W5-3`）。
@@ -157,5 +157,72 @@ fn a_write_reports_whether_the_new_face_landed_like_its_siblings() {
     assert!(
         rooted.contains("family     2 sibling(s) under root; outliers:"),
         "the verdict names the family the face landed in: {rooted}"
+    );
+}
+
+/// A field the caller left out is filled from the family it is joining, and the reply says so (audit `W5-6`).
+/// 调用方没写的字段，从它正在加入的那个家族里补上，而回复会说出来（审计 `W5-6`）。
+///
+/// This is the "derive the family contract from the tree" half: the parent's other children have
+/// already answered "what does this family declare", so a caller that has to spell it from memory is
+/// doing work the tree can do — and getting it wrong is how a family drifts. Both directions are
+/// pinned: an omitted field is inherited **and reported**, an explicit one is left alone.
+/// 这是"从树上推导家族契约"那一半：父级其它孩子已经回答过"这一家声明了什么"，因此必须凭记忆拼它的调用方
+/// 是在做树能做的事——而拼错正是家族开始漂移的方式。两个方向都钉：省略的字段会被继承**并报告**，显式给的
+/// 字段不动。
+#[test]
+fn an_omitted_family_field_is_inherited_and_reported() {
+    let (root, _) = package("family-inherit");
+    apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "apply": true,
+                "fields": {"module": "control", "kind": "Control", "needs_registry": true}}),
+    )
+    .expect("the parent face");
+    for module in ["alpha", "beta"] {
+        apply(
+            &root,
+            &json!({"action": "add", "parent": "root/control", "apply": true,
+                    "fields": {"module": module, "kind": module, "exports": "control.render",
+                               "handle_traits": "ControlHandle"}}),
+        )
+        .expect("a sibling stating the family contract");
+    }
+    let inherited = apply(
+        &root,
+        &json!({"action": "add", "parent": "root/control", "apply": true,
+                "fields": {"module": "gamma", "kind": "gamma"}}),
+    )
+    .expect("the new face");
+    assert!(
+        inherited
+            .contains("inherited  exports = control.render from the family under root/control")
+            && inherited.contains("inherited  handle_traits = ControlHandle from the family"),
+        "the reply names what it filled in: {inherited}"
+    );
+    let text = std::fs::read_to_string(written(&inherited)).expect("the new face file");
+    assert!(
+        text.contains("exports: [\"control.render\"]")
+            && text.contains("handle_traits: [\"ControlHandle\"]"),
+        "and the file carries them in the declaration's own spelling: {text}"
+    );
+
+    // An explicit value wins, and generates no inheritance note for that field.
+    // 显式给的值赢，并且那个字段不会产生继承说明。
+    let explicit = apply(
+        &root,
+        &json!({"action": "add", "parent": "root/control", "apply": true,
+                "fields": {"module": "delta", "kind": "delta", "exports": "control.other"}}),
+    )
+    .expect("a face that overrides one field");
+    assert!(
+        !explicit.contains("inherited  exports")
+            && explicit.contains("inherited  handle_traits = ControlHandle"),
+        "the caller's value is not overwritten, and the fields it did not state still are: {explicit}"
+    );
+    let text = std::fs::read_to_string(written(&explicit)).expect("the overriding face file");
+    assert!(
+        text.contains("exports: [\"control.other\"]"),
+        "the caller's spelling is the one that lands: {text}"
     );
 }

@@ -32,7 +32,7 @@ pub(crate) fn package(label: &str) -> (PathBuf, String) {
 
 /// The path one reply says it wrote, as the reply spells it.
 /// 一条回复说自己写下的路径，按回复的写法。
-fn written(reply: &str) -> PathBuf {
+pub(crate) fn written(reply: &str) -> PathBuf {
     reply
         .lines()
         .find_map(|line| line.strip_prefix("would write "))

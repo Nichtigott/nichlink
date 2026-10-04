@@ -40,7 +40,7 @@
 | M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
 | M4 W5-5 | check 失败按类型路由 | **完成** | 本轮 | `check_tests::a_red_routes_by_its_kind_rather_than_to_the_default_hint` |
 | M4 W5-3 | deepen 预览附消费方 diff | **完成** | 本轮 | `apply_consumers_tests::the_consumer_story_is_the_same_in_the_preview_and_after_the_write` |
-| M4 W5-6 | apply 树驱动一次成型 | **一半**（③ 写后家族判定已落地；① 从树推家族契约与模板仍开） | 本轮 | `apply_consumers_tests::a_write_reports_whether_the_new_face_landed_like_its_siblings` |
+| M4 W5-6 | apply 树驱动一次成型 | **大半**（① 从树推家族契约 + ③ 写后家族判定已落地；②"一次生成完整文件"本已如此） | 上轮+本轮 | `apply_consumers_tests::{a_write_reports_whether_the_new_face_landed_like_its_siblings, an_omitted_family_field_is_inherited_and_reported}` |
 | M4 W5-1 | adopt（单独设计评审后动工） | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
@@ -726,3 +726,30 @@ family     4 sibling(s) under root/control; outliers: 1 of 4
 
 **仍开**：① 从树推家族契约与模板（`add` 自动继承兄弟的形状，调用方不必逐字段拼）；② 一次生成完整文件；
 验收里的 S4 ≤2 次仪器调用与 S6 = 预览→落盘 2 调用属两臂实机。
+
+### W5-6 第①半：从树自行推导家族契约（完成，本轮）
+
+**改动**：`apply add` 时调用方**没写**的家族字段，由**它正在加入的那一家**补上，并且回复**说出来**。
+新增 `apply_family::complete_add_fields` / `inherited_fields`：取父级的孩子，按形状信号解析每个兄弟声明的
+`exports` / `handle_traits` / `part_traits` 标签，取**多数派**（出现次数 > 半数）合成声明里那种
+**逗号分隔**的拼写（渲染器按逗号切分并逐个加引号），填进请求并给出一行
+
+```
+inherited  exports = control.render from the family under root/control; pass it explicitly to override
+```
+
+**三条边界（都是有意为之）**：① **`parts` 从不继承**——它点名对象自己的零件类型，抄兄弟的值按构造就是错的
+（与形状比对同一条规则）；② **显式给的值永远赢**，树是**补全**请求、从不推翻它；③ 父级的两种拼法都读
+（顶层 `parent` 或 `fields` 里的），否则写了第二种的调用方会**静默地**完全得不到继承。
+
+**同一处的两个先红**：`conventions::online_analysis`（W3-3）报新调用点缺 `//! online:`（补："判定的是写入
+**刚留下**的那棵树"）；`conventions::size` 报 `apply.rs` 614 行 ⇒ 把 `W5-3`/`W5-6`/`W5-7` 三组注记整体搬进
+新模块 `apply_notes.rs`（报告的职责是渲染执行器的事实；这三组是"关于调用方那个决定"的事实）。
+
+**真机实测**（两个兄弟都声明了 `exports: ["control.render"]` 与 `handle_traits: ["ControlHandle"]`，再加一个
+不写这两项的 `gamma`）：回复给出两行 `inherited …`，**写下的文件里带着它们**，而家族判定同时说
+`outliers: 0 of 3`——W5-6 的两半合起来正好是"继承契约、然后确认家族干净"。
+
+**钉子**：省略 ⇒ 继承**并报告**且文件里落成声明的拼写；显式 ⇒ 不覆盖、也不为该字段出继承行，而未写的另一个
+字段仍然被继承。**W5-6 由此只剩验收里的步数（S4 ≤2 次仪器调用、S6 = 预览→落盘 2 调用）属两臂实机；"一次生成
+完整文件"本就是这个动作的做法。**

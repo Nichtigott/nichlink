@@ -108,3 +108,136 @@ pub(super) fn family_verdict(work: &Path, namespace: &str, face_path: &str) -> V
     }
     lines
 }
+
+/// Complete an `add` request's fields from the family the new face is joining.
+/// 用新面正在加入的那个家族补全 `add` 请求的字段。
+///
+/// The parent is read from the request in both spellings it accepts (`parent` at the top level, or
+/// inside `fields`), because a caller that wrote the second one would otherwise silently get no
+/// inheritance at all — a difference no reply would show.
+/// 父级按请求接受的两种拼法读（顶层的 `parent`，或 `fields` 里的），因为写了第二种的调用方否则会静默地
+/// 完全得不到继承——而那个差别没有任何回复会显示。
+pub(super) fn complete_add_fields(
+    work: &Path,
+    namespace: &str,
+    arguments: &serde_json::Value,
+    fields: &serde_json::Value,
+) -> (serde_json::Value, Vec<String>) {
+    match arguments
+        .get("parent")
+        .or_else(|| fields.get("parent"))
+        .and_then(serde_json::Value::as_str)
+    {
+        Some(parent) => inherited_fields(work, namespace, parent, fields),
+        None => (fields.clone(), Vec::new()),
+    }
+}
+
+/// The family's own declarations, filled into a new face's fields where the caller left them out.
+/// 当调用方没写时，把家族自己的声明填进新面的字段里。
+///
+/// Audit `W5-6`'s first half: "derive the family contract and template **from the tree**". A caller
+/// that has to spell `exports` and `handle_traits` from memory is doing work the parent's other
+/// children have already done — and getting one of them wrong is how a family drifts. What is
+/// inherited is the **majority** label set per field, and only where the caller said nothing: an
+/// explicit value always wins, and the reply says which fields it filled in, because a value that
+/// arrived without being asked for must never look like one the caller sent.
+/// 审计 `W5-6` 的前半："**从树上**推导家族契约与模板"。一个必须凭记忆拼 `exports` 与 `handle_traits`
+/// 的调用方，做的是父级其它孩子已经做过的工作——而拼错其中之一正是家族开始漂移的方式。继承的是每个字段的
+/// **多数派**标签集，而且只在调用方什么都没说的地方：显式给的值永远赢，而回复会说出它替调用方补了哪些字段，
+/// 因为一个不请自来的值绝不能看起来像调用方送的那个。
+///
+/// `parts` is deliberately **not** inherited: it names the object's own parts type, so a value copied
+/// from a sibling would be wrong by construction (the same rule the shape comparison follows).
+/// `parts` **有意不继承**：它点名对象自己的零件类型，因此抄兄弟的值按构造就是错的（与形状比对同一条规则）。
+///
+/// Returns the completed fields and one note per inherited field.
+/// 返回补全后的字段，以及每个被继承字段的一条说明。
+pub(super) fn inherited_fields(
+    work: &Path,
+    namespace: &str,
+    parent_path: &str,
+    fields: &serde_json::Value,
+) -> (serde_json::Value, Vec<String>) {
+    let inherited_keys = ["exports", "handle_traits", "part_traits"];
+    let mut completed = fields.clone();
+    let mut notes = Vec::new();
+    let Ok(faces) = crate::mcp::resolve::derived_faces(work, namespace) else {
+        return (completed, notes);
+    };
+    let siblings: Vec<_> = faces
+        .0
+        .iter()
+        .filter(|face| {
+            face.path
+                .trim_end_matches('/')
+                .rsplit_once('/')
+                .is_some_and(|(above, _)| above == parent_path.trim_end_matches('/'))
+        })
+        .collect();
+    if siblings.is_empty() {
+        return (completed, notes);
+    }
+    // Each sibling's declared labels per inheritable field, read with the comparison's own parser.
+    // 每个兄弟在每个可继承字段上声明的标签，用比对自己的解析器读。
+    let mut declared: Vec<(String, std::collections::BTreeMap<&str, Vec<String>>)> = Vec::new();
+    for face in &siblings {
+        let Ok(text) = std::fs::read_to_string(work.join("src").join(&face.source)) else {
+            continue;
+        };
+        let Ok(parsed) = one_face(&text) else {
+            continue;
+        };
+        let mut per_field = std::collections::BTreeMap::new();
+        for field in declared_shape(&parsed) {
+            if inherited_keys.contains(&field.spelling) {
+                per_field.insert(
+                    field.spelling,
+                    field
+                        .value
+                        .split(", ")
+                        .map(|label| label.trim().to_owned())
+                        .filter(|label| !label.is_empty())
+                        .collect(),
+                );
+            }
+        }
+        declared.push((face.path.clone(), per_field));
+    }
+    if declared.is_empty() {
+        return (completed, notes);
+    }
+    let Some(object) = completed.as_object_mut() else {
+        return (completed, notes);
+    };
+    for key in inherited_keys {
+        let stated = fields
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty());
+        if stated {
+            continue;
+        }
+        let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+        for (_, per_field) in &declared {
+            for label in per_field.get(key).into_iter().flatten() {
+                *counts.entry(label.as_str()).or_default() += 1;
+            }
+        }
+        let majority: Vec<&str> = counts
+            .iter()
+            .filter(|(_, count)| **count * 2 > declared.len())
+            .map(|(label, _)| *label)
+            .collect();
+        if majority.is_empty() {
+            continue;
+        }
+        let value = majority.join(", ");
+        object.insert(key.to_owned(), serde_json::Value::String(value.clone()));
+        notes.push(format!(
+            "inherited  {key} = {value} from the family under {parent_path}; pass it explicitly to \
+             override"
+        ));
+    }
+    (completed, notes)
+}
