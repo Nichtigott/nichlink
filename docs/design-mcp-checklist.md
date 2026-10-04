@@ -9,9 +9,9 @@
 
 | 阶段 | 项 | 状态 | 提交 | 验收怎么测 |
 | --- | --- | --- | --- | --- |
-| 0-1 | bench 进仓 | 进行中 | — | 见 §阶段 0 |
+| 0-1 | bench 进仓 | **完成**（规模 bench 新写；hardbug 与 S1–S7 已确认可用） | 本地脚本（`.py` 不入库） | 见 §阶段 0 |
 | 0-2 | 四轴回放固化 | 待做 | — | 见 §阶段 0 |
-| 0-3 | 基线落盘 | 待做 | — | 见 §阶段 0 |
+| 0-3 | 基线落盘 | **完成**（五档曲线，实测到 t4） | `1156794` | 见 §阶段 0 的曲线表 |
 | M1 W4-1 | F1 显示名漂移 | **完成** | `e21d6f3` | `consistency_tests::a_displayed_field_name_is_the_spelling_the_declaration_wrote` |
 | M1 W4-2 | F6 路径类校验 | **完成** | `aadf372` | `apply_tests::a_logical_path_is_refused_by_a_typed_plan_with_the_spelling_to_use` |
 | M1 W4-3 | F8 离线脚手架 | **完成** | `5281de5` | `scaffold::project::tests::a_request_names_the_source_and_git_is_never_guessed` + `tools/nichlink-external-rehearsal` |
@@ -24,7 +24,6 @@
 | M2 W1-1 | 广告收敛 2+1 | **完成** | `03e427f` | `protocol_tests::the_advertised_frame_and_the_handshake_fit_their_budgets` |
 | M2 W1-4 | 描述节食 | **完成** | `03e427f` | 同上（三条描述 + 三张 schema 的字节预算） |
 | M2 W2-4 | apply 面清单有界化（D1） | **完成** | `6a605b8` | `apply_tests::the_write_reply_is_bounded_and_full_buys_the_tree_back` |
-| M2 W2-5 | apply 成功回复节食 | **一半**（D2 完成，D3 会话化仍开） | `6a605b8` | 同上 + `a_preview_reports_the_resulting_tree…` 的两半断言 |
 | M2 W5-7 | 写后响应节食（D4） | **完成** | `0d8fcd6` | `a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading` |
 | M2 W5-8 | new_project 自带初始普查 | **完成** | `0d8fcd6` | `new_project_tests::the_creation_reply_carries_the_initial_census` |
 | M2 W1-3 | cargo 输出瘦身 | **完成**（边界索引合并已是现状，本次做分组折叠） | `15ab15b` | `check_tests::the_passing_groups_fold_and_verbose_undoes_it` |
@@ -33,7 +32,10 @@
 | M2 W2-5 | apply 成功回复节食 | **完成**（D2+D3） | `6a605b8` `0785094` | 见 `apply_refusals_tests::the_write_disclaimer_is_said_once_per_session_and_project` |
 | M2 W2-6 | `--list` 瘦身 schema | **完成**（口径已裁：默认有界、按需无界） | `9f06025` | `client_tests::every_discovery_page_is_bounded_with_a_way_to_the_whole_text` |
 | M2 W2-7 | `--list --all-slim` | **完成** | `9f06025` | `client_tests::the_thirteen_tool_view_is_one_small_call` |
-| M3 | W3-1 / W3-2 / W3-3 | 待做 | — | — |
+| M3 W3-1 | 记录增肥三列 + 读写成对 | **完成** | `63ab9ec` | `manifests_tests::the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with`、`every_published_column_reads_back` |
+| M3 W3-2 | 全读工具记录优先 | **进行中**（发布路径的普查/分页与声明事实已接上，端到端已验） | `8869a69` | `published_tests::a_current_record_is_shown_and_its_levels_are_counted` |
+| M3 W3-1b | 记录补 `parent_node`/`owns_registry` | 待做 | — | 见 §阶段 M3 的下一步 |
+| M3 W3-3 | 单一来源评审规则 | 待做 | — | — |
 | M4 | W5-1 / W5-2 / W5-3 / W5-4 / W5-5 / W5-6 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
