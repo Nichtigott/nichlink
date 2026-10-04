@@ -295,7 +295,10 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
         None => out_dir(root).join(format!("check-{face}.log")),
     };
     let outcome = run_command(&mut command, timeout, &log)?;
-    let observed = observation(&outcome.log)?;
+    let observed = observation(
+        &outcome.log,
+        arguments.get("verbose").and_then(Value::as_bool) == Some(true),
+    )?;
     // The verdict is line 1 (see `verdict`), ahead of everything the run produced, because round 7
     // measured a reader taking the one-shot client's `0` for a green face while the only failure
     // report sat on line six. The `exit` line below is the run's own code, and it stays.
@@ -594,7 +597,7 @@ fn why_lines(text: &str, names: &[String]) -> Vec<String> {
 /// with none is not a pass and the verdict line has to be able to say so.
 /// 日志说了什么，按运行自己说的样子——以及它有几条 `test result:` 行，因为没有的那种日志不是通过，
 /// 而判定行必须能说出这件事。
-fn observation(log: &Path) -> Result<Observation, String> {
+fn observation(log: &Path, verbose: bool) -> Result<Observation, String> {
     let mut file =
         File::open(log).map_err(|error| format!("cannot read {}: {error}", log.display()))?;
     let mut text = String::new();
@@ -625,19 +628,47 @@ fn observation(log: &Path) -> Result<Observation, String> {
                 .to_owned(),
         );
     } else {
-        lines.extend(
-            results
-                .iter()
-                .take(SAMPLE)
-                .map(|line| format!("result {line}")),
-        );
-        if results.len() > SAMPLE {
+        // Audit `W1-3`: a run has one group per test binary (unit tests, then one per integration
+        // file), and every group prints its own `test result:` line. The ones that carry a failure
+        // are the answer and are printed one by one; the groups that **passed** are a count and the
+        // first line, because a reader who needs the rest asked for `verbose: true` — that is the
+        // fold, and it is where the reply's tail came from on a wide tree.
+        // 审计 `W1-3`：一次运行每个测试二进制品一组（单元测试，然后每个集成文件一组），每组印自己那行
+        // `test result:`。带失败的那几行就是答案、逐行印出；**通过**的那些折成一个计数加第一行，因为需要
+        // 其余部分的读者会要 `verbose: true`——这就是那次折叠，也正是宽树上回复尾部的来路。
+        let (passed, failed): (Vec<&String>, Vec<&String>) = results
+            .iter()
+            .partition(|line| line.contains("test result: ok"));
+        for line in failed.iter().take(SAMPLE) {
+            lines.push(format!("result {line}"));
+        }
+        if failed.len() > SAMPLE {
             lines.push(withheld(
-                results.len() - SAMPLE,
-                results.len(),
+                failed.len() - SAMPLE,
+                failed.len(),
                 SAMPLE,
-                "result lines",
+                "failing result lines",
                 "read the log named above",
+            ));
+        }
+        if passed.len() == 1 || verbose {
+            for line in passed.iter().take(SAMPLE) {
+                lines.push(format!("result {line}"));
+            }
+            if passed.len() > SAMPLE {
+                lines.push(withheld(
+                    passed.len() - SAMPLE,
+                    passed.len(),
+                    SAMPLE,
+                    "passing result lines",
+                    "read the log named above",
+                ));
+            }
+        } else if !passed.is_empty() {
+            lines.push(format!(
+                "result {} group(s) passed — pass `verbose: true` for each line; first: {}",
+                passed.len(),
+                passed[0]
             ));
         }
     }

@@ -39,7 +39,7 @@ fn a_failing_run_reports_what_it_said() {
     .expect("the command runs");
     assert_eq!(outcome.code, Some(101), "{:?}", outcome.code);
     assert!(!outcome.timed_out);
-    let observed = observation(&log).expect("the log reads");
+    let observed = observation(&log, true).expect("the log reads");
     assert_eq!(observed.results, 1, "one `test result:` line was read");
     let joined = observed.lines.join("\n");
     assert!(joined.contains("1 passed; 1 failed"), "{joined}");
@@ -78,7 +78,10 @@ fn a_log_without_a_result_line_says_nothing_ran() {
         "   Compiling something v0.1.0\nerror: could not compile\n",
     )
     .expect("log");
-    let joined = observation(&log).expect("the log reads").lines.join("\n");
+    let joined = observation(&log, true)
+        .expect("the log reads")
+        .lines
+        .join("\n");
     assert!(joined.contains("nothing ran"), "{joined}");
     assert!(joined.contains("not a pass"), "{joined}");
     let _ = std::fs::remove_dir_all(&root);
@@ -233,7 +236,7 @@ fn a_failing_assertion_rides_with_its_test_name() {
          note: run with `RUST_BACKTRACE=1` for a backtrace\n",
     )
     .expect("the fixture log");
-    let observed = observation(&log).expect("the log reads");
+    let observed = observation(&log, true).expect("the log reads");
     let joined = observed.lines.join("\n");
     assert!(
         joined.contains("failed the_rendered_offsets_add_up"),
@@ -260,7 +263,7 @@ fn a_green_run_carries_no_assertion_words() {
     let root = scratch("why-green");
     let log = root.join("check-default.log");
     std::fs::write(&log, "test result: ok. 3 passed; 0 failed; 0 ignored\n").expect("log");
-    let observed = observation(&log).expect("the log reads");
+    let observed = observation(&log, true).expect("the log reads");
     assert!(
         !observed.lines.iter().any(|line| line.starts_with("why")),
         "{:?}",
@@ -484,6 +487,60 @@ fn the_sample_keeps_the_branch_row_that_names_the_dead_arm() {
     assert!(
         sample.contains("census rows withheld") || !sample.contains("withheld"),
         "the sample never cuts without saying so: {sample}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The groups that passed are a count and the first line; `verbose` prints them all.
+/// 通过的那些组折成一个计数加第一行；`verbose` 把它们全印出来。
+///
+/// Audit `W1-3`: a run has one `test result:` line per test binary, and on a wide tree those lines
+/// are most of the reply's tail. The failing ones are the answer and stay line by line; the passing
+/// ones fold, and the fold names the switch that undoes it — so the reader is never left guessing
+/// whether a group is missing or merely folded.
+/// 审计 `W1-3`：一次运行每个测试二进制品一行 `test result:`，而在宽树上这些行就是回复尾部的大半。带失败的
+/// 那些是答案、逐行留着；通过的那些折叠，而折叠点名撤销它的开关——因此读者从不必猜是少了一组还是只是被折了。
+#[test]
+fn the_passing_groups_fold_and_verbose_undoes_it() {
+    let root = std::env::temp_dir().join(format!("nichlink-check-fold-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("scratch");
+    let log = root.join("check-default.log");
+    std::fs::write(
+        &log,
+        "running 3 tests\n\
+         test result: ok. 3 passed; 0 failed; 0 ignored\n\
+         running 2 tests\n\
+         test result: ok. 2 passed; 0 failed; 0 ignored\n\
+         running 1 test\n\
+         test the_defect ... FAILED\n\
+         test result: FAILED. 0 passed; 1 failed; 0 ignored\n",
+    )
+    .expect("the log");
+
+    let folded = observation(&log, false).expect("the log reads");
+    let text = folded.lines.join("\n");
+    assert_eq!(folded.results, 3, "three groups ran: {text}");
+    assert!(
+        text.contains("test result: FAILED"),
+        "the failing group is printed line by line: {text}"
+    );
+    assert!(
+        text.contains("2 group(s) passed")
+            && text.contains("pass `verbose: true`")
+            && text.contains("first: test result: ok. 3 passed"),
+        "the passing groups fold into a count and the first line, with the way back: {text}"
+    );
+
+    let whole = observation(&log, true).expect("the log reads");
+    let text = whole.lines.join("\n");
+    assert!(
+        text.contains("test result: ok. 3 passed") && text.contains("test result: ok. 2 passed"),
+        "`verbose` prints every group: {text}"
+    );
+    assert!(
+        !text.contains("group(s) passed —"),
+        "and nothing is folded when it does: {text}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

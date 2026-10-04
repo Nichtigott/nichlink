@@ -667,6 +667,7 @@ pub(crate) fn tools() -> Vec<Value> {
                 "timeout_ms":{"type":"integer","minimum":1000,"maximum":3600000,"description":"how long the run may take before it is reported as unknown (default 900000)"},
                 "target_dir":{"type":"string","description":"`CARGO_TARGET_DIR` for this run — pass a directory OUTSIDE the tree; without it cargo writes `target/` inside the tree, and on a tree that was restored (sources older than the leftover artifacts) the next run reuses the old binary and reports a green that belongs to the previous code"},
                 "census":{"type":"boolean","description":"print the whole census table instead of the sampled rows and the one-sentence boundary indexes; the whole table also names every test-unreachable function and splits that column per directory (default false)"},
+                "verbose":{"type":"boolean","description":"print every `test result:` line, including the groups that passed (default: the failing ones line by line, the passing ones as a count and the first)"},
                 "root":{"type":"string"}
             }}),
         ),
@@ -785,6 +786,7 @@ fn advertised_schema(tool: &str) -> Value {
         "nichlink.check" => json!({"type":"object","properties":{
             "face":{"type":"string","description":"`default` (omitted), `all`, or a feature name"},
             "census":{"type":"boolean","description":"the whole table, not the sample"},
+            "verbose":{"type":"boolean","description":"every `test result:` line, passing groups included"},
             "timeout_ms":{"type":"integer","description":"default 900000; a timeout is `unknown`"},
             "root":{"type":"string"}
         }}),
