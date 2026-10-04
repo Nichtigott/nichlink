@@ -51,16 +51,16 @@ pub(super) enum ShapeComparison {
 /// 正是审计 `F1` 抓到的：读者拿到的名字，其取值放不回声明保存它的位置。因此比较仍只认一个键（同族不会
 /// 因为选了另一种拼写而被判离群），而每一行**读者可能照抄**的输出都点名文件里真正写着的那个拼写。
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(super) struct DeclaredField {
+pub(crate) struct DeclaredField {
     /// What comparisons match on; two spellings of one field share it.
     /// 比较据以匹配的东西；同一个字段的两种拼写共用它。
-    pub(super) key: &'static str,
+    pub(crate) key: &'static str,
     /// The spelling the declaration wrote — the one a reader may paste back into `apply`.
     /// 声明写下的拼写——读者可以照抄回 `apply` 的那一个。
-    pub(super) spelling: &'static str,
+    pub(crate) spelling: &'static str,
     /// The rendered value.
     /// 渲染后的取值。
-    pub(super) value: String,
+    pub(crate) value: String,
 }
 
 /// One entry of [`SHAPE_FIELDS`]: what to compare, under which key, and how.
@@ -68,7 +68,7 @@ pub(super) struct DeclaredField {
 pub(super) struct ShapeField {
     /// The key comparisons match on.
     /// 比较据以匹配的键。
-    pub(super) key: &'static str,
+    pub(crate) key: &'static str,
     /// The spellings a declaration may write, the compiler-checked one first when there are two.
     /// 声明可以写下的拼写；有两个时把参与编译检查的那个放前面。
     pub(super) spellings: &'static [&'static str],
@@ -199,7 +199,7 @@ pub(crate) fn tree_census(root: &Path) -> Option<String> {
 
 /// One parsed face's declared shape: the shape fields it carries, in the order of [`SHAPE_FIELDS`].
 /// 一个已解析注册面的已声明形状：它携带的形状字段，按 [`SHAPE_FIELDS`] 的顺序。
-pub(super) fn declared_shape(face: &FaceSyntax) -> Vec<DeclaredField> {
+pub(crate) fn declared_shape(face: &FaceSyntax) -> Vec<DeclaredField> {
     let mut shape = Vec::new();
     for field in SHAPE_FIELDS {
         let declared = match field.spellings {

@@ -40,7 +40,8 @@
 | M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
 | M4 W5-5 | check 失败按类型路由 | **完成** | 本轮 | `check_tests::a_red_routes_by_its_kind_rather_than_to_the_default_hint` |
 | M4 W5-3 | deepen 预览附消费方 diff | **完成** | 本轮 | `apply_consumers_tests::the_consumer_story_is_the_same_in_the_preview_and_after_the_write` |
-| M4 W5-1 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
+| M4 W5-6 | apply 树驱动一次成型 | **一半**（③ 写后家族判定已落地；① 从树推家族契约与模板仍开） | 本轮 | `apply_consumers_tests::a_write_reports_whether_the_new_face_landed_like_its_siblings` |
+| M4 W5-1 | adopt（单独设计评审后动工） | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
@@ -690,3 +691,38 @@ target and path alone, so those plans keep pointing where they point and gain th
 
 **顺带**：新代码把 `apply_tests.rs` 顶到 820 行代码行（超 800 的测试上限），把这条钉子拆进
 `apply_consumers_tests.rs`（`package` 提为 `pub(crate)` 复用）。
+
+### W5-6 apply 树驱动一次成型（本轮完成第 ③ 半：写后家族判定）
+
+清单这条有三半：① 从树自行推导家族契约与模板；② 一次生成完整文件；③ 响应附 diff + 计划后果 +
+**写后家族判定（`outliers: x of N`）**。本轮落的是 **③**（验收"零写后回查"的那一半）。
+
+**改动**：`report()` 现在把**家族判定**搭在每条写入回复上（预览与落盘都有）——新增
+`mcp/src/apply_family.rs`，它在**变更之后的树**上（预览＝副本）取"该面所在父级的孩子们"，按**形状信号**的
+字段名集合跑 `consistency` 自己的多数派算术（`deviations`），给出：
+
+```
+family     4 sibling(s) under root/control; outliers: 1 of 4
+  outlier     lever: declares `exports`, which no sibling declares; declares `handle_traits`, which
+              no sibling declares — `consistency {parent: "root/control"}` prints the fix
+```
+
+**一条规则不是两条**：多数派算术用 `consistency::deviations`，形状词汇用 `consistency_support` 的
+`declared_shape`/`one_face`/`Wording`（本轮把它们提到 `pub(crate)` 并重导出）——在这里抄第二份，就是
+"outlier"在关于同一棵树的两份答案里开始有两个意思的来路。只有自己一家时不给判定（对空无一物的判定不是判定）。
+
+**真机实测**（`/tmp/lever-drift` 上 `apply add`）：新面 `knob` 与三个兄弟一致，而前几轮实验留下的
+`lever` 被点名为唯一离群者——判定跟着**父级**走，不是一条固定路径。
+
+**钉子**：一致的面报 `outliers: 0 of 3`；多声明一个字段的面被点名 `outliers: 1 of 4` 并带上"哪个调用
+交回修复"；判定跟着面落地的**父级**走（第二个根子面按根自己的孩子们判）。
+
+**两处先红，都是我自己前几轮立下的门禁抓到的**（这正是它们的价值）：
+- `conventions::online_analysis`（W3-3 立的）当场报 `apply_family.rs` "computes online without saying why"
+  ——补上 `//! online: 判定说的是**写入刚留下的**那棵树：刚创建的面根本不在任何记录里，而兄弟可能自构建以来
+  已变"；
+- `conventions::size`（600 行棘轮）报 `apply.rs` 602→603 行 ⇒ 把打印搬进 `apply_family::verdict_lines`、
+  把 `work` 绑定提到 `consequences` 之前。
+
+**仍开**：① 从树推家族契约与模板（`add` 自动继承兄弟的形状，调用方不必逐字段拼）；② 一次生成完整文件；
+验收里的 S4 ≤2 次仪器调用与 S6 = 预览→落盘 2 调用属两臂实机。

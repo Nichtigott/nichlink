@@ -33,6 +33,10 @@ use crate::mcp::workspace::{Member, Scope};
 mod support;
 
 pub(crate) use support::tree_census;
+// The shape vocabulary the write path's family verdict reads, re-exported so there is one spelling of
+// "what does this declaration declare" rather than two (audit `W5-6`).
+// 写入路径的家族判定所读的形状词汇，重导出以便"这条声明声明了什么"只有一份拼写而不是两份（审计 `W5-6`）。
+pub(crate) use support::declared_shape;
 
 use support::*;
 
@@ -48,7 +52,7 @@ mod consistency_tests;
 /// the second with the first is how a comparison would silently report `0 deviations`.
 /// 声明缺失或不止一个时给的是原因，绝不是一个空形状："这个文件没有声明这些字段"与"这个文件的声明读不出来"
 /// 是两件不同的事实，而用前者去填后者，正是一份比较会静默报出 `0 deviations` 的来路。
-fn one_face(text: &str) -> Result<FaceSyntax, String> {
+pub(super) fn one_face(text: &str) -> Result<FaceSyntax, String> {
     let mut faces = parse_faces(text).map_err(|error| error.to_string())?;
     match faces.len() {
         0 => Err("it declares no registration face".to_owned()),
@@ -425,7 +429,7 @@ fn siblings<'a>(
 /// 这次比较的行用哪个动词：`api` 信号说的是**调用**，`shape` 信号说的是**声明**。一个内核、两种主语
 /// ——另一种做法是把多数表决的算术再抄一份，而两份多数规则正是两个信号会对"离群"的定义产生分歧的来路。
 #[derive(Clone, Copy)]
-enum Wording {
+pub(super) enum Wording {
     /// The `api` signal: names this face's file calls.
     /// `api` 信号：这个面的文件调用了哪些名字。
     Calls,
@@ -452,7 +456,10 @@ impl Wording {
     }
 }
 
-fn deviations(sets: &[(String, BTreeSet<String>)], wording: Wording) -> Vec<(String, Vec<String>)> {
+pub(super) fn deviations(
+    sets: &[(String, BTreeSet<String>)],
+    wording: Wording,
+) -> Vec<(String, Vec<String>)> {
     let total = sets.len();
     let mut shared: Vec<(String, usize)> = Vec::new();
     let mut seen: BTreeSet<&String> = BTreeSet::new();

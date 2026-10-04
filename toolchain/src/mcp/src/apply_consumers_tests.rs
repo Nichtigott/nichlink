@@ -89,3 +89,73 @@ fn the_consumer_story_is_the_same_in_the_preview_and_after_the_write() {
         "the consumer line names the plan and the reason it keeps pointing there: {preview}"
     );
 }
+
+/// A write says whether the face it wrote landed like its siblings (audit `W5-6`).
+/// 一次写入会说出它写下的那个面是否长得像它的兄弟（审计 `W5-6`）。
+///
+/// This is the "zero write-then-recheck" half of the item: the caller learns the family verdict from
+/// the write's own reply instead of spending a second instrument call on `consistency`. The verdict
+/// uses `consistency`'s own majority arithmetic, so the two answers cannot come to disagree about what
+/// an outlier is.
+/// 这是该条目的"零写后回查"那一半：调用方从写入自己的回复里拿到家族判定，而不必再花一次仪器调用去问
+/// `consistency`。判定用的是 `consistency` 自己的多数派算术，因此两份答案不可能对"什么算离群"产生分歧。
+#[test]
+fn a_write_reports_whether_the_new_face_landed_like_its_siblings() {
+    let (root, _) = package("family-verdict");
+    apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "apply": true,
+                "fields": {"module": "control", "kind": "Control", "needs_registry": true}}),
+    )
+    .expect("the parent face");
+    for module in ["button", "slider"] {
+        apply(
+            &root,
+            &json!({"action": "add", "parent": "root/control", "apply": true,
+                    "fields": {"module": module, "kind": module}}),
+        )
+        .expect("an agreeing leaf");
+    }
+    let agreeing = apply(
+        &root,
+        &json!({"action": "add", "parent": "root/control", "apply": true,
+                "fields": {"module": "knob", "kind": "knob"}}),
+    )
+    .expect("a third agreeing leaf");
+    assert!(
+        agreeing.contains("family     3 sibling(s) under root/control; outliers: 0 of 3"),
+        "an agreeing face reports a clean family: {agreeing}"
+    );
+
+    // A face that declares what no sibling declares is the outlier, and the reply says so.
+    // 一个声明了没有任何兄弟声明的字段的面就是离群者，而回复会说出来。
+    let deviating = apply(
+        &root,
+        &json!({"action": "add", "parent": "root/control", "apply": true,
+                "fields": {"module": "dial", "kind": "dial", "exports": "[control.render]"}}),
+    )
+    .expect("a deviating leaf");
+    assert!(
+        deviating.contains("family     4 sibling(s) under root/control; outliers: 1 of 4"),
+        "the deviating face is counted: {deviating}"
+    );
+    assert!(
+        deviating.contains("outlier     dial: declares `exports`")
+            && deviating.contains("`consistency {parent: \"root/control\"}` prints the fix"),
+        "and it is named, with the call that hands back the fix: {deviating}"
+    );
+
+    // The verdict follows the **parent** the face landed under, not a fixed path: a second root child
+    // is judged against the root's own children.
+    // 判定跟着"这个面落在哪个父级"走，而不是一条固定路径：第二个根子面按根自己的孩子们来判。
+    let rooted = apply(
+        &root,
+        &json!({"action": "add", "parent": "root", "apply": true,
+                "fields": {"module": "solo", "kind": "Solo", "needs_registry": true}}),
+    )
+    .expect("a root child");
+    assert!(
+        rooted.contains("family     2 sibling(s) under root; outliers:"),
+        "the verdict names the family the face landed in: {rooted}"
+    );
+}

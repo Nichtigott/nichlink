@@ -903,7 +903,8 @@ fn report(
     } else {
         format!("preview effect: {}", outcome.message)
     };
-    let consequences = consequences(target.work_dir(root), root, namespace, outcome)?;
+    let work = target.work_dir(root);
+    let consequences = consequences(work, root, namespace, outcome)?;
     // Audit `W2-5` (D2): the editable-field list is a **refusal** aid — it exists so a caller who
     // guessed a key learns the shape instead of guessing again — and it was being reprinted in every
     // successful reply, where the round measured it as a constant block nobody needed twice. The
@@ -918,6 +919,11 @@ fn report(
         outcome.source.display(),
         faces.len()
     );
+    // Audit `W5-6`: the write reply carries the family verdict (see `apply_family`).
+    // 审计 `W5-6`：写入回复携带家族判定（见 `apply_family`）。
+    if let Some(face) = changed_face {
+        reply.push_str(&apply_family::verdict_lines(work, namespace, &face.path));
+    }
     // Audit `W5-3`: the consumer story rides in **both** modes, because a preview that told a
     // different story from the one that lands would be an advertisement rather than a preview. The
     // executor computed it on whichever tree it ran on, so the two are the same computation.
@@ -970,6 +976,9 @@ fn report(
     }
     Ok(reply)
 }
+
+#[path = "apply_family.rs"]
+mod apply_family;
 
 #[path = "apply_refusals.rs"]
 mod apply_refusals;
