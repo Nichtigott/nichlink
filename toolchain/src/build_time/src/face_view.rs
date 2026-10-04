@@ -254,12 +254,11 @@ pub fn face_views_with_external(root: &Path, package: &str) -> Result<FaceRead, 
             (face, parent, parent_resolved)
         })
         .collect::<Vec<_>>();
-    let mut paths = BTreeMap::new();
-    paths.insert(root_node_id(package), "root".to_owned());
     let names = resolved
         .iter()
         .map(|(face, parent, _)| (face.id, *parent, face.registry_name.clone()))
         .collect::<Vec<_>>();
+    let mut paths = logical_paths(root_node_id(package), &names);
     let mut walking = BTreeSet::new();
     let mut views = resolved
         .into_iter()
@@ -314,6 +313,45 @@ fn root_node_id(package: &str) -> NodeId {
     NodeId::from_namespaced_path(package, "<root>", "root")
 }
 
+/// The registry name a declaration resolves to.
+/// 一条声明解析到的注册名。
+///
+/// The fallback is the macro's default, not a new rule: a face that omits `registry_name` takes its
+/// module's last segment (`__face_string_or!(last_path_segment(module_path!()))` in
+/// `run_method/src/macros/face_objects.rs`). A command that guessed anything else would print a
+/// logical path the runtime never had — and since the pruning record now publishes the logical path
+/// (audit `W3-2`), a second spelling of this rule in the manifest writer would be a second answer to
+/// the same question. Both callers call this one.
+/// 回退值是**宏的默认值**，不是新规则：省略 `registry_name` 的面取模块名末段
+/// （`run_method/src/macros/face_objects.rs` 中的 `__face_string_or!(last_path_segment(module_path!()))`）。
+/// 命令若猜成别的，就会打印出运行期从未有过的逻辑路径——而由于剪枝记录现在会发布逻辑路径（审计 `W3-2`），
+/// 在清单写入方里另写一份这条规则就是对同一个问题的第二个答案。两个调用方调的都是这一个。
+pub(crate) fn resolved_registry_name(face: &FaceSyntax, module: &str) -> String {
+    face.path("registry_name")
+        .unwrap_or_else(|| module.rsplit("::").next().unwrap_or(module).to_owned())
+}
+
+/// The logical path of every face, from the `(id, parent id, registry name)` triples that name them.
+/// 每个面的逻辑路径，取自命名它们的 `(id, 父级 id, 注册名)` 三元组。
+///
+/// `pub(crate)` since audit `W3-2`: the pruning record publishes this path, so the writer and the
+/// derived view have to walk it with the same function — and the walk is what the two used to
+/// disagree about when the record carried no path at all.
+/// 自审计 `W3-2` 起为 `pub(crate)`：剪枝记录发布这条路径，因此写入方与推导视图必须用同一个函数走它——
+/// 而当记录根本不携带路径时，两者分歧的正是这次行走。
+pub(crate) fn logical_paths(
+    root: NodeId,
+    names: &[(NodeId, NodeId, String)],
+) -> BTreeMap<NodeId, String> {
+    let mut paths = BTreeMap::new();
+    paths.insert(root, "root".to_owned());
+    let mut walking = BTreeSet::new();
+    for (id, _, _) in names {
+        logical_path(*id, names, &mut paths, &mut walking);
+    }
+    paths
+}
+
 fn visit_face_view(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<RawFace>) {
     for node in nodes {
         if let Some(file) = &node.file {
@@ -324,19 +362,7 @@ fn visit_face_view(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<Ra
                 && let Some(kind) = face.path("kind")
             {
                 let module = source_module_path(&relative);
-                let registry_name = face.path("registry_name").unwrap_or_else(|| {
-                    // The macro default, not a new rule: a face that omits
-                    // `registry_name` takes its module's last segment
-                    // (`__face_string_or!(last_path_segment(module_path!()))` in
-                    // `run_method/src/macros/face_objects.rs`). A command that
-                    // guessed anything else would print a logical path the
-                    // runtime never had.
-                    // 这是宏的默认值，不是新规则：省略 `registry_name` 的面取模块名末段
-                    // （`run_method/src/macros/face_objects.rs` 中的
-                    // `__face_string_or!(last_path_segment(module_path!()))`）。命令若
-                    // 猜成别的，就会打印出运行期从未有过的逻辑路径。
-                    module.rsplit("::").next().unwrap_or(&module).to_owned()
-                });
+                let registry_name = resolved_registry_name(&face, &module);
                 faces.push(RawFace {
                     id: NodeId::from_namespaced_path(package, &relative, &kind),
                     parent: parent_of(&face),

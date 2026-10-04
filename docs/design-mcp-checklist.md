@@ -511,3 +511,35 @@ slider 的 `parent_node` **正是 control.rs 自己的 `node` 列**（子面的�
 **并行跑线程** ⇒ `the_bounds_are_said_once_per_session_and_root` 只在全量跑时红（另一个测试的
 `session::forget()` 把它的键擦了）。改成 **thread-local**：stdio 服务本来就在调用它的那个线程上读并作答，
 因此生产语义不变，而测试各自一个线程、互不干扰。连跑三遍 565 项全绿。
+
+### W3-2 第二刀：记录发布**逻辑路径**（完成，本轮）
+
+**上一轮实测指出的正是这一条**：记录里 `path` 是声明拼出的东西，对每个宏派生的面都是 `-`，于是发布
+普查只能退到**源码目录**计数（一面一层）。而逻辑路径**构建期早就算出来了**——`face_view::logical_path`
+沿解析后的父链走。
+
+**改法（复用，不复制）**：
+- `face_view::resolved_registry_name(face, module)` 与 `face_view::logical_paths(root, names)` 提为
+  `pub(crate)`，**推导视图与清单写入方调同一对函数**——否则"注册名的回退规则"（省略时取模块名末段）
+  会有两份拼写，而对同一个问题给出两个答案正是本仓最不许的事。
+- `write_pruning_manifest` 现在**三遍**：① 索引「模块 → 面 id」；② 用**完整**的索引算
+  `(id, 父级 id, 注册名)` 三元组；③ 逐行解析并发布。**第二遍必须独立**——子面可能先于它点名的模块被
+  访问到；我第一版把解析塞在索引那趟里，钉子当场抓到：`parent:` 点名稍后访问的模块的子面拿到
+  `root/child` 而不是 `root/dial/child`（注释里把这件事记下来了）。
+- 新增第十三列 `logical_path`；`PruningRow` 同步读回；发布行也印 `logical_path=`；普查的层级回退链是
+  **逻辑路径 → 声明路径 → 源码目录**，并且**说出用的是哪一个**。
+
+**端到端（真 build script + `verify`，101 面）**：
+
+```
+… owns_registry  logical_path
+… false          root/control/child000088
+```
+```
+level (logical path prefix) and how many recorded faces sit under it:
+  root                                         1 face(s)
+  root/control                                 100 face(s)
+```
+⇒ 与推导侧**形状完全一致**（同一棵树两支都给出 `root 1 / root/control 100`），发布普查从 2,824 B 降到
+**1,386 B**（此前那次"压到 1,966 B"是靠修剪行数与注长度换来的；现在形状本身对了，预算不是靠削出来的）。
+已构建 101 面的默认 `registry` **88.7ms**（未构建 278.8ms）。

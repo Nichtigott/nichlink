@@ -131,7 +131,7 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
     let header = record.lines().next().unwrap_or_default();
     assert_eq!(
         header,
-        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry",
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\tlogical_path",
         "the columns are the record's contract"
     );
 
@@ -149,7 +149,7 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
         .find(|line| line.contains("dial/dial.rs"))
         .expect("a row for the face");
     let columns = row.split('\t').collect::<Vec<_>>();
-    assert_eq!(columns.len(), 12, "twelve columns: {row}");
+    assert_eq!(columns.len(), 13, "thirteen columns: {row}");
     assert_eq!(
         columns[7], expected_hash,
         "the source hash is the file's own sha256: {row}"
@@ -192,6 +192,15 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
     assert_eq!(
         columns[11], "false",
         "and the fixture declares no registry of its own: {row}"
+    );
+    // Audit `W3-2`: the logical path is the **derived** answer (the walk over resolved parents), not
+    // what the declaration spelled — and this fixture's face declares no `path` at all, which is the
+    // case the column exists for.
+    // 审计 `W3-2`：逻辑路径是**推导出来的**答案（沿解析后的父链走），不是声明拼出的东西——而这个夹具的
+    // 面根本没声明 `path`，正是这一列为之存在的情形。
+    assert_eq!(
+        columns[12], "root/dial",
+        "the logical path is the derived one: {row}"
     );
     let before = columns[8].to_owned();
     super::write_pruning_manifest(&src, &nodes, &out).expect("the manifest writes again");
@@ -254,6 +263,11 @@ fn every_published_column_reads_back() {
         row.calls.as_deref(),
         Some("helper"),
         "the direct calls read back: {row:?}"
+    );
+    assert_eq!(
+        row.logical_path.as_deref(),
+        Some("root/dial"),
+        "the logical path reads back: {row:?}"
     );
 
     // A record from before these columns still parses: the older three-column form leaves every
@@ -339,6 +353,11 @@ fn a_module_named_parent_resolves_to_its_identity() {
         dial.owns_registry.as_deref(),
         Some("false"),
         "`owns_registry` is published for every face: {dial:?}"
+    );
+    assert_eq!(
+        child.logical_path.as_deref(),
+        Some("root/dial/child"),
+        "the logical path nests under the parent's registry name: {child:?}"
     );
     let _ = fs::remove_dir_all(&root);
 }

@@ -485,28 +485,44 @@ fn render_published(
         // 审计 `W2-1` 同样落到发布路径上：已构建的树的 `registry` 过去每个面印一行、毫无上限，与推导路径
         // 当初的缺陷是同一个。普查在两条路上是同一个形状——总数与逐层计数——而记录携带 `path` 列时就用
         // **已发布的**那一个来数。
-        let by_path = rows.iter().any(|row| row.path.is_some());
+        // The **logical** path is what the census counts on (audit `W3-2`): it is the answer the
+        // runtime gives, while `path` is only what a declaration spelled and is empty for every
+        // macro-derived face. The fallback chain is logical path → declared path → source directory,
+        // and whichever one answered is named in the line above the counts.
+        // 普查按**逻辑**路径计数（审计 `W3-2`）：它是运行期给出的答案，而 `path` 只是声明拼出的东西、
+        // 对每个宏派生的面都空着。回退链是 逻辑路径 → 声明路径 → 源码目录，而究竟是哪一个答的，由计数
+        // 上方那一行说出来。
+        let by_logical = rows.iter().any(|row| row.logical_path.is_some());
+        let by_path = by_logical || rows.iter().any(|row| row.path.is_some());
         output.push_str(&format!(
             "level ({}) and how many recorded faces sit under it:\n",
-            if by_path {
+            if by_logical {
                 "logical path prefix"
+            } else if by_path {
+                "declared path prefix — this record carries no logical path"
             } else {
-                "source directory — this record carries no `path`"
+                "source directory — this record carries no path"
             }
         ));
         let mut counts: std::collections::BTreeMap<String, usize> =
             std::collections::BTreeMap::new();
         for row in rows {
-            let level = match (&row.path, by_path) {
+            let level = match (&row.logical_path, by_logical) {
                 (Some(path), true) => path
                     .rsplit_once('/')
                     .map_or("<root>", |(above, _)| above)
                     .to_owned(),
-                _ => row
-                    .source
-                    .rsplit_once('/')
-                    .map_or("<src>", |(dir, _)| dir)
-                    .to_owned(),
+                _ => match (&row.path, by_path) {
+                    (Some(path), true) => path
+                        .rsplit_once('/')
+                        .map_or("<root>", |(above, _)| above)
+                        .to_owned(),
+                    _ => row
+                        .source
+                        .rsplit_once('/')
+                        .map_or("<src>", |(dir, _)| dir)
+                        .to_owned(),
+                },
             };
             *counts.entry(level).or_default() += 1;
         }
@@ -553,8 +569,9 @@ fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
         value.as_deref().unwrap_or("-")
     }
     line.push_str(&format!(
-        "  path={} kind={} registry_name={} parent={} calls={} owns_registry={}",
+        "  path={} logical_path={} kind={} registry_name={} parent={} calls={} owns_registry={}",
         spelled(&row.path),
+        spelled(&row.logical_path),
         spelled(&row.kind),
         spelled(&row.registry_name),
         spelled(&row.parent),
@@ -577,7 +594,7 @@ fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
 /// 开始发布它们起就不成立（审计 `W3-1` 又加了源码哈希、声明指纹与直接调用名）。这是一句**落后于**行为的
 /// 自述，与"跑在行为前面"的自述是同一个缺陷：读者以为那几列不在，于是手工推导。
 const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. A row shows the \
-     declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`, \
+     declaration facts the record carries (`path`, `logical_path`, `kind`, `registry_name`, `parent`, \
      `owns_registry`) and what its file calls (`calls`); `-` means the declaration named none. \
      `source_hash`, `fields` and `parent_node` are published **in** `pruning_manifest.tsv` and are \
      not reprinted per row. A face added since the build is not in the record at all — that one is \

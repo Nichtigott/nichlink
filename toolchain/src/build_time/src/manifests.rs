@@ -52,8 +52,26 @@ pub(crate) fn write_pruning_manifest(
     // 可能先于"拥有它点名的那个模块"的面被访问到。
     let mut modules = std::collections::BTreeMap::new();
     visit_face_modules(src, nodes, &mut modules);
+    // A **third** walk, and it has to be one: the triples below carry resolved parent identities, and
+    // a child may be visited before the face that owns the module it names — resolving during the
+    // indexing walk would answer "unresolved" for exactly the children this column exists for. The
+    // pin caught that: the first version of this code did resolve during indexing, and a child whose
+    // `parent:` named a later-visited module got `root/child` instead of `root/dial/child`.
+    // **第三次**遍历，而且必须是独立的一次：下面的三元组带着解析后的父级身份，而子面可能先于"拥有它点名的
+    // 那个模块"的面被访问到——在索引那趟里解析，会对**正是这一列为之存在的那种子面**答"未解析"。钉子抓到了
+    // 这一点：这段代码的第一版就是在索引途中解析的，于是 `parent:` 点名了稍后才会被访问的模块的子面拿到
+    // `root/child` 而不是 `root/dial/child`。
+    let mut names = Vec::new();
+    visit_face_names(src, nodes, &modules, &mut names);
+    // The logical path is the build's own walk over those triples (audit `W3-2`): the record used to
+    // publish only the `path` a declaration spelled, which is `-` for every macro-derived face, so a
+    // reader counting levels fell back to source directories and got one level per face.
+    // 逻辑路径是构建自己对这些三元组的行走（审计 `W3-2`）：记录过去只发布声明拼出的 `path`，而它对每个
+    // 宏派生的面都是 `-`，于是按层级计数的读者退到源码目录，落得"一面一层"。
+    let paths =
+        super::face_view::logical_paths(super::registry_identity::package_root_node_id(), &names);
     let mut rows = Vec::new();
-    visit_pruning_symbols(src, nodes, &modules, &mut rows);
+    visit_pruning_symbols(src, nodes, &modules, &paths, &mut rows);
     write_face_rows(out_dir.join("pruning_manifest.tsv"), rows)
 }
 
@@ -88,6 +106,15 @@ struct FaceColumns {
     /// Whether the declaration gives this face a registry of its own (audit `W3-1b`).
     /// 这条声明是否给了这个面自己的注册机（审计 `W3-1b`）。
     owns_registry: String,
+    /// The **logical** path the build derives by walking the resolved parent chain (audit `W3-2`).
+    /// **逻辑**路径，构建沿解析后的父链走出来的（审计 `W3-2`）。
+    ///
+    /// This is a different fact from `path` beside it, and the difference is the point: `path` is
+    /// what the **declaration spelled** (`-` for every macro-derived face), while this is the answer
+    /// the runtime would give. The census counts levels on this column.
+    /// 它与旁边的 `path` 是两件事，而这个区别正是要点：`path` 是**声明拼出的**（对每个宏派生的面都是 `-`），
+    /// 而这一列是运行期会给出的答案。普查按这一列计层。
+    logical_path: String,
 }
 
 impl FaceColumns {
@@ -98,6 +125,7 @@ impl FaceColumns {
         kind: &str,
         source: &str,
         modules: &std::collections::BTreeMap<String, NodeId>,
+        logical_path: Option<&String>,
     ) -> Self {
         let spelled = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
         Self {
@@ -113,6 +141,7 @@ impl FaceColumns {
                 Some(true) => "true".to_owned(),
                 _ => "false".to_owned(),
             },
+            logical_path: logical_path.cloned().unwrap_or_else(|| "-".to_owned()),
         }
     }
 }
@@ -132,21 +161,45 @@ fn resolved_parent(
     face: &FaceSyntax,
     modules: &std::collections::BTreeMap<String, NodeId>,
 ) -> String {
+    let (id, resolved) = resolved_parent_id(face, modules);
+    if resolved {
+        id.to_string()
+    } else {
+        "-".to_owned()
+    }
+}
+
+/// The parent identity a declaration resolves to, and whether the chain resolved at all.
+/// 一条声明解析到的父级身份，以及这条链究竟解析出来没有。
+///
+/// Unresolved parents answer the **package root** with `false`, which is what the derived view does
+/// (`face_view::resolve_parent`), so the logical path this feeds is the same one a reader would
+/// derive. The published column still writes `-`, because "the root, but the chain was broken" is not
+/// the same claim as "the root".
+/// 未解析的父级回**包根**加 `false`，与推导视图（`face_view::resolve_parent`）一致，因此它喂给逻辑
+/// 路径的东西与读者推导出来的相同。而发布的那一列仍写 `-`，因为"根，但链断了"与"根"不是同一个主张。
+fn resolved_parent_id(
+    face: &FaceSyntax,
+    modules: &std::collections::BTreeMap<String, NodeId>,
+) -> (NodeId, bool) {
     match super::face_view::parent_of(face) {
         super::face_view::ParentSpec::Root => {
-            super::registry_identity::package_root_node_id().to_string()
+            (super::registry_identity::package_root_node_id(), true)
         }
-        super::face_view::ParentSpec::FromPath { source, kind } => {
-            super::registry_identity::package_node_id(&source, &kind).to_string()
-        }
+        super::face_view::ParentSpec::FromPath { source, kind } => (
+            super::registry_identity::package_node_id(&source, &kind),
+            true,
+        ),
         super::face_view::ParentSpec::NodePath(module) => {
             let key = module.strip_prefix("crate::").unwrap_or(&module);
             match modules.get(key) {
-                Some(id) => id.to_string(),
-                None => "-".to_owned(),
+                Some(id) => (*id, true),
+                None => (super::registry_identity::package_root_node_id(), false),
             }
         }
-        super::face_view::ParentSpec::Unparsed => "-".to_owned(),
+        super::face_view::ParentSpec::Unparsed => {
+            (super::registry_identity::package_root_node_id(), false)
+        }
     }
 }
 
@@ -276,12 +329,12 @@ fn write_face_rows(
     rows.sort();
     rows.dedup();
     let mut output = String::from(
-        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\n",
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\tlogical_path\n",
     );
     for (id, source, symbol, columns) in rows {
         writeln!(
             output,
-            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             columns.path,
             columns.kind,
             columns.registry_name,
@@ -290,7 +343,8 @@ fn write_face_rows(
             columns.fields,
             columns.calls,
             columns.parent_node,
-            columns.owns_registry
+            columns.owns_registry,
+            columns.logical_path
         )
         .unwrap();
     }
@@ -349,6 +403,7 @@ fn visit_pruning_symbols(
     src: &Path,
     nodes: &[Node],
     modules: &std::collections::BTreeMap<String, NodeId>,
+    paths: &std::collections::BTreeMap<NodeId, String>,
     rows: &mut Vec<(NodeId, String, String, FaceColumns)>,
 ) {
     for node in nodes {
@@ -361,7 +416,7 @@ fn visit_pruning_symbols(
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
                 let id = super::registry_identity::package_node_id(&relative, &kind);
                 let module = source_module_path(&relative);
-                let columns = FaceColumns::declared(&face, &kind, &source, modules);
+                let columns = FaceColumns::declared(&face, &kind, &source, modules, paths.get(&id));
                 let mut found = false;
                 for item in source.lines().filter_map(parse_pruning_item) {
                     found = true;
@@ -377,7 +432,7 @@ fn visit_pruning_symbols(
                 }
             }
         }
-        visit_pruning_symbols(src, &node.children, modules, rows);
+        visit_pruning_symbols(src, &node.children, modules, paths, rows);
     }
 }
 
@@ -406,6 +461,40 @@ fn visit_face_modules(
             }
         }
         visit_face_modules(src, &node.children, modules);
+    }
+}
+
+/// The `(id, parent id, registry name)` triples the logical-path walk needs (audit `W3-2`).
+/// 逻辑路径行走所需的 `(id, 父级 id, 注册名)` 三元组（审计 `W3-2`）。
+///
+/// Runs **after** the module index is complete, for the reason the writer's own comment gives: a
+/// child may be visited before the module it names.
+/// 在模块索引**建完之后**才跑，理由见写入方自己的注：子面可能先于它点名的模块被访问到。
+fn visit_face_names(
+    src: &Path,
+    nodes: &[Node],
+    modules: &std::collections::BTreeMap<String, NodeId>,
+    names: &mut Vec<(NodeId, NodeId, String)>,
+) {
+    for node in nodes {
+        if let Some(file) = &node.file {
+            let relative = relative_display(src, file);
+            if let Ok(source) = fs::read_to_string(file)
+                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
+                let id = super::registry_identity::package_node_id(&relative, &kind);
+                let module = source_module_path(&relative);
+                let (parent, _) = resolved_parent_id(&face, modules);
+                names.push((
+                    id,
+                    parent,
+                    super::face_view::resolved_registry_name(&face, &module),
+                ));
+            }
+        }
+        visit_face_names(src, &node.children, modules, names);
     }
 }
 

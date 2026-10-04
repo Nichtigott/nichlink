@@ -125,9 +125,9 @@ impl Fixture {
         self.publish(
             "pruning_manifest.tsv",
             &format!(
-                "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\n\
-                 {button}\tbutton/button.rs\t-\troot/button\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\t{parent}\tfalse\n\
-                 {slider}\tslider/slider.rs\t-\troot/control/slider\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\t{parent}\ttrue\n",
+                "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\tlogical_path\n\
+                 {button}\tbutton/button.rs\t-\t-\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\t{parent}\tfalse\troot/button\n\
+                 {slider}\tslider/slider.rs\t-\t-\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\t{parent}\ttrue\troot/control/slider\n",
                 hash = "a".repeat(64),
                 fingerprint = "b".repeat(64),
                 parent = "c".repeat(32),
@@ -465,7 +465,7 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
     let census =
         crate::mcp::registry::registry_brief(&fixture.root).expect("a published member answers");
     assert!(
-        census.contains("level (logical path prefix)"),
+        census.contains("level (logical path prefix)") && census.contains("root/control   "),
         "the census counts the published logical paths: {census}"
     );
     assert!(
@@ -482,7 +482,8 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
         crate::mcp::registry::registry_page(&fixture.root, 0, 200).expect("the page answers");
     assert!(
         full.contains("rows 1-2 of 2")
-            && full.contains("path=root/button")
+            && full.contains("path=-")
+            && full.contains("logical_path=root/button")
             && full.contains("kind=Button")
             && full.contains("registry_name=button")
             && full.contains("parent=rc")
