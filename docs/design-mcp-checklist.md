@@ -788,3 +788,33 @@ inherited  exports = control.render from the family under root/control; pass it 
 
 **仍开**：W6-2（中大型项目参考结构：workspace 分成员 + 家族分层规范 + 规模生成器验证树，验收 50k 文件
 workspace 树 `registry`/`consistency`/`search` p95 <3s 且响应拍平）。
+
+### W6-2 中大型项目参考结构（本轮：验收在 50k 面上实测，并修掉一处"响应不拍平"）
+
+**造树**（生成器新增 `--workspace <成员数> <每个成员的面数>`）：`gen_scale_tree.py target/scale/w50
+--workspace 20 2500` ⇒ **20 个成员 × 2,500 个面 = 50,080 个 `.rs` 文件**。成员是**普通包**（无 `build.rs`、
+无 `[workspace]` 表——后者会让 cargo 看到多个工作区根并拒绝这棵树），因此发布记录**不需要编译器**：对每个成员
+各跑一次 `verify`（只走管线）即可。
+
+**实测（三跑，第三次的字节数；数据 `scale-logs/workspace-50k.json`）**：
+
+| 工具 | 运行时间 | 响应字节 | 判定 |
+| --- | --- | --- | --- |
+| `registry`（默认普查） | 0.52 / 0.46 / 0.48 s | **1,961 B** | **达标且拍平**（五万面 1,961 B，而已构建的 101 面是 1,966 B） |
+| `search --query child000001` | 23.5 / 24.4 / 24.0 s | 10,802 B | ✗ 约 24 s |
+| `consistency --parent root/control --by shape` | 137.9 / 161.3 / 167.6 s | **2,808,408 B** | ✗ 约 2.5 min 且**完全没有拍平** |
+
+**结论分两半**：
+1. **`registry` 达标**——M3 的记录路径 + W2-1 的普查，在五万面上就是"平"的（这条验收最想看到的东西成立）。
+2. **`search`/`consistency` 未达标，而瓶颈不是面的推导**：它们每次调用都要 `load_sources` 读一遍整棵树的
+   源码（记录里没有函数级/调用级数据）——正是清单 W3-2 自己点名的那个余项。
+
+**本轮顺带修掉一处真的"不拍平"**：`consistency` 的 `--parent` 模式**每个成员印一行**，五万面实测 **2,808,408
+字节**；而本工具自己的承诺是"一次调用点名离群者"，默认印出每个成员与它自相矛盾。改为默认保留**家族行 + 离群者
++ 它们的原文片段**，其余扣下并附 `full: true`（与 W2-1 同一套 `truncation::withheld` 出路）⇒ 同一棵树同一
+调用降到 **10,688 字节**（时间不变：成本在**读源码**，不在渲染）。钉子
+`consistency_tests::the_member_rows_are_bought_not_given` 两个方向都钉（默认扣下且说出去哪儿买；`full: true`
+全印）；既有那条 `the_api_signal_reads_each_siblings_own_calls…` 改成用 `full: true` 买下它要读的行。
+
+**如实记一处正确性缺口**（不藏）：在这棵 50k 工作区上 `consistency` 答 `outliers: 0 of 0`——源码索引有
+**每棵树的预算**、超了就跳过文件，于是兄弟集合是空的。它该单独立项，本轮只把它记下来。

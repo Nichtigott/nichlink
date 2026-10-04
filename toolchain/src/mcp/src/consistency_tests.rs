@@ -527,8 +527,17 @@ fn the_sibling_set_is_one_level_deep() {
 fn the_api_signal_reads_each_siblings_own_calls_and_names_the_drifter() {
     let root = specimen_package("api-signal");
     let file = "src/control/object/slider/slider.rs";
-    let clean =
-        super::consistency(&root, &json!({"parent": "root/control", "by": "api"})).expect("answer");
+    // `full: true` because audit `W6-2` bounds the per-member rows by default (a 50,000-face family
+    // measured 2.8 MB of them); this pin is about the signal **reading** each sibling, so it buys the
+    // rows. `the_member_rows_are_bought_not_given` pins the bound itself.
+    // 用 `full: true`，因为审计 `W6-2` 默认把"每个成员的行"封了顶（五万面的家族实测 2.8 MB 的这种行）；
+    // 这条钉的是信号**读**了每个兄弟，因此把那些行买下来。封顶本身由
+    // `the_member_rows_are_bought_not_given` 钉。
+    let clean = super::consistency(
+        &root,
+        &json!({"parent": "root/control", "by": "api", "full": true}),
+    )
+    .expect("answer");
     assert!(
         clean.contains("1 call(s): to_local") && !clean.contains("\n  outlier"),
         "every sibling's own call is read and unanimity is not an outlier: {clean}"
@@ -924,5 +933,41 @@ fn a_hand_written_face_gets_a_manual_repair_not_a_refused_request() {
     assert!(
         !fix.starts_with('{'),
         "and it is prose rather than a request the write path would refuse: {fix}"
+    );
+}
+
+/// A family's per-member rows are bought, not given (audit `W6-2`).
+/// 一个家族的"每个成员的行"是买来的，不是白给的（审计 `W6-2`）。
+///
+/// Measured on a 50,000-face workspace: `consistency --parent root/control --by shape` answered
+/// **2,808,408 bytes**, one row per member. The tool's own promise is "one call names the outlier", so
+/// a default that prints every member contradicts it — and the acceptance this came from asks for a
+/// **flat** response. The default therefore keeps the family line, the outliers and their excerpts,
+/// and withholds the rest with the call that buys them; `full: true` prints them all.
+/// 在五万面的工作区上实测：`consistency --parent root/control --by shape` 答了 **2,808,408 字节**，
+/// 每个成员一行。本工具自己的承诺是"一次调用点名离群者"，因此"默认印出每个成员"与它自相矛盾——而它来自的
+/// 那条验收要的正是**拍平**的响应。所以默认保留家族行、离群者与它们的原文片段，其余扣下并附上买下它的调用；
+/// `full: true` 全印。
+#[test]
+fn the_member_rows_are_bought_not_given() {
+    let root = specimen_package("bounded-rows");
+    let bounded = super::consistency(&root, &json!({"parent": "root/control", "by": "shape"}))
+        .expect("answer");
+    assert!(
+        bounded.contains("member row(s) withheld") && bounded.contains("full: true"),
+        "the default withholds the per-member rows and names the call that buys them: {bounded}"
+    );
+    assert!(
+        bounded.contains("outliers:") && bounded.contains("family root/control"),
+        "while keeping the family line and the verdict: {bounded}"
+    );
+    let full = super::consistency(
+        &root,
+        &json!({"parent": "root/control", "by": "shape", "full": true}),
+    )
+    .expect("answer");
+    assert!(
+        !full.contains("member row(s) withheld") && full.contains("field(s):"),
+        "`full: true` prints every member's own value: {full}"
     );
 }

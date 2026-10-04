@@ -1,0 +1,22 @@
+{
+  "what": "W6-2 acceptance measurement: a 50,000-face workspace tree, read tools, 2026-10-04",
+  "tree": "tools/gen_scale_tree.py target/scale/w50 --workspace 20 2500 -> 20 members x 2500 child faces; 50,080 .rs files",
+  "published": "each member ran `verify` (pipeline only, no compiler): records under <member>/target/nichlink/out",
+  "protocol": "bash `time` around `nichlink-mcp --call <tool> --root <workspace>`, three runs, response bytes from the third",
+  "rows": [
+    {"tool": "registry", "runs_s": [0.522, 0.463, 0.479], "bytes": 1961,
+     "verdict": "met: <3 s and flat (1961 B at 50k faces; the same census is 1966 B on a built 101-face tree)"},
+    {"tool": "search --query child000001", "runs_s": [23.499, 24.438, 23.968], "bytes": 10802,
+     "verdict": "not met: ~24 s, because it reads the sources (the record carries no function-level data)"},
+    {"tool": "consistency --parent root/control --by shape", "runs_s": [137.876, 161.254, 167.644], "bytes": 2808408,
+     "verdict": "not met: ~2.5 min and 2.8 MB — one row per member"},
+    {"tool": "consistency (after bounding the member rows this round)", "runs_s": [183.033], "bytes": 10688,
+     "verdict": "response now flat (2,808,408 -> 10,688 B), but the time is unchanged: the cost is the source reading, not the rendering"}
+  ],
+  "findings": [
+    "registry is flat and fast at 50k: the M3 record path plus the W2-1 census did what they were for",
+    "search and consistency are the remaining wall and it is not the face derivation: it is `load_sources` (a tree-wide source read) per call — the W3-2 remainder the checklist itself names",
+    "consistency's parent mode was unbounded in a second way (one row per member); fixed this round with a default bound plus `full: true`",
+    "on this workspace consistency answers `outliers: 0 of 0`: the source index has a per-tree budget and skips files, so the sibling set is empty — a correctness gap worth its own item, recorded rather than hidden"
+  ]
+}

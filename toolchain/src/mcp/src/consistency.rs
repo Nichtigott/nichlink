@@ -415,6 +415,22 @@ fn siblings<'a>(
         .collect()
 }
 
+/// Whether one rendered line is a plain per-member value row (audit `W6-2`).
+/// 某一行是不是"每个成员的取值行"（审计 `W6-2`）。
+///
+/// The family header, the outlier rows and the excerpt lines that follow an outlier all carry a word
+/// of their own (`family`, `outlier`, `src/…`); a plain row is the one that is only indentation plus a
+/// label and a value. Getting this predicate wrong in either direction is visible: too wide drops the
+/// outliers, too narrow leaves the payload unbounded.
+/// 家族头、离群行、以及跟在离群者后面的原文行各有自己的词（`family`、`outlier`、`src/…`）；而"普通行"就是
+/// 只有缩进加一个标签与一个取值的那种。这个判据两个方向都会露馅：太宽会连离群者一起丢掉，太窄则载荷不封顶。
+fn is_member_row(line: &str) -> bool {
+    line.starts_with("  ")
+        && !line.starts_with("   ")
+        && !line.starts_with("  outlier")
+        && !line.trim_start().starts_with("src/")
+}
+
 /// Which siblings differ from the majority, and what they differ by.
 /// 哪些兄弟与多数派不同，以及差在哪。
 ///
@@ -605,6 +621,14 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
             // 让一句话说清形状，而不是每个成员一句。
             continue;
         }
+        // Audit `W6-2`: a family with thousands of members used to print **one row per member** —
+        // measured at 2,808,408 bytes on a 50,000-face workspace, against the acceptance's "响应拍平".
+        // The tool's own promise is "one call names the outlier", so the default keeps the census, the
+        // outliers and their excerpts, and the per-member value rows are **bought** with `full: true`.
+        // 审计 `W6-2`：成员上千的家族过去**每个成员印一行**——在五万面的工作区上实测 2,808,408 字节，
+        // 与验收的"响应拍平"相反。本工具自己的承诺是"一次调用点名离群者"，因此默认保留普查、离群者与它们
+        // 的原文片段，而"每个成员的取值行"由 `full: true` **买**。
+        let full = arguments.get("full").and_then(Value::as_bool) == Some(true);
         for signal in signals.iter().copied() {
             let mut rows: Vec<String> = vec![format!(
                 "family {parent} · member {} · {} member(s) · by {signal}",
@@ -797,6 +821,19 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
             }
             any_outlier |= outliers > 0;
             rows.push(format!("outliers: {outliers} of {}", sets.len()));
+            if !full {
+                let plain = rows.iter().filter(|row| is_member_row(row)).count();
+                if plain > 0 {
+                    rows.retain(|row| !is_member_row(row));
+                    rows.push(crate::mcp::truncation::withheld(
+                        plain,
+                        sets.len(),
+                        0,
+                        "member row(s)",
+                        "pass `full: true` for every member's own value",
+                    ));
+                }
+            }
             sections.push(rows.join("\n"));
         }
     }
