@@ -593,22 +593,9 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
             ));
         }
         let set = siblings(&faces, parent);
-        // Audit `W6-2`: only this family's own directories are read, and they are read from **this
-        // member's** root — the whole-tree read used to be done once from the workspace root, which
-        // was both the linear cost and the reason a member's faces came back "not in the index"
-        // (their `src/…` paths were matched against another root's index).
-        // 审计 `W6-2`：只读这一家自己的目录，而且从**本成员的**根读起——过去那次整棵树读取是在工作区根上做
-        // 一次，它既是那条线性成本，也是"成员的面报 not in the index"的原因（它们的 `src/…` 路径被拿去和
-        // 另一个根的索引比）。
-        let directories: Vec<String> = set
-            .iter()
-            .map(|face| {
-                let file = format!("src/{}", face.source.trim_start_matches("./"));
-                file.rsplit_once('/')
-                    .map(|(directory, _)| directory.to_owned())
-                    .unwrap_or(file)
-            })
-            .collect();
+        // Audit `W6-2`: only this family's own directories, read from **this member's** root.
+        // 审计 `W6-2`：只读这一家自己的目录，且从**本成员的**根读起。
+        let directories = crate::mcp::source_index::face_directories(set.iter().copied());
         let sources = crate::mcp::source_index::load_directories(&member.dir, &directories)?;
         if set.is_empty() {
             // A member with no face under it contributes nothing, and the round measured this

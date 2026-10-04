@@ -84,6 +84,32 @@ pub(crate) fn load_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
 /// cannot read is a case every caller already reports.
 /// 目录相对 `root`，各自单独读；不存在的目录不贡献任何东西、也不让答案失败，因为"索引读不到某个兄弟的文件"
 /// 是每个调用方本来就会报出来的情形。
+/// The `src/…` directory each of these faces lives in, deduplicated (audit `W6-2`).
+/// 这些面各自所在的 `src/…` 目录，已去重（审计 `W6-2`）。
+///
+/// The spelling is this module's own: `FaceView.source` is relative to `src/` while an index path is
+/// relative to the package root, and putting the `src/` on in one place is what keeps those two
+/// coordinates from being mixed up somewhere else — the mix-up that made a workspace member's answers
+/// come back with an empty sibling set.
+/// 这个拼写属于本模块：`FaceView.source` 相对 `src/`，而索引路径相对包根；把那个 `src/` 只加在一处，才能
+/// 让这两套坐标不在别处被混起来——而混起来正是"工作区成员的答案拿到空兄弟集合"的原因。
+pub(crate) fn face_directories<'a>(
+    faces: impl IntoIterator<Item = &'a crate::build_time::FaceView>,
+) -> Vec<String> {
+    let mut directories: Vec<String> = faces
+        .into_iter()
+        .map(|face| {
+            let file = format!("src/{}", face.source.trim_start_matches("./"));
+            file.rsplit_once('/')
+                .map(|(directory, _)| directory.to_owned())
+                .unwrap_or(file)
+        })
+        .collect();
+    directories.sort();
+    directories.dedup();
+    directories
+}
+
 pub(crate) fn load_directories(
     root: &Path,
     directories: &[String],
