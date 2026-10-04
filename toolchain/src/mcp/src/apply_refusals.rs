@@ -8,6 +8,8 @@
 //! 从 `apply.rs` 拆出来是为了 600 代码行棘轮，而它正好是**关于读者**的那一半：拒绝里印的可编辑字段清单、
 //! 用这棵树自己的名字搭出来的完整请求（审计 `W4-4`）、以及执行器那堵墙会重复一遍的追加/改写分界。动作本身
 //! 留在父模块——这个模块什么都不写。
+//!
+//! online: a refusal has to be built from the names in this tree as it stands now, and a tree that changed since the build has faces the record has never seen.
 
 use std::path::Path;
 

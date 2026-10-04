@@ -9,6 +9,8 @@
 //! it: one arm hand-swept every public doc to find a re-spelled constant, the other only compared the
 //! contracts on the symptom's own path and never saw it.
 //! 症状会自己收窄范围，那对症状是对的（调用方给出失败断言，面与调用点做完剩下的事）。**开放式**的问题
+//!
+//! online: declaration drift is a difference between the record and the sources, so the sources have to be read to state it.
 // ——"这棵树里还有别的问题吗"——没有这种收窄，而量到的失败正是没有任何东西回答它：一个臂手工扫遍所有
 // 公开文档才找到那处被重拼的常量，另一个只比对了症状路径上的契约、因此从没看见它。
 //!

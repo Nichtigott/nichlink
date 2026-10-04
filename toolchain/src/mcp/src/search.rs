@@ -42,6 +42,8 @@
 //! **虚拟清单**是一个根，而它按它实际的样子——工作区——作答：普查点名每个成员及其状态，每个成员命中
 //! 的面分组在它之下，而 Cargo 解析不了的成员说出 `tree unavailable (原因)`，而不是消失在一份更长的
 //! 文件命中之后。
+//!
+//! online: search is about the sources as they are now, and the build publishes no function or call data.
 
 use std::path::Path;
 

@@ -41,6 +41,8 @@
 //! `PluginCatalog` 闸门存下一条插件锁记录（三份契约分别见 `apply.rs`、`new_project.rs` 与
 //! `plugin.rs`）。它们都没有报告的是 contract、admission 与 registration rule 数据：那些住在已构建的
 //! `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
+//!
+//! online: the dispatch layer answers for trees that were never built as well as for built ones, and a face added since the build is only in the sources.
 
 use serde_json::{Value, json};
 use std::path::Path;

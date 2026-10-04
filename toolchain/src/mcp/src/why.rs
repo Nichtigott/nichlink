@@ -26,6 +26,8 @@
 //! 有没有一条已声明的 graft 切口点名拥有该文件的面。三条各自读拥有它的那份唯一实现——`build_evidence`
 //! 的作用域/剪枝行与 graft 视图的 `names_face`——因此它不会与 `explain` 或 `grafts` 对同一个事实给出
 //! 不同答案。
+//!
+//! online: the upstream facts at a line come from the sources' own text and call graph, neither of which the build publishes.
 
 use std::path::Path;
 

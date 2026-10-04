@@ -11,6 +11,8 @@
 //! 住的是**可判定的那一半**：标本按哪些字段比、trait 字段的两种拼写怎么归到一个键下、以及一处偏离点名的
 //! 那些行怎么被引回来（审计 `F1`、`W4-6`）。比较本身——同族集合、台账裁定、两种信号——留在父模块，因为
 //! 那才是这个工具作答的东西。
+//!
+//! online: an excerpt is quoted from the source file as it is now, and a face added since the build has no record row at all.
 
 use std::path::Path;
 

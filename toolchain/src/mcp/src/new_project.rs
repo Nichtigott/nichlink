@@ -27,6 +27,8 @@
 //! 落在这个调用所运行之根以外的目的地会在创建任何东西之前被拒绝，且拒绝会点名两条路径。在虚拟清单上
 //! 根是含多个成员的工作区，而相对 `directory` 是**那个**根的子目录，而不是进程恰好在其中启动的目录
 //! ——这也正是脚手架不需要任何成员身份的原因：目的地是显式的，而"落在根内"就是归属问题的全部。
+//!
+//! online: the scaffold writes a tree that has no record yet — it is creating the thing the record would describe.
 
 use std::path::{Component, Path, PathBuf};
 

@@ -46,6 +46,8 @@ pub mod lint;
 pub mod mounting;
 #[path = "naming.rs"]
 pub mod naming;
+#[path = "online_analysis.rs"]
+pub mod online_analysis;
 #[path = "purity.rs"]
 pub mod purity;
 #[path = "release_action_pin.rs"]

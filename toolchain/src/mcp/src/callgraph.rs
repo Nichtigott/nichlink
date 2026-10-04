@@ -13,6 +13,8 @@
 //! not an answer.
 //! 这些上限所针对的实测失败：常见名（`new`）在 NichUI 语料里有 142 个定义，而每个定义都列出该名字
 //! 的每一个调用点，最终以 4.5 MB 的回复抵达。代理读不下的答案不算答案。
+//!
+//! online: the build publishes faces, not call edges; the call graph is a property of the sources as they are now.
 
 use std::path::Path;
 

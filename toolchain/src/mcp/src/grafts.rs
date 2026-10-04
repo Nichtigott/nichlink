@@ -19,6 +19,8 @@
 //! 不可能给出不同答案。声明针对的是计划所瞄准的**槽位**，而不是计划选择的那个实现——那正是构建自己的
 //! 问题——因此每行既给出计划的目标与 graft，也给出声明自己的切口与 graft，两者不同时是**看得见**的，
 //! 而不是被默默接受或默默拒绝。只读：只打开文件，不写任何东西。
+//!
+//! online: graft plans live on disk rather than in the pruning record, and a plan may have been written since the build.
 
 use std::path::Path;
 

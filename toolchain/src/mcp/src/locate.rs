@@ -17,6 +17,8 @@
 //! file. No call graph, no build records, no runtime evidence.
 //! 排序**只读文本**，而且它自己说了这一点：与函数名、与它上方文档注释的词重叠，加上"整句原样出现在
 //! 文件里"的加成。没有调用图、没有构建记录、没有运行期证据。
+//!
+//! online: ranking the places a symptom's words point at reads the sources as they are now, including files the build never saw.
 
 use std::path::Path;
 

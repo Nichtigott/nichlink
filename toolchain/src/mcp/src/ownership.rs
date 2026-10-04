@@ -42,6 +42,8 @@
 //! because they are the same code (`workspace.rs` states the same rule for its own merge).
 //! 逐包主体始终是该工具**自己的单包实现**，只是接收成员的目录——因此合并答案与单包答案不可能不一致，
 //! 因为它们是同一段代码（`workspace.rs` 对它自己的合并声明了同一条规则）。
+//!
+//! online: routing a request needs the faces of **this** tree as it is now, because a member may have been added since the build.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

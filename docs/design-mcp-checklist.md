@@ -35,7 +35,7 @@
 | M3 W3-1 | 记录增肥三列 + 读写成对 | **完成** | `63ab9ec` | `manifests_tests::the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with`、`every_published_column_reads_back` |
 | M3 W3-2 | 全读工具记录优先 | **进行中**（发布路径的普查/分页与声明事实已接上，端到端已验） | `8869a69` | `published_tests::a_current_record_is_shown_and_its_levels_are_counted` |
 | M3 W3-1b | 记录补 `parent_node`/`owns_registry` | 待做 | — | 见 §阶段 M3 的下一步 |
-| M3 W3-3 | 单一来源评审规则 | 待做 | — | — |
+| M3 W3-3 | 在线分析评审规则（门禁 `online_analysis`） | **完成**（21 个桥文件各写了理由） | 本轮 | `conventions::online_analysis_tests::every_online_answer_says_why_the_build_cannot` |
 | M4 | W5-1 / W5-2 / W5-3 / W5-4 / W5-5 / W5-6 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
@@ -570,3 +570,31 @@ diff <(registry 已构建 | grep -E '^faces |^  ') <(registry 推导 | grep -E '
 
 **门禁 M3 的另一半**（t4 读延迟 211s → <3s）目前只有"未构建 t4 = 55.7s、已构建 101 面 = 88.7ms"两个点；
 要把五档都变成已构建的树需要每档都编译（t4 = 两万面，属 M5 的编译墙），因此这一半与 M5 一起量。
+
+### W3-3 在线分析评审规则（完成，本轮）
+
+清单的原文是"任何 PR 在 MCP 层新增在线分析必须回答『为什么构建期不能算』"——它是一条**评审**规则。
+本仓的规矩是"新增全仓规则请加到 `conventions`，而不是加到散文文档里"，因此落成门禁
+`conventions::online_analysis`：
+
+- **触发条件**是"摸到源码的那几个调用"（`derived_faces(` / `derived_tree(` / `load_sources(` /
+  `face_views_with_external(`），而不是"分析"这个看不见的词；清单住在一处，扩它只需改一行。
+- **回答**写在模块文档里：`//! online: <为什么构建算不了>`，且散文至少 30 字符（那是**下限**而不是
+  裁判——门禁判不了理由是否成立，它做的是让这个问题在唯一能回答它的地方无法回避，好让评审有一条可以反驳的
+  句子而不是一片沉默。`W3-3` 要的正是这个）。
+- **边界明说**：只判桥的生产那一半（文件里第一个 `#[cfg(test)]` 之前，且从不判 `*_tests.rs` 兄弟文件）
+  ——推导的测试是**关于**推导的测试。
+- **21 个文件各写了自己那句**：读源码文本的（`source_index`/`callgraph`/`impact`/`usages`/`why`/
+  `search`/`digest`/`claims`/`diff`/`affected`/`locate`/`consistency`/`consistency_support`/`check`）
+  说"构建发布的是面，不是调用图/不是源码文本，而这些答案是关于源码**此刻**的样子"；需要整份面的
+  （`resolve`/`workspace`/`grafts`/`apply_refusals`/`new_project`/`tools`/`ownership`）说"构建之后
+  新增的面根本不在记录里"。**不是 21 份同一句话**。
+
+钉子：三种合成形状（写了理由 ⇒ 放过；什么都没写 ⇒ 报出并带 `file:line` 位置；敷衍一句 ⇒ 仍报）+ 测试那一半
+不判 + 遍历覆盖桥（>40 文件）+ **对全检出断言 0 findings**。
+
+**顺带记两处先红**：① 我把 `pub mod online_analysis;` 插在了 `#[path = "purity.rs"]` 与
+`pub mod purity;` **之间** ⇒ purity 门禁的源码被当成 `online_analysis` 编译了一遍（`--list` 里出现
+`online_analysis::purity_tests::*` 才暴露），修法是把属性与它的条目还在一起；② 我的 `//! online:` 行
+紧跟在一条 markdown 列表项后面，`clippy::doc_lazy_continuation` 判定它是列表延续 ⇒ 在标记前补一行空
+`//!`（更可读，也顺手解掉这一类）。

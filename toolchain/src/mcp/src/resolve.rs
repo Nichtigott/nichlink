@@ -9,6 +9,8 @@
 //! 两种写法，一个答案：`nichlink.registry` 与 `nichlink.apply` 都报告逻辑路径，因此调用方可以
 //! 把它刚读到的树里的路径直接交回来——不必翻译成 32 位身份，也就没有翻译错的机会。身份同样接受，
 //! 因为已经持有身份的调用方不该被迫再查一次。
+//!
+//! online: an agent names what it can see in the sources now, and a name added since the build is not in the record.
 
 use std::path::Path;
 

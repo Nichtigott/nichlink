@@ -14,6 +14,8 @@
 //! 它的后代在半径内）、`requires` 了该面所提供能力的面是消费者、点名该面的已声明 graft 切口会把该面交出去。
 //! 遍历受 `depth` 与已访问集合限制，因此能力环变成一条更短的路径而不是死循环；没走到的会被如实报成
 //! 未到达，而不是被暗示为安全。
+//!
+//! online: impact is a transitive property of the call graph, and the build publishes no call edges.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;

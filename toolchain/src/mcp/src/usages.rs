@@ -15,6 +15,8 @@
 //! 却没有任何工具能报告它们），以及哪些面提到同一批能力记号。能力那一部分刻意被标明：`requires`/
 //! `provides` 是清单文本，因此匹配发生在**声明的记号**上而不是一棵已解析的图；把这句话说出来，就是
 //! 证据与猜测之间的区别。
+//!
+//! online: who points at a face is a property of the sources' declarations as they are now, not of the pruning record.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

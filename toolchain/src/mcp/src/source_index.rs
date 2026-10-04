@@ -1,5 +1,7 @@
 //! Source index and path safety for the MCP bridge's read side.
 //! MCP 桥读取一侧的源码索引与路径安全。
+//!
+//! online: the index **is** the source reading the other answers are built on; the build publishes faces and nothing at this granularity.
 
 use serde_json::Value;
 use std::fs;

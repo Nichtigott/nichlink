@@ -9,6 +9,8 @@
 //! 这条回答的失败是维护者点名的第四类：一个文件里好几套算法、错在其中一套的一个分支上，而每一部分单看
 //! 都自洽。读整个文件能知道里面有什么，但那是一次**无界**的调用；这条回复有界，说清哪些函数带着写下来
 //! 的契约、哪些被测试点名、谁调用它们 —— 以及它**不**读什么。
+//!
+//! online: one file's summary is about that file's text right now, which no build-time record carries.
 
 use std::path::Path;
 

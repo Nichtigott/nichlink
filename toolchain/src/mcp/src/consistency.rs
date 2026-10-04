@@ -16,6 +16,8 @@
 //! than filling them with defaults.
 //! 它覆盖**推导**出来的树（开发检出的常态）。当成员的树来自发布记录时，答案会明说，并点名字段实际住在
 //! 哪里，而不是拿默认值把空填上。
+//!
+//! online: the shape comparison compares declarations that may have been added since the build, and a shape is a property of the source text.
 
 use std::collections::BTreeSet;
 use std::path::Path;

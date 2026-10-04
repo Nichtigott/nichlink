@@ -9,6 +9,8 @@
 //! 文本 diff 回答"哪些行动了"；这里回答"哪些**面**出现、消失或换了身份"——注册机真正发布的单位。
 //! 它把源码推导出的树与构建自己的清单对照，因此两侧都是这个桥其它部分报告的同一批推导；没有构建过的
 //! 项目会被要求先构建，而不是拿到一份空 diff。
+//!
+//! online: the whole question is what changed since the build, so the current sources are one half of the answer and the record is the other.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;

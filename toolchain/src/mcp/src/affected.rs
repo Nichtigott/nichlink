@@ -9,6 +9,8 @@
 //! 这个答案是静态的，而且它自己说出来：测试调用了某个文件里的定义，那个文件就由那个测试覆盖；没有测试
 //! 提到的文件，最小而诚实的答案就是它所在包的整套测试。这里不判定任何测试会**失败**；它判定的是跑什么，
 //! 而这一半可以从文本推出，也是代理本来会靠猜的那一半。
+//!
+//! online: the build publishes faces, not which test reaches which source, so this answer is about the sources as they are now.
 
 use std::path::Path;
 

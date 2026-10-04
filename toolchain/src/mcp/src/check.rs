@@ -29,6 +29,8 @@
 //! - **Nothing ran is not a pass.** A log with no `test result:` line reports that, rather than an
 //!   empty success.
 //!   **什么都没跑不是通过。** 没有 `test result:` 行的日志会这么说，而不是给一个空的成功。
+//!
+//! online: a check has to see the sources and the build output as they are right now — that is what `check`/`verify` are for, and the record would be a second opinion about the thing being checked.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};

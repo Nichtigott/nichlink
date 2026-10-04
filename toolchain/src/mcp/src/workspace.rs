@@ -38,6 +38,8 @@
 //! where a caller can give a workspace root an identity by hand.
 //! 覆盖仍然只命名一棵树。`NICH_LINK_NAMESPACE` 在询问 Cargo 之前胜出，因此设置它之后，虚拟根会被
 //! 读作那个名字所指的包——这是调用方唯一能手工给工作区根一个身份的情形。
+//!
+//! online: a virtual root merges members whose records may be absent, stale or newer than the build, and the merged answer has to say which each member was.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
