@@ -543,3 +543,30 @@ level (logical path prefix) and how many recorded faces sit under it:
 ⇒ 与推导侧**形状完全一致**（同一棵树两支都给出 `root 1 / root/control 100`），发布普查从 2,824 B 降到
 **1,386 B**（此前那次"压到 1,966 B"是靠修剪行数与注长度换来的；现在形状本身对了，预算不是靠削出来的）。
 已构建 101 面的默认 `registry` **88.7ms**（未构建 278.8ms）。
+
+### W3-2 第三刀：把 M3 的"published vs derive 一致"做成钉子（完成，本轮）
+
+**先把口径读清楚**：清单的验收写"t2 级对照答案与 derive **逐字节一致**"，而同一份清单又要求发布答案声明
+`tree published from …`、推导答案说出它推导了——两条路**不可能**逐字节相同，**而且这是要求而不是缺陷**。
+因此本仓把 M3 门禁的"答案一致"读作**事实**一致：总数行与逐层计数行。这个口径读法已写进钉子文档。
+
+**改法**：新增 `published_tests::a_published_answer_and_a_derived_answer_carry_the_same_facts`——
+同一棵树先按已发布作答、再把两份记录移走按推导作答，比对**事实行**（`faces N` 与层级行），并
+`assert_ne!` 两份整答复（逼"必须说出自己来自哪里"这件事留在答案里）。
+
+**它当场抓到一件事**（这正是这枚钉子的价值）：我手写的夹具记录里 `logical_path` 写的是
+`root/control/slider`，而同一份源码推导出来是 `root/slider`（那两个面都声明父级为**根**）⇒ 发布普查说
+`root 1 / root/control 1`、推导普查说 `root 2`。夹具的历史值错了，已改。**手写的记录可以编码一个推导
+会反驳的事实——只有两边对账才发现。**
+
+**101 面规模上的同一次对账**（已构建的 `h1` 树，记录的发布普查 vs 把记录移开后的推导普查，取事实行）：
+
+```
+diff <(registry 已构建 | grep -E '^faces |^  ') <(registry 推导 | grep -E '^faces |^  ')
+→ 无差异（AGREE）
+```
+两条路都给出 `faces 101` + `root 1 face(s)` + `root/control 100 face(s)` + 同一句汇总行 ⇒ **事实逐行相同**，
+而整答复不同（差在 `tree published from …` / `tree derived now …`、`freshness`、`scope` 与发布注）。
+
+**门禁 M3 的另一半**（t4 读延迟 211s → <3s）目前只有"未构建 t4 = 55.7s、已构建 101 面 = 88.7ms"两个点；
+要把五档都变成已构建的树需要每档都编译（t4 = 两万面，属 M5 的编译墙），因此这一半与 M5 一起量。

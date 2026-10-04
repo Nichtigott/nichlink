@@ -127,7 +127,7 @@ impl Fixture {
             &format!(
                 "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\tlogical_path\n\
                  {button}\tbutton/button.rs\t-\t-\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\t{parent}\tfalse\troot/button\n\
-                 {slider}\tslider/slider.rs\t-\t-\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\t{parent}\ttrue\troot/control/slider\n",
+                 {slider}\tslider/slider.rs\t-\t-\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\t{parent}\ttrue\troot/slider\n",
                 hash = "a".repeat(64),
                 fingerprint = "b".repeat(64),
                 parent = "c".repeat(32),
@@ -464,14 +464,17 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
     // `registry_brief` 是工具**默认**作答的那一支（`registry` 是完整的那一支）。
     let census =
         crate::mcp::registry::registry_brief(&fixture.root).expect("a published member answers");
+    // The census prints **level prefixes**, so a fixture whose two faces both hang off the root
+    // shows one level holding both of them — the point is that the level came from the published
+    // `logical_path` and not from the source directory (which would have been two levels).
+    // 普查印的是**层级前缀**，因此两个面都挂在根上的夹具显示一层、两个面——要点是这个层级来自**已发布的**
+    // `logical_path`，而不是源码目录（那样会是两层）。
     assert!(
-        census.contains("level (logical path prefix)") && census.contains("root/control   "),
-        "the census counts the published logical paths: {census}"
-    );
-    assert!(
-        census.contains("root/control")
+        census.contains("level (logical path prefix)")
+            && census.contains("  root  ")
+            && census.contains("across 1 level(s)")
             && census.contains("`full: true` prints the rows, 200 per page"),
-        "and it names the level and the way to the rows: {census}"
+        "the census counts the published logical paths and names the way to the rows: {census}"
     );
     assert!(
         !census.contains("  selected     "),
@@ -500,6 +503,68 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
             && full.contains("not reprinted per row")
             && full.contains("is not in the record at all"),
         "the note names what is published in the file and what the record cannot answer: {full}"
+    );
+    let _ = &fixture.namespace;
+}
+
+/// The facts a `registry` answer carries, with the provenance lines dropped.
+/// 一条 `registry` 答案所携带的事实，去掉来源那些行。
+///
+/// The two paths **cannot** be byte-identical, and the reason is a requirement rather than a defect:
+/// the checklist asks a published answer to declare `tree published from …` and a derived one to say
+/// it derived. So the M3 gate's "答案一致" is read as the facts agreeing — the total and the level
+/// counts — which is what this folds out and what the caller compares.
+/// 两条路**不可能**逐字节相同，而原因是要求而不是缺陷：清单要发布答案声明 `tree published from …`、
+/// 要推导答案说出它推导了。因此 M3 门禁的"答案一致"读作**事实**一致——总数与逐层计数——也就是这里折出来
+/// 交给调用方比对的东西。
+fn facts(answer: &str) -> Vec<String> {
+    answer
+        .lines()
+        .filter(|line| line.starts_with("faces ") || line.starts_with("  "))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// A published answer and a derived answer to the same question carry the same facts.
+/// 对同一个问题，发布答案与推导答案携带相同的事实。
+///
+/// This is M3's own gate, taken at the scale a test can afford (`t2` in the checklist's language is
+/// the same question with a bigger tree). It is the pin that makes the record path *worth* taking: a
+/// fast answer that quietly said something else would be worse than the slow one it replaced.
+/// 这就是 M3 自己的门禁，取测试付得起的规模（清单里的 `t2` 是同一件事、树更大）。它是让记录路径**值得**
+/// 走的那枚钉子：一个悄悄说了别的事的快答案，比它替换掉的慢答案更糟。
+#[test]
+fn a_published_answer_and_a_derived_answer_carry_the_same_facts() {
+    let fixture = fixture("agreement");
+    fixture.publish_current_record();
+    let published =
+        crate::mcp::registry::registry_brief(&fixture.root).expect("the published answer");
+    assert!(
+        published.contains("tree published from"),
+        "the published answer declares its evidence: {published}"
+    );
+
+    // The same tree with its records taken away: the reader derives, which is the fallback the
+    // acceptance compares against.
+    // 同一棵树、记录拿走：读取方推导——正是验收要比对的那条回退路。
+    for record in ["pruning_manifest.tsv", "source_scope.tsv"] {
+        std::fs::remove_file(fixture.root.join("target/nichlink/out").join(record))
+            .expect("the record is removed");
+    }
+    let derived = crate::mcp::registry::registry_brief(&fixture.root).expect("the derived answer");
+    assert!(
+        derived.contains("tree derived now"),
+        "the derived answer declares that it derived: {derived}"
+    );
+
+    assert_eq!(
+        facts(&published),
+        facts(&derived),
+        "the two paths answer the same question the same way:\npublished:\n{published}\nderived:\n{derived}"
+    );
+    assert_ne!(
+        published, derived,
+        "and they are not byte-identical, because each has to say where it came from"
     );
     let _ = &fixture.namespace;
 }
