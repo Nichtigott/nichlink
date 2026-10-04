@@ -21,7 +21,17 @@
 | M1 W4-7 | 答案形状路由 | **完成** | `b53439c` | `client_tests::the_answer_shape_routing_is_on_both_pages` |
 | M1 W1-2 | status 并入首行 + next 实例化 | **完成** | `d9510f6` | `consistency_tests::the_answer_opens_with_the_census_and_closes_conservatively`、`why_tests::the_answer_carries_the_census_and_a_closure_line` |
 | 门禁 M1 | 整仓门禁 + hardbug 电池 | 见 §门禁 M1 | — | — |
-| M2 | W1-1 / W1-4 / W1-3 / W2-1 / W2-2 / W2-4 / W2-5 / W2-6 / W2-7 / W5-7 / W5-8 | 待做 | — | — |
+| M2 W1-1 | 广告收敛 2+1 | **完成** | `03e427f` | `protocol_tests::the_advertised_frame_and_the_handshake_fit_their_budgets` |
+| M2 W1-4 | 描述节食 | **完成** | `03e427f` | 同上（三条描述 + 三张 schema 的字节预算） |
+| M2 W2-4 | apply 面清单有界化（D1） | **完成** | `6a605b8` | `apply_tests::the_write_reply_is_bounded_and_full_buys_the_tree_back` |
+| M2 W2-5 | apply 成功回复节食 | **一半**（D2 完成，D3 会话化仍开） | `6a605b8` | 同上 + `a_preview_reports_the_resulting_tree…` 的两半断言 |
+| M2 W5-7 | 写后响应节食（D4） | **完成** | `0d8fcd6` | `a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading` |
+| M2 W5-8 | new_project 自带初始普查 | **完成** | `0d8fcd6` | `new_project_tests::the_creation_reply_carries_the_initial_census` |
+| M2 W1-3 | cargo 输出瘦身 | 待做 | — | — |
+| M2 W2-1 | registry 分页/普查化 | 待做 | — | — |
+| M2 W2-2 | consistency 免责文本会话化 | 待做 | — | — |
+| M2 W2-6 | `--list` 瘦身 schema | 待定（与 W1-4 的口径冲突，见下） | — | — |
+| M2 W2-7 | `--list --all-slim` | 待定（同上） | — | — |
 | M3 | W3-1 / W3-2 / W3-3 | 待做 | — | — |
 | M4 | W5-1 / W5-2 / W5-3 / W5-4 / W5-5 / W5-6 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
@@ -181,3 +191,68 @@ selector/confirm 支、`new_project` 的三个必填键支。`apply` 的**描述
 门禁本来就要"四轴重算 12 会话语料"。同一套夹具连着跑两遍，第二遍只是把第一遍的数字复述一遍。因此 M1 的
 机械门禁照跑，**两臂的实机重跑只在 M2 门禁做一次**，两阶段的用量从那一次里各取所需（M1 取"用法型拒绝
 = 0"，M2 取四轴）。
+
+## 阶段 M2：经济性主刀（进展）
+
+### W1-1 广告收敛 2+1（完成，`03e427f`）
+
+**证据**：`tools/list` 一帧交出全部二十七个工具（约 36,000 字符散文）；`initialize` 交出的长指引页约
+7,000 字符。那一轮量到这两个数字正是"第一个决定很贵"的来路（25 步 vs 对照工具的 14 步）。
+
+**改法**（**不删任何能力**）：新增 `tools::advertised()`，`tools/list` 只广告 `nichlink.check` /
+`nichlink.apply` / `nichlink_tools`；`tools()` 仍是完整目录（28 项），`--list`、`--list <tool>`、
+分派、归属分类都读它。`nichlink_tools` 不给参 ⇒ 与 `--list` **同一份实现**的一行式清单
+（`client::list_tool_lines`）；`tool: "<名字>"` ⇒ 与 `--list <tool>` **同一份实现**的整页
+（`client::describe_tool`）——广告与手册各只有一份实现，因此不可能漂移。长指引页改名 `GUIDANCE`
+（`--shapes` 仍印它，内容一字未删）；`INSTRUCTIONS` 变成握手用的短文本。
+
+**实测**（线上回复的形状）：广告帧 ≤ **4,200** 字节、三张广告 schema 合计 ≤ **4,300**、
+`INSTRUCTIONS` ≤ **550** 字节；目录仍有 **28** 项（≥27，一个能力没少）。
+
+**命名注**：`nichlink_tools` 按清单原文。它不是 `nichlink.*` 命名空间里的能力，而是"关于目录本身"的
+那一个，因此一行式清单的钉子放行这一个例外（`first.starts_with("nichlink.") || first.starts_with("nichlink_tools — ")`）。
+
+### W1-4 描述节食（完成，`03e427f`）
+
+**改法**：广告位工具各带一份**只留决策信息**的描述（check ~470 / apply ~430 字节）与一张**只留决定
+这次调用的键**的 schema。细则没有被删：完整描述与完整 schema 仍在 `tools()`（`--list <tool>` 印）、
+拒绝文案仍带实例化形状（W4-4）。`apply` 的广告 schema 里也补上了 `full`（W2-4 新键）与
+`cut`/`graft`/`to`/`full`（此前完整 schema 里**根本没有**这四个键——一处承诺面落后于能力面的旧缺陷）。
+
+**口径冲突（记下来，等维护者或下一轮裁）**：W1-4 说"细则全文迁入 `--list`"，而 W2-6 说"`--list` 返回
+瘦身 schema"。两者指向同一个出口的两种形态。当前实现站在 W1-4 那一边（`--list <tool>` 仍是完整描述），
+W2-6/W2-7 因此标"待定"而不是"完成"——不把没做的说成做了。
+
+### W2-4 apply 面清单有界化（完成，`6a605b8`）
+
+**证据**：每次写入印出**整棵树的每个面**。九面夹具上是几行，五万面的树上就是整份载荷。
+
+**改法**：默认回复 = 普查行 `faces N` + 发生变动的那个面（`changed  <path>  <kind>  <source>`）
++ `truncation::withheld` 扣下行（出路 `full: true`）；`full: true` 买回全量。`full` 同时进广告 schema
+与完整目录 schema。**实测**：预览 ≤4.4K、落盘 ≤2.2K 字节（钉子直接量 `reply.len()`）。
+
+### W2-5 apply 成功回复节食（D2 完成，D3 仍开，`6a605b8`）
+
+**D2**：`editable_fields_line` 是**拒绝**的辅助，却搭在每条成功回复上。成功回复删掉，拒绝路径照旧带。
+那条"每次回复都要带形状"的旧钉子按新意图改写，并且**两半都断言**（成功里没有、拒绝里有）——否则
+"搬走了"与"没了"看起来一样。
+
+**D3（仍开）**：`consequences` 的固定块（entry plan 行 + "not covered" 免责）**会话化**——同会话第二次
+`apply` 不再含全文。它需要进程级会话状态，而桥同时有长期 stdio 服务与 `--call` 一次性两条入口；
+"什么算同一个会话"要一个设计决定，因此留到 M2 收尾时定，而不是先写一个可能错的实现。
+
+### W5-7 写后响应节食（完成，`0d8fcd6`）
+
+`deepen` 的 `alternative` 与 `note` 两块是**决策辅助**，属于"决定还没做"的那一刻：预览给全文，落盘改印
+一行 `alternative was stated in preview; …`。验收两半（预览含全文、落盘不含）都钉在同一条测试里。
+
+### W5-8 new_project 自带初始普查（完成，`0d8fcd6`）
+
+落盘/预览回复新增 `tree: 1 package, N rust file(s); … M of them own a registry — \`registry\` would
+say the same thing`，用的是写入路径**刚刚**读过的那批源码（`load_sources` + `face_views`）⇒ 零额外
+推导，消灭了"写后立刻再发一次 `registry`"那一步。
+
+### 尚未开始（M2 余项）
+
+`W1-3` cargo 输出瘦身 · `W2-1` registry 分页/普查化 · `W2-2` consistency 免责文本会话化 ·
+`W2-6`/`W2-7`（口径待裁） · 决策点 `DP-1`/`DP-2`/`DP-3`（要门禁实测才裁，不许预设）。
