@@ -45,6 +45,48 @@ enum ShapeComparison {
     Labels,
 }
 
+/// One declared-shape field: the **key** a comparison matches on, the spelling the declaration
+/// actually wrote, and the value.
+/// 一个已声明形状字段：比较据以匹配的**键**、声明**实际写下**的拼写、以及取值。
+///
+/// The key and the spelling are deliberately two things. The kernel accepts two spellings for a
+/// trait field — `handle_contracts` (compiler-checked Rust paths) and `handle_traits` (the plain
+/// labels) — and both are editable through `apply`. Reporting the *derived* spelling instead of the
+/// one in the file is what audit `F1` caught: a reader was handed a name whose value could not be
+/// pasted back where the declaration keeps it. So the comparison still matches on one key (a family
+/// is not an outlier for choosing the other spelling), while every line a reader may copy names the
+/// spelling that is actually written.
+/// 键与拼写是刻意分开的两件事。内核接受两种 trait 字段拼写——`handle_contracts`（参与编译检查的 Rust
+/// 路径）与 `handle_traits`（纯标签）——而两者都能经 `apply` 编辑。报**推导**拼写而不是文件里那一个，
+/// 正是审计 `F1` 抓到的：读者拿到的名字，其取值放不回声明保存它的位置。因此比较仍只认一个键（同族不会
+/// 因为选了另一种拼写而被判离群），而每一行**读者可能照抄**的输出都点名文件里真正写着的那个拼写。
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct DeclaredField {
+    /// What comparisons match on; two spellings of one field share it.
+    /// 比较据以匹配的东西；同一个字段的两种拼写共用它。
+    key: &'static str,
+    /// The spelling the declaration wrote — the one a reader may paste back into `apply`.
+    /// 声明写下的拼写——读者可以照抄回 `apply` 的那一个。
+    spelling: &'static str,
+    /// The rendered value.
+    /// 渲染后的取值。
+    value: String,
+}
+
+/// One entry of [`SHAPE_FIELDS`]: what to compare, under which key, and how.
+/// [`SHAPE_FIELDS`] 的一项：比什么、用哪个键、怎么比。
+struct ShapeField {
+    /// The key comparisons match on.
+    /// 比较据以匹配的键。
+    key: &'static str,
+    /// The spellings a declaration may write, the compiler-checked one first when there are two.
+    /// 声明可以写下的拼写；有两个时把参与编译检查的那个放前面。
+    spellings: &'static [&'static str],
+    /// How the value is compared.
+    /// 取值怎么比。
+    comparison: ShapeComparison,
+}
+
 /// The declared-shape fields a specimen is compared on, and how each one is compared.
 /// 对比一个标本时看哪些已声明形状字段，以及每一项怎么比。
 ///
@@ -62,17 +104,41 @@ enum ShapeComparison {
 /// every family an outlier.
 /// `parts` 只比存在性，因为它点名的是对象**自己**的零件类型（`ButtonParts`）：两个兄弟写出不同的类型正是
 /// 设计而非漂移，比值会让每一个同族都成了离群。
-const SHAPE_FIELDS: &[(&str, ShapeComparison)] = &[
-    ("parts", ShapeComparison::Presence),
-    ("exports", ShapeComparison::Labels),
-    ("handle_traits", ShapeComparison::Labels),
-    ("part_traits", ShapeComparison::Labels),
+const SHAPE_FIELDS: &[ShapeField] = &[
+    ShapeField {
+        key: "parts",
+        spellings: &["parts"],
+        comparison: ShapeComparison::Presence,
+    },
+    ShapeField {
+        key: "exports",
+        spellings: &["exports"],
+        comparison: ShapeComparison::Labels,
+    },
+    ShapeField {
+        key: "handle_traits",
+        spellings: &["handle_contracts", "handle_traits"],
+        comparison: ShapeComparison::Labels,
+    },
+    ShapeField {
+        key: "part_traits",
+        spellings: &["part_contracts", "part_traits"],
+        comparison: ShapeComparison::Labels,
+    },
 ];
 
-/// The shape field names this comparison reads, for the lines that name the set.
-/// 这次比较读哪些形状字段名，供点名该集合的行使用。
+/// The shape field spellings this comparison reads, for the lines that name the set.
+/// 这次比较读哪些形状字段**拼写**，供点名该集合的行使用。
+///
+/// Every spelling is named, not only the canonical key: this line is read by someone who is about
+/// to write one of them, and naming a spelling the file does not carry is the `F1` defect.
+/// 每一种拼写都点名，而不只是规范键：读这一行的人正要去写其中之一，而点一个文件里没有的拼写就是
+/// `F1` 那个缺陷。
 fn shape_field_names() -> Vec<&'static str> {
-    SHAPE_FIELDS.iter().map(|(name, _)| *name).collect()
+    SHAPE_FIELDS
+        .iter()
+        .flat_map(|field| field.spellings.iter().copied())
+        .collect()
 }
 
 /// One field's rendered value as the labels it states.
@@ -87,31 +153,58 @@ fn shape_labels(value: &str) -> Vec<&str> {
 
 /// The labels a trait field carries, from either spelling, or `None` when neither is written.
 /// 某个 trait 字段携带的标签（两种写法都认），两者都没写时为 `None`。
-fn trait_shape(face: &FaceSyntax, paths: &str, labels: &str) -> Option<String> {
-    if face.field(paths).is_none() && face.field(labels).is_none() {
+///
+/// The value is always labels — the kernel derives them from the paths — while the returned
+/// **spelling** is whichever one the file actually carries, so a reader can paste it back.
+/// 取值永远是标签（由内核从路径派生），而返回的**拼写**是文件里真正写着的那个，读者据此可以照抄回去。
+fn trait_shape(
+    face: &FaceSyntax,
+    contracts: &'static str,
+    labels: &'static str,
+) -> Option<(&'static str, String)> {
+    let wrote_contracts = face.field(contracts).is_some();
+    let wrote_labels = face.field(labels).is_some();
+    if !wrote_contracts && !wrote_labels {
         return None;
     }
-    face.string_list(labels)
+    let value = face
+        .string_list(labels)
         .map(|values| values.join(", "))
         .or_else(|| face.field(labels))
-        .or_else(|| face.field(paths))
+        .or_else(|| face.field(contracts))?;
+    // The checked spelling wins when a face wrote both: that is the one the compiler reads, and the
+    // labels beside it are the redundant half.
+    // 两者都写时以受检的那个拼写为准：编译器读的是它，旁边那份标签才是多余的一半。
+    let spelling = if wrote_contracts { contracts } else { labels };
+    Some((spelling, value))
 }
 
 /// One parsed face's declared shape: the shape fields it carries, in the order of [`SHAPE_FIELDS`].
 /// 一个已解析注册面的已声明形状：它携带的形状字段，按 [`SHAPE_FIELDS`] 的顺序。
-fn declared_shape(face: &FaceSyntax) -> Vec<(String, String)> {
+fn declared_shape(face: &FaceSyntax) -> Vec<DeclaredField> {
     let mut shape = Vec::new();
-    for (name, _) in SHAPE_FIELDS {
-        let value = match *name {
-            "handle_traits" => trait_shape(face, "handle_contracts", "handle_traits"),
-            "part_traits" => trait_shape(face, "part_contracts", "part_traits"),
-            _ => face
+    for field in SHAPE_FIELDS {
+        let declared = match field.spellings {
+            [contracts, labels] => {
+                trait_shape(face, contracts, labels).map(|(spelling, value)| DeclaredField {
+                    key: field.key,
+                    spelling,
+                    value,
+                })
+            }
+            [name, ..] => face
                 .string_list(name)
                 .map(|values| values.join(", "))
-                .or_else(|| face.field(name)),
+                .or_else(|| face.field(name))
+                .map(|value| DeclaredField {
+                    key: field.key,
+                    spelling: name,
+                    value,
+                }),
+            [] => None,
         };
-        if let Some(value) = value {
-            shape.push(((*name).to_owned(), value));
+        if let Some(declared) = declared {
+            shape.push(declared);
         }
     }
     shape
@@ -126,24 +219,30 @@ fn declared_shape(face: &FaceSyntax) -> Vec<(String, String)> {
 /// sentence says so.
 /// 只判一个方向，而这就是要点：标本是基准，因此问题是"有没有照它做"，不是"兄弟有没有多发明什么"。因此一个
 /// 携带了标本没有的字段或标签的兄弟不在这里成行，而边界句会说清这一点。
-fn shape_gaps(specimen: &[(String, String)], sibling: &[(String, String)]) -> Vec<String> {
+///
+/// Matching is on the **key**, naming is by the specimen's **spelling**: a sibling that chose the
+/// other spelling of a trait field is not lacking anything, while the row for one that lacks it
+/// tells the reader the name the baseline actually uses.
+/// 匹配按**键**、命名按标本的**拼写**：选了 trait 字段另一种拼写的兄弟并不缺什么，而真的缺的那一个，
+/// 行里给出的名字是基准真正在用的那个。
+fn shape_gaps(specimen: &[DeclaredField], sibling: &[DeclaredField]) -> Vec<String> {
     let mut notes = Vec::new();
-    for (name, value) in specimen {
-        let Some((_, other)) = sibling.iter().find(|(field, _)| field == name) else {
-            notes.push(format!("lacks `{name}`"));
+    for field in specimen {
+        let Some(other) = sibling.iter().find(|candidate| candidate.key == field.key) else {
+            notes.push(format!("lacks `{}`", field.spelling));
             continue;
         };
         let comparison = SHAPE_FIELDS
             .iter()
-            .find(|(field, _)| field == name)
-            .map(|(_, comparison)| *comparison);
+            .find(|candidate| candidate.key == field.key)
+            .map(|candidate| candidate.comparison);
         if comparison != Some(ShapeComparison::Labels) {
             continue;
         }
-        let stated = shape_labels(other);
-        for label in shape_labels(value) {
+        let stated = shape_labels(&other.value);
+        for label in shape_labels(&field.value) {
             if !stated.contains(&label) {
-                notes.push(format!("lacks `{name}: {label}`"));
+                notes.push(format!("lacks `{}: {label}`", field.spelling));
             }
         }
     }
@@ -171,7 +270,7 @@ fn one_face(text: &str) -> Result<FaceSyntax, String> {
 
 /// One rendered shape, or the line that says there was none to read.
 /// 渲染后的形状；无可读字段时给出那一行说明。
-fn shape_line(shape: &[(String, String)]) -> String {
+fn shape_line(shape: &[DeclaredField]) -> String {
     if shape.is_empty() {
         return format!(
             "none of the fields this comparison reads ({})",
@@ -180,7 +279,7 @@ fn shape_line(shape: &[(String, String)]) -> String {
     }
     shape
         .iter()
-        .map(|(name, value)| format!("{name} `{value}`"))
+        .map(|field| format!("{} `{}`", field.spelling, field.value))
         .collect::<Vec<_>>()
         .join(" · ")
 }
@@ -245,9 +344,12 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
     for (file, text) in &current {
         match one_face(text) {
             Ok(face) => {
-                for (name, value) in declared_shape(&face) {
-                    if !shape.contains(&(name.clone(), value.clone())) {
-                        shape.push((name, value));
+                for field in declared_shape(&face) {
+                    let seen = shape.iter().any(|kept: &DeclaredField| {
+                        kept.key == field.key && kept.value == field.value
+                    });
+                    if !seen {
+                        shape.push(field);
                     }
                 }
             }
@@ -643,7 +745,7 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                         let names = match source_text(&sources, &face.source).map(one_face) {
                             Some(Ok(parsed)) => declared_shape(&parsed)
                                 .into_iter()
-                                .map(|(name, _)| name)
+                                .map(|field| field.key.to_owned())
                                 .collect::<BTreeSet<String>>(),
                             Some(Err(reason)) => {
                                 rows.push(format!("  {label:<24} unreadable: {reason}"));

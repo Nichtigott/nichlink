@@ -218,10 +218,68 @@ fn one_face_turns_every_unreadable_declaration_into_a_reason() {
     )
     .expect("one declaration parses");
     assert_eq!(
-        super::declared_shape(&parsed),
-        vec![("parts".to_owned(), "AParts".to_owned())],
-        "the shape is the fields the declaration carries"
+        super::declared_shape(&parsed)
+            .into_iter()
+            .map(|field| (field.key, field.spelling, field.value))
+            .collect::<Vec<_>>(),
+        vec![("parts", "parts", "AParts".to_owned())],
+        "the shape is the fields the declaration carries, under their own spelling"
     );
+}
+
+/// A displayed field name is the one the declaration wrote, and the other spelling is not a drift.
+/// 显示出来的字段名就是声明写下的那一个，而另一种拼写不算漂移。
+///
+/// Audit `F1`: the comparison used to report a trait field under a fixed spelling, so a reader of a
+/// face that wrote `handle_contracts` was handed `handle_traits` — a name whose value does not live
+/// where the file keeps it. The two spellings are one field (so choosing either is not a deviation)
+/// and the printed name is the file's own (so what a reader copies back is what is really there).
+/// 审计 `F1`：这次比较过去用一个固定拼写报告 trait 字段，于是读到一个写 `handle_contracts` 的面的人，
+/// 拿到的是 `handle_traits`——一个取值并不住在文件保存它的位置的名字。两种拼写是同一个字段（选哪个都
+/// 不算偏离），而印出来的名字是文件自己的（读者抄回去的就是真正在那里的东西）。
+#[test]
+fn a_displayed_field_name_is_the_spelling_the_declaration_wrote() {
+    let root = specimen_package("specimen-spelling");
+    adopt(
+        &root,
+        "root/control/button",
+        "src/control/object/button/button.rs",
+    );
+    let button = "src/control/object/button/button.rs";
+    replace(
+        &root,
+        button,
+        "    handle_traits: [\"ControlHandle\"],\n",
+        "    handle_contracts: [crate::control::ControlHandle],\n",
+    );
+    let answer =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        answer.contains("handle_contracts `ControlHandle`")
+            && !answer.contains("handle_traits `ControlHandle`"),
+        "the specimen's own spelling is what a reader is handed: {answer}"
+    );
+    assert!(
+        answer.contains("conformance: 0 of 2 sibling(s)"),
+        "the siblings write the other spelling of the same field, so nothing is lacking: {answer}"
+    );
+
+    // And the other way round: the sibling that really lacks the field is named under the
+    // specimen's spelling, because that is the name the baseline carries.
+    let timeline = "src/control/object/timeline/timeline.rs";
+    replace(
+        &root,
+        timeline,
+        "    handle_traits: [\"ControlHandle\"],\n",
+        "",
+    );
+    let missing =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        missing.contains("outlier     timeline: lacks `handle_contracts`"),
+        "the row names the spelling the specimen wrote: {missing}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A file the derivation dropped is named, so the sibling count is not read as the whole family.
@@ -311,20 +369,40 @@ fn the_two_baselines_are_not_accepted_together() {
 #[test]
 fn the_shape_fields_are_the_kernels_own_vocabulary() {
     let vocabulary = nichlink_kernel::declaration::FACE_FIELD_ORDER;
-    for (name, _) in super::SHAPE_FIELDS {
+    for field in super::SHAPE_FIELDS {
         assert!(
-            vocabulary.contains(name),
-            "`{name}` is not a face field the kernel declares: {vocabulary:?}"
+            vocabulary.contains(&field.key),
+            "`{}` is not a face field the kernel declares: {vocabulary:?}",
+            field.key
         );
+        // Every spelling too: the printed lines hand a reader one of these, and a spelling the
+        // kernel does not carry is the `F1` defect in its other form — a name that cannot be pasted
+        // back because the parser never knew it.
+        // 每一种拼写也要查：印出来的行递给读者的就是其中之一，而内核不携带的拼写是 `F1` 缺陷的另一种
+        // 形态——一个放不回去的名字，因为解析器从不认识它。
+        for spelling in field.spellings {
+            assert!(
+                vocabulary.contains(spelling),
+                "`{spelling}` is not a face field the kernel declares: {vocabulary:?}"
+            );
+        }
     }
     // And every field name the lines print is one of the compared ones.
     assert_eq!(
         super::shape_field_names(),
         super::SHAPE_FIELDS
             .iter()
-            .map(|(name, _)| *name)
+            .flat_map(|field| field.spellings.iter().copied())
             .collect::<Vec<_>>()
     );
+    // The two trait fields are the only ones with a second spelling, and each pair is one key.
+    // 只有两个 trait 字段有第二种拼写，而每一对共用一个键。
+    let two_spellings = super::SHAPE_FIELDS
+        .iter()
+        .filter(|field| field.spellings.len() > 1)
+        .map(|field| field.key)
+        .collect::<Vec<_>>();
+    assert_eq!(two_spellings, vec!["handle_traits", "part_traits"]);
 }
 
 /// The deviating sibling is named, and the note says which way it deviates.
