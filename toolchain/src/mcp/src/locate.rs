@@ -174,10 +174,11 @@ pub(crate) fn locate(root: &Path, arguments: &Value) -> Result<String, String> {
              this tree — pass fewer or different words, or `search {{literal}}` for a phrase. **If the \
              symptom is a failing test, `check`'s `failed` line is the symptom's own words** — this \
              tool ranks *source* words, so paste that line's phrase rather than the framework's summary. \
-             symptom is about a **whole file** rather than a symbol (a file whose algorithms \
-             contradict its own docs, a file nothing calls), that is a file-level question: `digest \
-             {{file}}` summarises one file, `read {{path, whole: true}}` prints it with its symbols, \
-             and `check {{face}}` runs a face\n",
+             **If the symptom is about a whole file** rather than a symbol (a file whose algorithms \
+             contradict its own docs, a file nothing calls), that is a file-level question, and it is \
+             answered by dumping the file rather than by ranking words: `--call read --path <file> \
+             --whole` prints it with its symbols, `--call digest --file <file>` summarises it, and \
+             `--call check --face <face>` runs a face\n",
             root.display()
         ));
     }
@@ -211,10 +212,28 @@ pub(crate) fn locate(root: &Path, arguments: &Value) -> Result<String, String> {
          invisible; and a hit is a place to look, not the defect"
             .to_owned(),
     );
-    lines.push(
-        "next   `read {path, line}` for the body (the reply prints the contract lines too), \
-         `callgraph {function}` for who calls it"
-            .to_owned(),
-    );
+    // W4-7: the routing is stated on the answer, with the file the ranking just put first. A
+    // file-level symptom ("one algorithm in one file contradicts its docs") is answered by the whole
+    // file, not by a window around one line, so the call that dumps it rides here rather than being
+    // left to the reader to work out from the shape of the question.
+    // W4-7：路由写在答案上，并用**排名第一的那个文件**实例化。文件级症状（"一个文件里有一套算法与它自己的
+    // 文档相反"）由整份文件来回答，而不是由某一行周围的窗口，因此把文件倒出来的那次调用搭在这里，而不是
+    // 留给读者自己从问题的形状里推。
+    let top = rows
+        .first()
+        .map(|row| row.file.as_str())
+        .unwrap_or_default();
+    lines.push(format!(
+        "next   `--call read --path {} --line {}` for the body (the reply prints the contract lines \
+         too), `--call callgraph --function {}` for who calls it",
+        top,
+        rows.first().map_or(1, |row| row.line),
+        rows.first().map(|row| row.name.as_str()).unwrap_or_default()
+    ));
+    lines.push(format!(
+        "shape  understanding question (what does this file do / why is it like this) -> dump the \
+         whole file: `--call read --path {top} --whole`; structural question (what is in it, who \
+         calls it) -> the bounded rows above"
+    ));
     Ok(format!("{}\n", lines.join("\n")))
 }

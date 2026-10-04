@@ -743,8 +743,10 @@ fn the_answer_opens_with_the_census_and_closes_conservatively() {
         "a named deviation is not a closed answer: {open}"
     );
     assert!(
-        open.contains("remaining  read src/control/object/slider/slider.rs:")
-            || open.contains("remaining  read src/control/object/button/button.rs:"),
+        open.contains("remaining  --call read --path src/control/object/slider/slider.rs --line ")
+            || open.contains(
+                "remaining  --call read --path src/control/object/button/button.rs --line "
+            ),
         "and it carries a runnable `read` for the line that decides it: {open}"
     );
     for line in open.lines().filter(|line| line.starts_with("remaining")) {

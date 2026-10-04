@@ -947,3 +947,31 @@ fn a_flag_is_split_at_its_first_equals_only() {
     assert_eq!(flag_pair("--=x"), None);
     assert_eq!(flag_pair("face"), None);
 }
+
+/// The answer-shape routing is in the shipped text, on both the short page and the long one.
+/// 答案形状的路由写在**出厂文本**里——短页与长页都有。
+///
+/// Audit `W4-7`: the two question shapes need different answers (an understanding question is
+/// answered by dumping the file, a structural one by the bounded answer), and a reader who does not
+/// know that asks the wrong tool and pays for the round trip. A rule that only lives in a design
+/// document is a rule that is not in the product.
+/// 审计 `W4-7`：两种问题形状要两种答案（理解型由"把文件倒出来"回答，结构型由有界答案回答），而不知道
+/// 这一点的读者会去问错的工具、并为此付一个往返。只活在设计文档里的规则，就是不在产物里的规则。
+#[test]
+fn the_answer_shape_routing_is_on_both_pages() {
+    for page in [SHAPES_SHORT, INSTRUCTIONS] {
+        for phrase in ["Answer shape", "read --whole", "答案的形状"] {
+            assert!(page.contains(phrase), "the shipped text carries `{phrase}`");
+        }
+    }
+    // And the tool that raises the question routes it itself, with the file it ranked first.
+    // 而提出这个问题的工具自己会路由它，并用它排第一的那个文件实例化。
+    let root = crate::mcp::tools::tools_tests::scratch_package("routing-locate");
+    let answer = crate::mcp::locate::locate(&root, &serde_json::json!({"symptom": "used"}))
+        .expect("a ranked answer");
+    assert!(
+        answer.contains("understanding question") && answer.contains("--whole"),
+        "locate points at the whole-file call: {answer}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

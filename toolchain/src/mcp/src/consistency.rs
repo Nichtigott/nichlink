@@ -189,8 +189,8 @@ fn trait_shape(
 /// 摘录本身就是坐标（`src/x.rs:12  text`），因此打开它的调用只差一次截取——而"要读者自己拼的命令"
 /// 正是 `W4-5` 量到的那多出来的一步。
 fn read_command(shown: &[String]) -> Option<String> {
-    let coordinate = shown.first()?.trim().split_once("  ")?.0;
-    Some(format!("read {coordinate}"))
+    let (path, line) = shown.first()?.trim().split_once("  ")?.0.split_once(':')?;
+    Some(format!("--call read --path {path} --line {line}"))
 }
 
 /// The tree census every answer about a tree can open with.
@@ -630,7 +630,7 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             if let Some(command) = read_command(&shown) {
                 remaining.push(command);
             }
-            remaining.push(format!("check {anchor}"));
+            remaining.push(format!("--call check --face {anchor}"));
             rows.extend(shown);
         }
         lines.push(format!(

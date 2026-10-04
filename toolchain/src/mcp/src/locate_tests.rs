@@ -194,14 +194,48 @@ fn a_symptom_about_a_whole_file_names_the_file_level_shapes() {
         .expect("a symptom with no match still answers");
     for shape in [
         "file-level question",
-        "`digest {file}`",
-        "`read {path, whole: true}`",
-        "`check {face}`",
+        "--call digest --file <file>",
+        "--call read --path <file> --whole",
+        "--call check --face <face>",
     ] {
         assert!(
             answer.contains(shape),
             "the pointer names `{shape}`: {answer}"
         );
     }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The answer routes by the shape of the question, and the call it names is the top candidate's.
+/// 答案按问题的形状路由，而它点名的调用用的是排名第一的那个候选。
+///
+/// Audit `W4-7`: an "understanding" question (what does this file do) is answered by the whole file,
+/// while a structural one (what is in it, who calls it) is answered by the bounded rows — and the
+/// answer knows which file it ranked first, so the call it prints is one a reader can paste rather
+/// than a template with `{path}` in it.
+/// 审计 `W4-7`："理解型"问题（这个文件是干什么的）由整份文件回答，而"结构型"问题（里面有什么、谁调用它）
+/// 由有界的那几行回答——而答案知道自己把哪个文件排第一，因此它印出来的调用是读者可以照抄的，而不是一个
+/// 带 `{path}` 的模板。
+#[test]
+fn the_routing_names_the_top_candidate_and_the_whole_file_call() {
+    let root = scratch("locate-routing");
+    let answer = super::locate(&root, &json!({"symptom": "used"})).expect("a ranked answer");
+    assert!(
+        answer.contains("shape  understanding question"),
+        "the routing rides on the answer: {answer}"
+    );
+    assert!(
+        answer.contains("--call read --path src/lib.rs --whole"),
+        "and it names the file the ranking put first, whole: {answer}"
+    );
+    assert!(
+        answer.contains("--call read --path src/lib.rs --line ")
+            && answer.contains("--call callgraph --function used"),
+        "as does the `next` line: {answer}"
+    );
+    assert!(
+        !answer.lines().any(|line| line.contains("{path}")),
+        "no template survives where a real name was available: {answer}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -330,7 +330,9 @@ fn the_answer_carries_the_census_and_a_closure_line() {
         .find(|line| line.starts_with("next"))
         .expect("a next line");
     assert!(
-        !next.contains('{') && next.contains("used") && next.contains("src/lib.rs:3"),
+        !next.contains('{')
+            && next.contains("used")
+            && next.contains("--call read --path src/lib.rs --line 3"),
         "the next line is instantiated with this answer's own names: {next}"
     );
     // An open answer names a command; none of them is a template.

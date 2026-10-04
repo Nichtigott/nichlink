@@ -74,8 +74,9 @@ pub const SHAPES_SHORT: &str = "\
   move or merge       -> `affected` -> `why` (plan half) -> `grafts` -> `apply`\n\
 **Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the next clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
 **`check`'s verdict is the first line of its reply** (`verdict  passed (cargo exit 0)`), not this client's exit code (`0` answered, `1` refused, `2` a usage error).\n\
+**Answer shape**: understanding -> `read --whole`; structural -> the bounded answer.\n\
 The full guidance page is `--shapes`; one tool's whole description is `--list <tool>`.\n\
-**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
+**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。**答案的形状**：理解型 ⇒ `read --whole` 整份倒出，结构型 ⇒ 有界答案。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
 
 /// The long guidance page: the prose behind every branch above, and still the text an MCP
 /// client is handed at `initialize`. Read it by name with `--shapes`.
@@ -144,6 +145,11 @@ whole-tree census of static facts (pass `census: true` for the whole table), and
 what it does not cover — dispose of each column before opening files one by one. \
 **范围型问题**（「这里还有别的问题吗」）是另一条工作流，也从同一次回复开始：`check` 末尾带一张整树\
 静态事实普查（`census: true` 给整表），每栏都写明它不覆盖什么——先把每栏处置掉，再逐个打开文件。 \
+**答案的形状**：理解型问题（这个文件是干什么的、为什么这样写）⇒ `read --whole` 整份倒出（界＝文件\
+大小）；结构型问题（里面有什么、谁调用它）⇒ 有界的那份答案；`locate` 的回复已经指向 `read --whole`。\
+**Answer shape**: an understanding question (what does this file do, why is it like this) is answered \
+by the whole file (`read --whole`); a structural one (what is in it, who calls it) by the bounded \
+answer above; `locate` already points at `read --whole`. \
 **If the symptom is in something the \
 code produces** (a rendered report, a generated record), `search {literal}` on that product's own \
 words finds the line that produces it, usually in one call. **If the symptom is the assertion's \

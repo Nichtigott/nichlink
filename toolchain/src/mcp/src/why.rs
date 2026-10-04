@@ -140,14 +140,14 @@ fn plan_facts(
         // Nothing here can say which face owns this file, so the answer is open and the call that
         // answers it is the one that lists them.
         // 这里没有东西能说出这个文件归哪个面，因此答案是开的，而回答它的那次调用就是列出面清单的那次。
-        remaining.push("registry".to_owned());
+        remaining.push("--call registry".to_owned());
         return (lines, None);
     };
     if evidence.scope.is_none() {
         // A tree that was never built has no published scope; that is a fact, and the call that
         // produces one is `check`.
         // 一棵从未构建过的树没有已发布的作用域；那是一个事实，而产生它的调用是 `check`。
-        remaining.push(format!("check {}", face.path));
+        remaining.push(format!("--call check --face {}", face.path));
     }
     let owning = face.path.clone();
     lines.push(format!(
@@ -166,7 +166,7 @@ fn plan_facts(
             lines.push(format!(
                 "  wiring     the host entry's declarations could not be read ({reason})"
             ));
-            remaining.push("grafts".to_owned());
+            remaining.push("--call grafts".to_owned());
         }
         Ok(declared) if declared.cuts.is_empty() => lines.push(format!(
             "  wiring     the host entry {} declares no graft cut, so nothing replaces this face's \
@@ -271,8 +271,11 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
         // 这个答案点名了这些函数，因此它是"一次调用就能合上"的开：第一个函数自己的行号是一个真实坐标，
         // 而不是模板。
         let remaining = match file.functions.first() {
-            Some(first) => vec![format!("read {}:{}", file.relative, first.line)],
-            None => vec![format!("inspect {{file:\"{}\"}}", file.relative)],
+            Some(first) => vec![format!(
+                "--call read --path {} --line {}",
+                file.relative, first.line
+            )],
+            None => vec![format!("--call inspect --path {}", file.relative)],
         };
         lines.push(
             crate::mcp::tools::closure(false, &remaining)
@@ -460,13 +463,15 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
     );
     lines.push(match &owning_face {
         Some(face) => format!(
-            "next   `check {face}` to run the face that compiles this file, `callgraph {}` for the \
-             whole chain, `read {}:{}` for the body",
+            "next   `--call check --face {face}` runs the face that compiles this file, \
+             `--call callgraph --function {}` gives the whole chain, `--call read --path {} --line \
+             {}` the body",
             function.name, file.relative, function.line
         ),
         None => format!(
-            "next   `registry` lists this tree's faces (one of them owns this file), `callgraph {}` \
-             for the whole chain, `read {}:{}` for the body",
+            "next   `--call registry` lists this tree's faces (one of them owns this file), \
+             `--call callgraph --function {}` gives the whole chain, `--call read --path {} --line \
+             {}` the body",
             function.name, file.relative, function.line
         ),
     });
