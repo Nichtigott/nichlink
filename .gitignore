@@ -6,3 +6,7 @@ target/
 # AgentTeams 运行期状态与工作区记忆库：属于工具状态，不是源码，不入库。
 .agent-teams/
 .dsh-meow/
+# Python measurement/evaluation scripts (benches, judges, extractors) are local tooling rather
+# than a published surface: they run against this checkout and are not committed.
+# Python 度量/评测脚本（bench、判分、抽取器）是本地工具而不是发布面：它们只对着本检出跑，不提交。
+*.py
