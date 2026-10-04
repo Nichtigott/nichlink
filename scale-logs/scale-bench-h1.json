@@ -1,0 +1,42 @@
+[
+  {
+    "tier": "h1",
+    "faces": 101,
+    "registry": {
+      "ms": 70.4,
+      "bytes": 2824,
+      "exit": 0,
+      "first_line": "namespace h1"
+    },
+    "registry-full": {
+      "ms": 70.2,
+      "bytes": 21172,
+      "exit": 0,
+      "first_line": "namespace h1"
+    },
+    "status": {
+      "ms": 86.8,
+      "bytes": 438,
+      "exit": 0,
+      "first_line": "root /home/nich/Moirai_N3/nichlink/target/scale/h1"
+    },
+    "search": {
+      "ms": 70.4,
+      "bytes": 447,
+      "exit": 0,
+      "first_line": "tree  answered from the build's published records (a record carries path, kind and registry_name; the module is not in one, so a query that only matches a module derives from the sources)"
+    },
+    "read": {
+      "ms": 44.5,
+      "bytes": 440,
+      "exit": 0,
+      "first_line": "src/control/control.rs:1-9 (15 lines)"
+    },
+    "why": {
+      "ms": 203.9,
+      "bytes": 295,
+      "exit": 0,
+      "first_line": "tree: 101 face(s), 104 file(s)"
+    }
+  }
+]

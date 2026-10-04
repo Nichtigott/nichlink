@@ -204,8 +204,7 @@ fn records_that_do_not_describe_these_sources_are_reported_stale() {
     assert!(
         report.contains("note: these are the build's **published** rows")
             && report.contains("the declaration facts the record carries")
-            && report
-                .contains("What the record does **not** carry is a face added since the build"),
+            && report.contains("A face added since the build is not in the record at all"),
         "the note names both what the record carries and what it does not: {report}"
     );
 }
@@ -496,10 +495,10 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
         "and the direct calls audit `W3-1` added, `-` where a file calls nothing: {full}"
     );
     assert!(
-        full.contains("Three columns are published **in**")
-            && full.contains("`parent_node`, the")
-            && full.contains("freshness is"),
-        "the note says where the two hashes live and why they are not reprinted: {full}"
+        full.contains("`source_hash`, `fields` and `parent_node` are published **in**")
+            && full.contains("not reprinted per row")
+            && full.contains("is not in the record at all"),
+        "the note names what is published in the file and what the record cannot answer: {full}"
     );
     let _ = &fixture.namespace;
 }

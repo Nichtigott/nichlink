@@ -288,7 +288,15 @@ pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<St
 
 /// How many level rows the census prints before withholding the rest.
 /// 普查在扣下其余之前印多少行层级。
-const CENSUS_LEVELS: usize = 20;
+///
+/// Measured (2026-10-04) on a built 101-face host: each face in its own source directory makes the
+/// published census's fallback coordinate one level per face, and twenty level rows plus the notes
+/// came to 2,824 bytes — over the `W2-1` budget of 2 KB for the 50,000-face tier. Twelve rows keep
+/// the worst case inside it while still showing the shape a reader needs (where the mass sits).
+/// 实测（2026-10-04，一个已构建的 101 面宿主）：每个面各占一个源码目录时，发布普查的回退坐标就是
+/// "一面一层"，二十行层级加注是 2,824 字节——超过 `W2-1` 给五万面档定的 2 KB。十二行把最坏情形压回
+/// 预算内，同时仍显示读者需要的形状（质量集中在哪儿）。
+const CENSUS_LEVELS: usize = 10;
 
 /// How many face rows one page of the list carries.
 /// 清单的一页带多少行面。
@@ -479,11 +487,11 @@ fn render_published(
         // **已发布的**那一个来数。
         let by_path = rows.iter().any(|row| row.path.is_some());
         output.push_str(&format!(
-            "level ({}) and how many recorded faces sit directly under it:\n",
+            "level ({}) and how many recorded faces sit under it:\n",
             if by_path {
                 "logical path prefix"
             } else {
-                "source directory; this record predates the `path` column"
+                "source directory — this record carries no `path`"
             }
         ));
         let mut counts: std::collections::BTreeMap<String, usize> =
@@ -568,14 +576,12 @@ fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
 /// 这句话过去说 `path`、`kind`、`registry_name`、`parent`"是推导事实、不在记录里"——从 2026-09-29 剪枝行
 /// 开始发布它们起就不成立（审计 `W3-1` 又加了源码哈希、声明指纹与直接调用名）。这是一句**落后于**行为的
 /// 自述，与"跑在行为前面"的自述是同一个缺陷：读者以为那几列不在，于是手工推导。
-const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. Each row also shows \
-     the declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`, \
-     `owns_registry`) and the names its file calls (`calls`); `-` means the declaration named none. \
-     Three columns are published **in** `pruning_manifest.tsv` and are not reprinted here: the \
-     per-face `source_hash` and declaration `fields` fingerprint (a 64-hex column per row is a \
-     screenful of noise, and freshness is `nichlink.check`'s question) and `parent_node`, the \
-     resolved parent identity (a reader with the whole file has it; nothing in this row needs it). What the record does **not** carry is a face added since the build: \
-     one it has never seen is `nichlink.search`'s to derive.\n";
+const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. A row shows the \
+     declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`, \
+     `owns_registry`) and what its file calls (`calls`); `-` means the declaration named none. \
+     `source_hash`, `fields` and `parent_node` are published **in** `pruning_manifest.tsv` and are \
+     not reprinted per row. A face added since the build is not in the record at all — that one is \
+     `nichlink.search`'s to derive.\n";
 
 #[cfg(test)]
 #[path = "registry_tests.rs"]

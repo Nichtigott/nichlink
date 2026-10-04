@@ -22,36 +22,49 @@
 //! 键里带着**根**，因此同一个会话里的两棵树各自有自己的第一次，也因此一个测试的临时目录不可能被另一个
 //! 测试"已经说过"。
 
+use std::cell::RefCell;
 use std::collections::BTreeSet;
-use std::sync::Mutex;
 
-/// The keys this process has already printed in full.
-/// 这个进程已经完整印过的那些键。
-static SAID: Mutex<Option<BTreeSet<String>>> = Mutex::new(None);
+thread_local! {
+    /// The keys **this serving thread** has already printed in full.
+    /// **这个服务线程**已经完整印过的那些键。
+    ///
+    /// Thread-local rather than process-global, and that is the same distinction the module
+    /// documents: the stdio server reads and answers on the thread that called it, so "this
+    /// session" and "this thread" are the same thing in production — while in a test binary, whose
+    /// tests run **in parallel threads of one process**, a process-global ledger is shared state two
+    /// tests fight over. That fight is not hypothetical: it made `the_bounds_are_said_once_…` fail
+    /// only when the whole suite ran (audit `W2-2`).
+    /// 用线程局部而不是进程全局，而这正是本模块记录的那个区分：stdio 服务在调用它的那个线程上读并作答，
+    /// 因此生产环境里"这个会话"与"这个线程"是同一件事——而在一个**并行跑测试的进程**里，进程级账本正是两个
+    /// 测试会互相抢的共享状态。那场争抢不是假设：它让 `the_bounds_are_said_once_…` 只在全量跑时失败
+    /// （审计 `W2-2`）。
+    static SAID: RefCell<BTreeSet<String>> = RefCell::new(BTreeSet::new());
+}
 
 /// Whether this is the first time this session is being told `key`; records it when it is.
 /// 这个会话是不是第一次被告知 `key`；是就记下它。
 ///
-/// A poisoned lock answers `true`: repeating a paragraph is a smaller failure than dropping one.
-/// 锁中毒时回 `true`：重复一段话比漏掉一段话是小得多的失败。
+/// A borrow that cannot be taken answers `true`: repeating a paragraph is a smaller failure than
+/// dropping one.
+/// 借不到时回 `true`：重复一段话比漏掉一段话是小得多的失败。
 pub(crate) fn first_time(key: &str) -> bool {
-    let Ok(mut guard) = SAID.lock() else {
-        return true;
-    };
-    let set = guard.get_or_insert_with(BTreeSet::new);
-    set.insert(key.to_owned())
+    SAID.with(|said| {
+        said.try_borrow_mut()
+            .map(|mut set| set.insert(key.to_owned()))
+            .unwrap_or(true)
+    })
 }
 
-/// Forget every key, so the next call answers as a first call.
-/// 忘掉所有键，好让下一次调用按第一次作答。
+/// Forget every key of **this thread**, so the next call answers as a first call.
+/// 忘掉**本线程**的所有键，好让下一次调用按第一次作答。
 ///
-/// Only tests use it: they share one process and would otherwise see each other's "already said".
-/// 只有测试用它：它们共用一个进程，否则会看到彼此的"已经说过"。
+/// Only tests use it: a test that calls one tool several times wants each call to be a first call,
+/// and its thread-local ledger is exactly what to clear.
+/// 只有测试用它：一个反复调用同一个工具的测试要每次都是"第一次"，而它自己的线程局部账本正是该清的东西。
 #[cfg(test)]
 pub(crate) fn forget() {
-    if let Ok(mut guard) = SAID.lock() {
-        *guard = None;
-    }
+    SAID.with(|said| said.borrow_mut().clear());
 }
 
 #[cfg(test)]
