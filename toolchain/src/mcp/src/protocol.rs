@@ -6,7 +6,7 @@ use std::env;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use crate::mcp::tools::{tool_call, tools};
+use crate::mcp::tools::{advertised, tool_call};
 
 /// Protocol revision advertised during initialization.
 /// 初始化时通告的协议版本。
@@ -299,7 +299,12 @@ fn dispatch(root: &Path, request: &Value) -> Value {
         // 永远等下去，而单成员 batch 则完全没有输出。
         "notifications/initialized" | "notifications/cancelled" => success(id, json!({})),
         "ping" => success(id, json!({})),
-        "tools/list" => success(id, json!({ "tools": tools() })),
+        // Audit `W1-1`: what arrives unasked is two entry points plus the catalogue tool, not the whole
+        // 27-tool frame. `tools()` is still the catalogue every other reader uses (`--list`,
+        // dispatch, `--list <tool>`), so nothing became unreachable — only unadvertised.
+        // 审计 `W1-1`：不请自来的是两个入口加一个目录工具，而不是整帧 27 个工具。`tools()` 仍是其它每个
+        // 读者用的目录（`--list`、分派、`--list <tool>`），因此没有任何东西变得够不着——只是不再被广告。
+        "tools/list" => success(id, json!({ "tools": advertised() })),
         "tools/call" => tool_call(root, id, params),
         _ => error_response(id, -32601, format!("unknown method `{method}`")),
     }

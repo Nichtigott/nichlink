@@ -685,7 +685,122 @@ pub(crate) fn tools() -> Vec<Value> {
              under it, with `tree unavailable (reason)` where a member has no tree to verify.",
             json!({"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":200},"root":{"type":"string"}}}),
         ),
+        catalogue_entry(),
     ]
+}
+
+/// What `tools/list` advertises: the two entry points, plus the catalogue tool.
+/// `tools/list` 广告的东西：两个入口，加上目录工具。
+///
+/// Audit `W1-1`: the client used to be handed **all twenty-seven** tools in one frame — around
+/// 36,000 characters of prose — so a session's first decision was made against a wall of text, and
+/// the round measured what that costs (25 steps against the compared tool's 14). Nothing is removed:
+/// the catalogue still holds every tool, `--list <tool>` still prints a whole description, and this
+/// meta-tool lists them all. What changed is **what arrives unasked** — the two calls the workflows
+/// actually enter through, and one tool whose whole job is to show the rest on request.
+/// 审计 `W1-1`：客户端过去在**一帧里**拿到**全部二十七个**工具——约 36,000 字符的散文——于是一个会话的
+/// 第一个决定是在一堵文字墙前做出的，而那一轮量到了代价（25 步 vs 对照工具的 14 步）。什么都没有删：
+/// 目录里仍然是每个工具，`--list <tool>` 仍然印完整描述，而这个元工具会把它们全列出来。变的是
+/// **不请自来的东西**——工作流真正进入的那两个调用，以及一个"按需展示其余"就是它全部职责的工具。
+pub(crate) fn advertised() -> Vec<Value> {
+    vec![
+        tool(
+            "nichlink.check",
+            ADVERTISED_CHECK,
+            advertised_schema("nichlink.check"),
+        ),
+        tool(
+            "nichlink.apply",
+            ADVERTISED_APPLY,
+            advertised_schema("nichlink.apply"),
+        ),
+        catalogue_entry(),
+    ]
+}
+
+/// The catalogue tool's entry, shared by the catalogue and the advertisement.
+/// 目录工具的条目，目录与广告共用。
+///
+/// One builder for both lists, because two copies of a description drift exactly the way the round
+/// measured them drifting: what `tools/list` says and what `--list` says are the same sentence about
+/// the same tool, or one of them is wrong.
+/// 两份清单共用一个构造器，因为描述的两份拷贝会按那一轮量到的方式漂移：`tools/list` 说的与 `--list` 说的
+/// 是关于同一个工具的同一句话，否则其中一句是错的。
+fn catalogue_entry() -> Value {
+    tool(
+        "nichlink_tools",
+        "Every tool here, one line each. No argument: name, keys, `*` = \
+         required — the shape a session needs to pick one. `tool: \
+         \"nichlink.consistency\"`: that tool's **whole** description and schema, which is what \
+         `--list <tool>` prints. The advertised tools are where the workflows enter; everything else \
+         is reached through this list, because the round measured a 36,000-character catalogue as \
+         the first thing a session read and the last thing it used. \
+         列出这个桥的整个能力面：不给参数 ⇒ 每个工具一行（名字、它接受的键、`*` = 必填）；\
+         `tool: \"nichlink.consistency\"` ⇒ 那个工具的**完整**描述与 schema（即 `--list <tool>`）。",
+        json!({"type":"object","properties":{
+            "tool":{"type":"string","description":"a tool name from the no-argument listing; omit it to list them all"}
+        }}),
+    )
+}
+
+/// The advertised description of `nichlink.check` (audit `W1-4`: decision information only).
+/// `nichlink.check` 的广告描述（审计 `W1-4`：只留决策信息）。
+///
+/// The full text — the census columns, the verdict states, the log path — is one `nichlink_tools`
+/// call away, and it is still what `--list check` prints. What stays here is what decides **whether
+/// to call it** and **what to pass**.
+/// 全文——普查各栏、判定状态、日志路径——离一次 `nichlink_tools` 调用，而且仍是 `--list check` 印的东西。
+/// 留在这里的是决定**要不要调它**与**传什么**的东西。
+const ADVERTISED_CHECK: &str = "\
+**Runs** `cargo test` on one face and puts the run's own verdict on the reply's first line \
+(`verdict  passed (cargo exit 0)` / `failed (exit 101)`) — never this client's exit code. `face` is `default` (what omitting it runs), `all`, or one feature name; naming one is still \
+the point, because a defect compiled only under a non-default feature cannot fail on the default \
+face. The reply also carries a sampled whole-tree census for \"what else is wrong here\" \
+(`census: true` for the whole table). Full text: `nichlink_tools {tool: \"nichlink.check\"}`. \
+跑一个面的 `cargo test`，判定在回复第一行；`face` 为 `default`（缺省即它）/`all`/某个特性名。";
+
+const ADVERTISED_APPLY: &str = "\
+**The only write path** for this tree's registration faces. Seven actions in two classes: \
+`add`/`deepen`/`cut`/`promote` are **additive** (declarations; a hand-written face is a legal \
+subject), `edit`/`rename`/`delete` are **rewrites** (the face's own file; generated faces only). \
+**Previewed unless `apply: true`**; `delete`/`promote` also need `confirm: true`. \
+More: `nichlink_tools {tool: \"nichlink.apply\"}`.";
+
+/// The slim schema of an advertised tool: the keys that decide the call, one line each.
+/// 一个广告工具的瘦 schema：决定这次调用的那几个键，每个一行。
+///
+/// Audit `W1-4`: the apply parameter block alone was 2,140 characters of prose repeated in every
+/// frame. What moved out is not deleted — `--list <tool>` and `nichlink_tools` still carry it — and
+/// the refusals carry the *instantiated* form, which is the one a caller can actually run.
+/// 审计 `W1-4`：仅 apply 的参数块就是 2,140 字符的散文，每一帧都重发一遍。搬走的不是删掉的——
+/// `--list <tool>` 与 `nichlink_tools` 仍然带着它——而拒绝文案带的是**实例化**的那一份，也就是调用方
+/// 真能跑的那一份。
+fn advertised_schema(tool: &str) -> Value {
+    match tool {
+        "nichlink.check" => json!({"type":"object","properties":{
+            "face":{"type":"string","description":"`default` (omitted), `all`, or a feature name"},
+            "census":{"type":"boolean","description":"the whole table, not the sample"},
+            "timeout_ms":{"type":"integer","description":"default 900000; a timeout is `unknown`"},
+            "root":{"type":"string"}
+        }}),
+        "nichlink.apply" => json!({"type":"object","properties":{
+            "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: the file (generated only)"},
+            "node":{"type":"string","description":"edit/rename/delete/deepen: the face"},
+            "parent":{"type":"string","description":"add: parent (default: the root)"},
+            "fields":{"type":"object","description":"the face's fields; strings except `needs_registry`; `module` is a bare snake_case name","properties":{"needs_registry":{"type":"boolean"}},"additionalProperties":{"type":"string"}},
+            "inside":{"type":"object","description":"deepen: the layer to add","properties":{"parts":{"type":"object","additionalProperties":{"type":"string"}}},"required":["parts"]},
+            "cut":{"type":"string","description":"cut: the face handed over (`crate::…::NODE_ID`)"},
+            "graft":{"type":"string","description":"cut: what replaces it"},
+            "to":{"type":"string","description":"cut: range end"},
+            "full":{"type":"boolean","description":"cut: the replacement covers the subtree"},
+            "selector":{"type":"string","description":"promote: the record directory to land"},
+            "implementation":{"type":"string","description":"promote: the implementation crate"},
+            "apply":{"type":"boolean","description":"false previews; true writes"},
+            "confirm":{"type":"boolean","description":"delete/promote: must be true"},
+            "root":{"type":"string"}
+        },"required":["action"]}),
+        _ => json!({"type":"object"}),
+    }
 }
 
 fn tool(name: &str, description: &str, input_schema: Value) -> Value {
@@ -826,6 +941,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.affected", affected),
     ("nichlink.check", check),
     ("nichlink.verify", verify),
+    ("nichlink_tools", catalogue),
 ];
 
 /// `nichlink.status` reads no arguments, so it joins the table through a shim.
@@ -1008,6 +1124,26 @@ pub(crate) fn closure(closed: bool, remaining: &[String]) -> String {
         text.push_str(&format!("remaining  {command}\n"));
     }
     text
+}
+
+/// The catalogue tool: every tool on one line, or one tool's whole page.
+/// 目录工具：所有工具一行式列出，或某一个工具的整页。
+///
+/// It reads the **same** catalogue and prints the **same** one-liner `--list` does
+/// (`client::list_tool_lines`) and the **same** page `--list <tool>` does (`client::describe_tool`),
+/// so the advertisement and the manual cannot drift: there is one implementation of each.
+/// 它读的是**同一份**目录、印的是 `--list` 印的那张**同一份**一行式清单（`client::list_tool_lines`）与
+/// `--list <tool>` 印的**同一页**（`client::describe_tool`），因此广告与手册不可能漂移：各自只有一份实现。
+fn catalogue(_root: &Path, arguments: &Value) -> Result<String, String> {
+    match arguments.get("tool").and_then(Value::as_str) {
+        Some(name) => crate::mcp::client::describe_tool(name).ok_or_else(|| {
+            format!(
+                "`{name}` is not a tool this bridge has; call `nichlink_tools` with no `tool` to list \
+                 them, or `--list` for the same list (plus the workflow table)"
+            )
+        }),
+        None => Ok(crate::mcp::client::list_tool_lines().join("\n") + "\n"),
+    }
 }
 
 pub(crate) fn tool_call(root: &Path, id: Value, params: &Value) -> Value {

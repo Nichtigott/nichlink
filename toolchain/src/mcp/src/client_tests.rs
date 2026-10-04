@@ -22,7 +22,10 @@ fn the_list_is_the_catalogue_one_entry_each() {
     for entry in &entries {
         let mut lines = entry.lines();
         let first = lines.next().unwrap_or_default();
-        assert!(first.starts_with("nichlink."), "{entry}");
+        assert!(
+            first.starts_with("nichlink.") || first.starts_with("nichlink_tools — "),
+            "every entry is namespaced, or is the one catalogue tool: {entry}"
+        );
         assert!(
             first.contains(" — "),
             "name, then the first sentence: {entry}"
@@ -93,14 +96,14 @@ fn the_instructions_name_the_symptom_and_the_call() {
         "affected",
     ] {
         assert!(
-            INSTRUCTIONS.contains(expected),
-            "missing `{expected}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(expected),
+            "missing `{expected}`: {GUIDANCE}"
         );
     }
     assert!(
-        INSTRUCTIONS.len() > 700,
+        GUIDANCE.len() > 700,
         "the table has to carry the mapping, not one sentence: {}",
-        INSTRUCTIONS.len()
+        GUIDANCE.len()
     );
 }
 
@@ -135,7 +138,7 @@ fn the_one_line_list_stays_small_and_keeps_the_entry_calls() {
     }
     // The long page is still reachable by name, and still carries what the short one drops.
     // 长页仍可按名字取到，并且仍带短页省掉的东西。
-    assert!(INSTRUCTIONS.len() > SHAPES_SHORT.len());
+    assert!(GUIDANCE.len() > SHAPES_SHORT.len());
     // And the whole one-line reply — what a session actually reads — has a bound of its own.
     // 而整条一行式回复——会话真正读到的那个——有自己的上限。
     let whole = std::iter::once(SHAPES_SHORT.to_owned())
@@ -166,8 +169,8 @@ fn the_one_line_list_stays_small_and_keeps_the_entry_calls() {
 #[test]
 fn the_table_does_not_read_the_exit_code_as_the_verdict() {
     assert!(
-        !INSTRUCTIONS.contains("exit code the verdict"),
-        "the promise the round measured false is gone: {INSTRUCTIONS}"
+        !GUIDANCE.contains("exit code the verdict"),
+        "the promise the round measured false is gone: {GUIDANCE}"
     );
     for expected in [
         "verdict is the first line of the reply",
@@ -183,8 +186,8 @@ fn the_table_does_not_read_the_exit_code_as_the_verdict() {
         "census: true",
     ] {
         assert!(
-            INSTRUCTIONS.contains(expected),
-            "missing `{expected}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(expected),
+            "missing `{expected}`: {GUIDANCE}"
         );
     }
 }
@@ -254,12 +257,12 @@ fn plain_arguments_carry_their_json_type() {
 ///
 /// This is the pin the round was missing. The table advertised `callgraph {orphans: true}` while the
 /// orphan view had deliberately been left out, and the old pin asserted only that the *string*
-/// appeared in `INSTRUCTIONS` — so two independent members spent two of a round's ten calls being
+/// appeared in `GUIDANCE` — so two independent members spent two of a round's ten calls being
 /// refused (`requires function`, then `needs a value`). Checking the sentence is not checking the
 /// shape. The reverse direction is checked too: every `tool {keys}` shape the table names must be
 /// listed here, so adding a promise without an acceptance check fails.
 /// 这就是那轮缺失的钉子。流程表承诺了 `callgraph {orphans: true}`，而孤儿视图当时被我故意缓做，旧钉子只断言
-/// 那个**字符串**出现在 `INSTRUCTIONS` 里——于是两位成员各自花掉那轮 10 次调用里的 2 次被拒
+/// 那个**字符串**出现在 `GUIDANCE` 里——于是两位成员各自花掉那轮 10 次调用里的 2 次被拒
 /// （`requires function`、继而 `needs a value`）。**检查句子不等于检查形状。**反向也检查：表里点名的每个
 /// `tool {keys}` 形状都必须在这里列名，因此"加了承诺却没有接受性检查"会失败。
 #[test]
@@ -321,7 +324,7 @@ fn the_table_only_advertises_shapes_the_tool_accepts() {
 /// 漂移是双向的：表里有、检查里没有 ⇒ 没人测的承诺；检查里有、表里已经删掉 ⇒ 活得比被检查对象还久的测试。
 #[test]
 fn every_shape_the_table_names_is_covered_by_an_acceptance_check() {
-    let named = INSTRUCTIONS
+    let named = GUIDANCE
         .split('`')
         .filter(|part| part.contains('{') && part.contains('}'))
         .filter_map(|part| part.split_once(' '))
@@ -405,11 +408,11 @@ fn a_text_key_keeps_digits_as_text() {
 #[test]
 fn the_table_names_the_adoption_ledger() {
     assert!(
-        super::INSTRUCTIONS.contains("adopted"),
+        super::GUIDANCE.contains("adopted"),
         "the ledger tool is named"
     );
     assert!(
-        super::INSTRUCTIONS.contains(".nichlink/adopted/entries"),
+        super::GUIDANCE.contains(".nichlink/adopted/entries"),
         "and so is where it lives"
     );
 }
@@ -515,21 +518,21 @@ fn the_flow_table_packages_the_seven_shapes_with_their_stop_conditions() {
     ];
     for (signal, stop) in rows {
         assert!(
-            INSTRUCTIONS.contains(signal),
-            "the table names the signal `{signal}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(signal),
+            "the table names the signal `{signal}`: {GUIDANCE}"
         );
         assert!(
-            INSTRUCTIONS.contains(stop),
-            "and its stop condition `{stop}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(stop),
+            "and its stop condition `{stop}`: {GUIDANCE}"
         );
     }
     assert!(
-        INSTRUCTIONS.contains("not by its wording"),
-        "the signals are structural, not words: {INSTRUCTIONS}"
+        GUIDANCE.contains("not by its wording"),
+        "the signals are structural, not words: {GUIDANCE}"
     );
     assert!(
-        INSTRUCTIONS.contains("停止条件"),
-        "and the Chinese half carries the same table: {INSTRUCTIONS}"
+        GUIDANCE.contains("停止条件"),
+        "and the Chinese half carries the same table: {GUIDANCE}"
     );
 }
 
@@ -591,10 +594,7 @@ fn the_scenario_fixture_covers_every_shape_and_cannot_drift_from_the_table() {
     }
     // Both ways: a shape the fixture dropped, and a shape the table added, are both drift.
     // 双向：夹具丢掉的形状与表里新加的形状都是漂移。
-    for row in INSTRUCTIONS
-        .split("  ")
-        .filter(|part| part.contains(" -> "))
-    {
+    for row in GUIDANCE.split("  ").filter(|part| part.contains(" -> ")) {
         let named = row
             .split_whitespace()
             .take_while(|word| !word.contains("->"))
@@ -637,8 +637,8 @@ fn the_table_says_where_a_parents_rules_live() {
         "父面自己的规范",
     ] {
         assert!(
-            INSTRUCTIONS.contains(expected),
-            "the table carries `{expected}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(expected),
+            "the table carries `{expected}`: {GUIDANCE}"
         );
     }
 }
@@ -665,8 +665,8 @@ fn the_table_points_a_family_question_at_the_family_comparison() {
         "对象有兄弟时",
     ] {
         assert!(
-            INSTRUCTIONS.contains(expected),
-            "the table carries `{expected}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(expected),
+            "the table carries `{expected}`: {GUIDANCE}"
         );
     }
 }
@@ -691,8 +691,8 @@ fn the_table_lets_independent_lookups_share_a_turn() {
         "只在`下一个参数不依赖上一个答案`时这么做",
     ] {
         assert!(
-            INSTRUCTIONS.contains(expected),
-            "the table carries `{expected}`: {INSTRUCTIONS}"
+            GUIDANCE.contains(expected),
+            "the table carries `{expected}`: {GUIDANCE}"
         );
     }
 }
@@ -717,12 +717,12 @@ fn the_pointer_to_a_parents_rule_uses_the_spelling_that_finds_it() {
     // pinned where that reply is built.
     // 这里只断言指引页：`pass literal` 是 **search 的回复**里的话，钉在生成那条回复的地方。
     assert!(
-        INSTRUCTIONS.contains("search {literal: \"REGISTRATION_RULE\"}"),
-        "the pointer uses the spelling that finds a const: {INSTRUCTIONS}"
+        GUIDANCE.contains("search {literal: \"REGISTRATION_RULE\"}"),
+        "the pointer uses the spelling that finds a const: {GUIDANCE}"
     );
     assert!(
-        !INSTRUCTIONS.contains("search {query: \"REGISTRATION_RULE\"}"),
-        "the name-shaped spelling cannot find a const: {INSTRUCTIONS}"
+        !GUIDANCE.contains("search {query: \"REGISTRATION_RULE\"}"),
+        "the name-shaped spelling cannot find a const: {GUIDANCE}"
     );
 }
 
@@ -779,12 +779,12 @@ fn the_keys_legend_appears_only_when_something_is_starred() {
 #[test]
 fn the_table_says_a_path_claim_is_read_at_each_hop() {
     assert!(
-        INSTRUCTIONS.contains("read at each hop's own definition"),
-        "the rule is on the page every agent reads: {INSTRUCTIONS}"
+        GUIDANCE.contains("read at each hop's own definition"),
+        "the rule is on the page every agent reads: {GUIDANCE}"
     );
     assert!(
-        INSTRUCTIONS.contains("a name that looks like the hop is not the hop"),
-        "and it says why naming is not enough: {INSTRUCTIONS}"
+        GUIDANCE.contains("a name that looks like the hop is not the hop"),
+        "and it says why naming is not enough: {GUIDANCE}"
     );
 }
 
@@ -959,10 +959,24 @@ fn a_flag_is_split_at_its_first_equals_only() {
 /// 这一点的读者会去问错的工具、并为此付一个往返。只活在设计文档里的规则，就是不在产物里的规则。
 #[test]
 fn the_answer_shape_routing_is_on_both_pages() {
-    for page in [SHAPES_SHORT, INSTRUCTIONS] {
-        for phrase in ["Answer shape", "read --whole", "答案的形状"] {
-            assert!(page.contains(phrase), "the shipped text carries `{phrase}`");
-        }
+    // The routing is on the two pages that carry prose (the `--list` short page and the long one),
+    // and the handshake text names the `read --whole` call it routes to.
+    // 路由在两张带散文的页上（`--list` 的短页与长页），而握手文本点名它路由到的那次 `read --whole`。
+    for page in [SHAPES_SHORT, GUIDANCE, INSTRUCTIONS] {
+        assert!(
+            page.contains("read --whole"),
+            "the shipped text names the whole-file call"
+        );
+    }
+    for page in [SHAPES_SHORT, GUIDANCE] {
+        assert!(
+            page.contains("Answer shape"),
+            "the English routing half is on both prose pages"
+        );
+        assert!(
+            page.contains("答案的形状") || page.contains("答案形状"),
+            "and so is the Chinese half"
+        );
     }
     // And the tool that raises the question routes it itself, with the file it ranked first.
     // 而提出这个问题的工具自己会路由它，并用它排第一的那个文件实例化。

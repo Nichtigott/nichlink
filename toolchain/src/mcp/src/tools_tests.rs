@@ -727,11 +727,21 @@ fn the_tools_list_reply_carries_the_annotations() {
     let tools = reply["result"]["tools"]
         .as_array()
         .expect("tools/list answers with an array");
-    assert_eq!(tools.len(), crate::mcp::tools::tools().len());
-    for entry in tools {
+    // The advertised frame is the two entry points plus the catalogue tool (audit `W1-1`) …
+    // 广告帧是两个入口加目录工具（审计 `W1-1`）……
+    assert_eq!(
+        tools.len(),
+        crate::mcp::tools::advertised().len(),
+        "the wire reply is what `advertised()` says it is"
+    );
+    // … and **every** entry either list carries keeps its annotations and its title, because a
+    // client that cannot tell a read tool from a write tool cannot ask for approval.
+    // ……而两张清单里的**每个**条目都带着自己的 annotations 与 title，因为分不出读工具与写工具的客户端
+    // 没法请求批准。
+    for entry in tools.iter().chain(crate::mcp::tools::tools().iter()) {
         assert!(
             entry["annotations"]["readOnlyHint"].is_boolean() && entry["title"].is_string(),
-            "the wire reply carries the annotations and the title: {entry}"
+            "the entry carries the annotations and the title: {entry}"
         );
     }
 }

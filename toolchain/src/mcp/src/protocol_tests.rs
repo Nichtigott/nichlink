@@ -180,7 +180,27 @@ fn the_registry_tool_is_listed_and_answers_about_this_package() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect::<Vec<_>>();
-    assert!(names.contains(&"nichlink.registry"), "{names:?}");
+    // Audit `W1-1` changed what arrives unasked: the two entry points plus the catalogue tool, not
+    // all 27. `registry` is still callable and still listed — by the catalogue tool, which is the
+    // one place a session looks when it needs a capability the advertisement did not name.
+    // 审计 `W1-1` 改了不请自来的东西：两个入口加目录工具，而不是全部 27 个。`registry` 照样可调、照样
+    // 被列出——由目录工具列出，而那是会话需要"广告没点名"的能力时唯一会看的地方。
+    assert_eq!(
+        names,
+        vec!["nichlink.check", "nichlink.apply", "nichlink_tools"],
+        "the advertisement is the two entry points plus the catalogue"
+    );
+    let catalogue = replies(
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\
+         \"params\":{\"name\":\"nichlink_tools\",\"arguments\":{}}}\n",
+    );
+    let listed_all = catalogue[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text reply");
+    assert!(
+        listed_all.contains("nichlink.registry — "),
+        "the catalogue tool lists every tool: {listed_all}"
+    );
 
     let called = replies(
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
@@ -270,4 +290,65 @@ fn a_frame_that_is_not_utf8_is_answered_and_the_session_continues() {
     assert!(message.contains("not valid UTF-8"), "{message}");
     assert_eq!(replies[1]["id"], 2, "{replies:#?}");
     assert!(replies[1]["result"].is_object(), "{replies:#?}");
+}
+
+/// The advertised frame fits the budget the round set for it, and the handshake text fits its own.
+/// 广告帧在那一轮为它设的预算之内，握手文本也在它自己的预算之内。
+///
+/// Audit `W1-1`: the catalogue used to arrive as ~36,000 characters in the `tools/list` reply and the
+/// long guidance page as ~7,000 in `initialize`. Both numbers are what made a session's first
+/// decision expensive, so both get a ceiling — measured on the **wire reply**, because that is the
+/// only shape a client pays for. The full text stays reachable (`--shapes`, `--list <tool>`,
+/// `nichlink_tools`), which is why this is a budget and not a deletion.
+/// 审计 `W1-1`：目录过去以约 36,000 字符出现在 `tools/list` 回复里，长指引页以约 7,000 出现在
+/// `initialize` 里。两个数字正是让一个会话的第一个决定变贵的东西，因此两者都有上限——量的是**线上回复**，
+/// 因为那是客户端唯一付费的形状。全文仍然够得着（`--shapes`、`--list <tool>`、`nichlink_tools`），
+/// 这也是它是"预算"而不是"删除"的原因。
+#[test]
+fn the_advertised_frame_and_the_handshake_fit_their_budgets() {
+    let listed = replies("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n");
+    let frame = listed[0]["result"]["tools"].to_string();
+    assert!(
+        frame.len() <= 4200,
+        "the advertised frame is a screenful: {} characters",
+        frame.len()
+    );
+    let names = listed[0]["result"]["tools"]
+        .as_array()
+        .expect("a tool array")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names.len(),
+        3,
+        "three entries arrive unasked, not twenty-seven: {names:?}"
+    );
+
+    // W1-4's own budget: the three advertised schemas together stay inside 4,300 characters.
+    // W1-4 自己的预算：三个广告 schema 合计在 4,300 字符以内。
+    let schemas: usize = listed[0]["result"]["tools"]
+        .as_array()
+        .expect("a tool array")
+        .iter()
+        .map(|tool| tool["inputSchema"].to_string().len())
+        .sum();
+    assert!(
+        schemas <= 4300,
+        "the advertised schemas are the call shapes, not the manual: {schemas} characters"
+    );
+
+    let handshake = crate::mcp::client::INSTRUCTIONS.len();
+    assert!(
+        handshake <= 550,
+        "the handshake text is a map, not a manual: {handshake} characters"
+    );
+    // And the surface it maps is still whole: the catalogue is unchanged, so nothing became
+    // unreachable when the advertisement shrank.
+    // 而它描绘的那个面仍是完整的：目录没动，因此广告变小的时候没有任何东西变得够不着。
+    assert!(
+        crate::mcp::tools::tools().len() >= 27,
+        "no capability was removed: {}",
+        crate::mcp::tools::tools().len()
+    );
 }

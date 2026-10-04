@@ -74,14 +74,38 @@ pub const SHAPES_SHORT: &str = "\
   move or merge       -> `affected` -> `why` (plan half) -> `grafts` -> `apply`\n\
 **Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the next clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
 **`check`'s verdict is the first line of its reply** (`verdict  passed (cargo exit 0)`), not this client's exit code (`0` answered, `1` refused, `2` a usage error).\n\
-**Answer shape**: understanding -> `read --whole`; structural -> the bounded answer.\n\
-The full guidance page is `--shapes`; one tool's whole description is `--list <tool>`.\n\
-**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。**答案的形状**：理解型 ⇒ `read --whole` 整份倒出，结构型 ⇒ 有界答案。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
+**Answer shape**: understanding -> `read --whole`; structural -> bounded.\n\
+One tool's whole description is `--list <tool>`; the long page is `--shapes`.\n\
+**先把请求放进七种形状之一**（按它点名什么、朝哪个方向动）：空树 ⇒ `new_project`；查看单对象 ⇒ `search`/`locate` → `read`/`why --at`/`check {face}`；有兄弟 ⇒ `consistency --parent` 一次点名异类；查看多个 ⇒ 同上再逐个；范围型 ⇒ `check` 逐栏处置；新增 ⇒ `registry`/`apply`/`consistency --specimen`/`check`；加深 ⇒ `explain`/`apply`/`check`；迁移 ⇒ `affected`/`why`/`grafts`/`apply`。**先读症状**：跑 `cargo test`，失败断言的原话就是下一条线索；**无注册面的树上「对象」只能指符号**，直接 `search`/`locate`/`read`。答案形状：理解型⇒read --whole，结构型⇒有界。**`check` 的判定在它回复第一行**。完整页是 `--shapes`。\n";
 
-/// The long guidance page: the prose behind every branch above, and still the text an MCP
-/// client is handed at `initialize`. Read it by name with `--shapes`.
-/// 长指引页：上面每一条背后的散文，也是 MCP 客户端在 `initialize` 时拿到的文本。用 `--shapes` 按名字取它。
+/// The handshake text: the capability map, the routing rule, and the one gate a writer must know.
+/// 握手文本：能力地图、路由规则、以及写者必须知道的那一道门。
+///
+/// Audit `W1-1`: this is what `initialize` hands the client, and the round measured the old text as
+/// seven kilobytes read by every session and referenced by none. Its budget is 550 characters — the
+/// map says **where each capability lives**, not what it answers, because the answers are the tools'
+/// own replies and their refusals. The long page is `--shapes`; one tool's whole description is
+/// `--list <tool>`; the whole surface on demand is the `nichlink_tools` call.
+/// 审计 `W1-1`：这是 `initialize` 交给客户端的东西，而那一轮量到旧文本是"每场都读、无一引用"的七千字节。
+/// 它的预算是 550 字符——地图说的是**每项能力住在哪**，不是它答什么，因为答案在各工具自己的回复与拒绝里。
+/// 长页是 `--shapes`；一个工具的完整描述是 `--list <tool>`；整面按需取是 `nichlink_tools`。
 pub const INSTRUCTIONS: &str = "\
+**Capability map**: `check` runs one face and carries the tree census; `apply` is the only write \
+path (previewed unless `apply: true`; `add`/`deepen`/`cut`/`promote` reach hand-written faces, \
+`edit`/`rename`/`delete` only generated ones). Everything else is one `nichlink_tools` call away. \
+Route understanding questions to `read --whole`, structural ones to the bounded answer. \
+能力地图：`check` 跑一个面；`apply` 是唯一写入路径；其余用 `nichlink_tools`。理解型用 \
+`read --whole`，结构型用有界答案。";
+
+/// The long guidance page: the prose behind every branch above. Read it by name with `--shapes`.
+/// 长指引页：上面每一条背后的散文。用 `--shapes` 按名字取它。
+///
+/// It **used to be** what `initialize` handed the client, and audit `W1-1` is why it is not any more:
+/// seven kilobytes arriving unasked, in every session, before the first question. It is still one
+/// call away, and the tools' own refusals and `next` lines carry the parts a reader acts on.
+/// 它**过去**是 `initialize` 交给客户端的东西，而审计 `W1-1` 正是它不再是的原因：七千字节不请自来，
+/// 每个会话、在每个问题之前。它仍离一次调用，而各工具自己的拒绝与 `next` 行带着读者会照做的那些部分。
+pub const GUIDANCE: &str = "\
 **Place the request in one of seven shapes first — by what it names and which way it moves, not by \
 its wording.** The signals are structural (how many objects it names, whether it inspects, adds, \
 deepens or moves, and whether the tree is empty yet), and each shape carries an entry call and a \
@@ -449,7 +473,7 @@ pub fn run_client(arguments: &[String]) -> Client {
         // The long page, by name. The one-line list carries the shapes; this carries the prose,
         // for a reader who asks for it instead of getting it every session.
         // 长页，按名字取。一行式清单带形状；这一支带散文，给主动要它的读者，而不是每场都塞给它。
-        "--shapes" => Client::Called(emit_or_stop(INSTRUCTIONS).unwrap_or(0)),
+        "--shapes" => Client::Called(emit_or_stop(GUIDANCE).unwrap_or(0)),
         "--help" | "-h" => Client::Called(emit_or_stop(USAGE).unwrap_or(0)),
         // A bare tool name is a call: `nichlink-mcp callgraph --function x` reads the way a command
         // line reads, and requiring `--call` first cost the round a refused call.
