@@ -261,11 +261,7 @@ fn visit_keys(schema: Option<&Value>, names: &mut Vec<String>, required: &mut Ve
 /// 那一轮量出了截断的代价：`apply` 的描述本来就写明"取值在 `fields` 下、每个值必须是字符串"，而一个臂
 /// 仍花了四次被拒才发现它——因为一次性客户端从来只显示第一句。
 pub fn describe_tool(name: &str) -> Option<String> {
-    let wanted = if name.contains('.') {
-        name.to_owned()
-    } else {
-        format!("nichlink.{name}")
-    };
+    let wanted = resolve_name(name);
     crate::mcp::tools::tools().into_iter().find_map(|tool| {
         let tool_name = tool.get("name")?.as_str()?;
         if tool_name != wanted {
@@ -304,6 +300,26 @@ pub fn describe_tool(name: &str) -> Option<String> {
             "{tool_name}\n    keys: {keys}{legend}\n{description}"
         ))
     })
+}
+
+/// The catalogue name a command line spelled, with the redundant prefix added only when needed.
+/// 命令行写出的目录名；只在必要时补上那个冗余前缀。
+///
+/// The `nichlink.` prefix is redundant on a command line whose only tool source is this bridge, so a
+/// bare `callgraph` resolves to `nichlink.callgraph`. What it is **not** is universal: the catalogue
+/// tool is called `nichlink_tools` (audit `W1-1`), and blindly prefixing made the one tool the
+/// advertisement tells a session to reach everything else with unreachable by name from the CLI.
+/// `nichlink.` 前缀在"唯一工具来源就是这个桥"的命令行上是冗余的，因此裸写 `callgraph` 解析成
+/// `nichlink.callgraph`。但它**不是**普遍的：目录工具叫 `nichlink_tools`（审计 `W1-1`），而盲目补前缀
+/// 让那个"广告让会话用它去够其余一切"的工具，在命令行上按名字够不着。
+pub fn resolve_name(spelled: &str) -> String {
+    let exact = crate::mcp::tools::tools()
+        .into_iter()
+        .any(|tool| tool.get("name").and_then(|name| name.as_str()) == Some(spelled));
+    if exact || spelled.contains('.') {
+        return spelled.to_owned();
+    }
+    format!("nichlink.{spelled}")
 }
 
 /// One line per tool: its name, the first sentence of its description, and the keys it takes
@@ -569,8 +585,7 @@ fn split_log(arguments: &[String]) -> (Option<std::path::PathBuf>, Vec<String>) 
 /// 第一个点名目录里某个工具的实参，以及它出现的位置。
 fn find_catalogue_name(arguments: &[String]) -> Option<(usize, &String)> {
     arguments.iter().enumerate().find(|(_, token)| {
-        let bare = token.strip_prefix("nichlink.").unwrap_or(token);
-        let wanted = format!("nichlink.{bare}");
+        let wanted = resolve_name(token);
         crate::mcp::tools::tools()
             .into_iter()
             .any(|tool| tool.get("name").and_then(|name| name.as_str()) == Some(wanted.as_str()))
@@ -646,11 +661,7 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
     // this bridge it is redundant, so a bare `callgraph` resolves to `nichlink.callgraph`.
     // `nichlink.` 前缀是目录里的拼法；在命令行上，唯一的工具来源就是这个桥，因此它是冗余的 ——
     // 裸写 `callgraph` 就解析成 `nichlink.callgraph`。
-    let resolved = if raw.contains('.') {
-        raw.to_owned()
-    } else {
-        format!("nichlink.{raw}")
-    };
+    let resolved = resolve_name(raw);
     let name = resolved.as_str();
     let mut object = Map::new();
     let mut at = 0usize;

@@ -307,7 +307,18 @@ fn a_frame_that_is_not_utf8_is_answered_and_the_session_continues() {
 #[test]
 fn the_advertised_frame_and_the_handshake_fit_their_budgets() {
     let listed = replies("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n");
-    let frame = listed[0]["result"]["tools"].to_string();
+    // The **reply line** is what a client pays for, envelope included.
+    // **回复那一行**才是客户端付费的东西，信封也算。
+    let mut wire = Vec::new();
+    crate::mcp::protocol::run_with(
+        &mut std::io::Cursor::new(
+            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n".to_vec(),
+        ),
+        &mut wire,
+    )
+    .expect("the bridge answers");
+    let frame = String::from_utf8(wire).expect("utf-8 reply");
+    let frame = frame.lines().next().unwrap_or_default().to_owned();
     assert!(
         frame.len() <= 4200,
         "the advertised frame is a screenful: {} characters",

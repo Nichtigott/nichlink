@@ -764,8 +764,7 @@ const ADVERTISED_APPLY: &str = "\
 **The only write path** for this tree's registration faces. Seven actions in two classes: \
 `add`/`deepen`/`cut`/`promote` are **additive** (declarations; a hand-written face is a legal \
 subject), `edit`/`rename`/`delete` are **rewrites** (the face's own file; generated faces only). \
-**Previewed unless `apply: true`**; `delete`/`promote` also need `confirm: true`. \
-More: `nichlink_tools {tool: \"nichlink.apply\"}`.";
+**Previewed unless `apply: true`**; `delete`/`promote` also need `confirm: true`.";
 
 /// The slim schema of an advertised tool: the keys that decide the call, one line each.
 /// 一个广告工具的瘦 schema：决定这次调用的那几个键，每个一行。

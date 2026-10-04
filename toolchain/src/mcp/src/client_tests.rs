@@ -989,3 +989,41 @@ fn the_answer_shape_routing_is_on_both_pages() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The catalogue tool is reachable by the name the advertisement uses.
+/// 目录工具按广告里那个名字够得着。
+///
+/// Audit `W1-1` left `nichlink_tools` advertised and the CLI could not call it: every bare name got
+/// the `nichlink.` prefix, so `--call nichlink_tools` resolved to `nichlink.nichlink_tools` and the
+/// one tool the handshake tells a session to reach everything else with answered `unknown tool`.
+/// The rule is now "an exact catalogue name wins; the prefix is added only when it is needed", and
+/// both halves are pinned — the new name resolves, and the old convenience still does.
+/// 审计 `W1-1` 把 `nichlink_tools` 广告出去了，而命令行调不到它：每个裸名都被补上 `nichlink.` 前缀，
+/// 于是 `--call nichlink_tools` 解析成 `nichlink.nichlink_tools`，而"握手让会话用它去够其余一切"的那个
+/// 工具回的是 `unknown tool`。现在的规则是"精确命中目录名者胜，只在需要时才补前缀"，两半都钉住——新名字
+/// 解析得到，旧的便利也还在。
+#[test]
+fn the_catalogue_tool_resolves_by_its_advertised_name() {
+    assert_eq!(super::resolve_name("nichlink_tools"), "nichlink_tools");
+    assert_eq!(super::resolve_name("callgraph"), "nichlink.callgraph");
+    assert_eq!(super::resolve_name("nichlink.why"), "nichlink.why");
+    assert_eq!(super::resolve_name("why"), "nichlink.why");
+    let root = crate::mcp::tools::tools_tests::scratch_package("catalogue-name");
+    let listed = super::call_tool(&root, "nichlink_tools", &serde_json::json!({}))
+        .expect("the catalogue answers by its advertised name");
+    assert!(
+        listed.contains("nichlink.registry — "),
+        "and it lists every tool: {listed}"
+    );
+    let one = super::call_tool(&root, "nichlink_tools", &serde_json::json!({"tool": "why"}))
+        .expect("one tool's page");
+    assert!(one.contains("Gather the upstream facts"), "{one}");
+    let unknown = super::call_tool(
+        &root,
+        "nichlink_tools",
+        &serde_json::json!({"tool": "no_such_tool"}),
+    )
+    .expect_err("an unknown name is refused, not invented");
+    assert!(unknown.contains("not a tool this bridge has"), "{unknown}");
+    let _ = std::fs::remove_dir_all(&root);
+}
