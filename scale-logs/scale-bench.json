@@ -1,0 +1,122 @@
+[
+  {
+    "tier": "t1",
+    "faces": 101,
+    "registry": {
+      "ms": 316.8,
+      "bytes": 863,
+      "exit": 0,
+      "first_line": "namespace t1"
+    },
+    "registry-full": {
+      "ms": 339.3,
+      "bytes": 13851,
+      "exit": 0,
+      "first_line": "namespace t1"
+    },
+    "status": {
+      "ms": 142.3,
+      "bytes": 440,
+      "exit": 0,
+      "first_line": "root /home/nich/Moirai_N3/nichlink/target/scale/t1"
+    },
+    "search": {
+      "ms": 334.5,
+      "bytes": 391,
+      "exit": 0,
+      "first_line": "tree  derived from the sources (this root's published records did not answer the query)"
+    },
+    "read": {
+      "ms": 71.0,
+      "bytes": 417,
+      "exit": 0,
+      "first_line": "src/control/control.rs:1-9 (15 lines)"
+    },
+    "why": {
+      "ms": 390.5,
+      "bytes": 321,
+      "exit": 0,
+      "first_line": "tree: 101 face(s), 102 file(s)"
+    }
+  },
+  {
+    "tier": "t2",
+    "faces": 1001,
+    "registry": {
+      "ms": 2923.0,
+      "bytes": 866,
+      "exit": 0,
+      "first_line": "namespace t2"
+    },
+    "registry-full": {
+      "ms": 3098.7,
+      "bytes": 26983,
+      "exit": 0,
+      "first_line": "namespace t2"
+    },
+    "status": {
+      "ms": 874.1,
+      "bytes": 442,
+      "exit": 0,
+      "first_line": "root /home/nich/Moirai_N3/nichlink/target/scale/t2"
+    },
+    "search": {
+      "ms": 2965.9,
+      "bytes": 391,
+      "exit": 0,
+      "first_line": "tree  derived from the sources (this root's published records did not answer the query)"
+    },
+    "read": {
+      "ms": 50.8,
+      "bytes": 417,
+      "exit": 0,
+      "first_line": "src/control/control.rs:1-9 (15 lines)"
+    },
+    "why": {
+      "ms": 2926.8,
+      "bytes": 323,
+      "exit": 0,
+      "first_line": "tree: 1001 face(s), 1002 file(s)"
+    }
+  },
+  {
+    "tier": "t3",
+    "faces": 5001,
+    "registry": {
+      "ms": 14102.1,
+      "bytes": 866,
+      "exit": 0,
+      "first_line": "namespace t3"
+    },
+    "registry-full": {
+      "ms": 14364.7,
+      "bytes": 26984,
+      "exit": 0,
+      "first_line": "namespace t3"
+    },
+    "status": {
+      "ms": 3772.9,
+      "bytes": 442,
+      "exit": 0,
+      "first_line": "root /home/nich/Moirai_N3/nichlink/target/scale/t3"
+    },
+    "search": {
+      "ms": 14233.4,
+      "bytes": 391,
+      "exit": 0,
+      "first_line": "tree  derived from the sources (this root's published records did not answer the query)"
+    },
+    "read": {
+      "ms": 51.2,
+      "bytes": 417,
+      "exit": 0,
+      "first_line": "src/control/control.rs:1-9 (15 lines)"
+    },
+    "why": {
+      "ms": 14516.5,
+      "bytes": 323,
+      "exit": 0,
+      "first_line": "tree: 5001 face(s), 5002 file(s)"
+    }
+  }
+]

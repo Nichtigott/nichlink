@@ -1,0 +1,42 @@
+[
+  {
+    "tier": "t4",
+    "faces": 20001,
+    "registry": {
+      "ms": 55705.8,
+      "bytes": 869,
+      "exit": 0,
+      "first_line": "namespace t4"
+    },
+    "registry-full": {
+      "ms": 56388.5,
+      "bytes": 26988,
+      "exit": 0,
+      "first_line": "namespace t4"
+    },
+    "status": {
+      "ms": 14907.1,
+      "bytes": 444,
+      "exit": 0,
+      "first_line": "root /home/nich/Moirai_N3/nichlink/target/scale/t4"
+    },
+    "search": {
+      "ms": 57891.8,
+      "bytes": 391,
+      "exit": 0,
+      "first_line": "tree  derived from the sources (this root's published records did not answer the query)"
+    },
+    "read": {
+      "ms": 74.0,
+      "bytes": 417,
+      "exit": 0,
+      "first_line": "src/control/control.rs:1-9 (15 lines)"
+    },
+    "why": {
+      "ms": 58829.4,
+      "bytes": 325,
+      "exit": 0,
+      "first_line": "tree: 20001 face(s), 20002 file(s)"
+    }
+  }
+]
