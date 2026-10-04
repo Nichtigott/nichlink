@@ -19,6 +19,7 @@ use serde_json::Value;
 use crate::mcp::callgraph::is_call_to;
 use crate::mcp::source_index::{SourceFile, display_list, load_sources};
 use crate::mcp::truncation::withheld;
+use nichlink_kernel::lexicon;
 
 /// How many tests one changed file may name before the reply says how many it withheld.
 /// 一个改动过的文件最多点名多少个测试，超出后回复要说出扣下了多少。
@@ -196,6 +197,16 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
             touched.relative,
             names.len()
         ));
+        // Audit `W5-2`'s plan layer: a symbol's reach is not only the tests that call it, it is also
+        // the **graft plan entries** that name the face the symbol lives on. A reader of "what does
+        // this change touch" who is not told about those entries misses the half of the answer that
+        // is not Rust code.
+        // 审计 `W5-2` 的计划层：一个符号的波及面不只是调用它的测试，还包括点名"它所在的那个面"的
+        // **graft 计划条目**。问"这次改动波及什么"的读者如果不知道那些条目，就漏掉了答案里不是 Rust
+        // 代码的那一半。
+        for line in plan_layer(owner.as_deref().unwrap_or(root), &touched.relative) {
+            output.push_str(&format!("  {line}\n"));
+        }
         if tests.is_empty() {
             output.push_str(
                 "  tests: none reference these definitions; run the owning package's suite\n",
@@ -221,6 +232,88 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
     }
     output.push_str("run: `cargo test -p <package>` for the packages the listed tests belong to\n");
     Ok(output)
+}
+
+/// The graft plan entries that name the face a changed file declares (audit `W5-2`).
+/// 点名"某个改动文件所声明的那个面"的那些 graft 计划条目（审计 `W5-2`）。
+///
+/// **A member with no plan directory pays nothing**: the existence check comes first, so a tree that
+/// has never had an external graft gets no derivation, no rows and no extra line. That ordering is
+/// the whole reason this can sit in `affected` without making it a tree walk.
+/// **没有计划目录的成员不付任何代价**：先做存在性判断，因此从未有过外部 graft 的树不会多出一次推导、
+/// 不会多出行、也不会多出一行字。这个次序正是它能待在 `affected` 里而不把它变成一次全树遍历的原因。
+///
+/// A plan entry is reported by the **selector** that names it and the **logical path** it targets, not
+/// by the implementation it selects: `affected` answers "what does this change touch", and the
+/// replacement is the build's question (`grafts` answers it).
+/// 一条计划条目按点名它的**选择器**与它针对的**逻辑路径**报告，而不是按它选中的实现：`affected` 回答的是
+/// "这次改动波及什么"，而替换件是构建的问题（由 `grafts` 回答）。
+fn plan_layer(member: &Path, source: &str) -> Vec<String> {
+    let plans = member
+        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::EXTERNAL_GRAFT_DIR);
+    if !plans.is_dir() {
+        return Vec::new();
+    }
+    let Ok(namespace) = crate::mcp::registry::namespace(member) else {
+        return Vec::new();
+    };
+    let Ok((faces, _)) = crate::mcp::resolve::derived_faces(member, &namespace) else {
+        return Vec::new();
+    };
+    let declared = crate::build_time::declared_grafts(member);
+    let Ok(rows) = crate::build_time::graft_plan_rows(member, &faces, declared.as_ref().ok())
+    else {
+        return Vec::new();
+    };
+    if rows.is_empty() {
+        return vec![format!(
+            "plan: no entry under {} names any face (nothing to touch there)",
+            plans.display()
+        )];
+    }
+    // Two coordinate systems meet here, and the record settles which is which: `FaceView.source` is
+    // relative to `src/` (the build's own layout) while `affected`'s changed paths come from the
+    // source index and carry the `src/` prefix. Comparing them raw makes every face look unnamed,
+    // which is a **silent** miss — the answer would say "no plan names this face" for a face a plan
+    // does name. Both spellings are therefore accepted, and so is an absolute path's tail.
+    // 这里两套坐标相遇，而记录决定了哪套是哪套：`FaceView.source` 相对 `src/`（构建自己的布局），而
+    // `affected` 的改动路径来自源码索引、带 `src/` 前缀。原样比较会让每个面都像"没有名字"，而那是**静默**
+    // 漏报——对一个确实被计划点名的面，答案会说"没有计划点名它"。因此两种拼法都收，绝对路径的尾段也收。
+    let bare = source.strip_prefix("src/").unwrap_or(source);
+    let named: Vec<String> = faces
+        .iter()
+        .filter(|face| face.source == bare || face.source == source)
+        .map(|face| face.id.to_string())
+        .collect();
+    let mut hits: Vec<String> = rows
+        .iter()
+        .filter(|row| {
+            row.target
+                .is_some_and(|target| named.iter().any(|id| id == &target.to_string()))
+        })
+        .map(|row| {
+            format!(
+                "{} targets {}",
+                row.selector,
+                row.target_path.as_deref().unwrap_or("-")
+            )
+        })
+        .collect();
+    hits.sort();
+    hits.dedup();
+    if hits.is_empty() {
+        vec![format!(
+            "plan: none of the {} entry(ies) here names this face",
+            rows.len()
+        )]
+    } else {
+        vec![format!(
+            "plan: {} entry(ies) name this face — {}",
+            hits.len(),
+            display_list(&hits[..hits.len().min(6)])
+        )]
+    }
 }
 
 /// The member a path lives in, as `(label prefix, member directory)`.

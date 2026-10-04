@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use nichlink_kernel::identity::NodeId;
 use serde_json::json;
 
 use super::affected;
@@ -152,4 +153,104 @@ fn the_three_spellings_of_several_files_agree() {
             && two.contains("src/quiet.rs: 1 definition(s)"),
         "both paths are answered: {two}"
     );
+}
+
+/// A package whose changed file **is** a registration face, plus one graft plan naming it.
+/// 一个"改动文件本身就是注册面"的包，外加一条点名它的 graft 计划。
+///
+/// `plan_layer` answers from records that are not Rust code, so the fixture has to have both halves:
+/// a face the derivation can find (the plan's target is an identity) and a plan on disk under
+/// `.nichlink/external-grafts`.
+/// `plan_layer` 依据的是"不是 Rust 代码"的那些记录，因此夹具两半都要有：推导找得到的注册面（计划的目标
+/// 是一个身份）与 `.nichlink/external-grafts` 下的一份计划。
+fn package_with_plan(label: &str) -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "nichlink-mcp-affected-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    write_fixture(
+        &root.join("Cargo.toml"),
+        "[package]\nname = \"affected-plan-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    );
+    write_fixture(&root.join("src/lib.rs"), "// entry\n");
+    // The face lives at `<dir>/<name>.rs`, which is the shape the build's walk recognises — the
+    // first version of this fixture put it at `src/shared.rs` and the derivation found **no faces at
+    // all**, so the plan layer had nothing to match and said "none of the 1 entry(ies) names this
+    // face". A fixture that is wrong about layout makes a correct tool look broken.
+    // 面住在 `<dir>/<name>.rs`——构建遍历认得的那种形状；这个夹具的第一版把它放在 `src/shared.rs`，于是推导
+    // **一个面都没找到**，计划层无从匹配、只能报"没有条目点名这个面"。一个布局写错的夹具，会让正确的工具
+    // 看起来是坏的。
+    write_fixture(
+        &root.join("src/shared/shared.rs"),
+        "pub struct Shared;\n\npub fn shared_helper() {}\n\ncrate::root_object! {\n    kind: \
+         Shared,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+    );
+    write_fixture(
+        &root.join("tests/uses_shared.rs"),
+        "#[test]\nfn it_calls_shared() {\n    shared_helper();\n}\n",
+    );
+    // The plan's target is the **identity** the build computes for this face, which is why the
+    // fixture builds it with the same kernel function the derivation uses.
+    // 计划的目标是构建为这个面算出的**身份**，因此夹具用推导自己用的那个内核函数把它造出来。
+    // The identity path is the face file's **own relative path** (`shared/shared.rs`), not its leaf
+    // name: writing `shared.rs` here was this fixture's second mistake, and the plan then targeted an
+    // identity no face has.
+    // 身份路径是面文件**自己的相对路径**（`shared/shared.rs`），不是它的叶名：这里写 `shared.rs` 是这个
+    // 夹具的第二个错，于是计划针对了一个没有任何面拥有的身份。
+    let target =
+        NodeId::from_namespaced_path("affected-plan-fixture", "shared/shared.rs", "Shared");
+    write_fixture(
+        &root.join(".nichlink/external-grafts/swapped/graft.plan"),
+        &format!(
+            "version = 1\ntarget = {target}\ntarget_path = root/shared\ngraft = swapped\nfull = \
+             false\n"
+        ),
+    );
+    root
+}
+
+/// A changed file's reach names the graft plan entries that touch its face (audit `W5-2`).
+/// 一个改动文件的波及面会点名触到它那个面的 graft 计划条目（审计 `W5-2`）。
+#[test]
+fn a_changed_face_names_the_plan_entries_that_target_it() {
+    let root = package_with_plan("plan");
+    let text = affected(&root, &json!({"files": ["src/shared/shared.rs"]})).expect("an answer");
+    assert!(
+        text.contains("plan: 1 entry(ies) name this face"),
+        "the plan layer names the entry: {text}"
+    );
+    assert!(
+        text.contains("swapped targets root/shared"),
+        "and it says which selector targets which logical path: {text}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A tree with plans but none for this face says so, rather than staying silent.
+/// 有计划、但没有一条针对这个面的树会把这件事说出来，而不是保持沉默。
+#[test]
+fn a_face_no_plan_targets_is_reported_as_such() {
+    let root = package_with_plan("plan-miss");
+    let text = affected(&root, &json!({"files": ["src/lib.rs"]})).expect("an answer");
+    assert!(
+        text.contains("plan: none of the 1 entry(ies) here names this face"),
+        "silence would read as 'no plans exist': {text}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A tree with no plan directory grows no plan line at all.
+/// 没有计划目录的树完全不会多出一行计划。
+#[test]
+fn a_tree_without_plans_pays_nothing() {
+    let root = package("no-plans");
+    let text = affected(&root, &json!({"files": ["src/shared.rs"]})).expect("an answer");
+    assert!(
+        !text.contains("plan:"),
+        "a tree that has never had a graft says nothing about plans: {text}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }

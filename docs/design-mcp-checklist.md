@@ -36,7 +36,8 @@
 | M3 W3-2 | 全读工具记录优先 | **进行中**（发布路径的普查/分页与声明事实已接上，端到端已验） | `8869a69` | `published_tests::a_current_record_is_shown_and_its_levels_are_counted` |
 | M3 W3-1b | 记录补 `parent_node`/`owns_registry` | 待做 | — | 见 §阶段 M3 的下一步 |
 | M3 W3-3 | 在线分析评审规则（门禁 `online_analysis`） | **完成**（21 个桥文件各写了理由） | 本轮 | `conventions::online_analysis_tests::every_online_answer_says_why_the_build_cannot` |
-| M4 | W5-1 / W5-2 / W5-3 / W5-4 / W5-5 / W5-6 | 待做 | — | — |
+| M4 W5-2 | affected 补计划层 | **完成** | 本轮 | `affected_tests::a_changed_face_names_the_plan_entries_that_target_it` |
+| M4 W5-1 / W5-3 / W5-4 / W5-5 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
@@ -598,3 +599,25 @@ diff <(registry 已构建 | grep -E '^faces |^  ') <(registry 推导 | grep -E '
 `online_analysis::purity_tests::*` 才暴露），修法是把属性与它的条目还在一起；② 我的 `//! online:` 行
 紧跟在一条 markdown 列表项后面，`clippy::doc_lazy_continuation` 判定它是列表延续 ⇒ 在标记前补一行空
 `//!`（更可读，也顺手解掉这一类）。
+
+## 阶段 M4：反补丁感（进行中）
+
+### W5-2 affected 补计划层（完成，本轮）
+
+**改动**：`affected` 的每个改动文件行下面多一段 `plan:`——点名"该文件所声明的那个面"的 **graft 计划条目**
+（按**选择器 + 它针对的逻辑路径**报告，不报它选中的实现：`affected` 回答"这次改动波及什么"，替换件是
+`grafts` 的问题）。
+
+**两处次序是承重的**：
+1. **没有计划目录的成员一分钱不付**——先做 `.nichlink/external-grafts` 的存在性判断，因此从未有过外部 graft
+   的树既不多一次推导、也不多一行字（用它把"计划层"塞进 `affected` 而不让它变成全树遍历）。
+2. **两套坐标要认全**——`FaceView.source` 相对 `src/`，而 `affected` 的改动路径带 `src/` 前缀；原样比较
+   会让每个面都像"没有名字"，而那是**静默漏报**（对一个确实被计划点名的面会说"没有计划点名它"）。
+
+**钉子**：有计划且点名 ⇒ 报出选择器与逻辑路径；有计划但没点名 ⇒ **明说**"`none of the N entry(ies) here
+names this face`"（沉默会被读成"根本没有计划"）；**没有计划目录的树一个 `plan:` 字都不多**。
+
+**如实记：这个夹具我写错了两次，两次都是布局/身份写错、看起来像工具坏了。**
+① 面放在 `src/shared.rs` ⇒ 构建的遍历**一个面都找不到**（面必须住在 `<dir>/<name>.rs`）；② 计划的
+`target` 我按叶名写成 `shared.rs`，而身份路径是**文件自己的相对路径** `shared/shared.rs`。两次都是
+"夹具错了、被断言抓到"，不是工具错——这条留给以后写夹具的人。
