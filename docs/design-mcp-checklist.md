@@ -33,8 +33,8 @@
 | M2 W2-6 | `--list` 瘦身 schema | **完成**（口径已裁：默认有界、按需无界） | `9f06025` | `client_tests::every_discovery_page_is_bounded_with_a_way_to_the_whole_text` |
 | M2 W2-7 | `--list --all-slim` | **完成** | `9f06025` | `client_tests::the_thirteen_tool_view_is_one_small_call` |
 | M3 W3-1 | 记录增肥三列 + 读写成对 | **完成** | `63ab9ec` | `manifests_tests::the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with`、`every_published_column_reads_back` |
-| M3 W3-2 | 全读工具记录优先 | **进行中**（发布路径的普查/分页与声明事实已接上，端到端已验） | `8869a69` | `published_tests::a_current_record_is_shown_and_its_levels_are_counted` |
-| M3 W3-1b | 记录补 `parent_node`/`owns_registry` | 待做 | — | 见 §阶段 M3 的下一步 |
+| M3 W3-2 | 发布路径记录优先（普查/分页 + 显示声明事实 + `logical_path`） | **完成** | `8869a69` `cfef385` `a751612` | `published_tests::{a_current_record_is_shown_and_its_levels_are_counted, a_published_answer_and_a_derived_answer_carry_the_same_facts}` |
+| M3 W3-1b | 记录补 `parent_node`/`owns_registry` | **完成** | `6693bda` | `manifests_tests::a_module_named_parent_resolves_to_its_identity` |
 | M3 W3-3 | 在线分析评审规则（门禁 `online_analysis`） | **完成**（21 个桥文件各写了理由） | 本轮 | `conventions::online_analysis_tests::every_online_answer_says_why_the_build_cannot` |
 | M4 W5-2 | affected 补计划层 | **完成** | 本轮 | `affected_tests::a_changed_face_names_the_plan_entries_that_target_it` |
 | M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
@@ -42,6 +42,8 @@
 | M4 W5-3 | deepen 预览附消费方 diff | **完成** | 本轮 | `apply_consumers_tests::the_consumer_story_is_the_same_in_the_preview_and_after_the_write` |
 | M4 W5-6 | apply 树驱动一次成型 | **大半**（① 从树推家族契约 + ③ 写后家族判定已落地；②"一次生成完整文件"本已如此） | 上轮+本轮 | `apply_consumers_tests::{a_write_reports_whether_the_new_face_landed_like_its_siblings, an_omitted_family_field_is_inherited_and_reported}` |
 | M4 W5-1 | adopt（单独设计评审后动工） | 待做 | — | — |
+| M5 W6-1 | 编译墙归因 | **完成**（报告 + 10k<5min 实测达标） | `22c882f` | 见 §阶段 M5 |
+| M5 W6-2 | 中大型项目参考结构 | **进行中**（验收已实测；②③ 两梯度已落，③ 下半与家族分层仍开） | `c41bac3` `6fb4e42` `460eafe` `36a107b` | 见 §阶段 M5 |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
