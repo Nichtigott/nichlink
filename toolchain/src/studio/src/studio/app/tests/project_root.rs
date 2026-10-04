@@ -208,8 +208,21 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
     );
     let (core, build) = crate::build_time::scaffold::dependency_specs(&source);
 
-    assert!(core.contains("git = \"https://github.com/Nichtigott/nichlink\""));
-    assert!(build.contains("branch = \"main\""));
+    // Audit `F8` changed what an installed copy writes: the fallback used to be a git dependency,
+    // which needs a fetch before the project resolves at all. It is now the published release — so
+    // the property this pin is about (no path from *this machine* leaks into a generated manifest)
+    // is checked the same way, and the stronger half is checked too: nothing to fetch either.
+    // 审计 `F8` 改了装出来的副本会写下的东西：过去回落到 git 依赖，而那个项目要能解析就得先拉一次仓库。
+    // 现在回落到已发布的那一版——因此这条钉子守的性质（**本机**的路径不会漏进生成的清单）照样检查，而且
+    // 更强的另一半也一起检查：也没有要拉的东西。
+    assert!(
+        core.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
+        "the released requirement is what an installed copy writes: {core}"
+    );
+    assert!(
+        !core.contains("git =") && !build.contains("git ="),
+        "nothing in a generated manifest asks for a fetch: {core} / {build}"
+    );
     assert!(!core.contains(checkout.to_string_lossy().as_ref()));
     assert!(!build.contains(checkout.to_string_lossy().as_ref()));
     let _ = std::fs::remove_dir_all(checkout);
