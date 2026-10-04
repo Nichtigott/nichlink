@@ -294,6 +294,16 @@ fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
     )
     .expect("the deepen applies");
     assert!(applied.contains("action apply"), "{applied}");
+    // Audit `W5-7`: the two blocks are a decision aid, so they arrive where the decision is still
+    // open and not again after it was made. The write keeps one line that says where they were.
+    // 审计 `W5-7`：那两块是决策辅助，因此它们到达的时候决定还没做，做过之后不再来一遍。落盘只留一行，
+    // 说它们此前在哪儿。
+    assert!(
+        applied.contains("alternative was stated in preview")
+            && !applied.contains("alternative (the other reading")
+            && !applied.contains("stops being a unit struct"),
+        "the write does not reprint the preview's decision aid: {applied}"
+    );
     let text = std::fs::read_to_string(&face).expect("the face file");
     assert!(
         text.contains("pub struct Button {\n    parts: ButtonParts,\n}"),

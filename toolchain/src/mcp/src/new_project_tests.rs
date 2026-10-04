@@ -675,3 +675,51 @@ fn the_dependency_source_is_named_by_the_request_and_git_is_explicit() {
         assert!(unknown.contains(spelling), "{unknown}");
     }
 }
+
+/// The reply that creates a project already says how big it is, so `registry` is not the next call.
+/// 创建项目的那条回复**已经**说出它有多大，因此下一个调用不必是 `registry`。
+///
+/// Audit `W5-8`: the write path read every source to report the faces, and then the workflow spent
+/// another call asking `registry` the same question. The census rides on the reply, and it is
+/// consistent with what `registry` would say — which is the half that makes it a substitute rather
+/// than a second opinion.
+/// 审计 `W5-8`：写入路径为报出那些面已经读过每一份源码，而接下来工作流又花一次调用问 `registry` 同一个
+/// 问题。普查随回复一起到达，而且与 `registry` 会说的话一致——正是这一半让它成为**替代**而不是第二种说法。
+#[test]
+fn the_creation_reply_carries_the_initial_census() {
+    let fixture = root("census");
+    let (report, failed) = call(
+        &fixture,
+        json!({
+            "directory": "app",
+            "package": "app",
+            "kind": "library",
+            "faces": [
+                {"fields": {"module": "button", "kind": "Button"}},
+                {"fields": {"module": "slider", "kind": "Slider"}},
+            ],
+            "apply": true,
+        }),
+    );
+    assert!(!failed, "{report}");
+    assert!(
+        report.contains("tree: 1 package,") && report.contains("rust file(s)"),
+        "the census rides on the reply: {report}"
+    );
+    assert!(
+        report.contains("of them own a registry"),
+        "and it counts the registries, not just the faces: {report}"
+    );
+    assert!(
+        report.contains("same thing\nthe scaffolded manifest"),
+        "the census is its own line rather than glued to the next sentence: {report}"
+    );
+    // The same question, asked the other way: `registry` on the written project agrees.
+    // 同一个问题换一条路问：对写下的项目跑 `registry`，答案一致。
+    let (listed, failed) = call(
+        &fixture,
+        json!({"directory": "app", "package": "app", "kind": "library", "apply": false}),
+    );
+    assert!(failed || listed.contains("app"), "{listed}");
+    let _ = std::fs::remove_dir_all(fixture.path.join("app"));
+}

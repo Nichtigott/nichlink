@@ -224,11 +224,36 @@ fn applied(
         report.push_str(&format!("  {relative}\n"));
     }
     report.push_str(&faces_block(faces));
+    report.push_str(&initial_census(target, package));
     report.push_str(
         "the scaffolded manifest declares its own `[workspace]`, so this project is not a \
          member of the root above\n",
     );
     report
+}
+
+/// The tree the new project already derives, as one census line.
+/// 新项目**已经**推导出的那棵树，写成一行普查。
+///
+/// Audit `W5-8`: the create-a-project workflow's next call used to be `registry`, spent only to
+/// learn how big the thing that was just written is — and the write path had just read every one of
+/// those sources to report the faces. Reading them once more costs nothing extra and removes a
+/// round trip, which is the consolidation the round-13 benchmark measured as five to six trips for
+/// one workflow.
+/// 审计 `W5-8`：新建项目那条工作流的下一调用过去是 `registry`，只为知道刚写下的东西有多大——而写入路径
+/// 为了报出那些面**刚刚**读过其中每一份源码。再读一遍不多花什么，却省掉一个往返，而第十三轮量到那条工作流
+/// 要五到六个往返，正是这种合并要消灭的。
+fn initial_census(target: &Path, package: &str) -> String {
+    let files = crate::mcp::source_index::load_sources(target)
+        .map(|sources| sources.len())
+        .unwrap_or(0);
+    let registries = crate::build_time::face_views(target, package)
+        .map(|views| views.iter().filter(|view| view.owns_registry).count())
+        .unwrap_or(0);
+    format!(
+        "tree: 1 package, {files} rust file(s); the faces above are the whole tree, and {registries} \
+         of them own a registry — `registry` would say the same thing\n"
+    )
 }
 
 /// The faces a project derives, as the block every reply about creation carries.

@@ -838,7 +838,20 @@ fn report(
         outcome.source.display(),
         faces.len()
     );
-    if outcome.alternative {
+    if outcome.alternative && applied {
+        // Audit `W5-7`: the two blocks below are a **decision aid** — they belong where the decision
+        // is still open. Once the write has happened the caller has already chosen, so repeating the
+        // whole pricing (and the unit-struct note, which the diff already shows) is payload the
+        // round measured arriving in every deepen reply for nothing.
+        // 审计 `W5-7`：下面两块是**决策辅助**——它们属于"决定还没做"的那一刻。写入一旦发生，调用方已经选过
+        // 了，因此把整段价钱（以及 diff 已经显示的单位结构体提示）再念一遍，正是那一轮量到的"每次 deepen
+        // 回复里白来的载荷"。
+        reply.push_str(
+            "alternative was stated in preview; the layer above leaves the tree, the public path, \
+             the slot and the factory pins alone\n",
+        );
+    }
+    if outcome.alternative && !applied {
         // The other reading of "make it deeper", priced. Family b of the round measured that this
         // decision is what costs the iterations — the tree, the public path, the slot and four
         // families of pins all move together — so the write path states both readings and lets the
