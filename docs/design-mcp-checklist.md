@@ -37,7 +37,8 @@
 | M3 W3-1b | 记录补 `parent_node`/`owns_registry` | 待做 | — | 见 §阶段 M3 的下一步 |
 | M3 W3-3 | 在线分析评审规则（门禁 `online_analysis`） | **完成**（21 个桥文件各写了理由） | 本轮 | `conventions::online_analysis_tests::every_online_answer_says_why_the_build_cannot` |
 | M4 W5-2 | affected 补计划层 | **完成** | 本轮 | `affected_tests::a_changed_face_names_the_plan_entries_that_target_it` |
-| M4 W5-1 / W5-3 / W5-4 / W5-5 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
+| M4 W5-4 | consistency 升级修复器入口 | **完成** | 本轮 | `consistency_tests::the_repair_the_comparison_hands_back_clears_the_outlier` |
+| M4 W5-1 / W5-3 / W5-5 / W5-6 | 见 §阶段 M4 | 待做 | — | — |
 | M5 | W6-1 / W6-2 | 待做 | — | — |
 
 ## 阶段 0：测量地基
@@ -621,3 +622,29 @@ names this face`"（沉默会被读成"根本没有计划"）；**没有计划�
 ① 面放在 `src/shared.rs` ⇒ 构建的遍历**一个面都找不到**（面必须住在 `<dir>/<name>.rs`）；② 计划的
 `target` 我按叶名写成 `shared.rs`，而身份路径是**文件自己的相对路径** `shared/shared.rs`。两次都是
 "夹具错了、被断言抓到"，不是工具错——这条留给以后写夹具的人。
+
+### W5-4 consistency 升级修复器入口（完成，本轮）
+
+**验收的读法**：清单要"一次调用给出可执行修复，执行后 outliers: 0"。因此这条不是"答复里多一句建议"，
+而是**答复里直接给出可执行的请求**：多了一行 `majority   N of M sibling(s) carry this shape`（多数派就是
+本比对认的基线），以及每个离群者下的 `fix` 行——**写入路径自己的 JSON 请求**（`{"action":"edit", …}`）。
+
+**钉子把"可执行"当真**：测试不靠读一遍来判 `fix` 行，而是把工具自己打印的 JSON **取出来、交给写入路径
+执行**，再问一次比对，断言 `outliers` 归零。一条点名错字段/错面/错值的修复行会让离群继续站着。
+
+**三处只有做了才知道的事**：
+1. **`edit` 按逻辑路径指认面**：键是 `node` 而不是 `face`。第一版给 `face`，写入路径当场拒绝并交回可接受
+   形状（`{"action":"edit","apply":true,"fields":{…},"node":"root/control/button"}`）。修好之后那行还是
+   "粘贴即用"的。
+2. **`edit` 只重写生成的面**（`// generated-by=NichLink` 是硬边界，不是疏漏）：对手写的面交回 `edit` 请求＝
+   交回一条**粘贴即失败**的行。因此分两种拼法——生成的给 JSON 请求，手写的给"在那个文件里加
+   `parts: SliderParts`，或先 adopt"。两个方向都有钉子。
+3. **`parts` 只比存在性、比值属于对象自己**：把标本的 `parts: ButtonParts` 抄进 slider 是一次**弄坏被修
+   文件**的修复。判断走 `SHAPE_FIELDS` 的 `ShapeComparison::Presence`，取值用兄弟自己的 `<Kind>Parts`。
+4. `GENERATED_MARKER` 从创作模块的私有常量**搬进 `kernel::lexicon`**（文本契约的家）：桥要问同一个问题，
+   而第二个读取方只抄得到一个字面量——那是两份答案。搬的时候我把它插在了 `NICHLINK_DIR` 的**文档与条目
+   之间**（`missing_docs` 当场报出），与上一轮 `#[path]` 那次是同一族错误：**插入必须落在被插入条目的文档
+   *之上***。
+
+**顺带满足 600 行棘轮**：新代码把 `consistency.rs` 顶到 649 行，把三个修复辅助函数（`repair_value` /
+`repair_request` / `manual_repair`）移进 `consistency_support.rs`（形状词汇本来就住那里）。

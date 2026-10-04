@@ -116,6 +116,19 @@ pub const SCOPE_ALWAYS_INCLUDED: &[&str] = &[
     "root_registry",
 ];
 
+/// The first line every generated registration face file carries.
+/// 每个生成的注册面文件所携带的第一行。
+///
+/// A text contract rather than a runtime detail: it is what tells a rewrite action whether a face is
+/// **NichLink's to rewrite** or the operator's to keep (`is_nichlink_owned_source`), and the bridge's
+/// repair suggestions have to ask the same question before they hand back a request that would be
+/// refused. It lived as a private constant inside the authoring module, which is why the second
+/// reader could only have copied the literal.
+/// 这是文本契约而不是运行期细节：它决定了重写动作可以把哪个面当作**NichLink 的**来改、哪个是操作者的
+/// 要留着（`is_nichlink_owned_source`），而桥的修复建议必须先问同一个问题，才不至于交回一条会被拒绝的
+/// 请求。它原先只是创作模块内部的私有常量，这正是第二个读取方只能抄字面量的原因。
+pub const GENERATED_MARKER: &str = "// generated-by=NichLink";
+
 /// Package-level directory holding NichLink's authoring records.
 /// 存放 NichLink 创作记录的包级目录。
 pub const NICHLINK_DIR: &str = ".nichlink";

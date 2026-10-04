@@ -410,3 +410,121 @@ pub(super) fn shape_line(shape: &[DeclaredField]) -> String {
         .collect::<Vec<_>>()
         .join(" · ")
 }
+
+/// The repair spelled as "declare this in that file", for a face the write path may not rewrite.
+/// 把修复拼成"在那个文件里声明这个"，用于写入路径不可以重写的面。
+///
+/// Returns `None` for a deviation that is not a missing field (a missing **label** inside a list the
+/// sibling already declares), for the reason [`repair_request`] gives.
+/// 对"不是缺字段"的偏离（兄弟已声明的列表里缺某个**标签**）回 `None`，理由见 [`repair_request`]。
+pub(super) fn manual_repair(
+    specimen: &[DeclaredField],
+    gaps: &[String],
+    source: &str,
+    kind: &str,
+) -> Option<String> {
+    let mut wanted: Vec<String> = Vec::new();
+    for gap in gaps {
+        let named = gap.trim_start_matches("lacks `").trim_end_matches('`');
+        if named.contains(':') {
+            continue;
+        }
+        if let Some(value) = repair_value(specimen, named, kind) {
+            wanted.push(format!("{named}: {value}"));
+        }
+    }
+    if wanted.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "this face is hand-written, so no `edit` request is handed back (`edit` rewrites only \
+         generated faces) — add {} to src/{} by hand, or adopt the face first",
+        wanted.join(", "),
+        source.trim_start_matches("./")
+    ))
+}
+
+/// The write-path request that pulls one deviating sibling back to the specimen's shape (audit `W5-4`).
+/// 把某个偏离的兄弟拉回标本形状的那条写入路径请求（审计 `W5-4`）。
+///
+/// Returns `None` when the deviation is **not** expressible as "set this field": a gap that names a
+/// missing **label** inside a list the sibling already declares needs the label appended to that
+/// list, and inventing a whole-field rewrite there would replace the sibling's other labels with the
+/// specimen's — a repair that quietly breaks something else. Those rows keep the label they named and
+/// no request; this one says why rather than guessing.
+/// 偏离**不能**表达成"把这个字段设成什么"时回 `None`：一条点名"兄弟已声明的列表里缺某个**标签**"的
+/// gap，需要把该标签追加到那个列表上；在那里编一条整字段重写，会把兄弟自己的其它标签一并换成标本的
+/// ——那是一次悄悄弄坏别的东西的修复。那种行保留它点名的标签、不给请求；这里说明理由而不是猜。
+///
+/// The request is built as JSON rather than as a hand-spelled command line, so escaping is right by
+/// construction: it is meant to be **pasted**, and a line a reader has to repair before pasting is
+/// worse than no line.
+/// 请求按 JSON 构造而不是手拼命令行，因此转义天然正确：它是给人**粘贴**的，而一行还需要读者先修好才能
+/// 粘贴的字，比没有这一行更糟。
+pub(super) fn repair_value(specimen: &[DeclaredField], name: &str, kind: &str) -> Option<String> {
+    // A field compared **by presence alone** names the object's own type, so the specimen's value is
+    // not the answer: copying `parts: ButtonParts` into the slider would be a repair that breaks the
+    // file it repairs. The value is the sibling's own, by the scaffold's convention `<Kind>Parts`.
+    // 一个**只按存在**比较的字段点名的是对象自己的类型，因此标本的取值不是答案：把 `parts: ButtonParts`
+    // 抄进 slider，是一次弄坏被修文件的修复。取值取兄弟自己的，按脚手架 `<Kind>Parts` 的约定。
+    let field = specimen.iter().find(|field| field.spelling == name)?;
+    let presence_only = SHAPE_FIELDS
+        .iter()
+        .find(|candidate| candidate.key == field.key)
+        .map(|candidate| candidate.comparison)
+        == Some(ShapeComparison::Presence);
+    Some(if presence_only {
+        format!("{kind}Parts")
+    } else {
+        field.value.clone()
+    })
+}
+
+pub(super) fn repair_request(
+    specimen: &[DeclaredField],
+    face: &crate::build_time::FaceView,
+    gaps: &[String],
+    text: Option<&str>,
+) -> Option<serde_json::Value> {
+    // The write path's own question, asked before a request is handed back: is this file NichLink's
+    // to rewrite? The marker is the kernel's text contract (`lexicon::GENERATED_MARKER`), not a
+    // literal spelled here — and a file the index could not read is not one to claim either way.
+    // 交回请求之前先问写入路径自己的问题：这个文件是 NichLink 可以重写的吗？那个标记是内核的文本契约
+    // （`lexicon::GENERATED_MARKER`），不是在这里拼的字面量——而索引读不到的文件，两种情况都不该替它断言。
+    let text = text?;
+    if !text
+        .lines()
+        .any(|line| line.trim() == nichlink_kernel::lexicon::GENERATED_MARKER)
+    {
+        return None;
+    }
+    let mut fields = serde_json::Map::new();
+    for gap in gaps {
+        // A field-level gap is ``lacks `exports` ``; a label-level one is
+        // ``lacks `exports: control.render` `` and is deliberately left alone.
+        // 字段级 gap 是 ``lacks `exports` ``；标签级的是 ``lacks `exports: control.render` ``，有意不动。
+        let named = gap.trim_start_matches("lacks `").trim_end_matches('`');
+        if named.contains(':') {
+            continue;
+        }
+        let Some(value) = repair_value(specimen, named, &face.kind) else {
+            continue;
+        };
+        fields.insert(named.to_owned(), serde_json::Value::String(value));
+    }
+    if fields.is_empty() {
+        return None;
+    }
+    // The key is `node`, not `face`: `edit` addresses a face by its **logical path** (or its
+    // identity), which is the thing this comparison already speaks in — the write path's own refusal
+    // is what taught this line that, and it hands back the accepted shape so the next reader does not
+    // have to discover it the same way.
+    // 键是 `node` 而不是 `face`：`edit` 按**逻辑路径**（或身份）指认一个面，而那正是这次比对已经在说的
+    // 东西——写入路径自己的拒绝教会了这一行，而它把可接受形状一并交回，好让下一个读者不必用同样的方式发现。
+    Some(serde_json::json!({
+        "action": "edit",
+        "node": face.path,
+        "fields": fields,
+        "apply": true,
+    }))
+}

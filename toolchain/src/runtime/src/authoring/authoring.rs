@@ -13,7 +13,14 @@ use self::context::{
 use self::filesystem::{atomic_write, create_new};
 use self::parse::trait_names_from_paths;
 
-const GENERATED_MARKER: &str = "// generated-by=NichLink";
+/// The generation marker, re-exported so the module's own readers keep their path.
+/// 生成标记，重导出以便本模块自己的读者保留原有路径。
+///
+/// The constant itself lives in `kernel::lexicon` with the other text contracts: the bridge asks the
+/// same question before suggesting a repair, and two literals would be two answers.
+/// 常量本体住在 `kernel::lexicon`，与其它文本契约一起：桥在建议修复前会问同一个问题，而两个字面量就是
+/// 两个答案。
+pub(crate) use nichlink_kernel::lexicon::GENERATED_MARKER;
 
 #[path = "context.rs"]
 pub mod context;

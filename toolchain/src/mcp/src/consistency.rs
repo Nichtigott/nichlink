@@ -254,12 +254,55 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
                 remaining.push(command);
             }
             remaining.push(format!("--call check --face {anchor}"));
+            // Audit `W5-4`: a comparison that only names the deviating sibling makes the reader do
+            // the repair research. The two things a repair needs are already in this answer — what
+            // the majority declares (the specimen's own shape) and which sibling deviates — so the
+            // row carries the **request** that performs it, in the write path's own spelling, and
+            // the reader pastes it rather than reconstructing it.
+            // 审计 `W5-4`：只点名离群兄弟的比对，把修复的调研留给了读者。一次修复需要的两件事本来就在这份
+            // 答案里——多数派声明了什么（标本自己的形状）与哪个兄弟偏离了——因此这一行带上**执行它的那个
+            // 请求**，用写入路径自己的拼写，读者粘贴而不是重建。
+            // A repair request is only handed back for a face the write path **may** rewrite: `edit`
+            // refuses a hand-written file by design (only generated faces are NichLink's to rewrite),
+            // so a `fix` line there would be a line that fails when pasted. The hand-written case gets
+            // the same facts in the form that works — what to declare, in which file.
+            // 只有写入路径**可以**重写的面才交回修复请求：`edit` 按设计拒绝手写的文件（只有生成的面才是
+            // NichLink 可改的），因此那种情况下给一条 `fix` 就是给一条粘贴即失败的行。手写的情形拿到的是
+            // 同样的事实、以行得通的形式：要声明什么、在哪个文件。
+            let text = source_text(&sources, &face.source);
+            match repair_request(&shape, face, &gaps, text) {
+                Some(fix) => {
+                    rows.push(format!(
+                        "  fix         {}",
+                        serde_json::to_string(&fix).unwrap_or_default()
+                    ));
+                    remaining.push(format!(
+                        "--call apply --action edit --node {} --apply true",
+                        face.path
+                    ));
+                }
+                None => {
+                    if let Some(manual) = manual_repair(&shape, &gaps, &face.source, &face.kind) {
+                        rows.push(format!("  fix         {manual}"));
+                    }
+                }
+            }
             rows.extend(shown);
         }
         lines.push(format!(
             "family {parent} · member {} · {} sibling(s)",
             member.name,
             siblings.len()
+        ));
+        // The majority is the specimen **because** the comparison calls it the baseline; saying so
+        // with a count is what makes the `fix` rows below a repair rather than an opinion.
+        // 多数派就是标本**因为**这次比对把它当基线；用一个计数把它说出来，才让下面的 `fix` 行成为修复
+        // 而不是一种意见。
+        lines.push(format!(
+            "majority   {} of {} sibling(s) carry this shape; shape {}",
+            siblings.len() - differing - unread,
+            siblings.len(),
+            shape_line(&shape)
         ));
         lines.extend(rows);
         lines.push(format!(

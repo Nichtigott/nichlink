@@ -100,6 +100,22 @@ fn adopt(root: &Path, anchor: &str, file: &str) {
     );
 }
 
+/// Mark a fixture face as NichLink-generated, which is the predicate the write path's rewrite actions
+/// use (`lexicon::GENERATED_MARKER`). A hand-written face is refused by `edit` **by design**, so a
+/// repair pin that wants the executable path has to use a generated one.
+/// 把一个夹具面标成 NichLink 生成的，也就是写入路径的重写动作所用的那个判据
+/// （`lexicon::GENERATED_MARKER`）。手写的面会被 `edit` **按设计**拒绝，因此想走可执行那条路的修复钉子
+/// 必须用生成的面。
+fn generated(root: &Path, file: &str) {
+    let path = root.join(file);
+    let text = std::fs::read_to_string(&path).expect("fixture source");
+    std::fs::write(
+        &path,
+        format!("{}\n{text}", nichlink_kernel::lexicon::GENERATED_MARKER),
+    )
+    .expect("fixture write");
+}
+
 /// Replace one line of a fixture face file, so a pin can take a declaration away and put it back.
 /// 替换夹具面文件里的一行，使钉子能取走一条声明、再把它放回去。
 fn replace(root: &Path, file: &str, from: &str, to: &str) {
@@ -813,4 +829,100 @@ fn the_bounds_are_said_once_per_session_and_root() {
     );
     let _ = std::fs::remove_dir_all(&first);
     let _ = std::fs::remove_dir_all(&elsewhere);
+}
+
+/// The repair a comparison hands back is executable, and executing it clears the outlier (audit `W5-4`).
+/// 比对交回来的修复是可执行的，而执行它会让离群清零（审计 `W5-4`）。
+///
+/// **What makes this an acceptance rather than a shape check**: the test does not judge the `fix` line
+/// by reading it. It takes the JSON the tool itself printed, hands it to the write path, and asks the
+/// comparison again. A repair line that named the wrong field, the wrong face or the wrong value would
+/// leave the outlier standing — and a line that read well but did nothing would be worse than naming
+/// the deviation and stopping.
+/// **为什么这是验收而不是形状检查**：本测试不靠"读一遍"来判那条 `fix` 行。它取工具自己打印的 JSON、
+/// 交给写入路径、再问一次比对。一条点名了错字段、错面或错值的修复行，会让离群继续站着——而一条读起来很
+/// 顺、却什么也没做的行，比点名偏离然后停在那里更糟。
+#[test]
+fn the_repair_the_comparison_hands_back_clears_the_outlier() {
+    crate::mcp::session::forget();
+    let root = specimen_package("specimen-repair");
+    adopt(
+        &root,
+        "root/control/button",
+        "src/control/object/button/button.rs",
+    );
+    let file = "src/control/object/slider/slider.rs";
+    generated(&root, file);
+    // The drift `W4-1` measured: a sibling loses a declaration its family carries.
+    // `W4-1` 量到的那种漂移：一个兄弟丢了同族都有的那条声明。
+    replace(&root, file, "    parts: SliderParts,\n", "");
+
+    let broken =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        broken.contains("conformance: 1 of 2 sibling(s)"),
+        "the fixture drifts before the repair: {broken}"
+    );
+    let fix = broken
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("fix         "))
+        .expect("the answer hands back a repair request");
+    let request: serde_json::Value =
+        serde_json::from_str(fix).expect("the repair is a pasteable request");
+    assert_eq!(
+        request.get("action").and_then(serde_json::Value::as_str),
+        Some("edit"),
+        "and it is the write path's own `edit`: {fix}"
+    );
+
+    // Executed as written, through the same entry point a caller would use.
+    // 按它写下的样子执行，走调用方会走的同一个入口。
+    crate::mcp::apply::apply(&root, &request).expect("the repair runs");
+    crate::mcp::session::forget();
+    let repaired =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        repaired.contains("conformance: 0 of 2 sibling(s)"),
+        "the outlier is gone: {repaired}"
+    );
+}
+
+/// A hand-written face gets the same facts in the form that works, not a request that would be refused.
+/// 手写的面拿到的是同样事实、以行得通的形式，而不是一条会被拒绝的请求。
+///
+/// `edit` rewrites only generated faces — that is a deliberate boundary, not an oversight — so a
+/// comparison that handed back an `edit` request here would be handing back a line that fails the
+/// moment it is pasted. The honest answer names what to declare and where.
+/// `edit` 只重写生成的面——那是有意的边界而不是疏漏——因此在这里交回一条 `edit` 请求，等于交回一条
+/// 粘贴即失败的行。诚实的答案点名要声明什么、声明在哪儿。
+#[test]
+fn a_hand_written_face_gets_a_manual_repair_not_a_refused_request() {
+    crate::mcp::session::forget();
+    let root = specimen_package("specimen-manual-repair");
+    adopt(
+        &root,
+        "root/control/button",
+        "src/control/object/button/button.rs",
+    );
+    let file = "src/control/object/slider/slider.rs";
+    replace(&root, file, "    parts: SliderParts,\n", "");
+
+    let answer =
+        super::consistency(&root, &json!({"specimen": "root/control/button"})).expect("an answer");
+    assert!(
+        answer.contains("conformance: 1 of 2 sibling(s)"),
+        "the drift is there: {answer}"
+    );
+    let fix = answer
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("fix         "))
+        .expect("a repair line");
+    assert!(
+        fix.contains("hand-written") && fix.contains("parts: SliderParts"),
+        "the manual repair names the file's state and the declaration to add: {fix}"
+    );
+    assert!(
+        !fix.starts_with('{'),
+        "and it is prose rather than a request the write path would refuse: {fix}"
+    );
 }
