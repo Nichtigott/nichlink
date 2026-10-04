@@ -118,6 +118,20 @@ pub struct PruningRow {
     /// 读取方会滤掉 `-`，因此"什么都没调用"的面读出来也是 `None`——与推导对一份没有调用的文件给出的答案
     /// 相同，正是这一点让两条路可比。
     pub calls: Option<String>,
+    /// The **resolved** parent identity, when the record published one (audit `W3-1b`).
+    /// **解析后**的父级身份，记录发布过时才有（审计 `W3-1b`）。
+    ///
+    /// This is the column that lets a reader build a `FaceView` from the record instead of walking
+    /// the sources: the `parent` column beside it is the Rust path the **declaration** spelled, and
+    /// turning that into an identity is the work this one saves. `None` means the record predates
+    /// the column *or* the chain did not resolve — both answer the same way, which is "derive".
+    /// 这一列让读者能**从记录**构造 `FaceView`，而不必走一遍源码：它旁边那列 `parent` 是**声明**拼出的
+    /// Rust 路径，而把那个变成身份正是这一列省下的工作。`None` 意为记录早于该列，**或**链没解析出来——
+    /// 两者答案相同：推导。
+    pub parent_node: Option<String>,
+    /// Whether the declaration gave this face a registry of its own (audit `W3-1b`).
+    /// 这条声明是否给了这个面自己的注册机（审计 `W3-1b`）。
+    pub owns_registry: Option<String>,
 }
 
 /// The build scope the last pipeline run published in `out_dir`.
@@ -261,6 +275,8 @@ pub fn read_pruning_manifest(out_dir: &Path) -> Result<Vec<PruningRow>, String> 
             source_hash: column(),
             fields: column(),
             calls: column(),
+            parent_node: column(),
+            owns_registry: column(),
         });
     }
     Ok(rows)

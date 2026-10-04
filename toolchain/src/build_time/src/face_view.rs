@@ -110,7 +110,13 @@ struct RawFace {
 /// The parent a declaration names, kept unresolved until every face's module is
 /// known.
 /// 声明命名的父级；在知道每个面的模块之前保持未解析。
-enum ParentSpec {
+///
+/// `pub(crate)` because the pruning record publishes the **resolved** parent identity (audit
+/// `W3-1b`), and a second spelling of "what does this declaration name" written in the manifest
+/// writer is exactly the copy that drifts.
+/// `pub(crate)` 是因为剪枝记录要发布**解析后**的父级身份（审计 `W3-1b`），而在清单写入方里另写一份
+/// "这条声明命名了什么"正是那种会漂移的拷贝。
+pub(crate) enum ParentSpec {
     Root,
     FromPath {
         source: String,
@@ -276,7 +282,7 @@ pub fn face_views_with_external(root: &Path, package: &str) -> Result<FaceRead, 
 /// Resolve one collected parent against the module-to-face map, matching the
 /// build's three parent forms.
 /// 用"模块 → 面"映射解析一个已收集的父级，对应构建的三种父级形式。
-fn resolve_parent(
+pub(crate) fn resolve_parent(
     parent: &ParentSpec,
     package: &str,
     modules: &BTreeMap<String, NodeId>,
@@ -357,7 +363,7 @@ fn visit_face_view(src: &Path, nodes: &[Node], package: &str, faces: &mut Vec<Ra
 /// 没有 `parent` 字段即包根。解析成模块或 source/kind 对的 `parent` 字段按数据保留；
 /// 解析不了的记为 `Unparsed`，成为被上报的未解析父级而不是猜测。构建对同一情形报的
 /// 是 `static-plan` 诊断。
-fn parent_of(face: &FaceSyntax) -> ParentSpec {
+pub(crate) fn parent_of(face: &FaceSyntax) -> ParentSpec {
     if face.field("parent").is_none() {
         return ParentSpec::Root;
     }

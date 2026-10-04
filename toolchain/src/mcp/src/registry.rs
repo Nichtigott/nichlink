@@ -545,12 +545,13 @@ fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
         value.as_deref().unwrap_or("-")
     }
     line.push_str(&format!(
-        "  path={} kind={} registry_name={} parent={} calls={}",
+        "  path={} kind={} registry_name={} parent={} calls={} owns_registry={}",
         spelled(&row.path),
         spelled(&row.kind),
         spelled(&row.registry_name),
         spelled(&row.parent),
-        spelled(&row.calls)
+        spelled(&row.calls),
+        spelled(&row.owns_registry)
     ));
     line.push('\n');
     line
@@ -568,11 +569,12 @@ fn published_row(tree: &PublishedTree, row: &PruningRow) -> String {
 /// 开始发布它们起就不成立（审计 `W3-1` 又加了源码哈希、声明指纹与直接调用名）。这是一句**落后于**行为的
 /// 自述，与"跑在行为前面"的自述是同一个缺陷：读者以为那几列不在，于是手工推导。
 const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. Each row also shows \
-     the declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`) and the \
-     names its file calls (`calls`); `-` means the declaration named none. The per-face \
-     `source_hash` and declaration `fields` fingerprint are published **in** `pruning_manifest.tsv` \
-     and are not reprinted here — a 64-hex column per row is a screenful of noise, and freshness is \
-     `nichlink.check`'s question. What the record does **not** carry is a face added since the build: \
+     the declaration facts the record carries (`path`, `kind`, `registry_name`, `parent`, \
+     `owns_registry`) and the names its file calls (`calls`); `-` means the declaration named none. \
+     Three columns are published **in** `pruning_manifest.tsv` and are not reprinted here: the \
+     per-face `source_hash` and declaration `fields` fingerprint (a 64-hex column per row is a \
+     screenful of noise, and freshness is `nichlink.check`'s question) and `parent_node`, the \
+     resolved parent identity (a reader with the whole file has it; nothing in this row needs it). What the record does **not** carry is a face added since the build: \
      one it has never seen is `nichlink.search`'s to derive.\n";
 
 #[cfg(test)]

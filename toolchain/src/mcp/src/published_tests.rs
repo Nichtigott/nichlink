@@ -125,11 +125,12 @@ impl Fixture {
         self.publish(
             "pruning_manifest.tsv",
             &format!(
-                "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\n\
-                 {button}\tbutton/button.rs\t-\troot/button\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\n\
-                 {slider}\tslider/slider.rs\t-\troot/control/slider\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\n",
+                "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\n\
+                 {button}\tbutton/button.rs\t-\troot/button\tButton\tbutton\trc\t{hash}\t{fingerprint}\t-\t{parent}\tfalse\n\
+                 {slider}\tslider/slider.rs\t-\troot/control/slider\tSlider\tslider\trc\t{hash}\t{fingerprint}\thelper\t{parent}\ttrue\n",
                 hash = "a".repeat(64),
                 fingerprint = "b".repeat(64),
+                parent = "c".repeat(32),
             ),
         );
     }
@@ -485,7 +486,9 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
             && full.contains("path=root/button")
             && full.contains("kind=Button")
             && full.contains("registry_name=button")
-            && full.contains("parent=rc"),
+            && full.contains("parent=rc")
+            && full.contains("owns_registry=true")
+            && full.contains("owns_registry=false"),
         "the rows show the declaration facts the record carries: {full}"
     );
     assert!(
@@ -493,7 +496,8 @@ fn a_current_record_is_shown_and_its_levels_are_counted() {
         "and the direct calls audit `W3-1` added, `-` where a file calls nothing: {full}"
     );
     assert!(
-        full.contains("`source_hash` and declaration `fields` fingerprint are published **in**")
+        full.contains("Three columns are published **in**")
+            && full.contains("`parent_node`, the")
             && full.contains("freshness is"),
         "the note says where the two hashes live and why they are not reprinted: {full}"
     );

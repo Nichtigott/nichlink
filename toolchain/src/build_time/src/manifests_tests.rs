@@ -131,7 +131,7 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
     let header = record.lines().next().unwrap_or_default();
     assert_eq!(
         header,
-        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls",
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry",
         "the columns are the record's contract"
     );
 
@@ -149,7 +149,7 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
         .find(|line| line.contains("dial/dial.rs"))
         .expect("a row for the face");
     let columns = row.split('\t').collect::<Vec<_>>();
-    assert_eq!(columns.len(), 10, "ten columns: {row}");
+    assert_eq!(columns.len(), 12, "twelve columns: {row}");
     assert_eq!(
         columns[7], expected_hash,
         "the source hash is the file's own sha256: {row}"
@@ -172,6 +172,26 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
         columns[8].len(),
         64,
         "the field fingerprint is a sha256: {row}"
+    );
+    // Audit `W3-1b`: the fixture's face declares no `parent`, which means **the package root** —
+    // and the record publishes that identity rather than leaving the reader to derive it.
+    // 审计 `W3-1b`：夹具的面没有声明 `parent`，那意味着**包根**——而记录发布的就是那个身份，不留给读者推导。
+    // The identity itself is compared in `a_module_named_parent_resolves_to_its_identity`, where
+    // the expected value is another row's own `id` — no namespace arithmetic on the test's side.
+    // Here the claim is only that the column is **present and well-formed**: this face declares no
+    // `parent`, which means the package root, and a `-` here would mean the writer could not resolve
+    // something it demonstrably can.
+    // 身份本身在 `a_module_named_parent_resolves_to_its_identity` 里比，那里的期望值是**另一行自己的
+    // `id`**——测试这一侧不做命名空间算术。这里只主张这一列**在且形状对**：这个面没声明 `parent`，那意味着
+    // 包根，而这里写 `-` 就意味着写入方解析不出一件它明明解析得了的事。
+    assert_eq!(
+        columns[10].len(),
+        32,
+        "the resolved parent is a node id: {row}"
+    );
+    assert_eq!(
+        columns[11], "false",
+        "and the fixture declares no registry of its own: {row}"
     );
     let before = columns[8].to_owned();
     super::write_pruning_manifest(&src, &nodes, &out).expect("the manifest writes again");
@@ -251,6 +271,74 @@ fn every_published_column_reads_back() {
     assert!(
         old[0].source_hash.is_none() && old[0].calls.is_none(),
         "and its absent columns are `None`, not an error: {old:?}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// A child whose parent is named by module path gets that parent's **identity**, not just its path.
+/// 一个按模块路径点名父级的子面，拿到的是父级的**身份**，而不只是路径。
+///
+/// Audit `W3-1b`: `FaceView` needs the resolved `parent`, and the record published only the Rust path
+/// the declaration spelled — so a reader that wanted whole faces still had to walk the sources. The
+/// two-pass writer is what closes that: pass one indexes every face's module, pass two resolves. The
+/// pin walks both shapes the resolver has — a module the tree owns, and a parent that names
+/// something this tree does not have (`-`, which is the honest answer rather than a guess).
+/// 审计 `W3-1b`：`FaceView` 需要解析后的 `parent`，而记录只发布声明拼出的 Rust 路径——因此想要整份面的
+/// 读者仍然得走一遍源码。两遍写入正是关掉这一点：第一遍索引每个面的模块，第二遍解析。钉子走解析器的两种
+/// 形状——树拥有的模块，与点名了树里没有的东西的父级（`-`，那是诚实的答案而不是猜）。
+#[test]
+fn a_module_named_parent_resolves_to_its_identity() {
+    let (root, src) = package("parent-node", "");
+    // A child whose `parent:` names the root face's module, and a second one whose parent names a
+    // module nothing owns.
+    fs::create_dir_all(src.join("child")).expect("child directory");
+    fs::write(
+        src.join("child/child.rs"),
+        "crate::control_object! {\n    kind: Child,\n    parent: crate::dial::NODE_ID,\n}\n",
+    )
+    .expect("child face");
+    fs::create_dir_all(src.join("orphan")).expect("orphan directory");
+    fs::write(
+        src.join("orphan/orphan.rs"),
+        "crate::control_object! {\n    kind: Orphan,\n    parent: crate::nowhere::NODE_ID,\n}\n",
+    )
+    .expect("orphan face");
+    let out = root.join("out");
+    fs::create_dir_all(&out).expect("out directory");
+    let nodes = crate::build_time::source_walk::discover_root(&src);
+    super::write_pruning_manifest(&src, &nodes, &out).expect("the manifest writes");
+    let rows = crate::build_time::read_pruning_manifest(&out).expect("the record reads");
+
+    let dial = rows
+        .iter()
+        .find(|row| row.source == "dial/dial.rs")
+        .expect("the parent face");
+    let child = rows
+        .iter()
+        .find(|row| row.source == "child/child.rs")
+        .expect("the child face");
+    assert_eq!(
+        child.parent_node.as_deref(),
+        Some(dial.id.to_string().as_str()),
+        "the child's resolved parent is the parent face's own identity"
+    );
+    assert_eq!(
+        child.parent.as_deref(),
+        Some("crate::dial::NODE_ID"),
+        "and the spelled path is still published beside it"
+    );
+    let orphan = rows
+        .iter()
+        .find(|row| row.source == "orphan/orphan.rs")
+        .expect("the orphan face");
+    assert!(
+        orphan.parent_node.is_none(),
+        "a parent this tree does not own stays unresolved rather than guessed: {orphan:?}"
+    );
+    assert_eq!(
+        dial.owns_registry.as_deref(),
+        Some("false"),
+        "`owns_registry` is published for every face: {dial:?}"
     );
     let _ = fs::remove_dir_all(&root);
 }

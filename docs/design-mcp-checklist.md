@@ -443,3 +443,36 @@ check 343/4847 · apply 433/4579 · search 466/2282 · consistency 435/1329 ⇒ 
 **钉子**：`published_tests::a_current_record_is_shown_and_its_levels_are_counted`（默认是普查且按**已发布
 的**逻辑路径计数、默认不印行；`full` 页显示五个声明列与 `calls`，`calls=-` 的情形也钉住；注里说出两个
 哈希住哪）、`records_that_do_not_describe_these_sources_are_reported_stale`（注的两半都断言）。
+
+### W3-1b 记录补 `parent_node` / `owns_registry`（完成，本轮）
+
+**为什么需要这两列**：`FaceView` 的 `parent` 是 `NodeId`，而记录发布的 `parent` 是**声明拼出的 Rust
+路径**（`crate::control::NODE_ID`）——把那段文字变成身份是读者本要自己做的工作，也是"能不能从记录构造
+`FaceView`"的分界。`owns_registry` 同理（它决定"这个面是不是文件夹面"）。
+
+**改法**：`write_pruning_manifest` 变成**两遍**——第一遍索引「每个面拥有的模块路径 → 该面的 `NodeId`」
+（子面可能先于它点名的父面被访问到，因此解析不能在遍历途中做），第二遍逐行解析父级身份。解析器用的是
+**构建自己的** `face_view::resolve_parent` / `parent_of`（本轮把这两个从私有提到 `pub(crate)`，而不是
+在清单写入方里另写一份"这条声明命名了什么"——那种拷贝正是会漂移的东西）。解析不出时写 `-`（树不拥有的
+模块、解析不了的 `parent`），并明说 `-` 的读法是"推导"。
+
+**端到端证据**（真 build script 写出的十二列表头 + 前两行）：
+
+```
+# node	source	symbol	path	kind	registry_name	parent	source_hash	fields	calls	parent_node	owns_registry
+bdb4427c…	control/object/slider/slider.rs	-	-	Slider	-	crate::control::NODE_ID	981ae775…	c760ca90…	-	fb97ddd5f2b803d1b7f40a776d8a22d9	false
+fb97ddd5…	control/control.rs	-	-	Control	-	-	620a2d06…	57a3a780…	-	b6a6bea94077152dbb7dd780a2708acf	true
+```
+slider 的 `parent_node` **正是 control.rs 自己的 `node` 列**（子面的解析父级＝父面的身份 ✓），而 control.rs
+的 `owns_registry=true` 与它声明的 `needs_registry: true` 对得上。桥里 `registry --full` 现在直接印
+`owns_registry=true|false`（读记录，不推导）。
+
+**钉子**：`manifests_tests::the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with`
+（表头十二列即契约；`parent_node` 查形状）、`a_module_named_parent_resolves_to_its_identity`（**两种形状**
+都走：按模块点名的父级 ⇒ 与父面自己的 `id` **逐字相等**；点名树里没有的模块 ⇒ `None` 而不是猜）、
+`every_published_column_reads_back`（读写成对）、`published_tests::a_current_record_is_shown_and_its_levels_are_counted`
+（发布行显示 `owns_registry`，注里点名 `parent_node` 发布在文件里）。
+
+**一处如实记**：`parent_node` 的期望值我第一版硬写了 `env!("CARGO_PKG_NAME")`，而写入方用的是
+`package_namespace()`（运行期读环境）⇒ 两个不同函数，测试先红。改成"与另一行自己的 `id` 比"（不需要
+测试侧做任何命名空间算术）——与第十轮那条"两边必须用同一个函数"同族，本轮又踩一次。

@@ -45,8 +45,15 @@ pub(crate) fn write_pruning_manifest(
     nodes: &[Node],
     out_dir: &Path,
 ) -> Result<(), String> {
+    // Pass one: every face's own identity, indexed by the module path a `parent:` declaration
+    // spells. The resolution cannot happen while walking, because a child may be visited before the
+    // face that owns the module it names.
+    // 第一遍：每个面自己的身份，按 `parent:` 声明拼出的模块路径建索引。解析不能在遍历途中做，因为子面
+    // 可能先于"拥有它点名的那个模块"的面被访问到。
+    let mut modules = std::collections::BTreeMap::new();
+    visit_face_modules(src, nodes, &mut modules);
     let mut rows = Vec::new();
-    visit_pruning_symbols(src, nodes, &mut rows);
+    visit_pruning_symbols(src, nodes, &modules, &mut rows);
     write_face_rows(out_dir.join("pruning_manifest.tsv"), rows)
 }
 
@@ -75,12 +82,23 @@ struct FaceColumns {
     /// The names this file calls directly, comma-separated, `-` when it calls none.
     /// 这份文件直接调用的名字，逗号分隔，一个都没有时写 `-`。
     calls: String,
+    /// The **resolved** parent identity, or `-` when this tree cannot resolve it (audit `W3-1b`).
+    /// **解析后**的父级身份；这棵树解析不出时写 `-`（审计 `W3-1b`）。
+    parent_node: String,
+    /// Whether the declaration gives this face a registry of its own (audit `W3-1b`).
+    /// 这条声明是否给了这个面自己的注册机（审计 `W3-1b`）。
+    owns_registry: String,
 }
 
 impl FaceColumns {
     /// The facts as this face spells them, with `-` where it names none.
     /// 本面拼出的各项事实，未声明的写作 `-`。
-    fn declared(face: &FaceSyntax, kind: &str, source: &str) -> Self {
+    fn declared(
+        face: &FaceSyntax,
+        kind: &str,
+        source: &str,
+        modules: &std::collections::BTreeMap<String, NodeId>,
+    ) -> Self {
         let spelled = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
         Self {
             path: spelled(face.string("path")),
@@ -90,7 +108,45 @@ impl FaceColumns {
             source_hash: nichlink_kernel::sha256_hex(source.as_bytes()),
             fields: field_fingerprint(face, kind),
             calls: called_names(source),
+            parent_node: resolved_parent(face, modules),
+            owns_registry: match face.boolean("needs_registry") {
+                Some(true) => "true".to_owned(),
+                _ => "false".to_owned(),
+            },
         }
+    }
+}
+
+/// The parent identity this declaration resolves to, or `-` (audit `W3-1b`).
+/// 这条声明解析到的父级身份，或 `-`（审计 `W3-1b`）。
+///
+/// The resolver is the **build's own** (`face_view::resolve_parent`), so the record publishes the
+/// identity the derived tree computes rather than a second opinion about it. `-` is written when
+/// the chain does not resolve (a module the tree does not own, or a `parent` that does not parse) —
+/// and `-` is honest there: a reader that needs the parent then derives, exactly as it did before
+/// the column existed.
+/// 解析器用的是**构建自己的**那一个（`face_view::resolve_parent`），因此记录发布的就是推导树算出的身份，
+/// 而不是关于它的第二种意见。链解析不出时写 `-`（树不拥有的模块、或解析不了的 `parent`）——而 `-` 在那
+/// 里是诚实的：需要父级的读者于是推导，与这一列存在之前一样。
+fn resolved_parent(
+    face: &FaceSyntax,
+    modules: &std::collections::BTreeMap<String, NodeId>,
+) -> String {
+    match super::face_view::parent_of(face) {
+        super::face_view::ParentSpec::Root => {
+            super::registry_identity::package_root_node_id().to_string()
+        }
+        super::face_view::ParentSpec::FromPath { source, kind } => {
+            super::registry_identity::package_node_id(&source, &kind).to_string()
+        }
+        super::face_view::ParentSpec::NodePath(module) => {
+            let key = module.strip_prefix("crate::").unwrap_or(&module);
+            match modules.get(key) {
+                Some(id) => id.to_string(),
+                None => "-".to_owned(),
+            }
+        }
+        super::face_view::ParentSpec::Unparsed => "-".to_owned(),
     }
 }
 
@@ -220,19 +276,21 @@ fn write_face_rows(
     rows.sort();
     rows.dedup();
     let mut output = String::from(
-        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\n",
+        "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\n",
     );
     for (id, source, symbol, columns) in rows {
         writeln!(
             output,
-            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{id}\t{source}\t{symbol}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             columns.path,
             columns.kind,
             columns.registry_name,
             columns.parent,
             columns.source_hash,
             columns.fields,
-            columns.calls
+            columns.calls,
+            columns.parent_node,
+            columns.owns_registry
         )
         .unwrap();
     }
@@ -290,6 +348,7 @@ fn visit_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, St
 fn visit_pruning_symbols(
     src: &Path,
     nodes: &[Node],
+    modules: &std::collections::BTreeMap<String, NodeId>,
     rows: &mut Vec<(NodeId, String, String, FaceColumns)>,
 ) {
     for node in nodes {
@@ -302,7 +361,7 @@ fn visit_pruning_symbols(
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
                 let id = super::registry_identity::package_node_id(&relative, &kind);
                 let module = source_module_path(&relative);
-                let columns = FaceColumns::declared(&face, &kind, &source);
+                let columns = FaceColumns::declared(&face, &kind, &source, modules);
                 let mut found = false;
                 for item in source.lines().filter_map(parse_pruning_item) {
                     found = true;
@@ -318,7 +377,35 @@ fn visit_pruning_symbols(
                 }
             }
         }
-        visit_pruning_symbols(src, &node.children, rows);
+        visit_pruning_symbols(src, &node.children, modules, rows);
+    }
+}
+
+/// Every registration face's identity, by the module path that face owns (audit `W3-1b`).
+/// 每个注册面的身份，按它拥有的模块路径建索引（审计 `W3-1b`）。
+///
+/// The same walk and the same guards as the row visitor, so the two passes cannot disagree about
+/// which files are faces; the map is what turns a `parent:` module path into an identity.
+/// 与行遍历同一次遍历、同一批守卫，因此两遍对"哪些文件是面"不可能有分歧；这张映射就是把 `parent:` 的
+/// 模块路径变成身份的东西。
+fn visit_face_modules(
+    src: &Path,
+    nodes: &[Node],
+    modules: &mut std::collections::BTreeMap<String, NodeId>,
+) {
+    for node in nodes {
+        if let Some(file) = &node.file {
+            let relative = relative_display(src, file);
+            if let Ok(source) = fs::read_to_string(file)
+                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
+                let id = super::registry_identity::package_node_id(&relative, &kind);
+                modules.insert(source_module_path(&relative), id);
+            }
+        }
+        visit_face_modules(src, &node.children, modules);
     }
 }
 
