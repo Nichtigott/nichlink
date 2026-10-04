@@ -367,3 +367,46 @@ check 343/4847 · apply 433/4579 · search 466/2282 · consistency 435/1329 ⇒ 
 ### M2 余下
 
 `DP-1`/`DP-2`/`DP-3` 与门禁 M2 的四轴重算都要**两臂实机**数据，仍按 §门禁 M1 的决定合并成一次跑。
+
+## 阶段 M3：记录路径（进行中）
+
+### W3-1 记录 schema 增肥（完成，`63ab9ec`）
+
+**先核对现状再动手**：`pruning_manifest.tsv` 的表头已经是
+`# node  source  symbol  path  kind  registry_name  parent` —— 前四项事实 2026-09-29 就有了
+（只是磁盘上 `examples/control-button/target/…` 那份是旧构建留下的三列表，一度让我以为没做）。
+缺的是 **变化探测与调用面** 那三样。
+
+**改法**（只落构建期**已经算出**的东西）：`FaceColumns` 新增
+- `source_hash` = 该面自己那份源码字节的 `sha256_hex`；
+- `fields` = 声明字段指纹（按内核 `FACE_FIELD_ORDER` 枚举、`name=raw` 排序去重后散列，**并把 `kind`
+  折进去**——它是身份输入且不总被写下来，只散列"写下来的东西"会把字段相同、kind 不同的两个面判成相等）；
+- `calls` = 该文件直接调用的名字（**内核自己的 `direct_calls` 规则**，与桥里每个读者同一条；无调用写
+  `-`）。
+
+**读写成对**：`PruningRow` 同步新增三列并在 `read_pruning_manifest` 里读回——只写不读等于发布了没人
+够得着的事实（"承诺面落后于能力面"的另一个方向）。旧的三列表照旧解析、缺列读作 `None` 而不是报错。
+
+**钉子**：表头即契约；哈希与调用名用读者会用的**同一批内核函数重算对账**；指纹查长度与两次构建间稳定；
+写入→读回逐列相等。
+
+### W3-2 全读工具记录优先（进行中；本轮只做到"记录能被重建出来"）
+
+**对着代码核到的现状**：`Member::tree()` 已经有 `Tree::Published` 分支，`PublishedTree` 也已经带着
+`faces: Vec<PruningRow>`（含 `path`/`kind`/`registry_name`/`parent`，本轮又加了 `source_hash`/
+`fields`/`calls`）——**发布路径本来就在**，缺的是"据它构造出读者要的东西"。
+
+**顺手修掉一处自述落后**：`workspace.rs::derived_tree` 的文档说"记录不携带 `path` 与 `kind`"——
+那句从 2026-09-29 起就不成立，本轮再假一层。已改成事实：记录仍**不**携带的是把 `FaceView`
+**构造出来**所需的两样——解析后的父级 **`NodeId`**（记录发布的 `parent` 是声明拼出的 Rust 路径）与
+`owns_registry`——以及"构建之后新增的面只在源码里"。
+
+**W3-2 的下一步（按依赖排序，动手前先看这一段）**：
+1. **W3-1b**：记录再补两列——`parent_node`（解析后的父级 `NodeId`；构建期拓扑已经算出）与
+   `owns_registry`。有了它们，`FaceView` 才能**从记录构造**，而不是只能填空。
+2. **`registry` 的普查/分页先走记录**（它是规模 bench 里最慢的一个，t4 55.7s）：普查只需要 `path` 逐层
+   计数——连 `FaceView` 都不必构造。新鲜度用 `source_hash` 对现读字节比（比整棵树的解析便宜一个量级），
+   记录不新鲜就回落并声明。答案要带 `tree published from <记录路径>`。
+3. `status` / `search` / `why` 随后；注意它们慢在 **`load_sources` 遍历源码**（函数与调用面），不是慢在
+   面的推导——记录里没有函数级数据，那半边要另想办法（`function_manifest.tsv` 只有「面 → 符号」）。
+4. `check`/`verify` **永远 derive**（清单红线），不接记录。

@@ -202,9 +202,25 @@ impl Member {
         }
     }
 
-    /// The faces this member names by logical path, derived now when the member
-    /// published records — because the record carries no `path` and no `kind`.
-    /// 这个成员按逻辑路径点名的面；成员发布过记录时此刻推导——因为记录不携带 `path` 与 `kind`。
+    /// The faces this member names by logical path, derived now when the member published records.
+    /// 这个成员按逻辑路径点名的面；成员发布过记录时此刻推导。
+    ///
+    /// **Why it still derives** (the sentence here used to say "because the record carries no
+    /// `path` and no `kind`", which stopped being true on 2026-09-29 when the pruning row began
+    /// publishing those four facts — audit `W3-1` then added three more columns, so the record now
+    /// carries the source hash, the declaration fingerprint and the direct calls too). What the
+    /// record still does **not** carry is the two things a `FaceView` needs to be *constructed*
+    /// rather than filled in: the resolved parent **`NodeId`** (the record publishes the parent as
+    /// the Rust path the declaration spelled) and `owns_registry`. And a face added since the build
+    /// is in the sources and not in the record at all. Until those are published, a caller that
+    /// needs whole `FaceView`s pays this walk; the ones that need only the published columns read
+    /// them (`published()`), and every caller states which tree it used (`evidence_line`).
+    /// **为什么仍然推导**（这句话过去写的是"因为记录不携带 `path` 与 `kind`"，而那句从 2026-09-29 剪枝行
+    /// 开始发布那四项事实起就不再成立；审计 `W3-1` 又加了三列，因此记录现在也带着面源码哈希、声明指纹与
+    /// 直接调用名）。记录仍然**不**携带的，是把 `FaceView` **构造出来**（而不是填空）所需的两样：解析后的
+    /// 父级 **`NodeId`**（记录发布的 `parent` 是声明拼出的 Rust 路径）与 `owns_registry`；而构建之后新增
+    /// 的面只在源码里、根本不在记录里。在它们被发布之前，需要整份 `FaceView` 的调用方要付这次遍历；只需要
+    /// 已发布列的调用方读记录（`published()`），而每个调用方都说出自己用了哪棵树（`evidence_line`）。
     ///
     /// This is the fallback the published path exists to avoid, and it is taken
     /// only by answers whose question the record cannot answer. Every caller
