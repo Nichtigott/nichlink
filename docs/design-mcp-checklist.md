@@ -1047,3 +1047,27 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 `deviations` 一样改成一遍计数、每兄弟 O(1) 查询。shape 那 5 s 还需再切一段量（记录读取本身应 << 1 s）。
 复核记录 `target/hardbug-runs/t3-family-record.txt`（工作区数据，不进库）。
 
+### M6 §5.2 T3 第二刀 + 第三刀前的归因（本轮）
+
+**第二刀（O(n²) 修掉）**：`--by kind`/`--by source` 的 `values` 多数派分支对**每个兄弟**都做一次
+`counts.values().max()` + 一次全量过滤 ⇒ 2,500² ≈ 6.25M 次比较。改成"一遍计数 + 预先算好 `top` 与
+`tied_at_top`"，每兄弟 O(1)（语义等价：原条件＝该取值计数等于最高计数且不止一个取值拿到它）。
+实测：`--by kind` **10.44 → 5.01 s** · `--by source` **4.69 s** · `--by shape` 5.07 s（本就走 `deviations`
+的一遍计数，未受影响）。
+
+**第三刀前的决定性归因**（同一棵 2,500 面独立包）：
+
+| 探针 | 时间 |
+| --- | --- |
+| `consistency --parent root/nope --by kind`（**空家族**） | **4.53 s** |
+| 同上、但把 `shape_manifest.tsv` 拿走 | 4.82 s（**不是它**） |
+| `consistency --by kind`（**无记录 ⇒ 推导**） | 8.27 s |
+| `registry --full --limit 200`（同树对照） | 0.83 s |
+| `status` / `affected` | 1.25 s / 0.80 s |
+
+⇒ **逐兄弟的循环几乎不花钱**：空家族就付掉了大部分。那 4.5 s 是**固定路径**的成本、随成员面数线性
+（50 面的 `sr` 是 0.22 s ⇒ ≈1.7 ms/面），而且**不是** shape 清单的读取。`registry` 在同一棵树上 0.83 s，
+证明这条固定路径可以低一个量级。**下一探针（已定）**：在固定路径三段各打一个计时点
+（`build_evidence` 新鲜性 / 记录读取 + `face_views_from_pruning` / `tree_census` 与头部装配），量出 4.5 s
+落在哪一段；在那之前不再猜。复核记录 `target/hardbug-runs/t3-family-record.txt`。
+

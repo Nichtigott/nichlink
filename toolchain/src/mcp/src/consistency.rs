@@ -767,6 +767,16 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                 outliers = found.len();
                 any_outlier |= outliers > 0;
             } else {
+                // Counted **once** (audit `T3`), for the same reason `deviations` is: the tie test
+                // below used to walk the whole table per sibling — `counts.values().max()` and a full
+                // filter — which is O(siblings^2) and measured as the whole cost of the answer
+                // (10.4 s on a 2,500-face family, *worse* than the shape signal it was supposed to
+                // beat). Two facts computed here replace both walks: the top count, and whether more
+                // than one value holds it.
+                // **只数一遍**（审计 `T3`），理由与 `deviations` 相同：下面那个平局判定过去对**每个兄弟**都
+                // 走一遍整表——`counts.values().max()` 加一次全量过滤——是 O(兄弟数²)，而实测它就是整个答案的
+                // 成本（2,500 面家族上 10.4 s，比它本该胜过的那条 `shape` 还慢）。这里算出的两个事实取代那两次
+                // 遍历：最高的计数，以及是否有不止一个取值拿到它。
                 let mut counts: std::collections::BTreeMap<&str, usize> =
                     std::collections::BTreeMap::new();
                 for (_, value) in &values {
@@ -777,18 +787,14 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                     .max_by_key(|(value, count)| (**count, std::cmp::Reverse(value.len())))
                     .map(|(value, _)| *value)
                     .unwrap_or_default();
+                let top = counts.values().copied().max().unwrap_or(0);
+                let tied_at_top = counts.values().filter(|count| **count == top).count() > 1;
                 for (sibling, value) in &values {
                     if value != majority {
                         // Ties are not outliers: with no single majority value there is nothing to call
                         // a deviation.
                         // 平局不算离群：没有唯一的多数值时，就没有可称为偏离的东西。
-                        if counts
-                            .values()
-                            .filter(|count| **count == counts[value.as_str()])
-                            .count()
-                            > 1
-                            && counts.values().max() == counts.get(value.as_str())
-                        {
+                        if tied_at_top && counts.get(value.as_str()) == Some(&top) {
                             continue;
                         }
                         rows.push(format!(
