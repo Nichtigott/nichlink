@@ -1110,3 +1110,19 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 最终答案——那一刀约值 90 s（50k）/4 s（2,500 面），是 T1 真正的大头，但建立在前一刀之上。
 复核记录 `target/hardbug-runs/t1-search-record.txt`（工作区数据，不进库）。
 
+### M6 §5.2 T1（第二刀未落地）：空答案要成为最终答案，前提是新鲜度覆盖"新增文件"
+
+**前提诊断（有证据）**：`discovery_fingerprint` 只哈希**被模块树发现到的**文件（`collect_source_files(nodes)`）
+⇒ 一份 `src/` 下新增、**没有任何 `mod` 声明**的文件**不改指纹**，`build_output_is_current` 仍答 `current`
+⇒ 这正是 `search` 的 `[added since build]` 钉子抓住的东西，也是"记录的空答案＝最终答案"不成立的原因。
+
+**尝试**：把指纹补上"**原始文件集合**"（`visit_rust_paths(scan)`：只走 `src/**/*.rs` 的**路径**、不读内容
+——编辑已由原循环覆盖，读内容会让每次新鲜性检查多读一遍整棵树），两个调用点同步传 `scan`。
+
+**结果：那条钉子仍然红**，而且诊断打印留下一个**没解释清楚的现象**：
+`stored=2acca1e0 recomputed=2acca1e0 raw=3`（**新增文件之后**，三个 `.rs` 都在，而 stored 与 recomputed 相等
+——按测试顺序 stored 应在新增之前写下）。⇒ **改动全部回退**（`git checkout -- toolchain/`，回到 `e0ae9d5`），
+空答案规则**保持关闭**。
+**下一轮第一步**：查清上表里的 `stored` 是谁、何时写的（在 `check_for` 与 `TreeDelta::read` 两处打点，或比对
+两次 search 前后指纹文件的 mtime/内容），再决定"原始文件集合进指纹"是否可行、以及空答案规则的次序。
+
