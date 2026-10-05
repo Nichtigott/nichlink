@@ -960,3 +960,30 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 当场拦下我给它起的名 `collect_properties`（私有遍历动词必须是 `visit_`/`walk_`）⇒ 改名 `walk_properties`。
 **仍开**：这条对差现在是"一手维护的表 + 机械比对"，下一步可把**工具→处理模块**的映射也从 `DISPATCH` 表机械导出，
 让整件事零维护。
+
+## 阶段 M6（终局收口）：按《nichlink 终局优化方向》再落一轮
+
+### §3 离线出生证明（本轮）
+
+**缺陷（如实复现）**：把二进制拷到检出外跑 `new_project`，清单写的是注册局依赖
+`nichlink-toolchain = { version = "0.2.0" }`，而 0.2.0 **没发布** ⇒ 刚生成的宿主第一条命令就失败：
+`cargo build --offline` → `error: no matching package named nichlink-toolchain found`。
+**第一印象场景在最该演示约束系统的地方演示不了**（复核记录 `target/hardbug-runs/offline-birth.txt`）。
+
+**关键实测事实（它决定了这条检查该问哪儿）**：本机 `~/.cargo` 里**有** 0.2.0 的 `.crate` 存档、**没有**
+索引条目（cargo 的 `.cache/ni/ch/nichlink-toolchain`），而 `cargo build --offline` **依然失败**
+⇒ **没有索引条目的存档解析不了**。因此探针必须查**索引缓存**（并要求其中出现 `"vers":"<版本>"`），
+不能查 `.crate` —— 我第一版查的就是 `.crate`，实测被这条事实推翻（并把它钉进了钉子）。
+
+**改动**：`build_time::scaffold::{registry_release_present, offline_source_warning}`（纯本地、确定性、
+无网络、不会在气隙机器上挂住），由 `new_project` 在**预览与落盘两种回复**里附加一行 `offline …`：
+点名版本、它查过的位置、以及三条出路（先联网构建一次 / 改用 `dependency: "git"` / 从检出里跑以获得
+`path` 依赖）。`path`/`git` 来源自带字节，因此从不警告。
+
+**实测（两个方向）**：真实 HOME（索引无该版本）⇒ 警告出现 ✓；伪造一份已预热的索引缓存 ⇒
+`grep -c '^offline'` = **0** ✓；只放 `.crate` 不放索引 ⇒ 仍警告 ✓（钉子
+`new_project_tests::a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later`）。
+
+**仍开**：① 回复**无条件**说出"选了哪条来源"（现在只在有问题时说；无条件那句会动到回复形状的既有钉子，
+留下一轮）；② 装出来的二进制若既不在检出内、又拿不到缓存，仍只能靠这条警告指路——真正的解除要么发布
+0.2.0，要么调用方自己给 `git`/`path`。

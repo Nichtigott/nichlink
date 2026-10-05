@@ -179,6 +179,85 @@ pub fn requested_source(
 /// 字面量上，因此下一次发布自动带上它。
 const RELEASE_REQUIREMENT: &str = env!("CARGO_PKG_VERSION");
 
+/// Whether this release could resolve from the **local** registry cache.
+/// 这一版能否从**本地**注册表缓存解析出来。
+///
+/// This is the question that decides whether `cargo build --offline` works for a generated host whose
+/// manifest names the published release, and it is answerable without a network: cargo resolves an
+/// offline version requirement from the unpacked sources (`registry/src/<index>/<name>-<version>/`)
+/// or the downloaded archive (`registry/cache/<index>/<name>-<version>.crate`). Asking the cache
+/// rather than crates.io keeps this check deterministic, instant, and free of a probe that could hang
+/// on an air-gapped machine — which is exactly the machine the warning exists for.
+/// 这正是决定"清单指向已发布那一版的生成宿主能否 `cargo build --offline`"的那个问题，而它**不需要网络**
+/// 就能回答：离线时 cargo 从解包源码（`registry/src/<index>/<name>-<version>/`）或已下载的存档
+/// （`registry/cache/<index>/<name>-<version>.crate`）解析版本要求。问缓存而不是问 crates.io，让这项检查
+/// 确定、瞬时，并且不会在气隙机器上挂住——而气隙机器正是这条警告存在的理由。
+pub fn registry_release_present(version: &str, cargo_home: &Path) -> bool {
+    // The **index cache** is the decisive one, and that is a measured fact rather than a reading of
+    // cargo's docs: this machine holds `registry/cache/…/nichlink-toolchain-0.2.0.crate` (the release
+    // was published and then deleted) while `registry/index/…/.cache/ni/ch/nichlink-toolchain` does
+    // not exist, and `cargo build --offline` on a generated project fails with `no matching package
+    // named nichlink-toolchain found`. An archive without an index entry does not resolve.
+    // **索引缓存**才是决定性的那一个，而这是实测事实、不是对 cargo 文档的解读：这台机器上有
+    // `registry/cache/…/nichlink-toolchain-0.2.0.crate`（那一版发布过又被删除），却没有
+    // `registry/index/…/.cache/ni/ch/nichlink-toolchain`，而生成的项目上 `cargo build --offline` 报
+    // `no matching package named nichlink-toolchain found`。**没有索引条目的存档解析不了。**
+    let wanted = format!("\"vers\":\"{version}\"");
+    let indexes = cargo_home.join("registry").join("index");
+    let Ok(indexes) = std::fs::read_dir(&indexes) else {
+        return false;
+    };
+    for index in indexes.flatten() {
+        // Cargo's index cache path for a crate: the first two characters, then the next two.
+        // cargo 为某个 crate 缓存的索引路径：前两个字符，再接后两个字符。
+        let entry = index
+            .path()
+            .join(".cache")
+            .join("ni")
+            .join("ch")
+            .join("nichlink-toolchain");
+        let Ok(text) = std::fs::read(&entry) else {
+            continue;
+        };
+        if String::from_utf8_lossy(&text).contains(&wanted) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The line a creation reply owes a caller whose manifest will not resolve offline (audit `F8`).
+/// 生成回复欠调用方的那句话：当清单在离线时解析不了时（审计 `F8`）。
+///
+/// `Registry` is the right default for a tool that is not inside a checkout — but only for a release
+/// that **is published**. The round that found this measured `cargo build --offline` failing with
+/// `no matching package named nichlink-toolchain` on a freshly generated project, i.e. the first
+/// impression scenario failing at its first command, silently. The manifest cannot fix itself; the
+/// reply can say what happened, name the check it ran, and give the two ways out.
+/// 对不在检出内的工具，`Registry` 是对的默认值——但只对**已发布**的那一版成立。发现这条缺陷的那一轮实测：
+/// 刚生成的项目上 `cargo build --offline` 报 `no matching package named nichlink-toolchain`，也就是
+/// **第一印象场景在第一条命令上悄悄失败**。清单自己无法补救；回复可以说明发生了什么、点名它做的检查，
+/// 并给出两条出路。
+pub fn offline_source_warning(
+    source: &DependencySource,
+    version: &str,
+    cargo_home: &Path,
+) -> Option<String> {
+    let DependencySource::Registry = source else {
+        return None;
+    };
+    if registry_release_present(version, cargo_home) {
+        return None;
+    }
+    Some(format!(
+        "offline     nichlink-toolchain {version} is not in the local registry cache \
+         ({}), so `cargo build --offline` here cannot resolve it yet — build once online, or \
+         regenerate with `dependency: \"git\"` (`git: \"<url>\"` for another repository), or run \
+         this tool from a NichLink checkout to get `path` dependencies instead",
+        cargo_home.display()
+    ))
+}
+
 /// The `(runtime, build)` dependency requirement strings for a generated
 /// manifest, in the two lines `Cargo.toml` needs.
 /// 生成清单所需的 `(runtime, build)` 两行依赖声明，即 `Cargo.toml` 要的两条。

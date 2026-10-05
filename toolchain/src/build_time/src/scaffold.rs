@@ -23,7 +23,7 @@ pub use install::{
 };
 pub use project::{
     DependencySource, ProjectKind, create_project, dependency_specs, detected_source,
-    project_files, requested_source,
+    offline_source_warning, project_files, registry_release_present, requested_source,
 };
 pub use snippets::{
     BLINK_SNIPPET_FILE, Editor, NVIM_SNIPPET_FILE, SNIPPET_FILE, editor_snippets,

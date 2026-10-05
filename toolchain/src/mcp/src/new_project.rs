@@ -114,16 +114,21 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
         Path::new(env!("CARGO_MANIFEST_DIR")),
         &std::env::current_exe().unwrap_or_default(),
     )?;
+    // Audit `F8` follow-up: a manifest that names the published release only resolves offline from a
+    // warm registry cache. When this machine has no such cache entry, the reply says so instead of
+    // letting the generated project fail at its first `cargo build --offline` — the check is local
+    // and deterministic (see `offline_source_warning`), so it can be made on every creation.
+    // 审计 `F8` 续：指向已发布那一版的清单，只有在注册表缓存已预热时才能离线解析。这台机器上没有那条缓存
+    // 时，回复就说出这件事，而不是让生成出来的项目在第一条 `cargo build --offline` 上失败——这项检查是
+    // 本地且确定的（见 `offline_source_warning`），因此每次生成都可以做。
+    let warning =
+        scaffold::offline_source_warning(&source, env!("CARGO_PKG_VERSION"), &cargo_home());
     if apply {
         if requests.is_empty() {
             scaffold::create_project(&target, &package, kind, &source)?;
-            return Ok(applied(
-                root,
-                &target,
-                &package,
-                kind,
-                &produced(&target)?,
-                &[],
+            return Ok(with_warning(
+                applied(root, &target, &package, kind, &produced(&target)?, &[]),
+                &warning,
             ));
         }
         // Faces make this two steps, so the whole project is built beside the destination and
@@ -162,13 +167,9 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
                     .map(|()| faces)
             });
         return match outcome {
-            Ok(faces) => Ok(applied(
-                root,
-                &target,
-                &package,
-                kind,
-                &produced(&target)?,
-                &faces,
+            Ok(faces) => Ok(with_warning(
+                applied(root, &target, &package, kind, &produced(&target)?, &faces),
+                &warning,
             )),
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&staging);
@@ -192,10 +193,41 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     let outcome = scaffold::create_project(&staged, &package, kind, &source)
         .and_then(|()| add_faces(&staged, &requests))
         .and_then(|faces| produced(&staged).map(|files| (files, faces)));
-    let report =
-        outcome.map(|(files, faces)| preview(root, &target, &package, kind, &files, &faces));
+    let report = outcome.map(|(files, faces)| {
+        with_warning(
+            preview(root, &target, &package, kind, &files, &faces),
+            &warning,
+        )
+    });
     remove_copy(root, &work);
     report
+}
+
+/// Append the offline warning, when there is one, to whichever reply shape was produced.
+/// 有离线警告时，把它附到任何一种形状的回复后面。
+///
+/// One place builds the line (`scaffold::offline_source_warning`) and one place appends it, so the
+/// preview and the write cannot disagree about what the caller is being told.
+/// 行在一处构建（`scaffold::offline_source_warning`）、在一处附加，因此预览与落盘不可能对"调用方被告知了
+/// 什么"说法不一。
+fn with_warning(report: String, warning: &Option<String>) -> String {
+    match warning {
+        Some(line) => format!("{report}{line}\n"),
+        None => report,
+    }
+}
+
+/// This machine's cargo home, which decides whether the published release resolves offline.
+/// 这台机器的 cargo home——它决定已发布的那一版能否离线解析。
+fn cargo_home() -> PathBuf {
+    std::env::var_os("CARGO_HOME").map_or_else(
+        || {
+            std::env::var_os("HOME")
+                .map_or_else(|| PathBuf::from("."), PathBuf::from)
+                .join(".cargo")
+        },
+        PathBuf::from,
+    )
 }
 
 /// What an apply says: where the project landed, every file it wrote, the faces it now

@@ -723,3 +723,82 @@ fn the_creation_reply_carries_the_initial_census() {
     assert!(failed || listed.contains("app"), "{listed}");
     let _ = std::fs::remove_dir_all(fixture.path.join("app"));
 }
+
+/// A birth that cannot resolve offline says so instead of failing at the first command (audit `F8`).
+/// 离线解析不了的出生会说出来，而不是在第一条命令上失败（审计 `F8`）。
+///
+/// The round that found this measured `cargo build --offline` failing with `no matching package named
+/// nichlink-toolchain` on a freshly generated project whose manifest named the published release —
+/// the first-impression scenario failing silently at `cargo build`. The check behind the line is
+/// local (a registry-cache lookup), so it is made here against a fabricated cargo home: an empty one
+/// must warn, one holding the release must not.
+/// 发现这条缺陷的那一轮实测：清单指向已发布那一版的刚生成项目上，`cargo build --offline` 报
+/// `no matching package named nichlink-toolchain`——第一印象场景在 `cargo build` 上悄悄失败。这句话背后
+/// 的检查是**本地**的（查注册表缓存），因此这里用伪造的 cargo home 来钉：空的那份必须警告，装着这一版的
+/// 那份不许警告。
+#[test]
+fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later() {
+    let version = env!("CARGO_PKG_VERSION");
+    let home = std::env::temp_dir().join(format!("new-project-cargo-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    let source = crate::build_time::scaffold::DependencySource::Registry;
+
+    // Empty cache: the warning names the version, where it looked, and both ways out.
+    // 空缓存：警告点名版本、它查过的位置，以及两条出路。
+    let warning = crate::build_time::scaffold::offline_source_warning(&source, version, &home)
+        .expect("an empty cache cannot resolve the release");
+    assert!(
+        warning.contains(version)
+            && warning.contains("registry cache")
+            && warning.contains("dependency: \"git\""),
+        "the line names the version, the check, and a way out: {warning}"
+    );
+
+    // An **archive alone is not an answer**: this machine holds the `.crate` of a release that was
+    // deleted from the index, and `cargo build --offline` still fails on a project naming it — so an
+    // archive must not clear the warning.
+    // **只有存档不算答案**：这台机器上有那份已被从索引删除的版本的 `.crate`，而引用它的项目上
+    // `cargo build --offline` 依然失败——因此存档不许解除这条警告。
+    let cache = home.join("registry/cache/index.crates.io-0000000000000000");
+    std::fs::create_dir_all(&cache).expect("the cache directory");
+    std::fs::write(
+        cache.join(format!("nichlink-toolchain-{version}.crate")),
+        b"x",
+    )
+    .expect("the archive");
+    assert!(
+        crate::build_time::scaffold::offline_source_warning(&source, version, &home).is_some(),
+        "an archive without an index entry does not resolve offline"
+    );
+
+    // A warm **index** cache: nothing to say. That is the state cargo resolves a version from.
+    // 索引缓存已预热：无话可说——那才是 cargo 据以解析某个版本的状态。
+    let index = home.join("registry/index/index.crates.io-0000000000000000/.cache/ni/ch");
+    std::fs::create_dir_all(&index).expect("the index cache directory");
+    std::fs::write(
+        index.join("nichlink-toolchain"),
+        format!("{{\"name\":\"nichlink-toolchain\",\"vers\":\"{version}\"}}\n"),
+    )
+    .expect("the index entry");
+    assert!(
+        crate::build_time::scaffold::offline_source_warning(&source, version, &home).is_none(),
+        "a version the index cache carries resolves offline, so there is nothing to warn about"
+    );
+
+    // And a source that carries its own bytes never warns: `path` and `git` do not need the cache.
+    // 而自带字节的来源从不警告：`path` 与 `git` 不需要缓存。
+    for other in [
+        crate::build_time::scaffold::DependencySource::Local {
+            workspace: std::path::PathBuf::from("/tmp"),
+        },
+        crate::build_time::scaffold::DependencySource::Git {
+            url: "https://example.invalid/x".to_owned(),
+        },
+    ] {
+        assert!(
+            crate::build_time::scaffold::offline_source_warning(&other, version, &home).is_none(),
+            "{other:?} resolves without a registry cache"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}
