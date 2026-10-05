@@ -1137,3 +1137,19 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 **下一轮的一次性实验（写死）**：在 `build_output_is_current` 里把 `stored / recomputed / raw 清单 / scan 路径`
 打在**同一行**，跑一次那条钉子，直接读出"谁写的指纹、两侧差在哪、raw 是否把新文件算进去"。
 
+### M6 §5.2 T1（第四轮）：一次性实验读出了真正的前置缺陷
+
+按上一轮写死的方式做**同一行打印**（`stored / recomputed / raw / scan`），一次跑完得出三件事：
+① 全仓只有一个 `build_output_is_current`（`scope_view.rs` 里那个，`tree_delta.rs:106` 调的就是它）；
+② 两行 ONELINE 都在新增 `dial` **之前**，也就是说第二、三次搜索**根本没再查新鲜度**——因为第一次搜索时
+`record_face_lines` 就已返回空答案，而我的规则把它当成了最终答案，后面的代码路径根本没走到；
+③ **判错的位置是第一次断言**（`search_tests.rs:89`，查询 `root/button` 期待 `[ok]`）。
+⇒ 真正的事实：**`record_face_lines` 对 `root/button` 这个逻辑路径没有匹配到任何一行**，于是返回空。规则关闭时
+这没关系（空答案让位给推导，推导按逻辑路径找到了那个面 ⇒ `[ok]` ✓）；规则一开，这份空答案就变成
+`no matches` ⇒ 断言红 ✗✗。
+⇒ 因此这一刀的前置缺陷不是"新鲜度不覆盖新增文件"，而是：**记录路径的匹配规则比推导窄**。今天不出错，只因为
+空答案会让位。修好匹配，空答案才真的意味着"没有这个面"，"空答案即最终"才既对又省。
+**已回退**（回到 `e0ae9d5` + 文档），`search_tests` 18 项全绿。
+**下一轮写死的一次性实验**：在 `record_face_lines` 里打印**一行**：`query / 行数 / 前 3 行的
+(logical_path, kind, registry_name, source) 拼写 / 是否命中`，看 `root/button` 为什么没被匹配上。
+
