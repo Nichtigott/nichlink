@@ -840,6 +840,29 @@ fn record_source_lines(
     Ok(Some(lines))
 }
 
+/// The identity the face in this file carries **now** (audit `T1`).
+/// 这份文件里的面**此刻**携带的身份（审计 `T1`）。
+///
+/// Parsed with the kernel's own face reader and hashed with the build's own identity rule, so a
+/// record-answered row and a derived row cannot disagree about what "re-identified" means. `None` when
+/// the file cannot be read or parsed: the caller then falls back to the recorded identity and the reply
+/// keeps saying the build it describes is stale.
+/// 用内核自己的面读取器解析、用构建自己的身份规则散列，因此"记录作答的行"与"推导出来的行"不可能对
+/// "re-identified"给出两种意思。文件读不到或解析不了时回 `None`：调用方退回记录里的身份，而回复继续说明
+/// 它所描述的那次构建已经陈旧。
+fn current_identity(root: &Path, row: &crate::build_time::PruningRow) -> Option<NodeId> {
+    let namespace = crate::mcp::registry::namespace(root).ok()?;
+    let text = std::fs::read_to_string(root.join("src").join(&row.source)).ok()?;
+    let face = crate::mcp::consistency::one_face(&text).ok()?;
+    // `field` and not `string`: the declaration writes `kind: X` and the kernel's face reader keeps
+    // that as the field's raw value (measured: `string("kind")` is `None` here while
+    // `field("kind")` is `Some("RenamedButton")`).
+    // 用 `field` 而不是 `string`：声明写的是 `kind: X`，内核的面读取器把它保留为字段的原始取值（实测：
+    // 这里 `string("kind")` 是 `None`，而 `field("kind")` 是 `Some("RenamedButton")`）。
+    let kind = face.field("kind").or_else(|| row.kind.clone())?;
+    Some(NodeId::from_namespaced_path(&namespace, &row.source, &kind))
+}
+
 fn record_face_lines(
     root: &Path,
     query: &str,
@@ -859,10 +882,29 @@ fn record_face_lines(
         by_id.entry(row.id).or_insert(row);
     }
     let built = TreeDelta::read(root);
+    // A **stale** record no longer describes this tree, and every verdict below is relative to it:
+    // the round's `kind`-change pin needs the derivation to see that a face was re-identified, and the
+    // `added since build` pin needs it to see a face the build never saw. Presenting the old rows with
+    // a warning is what a *listing* may do; a **name lookup with verdicts** may not, because the caller
+    // asked what is there now.
+    // **陈旧**的记录不再描述这棵树，而下面每条裁决都是相对它说的：那一轮的 `kind` 变更钉子需要推导来看出
+    // 某个面被重新识别过，`added since build` 钉子需要它看见构建从未见过的面。带上警告把旧行摆出来，是一份
+    // **清单**可以做的；而**带裁决的名字查找**不可以——调用方问的是现在有什么。
     let mut lines = Vec::new();
     for (id, row) in &by_id {
+        // Four spellings, and the fourth is the one this used to be missing: `path` is what the
+        // **declaration** wrote (often `-`, because a macro-derived face does not state one), while
+        // `logical_path` is the path every other tool reports and the one a caller has in hand. Without
+        // it, `search {query: "root/button"}` found nothing in the record and fell back to deriving —
+        // which is why the empty-answer rule could not be trusted: an empty record answer did not mean
+        // "no such face", it meant "this record reader cannot see the spelling you asked for".
+        // 四种拼写，而第四种正是这里过去缺的那一种：`path` 是**声明**写下的（常常是 `-`，因为宏派生的面不
+        // 写它），而 `logical_path` 是其它每个工具报告的那个路径、也是调用方手里有的那个。少了它，
+        // `search {query: "root/button"}` 在记录里什么都找不到、退回推导——这正是"空答案"不能信的原因：
+        // 记录答空并不等于"没有这个面"，而是"这个记录读者看不见你问的那种拼写"。
         let declared = [
             row.path.as_deref(),
+            row.logical_path.as_deref(),
             row.kind.as_deref(),
             row.registry_name.as_deref(),
         ];
@@ -874,7 +916,20 @@ fn record_face_lines(
             continue;
         }
         if *hits < limit {
-            lines.push(record_face_line(*id, row, &built));
+            // A stale record still answers the **name** (that is this reader's whole point), but its
+            // row describes the build, not the tree: the identity to judge is the one the file carries
+            // **now**, and deriving it costs one parse of the one file this row is about. Without
+            // this, a `kind` changed in place came back `[ok]` — the record's own id compared against
+            // itself — while the caller was asking what is there now.
+            // 陈旧的记录照样回答**名字**（这正是这个读者的意义），但它的行描述的是那次构建、不是这棵树：要裁决
+            // 的身份是文件**此刻**携带的那个，而推出它只需解析这一行所指的那一个文件。少了这一步，就地改过的
+            // `kind` 会回 `[ok]`——拿记录自己的 id 与它自己比——而调用方问的是现在有什么。
+            let judged = if built.current {
+                *id
+            } else {
+                current_identity(root, row).unwrap_or(*id)
+            };
+            lines.push(record_face_line(judged, row, &built));
             *hits += 1;
         } else {
             *withheld_hits += 1;
@@ -892,7 +947,7 @@ fn record_face_lines(
     // `[added since build]`——那个面不在任何记录里，因此记录的空答案不可能是最终答案。把空答案定为最终答案
     // 在 50,000 文件上约值 90 s，所以次序是：先让 `build_output_is_current` 覆盖**被发现到的文件集合**，
     // 再让记录的空答案成为最终答案。
-    if lines.is_empty() {
+    if lines.is_empty() && !(built.known && built.current) {
         return Ok(None);
     }
     let mut answer = vec![RECORD_SOURCE.to_owned()];

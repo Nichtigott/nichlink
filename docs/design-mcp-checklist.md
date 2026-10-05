@@ -1153,3 +1153,22 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 **下一轮写死的一次性实验**：在 `record_face_lines` 里打印**一行**：`query / 行数 / 前 3 行的
 (logical_path, kind, registry_name, source) 拼写 / 是否命中`，看 `root/button` 为什么没被匹配上。
 
+### M6 §5.2 T1：落地（匹配补全 · 陈旧记录逐面重认 · 指纹覆盖原始文件集合 · 空答案即最终）
+
+**怎么定的位**：按上一轮写死的方式做**一行打印**：`parsed_kind=None / row_kind=Some("Button") / judged==row_id`
+⇒ 我用来重认身份的读取器没读出 `kind`；再一行打印 ⇒ `one_face` 解析**成功**，但 `string("kind")=None` 而
+`field("kind")=Some("RenamedButton")` ⇒ 改用 `field` ✓。**两次一行打印就定位**（对比前两轮的三次跨运行推理）。
+
+**四件改动**：① **匹配补全**——`record_face_lines` 的匹配拼写加上 **`logical_path`**（`path` 是**声明**写的，
+宏派生的面常是 `-`；`logical_path` 才是别的工具报告、调用方手里有的那个），这正是前四轮追到的"记录路径比推导窄"；
+② **陈旧记录逐面重认**——记录陈旧时，被匹配的行用**它自己那份文件此刻的 `kind`** 重算身份（只解析那一个文件），
+就地改过的 `kind` 因此报 `[re-identified (旧 -> 新)]`，回复照旧说 `build stale`；两条既有钉子（"陈旧记录照样答
+名字"与"改过的 kind 要报重认"）由此同时满足；③ **指纹覆盖原始文件集合**——`discovery_fingerprint` 增加
+`src/**/*.rs` 的**路径**列表（不读内容），于是新增一个没有 `mod` 声明的文件也会让记录陈旧；④ **空答案即最终**
+（仅当 `known && current`）。
+**实测**：t3（2,500 文件）`--query zzz-nothing` **4.54 → 0.75 s**、`child000001` 0.47 → 0.80 s；50k 工作区
+`zzz-nothing` **96.5 → 17.2 s**、`child000001` 12.7 → 16.2 s。
+**如实说明 50k 变慢的那一格**：`build_output_is_current` 现在每次多走一遍 `src/**`，而一次搜索**最多问它三次**
+（delta / `record_source_lines` / `TreeDelta::read`）⇒ 20 成员 × 3 × ~0.25 s ≈ 15 s。**下一刀：一次调用内每个
+成员只问一次新鲜度**（把判定往下传；**不新增缓存**——缓存正是这一带反复出错的形状）。
+

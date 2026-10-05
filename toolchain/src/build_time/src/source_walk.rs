@@ -237,11 +237,27 @@ pub(crate) fn emit_rerun_paths(src: &Path, nodes: &[Node]) {
     }
 }
 
-pub(crate) fn discovery_fingerprint(src: &Path, nodes: &[Node]) -> String {
+pub(crate) fn discovery_fingerprint(src: &Path, scan: &Path, nodes: &[Node]) -> String {
+    // Two inputs, each covering what the other cannot (audit `T1`): the **raw file set** by path alone
+    // — the module tree below cannot see a file that no `mod` declaration names, so a face added
+    // beside the tree used to leave the fingerprint unchanged — and the **recorded files** with
+    // contents, which is what notices an edit. Paths and not contents for the first half: hashing every
+    // file's bytes would make each freshness check read the whole tree once more.
+    // 两份输入，各自覆盖对方覆盖不到的东西（审计 `T1`）：**原始文件集合**只看路径——下面那棵模块树看不见
+    // 没有任何 `mod` 声明的文件，因此在树旁边新增一个面过去不改指纹——以及**记录过的文件**及其内容，后者
+    // 用来发现编辑。前半只取路径不取内容：哈希每个文件的字节会让每次新鲜性检查对整棵树多读一遍。
+    let mut raw = Vec::new();
+    visit_rust_paths(scan, &mut raw);
+    raw.sort();
     let mut files = Vec::new();
     collect_source_files(nodes, &mut files);
     files.sort();
     let mut input = Vec::new();
+    for path in &raw {
+        input.extend_from_slice(super::relative_display(src, path).as_bytes());
+        input.push(0);
+        input.push(0xfe);
+    }
     for file in files {
         input.extend_from_slice(super::relative_display(src, &file).as_bytes());
         input.push(0);
@@ -298,4 +314,20 @@ pub(crate) fn collect_rust_sources(
         |_, _| nichlink_kernel::source::Keep::Yes,
         files,
     )
+}
+
+/// Every `.rs` file under `dir`, by path, without reading any of them.
+/// `dir` 下每个 `.rs` 文件的路径，不读取其中任何一个。
+fn visit_rust_paths(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            visit_rust_paths(&path, into);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            into.push(path);
+        }
+    }
 }

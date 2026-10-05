@@ -54,7 +54,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let mut unplaced = Vec::new();
     let nodes = discover_root_reporting(scan, &mut unplaced);
     prime_node_id_cache(manifest, src, &nodes);
-    let discovery_fingerprint = super::discovery_fingerprint(src, &nodes);
+    let discovery_fingerprint = super::discovery_fingerprint(src, scan, &nodes);
     // One entry, resolved once, for both readers below. Pruning and the generated
     // cut table must describe the same file, and they silently stopped doing so
     // when each resolved the entry on its own — `NICH_LINK_ENTRY` reached only
