@@ -1274,7 +1274,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 | 项 | 目标 | 现状 | 具体改动 | 验收（可判定） |
 | --- | --- | --- | --- | --- |
-| **P0.1** | 去掉重复付费 | **代码已在树里**（未提交）：`freshness::verdict(root, out)` 是唯一付费入口；`Verified` 增 `stamp: (usize, u64)`＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；`remembered()` 要求戳匹配；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全改走它；`search::record_source_lines` 本就**收判定**不自己付费 | 见左 | 50k `search --query` **~4.8 s**；`a_published_face_is_ok_and_a_new_one_is_added_since_build` **仍绿**（已验：584 项全绿）；盲区写进文档：窗口内 `cp -p`（保留 mtime）不被发现，窗口 `REUSE_WINDOW_SECONDS` 且仅进程内 |
+| **P0.1** | 去掉重复付费 | **完成**（见 §M7.8）：`freshness::verdict(root, out)` 是唯一付费入口；`Verified` 增 `stamp: (usize, u64)`＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；`remembered()` 要求戳匹配；`begin_answer()` 让三个读取方**每成员共享一遍戳**（计数：40→20 次哈希、60→20 次戳）；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全改走它 | 50k `search --query` **11.28 → 7.53 s（1.50×）**（同一会话交错测；本机比上轮慢 1.4×，换算≈5.3 s） | `a_published_face_is_ok_and_a_new_one_is_added_since_build` **绿**、`--features mcp` 584 项全绿、两面 clippy + 全工作区测试 + `--check-table` 全绿；盲区写进文档：戳每答案只走一遍（同答案内的并发编辑不被发现，与窗口本来的暴露相同）、窗口内 `cp -p`（保留 mtime）不被发现，窗口 `REUSE_WINDOW_SECONDS` 且仅进程内 |
 | **P0.2** | 并行 `discover_root` | `source_walk::discover_root_reporting` 逐目录递归、单线程（每成员 ~40 ms） | 目录项按序取回后**按文件并行**解析，**子节点与 `unplaced` 按路径序合并**（与 K2 的 `parallel_map` 同形） | 同一棵树上**计划与记录逐字节相同**；50k 省 ~0.75 s（→ ~4.0–4.5 s） |
 | **P0.3**（**待裁**） | 按答案验鲜 | 现在按"整棵树"验 | `record_face_lines` 只对**它点到的行**读文件比 `source_hash`；答案加一行 `verified N named row(s)`；"整棵树新鲜吗"不再有任何一次调用回答（写进文档） | 50k `search --query` **≤1 s**；命中查询只读命中文件；钉子：答案必须自报验了几行 |
 | **P0.4** | 数据落地 | 数字散在会话里 | `scale-logs/t1-freshness.json`（三段账 + 两次付费 + 并行前后） | 文档表格与 git 对账；**估算与实测分列** |
@@ -1355,4 +1355,30 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 ### §M7.7 P0.1 现状（本轮）
 
 **代码在树里**（未提交）：`freshness::verdict(root, out)` 成为**唯一付费入口**，`Verified` 增加 `stamp: (usize, u64)`（文件数 + 最新 mtime，只读目录项），`remembered()` 要求戳仍匹配；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全部改走它；`search::record_source_lines` 本来就从 `roots_with_freshness` **收判定**、不自己付费 ✓。**测试 584 项全绿**（含"改动看得见"那条钉子）⇒ 上一轮"共享裁决打红钉子"的问题由**戳**解决。**实测数待补**（下一段）。
+
+### §M7.8 P0.1 落地与实测（2026-10-05，本轮补完）
+
+**一句话**：同一份裁决**每个成员一次**（重复付费清掉），而守卫它的**树戳也每个成员只走一遍**（三个读取方共享一次遍历）；`a_published_face_is_ok_and_a_new_one_is_added_since_build` 仍绿。
+
+**改法（在 §M7.7 那段之上加的一层）**：`begin_answer()` —— 一份答案开始时**只清空戳记忆**（`STAMPS`），**不清核验本身**（复用窗口照旧）。它在两处被调用：`set_policy()`（每次派发调用都经过它，`run_tool` 与 `tool_call` 各一处）与 `roots_with_freshness()`（进程内直接调用的答案从这里开始——测试里的 `search`、一个读取方调另一个，只有这一个边界）。**为什么要多这一层**：戳是**给记忆用的守卫**，而一份答案要问它三遍（`roots_with_freshness` 付费、普查印等级、`TreeDelta::read` 取裁决）⇒ 实测 8.5 s 里有 **2.0 s** 是在为同一个问题走三遍树。共享之后**每成员 1 次哈希 + 1 次戳**。
+
+**机制计数（同一棵树、一次运行，桩打在两处）**：
+
+| 版本 | `build_output_is_current` 调用 | `tree_stamp` 遍历 | 墙钟 |
+| --- | --- | --- | --- |
+| 第五刀（基线，未改） | **40**（20 成员 × 2 读者） | —（当时还没有戳） | 11.28 s |
+| 第六刀，但三个读取方各走一遍戳 | 20 ✓ | **60** | 8.34 s |
+| 第六刀 + 每答案共享一次戳（本轮） | 20 ✓ | **20** ✓ | **7.53 s** |
+
+**实测（同一会话内两臂交错跑，三次取中位；`scale-logs/t1-freshness.json` 是原始记录）**：
+
+| 树 / 查询 | 基线（`c29ffa2`） | 本轮（第六刀） | 比值 |
+| --- | --- | --- | --- |
+| w50 `--query child000001` | 11.276 s | **7.528 s** | **1.50×** |
+| w50 `--query zzz-nothing` | 11.109 s | **7.581 s** | **1.47×** |
+| t3 `--query child000001` | 0.325–0.548 s | 0.344–0.555 s | 不可分（单成员，这一刀省下的约 0.2 s 在噪声之下） |
+
+**必须一起读的两条**：① **绝对秒数不跨会话可比** —— 同一个**基线**二进制在上一次会话里是 **7.90 s**、在本会话里是 **11.28 s**（本机此刻约慢 1.4×），因此本轮只报**同一会话内交错测出的比值**（1.50× / 1.47×），并按这个比例把上轮的数字换算着读（≈5.3 s）✓；② **T1 的 p95 ≤1 s 仍未达**，这一刀只是把"同一件事付两次"（3.5 s）清掉，剩下的 ~4.5 s（20 次内容哈希本身）与 ~2.3 s（哈希之外）都是**下一步**的对象。
+
+**仍未闭合（不许说成做完了）**：P0.2 并行 `discover_root`（上表里"哈希之外"的一块）· P0.3【待裁】按答案验鲜（≤1 s 的唯一路径）· P0.4 数据落地（本节与 `scale-logs/t1-freshness.json` 已落 P0.1 的一半，P0.2 后补全）· P1–P4 全部未动。
 

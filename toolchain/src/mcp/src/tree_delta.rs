@@ -16,7 +16,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
-use crate::build_time::{FaceView, PruningRow, build_output_is_current, read_pruning_manifest};
+use crate::build_time::{FaceView, PruningRow, read_pruning_manifest};
 use nichlink_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;
@@ -103,7 +103,12 @@ impl TreeDelta {
     /// 说出它。
     pub(crate) fn read(root: &Path) -> Self {
         let out = out_dir(root);
-        let current = build_output_is_current(root, &out);
+        // Through the one entry point that pays for the content hash (audit `T1`, cut 6): this reader
+        // and the face/source halves must share one verdict per call, or the same member is hashed
+        // twice — measured as 40 hashes for 20 members, 3.5 s of a 7.9 s answer.
+        // 经由那个**唯一**为内容哈希付费的入口（审计 `T1` 第六刀）：本读者与面半/源码半必须在一次调用内共享
+        // 同一份裁决，否则同一个成员会被哈希两次——实测 20 个成员付了 40 次哈希，占 7.9 s 里的 3.5 s。
+        let current = crate::mcp::freshness::verdict(root, &out);
         Self::read_with(root, current)
     }
 

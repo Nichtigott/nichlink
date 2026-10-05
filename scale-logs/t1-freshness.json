@@ -1,0 +1,34 @@
+{
+  "what": "T1 P0.1: one content verdict per member per answer, guarded by a cheap tree stamp (audit 第六刀)",
+  "when": "2026-10-05",
+  "tree": "target/scale/w50 = 20 members x 2,503 .rs files = 50,060 files, records published per member (`verify`, pipeline only); target/scale/t3 = 1 member x 2,504 files",
+  "protocol": "one fresh process per run: `target/debug/nichlink-mcp --call search --query <q> --root target/scale/<tree>`, wall clock by bash TIMEFORMAT=%R; three runs per arm, arms INTERLEAVED in one session (baseline, cut6, baseline, cut6, ...) so load and page cache hit both arms",
+  "arms": {
+    "baseline": "c29ffa2 (plus the docs commit 7c1eecf): `build_output_is_current` called directly by three readers; the hash is paid twice per member (40 for 20 members)",
+    "cut6": "one paid entry point `freshness::verdict`, `Verified` carries a stamp (file count + newest mtime of `src/**/*.rs`, read from directory entries), `remembered()` only reuses while the stamp still matches, and the stamp walk is taken once per member per answer (`begin_answer` at `set_policy` and at `roots_with_freshness`)",
+    "cut6_three_walks": "the same cut-6 code BEFORE the per-answer stamp memo: the stamp guard was walked by all three readers (60 walks for 20 members)"
+  },
+  "rows": [
+    {"tree": "w50", "query": "child000001", "baseline_s": [10.787, 12.844, 11.276], "baseline_median_s": 11.276,
+     "cut6_three_walks_median_s": 8.343, "cut6_s": [7.651, 6.320, 7.528], "cut6_median_s": 7.528,
+     "ratio": "11.276 / 7.528 = 1.50x"},
+    {"tree": "w50", "query": "zzz-nothing", "baseline_s": [11.109, 10.798, 11.430], "baseline_median_s": 11.109,
+     "cut6_three_walks_median_s": 8.039, "cut6_s": [7.581, 6.514, 8.146], "cut6_median_s": 7.581,
+     "ratio": "11.109 / 7.581 = 1.47x"},
+    {"tree": "t3", "query": "child000001", "baseline_s": [0.548, 0.415, 0.325], "cut6_s": [0.555, 0.399, 0.344],
+     "verdict": "indistinguishable: one member, so the duplicate payment this cut removes is worth ~0.2 s there, below the noise"}
+  ],
+  "mechanism_counts": {
+    "protocol": "instrumented build (eprintln in `build_output_is_current` and in `tree_stamp`), one `--call search --query child000001 --root target/scale/w50` run, counters read from stderr",
+    "baseline_before_this_round": {"build_output_is_current_calls": 40, "note": "20 members x 2 readers, measured in the fifth cut"},
+    "cut6_three_walks": {"build_output_is_current_calls": 20, "stamp_walks": 60},
+    "cut6": {"build_output_is_current_calls": 20, "stamp_walks": 20, "wall_s": 7.843},
+    "reading": "one verdict per member (the duplicate payment is gone) and one stamp walk per member (the three readers share it inside one answer)"
+  },
+  "box_note": "this session's box is about 1.4x slower than the one that measured the fifth cut: the SAME baseline binary measured 11.28 s here against 7.90 s there, so absolute seconds are NOT comparable across sessions. Ratios inside one session are, and the baseline/cut6 pair above was measured interleaved.",
+  "estimation_rule": "the numbers above are all MEASURED. No figure in the checklist's P0 table is an estimate; where an estimate was written down it is labelled as one.",
+  "open": [
+    "T1 acceptance p95 <= 1 s is NOT met (7.5 s on this box, ~5.3 s scaled to the quieter box)",
+    "the remaining cost is the per-member content hash itself (20 x ~0.22 s here) plus ~2.3 s outside the hash, which the fifth cut already located as the second payment now removed; P0.2 (parallel discover) and P0.3 (verify the rows an answer names) are the next two items"
+  ]
+}

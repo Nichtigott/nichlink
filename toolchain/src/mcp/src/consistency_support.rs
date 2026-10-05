@@ -234,7 +234,7 @@ fn published_census(root: &Path) -> Option<String> {
     let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for root in roots {
         let out = crate::mcp::build_evidence::out_dir(&root);
-        if !crate::build_time::build_output_is_current(&root, &out) {
+        if !crate::mcp::freshness::verdict(&root, &out) {
             return None;
         }
         let rows = crate::build_time::read_pruning_manifest(&out).ok()?;
@@ -808,6 +808,15 @@ pub(super) fn published_faces(
 /// 工作区根没有自己的记录，成员才有。判定在这里取一次并往下传，于是一次调用对每个成员只问一次——过去问两次，
 /// 而在 50,000 文件上那就是剩下的全部成本。
 pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool)> {
+    // This is where a record-reading answer starts for every in-process caller — the dispatched
+    // tools get their own boundary from `set_policy`, but a direct call (`search` in a test, one
+    // reader calling another) has only this one. Opening the answer here is what lets the three
+    // readers below share one stamp walk per member while a stamp taken for a *previous* answer can
+    // never vouch for this tree (audit `T1`, cut 6).
+    // 对每个进程内调用方来说，读记录的一次答案就是从这里开始的——派发的工具由 `set_policy` 给出自己的
+    // 边界，而直接调用（测试里的 `search`、一个读取方调另一个）只有这里。在这里开启答案，正是让下面三个
+    // 读取方共用"每成员一遍戳"、同时让**上一份**答案取的戳绝不为此树作保的东西（审计 `T1` 第六刀）。
+    crate::mcp::freshness::begin_answer();
     let roots = match crate::mcp::workspace::scope(root) {
         Ok(crate::mcp::workspace::Scope::Package(_)) => vec![root.to_path_buf()],
         Ok(crate::mcp::workspace::Scope::Workspace(members)) => {
@@ -818,10 +827,8 @@ pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool
     roots
         .into_iter()
         .map(|root| {
-            let current = crate::build_time::build_output_is_current(
-                &root,
-                &crate::mcp::build_evidence::out_dir(&root),
-            );
+            let current =
+                crate::mcp::freshness::verdict(&root, &crate::mcp::build_evidence::out_dir(&root));
             (root, current)
         })
         .collect()
