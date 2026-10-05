@@ -1268,25 +1268,66 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 ### §M7.2 计划（四段；执行清单住在 todo 工具，此处是依据与判据）
 
-| 项 | 目标 | 验收 |
+**总预算锚点（都是实测，不是估算）**：单 crate 构建 `103/1003/4644/10003 面 = 1.56/11.66/59.78/141.64 s`（构建脚本占 **73%** ⇒ **~14 ms/面**）· 50k 工作区 = **50,060 文件 / 19 MB**，全读 **0.62 s**、读+sha256 **0.68 s** · 50k `search --query` 现状 **7.9 s**（`c29ffa2`）· 同一裁决曾付 **40 次**哈希（20 成员 × 2），去掉后实测到过 **4.81 s** · T1 验收线 **p95 ≤1 s**（清单原线 ≤3 s）· 生态 crate 文件数分位：**p50 11 · p90 82 · p99 310 · max 1726** · 真宿主面密度 **0.31 面/文件**（`examples/control-button` 13 文件 / 4 面）。
+
+#### P0 性能收尾（先把"同一件事付两次"清掉）
+
+| 项 | 目标 | 现状 | 具体改动 | 验收（可判定） |
+| --- | --- | --- | --- | --- |
+| **P0.1** | 去掉重复付费 | **代码已在树里**（未提交）：`freshness::verdict(root, out)` 是唯一付费入口；`Verified` 增 `stamp: (usize, u64)`＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；`remembered()` 要求戳匹配；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全改走它；`search::record_source_lines` 本就**收判定**不自己付费 | 见左 | 50k `search --query` **~4.8 s**；`a_published_face_is_ok_and_a_new_one_is_added_since_build` **仍绿**（已验：584 项全绿）；盲区写进文档：窗口内 `cp -p`（保留 mtime）不被发现，窗口 `REUSE_WINDOW_SECONDS` 且仅进程内 |
+| **P0.2** | 并行 `discover_root` | `source_walk::discover_root_reporting` 逐目录递归、单线程（每成员 ~40 ms） | 目录项按序取回后**按文件并行**解析，**子节点与 `unplaced` 按路径序合并**（与 K2 的 `parallel_map` 同形） | 同一棵树上**计划与记录逐字节相同**；50k 省 ~0.75 s（→ ~4.0–4.5 s） |
+| **P0.3**（**待裁**） | 按答案验鲜 | 现在按"整棵树"验 | `record_face_lines` 只对**它点到的行**读文件比 `source_hash`；答案加一行 `verified N named row(s)`；"整棵树新鲜吗"不再有任何一次调用回答（写进文档） | 50k `search --query` **≤1 s**；命中查询只读命中文件；钉子：答案必须自报验了几行 |
+| **P0.4** | 数据落地 | 数字散在会话里 | `scale-logs/t1-freshness.json`（三段账 + 两次付费 + 并行前后） | 文档表格与 git 对账；**估算与实测分列** |
+
+#### P1 图成一等产物（"索引"的正确形状：产物 + 异步刷新，不是搜索引擎）
+
+| 项 | 目标 | 现状 | 具体改动 | 验收 |
+| --- | --- | --- | --- | --- |
+| **P1.1** | 图有产物 | 图信息散在 `pruning_manifest`（`parent_node`/`calls`/`logical_path`）、`file_manifest`、MIR 调用图 | 构建期在内存建图（节点＝面/文件，边＝`parent`/`call`/`uses`/`graft`），并发布 **`graph_edges.tsv`**：`from<TAB>to<TAB>kind`；头部带**节点/边计数 + 内容哈希** | 与 `pruning_manifest` 事实一致（钉子）；`registry --full` 逐字节不变 |
+| **P1.2** | 写路径异步刷新 | 无 | ① **我们的写路径**（`apply`/`new_project`/CLI `check`/Studio 保存）落盘后刷新；② **外部编辑**（编辑器/`cp`/`git`）不靠监听，靠 **stamp 差分**（廉价 walk）在查询时发现"落后" | 保存后终端出现成功行（P2.2）；外部编辑在**不**触发刷新的情况下被 P2.3 报出来 |
+| **P1.3** | MCP `graph` 读工具 | 无 | `graph {query, direction, depth}`：给节点/边/扇入扇出/**强连通分量**；输出有界（`withheld` 带出路）；**不做倒排索引**（§7 红线） | 承诺面（schema）与能力面对上；答案自报 generation 与出处 |
+
+#### P2 异步的信号对齐（维护者点名的机制）
+
+| 项 | 目标 | 具体改动 | 验收 |
+| --- | --- | --- | --- |
+| **P2.1** | generation + 就绪 | `graph.generation` 单行：`generation\tcontent_hash\tfiles\tfaces\tfinished_at`，**temp + rename** 原子写；**没有它 = 没就绪** | 钉子：截断/半写的 generation **必须被拒**（不猜） |
+| **P2.2** | 终端明确成功行 | 写路径结束打印：`graph updated: generation N, X file(s), Y face(s), <hash>`；MCP 回复里同形一行 | 文本被钉子钉住（形状是承诺） |
+| **P2.3** | 落后即报，不重试 | `search`/`registry`/`consistency`/`graph` 启动时比 generation 与当前 stamp；不一致 ⇒ 回复 `index behind: generation N covers <hash>; run nichlink check (or wait for the refresh)`；**绝不重试、绝不猜** | 钉子：落后时必须出现该行；**且不得**静默走旧图 |
+| **边界（必须写进文档）** | 新鲜度规则**不变** | generation 只服务**图这种加速器**；记录的**逐字节裁决**仍走 `freshness::verdict`，落后时按既有规则"回退推导"——两件事分开说 | 两条规则都各有钉子 |
+
+#### P3 crate 分区（"变形金刚"）
+
+| 项 | 目标 | 具体改动 | 验收 |
+| --- | --- | --- | --- |
+| **P3.1** | 声明 + 锁 | 入口（宿主）手写：`partitions! { namespace = "…"; host = [a, c]; A = [A]; B = [B]; c1 = [c1]; c2 = [c2]; }`（点名的是一棵子树的逻辑路径）；锁 `.nichlink/partitions.lock`：声明哈希 + 每分区（名字/面集合哈希/成员数）+ **形状指纹** | 形状历史 = 锁的 git 历史（`git log -- .nichlink/partitions.lock`） |
+| **P3.2** | 生成器 | 每分区产 `crates/<名>/Cargo.toml`（包名·版本·`[lib] path`·**由 parent 树 + 调用 SCC 导出的 path 依赖**·`[package.metadata.nichlink] shape`）+ 挂载根 `src/__partitions/<名>.rs`（`#[path="…"] pub mod …;` + `pub use host::NICHLINK_NAMESPACE;`）+ `.cargo/config.toml` 的 remap；**三类拒绝**：分区重叠 · 陈旧挂载（面没被任何分区挂载 / 挂载点不存在）· 成环（SCC 报"这几处必须同 crate"） | 三类拒绝各有一枚钉子（红并点名）；生成物**不进 git** |
+| **P3.3**（**待裁**） | 身份不变 | 宿主定义 `pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");`；宏烤 `crate::NICHLINK_NAMESPACE` 而不是 `env!`；门禁：**面文件不得读 `CARGO_PKG_NAME`**；生成器把该常量 re-export 进每个挂载根 | **NodeId 集合分区前后逐字节相同**（总闸门钉子） |
+| **P3.4** | `re` 命令 | `nichlink partition --check`（声明↔锁↔树自洽）/ `--write`（物化）/ `--revert`（打散）/ `--at <commit>`（换回某个形状） | 删生成物后 `git status` 无差异；`--at` 后形状指纹与那个提交的锁一致 |
+| **P3.5** | 发布物化 | `--release` 物化真实包 + **身份/记录/租约迁移**（显式列出哪些记录失效） + `[package.metadata.nichlink] shape`；**CI 两个形状都构建都测**；`cargo publish --workspace`（cargo 自己算顺序） | crates.io 约束：自包含（包外文件被拒，已实测）· ≤10 MB · 包名唯一 · `license-file` 在包内 |
+| **P3.6** | 可视化与会判断 | 阈值取**实测**（>1,000 面 / >310 文件 ⇒ 建议切）；Studio 视图给：建议切口 + 代价（新增 N 项 `pub`、M 处身份迁移）+ **编译时长回填**（分 2/4/8 各量一次） | "100~500 块"这个数**由测量得出**，不照抄；无测量不下结论 |
+
+#### P4 MCP / Studio 接入
+
+| 项 | 目标 | 具体改动 | 验收 |
+| --- | --- | --- | --- |
+| **P4** | 工具化 | MCP：`partitions`（读：当前形状/锁/建议/代价）、`partition`（写：**默认预览**，`apply: true` 才落盘）；Studio：形状视图 + 一键重组 + 时长回填；**是独立工作流，路径明确、不常调整** | `READ_KEYS` 与 schema 对齐（既有钉子）；预览与落盘**说同一件事** |
+
+#### 顺序与依赖
+
+**P0 → P1 → P2 → P3 → P4**。理由：P0 是"同一件事付两次"的止血（立刻见效、且不改语义）；P1/P2 是**图 + 异步 + 信号**，它们是 P3.2 分区器的输入（没有图就没有"按依赖切"）；P3.3 是 P3.2 的前置（不改命名空间就会改身份）；P3.5/P4 依赖 P3.1–P3.4。**P0.3 与 P3.3 两处等维护者裁**，其余可并行推进。
+
+#### 风险登记（每条都有缓解）
+
+| 风险 | 症状 | 缓解 |
 | --- | --- | --- |
-| **P0.1** 去掉重复付费 | 带**廉价戳**的进程内记忆：戳＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；戳不匹配即重新付费 | 50k `search --query` 7.9 → **~4.8 s**；**钉子 `a_published_face_is_ok_and_a_new_one_is_added_since_build` 必须仍绿** |
-| **P0.2** 并行 `discover_root` | 递归解析按文件并行（先确认顺序/共享状态） | 50k → ~4.0–4.5 s；**摘要逐字节守恒** |
-| **P0.3**（**待裁**）按答案验鲜 | 只验"这份答案点到的记录行" | 50k ≤1 s；答案写明验了哪几行 |
-| **P0.4** 落数据 | 三段账与两次付费的数字进 `scale-logs/`，估算与实测分开写 | 文档与 git 对账 |
-| **P1.1** 图成一等产物 | 新增 `graph.tsv`：节点＝面/文件，边＝`parent`/调用/`uses`，各带哈希 | 与 `pruning_manifest` 一致；新增钉子 |
-| **P1.2** 写路径异步刷新 | 落盘后后台重算 + 写 generation | 终端给出明确成功行 |
-| **P1.3** MCP `graph` 读工具 | 依赖/扇入扇出/强连通分量 | **不做倒排索引**（§7 红线） |
-| **P2.1** generation + 就绪标记 | 写一半没有标记 | 钉子：截断的图文件必须被拒 |
-| **P2.2** 成功行 | `graph updated: generation N, X file(s), Y face(s)` | 终端可见 |
-| **P2.3** 落后即报 | 读工具在 generation 落后时明确报 "index is behind"，**不重试不猜** | 钉子 |
-| **P3.1** 声明面 + 锁 | 入口 `partitions!{…}`（宿主所有）+ `.nichlink/partitions.lock`（形状指纹） | 形状历史 = 锁的 git 历史 |
-| **P3.2** 生成器 | 幽灵 crate（`#[path]` + remap）+ 依赖导出（parent 树 + 调用 SCC）+ **重叠/陈旧挂载/成环**三类拒绝 | 生成物不进 git |
-| **P3.3**（**待裁**）命名空间 | `env!("CARGO_PKG_NAME")` → **根常量** + 门禁（面文件不得读它） | NodeId 集合分区前后**逐字节相同** |
-| **P3.4** `re` 命令 | 换形状＝`git checkout <commit> -- 声明` + 重新生成；`--revert` 打散 | 删生成物后 `git status` 无差异 |
-| **P3.5** 发布物化 | `--release` 物化 + `[package.metadata.nichlink] shape`；CI **两个形状都构建都测** | `cargo publish --workspace` 绿 |
-| **P3.6** Studio 可视化 | 按实测阈值（>1,000 面 / >310 文件）给建议切口与代价 | 代价 = 新增 N 项 `pub`、M 处身份迁移、预计并行收益 |
-| **P4** MCP/Studio 接入 | `partitions`（读）/`partition`（写，默认预览） | 承诺面与能力面对上 |
+| 身份变化 | 分区后 `NodeId` 变 ⇒ 记录/租约失效 | P3.3（根常量）+ **逐字节相同**的钉子（总闸门） |
+| 陈旧挂载 | 新面没被任何分区挂载 ⇒ 静默不编译 | 构建脚本集合对差 `compile_error!`；`partition --check` 进 CI |
+| 并发写 | MCP/CLI 写生成物时有人在构建 | 生成物一律 temp + rename；构建期只读 |
+| 两个形状 | 测的不是发的 | CI 两个形状都构建都测（P3.5） |
+| 缓存失效 | 改一个面重跑整个构建脚本 | K5 增量（按面/子树指纹重渲染），把这句从"目标"变"事实" |
+| 假绿 | generation 落后却给出旧答案 | P2.3 落后即报 + 钉子；`cargo package --list` 那类"看起来成功"的步骤一律不当作绿灯 |
+
 
 ### §M7.3 异步与信号对齐（维护者点名的机制）
 
