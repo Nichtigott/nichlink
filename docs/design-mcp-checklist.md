@@ -984,6 +984,21 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 `grep -c '^offline'` = **0** ✓；只放 `.crate` 不放索引 ⇒ 仍警告 ✓（钉子
 `new_project_tests::a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later`）。
 
+### §3 续（本轮）：把修复做成"本地确实能跑起来"
+
+上一轮只做到**说出来**（警告），本轮做到**跑得起来**：`new_project` 新增 `path` 键——**点名一个 NichLink 检出**
+（`kernel/` 与 `toolchain/` 相邻，校验过），生成的清单就写指向它的 `path` 依赖。这条拼写正是给**装出来的**
+工具用的：它既不在检出内、又拿不到注册表缓存，以前只能生出一份 `cargo build --offline` 必败的清单。
+
+**边界**：① `path` 单独给就是来源（本地拼写，读它到不了网络，拒绝只会让调用方把同一件事写两遍）；② 目录不像
+检出 ⇒ **按名拒绝**并点名它找过的两个目录；③ `dependency: "registry"` 与 `path` 同时给 ⇒ **按名拒绝冲突**，
+不静默偏向一个；④ 只有注册局来源才谈离线警告，`path`/`git` 自带字节、从不警告。
+
+**出生证明实测（创建 → 构建 → 普查，全部离线）**：从检出外 `/tmp/nlmcp4` 生成 → `cargo build --offline`
+**Finished**（21.37 s）→ `registry` 答 `namespace probe / faces 0`（library 模板未声明面，符合预期）。
+`--list` 的字节预算被这次新增顶到 5001 ⇒ 削 `SHAPES_SHORT` 一句散文到 **4,976**（预算是预算，钉子逼着做取舍）。
+复核记录 `target/hardbug-runs/offline-birth.txt`。
+
 **仍开**：① 回复**无条件**说出"选了哪条来源"（现在只在有问题时说；无条件那句会动到回复形状的既有钉子，
 留下一轮）；② 装出来的二进制若既不在检出内、又拿不到缓存，仍只能靠这条警告指路——真正的解除要么发布
 0.2.0，要么调用方自己给 `git`/`path`。

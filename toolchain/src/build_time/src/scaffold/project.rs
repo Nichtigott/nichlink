@@ -106,6 +106,43 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
     }
 }
 
+/// The checkout a request points at, or the detected one (audit `F8` follow-up).
+/// 请求指向的检出目录，或检测出来的那一个（审计 `F8` 续）。
+///
+/// Detection answers "am I running from a checkout", and that question has no answer on a machine
+/// where this tool was installed — which is exactly the machine whose generated project could not
+/// build offline (`cargo build --offline` → `no matching package named nichlink-toolchain`, because
+/// the release is unpublished). Naming the checkout makes that machine able to generate a project
+/// that **does** build locally, which is the point of the spelling.
+/// 检测回答的是"我是不是从检出里跑的"，而这个问题在**装出来的**工具上没有答案——而那正是生成项目无法
+/// 离线构建的那台机器（`cargo build --offline` → `no matching package named nichlink-toolchain`，
+/// 因为那一版还没发布）。**点名检出**让那台机器也能生成**本地确实能构建**的项目，而这正是这个拼写的目的。
+///
+/// A named directory must look like a checkout: `kernel/` and `toolchain/` beside each other. That
+/// check is what keeps a typo from becoming a manifest that fails at its first `cargo build`, and the
+/// refusal names both directories it looked for.
+/// 点名的目录必须**像**一个检出：`kernel/` 与 `toolchain/` 相邻。这道检查让一个拼写错误不至于变成一份在
+/// 第一条 `cargo build` 上失败的清单，而拒绝会点名它找过的两个目录。
+fn named_checkout(
+    checkout: Option<&str>,
+    detected: DependencySource,
+) -> Result<DependencySource, String> {
+    let Some(named) = checkout.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(detected);
+    };
+    let workspace = Path::new(named);
+    if workspace.join("kernel").is_dir() && workspace.join("toolchain").is_dir() {
+        return Ok(DependencySource::Local {
+            workspace: workspace.to_path_buf(),
+        });
+    }
+    Err(format!(
+        "`path` is `{named}`, which does not look like a NichLink checkout: `kernel/` and \
+         `toolchain/` are not both inside it. Point it at a checkout (the directory holding both), \
+         or use `dependency: \"registry\"` for the published release. Nothing was created"
+    ))
+}
+
 /// The dependency source a **request** names, or the detected default when it names none.
 /// 一次**请求**点名的依赖来源；一个都没点名时用检测出来的默认值。
 ///
@@ -121,12 +158,22 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
 pub fn requested_source(
     dependency: Option<&str>,
     git: Option<&str>,
+    checkout: Option<&str>,
     tool_manifest_dir: &Path,
     current_exe: &Path,
 ) -> Result<DependencySource, String> {
     let detected = || detected_source(tool_manifest_dir, current_exe);
     let url = git.map(str::trim).filter(|value| !value.is_empty());
     let Some(kind) = dependency.map(str::trim).filter(|value| !value.is_empty()) else {
+        // A named checkout is a source by itself: `path` is local, so reading it cannot reach the
+        // network, and refusing it would only make the caller spell the same thing twice.
+        // 点名检出本身就是一种来源：`path` 是本地拼写，读它到不了网络，拒绝它只会让调用方把同一件事写两遍。
+        if checkout
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return named_checkout(checkout, detected());
+        }
         if url.is_some() {
             return Err(
                 "`git` names a repository, so the request has to say `dependency: \"git\"` as well; \
@@ -137,7 +184,7 @@ pub fn requested_source(
         return Ok(detected());
     };
     match kind {
-        "path" => match detected() {
+        "path" => match named_checkout(checkout, detected())? {
             source @ DependencySource::Local { .. } => Ok(source),
             // Not a fallback to `registry`: the caller asked for this checkout's crates, and
             // quietly handing back a published release would be a different project.
@@ -150,7 +197,17 @@ pub fn requested_source(
                     .to_owned(),
             ),
         },
-        "registry" => Ok(DependencySource::Registry),
+        "registry" => {
+            if checkout.map(str::trim).is_some_and(|value| !value.is_empty()) {
+                return Err(
+                    "`dependency: \"registry\"` and a named `path` are two different sources: keep \
+                     `registry` for the published release, or drop it and let `path` point at a \
+                     checkout. Nothing was created"
+                        .to_owned(),
+                );
+            }
+            Ok(DependencySource::Registry)
+        }
         "git" => Ok(DependencySource::Git {
             url: url.unwrap_or(NICHLINK_REPOSITORY).to_owned(),
         }),
@@ -730,21 +787,24 @@ mod tests {
         let exe = Path::new("/usr/local/bin/nichlink-mcp");
         // Nothing named: the detected default, and here that is the registry — not a git fetch.
         // 什么都没点名：用检测出来的默认值，而这里它是 registry——不是一次 git 拉取。
-        let detected = requested_source(None, None, manifest, exe).expect("the default answers");
+        let detected =
+            requested_source(None, None, None, manifest, exe).expect("the default answers");
         assert!(
             matches!(detected, DependencySource::Registry),
             "an installed binary must not write a manifest that needs a fetch"
         );
         // A URL without the word `git`: refused, because the value alone cannot say what it meant.
         // 给了 URL 却没说 `git`：拒绝，因为光看那个值说不清它是什么意思。
-        let unnamed = requested_source(None, Some("https://example.invalid/x"), manifest, exe)
-            .expect_err("a URL alone is not a decision");
+        let unnamed =
+            requested_source(None, Some("https://example.invalid/x"), None, manifest, exe)
+                .expect_err("a URL alone is not a decision");
         assert!(unnamed.contains("dependency: \"git\""), "{unnamed}");
         // Named: the URL is used, and with no URL the project's own repository is.
         // 点名了：用给的 URL；没给 URL 时用本项目自己的仓库。
         let named = requested_source(
             Some("git"),
             Some("https://example.invalid/x"),
+            None,
             manifest,
             exe,
         )
@@ -754,14 +814,14 @@ mod tests {
             "{named:?}"
         );
         let default_url =
-            requested_source(Some("git"), None, manifest, exe).expect("a default URL");
+            requested_source(Some("git"), None, None, manifest, exe).expect("a default URL");
         assert!(
             matches!(&default_url, DependencySource::Git { url } if url == NICHLINK_REPOSITORY),
             "{default_url:?}"
         );
         // `path` without a checkout is refused rather than silently turned into the registry.
         // 没有检出时 `path` 被拒绝，而不是悄悄换成 registry。
-        let no_checkout = requested_source(Some("path"), None, manifest, exe)
+        let no_checkout = requested_source(Some("path"), None, None, manifest, exe)
             .expect_err("an installed binary has no checkout to point at");
         assert!(
             no_checkout.contains("dependency: \"registry\"")
@@ -770,7 +830,7 @@ mod tests {
         );
         // And an unknown spelling names the three that exist.
         // 未知拼写会点名存在的三种。
-        let unknown = requested_source(Some("crates-io"), None, manifest, exe)
+        let unknown = requested_source(Some("crates-io"), None, None, manifest, exe)
             .expect_err("only three spellings exist");
         for spelling in ["path", "registry", "git"] {
             assert!(unknown.contains(spelling), "{unknown}");

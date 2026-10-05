@@ -111,6 +111,7 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     let source = scaffold::requested_source(
         arguments.get("dependency").and_then(Value::as_str),
         arguments.get("git").and_then(Value::as_str),
+        arguments.get("path").and_then(Value::as_str),
         Path::new(env!("CARGO_MANIFEST_DIR")),
         &std::env::current_exe().unwrap_or_default(),
     )?;

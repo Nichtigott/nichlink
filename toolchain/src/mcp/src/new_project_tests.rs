@@ -802,3 +802,89 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     }
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A tool outside a checkout can still generate a project that builds locally (audit `F8`).
+/// 检出外的工具照样能生成**本地能构建**的项目（审计 `F8`）。
+///
+/// The offline warning says the manifest cannot resolve; this pin is the other half — the spelling
+/// that makes it resolve. It is pinned at the **decision** (`requested_source`) and at the **bytes**
+/// it writes (`dependency_specs`) rather than through a whole creation, because that is the contract:
+/// a named checkout becomes a `path` dependency, a typo is refused by name, and a request naming two
+/// different sources is refused rather than silently preferred. The end-to-end proof (generate from
+/// outside the checkout → `cargo build --offline` → census) is recorded in
+/// `target/hardbug-runs/offline-birth.txt`.
+/// 离线警告说的是"清单解析不了"；这枚钉子钉的是另一半——**让它解析得了**的那个拼写。它钉在**决定**
+/// （`requested_source`）与它写下的**字节**（`dependency_specs`）上，而不走整条创建流程，因为契约就在这里：
+/// 点名检出会变成 `path` 依赖、拼错按名被拒、一次点名两个来源被拒而不是静默偏向。端到端证明（从检出外生成
+/// → `cargo build --offline` → 普查）记在 `target/hardbug-runs/offline-birth.txt`。
+#[test]
+fn a_named_checkout_is_the_way_to_get_dependencies_that_resolve_offline() {
+    use crate::build_time::scaffold::{DependencySource, dependency_specs, requested_source};
+
+    let case = std::env::temp_dir().join(format!("new-project-checkout-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&case);
+    let checkout = case.join("checkout");
+    std::fs::create_dir_all(checkout.join("kernel")).expect("kernel directory");
+    std::fs::create_dir_all(checkout.join("toolchain")).expect("toolchain directory");
+    let manifest = case.join("tool-manifest");
+    std::fs::create_dir_all(&manifest).expect("tool manifest directory");
+    let exe = case.join("bin/nichlink-mcp");
+
+    // A named checkout answers with `path` dependencies into it — with or without `dependency`.
+    // 点名检出会用指向它的 `path` 依赖作答——给不给 `dependency` 都行。
+    for (dependency, checkout_arg) in [
+        (Some("path"), Some(checkout.to_str().unwrap_or_default())),
+        (None, Some(checkout.to_str().unwrap_or_default())),
+    ] {
+        let source = requested_source(dependency, None, checkout_arg, &manifest, &exe)
+            .expect("a named checkout answers");
+        assert!(
+            matches!(&source, DependencySource::Local { workspace } if workspace == &checkout),
+            "{source:?}"
+        );
+        let (runtime, build) = dependency_specs(&source);
+        assert!(
+            runtime.contains(&format!(
+                "path = \"{}\"",
+                checkout.join("toolchain").display()
+            )) && build.contains("path = "),
+            "both lines point at the named checkout: {runtime} / {build}"
+        );
+        assert!(
+            crate::build_time::scaffold::offline_source_warning(
+                &source,
+                env!("CARGO_PKG_VERSION"),
+                &case
+            )
+            .is_none(),
+            "a path dependency carries its own bytes, so there is nothing offline to warn about"
+        );
+    }
+
+    // A typo is refused by name, naming both directories a checkout has.
+    // 拼错按名拒绝，并点名一个检出应有的两个目录。
+    let error = requested_source(Some("path"), None, Some("/tmp"), &manifest, &exe)
+        .expect_err("a directory that is not a checkout");
+    assert!(
+        error.contains("kernel")
+            && error.contains("toolchain")
+            && error.contains("Nothing was created"),
+        "the refusal names what a checkout is: {error}"
+    );
+
+    // Two sources at once is a request to guess; it is refused instead.
+    // 一次点名两个来源等于要求去猜；这里选择拒绝。
+    let error = requested_source(
+        Some("registry"),
+        None,
+        Some(checkout.to_str().unwrap_or_default()),
+        &manifest,
+        &exe,
+    )
+    .expect_err("two sources at once");
+    assert!(
+        error.contains("two different sources"),
+        "the refusal names the conflict: {error}"
+    );
+    let _ = std::fs::remove_dir_all(&case);
+}

@@ -72,7 +72,7 @@ pub const SHAPES_SHORT: &str = "\
   add an object       -> `registry` -> `apply {action: \"add\"}` -> `consistency --specimen` -> `check`\n\
   deepen an object    -> `explain {node}` -> `apply {action: \"deepen\"}` -> `check`\n\
   move or merge       -> `affected` -> `why` (plan half) -> `grafts` -> `apply`\n\
-**Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the clue. On a tree with no registered face, \"the object\" can only mean a *symbol*, so go straight to `search` / `locate` / `read` instead of reading the manuals first.\n\
+**Symptom first**: run the suite you already have (`cargo test`) — the failing assertion's own words are the clue. On a tree with no registered face, \"the object\" can only mean a *symbol*: go to `search` / `locate` / `read` rather than the manuals.\n\
 **`check`'s verdict is the first line of its reply** (`verdict  passed (cargo exit 0)`), not this client's exit code (`0` answered, `1` refused, `2` a usage error).\n\
 **Answer shape**: understanding -> `read --whole`; structural -> bounded.\n\
 One tool's page is `--list <tool>`; the long page is `--shapes`.\n\
