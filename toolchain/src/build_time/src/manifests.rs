@@ -297,6 +297,52 @@ fn visit_shape_fields(src: &Path, nodes: &[Node], rows: &mut Vec<(String, String
     }
 }
 
+/// Write one row per function each source file declares (audit `T1`).
+/// 每份源码文件声明的每个函数写一行（审计 `T1`）。
+///
+/// `search --query` answers two questions from bytes it reads: "is this a **path**" and "is this a
+/// **function name**". Both are facts the build already has in hand, and reading every file in the
+/// tree to re-derive them was measured at **96 s** on a 50,000-file workspace (a query that matched
+/// nothing paid the whole scan, because a matching one exits early on `limit` — so the earlier
+/// "24 s → 14.6 s" figures were partial runs). This manifest is the missing half: paths and names,
+/// published, so the query is a record read.
+/// `search --query` 用它读到的字节回答两个问题："这是不是一个**路径**"、"这是不是一个**函数名**"。两者都是
+/// 构建手里本来就有的事实，而为了重新推出它们去读树里每个文件，在 50,000 文件的工作区上实测 **96 s**（什么
+/// 都没命中的查询要付整次扫描，而命中的那个会因 `limit` 提前退出——所以先前那些"24 s → 14.6 s"是**部分**
+/// 运行）。这份清单就是缺的那一半：路径与名字，发布出来，让查询变成一次记录读取。
+///
+/// A file with no function still gets a row (`function = -`): a reader that matches **paths** must see
+/// every file, or its answer would silently be about the files that happen to declare something.
+/// 没有函数的文件照样有一行（`function = -`）：按**路径**匹配的读者必须看得见每份文件，否则它的答案会静默
+/// 地只关于那些恰好声明了东西的文件。
+pub(crate) fn write_file_manifest(
+    src: &Path,
+    nodes: &[Node],
+    out_dir: &Path,
+) -> Result<(), String> {
+    let mut rows = Vec::new();
+    visit_file_functions(src, nodes, &mut rows);
+    write_file_rows(out_dir.join("file_manifest.tsv"), rows)
+}
+
+fn visit_file_functions(src: &Path, nodes: &[Node], rows: &mut Vec<(String, String, String)>) {
+    for node in nodes {
+        if let Some(file) = &node.file
+            && let Ok(source) = fs::read_to_string(file)
+        {
+            let relative = relative_display(src, file);
+            let symbols = nichlink_kernel::source::function_symbols(&source);
+            if symbols.is_empty() {
+                rows.push((relative.clone(), "-".to_owned(), "-".to_owned()));
+            }
+            for symbol in symbols {
+                rows.push((relative.clone(), symbol.name, "-".to_owned()));
+            }
+        }
+        visit_file_functions(src, &node.children, rows);
+    }
+}
+
 pub(crate) fn write_function_manifest(
     src: &Path,
     nodes: &[Node],
@@ -411,6 +457,21 @@ fn write_rows(
     let mut output = String::from("# node\tsource\tsymbol\n");
     for (id, source, symbol) in rows {
         writeln!(output, "{id}\t{source}\t{symbol}").unwrap();
+    }
+    write_if_changed(path.as_ref(), &output)
+}
+
+/// A record's rows as `(source, name, note)`, in the order the file's own header declares.
+/// 一份记录的行，形如 `(source, name, note)`，按文件自己表头声明的顺序。
+fn write_file_rows(
+    path: impl AsRef<Path>,
+    mut rows: Vec<(String, String, String)>,
+) -> Result<(), String> {
+    rows.sort();
+    rows.dedup();
+    let mut output = String::from("# source\tfunction\tnote\n");
+    for (source, name, note) in rows {
+        writeln!(output, "{source}\t{name}\t{note}").unwrap();
     }
     write_if_changed(path.as_ref(), &output)
 }

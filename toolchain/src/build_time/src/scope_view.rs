@@ -307,6 +307,41 @@ pub struct ShapeRow {
     pub value: String,
 }
 
+/// One function a source file declares, as the file manifest carries it (audit `T1`).
+/// 一份源码文件声明的一个函数，按文件清单携带的样子（审计 `T1`）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileRow {
+    /// The file's path, relative to `src/`.
+    /// 该文件的路径，相对 `src/`。
+    pub source: String,
+    /// The function's name, or `-` for a file that declares none.
+    /// 函数名；一份什么都没声明的文件写作 `-`。
+    pub function: String,
+}
+
+/// Read the file/function facts the last build published (audit `T1`).
+/// 读取上一次构建发布的"文件/函数"事实（审计 `T1`）。
+pub fn read_file_manifest(out_dir: &Path) -> Result<Vec<FileRow>, String> {
+    let path = out_dir.join("file_manifest.tsv");
+    let text = fs::read_to_string(&path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let mut rows = Vec::new();
+    for line in text.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut fields = line.split('\t');
+        let (Some(source), Some(function)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        rows.push(FileRow {
+            source: source.to_owned(),
+            function: function.to_owned(),
+        });
+    }
+    Ok(rows)
+}
+
 /// Read the declaration-shaped facts the last build published.
 /// 读取上一次构建发布的"声明形状"事实。
 pub fn read_shape_manifest(out_dir: &Path) -> Result<Vec<ShapeRow>, String> {

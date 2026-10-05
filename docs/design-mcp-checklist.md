@@ -1092,3 +1092,21 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 下一探针同法：工作区根与一个成员分别打点，找出每成员多出来的那 ~1.8 s。
 复核记录 `target/hardbug-runs/t3-family-record.txt`（工作区数据，不进库）。
 
+### M6 §5.2 T1（第一刀）：`search --query` 的源码那一半走记录
+
+**落地**：① 新增构建期记录 **`file_manifest.tsv`**（每份 `.rs` 一行：`source` + 它声明的函数名；一个函数都没
+声明的文件写 `-`，因为按**路径**匹配的读者必须看得见每份文件）——写入方 `manifests::write_file_manifest`
+（用内核自己的 `function_symbols`），读取方 `build_time::read_file_manifest -> Vec<FileRow>`。
+② `search` 的**源码那一半**改由它作答（`record_source_lines`）：路径与函数名都取自清单，**零文件读取**；
+记录答不了才回退原扫描，预筛规则不变。③ **工作区根**读**成员**的清单（根没有自己的记录），否则对着工作区根的
+查询会退回扫描整棵树。
+**实测**：分段计时把这一半从 **~4 s 打到 0.17 s**（2,500 文件的包）；t3 `--query child000001` 0.47 → 0.51 s。
+
+**本轮回退的一刀（重要，如实记）**：我一度把"记录的空答案在记录新鲜时即为最终答案"做成规则（它让 50k 的
+`--query` 从 **96.5 s 降到 12.8 s**、t3 的 4.5 s 降到 0.50 s）——**被既有钉子当场判红**：
+`search_tests::a_published_face_is_ok_and_a_new_one_is_added_since_build` 在一份**新鲜**记录旁边写下一个新面并
+期待 `[added since build]`，而那个面不在任何记录里 ⇒ **空答案不可能是最终答案**。根因是 **新鲜度不会注意到
+"新增的文件"**。⇒ 次序改成：**先让 `build_output_is_current` 覆盖"被发现到的文件集合"**，再让记录的空答案成为
+最终答案——那一刀约值 90 s（50k）/4 s（2,500 面），是 T1 真正的大头，但建立在前一刀之上。
+复核记录 `target/hardbug-runs/t1-search-record.txt`（工作区数据，不进库）。
+

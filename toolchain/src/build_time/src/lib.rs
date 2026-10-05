@@ -110,9 +110,9 @@ pub(crate) const DEMO_ONLY_FEATURE: &str = "compile_error_demo";
 // 对外表面，保持在调用方已经在用的路径上。
 pub use entry::host_entry_source;
 pub use face_view::{
-    BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views,
+    BuildScopeView, FaceView, FileRow, PruningRow, build_output_is_current, face_views,
     face_views_and_unreadable, face_views_from_pruning, face_views_with_external, read_build_scope,
-    read_pruning_manifest, read_shape_manifest,
+    read_file_manifest, read_pruning_manifest, read_shape_manifest,
 };
 pub use graft_view::{
     DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, OVERLAY_NOTE,
@@ -153,8 +153,8 @@ pub(crate) use face_syntax_check::{
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
 pub(crate) use manifests::{
-    write_function_manifest, write_graft_manifest, write_pruning_manifest, write_shape_manifest,
-    write_source_scope_manifest,
+    write_file_manifest, write_function_manifest, write_graft_manifest, write_pruning_manifest,
+    write_shape_manifest, write_source_scope_manifest,
 };
 pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
 pub(crate) use renderer::render_lib;

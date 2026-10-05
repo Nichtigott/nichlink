@@ -361,37 +361,54 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // 审计 `W6-2` 第②步：不在一个文件的字节里的**名字**，不可能是那个文件里的声明，因此只对文本提到该
     // 查询的文件做词法。每个文件仍然被列出——下面的路径那一半看得到全部——这是预筛绝不能碰的性质。
     let needle = query.to_ascii_lowercase();
-    let files = load_sources_matching(root, |_, text| text.to_ascii_lowercase().contains(&needle))?;
-    for file in &files {
-        if file.relative.to_ascii_lowercase().contains(&query) {
-            if hits < limit {
-                results.push(format!("file  {}", file.relative));
-                hits += 1;
-            } else {
-                withheld_hits += 1;
+    // Audit `T1`: both halves of this question — "is it a **path**" and "is it a **function name**" —
+    // are facts the build already published (`file_manifest.tsv`), so a current record answers them
+    // without reading a single file. Reading them instead was measured at **96 s** on a 50,000-file
+    // workspace for a query that matched nothing; a matching one looked 8× cheaper only because it
+    // exits early on `limit`, which is why the older figures for this tool were partial runs. The
+    // scan below is unchanged for a record that cannot answer, and the pre-filter rule stands: it
+    // decides what is **lexed**, never what is **listed**.
+    // 审计 `T1`：这个问题的两半——"它是不是一个**路径**"、"它是不是一个**函数名**"——都是构建已经发布过的
+    // 事实（`file_manifest.tsv`），因此新鲜的记录不读任何文件就能回答它们。改为现读在 50,000 文件的工作区上
+    // 实测 **96 s**（什么也没命中的查询）；命中的那个看着便宜 8 倍，只因它按 `limit` 提前退出——这也是这个工具
+    // 早先那些数是**部分**运行的原因。记录答不了时下面的扫描保持原样，而预筛的规则照旧：它决定**词法什么**，
+    // 绝不决定**列出什么**。
+    if let Some(lines) = record_source_lines(root, &query, limit, &mut hits, &mut withheld_hits)? {
+        results.extend(lines);
+    } else {
+        let files =
+            load_sources_matching(root, |_, text| text.to_ascii_lowercase().contains(&needle))?;
+        for file in &files {
+            if file.relative.to_ascii_lowercase().contains(&query) {
+                if hits < limit {
+                    results.push(format!("file  {}", file.relative));
+                    hits += 1;
+                } else {
+                    withheld_hits += 1;
+                }
             }
-        }
-        for function in &file.functions {
-            if !function.name.to_ascii_lowercase().contains(&query) {
-                continue;
-            }
-            if hits < limit {
-                // The doc's first line rides along: "the doc says A and the code writes not-A" is
-                // the strongest signal this bridge prints, and the evaluation's arm needed two
-                // requests to put the two halves side by side in every round.
-                // 文档首行随行给出："文档说要 A、代码写着 ¬A"是本桥能打印的最强信号，而评测里那一组每轮都
-                // 要两次请求才把两半并排。
-                let doc = match doc_first_line(&file.source, function.line) {
-                    Some(doc) => format!("  /// {doc}"),
-                    None => String::new(),
-                };
-                results.push(format!(
-                    "fn    {} -> {}:{}{doc}",
-                    function.name, file.relative, function.line
-                ));
-                hits += 1;
-            } else {
-                withheld_hits += 1;
+            for function in &file.functions {
+                if !function.name.to_ascii_lowercase().contains(&query) {
+                    continue;
+                }
+                if hits < limit {
+                    // The doc's first line rides along: "the doc says A and the code writes not-A" is
+                    // the strongest signal this bridge prints, and the evaluation's arm needed two
+                    // requests to put the two halves side by side in every round.
+                    // 文档首行随行给出："文档说要 A、代码写着 ¬A"是本桥能打印的最强信号，而评测里那一组每轮都
+                    // 要两次请求才把两半并排。
+                    let doc = match doc_first_line(&file.source, function.line) {
+                        Some(doc) => format!("  /// {doc}"),
+                        None => String::new(),
+                    };
+                    results.push(format!(
+                        "fn    {} -> {}:{}{doc}",
+                        function.name, file.relative, function.line
+                    ));
+                    hits += 1;
+                } else {
+                    withheld_hits += 1;
+                }
             }
         }
     }
@@ -751,6 +768,78 @@ const DERIVED_SOURCE: &str =
 /// 记录携带了名字匹配与裁决所需的一切——身份、源码路径，以及那三项声明的事实——因此这条路径完全不花
 /// 源码遍历。记录读不了、或其中没有命中时返回 `None`，由调用方改为推导；那不是最后的兜底，而是这个分工
 /// 诚实的那一半：记录**不**携带面的模块，而只匹配模块的查询只能由源码作答。
+/// Answer the path/function half from the published file manifest (audit `T1`).
+/// 由已发布的文件清单回答路径/函数那一半（审计 `T1`）。
+///
+/// `None` means the record cannot answer — absent, stale, or describing no file — and the caller
+/// scans the sources instead. The manifest must describe **every** file, the same rule every reader
+/// in this bridge follows: one that listed only the files carrying functions would answer a path
+/// question about a subset of the tree, which is the silent wrong answer this area keeps producing.
+/// `None` 意为记录答不了——不存在、不新鲜、或一份文件都没描述——调用方改为扫源码。清单必须描述**每一份**
+/// 文件，与本桥每个读者遵循的是同一条规则：一份只列出"带函数的文件"的清单，会把路径问题答成整棵树的一个子集，
+/// 而"格式正常但错"正是这一带反复生产的答案。
+fn record_source_lines(
+    root: &Path,
+    query: &str,
+    limit: usize,
+    hits: &mut usize,
+    withheld_hits: &mut usize,
+) -> Result<Option<Vec<String>>, String> {
+    // A workspace root has no record of its own — its members do — so the members are read, the same
+    // shape `consistency`'s census uses. Without this, a query against a workspace root fell back to
+    // scanning every file in it (measured 12.8 s at 50,000 files) even though every member's manifest
+    // was current.
+    // 工作区根没有自己的记录——它的成员才有——因此读的是成员，与 `consistency` 的普查同形。少了这一步，
+    // 对着工作区根的查询会退回扫描它里面的每个文件（在 50,000 文件上实测 12.8 s），尽管每个成员的清单都是
+    // 新鲜的。
+    let roots = match crate::mcp::workspace::scope(root) {
+        Ok(crate::mcp::workspace::Scope::Package(_)) => vec![root.to_path_buf()],
+        Ok(crate::mcp::workspace::Scope::Workspace(members)) => {
+            members.into_iter().map(|member| member.dir).collect()
+        }
+        Ok(crate::mcp::workspace::Scope::Unresolvable(_)) | Err(_) => return Ok(None),
+    };
+    let mut rows = Vec::new();
+    for root in roots {
+        let out = crate::mcp::build_evidence::out_dir(&root);
+        if !crate::build_time::build_output_is_current(&root, &out) {
+            return Ok(None);
+        }
+        let Ok(member_rows) = crate::build_time::read_file_manifest(&out) else {
+            return Ok(None);
+        };
+        if member_rows.is_empty() {
+            return Ok(None);
+        }
+        rows.extend(member_rows);
+    }
+    let needle = query.to_ascii_lowercase();
+    let mut lines = Vec::new();
+    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for row in &rows {
+        if row.source.to_ascii_lowercase().contains(&needle) && seen.insert(row.source.as_str()) {
+            if *hits < limit {
+                lines.push(format!("file  src/{}", row.source));
+                *hits += 1;
+            } else {
+                *withheld_hits += 1;
+            }
+        }
+    }
+    for row in &rows {
+        if row.function == "-" || !row.function.to_ascii_lowercase().contains(&needle) {
+            continue;
+        }
+        if *hits < limit {
+            lines.push(format!("fn    {} -> src/{}", row.function, row.source));
+            *hits += 1;
+        } else {
+            *withheld_hits += 1;
+        }
+    }
+    Ok(Some(lines))
+}
+
 fn record_face_lines(
     root: &Path,
     query: &str,
@@ -791,6 +880,18 @@ fn record_face_lines(
             *withheld_hits += 1;
         }
     }
+    // An empty result still yields to the derivation, and the reason is measured rather than assumed:
+    // **freshness does not notice a file that was added**. The pin
+    // `a_published_face_is_ok_and_a_new_one_is_added_since_build` writes a face beside a current
+    // record and expects `[added since build]` — that face is in no record, so an empty record answer
+    // cannot be final. Making it final is worth about 90 s at 50,000 files, so the order is: first let
+    // `build_output_is_current` cover the **discovered file set**, then let the record's empty answer
+    // be final.
+    // 空结果仍然让位给推导，而理由是量出来的、不是假定的：**新鲜度不会注意到新增的文件**。钉子
+    // `a_published_face_is_ok_and_a_new_one_is_added_since_build` 在一份新鲜的记录旁边写下一个面，并期待
+    // `[added since build]`——那个面不在任何记录里，因此记录的空答案不可能是最终答案。把空答案定为最终答案
+    // 在 50,000 文件上约值 90 s，所以次序是：先让 `build_output_is_current` 覆盖**被发现到的文件集合**，
+    // 再让记录的空答案成为最终答案。
     if lines.is_empty() {
         return Ok(None);
     }

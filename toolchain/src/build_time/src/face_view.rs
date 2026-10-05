@@ -43,8 +43,8 @@ use super::{Node, discover_root_reporting, parsed_face, relative_display, source
 mod scope_view;
 
 pub use self::scope_view::{
-    BuildScopeView, PruningRow, ShapeRow, build_output_is_current, read_build_scope,
-    read_pruning_manifest, read_shape_manifest,
+    BuildScopeView, FileRow, PruningRow, ShapeRow, build_output_is_current, read_build_scope,
+    read_file_manifest, read_pruning_manifest, read_shape_manifest,
 };
 
 /// One registration face as the build's own discovery sees it.
