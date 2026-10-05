@@ -932,3 +932,31 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 
 **下一步（已由上述对比定死）**：让**兄弟集合**也从记录取——即 `registry` 已经在用的那条 W3-2 规则（剪枝清单
 新鲜时按它的行构面），推导只在记录答不了时付费。那才是让 `consistency` 在几千成员家族上回到 3 s 内的那一步。
+
+### 追问"还有 schema 呢？"：广告面 vs 能力面（本轮，**当场抓到 3 处 + 1 条钉子**）
+
+**方法（机械，不靠记忆）**：把 `tools.rs` 的 28 个目录条目逐块切开取"声明了哪些键"（**任意深度**的
+`properties`，因为 `parts` 在 `inside` 之下、`cut`/`graft` 在某个 `anyOf` 分支里都算广告），再把
+每个处理函数模块里**实际读的键**取出来（读的拼写只有两种：`arguments.get("X")` 与 `text/optional_text(arguments, "X")`），
+两边对差。
+
+**抓到的三处（都是"能力跑到广告前面"，也就是清单 W2-4 那一族）**：
+1. `consistency.by` 的 `enum` 只写 `["api","kind","source"]`——**缺 `"shape"`** ✗，而 `shape` 甚至不是可选的，它是**默认**跑的两个信号之一；
+2. `consistency` 的 properties 里**没有 `full`** ✗——而它正是那个被有界化的答案**唯一的出路**（读者根本发现不了怎么买回逐成员行）；
+3. `mir` 的处理函数读 `against_trace`，schema 里没有它 ✗。
+
+**修法**：三处补齐（`by` 的 enum 加 `shape`、补 `full` 与 `against_trace` 的描述），并把 `by` 的描述从
+"`api` (default)" 改成事实（**省略即同时比 `api` 与 `shape`**）。
+
+**钉子（有牙，已验）**：`tools_tests::every_key_a_handler_reads_is_advertised_and_every_entry_is_accounted_for`
+——① 每个处理函数读的键都必须被 schema 广告（**任意深度**）；② `READ_KEYS` 表必须点名**每一个**目录条目，
+新工具没人加进去就红；③ `by` 的 enum 不得比处理函数接受的信号更窄。**反向验证**：把 `full` 从 schema 删掉 ⇒
+红并点名 `consistency reads \`full\` but its schema does not declare it`；把 `shape` 从 enum 去掉 ⇒ 红并点名
+`by must offer \`shape\``；恢复 ⇒ 绿。
+
+**如实记的两处过程事实**：① 我第一版 `READ_KEYS` 是**手写猜的**，跑出 8 条"缺失"里有一半是**表的错**
+（`closure` 根本不是入参、`inspect`/`locate` 的键不在我以为的模块里）⇒ 改成**从代码机械导出**每模块真正读的键，
+只剩 1 条待判（`conformance` 的 `files` 实为 `adopted` 的续期路径读的，已按事实归位）；② 全仓 `verb_table` 门禁
+当场拦下我给它起的名 `collect_properties`（私有遍历动词必须是 `visit_`/`walk_`）⇒ 改名 `walk_properties`。
+**仍开**：这条对差现在是"一手维护的表 + 机械比对"，下一步可把**工具→处理模块**的映射也从 `DISPATCH` 表机械导出，
+让整件事零维护。

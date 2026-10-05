@@ -745,3 +745,97 @@ fn the_tools_list_reply_carries_the_annotations() {
         );
     }
 }
+
+/// Every key a handler reads is advertised, and every entry is accounted for (audit `W2-4` again).
+/// 处理函数读的每个键都被广告出去，且每个条目都有交代（再次审计 `W2-4`）。
+///
+/// Two failures are caught here, and both were real. **Capability ahead of the advertisement**:
+/// `consistency` read `by: "shape"` and `full` while its schema offered neither, and `full` is the
+/// only way out of a bounded answer — so a reader could not reach the capability at all; `mir` read
+/// `against_trace` the same way. **An entry nobody accounted for**: the list has to name every
+/// catalogue entry, so a new tool cannot be added without saying which keys it reads.
+/// 两类失败在这里被抓，而两类都真实发生过。**能力跑到广告前面**：`consistency` 读 `by: "shape"` 与
+/// `full`，而它的 schema 一个都没给，而 `full` 还是有界答案唯一的出路——于是读者根本够不到那个能力；
+/// `mir` 同形地读 `against_trace`。**没人交代的条目**：清单必须点名每一个目录条目，因此新工具不可能
+/// 不声明它读哪些键。
+#[test]
+fn every_key_a_handler_reads_is_advertised_and_every_entry_is_accounted_for() {
+    let entries: Vec<serde_json::Value> = crate::mcp::tools::tools();
+    let mut missing: Vec<String> = Vec::new();
+    for entry in &entries {
+        let name = entry["name"].as_str().expect("a name");
+        let (_, keys) = super::READ_KEYS
+            .iter()
+            .find(|(listed, _)| *listed == name)
+            .unwrap_or_else(|| {
+                panic!("`{name}` has no READ_KEYS row: add one naming the keys it reads")
+            });
+        // Keys may be advertised at any depth — `parts` sits under `inside`, `cut`/`graft` under the
+        // graft branch of an `anyOf` — because what matters is that the schema **names** them
+        // somewhere the reader can find. A top-level-only scan would report those as missing and
+        // push the fix toward flattening a schema that is already correct.
+        // 键可以广告在**任何深度**——`parts` 在 `inside` 之下、`cut`/`graft` 在某个 `anyOf` 分支里
+        // ——要紧的是 schema 在读者找得到的地方**点名**了它们。只扫顶层会把那些报成缺失，并把修法
+        // 推向把一份本来就对的 schema 拍平。
+        let mut advertised = std::collections::BTreeSet::new();
+        walk_properties(&entry["inputSchema"], &mut advertised);
+        for key in *keys {
+            if !advertised.contains(*key) {
+                missing.push(format!(
+                    "{name} reads `{key}` but its schema does not declare it"
+                ));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:#?}");
+    assert_eq!(
+        entries.len(),
+        super::READ_KEYS.len(),
+        "the catalogue and the read-keys table must name the same entries"
+    );
+    // And the enum that carries the signals is not narrower than the signals the handler accepts.
+    // 而承载信号的 enum 不得比处理函数接受的信号更窄。
+    let consistency = entries
+        .iter()
+        .find(|entry| entry["name"] == "nichlink.consistency")
+        .expect("consistency");
+    let signals = consistency["inputSchema"]["properties"]["by"]["enum"]
+        .as_array()
+        .expect("the `by` enum")
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<Vec<_>>();
+    for signal in ["api", "kind", "source", "shape"] {
+        assert!(
+            signals.contains(&signal),
+            "`by` must offer `{signal}`: the handler accepts it, so the schema must name it ({signals:?})"
+        );
+    }
+}
+
+/// Walk a schema and note every key any `properties` object in it names, at any depth.
+/// 这份 schema 里任何 `properties` 对象点名的每个键，任意深度。
+fn walk_properties(value: &serde_json::Value, into: &mut std::collections::BTreeSet<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                if key == "properties"
+                    && let Some(fields) = child.as_object()
+                {
+                    into.extend(fields.keys().cloned());
+                    for field in fields.values() {
+                        walk_properties(field, into);
+                    }
+                } else {
+                    walk_properties(child, into);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                walk_properties(item, into);
+            }
+        }
+        _ => {}
+    }
+}
