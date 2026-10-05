@@ -130,8 +130,10 @@ last answer\n\
 time; stop when every named object has a verdict, including the ones with nothing wrong\n\
   inspect, a range question -> `check` and dispose of every census column; stop when each column is \
 either covered or named as one it does not cover\n\
-  add an object             -> `registry` for the family, `apply {action: \"add\", apply: true}`, `consistency \
---specimen`, `check`; stop when the new face's shape matches its siblings and the gates are green\n\
+  add an object             -> `registry` for the family, `apply {action: \"add\", apply: true}`, `check`; \
+the write's own reply already reports `family … outliers: x of N` for the siblings it landed among, \
+so its shape question costs no second call: stop when that line names no outlier and the gates \
+are green\n\
   (the parent's own rules)  a parent declares what its children must carry in \
 `<parent>/registry_rule/registry_rule.rs` — `search {literal: \"REGISTRATION_RULE\"}` finds it, and a child \
 that violates it **fails the build naming the missing requirement**; read it before adding or changing a \
@@ -149,7 +151,7 @@ layer's impact is disposed of, not when the move compiles\n\
 `search` 到 `read`、`why --at`、`check {face}`，停在「根因带文件与行号、最小修、反证」；查看多个 ⇒ \
 `consistency --parent` **一次**比完同族再逐个，停在「每个被点名的对象都有裁定（没问题的也要有依据）」；\
 范围型 ⇒ `check` 并逐栏处置，停在「每栏要么被覆盖、要么被点名为它不覆盖」；新增 ⇒ `registry`、\
-`apply {action: \"add\", apply: true}`、`consistency --specimen`、`check`，停在「新面形状与同族一致且门禁绿」；\
+`apply {action: \"add\", apply: true}`、`check`——写回执自己就报 `family … outliers: x of N`，同族形状那一问不必再花一次调用，停在「那一行没有离群者且门禁绿」；\
 **父面自己的规范**写在 `<父>/registry_rule/registry_rule.rs` 里——`search {literal: \"REGISTRATION_RULE\"}` 找得到它，\
 违反的子面会**构建失败并点名缺哪条**，因此在新增或改动子面之前先读它（那次失败是在改动之后才到的）；加深 ⇒ \
 `explain`、`apply {action: \"deepen\", apply: true}`、`check`，停在「树、公开路径与出厂形状钉子都没动」；\

@@ -1002,3 +1002,29 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 **仍开**：① 回复**无条件**说出"选了哪条来源"（现在只在有问题时说；无条件那句会动到回复形状的既有钉子，
 留下一轮）；② 装出来的二进制若既不在检出内、又拿不到缓存，仍只能靠这条警告指路——真正的解除要么发布
 0.2.0，要么调用方自己给 `git`/`path`。
+
+### M6 §4 写路径边界：把不对称写成明示 + 给拒绝一条路（本轮）
+
+**§4 第①条（不对称写进描述）已在位**：`apply` 的广告描述本来就写着两类动作——`add`/`deepen`/`cut`/`promote`
+是**追加**类（改声明，手写面是合法主体），`edit`/`rename`/`delete` 是**改写**类（只改写自己生成过的文件），
+拒绝文案也重复了这条界。钉子 `apply_tests::the_write_description_states_which_actions_reach_hand_written_faces`。
+
+**§4 第②条（s7 写链的拒绝要给出路）本轮补上**：手写面被拒时，原来只划界（"这是作者身份，收编它是另一个
+决定"），没有下一步。现在多一段 `way forward:`，给出**两条可走的路**：① 只要**声明**要改（加层、加条目、
+换父级）⇒ 用追加类动作，这份文件就是合法主体；② 要给**文件**改名/改写 ⇒ 在编辑器里做，并点名"模块名就是
+目录名与文件名，所以改名＝那一对名字 + 每一条点名旧路径的计划条目"，且给出**列出它们的命令**
+（`affected {files: ["<该面的源码>"]}`）。钉子
+`apply_refusals_tests::a_handwritten_face_refusal_names_the_routes_that_do_work`。同时保留了
+"taking one over is a separate, explicit adoption" 那句（既有钉子要求它在拒绝里出现）。
+
+**§4 第③条（D5：裁确认步）本轮落，但按证据裁在准确的位置**：先把那一问的归属查清——
+`consistency --specimen` 的定义（GUIDANCE 自己的话）是"把兄弟与那批文件携带的已声明形状比对，点名谁缺哪条
+声明"，也就是说它问的**就是同族形状那一问**；而 W5-6③ 之后，`apply` 的**写回执自己**就报
+`family N sibling(s) under <parent>; outliers: x of N` ✓ ⇒ **"新面与同族一致吗"这一问不必再花一次调用**
+（D5 的前提成立）。因此改动是：**add 形状里去掉那次 `consistency --specimen`**，把停止条件改成由回执回答
+（`stop when that line names no outlier and the gates are green`），并在 GUIDANCE 里保留"台账那一问"
+（`conformance {anchor}` + `consistency --specimen <anchor>`）——它问的是**与台账认证过的形状是否漂移**，
+与写回执的同族多数派**不是同一个问题**，不许一起裁掉。
+钉子 `client_tests::the_flow_table_packages_the_seven_shapes_with_their_stop_conditions` 当场因停止条件
+措辞变化而红（行为变化打红旧断言 ⇒ 跟着行为改断言且保持同样强），改后绿。`--list` 仍 **4,976 ≤ 5,000**。
+

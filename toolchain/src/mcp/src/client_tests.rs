@@ -511,7 +511,7 @@ fn the_flow_table_packages_the_seven_shapes_with_their_stop_conditions() {
             "stop when every named object has a verdict",
         ),
         ("a range question", "stop when each column is"),
-        ("add an object", "stop when the new face's shape matches"),
+        ("add an object", "stop when that line names no outlier"),
         (
             "deepen an object",
             "stop when the tree, the public paths and the factory pins",
