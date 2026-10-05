@@ -191,10 +191,68 @@ pub(super) fn read_command(shown: &[String]) -> Option<String> {
 /// 审计 `W4-5`/`W1-2`：那一轮量到会话先发一次 `status`、只为知道树有多大，然后再问真正的问题。这个大小是
 /// 这些工具**本来就持有**的事实，因此它随答案一起走，而不是花掉一次调用。
 pub(crate) fn tree_census(root: &Path) -> Option<String> {
+    // Audit `T3`: this one line used to cost a **full derivation plus a full source scan** — measured
+    // at 4.76 s on a 2,500-face tree, and it is printed on every `consistency` answer, including the
+    // ones whose whole answer is one family. The build's record already states the faces it published
+    // and which source each came from, so the census is a manifest read when the record is current.
+    // 审计 `T3`：这一行过去要付一次**整树推导 + 整份源码扫描**——在 2,500 面的树上实测 4.76 s，而它印在
+    // 每一条 `consistency` 答复上，包括那些整个答案就是一个家族的时候。构建的记录本来就说出了它发布过的面
+    // 以及每个面来自哪份源码，因此记录新鲜时，这张普查就是一次清单读取。
+    if let Some(line) = published_census(root) {
+        return Some(line);
+    }
     let files = load_sources(root).ok()?.len();
     let namespace = crate::mcp::registry::namespace(root).ok()?;
     let (faces, _) = crate::mcp::resolve::derived_faces(root, &namespace).ok()?;
     Some(format!("tree: {} face(s), {files} file(s)", faces.len()))
+}
+
+/// The census from the published record, when this root's record is current (audit `T3`).
+/// 记录新鲜时，由已发布记录给出的普查（审计 `T3`）。
+///
+/// The two numbers are the same **facts** the derivation reports — how many faces the build published
+/// and how many source files carry them — and the line says which reading it is, because a reader
+/// comparing two trees must not have to guess whether a count came from the build or from a scan of
+/// the sources.
+/// 这两个数与推导报告的是同样的**事实**——构建发布了多少个面、有多少份源码承载它们——而这一行会说出它是
+/// 哪一种读法，因为要对比两棵树的读者不该去猜某个计数来自构建还是来自一次源码扫描。
+fn published_census(root: &Path) -> Option<String> {
+    // A workspace root has no record of its own: its members do. Summing them keeps the fast path
+    // for the shape this is measured on — a 20-member workspace whose root would otherwise pay a
+    // 50,000-face derivation just to print one line (measured: 59 s against 6 s for the same
+    // answer once the members answer).
+    // 工作区根没有自己的记录：它的成员才有。把成员加起来，才能让这条快路覆盖实测的那个形状——否则一个
+    // 20 成员的工作区根为了印一行字要付 50,000 个面的推导（实测：59 s，而让成员来答之后同一份答案是 6 s）。
+    let roots = match crate::mcp::workspace::scope(root).ok()? {
+        crate::mcp::workspace::Scope::Package(_) => vec![root.to_path_buf()],
+        crate::mcp::workspace::Scope::Workspace(members) => {
+            members.into_iter().map(|member| member.dir).collect()
+        }
+        crate::mcp::workspace::Scope::Unresolvable(_) => return None,
+    };
+    let mut faces = 0usize;
+    let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for root in roots {
+        let out = crate::mcp::build_evidence::out_dir(&root);
+        if !crate::build_time::build_output_is_current(&root, &out) {
+            return None;
+        }
+        let rows = crate::build_time::read_pruning_manifest(&out).ok()?;
+        if rows.is_empty() {
+            return None;
+        }
+        faces += rows.len();
+        // Sources are keyed by member as well: two members may each carry `control/control.rs`.
+        // 源码按成员做键：两个成员可能各有自己的 `control/control.rs`。
+        files.extend(
+            rows.iter()
+                .map(|row| format!("{}/{}", root.display(), row.source)),
+        );
+    }
+    Some(format!(
+        "tree: {faces} face(s), {} source file(s) (read from the published record)",
+        files.len()
+    ))
 }
 
 /// One parsed face's declared shape: the shape fields it carries, in the order of [`SHAPE_FIELDS`].

@@ -1071,3 +1071,24 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 （`build_evidence` 新鲜性 / 记录读取 + `face_views_from_pruning` / `tree_census` 与头部装配），量出 4.5 s
 落在哪一段；在那之前不再猜。复核记录 `target/hardbug-runs/t3-family-record.txt`。
 
+### M6 §5.2 T3 第三刀：`tree_census` 每答一次就整树推导（**成员级验收已过**）
+
+**怎么找到的**：在固定路径上打计时点（临时插桩，量完即撤）⇒
+`scope 83ms · build_evidence 198ms · read_pruning 15ms · build_views 7ms · member_faces 220ms ·
+**tree_census 4.755s**` —— 就是它。`tree_census` 的实现是 `load_sources(root)`（读并解析整份源码）
+**加上** `derived_faces(root, &namespace)`（**再推导一整棵树**），只为了印一行
+`tree: N face(s), M file(s)`，而它印在**每一条** `consistency` 答复上（包括整个答案就是一个家族的那些）。
+
+**修法**：**记录优先**——`published_census` 读剪枝清单得到"面数 + 承载它们的源码数"（与推导报告的是同一批
+**事实**），记录新鲜时就是一次清单读取；工作区根没有自己的记录 ⇒ **把成员的加起来**（否则一个 20 成员的
+工作区根为了印一行要付 50,000 个面的推导）。这一行还**说出自己是哪一种读法**
+（`(read from the published record)`），因为要对比两棵树的读者不该去猜计数来自哪一侧。
+
+**实测（2,500 面独立包）**：`--by kind` 5.01 → **0.51 s** · `--by shape` 5.07 → **0.79 s**（**验收 ≤1.5 s
+过 ✓**）· `--by source` 4.69 → **0.51 s** · 空家族 4.53 → **0.54 s**。
+**50k 面工作区**：151.5–174 → **50.0 s**（普查行证明走记录：`50020 face(s) … (read from the published record)`）。
+
+**仍开**：工作区根那 50 s ＝ **20 × 每成员固定成本**（单成员 0.73 s，即每成员多约 1.8 s，未逐段量）。
+下一探针同法：工作区根与一个成员分别打点，找出每成员多出来的那 ~1.8 s。
+复核记录 `target/hardbug-runs/t3-family-record.txt`（工作区数据，不进库）。
+
