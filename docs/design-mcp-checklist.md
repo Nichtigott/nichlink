@@ -1028,3 +1028,22 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 钉子 `client_tests::the_flow_table_packages_the_seven_shapes_with_their_stop_conditions` 当场因停止条件
 措辞变化而红（行为变化打红旧断言 ⇒ 跟着行为改断言且保持同样强），改后绿。`--list` 仍 **4,976 ≤ 5,000**。
 
+### M6 §5.2 T3：家族读走记录（本轮，**部分达成，验收未过**）
+
+**改动**：① `build_time::face_views_from_pruning(rows)` —— 由剪枝记录构造 `FaceView`（W3-1b 发布
+`parent_node`/`owns_registry`/`logical_path` 的目的就是它）；缺列的行**计数**，非零则调用方回退推导，
+**绝不拿更小的家族去比**。② `consistency::member_faces` 记录优先：成员已发布且 `build_output_is_current`
+⇒ 面取自记录，证据行说 `tree published from … (this comparison reads the build's own record)`。
+③ **顺带修掉一处真缺陷**：`shape_names_from_record` 用记录的 `source` 拼写做键（**无** `src/` 前缀），而调用方
+带 `src/` 去查 ⇒ **每次查询都落空**、静默退回读每个文件，而回复还声称"读的是记录"✗✗。新增
+`source_index::indexed_path`（索引坐标只在一处定义，两侧共用）后，2,500 面独立包 **7.67 → 5.03 s**。
+**这是同一族缺陷的第三次**（"两套坐标混用"已在 W6-2 第①步栽过一次）。
+
+**实测（同一台机、同一棵树）**：`--by shape` 2,500 面独立包 **5.03 s**（验收 ≤1.5 s，**未过**）· 50 面独立包
+**0.32 s**（走记录 ✓）· `--by kind` 同一棵树 **10.44 s** · 对照 `registry` **0.87 s**。
+
+**已定位的下一处（O(n²)）**：`--by kind`/`--by source` 的 `values` 多数派分支对**每个兄弟**都做一次
+`counts.values().max()` + 一次全表过滤 ⇒ 2,500² ≈ 6.25M 次比较 ⇒ 10.4 s，**反而比 shape 慢**。下一刀与
+`deviations` 一样改成一遍计数、每兄弟 O(1) 查询。shape 那 5 s 还需再切一段量（记录读取本身应 << 1 s）。
+复核记录 `target/hardbug-runs/t3-family-record.txt`（工作区数据，不进库）。
+

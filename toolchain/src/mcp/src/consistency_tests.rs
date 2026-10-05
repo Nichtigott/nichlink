@@ -990,10 +990,14 @@ fn the_declaration_record_answers_which_fields_a_face_declares() {
     std::fs::create_dir_all(&out).expect("the record directory");
     std::fs::write(
         out.join("shape_manifest.tsv"),
+        // The record's `source` column is relative to `src/` (the writer's own spelling); the reader
+        // re-keys it in the index's coordinate so both sides look the same file up the same way.
+        // 记录的 `source` 列相对 `src/`（写入方自己的拼写）；读取方把它重新按索引坐标做键，好让两侧
+        // 用同一种方式查同一个文件。
         "# source\tfield\tvalue\n\
-         src/control/object/slider/slider.rs\texports\tcontrol.render\n\
-         src/control/object/slider/slider.rs\tparts\tSliderParts\n\
-         src/control/object/button/button.rs\t-\t-\n",
+         control/object/slider/slider.rs\texports\tcontrol.render\n\
+         control/object/slider/slider.rs\tparts\tSliderParts\n\
+         control/object/button/button.rs\t-\t-\n",
     )
     .expect("the record");
 

@@ -567,7 +567,14 @@ pub(super) fn shape_names_from_record(
     let mut shapes: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
         std::collections::BTreeMap::new();
     for row in rows {
-        let entry = shapes.entry(row.source).or_default();
+        // Keyed in the **index's** spelling (`src/…`), which is what the caller looks faces up with:
+        // the record spells the same file without that prefix, and using its spelling here made every
+        // lookup miss and quietly fall back to reading the file.
+        // 按**索引的**拼写（`src/…`）做键，也就是调用方查面时用的那一种：记录里同一个文件没有那个前缀，
+        // 用它的拼写做键会让每次查询都落空、悄悄退回读文件。
+        let entry = shapes
+            .entry(crate::mcp::source_index::indexed_path(&row.source))
+            .or_default();
         if row.field != "-" {
             entry.insert(row.field);
         }
@@ -697,4 +704,39 @@ pub(crate) fn deviations(
         }
     }
     rows
+}
+
+/// The faces the build's own record describes, when it describes all of them (audit `T3`).
+/// 构建自己的记录所描述的那些面——当它把每一个都描述到了时（审计 `T3`）。
+///
+/// `None` means "derive instead", and it is returned for three different reasons that all answer the
+/// same way: the member has no published record, the record is not current, or a row lacks a column a
+/// `FaceView` needs. A partial record must not be used — comparing a face against a family smaller
+/// than its own is the silent wrong answer this area keeps producing.
+/// `None` 意为"改为推导"，而它有三个不同的理由、答法都一样：成员没有已发布记录、记录不新鲜、或某一行缺了
+/// `FaceView` 需要的列。残缺的记录不许使用——拿一个比它自己更小的家族去比，正是这一带反复生产的"格式正常
+/// 但错"的答案。
+pub(super) fn published_faces(
+    member: &crate::mcp::workspace::Member,
+) -> Option<(Vec<crate::build_time::FaceView>, String)> {
+    member.published()?;
+    if !crate::mcp::build_evidence::build_evidence(&member.dir).current {
+        return None;
+    }
+    let out = crate::mcp::build_evidence::out_dir(&member.dir);
+    let rows = crate::build_time::read_pruning_manifest(&out).ok()?;
+    if rows.is_empty() {
+        return None;
+    }
+    let (faces, skipped) = crate::build_time::face_views_from_pruning(&rows);
+    if skipped > 0 {
+        return None;
+    }
+    Some((
+        faces,
+        format!(
+            "tree published from {} (this comparison reads the build's own record)",
+            out.display()
+        ),
+    ))
 }

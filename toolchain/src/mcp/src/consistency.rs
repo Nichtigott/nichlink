@@ -394,6 +394,9 @@ fn member_faces(
     member: &Member,
     because: &str,
 ) -> Result<(String, Vec<crate::build_time::FaceView>, String), String> {
+    if let Some((faces, evidence)) = published_faces(member) {
+        return Ok((evidence, faces, String::new()));
+    }
     let evidence = member.evidence_line(because).trim_end().to_owned();
     let (faces, unparsable) = member.derived_tree()?;
     Ok((evidence, faces, unparsable))
@@ -615,7 +618,7 @@ pub(crate) fn consistency(root: &Path, arguments: &Value) -> Result<String, Stri
                         // 先记录、否则源码；`shapes from` 那行说明用的是哪一个。
                         let recorded = record_shapes.as_ref().and_then(|shapes| {
                             shapes
-                                .get(&format!("src/{}", face.source.trim_start_matches("./")))
+                                .get(&crate::mcp::source_index::indexed_path(&face.source))
                                 .cloned()
                         });
                         if let Some(names) = recorded {

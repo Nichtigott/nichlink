@@ -111,8 +111,8 @@ pub(crate) const DEMO_ONLY_FEATURE: &str = "compile_error_demo";
 pub use entry::host_entry_source;
 pub use face_view::{
     BuildScopeView, FaceView, PruningRow, build_output_is_current, face_views,
-    face_views_and_unreadable, face_views_with_external, read_build_scope, read_pruning_manifest,
-    read_shape_manifest,
+    face_views_and_unreadable, face_views_from_pruning, face_views_with_external, read_build_scope,
+    read_pruning_manifest, read_shape_manifest,
 };
 pub use graft_view::{
     DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, OVERLAY_NOTE,

@@ -136,6 +136,23 @@ fn load_filtered_file(
 /// come back with an empty sibling set.
 /// 这个拼写属于本模块：`FaceView.source` 相对 `src/`，而索引路径相对包根；把那个 `src/` 只加在一处，才能
 /// 让这两套坐标不在别处被混起来——而混起来正是"工作区成员的答案拿到空兄弟集合"的原因。
+/// The one spelling an index path is written in: `src/…`, from the package root (audit `T3`).
+/// 索引路径唯一的那种拼写：`src/…`，从包根算起（审计 `T3`）。
+///
+/// `FaceView.source` is relative to `src/` while a record's `source` column and every `SourceFile`
+/// are relative to the package root — two coordinates for the same file, and mixing them up makes a
+/// lookup miss **silently**. It did: `shape_names_from_record` keyed its map by the record's
+/// spelling and the caller looked faces up with `src/` in front, so every sibling missed the record
+/// and fell back to reading its file — 7 s on a 2,500-face member, while the reply said it had read
+/// the record. One function, used by both sides, is what keeps that from happening again.
+/// `FaceView.source` 相对 `src/`，而记录的 `source` 列与每个 `SourceFile` 都相对包根——同一个文件的两套
+/// 坐标，混起来会让查询**静默**落空。它真的落空了：`shape_names_from_record` 用记录的拼写做键，调用方却
+/// 带着 `src/` 去查，于是每个兄弟都没命中记录、退回读自己的文件——在一个 2,500 面的成员上花了 7 s，而回复
+/// 还说着"读的是记录"。一个函数、两侧共用，才能让它不再发生。
+pub(crate) fn indexed_path(face_source: &str) -> String {
+    format!("src/{}", face_source.trim_start_matches("./"))
+}
+
 pub(crate) fn face_directories<'a>(
     faces: impl IntoIterator<Item = &'a crate::build_time::FaceView>,
 ) -> Vec<String> {

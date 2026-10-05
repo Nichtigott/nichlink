@@ -279,6 +279,66 @@ pub fn face_views_with_external(root: &Path, package: &str) -> Result<FaceRead, 
     Ok((views, unreadable, external))
 }
 
+/// The faces a published pruning record describes, without walking the sources (audit `T3`).
+/// 一份已发布的剪枝记录所描述的面，不必走一遍源码（审计 `T3`）。
+///
+/// This is the reader `parent_node`/`owns_registry`/`logical_path` were published for: a family
+/// question ("who is under this parent, and what does each declare") needed the **derived** tree,
+/// which parses every file in the member — measured on a 2,501-face member as 11 s for `consistency`
+/// against 0.97 s for `registry`, which takes its faces from this same record. The record is the
+/// build's own statement about the faces it published, so a reader that trusts it pays nothing for
+/// the work the build already did.
+/// 这就是发布 `parent_node`/`owns_registry`/`logical_path` 所服务的读者：一个家族问题（"这个父级下有哪些面、
+/// 各自声明了什么"）过去需要**推导**树，那要解析成员里的每个文件——在一个 2,501 面的成员上实测：`consistency`
+/// 11 s，而**从这份记录取面**的 `registry` 0.97 s。记录是构建对自己发布过的面的陈述，因此信它的读者不必为
+/// 构建已经付过的钱再付一次。
+///
+/// Rows that do not carry what a `FaceView` needs are **counted, not guessed**: the caller compares
+/// that count against zero and derives instead, because a partially-built family would compare a face
+/// against a smaller set than the one it belongs to — the silent wrong answer this whole area keeps
+/// producing.
+/// 不带 `FaceView` 所需各列的行会被**计数、而不是被猜**：调用方拿这个数与零比较，非零就改为推导——因为一个
+/// 只建了一半的家族会拿一个更小的集合去比，而"格式正常但错"的答案正是这一带反复生产的东西。
+pub fn face_views_from_pruning(rows: &[PruningRow]) -> (Vec<FaceView>, usize) {
+    let mut views = Vec::new();
+    let mut skipped = 0usize;
+    for row in rows {
+        // `registry_name` is deliberately **not** required: a face that leaves it to the macro
+        // default publishes `-`, and filling that in here would be a second implementation of the
+        // macro's own rule. The comparison this serves never reads that column — it indexes faces by
+        // logical path and compares declared fields and calls — so an absent one is not a reason to
+        // give up the record.
+        // 有意**不**要求 `registry_name`：把该列留给宏默认值的面发布的是 `-`，在这里补上它就是宏那条规则
+        // 的第二份实现。这个读者所服务的比对从不读那一列——它按逻辑路径索引面、比的是声明字段与调用——因此
+        // 缺那一列不是放弃记录的理由。
+        let (Some(kind), Some(path), Some(parent_node)) = (
+            row.kind.as_deref(),
+            row.logical_path.as_deref(),
+            row.parent_node.as_deref(),
+        ) else {
+            skipped += 1;
+            continue;
+        };
+        let Ok(parent) = parent_node.parse::<NodeId>() else {
+            skipped += 1;
+            continue;
+        };
+        views.push(FaceView {
+            id: row.id,
+            parent,
+            kind: kind.to_owned(),
+            registry_name: row.registry_name.clone().unwrap_or_default(),
+            module: row.symbol.clone(),
+            source: row.source.clone(),
+            owns_registry: row.owns_registry.as_deref() == Some("true"),
+            path: path.to_owned(),
+            parent_resolved: true,
+        });
+    }
+    views.sort_by(|left, right| (&left.path, left.id).cmp(&(&right.path, right.id)));
+    (views, skipped)
+}
+
 /// Resolve one collected parent against the module-to-face map, matching the
 /// build's three parent forms.
 /// 用"模块 → 面"映射解析一个已收集的父级，对应构建的三种父级形式。
