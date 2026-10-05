@@ -1210,3 +1210,18 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 **预期**：50k `search --query` **8.5 → ~1–2 s**，且**判据一个字不改**（仍逐字节、不碰时间戳）——这正是维护者裁决的
 方向 ①，且比先前估的"1.5× 天花板"大得多：**原先的天花板估计错在把"解析开销"当成了"I/O 下限"**。
 
+### M6 §5.2 T1 第四刀：K2 并行哈希落地（摘要逐字节守恒）+ 50k 的三段账
+
+**诊断（一行打印、一次运行）**：`build_output_is_current` 每个成员**只被调用一次**（上一轮"每成员问一次"有效 ✓），
+每成员 = **`discover_root` 整树解析 ≈40 ms + hash ≈125 ms**（2,500 文件 ⇒ 每文件 ~50 µs）⇒ 20 成员 ≈3.3 s。
+**K2 做法**：只并行"每文件读字节 + 拼路径"这一半（`parallel_map`，**标准库线程**；本检出离线且发布 crate ⇒
+**不加依赖**），**分块按排序后的文件顺序拼接** ⇒ 摘要与串行**逐字节相同**。**守恒证据**：改动后 `registry` 仍报
+`tree published from …`（记录是**改动前**签的，仍判 current ✓）。钉子
+`source_walk::parallel_tests::fingerprints_do_not_depend_on_the_worker_count`。
+**实测**：t3 `--query` 0.29 → **0.27 s**；50k `child000001` 8.8 → **7.8 s**、`zzz-nothing` 8.5 → **7.9 s**。
+**只快了 ~8%**（预估的"省 2.5 s"没兑现）⇒ 说明 hash 之外还有更大的一块。
+**50k 三段账（同一次运行）**：`pre_freshness 0.4 µs` · `freshness 3.73 s` · `faces_half 4.37 s`（含 freshness ⇒
+faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s** ⇒ **约 3.5 s 不在 `search()` 里**（在
+`--call` 的分派层）。**目标 <1 s 仍未达；下一步写死**：① 在 `main`/dispatch 打一行查那 3.5 s；② `freshness` 里
+`discover` 仍占 0.8 s（递归解析，可并行但要先确认顺序与共享状态）。
+

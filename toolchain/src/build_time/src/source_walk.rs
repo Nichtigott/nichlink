@@ -258,11 +258,26 @@ pub(crate) fn discovery_fingerprint(src: &Path, scan: &Path, nodes: &[Node]) -> 
         input.push(0);
         input.push(0xfe);
     }
-    for file in files {
-        input.extend_from_slice(super::relative_display(src, &file).as_bytes());
-        input.push(0);
-        input.extend_from_slice(&fs::read(&file).unwrap_or_default());
-        input.push(0xff);
+    // The per-file half — read the bytes and spell the path — is independent per file, and it is the one
+    // part of this rule parallelism can touch (audit `K2`). Measured at 50,000 files: **125 ms per
+    // 2,500-file member**, i.e. ~50 µs per file of read + hash + allocation, paid once per member in
+    // sequence. The chunks are joined in the **sorted file order**, which is what keeps the digest
+    // identical to the serial one: combining in completion order would change the fingerprint and make
+    // every existing record stale.
+    // 每文件那一半——读字节、拼路径——逐文件独立，是这条规则里并行唯一能碰的部分（审计 `K2`）。在 50,000
+    // 文件上实测：每个 2,500 文件的成员 **125 ms**，即每文件约 50 µs 的读+哈希+分配，而 20 个成员按顺序各付一次。
+    // 各分块按**排序后的文件顺序**拼接，这正是让摘要与串行版逐字节相同的原因：按完成顺序拼接会改掉指纹，
+    // 从而让每一份已存在的记录变陈旧。
+    let chunks = parallel_map(&files, |file| {
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(super::relative_display(src, file).as_bytes());
+        chunk.push(0);
+        chunk.extend_from_slice(&fs::read(file).unwrap_or_default());
+        chunk.push(0xff);
+        chunk
+    });
+    for chunk in chunks {
+        input.extend_from_slice(&chunk);
     }
     super::registry_identity::NodeId::from_bytes(&input).to_string()
 }
@@ -316,6 +331,40 @@ pub(crate) fn collect_rust_sources(
     )
 }
 
+/// Map over items with several workers, preserving order (audit `K2`).
+/// 用多个工作线程映射一组条目，并**保持顺序**（审计 `K2`）。
+///
+/// Standard library only: this checkout builds offline and publishes crates, so a thread-pool
+/// dependency is not an option, and `std::thread::scope` has been enough since 1.63. **Order
+/// preservation is the whole contract** — a fingerprint that depended on completion order would go
+/// stale for every record the moment the machine's core count changed, and `fingerprints_do_not_depend
+/// _on_the_worker_count` is the pin that holds it.
+/// 只用标准库：本检出离线构建并发布 crate，因此线程池依赖不是选项，而 `std::thread::scope` 自 1.63 起就够用。
+/// **保持顺序就是它的全部契约**——依赖完成顺序的指纹会在机器核数一变时让每份记录立刻陈旧，而
+/// `fingerprints_do_not_depend_on_the_worker_count` 就是守住它的钉子。
+fn parallel_map<T: Send>(
+    items: &[std::path::PathBuf],
+    map: impl Fn(&std::path::PathBuf) -> T + Sync,
+) -> Vec<T> {
+    // Below this size the thread handoff costs more than the work it hands off.
+    // 小于这个规模时，线程交接比它交接出去的活还贵。
+    if items.len() < 64 {
+        return items.iter().map(map).collect();
+    }
+    let workers = std::thread::available_parallelism().map_or(1, |count| count.get());
+    let chunk = items.len().div_ceil(workers);
+    let mut slots: Vec<Option<Vec<T>>> = (0..items.len().div_ceil(chunk)).map(|_| None).collect();
+    std::thread::scope(|scope| {
+        for (slot, slice) in slots.iter_mut().zip(items.chunks(chunk)) {
+            let map = &map;
+            scope.spawn(move || {
+                *slot = Some(slice.iter().map(map).collect());
+            });
+        }
+    });
+    slots.into_iter().flatten().flatten().collect()
+}
+
 /// Every `.rs` file under `dir`, by path, without reading any of them.
 /// `dir` 下每个 `.rs` 文件的路径，不读取其中任何一个。
 fn visit_rust_paths(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
@@ -328,6 +377,38 @@ fn visit_rust_paths(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
             visit_rust_paths(&path, into);
         } else if path.extension().is_some_and(|extension| extension == "rs") {
             into.push(path);
+        }
+    }
+}
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::parallel_map;
+
+    /// The fingerprint must not depend on how many workers computed it (audit `K2`).
+    /// 指纹不得取决于用几个工作线程算出来（审计 `K2`）。
+    ///
+    /// Parallelism here is an implementation detail of a **rule**: the digest goes into every record,
+    /// and a digest that depended on completion order would invalidate all of them the moment the core
+    /// count changed. The pin runs the same mapping many times and compares the joined result — with
+    /// enough items that the parallel path is actually taken (> the serial threshold).
+    /// 这里的并行只是一条**规则**的实现细节：摘要写进每一份记录，而依赖完成顺序的摘要在核数一变时就会让它们
+    /// 全部失效。这枚钉子反复跑同一个映射并比较拼接结果——条目数足够多，因此真的会走并行那条路（超过串行阈值）。
+    #[test]
+    fn fingerprints_do_not_depend_on_the_worker_count() {
+        let items: Vec<std::path::PathBuf> = (0..500)
+            .map(|index| std::path::PathBuf::from(format!("file{index:04}.rs")))
+            .collect();
+        let expected: Vec<String> = items
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect();
+        for _ in 0..5 {
+            let got = parallel_map(&items, |path| path.display().to_string());
+            assert_eq!(
+                got, expected,
+                "order is preserved whatever the worker count"
+            );
         }
     }
 }
