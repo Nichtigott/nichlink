@@ -824,13 +824,45 @@ pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool
         }
         Ok(crate::mcp::workspace::Scope::Unresolvable(_)) | Err(_) => Vec::new(),
     };
+    // The per-member work is where the seconds are at 50,000 files — one whole-tree content hash per
+    // member — and **no member's verdict depends on another's**: this is the one place in a read
+    // answer that parallelism can take without changing a single verdict (audit `T1`, cut 7). It is
+    // measured, not assumed: the same eight members answered in 4.392 s one after another and in
+    // 0.864 s under `-P8`.
+    // 在 50,000 文件上，每个成员的活正是秒数所在——每成员一次整树内容哈希——而**没有任何成员的裁决依赖
+    // 另一个**：这是读答案里并行唯一能不改变任何裁决就拿走的地方（审计 `T1` 第七刀）。这是量出来的而不是
+    // 假定的：同样八个成员，一个接一个答用 4.392 s，`-P8` 下 0.864 s。
+    let policy = crate::mcp::freshness::current_policy();
+    let mut verdicts: Vec<Option<bool>> = vec![None; roots.len()];
+    let mut due = Vec::new();
+    for (index, member) in roots.iter().enumerate() {
+        let out = crate::mcp::build_evidence::out_dir(member);
+        match crate::mcp::freshness::consult(member, &out, policy) {
+            crate::mcp::freshness::Consultation::Remembered(current) => {
+                verdicts[index] = Some(current);
+            }
+            crate::mcp::freshness::Consultation::Pay { stamp } => {
+                due.push((index, member.clone(), out, stamp));
+            }
+        }
+    }
+    // Two items already pay for the thread handoff here: a member is a whole-tree content hash, not a
+    // file. The budget is the machine rule the walk uses — half the cores, at most eight, one core
+    // always left alone — so a tool call never takes the user's machine (audit `T1`, cut 7).
+    // 这里两个条目就够付线程交接的钱：一个成员是一次整树内容哈希，不是一个文件。预算就是遍历所用的那条机器
+    // 规则——一半的核、最多八个、永远留一个核——因此一次工具调用绝不拿走用户的整台机器（审计 `T1` 第七刀）。
+    let paid = crate::build_time::parallel_map_with_threshold(
+        &due,
+        crate::build_time::worker_budget(),
+        2,
+        |(_, member, out, stamp)| crate::mcp::freshness::pay_with_stamp(member, out, *stamp),
+    );
+    for ((index, member, out, _), payment) in due.iter().zip(paid) {
+        verdicts[*index] = Some(crate::mcp::freshness::record(member, out, payment));
+    }
     roots
         .into_iter()
-        .map(|root| {
-            let current =
-                crate::mcp::freshness::verdict(&root, &crate::mcp::build_evidence::out_dir(&root));
-            (root, current)
-        })
+        .zip(verdicts.into_iter().map(|current| current.unwrap_or(false)))
         .collect()
 }
 

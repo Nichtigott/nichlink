@@ -28,6 +28,11 @@ fn the_text_contracts_keep_their_published_values() {
     assert_eq!(TRACE_FILE, "nichlink.trace");
     assert_eq!(TRACE_FILE_ENV, "NICH_LINK_TRACE_FILE");
     assert_eq!(TRACE_MODE_ENV, "NICH_LINK_TRACE");
+    // The worker cap is read by the walk and named here once (audit `T1`); it is a contract for the
+    // same reason the entry is: two surfaces read it, and a second literal would drift.
+    // 工作线程上限由遍历读取、并在这里只命名一次（审计 `T1`）；它是契约的理由与入口变量相同：有两处读它，
+    // 而第二个字面量会漂。
+    assert_eq!(JOBS_ENV, "NICH_LINK_JOBS");
 }
 
 /// The package-root rule, at each of its three steps and at the boundary a

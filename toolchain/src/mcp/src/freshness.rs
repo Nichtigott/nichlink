@@ -144,6 +144,19 @@ thread_local! {
     /// 新增的文件会改变计数、让存下的戳对不上。
     static STAMPS: RefCell<HashMap<(PathBuf, PathBuf), (usize, u64)>> =
         RefCell::new(HashMap::new());
+    /// Which answer this thread is currently producing (audit `T1`, cut 7).
+    /// 本线程当前正在产出的第几份答案（审计 `T1` 第七刀）。
+    ///
+    /// A verdict that an answer **paid for itself** is not a reuse, and saying `reused (... 0s ago)`
+    /// about it is a worse answer than saying `content-verified`: measured on the 50,000-file
+    /// workspace, sharing the payment between the readers silently turned every roster row from
+    /// `freshness: content-verified at 23:34:22` into `freshness: reused (... 5s ago)`, which is a
+    /// different claim about the same work. This counter is how the line tells the two apart.
+    /// 一份答案**自己付过费**的裁决不是复用，而用 `reused (... 0s ago)` 说它是比 `content-verified`
+    /// 更差的答案：在 50,000 文件的工作区上实测，把付费在几个读者之间共享，静默地把每一行普查从
+    /// `freshness: content-verified at 23:34:22` 变成了 `freshness: reused (... 5s ago)`——关于同一件
+    /// 工作，这是两种不同的声称。这个计数器就是那行字区分两者的依据。
+    static ANSWER: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Open a new answer: the stamps walked for the previous one vouch for nothing here.
@@ -157,7 +170,14 @@ thread_local! {
 /// 答案从这里开始）。被丢掉的只是**戳记忆**；核验本身留着，因为那正是复用窗口的含义：一份裁决可以跨答案
 /// 被复用，但只在那棵树被重新走过一遍之后。
 pub(crate) fn begin_answer() {
+    ANSWER.with(|answer| answer.set(answer.get() + 1));
     STAMPS.with(|stamps| stamps.borrow_mut().clear());
+}
+
+/// Which answer this thread is producing.
+/// 本线程正在产出的第几份答案。
+fn answer_epoch() -> u64 {
+    ANSWER.with(Cell::get)
 }
 
 /// One content verification, with when it happened and what it said.
@@ -184,6 +204,9 @@ struct Verified {
     /// 没有它，把一份裁决在"出处读者"和"裁决读者"之间共享，就意味着一次调用可能拿另一次调用的树作答——
     /// 那正是钉子 `a_published_face_is_ok_and_a_new_one_is_added_since_build` 变红的原因（实测过）。
     stamp: (usize, u64),
+    /// The answer that paid for this verification (audit `T1`, cut 7).
+    /// 为这次核验付费的那份答案（审计 `T1` 第七刀）。
+    answer: u64,
 }
 
 /// Set the policy for the calls that follow on this thread.
@@ -202,75 +225,193 @@ fn policy() -> Policy {
 /// The freshness line for one published output directory.
 /// 一个已发布产物目录的新鲜度行。
 pub(crate) fn line(root: &Path, out: &Path) -> String {
-    let key = (root.to_path_buf(), out.to_path_buf());
+    let key = key(root, out);
     match policy() {
-        Policy::Verify => verify_now(&key, root, out),
-        Policy::Reuse => match remembered(&key, root) {
-            Some(verified) => reused_line(&verified),
-            None => verify_now(&key, root, out),
+        Policy::Verify => paid_line(root, out, None),
+        Policy::Reuse => match lookup(&key, root) {
+            Lookup::Hit(verified) => reused_line(&verified),
+            Lookup::Miss { stamp } => paid_line(root, out, stamp),
         },
-        Policy::ReuseOnly => match remembered(&key, root) {
-            Some(verified) => reused_line(&verified),
-            None => UNKNOWN.to_owned(),
+        Policy::ReuseOnly => match lookup(&key, root) {
+            Lookup::Hit(verified) => reused_line(&verified),
+            Lookup::Miss { .. } => UNKNOWN.to_owned(),
         },
     }
 }
 
-/// The verification this thread took inside the window, if it took one.
-/// 本线程在窗口之内做过的核验（如果有）。
-///
-/// An expired entry is dropped rather than answered: the window is the whole permission to
-/// reuse, and holding the entry any longer would only invite a second reader to forget
-/// that.
-/// 过期的条目被丢弃而不是被拿来作答：窗口就是复用的全部许可，再留着它只会招来第二个读取方忘记这
-/// 一点。
-fn remembered(key: &(PathBuf, PathBuf), root: &Path) -> Option<Verified> {
-    let window = Duration::from_secs(REUSE_WINDOW_SECONDS);
-    let stamp = stamp_for(key, root);
-    VERIFIED.with(|store| {
-        let mut store = store.borrow_mut();
-        match store.get(key) {
-            Some(verified) if verified.at.elapsed() < window && verified.stamp == stamp => {
-                Some(Verified {
-                    at: verified.at,
-                    clock: verified.clock.clone(),
-                    current: verified.current,
-                    stamp: verified.stamp,
-                })
-            }
-            Some(_) => {
-                store.remove(key);
-                None
-            }
-            None => None,
-        }
-    })
+/// The key one published output is remembered under.
+/// 一份已发布产物被记下的键。
+fn key(root: &Path, out: &Path) -> (PathBuf, PathBuf) {
+    (root.to_path_buf(), out.to_path_buf())
 }
 
-/// Pay for the content hash and remember it.
-/// 为内容哈希付费并记住它。
-fn verify_now(key: &(PathBuf, PathBuf), root: &Path, out: &Path) -> String {
-    let current = pay_now(key, root, out);
-    if current {
-        format!("freshness: content-verified at {}", wall_clock())
+/// What this thread already knows about one published output inside the window.
+/// 本线程在窗口之内对一份已发布产物已经知道的东西。
+enum Lookup {
+    /// A verification inside the window whose stamp still matches this tree.
+    /// 窗口之内、且其戳仍与这棵树相符的一次核验。
+    Hit(Verified),
+    /// Nothing reusable — with the stamp the caller must pay under, when one had to be walked.
+    /// 没有可复用的东西——需要走一遍时，连同调用方付费时必须用的那个戳。
+    ///
+    /// `None` when there was nothing to validate: a member with no remembered verdict needs no stamp
+    /// walk to decide that it must pay, and the walk then happens **inside the payment** (audit `T1`,
+    /// cut 7) — which is where it can run beside the other members'.
+    /// 当没有任何东西需要校验时是 `None`：没有记忆裁决的成员不需要走戳就能判定它必须付费，于是这次走法
+    /// 发生在**付费里面**（审计 `T1` 第七刀）——而那里它才能与其它成员的走法并行。
+    Miss {
+        /// The stamp of the tree as this answer sees it, when one was walked.
+        /// 这份答案所见的树戳，走过时才有。
+        stamp: Option<(usize, u64)>,
+    },
+}
+
+/// What an answer must do about one member (audit `T1`, cut 7).
+/// 一份答案对一个成员必须做的事（审计 `T1` 第七刀）。
+pub(crate) enum Consultation {
+    /// Reuse this verdict: the window holds one and the tree behind it has not moved.
+    /// 复用这个裁决：窗口里有一份，而它背后的树没有动过。
+    Remembered(bool),
+    /// Pay for one, under this stamp when one was already walked.
+    /// 付费；已经走过戳时就用那个戳。
+    Pay {
+        /// The stamp of the tree as this answer sees it, when one was walked.
+        /// 这份答案所见的树戳，走过时才有。
+        stamp: Option<(usize, u64)>,
+    },
+}
+
+/// One member's content verification, paid for but not yet recorded (audit `T1`, cut 7).
+/// 一个成员的内容核验，已付费但尚未记下（审计 `T1` 第七刀）。
+///
+/// Split from the recording so the payment can happen on **another thread**: the per-member work is
+/// where the seconds are (a whole-tree hash per member), one member's verdict does not depend on
+/// another's, and nothing about this value touches this thread's memo. [`record`] puts it back.
+/// 与"记下"拆开，是为了让付费可以发生在**另一个线程**上：每个成员的活正是秒数所在（每成员一次整树
+/// 哈希），一个成员的裁决不依赖另一个，而这个值不碰本线程的任何记忆。[`record`] 把它放回去。
+pub(crate) struct Paid {
+    /// Whether the output still described the sources when the hash ran.
+    /// 哈希运行时，产物是否仍在描述这批源码。
+    current: bool,
+    /// The moment the hash ran, as `HH:MM:SS` (UTC).
+    /// 哈希运行的时刻，`HH:MM:SS`（UTC）。
+    clock: String,
+    /// The stamp the caller handed in, kept so the next lookup can compare against it.
+    /// 调用方交进来的戳，留着让下一次查找能与之对比。
+    stamp: (usize, u64),
+}
+
+/// The policy this thread's current tool call asked for.
+/// 本线程当前工具调用所要求的策略。
+pub(crate) fn current_policy() -> Policy {
+    policy()
+}
+
+/// What an answer must do about one member, under a policy it names (audit `T1`, cut 7).
+/// 一份答案在**它点名的**策略下对一个成员必须做的事（审计 `T1` 第七刀）。
+///
+/// The policy is a parameter rather than a second read of this thread's cell because the caller may
+/// be deciding for several members at once, and the decision has to be the caller's request, not
+/// whatever the worker thread it later runs on happens to hold.
+/// 策略是参数而不是再读一次本线程的单元，因为调用方可能一次为好几个成员做决定，而这个决定必须是调用方
+/// 的请求，而不是它随后运行的那个工作线程碰巧持有的东西。
+pub(crate) fn consult(root: &Path, out: &Path, policy: Policy) -> Consultation {
+    let key = key(root, out);
+    match policy {
+        Policy::Verify => Consultation::Pay { stamp: None },
+        // Never pay: without a matching remembered verdict the honest answer is "not known to be
+        // current", which sends the readers down the deriving path rather than trusting the record.
+        // 永不自付：没有匹配的记忆时，诚实的答案是"不知道它新鲜"，让读者走推导那条路，而不是相信记录。
+        Policy::ReuseOnly => {
+            Consultation::Remembered(matches!(lookup(&key, root), Lookup::Hit(v) if v.current))
+        }
+        Policy::Reuse => match lookup(&key, root) {
+            Lookup::Hit(verified) => Consultation::Remembered(verified.current),
+            Lookup::Miss { stamp } => Consultation::Pay { stamp },
+        },
+    }
+}
+
+/// Pay for one member's content hash on **this** thread, under a stamp the caller walked.
+/// 在**本**线程上为一个成员的内容哈希付费，用的是调用方走过的那个戳。
+///
+/// Touches no memo: this is the half that may run on a worker thread.
+/// 不碰任何记忆：这是可以跑在工作线程上的那一半。
+pub(crate) fn pay_with_stamp(root: &Path, out: &Path, stamp: Option<(usize, u64)>) -> Paid {
+    let stamp = stamp.unwrap_or_else(|| tree_stamp(root));
+    Paid {
+        current: build_output_is_current(root, out),
+        clock: wall_clock(),
+        stamp,
+    }
+}
+
+/// Record a payment as one **this answer** took, and report what it said (audit `T1`, cut 7).
+/// 把一次付费记为**本份答案**自己做过的，并回报它说了什么（审计 `T1` 第七刀）。
+pub(crate) fn record(root: &Path, out: &Path, paid: Paid) -> bool {
+    let verified = Verified {
+        at: Instant::now(),
+        clock: paid.clock,
+        current: paid.current,
+        stamp: paid.stamp,
+        answer: answer_epoch(),
+    };
+    let current = verified.current;
+    let stamp = verified.stamp;
+    VERIFIED.with(|store| store.borrow_mut().insert(key(root, out), verified));
+    // The stamp this payment was taken under is now this answer's stamp: remembering it here is what
+    // lets the readers that follow (`TreeDelta`, the census line) reuse the verdict without walking
+    // the tree again — including when the walk happened on a worker thread.
+    // 这次付费所用的戳从此就是**本份答案**的戳：在这里记住它，正是让随后那些读取方（`TreeDelta`、普查
+    // 行）不必再走一遍树就能复用裁决的东西——包括那次走法发生在工作线程上的情形。
+    STAMPS.with(|stamps| stamps.borrow_mut().insert(key(root, out), stamp));
+    current
+}
+
+/// Look one published output up, walking the guard stamp exactly once.
+/// 查一份已发布产物，并且只走一遍守卫用的戳。
+fn lookup(key: &(PathBuf, PathBuf), root: &Path) -> Lookup {
+    let window = Duration::from_secs(REUSE_WINDOW_SECONDS);
+    let expired = VERIFIED.with(|store| {
+        let mut store = store.borrow_mut();
+        let verified = store.get(key)?;
+        if verified.at.elapsed() >= window {
+            store.remove(key);
+            return None;
+        }
+        Some(Verified {
+            at: verified.at,
+            clock: verified.clock.clone(),
+            current: verified.current,
+            stamp: verified.stamp,
+            answer: verified.answer,
+        })
+    });
+    let Some(verified) = expired else {
+        // Nothing to validate: the stamp walk belongs to the payment that is about to happen, where
+        // it can run beside every other member's.
+        // 没有东西需要校验：该走的戳属于即将发生的那次付费，而那里它能与其它每个成员的走法并行。
+        return Lookup::Miss { stamp: None };
+    };
+    let stamp = stamp_for(key, root);
+    if verified.stamp == stamp {
+        Lookup::Hit(verified)
+    } else {
+        VERIFIED.with(|store| store.borrow_mut().remove(key));
+        Lookup::Miss { stamp: Some(stamp) }
+    }
+}
+
+/// Pay for the content hash, remember it, and spell the line for a payment this answer made.
+/// 为内容哈希付费、记下它，并为"本份答案自己做过的付费"拼出那一行。
+fn paid_line(root: &Path, out: &Path, stamp: Option<(usize, u64)>) -> String {
+    let paid = pay_with_stamp(root, out, stamp);
+    let clock = paid.clock.clone();
+    if record(root, out, paid) {
+        format!("freshness: content-verified at {clock}")
     } else {
         STALE.to_owned()
     }
-}
-
-/// Hash the sources once, remember the verdict **and its stamp**, and report the verdict.
-/// 对源码做一次哈希，记住裁决**与它的戳**，并回报裁决。
-fn pay_now(key: &(PathBuf, PathBuf), root: &Path, out: &Path) -> bool {
-    let stamp = stamp_for(key, root);
-    let verified = Verified {
-        at: Instant::now(),
-        clock: wall_clock(),
-        current: build_output_is_current(root, out),
-        stamp,
-    };
-    let current = verified.current;
-    VERIFIED.with(|store| store.borrow_mut().insert(key.clone(), verified));
-    current
 }
 
 /// Whether this published output still describes its sources — **the one place that pays for the
@@ -288,19 +429,21 @@ fn pay_now(key: &(PathBuf, PathBuf), root: &Path, out: &Path) -> bool {
 /// 哈希而不是 20 次**，实测占 7.9 s 答案里的 3.5 s。**戳**是让共享安全的东西：一棵多了、少了或被碰过的文件
 /// 的树过不了戳、会重新付费，于是"在一份新鲜记录旁边写下一个面"的那条钉子照旧看到 `[added since build]`。
 pub(crate) fn verdict(root: &Path, out: &Path) -> bool {
-    let key = (root.to_path_buf(), out.to_path_buf());
+    let key = key(root, out);
     match policy() {
         // The caller asked to pay now, whatever the window holds.
         // 调用方要求现在就付，无论窗口里有什么。
-        Policy::Verify => pay_now(&key, root, out),
-        Policy::Reuse => match remembered(&key, root) {
-            Some(verified) => verified.current,
-            None => pay_now(&key, root, out),
+        Policy::Verify => record(root, out, pay_with_stamp(root, out, None)),
+        Policy::Reuse => match lookup(&key, root) {
+            Lookup::Hit(verified) => verified.current,
+            Lookup::Miss { stamp } => record(root, out, pay_with_stamp(root, out, stamp)),
         },
         // Never pay: without a matching remembered verdict the honest answer is "not known to be
         // current", which sends the readers down the deriving path rather than trusting the record.
         // 永不自付：没有匹配的记忆时，诚实的答案是"不知道它新鲜"，让读者走推导那条路，而不是相信记录。
-        Policy::ReuseOnly => remembered(&key, root).is_some_and(|verified| verified.current),
+        Policy::ReuseOnly => {
+            matches!(lookup(&key, root), Lookup::Hit(verified) if verified.current)
+        }
     }
 }
 
@@ -369,20 +512,34 @@ fn tree_stamp(root: &Path) -> (usize, u64) {
     (count, newest)
 }
 
-/// The line for a verification the window let this call reuse.
-/// 窗口允许本次调用复用的那次核验，其对应的行。
+/// The line for a verification this answer may use, saying which of the two things it is.
+/// 本份答案可以使用的一次核验，其对应的行——并说出它究竟是两者中的哪一种。
+///
+/// **A verification this answer paid for itself is not a reuse** (audit `T1`, cut 7). The two used to
+/// share one wording the moment the payment started being shared between readers, and the roster of a
+/// 50,000-file workspace silently changed from `content-verified at 23:34:22` to `reused (... 5s ago)`
+/// for exactly the same work — a different claim about the answer, and a worse one. The rule is now:
+/// paid in **this** answer ⇒ `content-verified`; paid in an earlier one and still inside the window ⇒
+/// `reused`, which names the moment and the window it relied on.
+/// **本份答案自己付过费的核验不是复用**（审计 `T1` 第七刀）。付费一开始在几个读者之间共享，这两者就
+/// 共用了一种措辞，而 50,000 文件工作区的普查静默地从 `content-verified at 23:34:22` 变成了
+/// `reused (... 5s ago)`——同一份工作却是关于这份答案的另一种声称，而且是更差的那种。规则现在是：
+/// 在**本份**答案里付费 ⇒ `content-verified`；在更早的答案里付费且仍在窗口内 ⇒ `reused`，并点名那个
+/// 时刻与它所依赖的窗口。
 fn reused_line(verified: &Verified) -> String {
     let age = verified.at.elapsed().as_secs();
-    if verified.current {
-        format!(
+    let paid_here = verified.answer == answer_epoch();
+    match (verified.current, paid_here) {
+        (true, true) => format!("freshness: content-verified at {}", verified.clock),
+        (true, false) => format!(
             "freshness: reused (content-verified at {}, {age}s ago; window {REUSE_WINDOW_SECONDS}s)",
             verified.clock
-        )
-    } else {
-        format!(
+        ),
+        (false, true) => STALE.to_owned(),
+        (false, false) => format!(
             "{STALE}; reused, content-verified at {}, {age}s ago; window {REUSE_WINDOW_SECONDS}s",
             verified.clock
-        )
+        ),
     }
 }
 

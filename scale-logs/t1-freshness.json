@@ -1,5 +1,5 @@
 {
-  "what": "T1 P0.1 + P0.2: one content verdict per member per answer, guarded by a cheap tree stamp; discovery walks each level with a bounded worker pool",
+  "what": "T1 P0.1 + P0.2 + P0.3': one content verdict per member per answer, guarded by a cheap tree stamp; discovery parallel per level; member verifications paid in parallel under a bounded worker budget",
   "when": "2026-10-05",
   "trees": {
     "w50": "target/scale/w50 = 20 members x 2,503 .rs files = 50,060 files, records published per member (`verify`, pipeline only)",
@@ -10,7 +10,8 @@
     "baseline": "c29ffa2 (+ docs commit 7c1eecf): `build_output_is_current` called directly by three readers; the content hash is paid twice per member (40 for 20 members)",
     "cut6_three_walks": "P0.1 without the per-answer stamp memo: the stamp guard is walked by all three readers (60 walks for 20 members)",
     "cut6": "P0.1: one paid entry point `freshness::verdict`, `Verified` carries a stamp (file count + newest mtime of `src/**/*.rs`, read from directory entries), `remembered()` only reuses while the stamp still matches, and `begin_answer()` shares one stamp walk per member per answer",
-    "p02": "P0.1 + P0.2: `parallel_map_with_workers` maps each directory level (order preserved, no nested pools); the discovery reference for the serial path is the same code with workers = 1"
+    "p02": "P0.1 + P0.2: `parallel_map_with_workers` maps each directory level (order preserved, no nested pools)",
+    "p03": "P0.1 + P0.2 + P0.3': the members of a workspace are verified in parallel (`parallel_map_members`) under a bounded, machine-adaptive worker budget; the stamp walk happens inside the payment (so it runs beside the other members) and is only taken up front when there is a remembered verdict to validate; the pruning manifest is read once per member instead of twice; a verdict this answer paid for is spelled `content-verified`, not `reused`"
   },
   "sessions": [
     {
@@ -38,15 +39,28 @@
     },
     {
       "name": "quiet-C",
-      "note": "interleaved baseline vs P0.1+P0.2, same session; this is the headline pair",
+      "note": "interleaved baseline vs P0.1+P0.2, same session",
       "rows": [
         {"arm": "baseline", "tree": "w50", "query": "child000001", "runs_s": [8.618, 8.148, 8.205], "median_s": 8.205},
         {"arm": "p02", "tree": "w50", "query": "child000001", "runs_s": [4.759, 4.786, 4.762], "median_s": 4.762},
         {"arm": "baseline", "tree": "w50", "query": "zzz-nothing", "runs_s": [8.129, 7.823, 7.765], "median_s": 7.823},
         {"arm": "p02", "tree": "w50", "query": "zzz-nothing", "runs_s": [4.694, 4.991, 4.689], "median_s": 4.689}
       ],
-      "headline": "8.205 -> 4.762 s (1.72x) and 7.823 -> 4.689 s (1.67x); the previous session measured the same baseline at 7.90 s, so this box was quiet again",
-      "t3": {"arm": "baseline", "runs_s": [0.548, 0.415, 0.325], "p02": [0.555, 0.399, 0.344], "verdict": "indistinguishable: one member, so the duplicate payment removed here is worth ~0.2 s, below the noise"}
+      "headline": "8.205 -> 4.762 s (1.72x) and 7.823 -> 4.689 s (1.67x)"
+    },
+    {
+      "name": "D",
+      "note": "interleaved baseline vs P0.1+P0.2+P0.3', same session; this is the headline pair for the whole P0 batch",
+      "rows": [
+        {"arm": "baseline", "tree": "w50", "query": "child000001", "runs_s": [12.125, 10.161, 9.923], "median_s": 10.161},
+        {"arm": "p03", "tree": "w50", "query": "child000001", "runs_s": [3.420, 3.230, 3.260], "median_s": 3.260},
+        {"arm": "baseline", "tree": "w50", "query": "zzz-nothing", "runs_s": [10.881, 10.095, 10.031], "median_s": 10.095},
+        {"arm": "p03", "tree": "w50", "query": "zzz-nothing", "runs_s": [3.220, 3.153, 3.522], "median_s": 3.220},
+        {"arm": "baseline", "tree": "t3", "query": "child000001", "runs_s": [0.416]},
+        {"arm": "p03", "tree": "t3", "query": "child000001", "runs_s": [0.351]}
+      ],
+      "headline": "10.161 -> 3.260 s (3.12x) and 10.095 -> 3.220 s (3.14x); on the quieter box of session C the same batch would read 8.2 -> 2.6 s",
+      "note": "the baseline absolute seconds drift with the box (7.90 s in the previous session, 8.20 s in session C, 10.16 s here), which is why every ratio above is measured inside ONE session with the arms interleaved"
     }
   ],
   "mechanism_counts": {
@@ -54,16 +68,46 @@
     "baseline": {"build_output_is_current_calls": 40, "note": "20 members x 2 readers, measured in the fifth cut"},
     "cut6_three_walks": {"build_output_is_current_calls": 20, "stamp_walks": 60},
     "cut6": {"build_output_is_current_calls": 20, "stamp_walks": 20, "wall_s": 7.843},
-    "reading": "one verdict per member (the duplicate payment is gone) and one stamp walk per member (the three readers share it inside one answer)"
+    "p03": {"build_output_is_current_calls": 20, "stamp_walks": 20, "wall_s": 3.159},
+    "reading": "one verdict per member, one stamp walk per member, and both now run on the worker that owes them"
+  },
+  "p03_phases": {
+    "protocol": "temporary eprintln timers around `search`'s phases and inside `roots_with_freshness`, one run per row, same tree and query; the rows are successive states of the same work, not three different machines",
+    "rows": [
+      {"state": "members paid in parallel, before the other two changes", "consult_s": 0.780, "parallel_pay_s": 1.561, "verify_phase_s": 2.873, "tree_phase_s": 1.502, "wall_s": 4.505},
+      {"state": "pruning manifest read once per member", "consult_s": 0.673, "parallel_pay_s": 1.391, "verify_phase_s": 2.556, "tree_phase_s": 1.056, "wall_s": 3.708},
+      {"state": "stamp walk folded into the payment", "consult_s": 0.009, "parallel_pay_s": 1.671, "verify_phase_s": 2.142, "tree_phase_s": 0.922, "wall_s": 3.159}
+    ],
+    "reading": "consult is what the calling thread did before the workers started (stamp walks + memo lookups); parallel_pay is the 20 content hashes plus their stamp walks on the worker pool; tree is the per-member record work (pruning manifest, one row per face). What remains is the hash itself plus a per-member manifest pass that is still sequential."
+  },
+  "member_parallelism_probe": {
+    "protocol": "8 members answered one after another, then the same 8 concurrently (`xargs -P8`), one fresh process each, wall clock",
+    "sequential_s": 4.392,
+    "parallel_s": 0.864,
+    "speedup": "5.1x",
+    "reading": "the per-member verification is independent work and this is the evidence that parallelising it is the lever; what the tool actually uses is the bounded budget below, not -P8"
+  },
+  "worker_budget": {
+    "rule": "half the machine's cores, at most 8, never fewer than one core left alone; `NICH_LINK_JOBS` overrides it",
+    "why": "the maintainer's requirement, verbatim: machine core counts differ, and a tool call must not take the user's whole machine",
+    "pin": "build_time::source_walk::parallel_tests::the_worker_budget_leaves_the_machine_alone_and_honours_an_explicit_request"
   },
   "p02_acceptance": {
     "plan_and_records_byte_identical": "measured: `verify` on a copy of target/scale/t3 (2,504 files) run with the pre-P0.2 binary and then with the P0.2 binary, both publishing into the same path; `diff -r` over the two out dirs is empty and all eight artifacts hash equal (discovery.fingerprint, file_manifest.tsv, function_manifest.tsv, generated_lib.rs, graft_plan.tsv, pruning_manifest.tsv, shape_manifest.tsv, source_scope.tsv)",
     "older_records_stay_valid": "measured: the target/scale/w50 members were published BEFORE this change; the baseline, P0.1 and P0.1+P0.2 binaries all print `freshness: content-verified` and the same `discovery.fingerprint ca0d05b9e102b8aa0300a7d40ee703d2`",
     "pin": "build_time::source_walk::discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count (200-face wide fixture where the wide level is not the root; workers 1/2/3/8/64 must agree on the tree AND on the order of the findings)"
   },
+  "answer_wording_fixed": {
+    "what": "P0.1 alone silently changed what the answer says for the same work",
+    "before_this_batch": "freshness: content-verified at 23:34:22 (baseline binary, measured)",
+    "with_p01_only": "freshness: reused (content-verified at 23:34:28, 5s ago; window 30s) (measured)",
+    "now": "freshness: content-verified at 23:42:15 (measured) — a verdict this answer paid for is not a reuse; only a later answer's reuse is spelled `reused`",
+    "pin": "mcp::freshness::freshness_tests::a_verdict_this_answer_paid_for_is_not_spelled_as_a_reuse"
+  },
   "estimation_rule": "every number above is MEASURED. Where a figure in the checklist's P0 table is an estimate it is labelled as one.",
   "open": [
-    "T1 acceptance p95 <= 1 s is NOT met (4.76 s on this box)",
-    "what remains at 50k: 20 content hashes (~0.16 s each quiet), 20 stamp walks, and the manifest reads; P0.3 (verify the rows an answer names, plus a names-only file-set comparison) is the route to <= 1 s and is waiting on the maintainer's ruling"
+    "T1 acceptance p95 <= 1 s is NOT met: 3.16-3.26 s at 50,000 files with this bounded budget (8 workers of 20 cores)",
+    "what remains: the twenty whole-tree content hashes (~1.4-1.7 s on the worker pool, which is why the budget bounds the gain: 20 members / 8 workers), one still-sequential per-member manifest pass (~0.9 s), and process startup + workspace scope (~0.5 s)",
+    "the route to <= 1 s is a budget decision (raise NICH_LINK_JOBS / the rule), not a semantic change: P0.3 (verify only the rows an answer names) is still open and would cost the negative answers their whole-tree guarantee"
   ]
 }

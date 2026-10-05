@@ -83,6 +83,19 @@ pub const ENTRY_ENV: &str = "NICH_LINK_ENTRY";
 /// 向构建步骤索取详细状态行的环境变量。
 pub const BUILD_VERBOSE_ENV: &str = "NICH_LINK_BUILD_VERBOSE";
 
+/// The environment variable that caps how many workers a walk may use (audit `T1`).
+/// 限制一次遍历最多用几个工作线程的环境变量（审计 `T1`）。
+///
+/// The default is a rule rather than a number — half the machine, at most eight, never fewer than
+/// one core left alone — because machines differ and a tool call must not take a user's whole
+/// machine. This variable is the explicit override for a caller who knows better than the rule, and
+/// it is part of the text contract for the same reason `NICH_LINK_ENTRY` is: two surfaces read it,
+/// and a second literal would drift.
+/// 默认值是一条规则而不是一个数字——半台机器、最多八个、至少留一个核——因为机器各不相同，而一次工具
+/// 调用不该把用户的整台机器拿走。这个变量是给"比规则更清楚自己处境"的调用方的显式覆盖；它属于文本契约
+/// 的理由与 `NICH_LINK_ENTRY` 相同：有两处读它，而第二个字面量会漂。
+pub const JOBS_ENV: &str = "NICH_LINK_JOBS";
+
 /// The environment variable that pins the package a surface works on.
 /// 固定执行面所工作的包的环境变量。
 pub const PACKAGE_ROOT_ENV: &str = "NICH_LINK_PACKAGE_ROOT";

@@ -138,6 +138,15 @@ pub(crate) use discovery_cache::{
 };
 pub use source_layout::{SourceLayout, source_layout};
 pub(crate) use source_walk::{discover_root_reporting, discovery_fingerprint, emit_rerun_paths};
+// The read path of the bridge is the only caller of these two: the member map exists to verify the
+// members of a workspace beside each other, and the budget is the rule it runs under. They are
+// re-exported **under that feature** because a build without the bridge would otherwise carry an
+// unused import — and the definitions themselves stay ungated, since the walk uses both.
+// 只有桥的读路径调用这两个：成员映射存在的意义是把工作区的成员并排核验，而预算是它运行所依的规则。
+// 它们**在那个特性下**才被重导出，因为不带桥的构建否则会背上一个未使用导入——而定义本身不设门控，
+// 因为遍历两处都在用。
+#[cfg(feature = "mcp")]
+pub(crate) use source_walk::{parallel_map_with_threshold, worker_budget};
 // `resolve_host_entry` is deliberately absent: production code reaches it only
 // through `host_entry_from_environment`, and re-exporting it for tests alone
 // would be an unused import in a non-test build.

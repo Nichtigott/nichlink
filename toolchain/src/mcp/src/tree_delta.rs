@@ -125,28 +125,59 @@ impl TreeDelta {
     pub(crate) fn read_with(root: &Path, current: bool) -> Self {
         let out = out_dir(root);
         match read_pruning_manifest(&out) {
-            Ok(rows) => {
-                let ids = rows.iter().map(|row| row.id).collect();
-                let by_source = rows
-                    .iter()
-                    .map(|row| (row.source.clone(), row.id))
-                    .collect();
-                Self {
-                    current,
-                    known: true,
-                    ids,
-                    by_source,
-                    rows,
-                }
-            }
-            Err(_) => Self {
-                current,
-                known: false,
-                ids: BTreeSet::new(),
-                by_source: HashMap::new(),
-                rows: Vec::new(),
-            },
+            Ok(rows) => Self::from_rows(rows, current),
+            Err(_) => Self::without_rows(current),
         }
+    }
+
+    /// The delta built from rows a caller has **already read** (audit `T1`, cut 7).
+    /// 由调用方**已经读过**的行构成的差异（审计 `T1` 第七刀）。
+    ///
+    /// The pruning manifest is the same file `search`'s record half reads, and asking for it twice
+    /// parsed fifty thousand rows twice per 50,000-file workspace — the read half of that answer's
+    /// tree phase, measured at 1.5 s. A caller that has the rows hands them over instead.
+    /// 剪枝清单就是 `search` 的记录那一半也在读的同一个文件，而问它两遍会在一个 50,000 文件的工作区上
+    /// 把五万行解析两遍——那是该答案树那一半的一半，实测 1.5 s。手里已有行的调用方改为把它交过来。
+    pub(crate) fn from_rows(rows: Vec<PruningRow>, current: bool) -> Self {
+        let ids = rows.iter().map(|row| row.id).collect();
+        let by_source = rows
+            .iter()
+            .map(|row| (row.source.clone(), row.id))
+            .collect();
+        Self {
+            current,
+            known: true,
+            ids,
+            by_source,
+            rows,
+        }
+    }
+
+    /// The delta for a member whose manifest could not be read.
+    /// 清单读不了的成员的差异。
+    pub(crate) fn without_rows(current: bool) -> Self {
+        Self {
+            current,
+            known: false,
+            ids: BTreeSet::new(),
+            by_source: HashMap::new(),
+            rows: Vec::new(),
+        }
+    }
+
+    /// One row per face, borrowed from the rows this delta already holds.
+    /// 每个面一行，借自这份差异已经持有的行。
+    ///
+    /// The manifest carries one row per tracked **symbol**, so a face appears as many times as it
+    /// tracks symbols; the first row wins, exactly as the record half has always decided it.
+    /// 清单每个被跟踪的**符号**一行，因此一个面会出现它跟踪符号数次；第一行胜出，与记录那一半一向的
+    /// 判定相同。
+    pub(crate) fn one_row_per_id(&self) -> std::collections::BTreeMap<NodeId, &PruningRow> {
+        let mut by_id = std::collections::BTreeMap::new();
+        for row in &self.rows {
+            by_id.entry(row.id).or_insert(row);
+        }
+        by_id
     }
 
     /// Where one face stands, in the one vocabulary both tools use.

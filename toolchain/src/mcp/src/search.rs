@@ -878,14 +878,15 @@ fn record_face_lines(
     let Ok(rows) = crate::build_time::read_pruning_manifest(&out) else {
         return Ok(None);
     };
+    // The rows are read **once** and handed to the delta as well: the record half and the delta read
+    // the same manifest, and reading it twice parsed 50,000 rows twice for one 50,000-file answer
+    // (audit `T1`, cut 7). One row per face is then taken from the rows this delta already holds.
+    // 这些行**只读一次**，并同样交给差异：记录那一半与差异读的是同一份清单，读两遍等于为一份 50,000 文件的
+    // 答案把五万行解析两遍（审计 `T1` 第七刀）。随后"每个面一行"取自这份差异已经持有的那些行。
+    let built = TreeDelta::from_rows(rows, current);
     // One row per tracked symbol, so a face appears as many times as it tracks symbols.
     // 每个被跟踪符号一行，因此一个面会出现它跟踪符号数次。
-    let mut by_id: std::collections::BTreeMap<NodeId, &crate::build_time::PruningRow> =
-        std::collections::BTreeMap::new();
-    for row in &rows {
-        by_id.entry(row.id).or_insert(row);
-    }
-    let built = TreeDelta::read_with(root, current);
+    let by_id = built.one_row_per_id();
     // A **stale** record no longer describes this tree, and every verdict below is relative to it:
     // the round's `kind`-change pin needs the derivation to see that a face was re-identified, and the
     // `added since build` pin needs it to see a face the build never saw. Presenting the old rows with
