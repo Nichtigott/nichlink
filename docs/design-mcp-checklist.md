@@ -1274,8 +1274,8 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 | 项 | 目标 | 现状 | 具体改动 | 验收（可判定） |
 | --- | --- | --- | --- | --- |
-| **P0.1** | 去掉重复付费 | **完成**（见 §M7.8）：`freshness::verdict(root, out)` 是唯一付费入口；`Verified` 增 `stamp: (usize, u64)`＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；`remembered()` 要求戳匹配；`begin_answer()` 让三个读取方**每成员共享一遍戳**（计数：40→20 次哈希、60→20 次戳）；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全改走它 | 50k `search --query` **11.28 → 7.53 s（1.50×）**（同一会话交错测；本机比上轮慢 1.4×，换算≈5.3 s） | `a_published_face_is_ok_and_a_new_one_is_added_since_build` **绿**、`--features mcp` 584 项全绿、两面 clippy + 全工作区测试 + `--check-table` 全绿；盲区写进文档：戳每答案只走一遍（同答案内的并发编辑不被发现，与窗口本来的暴露相同）、窗口内 `cp -p`（保留 mtime）不被发现，窗口 `REUSE_WINDOW_SECONDS` 且仅进程内 |
-| **P0.2** | 并行 `discover_root` | `source_walk::discover_root_reporting` 逐目录递归、单线程（每成员 ~40 ms） | 目录项按序取回后**按文件并行**解析，**子节点与 `unplaced` 按路径序合并**（与 K2 的 `parallel_map` 同形） | 同一棵树上**计划与记录逐字节相同**；50k 省 ~0.75 s（→ ~4.0–4.5 s） |
+| **P0.1** | 去掉重复付费 | **完成**（见 §M7.8）：`freshness::verdict(root, out)` 是唯一付费入口；`Verified` 增 `stamp: (usize, u64)`＝`src/**/*.rs` 的**文件数 + 最新 mtime**（只读目录项）；`remembered()` 要求戳匹配；`begin_answer()` 让三个读取方**每成员共享一遍戳**（计数：40→20 次哈希、60→20 次戳）；`tree_delta::read`、`consistency_support::{roots_with_freshness, published_census}` 全改走它 | 50k `search --query`：**P0.1 单独 8.21→5.10 s / 7.82→5.28 s（同会话交错，约 1.6×）**；与 P0.2 合起来 **8.21→4.76 s（1.72×）** | `a_published_face_is_ok_and_a_new_one_is_added_since_build` **绿**、`--features mcp` 584 项全绿、两面 clippy + 全工作区测试 + `--check-table` 全绿；盲区写进文档：戳每答案只走一遍（同答案内的并发编辑不被发现，与窗口本来的暴露相同）、窗口内 `cp -p`（保留 mtime）不被发现，窗口 `REUSE_WINDOW_SECONDS` 且仅进程内 |
+| **P0.2** | 并行 `discover_root` | **完成**（见 §M7.9）：每一层都用 `parallel_map_with_workers` 映射（宽层不在根层）、条目先读出来再映射（顺序＝目录顺序）、`MAPPING` 标记拒绝嵌套、`workers<=1` 或 <64 条目走串行（作为钉子的串行参照） | 同一棵树上**计划与记录逐字节相同**（t3 上改前/改后两份 `out/` `diff -r` 为空、八份产物 sha256 全等；w50 旧记录仍 `content-verified`、指纹不变） | 50k 省 0.24–0.52 s（5.095→4.859 / 5.279→4.759）；钉子 `source_walk::discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count`（200 面宽夹具，workers 1/2/3/8/64 树与发现顺序都一致） |
 | **P0.3**（**待裁**） | 按答案验鲜 | 现在按"整棵树"验 | `record_face_lines` 只对**它点到的行**读文件比 `source_hash`；答案加一行 `verified N named row(s)`；"整棵树新鲜吗"不再有任何一次调用回答（写进文档） | 50k `search --query` **≤1 s**；命中查询只读命中文件；钉子：答案必须自报验了几行 |
 | **P0.4** | 数据落地 | 数字散在会话里 | `scale-logs/t1-freshness.json`（三段账 + 两次付费 + 并行前后） | 文档表格与 git 对账；**估算与实测分列** |
 
@@ -1381,4 +1381,19 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 **必须一起读的两条**：① **绝对秒数不跨会话可比** —— 同一个**基线**二进制在上一次会话里是 **7.90 s**、在本会话里是 **11.28 s**（本机此刻约慢 1.4×），因此本轮只报**同一会话内交错测出的比值**（1.50× / 1.47×），并按这个比例把上轮的数字换算着读（≈5.3 s）✓；② **T1 的 p95 ≤1 s 仍未达**，这一刀只是把"同一件事付两次"（3.5 s）清掉，剩下的 ~4.5 s（20 次内容哈希本身）与 ~2.3 s（哈希之外）都是**下一步**的对象。
 
 **仍未闭合（不许说成做完了）**：P0.2 并行 `discover_root`（上表里"哈希之外"的一块）· P0.3【待裁】按答案验鲜（≤1 s 的唯一路径）· P0.4 数据落地（本节与 `scale-logs/t1-freshness.json` 已落 P0.1 的一半，P0.2 后补全）· P1–P4 全部未动。
+
+### §M7.9 P0.2 落地：每一层各自并行、顺序不动（2026-10-05）
+
+**改法**：发现遍历的**每一层**都用 `parallel_map_with_workers` 映射（根层与 `discover_children` 各一次），而不是只并行根层——真实树的宽层很少是顶层：50,000 文件夹具把它的 2,500 个面放在 `src/control/object/` 下，只并行根层等于没并行。三处配套：① **条目先读出来再映射**，因此合并顺序就是目录交出条目的顺序（`unplaced` 的顺序也被保住）；② **拒绝嵌套**——线程本地的 `MAPPING` 标记让"工作线程里的另一个宽层"在自己线程上做完，线程数由机器决定而不是由树的深度决定；③ `workers <= 1` 或条目数 <64 时走串行，那条路就是钉子的**串行参照**。
+
+**验收（逐字节，实测不是声称）**：
+- **发布物逐字节相同**：把 `target/scale/t3`（2,504 文件）复制一份，先由**改前**的二进制 `verify` 发布、存下 `out/`，清掉 `target/` 再由**改后**的二进制发布同一个路径 ⇒ `diff -r` 为空、八份产物 sha256 全等（`discovery.fingerprint`、`file_manifest.tsv`、`function_manifest.tsv`、`generated_lib.rs`、`graft_plan.tsv`、`pruning_manifest.tsv`、`shape_manifest.tsv`、`source_scope.tsv`）✓
+- **旧记录不失效**：`target/scale/w50` 的 20 个成员是在这次改动**之前**发布的；改前/改后两个二进制都印 `freshness: content-verified` 且指纹同为 `ca0d05b9e102b8aa0300a7d40ee703d2` ✓（若顺序变了，指纹会变、全部记录立刻陈旧——这正是要防的）
+- **钉子**：`build_time::source_walk::discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count`——200 个面的宽夹具（宽层不在根层），workers 取 **1/2/3/8/64**，树与**发现的顺序**都必须一致 ✓
+
+**实测（同一会话内与 P0.1 交错跑、三次取中位）**：`cut6`（只有 P0.1）5.095 s → `p02`（P0.1+P0.2）**4.859 s**（`child000001`）；5.279 → **4.759 s**（`zzz-nothing`）⇒ 这一刀值 0.24–0.52 s（1.05–1.11×）。**与基线合起来**（同会话交错）：**8.205 → 4.762 s（1.72×）**、**7.823 → 4.689 s（1.67×）** ✓ —— 这达到 P0.1 表里那句"50k `search --query` ~4.8 s"。
+
+**门禁**：`cargo fmt --check` ✓ · `cargo test --workspace --offline` ✓ · `--features mcp` **585 项全绿** ✓ · 两面 `clippy -D warnings` ✓ · `nichlink-conventions` 158 项（含 600 行棘轮与 `test_shape`）✓ · `tools/nichlink-publish --check-table` ✓。
+
+**仍未闭合**：**T1 的 p95 ≤1 s 仍未达**（本机 4.76 s）；剩下的三块是 20 次内容哈希（安静时每次约 0.16 s）、20 次戳遍历、以及每成员的清单读取 ⇒ 下一步是 **P0.3**（待裁）。
 

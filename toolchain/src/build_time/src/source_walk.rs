@@ -48,6 +48,25 @@ pub(crate) fn discover_root(src: &Path) -> Vec<Node> {
 /// 会让工具在真实 crate 上不可用。而**是**注册面的文件、或本意是面却解析不了的文件会被
 /// 报告：构建永远编译不到它，此处沉默正是本项目存在的意义所在——拒绝的那种失败。
 pub(crate) fn discover_root_reporting(src: &Path, unplaced: &mut Vec<UnplacedFace>) -> Vec<Node> {
+    discover_root_reporting_with_workers(src, unplaced, worker_count())
+}
+
+/// [`discover_root_reporting`] with the worker count spelled out, so a pin can compare worker counts.
+/// [`discover_root_reporting`] 的显式工作线程数版本，好让钉子能比较不同线程数的结果。
+///
+/// **Order is the whole contract.** The nodes are sorted by name below and the unplaceable findings
+/// are merged in the order the directory handed its entries out, so the tree and the diagnostics are
+/// the same whatever the worker count — the fingerprint that goes into every record is computed from
+/// this tree, and one that depended on completion order would invalidate every record the moment the
+/// machine's core count changed (audit `K2`'s rule, now holding for discovery too).
+/// **顺序就是全部契约。** 节点在下面按名字排序，无法安放的发现按目录交出条目的顺序合并，因此无论几个
+/// 工作线程，树与诊断都相同——写进每份记录的指纹就是从这棵树算出来的，而依赖完成顺序的指纹会在机器的核数
+/// 一变时让每份记录失效（审计 `K2` 的规则，现在对发现过程同样成立）。
+pub(crate) fn discover_root_reporting_with_workers(
+    src: &Path,
+    unplaced: &mut Vec<UnplacedFace>,
+    workers: usize,
+) -> Vec<Node> {
     // A tree the build cannot read is a layout problem, reported where layout
     // problems are reported. This used to `expect("src directory must exist")`,
     // which took the build script down with exit 101 and left `check --json` with
@@ -59,34 +78,61 @@ pub(crate) fn discover_root_reporting(src: &Path, unplaced: &mut Vec<UnplacedFac
         unplaced.push(unreadable(src, src));
         return Vec::new();
     };
-    let mut nodes: Vec<Node> = entries
+    // The entries are read out first so one entry can go to one worker; the order the directory
+    // handed them out is the order the findings below are merged in.
+    // 先把条目读出来，好把一个条目交给一个工作线程；目录交出它们的顺序就是下面合并发现的顺序。
+    let entries: Vec<PathBuf> = entries
         .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let path = entry.path();
-            let name = path.file_name()?.to_str()?.to_owned();
-            if matches!(name.as_str(), "lib.rs" | "main.rs" | "bin") {
-                return None;
-            }
-            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
-                record_unplaced(unplaced, src, &path);
-            }
-            if path.is_dir() && valid_name(&name) {
-                let attached = path.join(format!("{name}.rs"));
-                return Some(Node {
-                    name,
-                    file: attached.is_file().then_some(attached),
-                    children: discover_children(src, &path, unplaced),
-                });
-            }
-            None
-        })
+        .map(|entry| entry.path())
         .collect();
+    let mut nodes = Vec::new();
+    for (node, mut found) in parallel_map_with_workers(&entries, workers, |path| {
+        walk_root_entry(src, path, workers)
+    }) {
+        if let Some(node) = node {
+            nodes.push(node);
+        }
+        unplaced.append(&mut found);
+    }
     nodes.sort_by(|left, right| left.name.cmp(&right.name));
     nodes.retain(has_source);
     nodes
 }
 
-fn discover_children(src: &Path, dir: &Path, unplaced: &mut Vec<UnplacedFace>) -> Vec<Node> {
+/// One entry of the source root, walked the way the root walk asks for it.
+/// 源根的一个条目，按根遍历要求的方式走过。
+fn walk_root_entry(src: &Path, path: &Path, workers: usize) -> (Option<Node>, Vec<UnplacedFace>) {
+    let mut unplaced = Vec::new();
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return (None, unplaced);
+    };
+    if matches!(name, "lib.rs" | "main.rs" | "bin") {
+        return (None, unplaced);
+    }
+    let name = name.to_owned();
+    if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+        record_unplaced(&mut unplaced, src, path);
+    }
+    if path.is_dir() && valid_name(&name) {
+        let attached = path.join(format!("{name}.rs"));
+        return (
+            Some(Node {
+                name,
+                file: attached.is_file().then_some(attached),
+                children: discover_children(src, path, &mut unplaced, workers),
+            }),
+            unplaced,
+        );
+    }
+    (None, unplaced)
+}
+
+fn discover_children(
+    src: &Path,
+    dir: &Path,
+    unplaced: &mut Vec<UnplacedFace>,
+    workers: usize,
+) -> Vec<Node> {
     // The same refusal as the root's: a directory that vanished or cannot be read
     // between the walk reaching it and this call is reported, not fatal.
     // 与根目录同样的拒绝：在遍历到达它之后、本次调用之前消失或读不了的目录会被报告，而不是致命。
@@ -94,36 +140,69 @@ fn discover_children(src: &Path, dir: &Path, unplaced: &mut Vec<UnplacedFace>) -
         unplaced.push(unreadable(src, dir));
         return Vec::new();
     };
-    let mut nodes: Vec<Node> = entries
+    // Each level maps in parallel on its own — the wide level of a real tree is rarely the top one
+    // (the 50,000-file fixture keeps its 2,500 faces in `src/control/object/`), and parallelising
+    // only the root would leave that level serial. [`parallel_map_with_workers`] refuses to nest, so
+    // a worker that meets another wide level finishes it on its own thread instead of spawning a
+    // second pool: the thread count stays bounded by the machine, not by the depth of the tree.
+    // 每一层各自并行映射——真实树的宽层很少是顶层（50,000 文件夹具把它的 2,500 个面放在
+    // `src/control/object/` 下），只并行根层会让那一层留在串行。 [`parallel_map_with_workers`] 拒绝嵌套，
+    // 因此在工作线程里遇到另一个宽层的调用会在自己的线程上把它做完，而不是再开一个线程池：线程数由机器
+    // 决定，而不是由树的深度决定。
+    let entries: Vec<PathBuf> = entries
         .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let path = entry.path();
-            let name = path.file_name()?.to_str()?.to_owned();
-            if path.is_file() {
-                if path.file_stem().and_then(|stem| stem.to_str())
-                    == dir.file_name().and_then(|stem| stem.to_str())
-                {
-                    return None;
-                }
-                if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-                    return None;
-                }
-                record_unplaced(unplaced, src, &path);
-            }
-            if path.is_dir() && valid_name(&name) {
-                let attached = path.join(format!("{name}.rs"));
-                return Some(Node {
-                    name,
-                    file: attached.is_file().then_some(attached),
-                    children: discover_children(src, &path, unplaced),
-                });
-            }
-            None
-        })
+        .map(|entry| entry.path())
         .collect();
+    let mut nodes = Vec::new();
+    for (node, mut found) in parallel_map_with_workers(&entries, workers, |path| {
+        walk_child_entry(src, dir, path, workers)
+    }) {
+        if let Some(node) = node {
+            nodes.push(node);
+        }
+        unplaced.append(&mut found);
+    }
     nodes.sort_by(|left, right| left.name.cmp(&right.name));
     nodes.retain(has_source);
     nodes
+}
+
+/// One entry of a module directory, walked the way [`discover_children`] asks for it.
+/// 模块目录的一个条目，按 [`discover_children`] 要求的方式走过。
+fn walk_child_entry(
+    src: &Path,
+    dir: &Path,
+    path: &Path,
+    workers: usize,
+) -> (Option<Node>, Vec<UnplacedFace>) {
+    let mut unplaced = Vec::new();
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return (None, unplaced);
+    };
+    if path.is_file() {
+        if path.file_stem().and_then(|stem| stem.to_str())
+            == dir.file_name().and_then(|stem| stem.to_str())
+        {
+            return (None, unplaced);
+        }
+        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            return (None, unplaced);
+        }
+        record_unplaced(&mut unplaced, src, path);
+    }
+    let name = name.to_owned();
+    if path.is_dir() && valid_name(&name) {
+        let attached = path.join(format!("{name}.rs"));
+        return (
+            Some(Node {
+                name,
+                file: attached.is_file().then_some(attached),
+                children: discover_children(src, path, &mut unplaced, workers),
+            }),
+            unplaced,
+        );
+    }
+    (None, unplaced)
 }
 
 /// One directory the walk could not read, reported like an unplaceable face.
@@ -346,23 +425,71 @@ fn parallel_map<T: Send>(
     items: &[std::path::PathBuf],
     map: impl Fn(&std::path::PathBuf) -> T + Sync,
 ) -> Vec<T> {
+    parallel_map_with_workers(items, worker_count(), map)
+}
+
+/// How many workers this machine offers.
+/// 这台机器提供几个工作线程。
+fn worker_count() -> usize {
+    std::thread::available_parallelism().map_or(1, |count| count.get())
+}
+
+thread_local! {
+    /// Whether this thread is already inside a mapping, which is what stops a nested wide level from
+    /// opening a second pool (audit `T1`).
+    /// 本线程是否已经在一个映射之内；正是它阻止嵌套的宽层再开一个线程池（审计 `T1`）。
+    static MAPPING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`parallel_map`] with the worker count spelled out, so a pin can compare worker counts.
+/// [`parallel_map`] 的显式工作线程数版本，好让钉子能比较不同线程数。
+///
+/// Below the threshold, and **inside** a worker of an enclosing mapping, it runs serially: the thread
+/// handoff costs more than the work it hands off, and a nested pool would multiply the machine's
+/// threads by the depth of the tree.
+/// 低于阈值时，以及**在**外层映射的工作线程**之内**时，它串行运行：线程交接比它交接出去的活还贵，而嵌套
+/// 线程池会把机器的线程数乘以树的深度。
+fn parallel_map_with_workers<I: Sync, T: Send>(
+    items: &[I],
+    workers: usize,
+    map: impl Fn(&I) -> T + Sync,
+) -> Vec<T> {
     // Below this size the thread handoff costs more than the work it hands off.
     // 小于这个规模时，线程交接比它交接出去的活还贵。
-    if items.len() < 64 {
+    if items.len() < 64 || workers <= 1 || MAPPING.with(std::cell::Cell::get) {
         return items.iter().map(map).collect();
     }
-    let workers = std::thread::available_parallelism().map_or(1, |count| count.get());
     let chunk = items.len().div_ceil(workers);
     let mut slots: Vec<Option<Vec<T>>> = (0..items.len().div_ceil(chunk)).map(|_| None).collect();
     std::thread::scope(|scope| {
         for (slot, slice) in slots.iter_mut().zip(items.chunks(chunk)) {
             let map = &map;
             scope.spawn(move || {
+                let _guard = MappingGuard::enter();
                 *slot = Some(slice.iter().map(map).collect());
             });
         }
     });
     slots.into_iter().flatten().flatten().collect()
+}
+
+/// Marks its thread as being inside a mapping, for as long as it lives.
+/// 在它存活期间，把所在线程标记为"在一个映射之内"。
+struct MappingGuard;
+
+impl MappingGuard {
+    /// Enter a mapping on this thread, restoring the previous mark when dropped.
+    /// 在本线程进入一个映射，并在被丢弃时恢复先前的标记。
+    fn enter() -> Self {
+        MAPPING.with(|mapping| mapping.set(true));
+        MappingGuard
+    }
+}
+
+impl Drop for MappingGuard {
+    fn drop(&mut self) {
+        MAPPING.with(|mapping| mapping.set(false));
+    }
 }
 
 /// Every `.rs` file under `dir`, by path, without reading any of them.
@@ -410,5 +537,112 @@ mod parallel_tests {
                 "order is preserved whatever the worker count"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use super::{UnplacedFace, discover_root_reporting_with_workers};
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// A wide tree: `root/src/control/object/<face>/<face>.rs`, the shape a real generated host has
+    /// when it has to spread a large registry over directories — and the shape the 50,000-file
+    /// fixture has, whose wide level is neither the root nor the first level (audit `T1`).
+    /// 一棵宽树：`root/src/control/object/<face>/<face>.rs`——真实生成宿主在必须把大注册表摊到目录里时的
+    /// 形状，也正是 50,000 文件夹具的形状，而它的宽层既不是根层也不是第一层（审计 `T1`）。
+    fn wide_tree(label: &str, faces: usize) -> PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "nichlink-source-walk-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src/control/object")).expect("tree");
+        fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
+        fs::write(
+            root.join("src/control/control.rs"),
+            "// the module that owns the wide level\n",
+        )
+        .expect("control module");
+        for index in 0..faces {
+            let face = format!("child{index:06}");
+            let directory = root.join("src/control/object").join(&face);
+            fs::create_dir_all(&directory).expect("face directory");
+            fs::write(directory.join(format!("{face}.rs")), "// face\n").expect("face source");
+        }
+        // A face that sits outside the layout is the finding the walk reports, and its position in
+        // the merged list is part of what this pin compares.
+        // 一个长在布局之外的面正是遍历要报告的发现，而它在合并后的清单里的位置也是这枚钉子比较的东西。
+        fs::write(root.join("src/control/loose.rs"), "// not a face\n").expect("loose file");
+        root
+    }
+
+    fn render(nodes: &[super::Node]) -> Vec<String> {
+        let mut lines = Vec::new();
+        render_into(nodes, 0, &mut lines);
+        lines
+    }
+
+    fn render_into(nodes: &[super::Node], depth: usize, lines: &mut Vec<String>) {
+        for node in nodes {
+            lines.push(format!(
+                "{}{} file={:?}",
+                "  ".repeat(depth),
+                node.name,
+                node.file.as_ref().map(|file| file
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default())
+            ));
+            render_into(&node.children, depth + 1, lines);
+        }
+    }
+
+    fn render_findings(findings: &[UnplacedFace]) -> Vec<String> {
+        findings
+            .iter()
+            .map(|finding| format!("{} {} {}", finding.relative, finding.phase, finding.line))
+            .collect()
+    }
+
+    /// Discovery must hand back the same tree and the same findings whatever the worker count
+    /// (audit `T1`).
+    /// 无论几个工作线程，发现过程都必须交回同一棵树与同一批发现（审计 `T1`）。
+    ///
+    /// The tree goes into the fingerprint that every record carries, so a result that depended on
+    /// which worker finished first would invalidate every record on a machine with a different core
+    /// count. The serial run is the reference; the parallel runs must match it **including the order
+    /// of the findings**, which is the half that a naive parallel walk gets wrong.
+    /// 这棵树会进入每份记录携带的指纹，因此一个取决于哪个工作线程先做完的结果，会在核数不同的机器上让每份记录
+    /// 失效。串行那次是参照；并行的几次必须与它一致，**连发现的顺序也要一致**——那正是草率的并行遍历会弄错的
+    /// 那一半。
+    #[test]
+    fn the_discovered_tree_does_not_depend_on_the_worker_count() {
+        let root = wide_tree("workers", 200);
+        let src = root.join("src");
+        let mut serial_findings = Vec::new();
+        let serial = discover_root_reporting_with_workers(&src, &mut serial_findings, 1);
+        assert!(
+            render(&serial).len() > 200,
+            "the fixture must be wide enough to take the parallel path: {}",
+            render(&serial).len()
+        );
+        for workers in [2usize, 3, 8, 64] {
+            let mut findings = Vec::new();
+            let tree = discover_root_reporting_with_workers(&src, &mut findings, workers);
+            assert_eq!(
+                render(&tree),
+                render(&serial),
+                "the tree differs with {workers} workers"
+            );
+            assert_eq!(
+                render_findings(&findings),
+                render_findings(&serial_findings),
+                "the findings differ with {workers} workers"
+            );
+        }
+        let _ = fs::remove_dir_all(&root);
     }
 }
