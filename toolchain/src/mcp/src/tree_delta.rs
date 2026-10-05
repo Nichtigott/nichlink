@@ -104,6 +104,21 @@ impl TreeDelta {
     pub(crate) fn read(root: &Path) -> Self {
         let out = out_dir(root);
         let current = build_output_is_current(root, &out);
+        Self::read_with(root, current)
+    }
+
+    /// The same reading with the freshness verdict **already known** (audit `T1`).
+    /// 同一份读取，但新鲜度判定**已知**（审计 `T1`）。
+    ///
+    /// Freshness walks the tree's sources, and one `search` call used to ask for it twice per member —
+    /// the delta and the source half — which at 50,000 files was the whole difference between 17 s and
+    /// the target. Passing the verdict down is the fix; a **cache** is not, because a remembered
+    /// verdict is the shape that made an earlier attempt wrong.
+    /// 新鲜度要遍历树的源码，而一次 `search` 过去对每个成员问两次（delta 与源码那一半）——在 50,000 文件上，
+    /// 那就是 17 s 与目标之间的全部差距。把判定往下传就是修法；**缓存**不是，因为"记住一个判定"正是让先前
+    /// 一次尝试出错的那种形状。
+    pub(crate) fn read_with(root: &Path, current: bool) -> Self {
+        let out = out_dir(root);
         match read_pruning_manifest(&out) {
             Ok(rows) => {
                 let ids = rows.iter().map(|row| row.id).collect();

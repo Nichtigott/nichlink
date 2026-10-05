@@ -1172,3 +1172,22 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 （delta / `record_source_lines` / `TreeDelta::read`）⇒ 20 成员 × 3 × ~0.25 s ≈ 15 s。**下一刀：一次调用内每个
 成员只问一次新鲜度**（把判定往下传；**不新增缓存**——缓存正是这一带反复出错的形状）。
 
+### M6 §5.2 T1 第二刀：新鲜度"一次调用只问一次"
+
+**改动**：把判定往下传（`TreeDelta::read_with(root, current)`；`roots_with_freshness(root)` 一次算好，面半与
+源码半共用）⇒ 每个成员从"问两次"变成"问一次"。**不新增缓存**——记住一个判定正是这一带反复出错的形状。
+配套两处：① 成员清单为空（cargo 解析不了的根、没有清单的目录）时 `record_source_lines` 回退 `None`，让扫描
+照旧回答源码那一半（既有钉子 `a_root_without_a_package_still_answers_the_source_half` 守着）；② 两个新读者按
+600 行棘轮搬进 `consistency::support`（`roots_with_freshness`、`current_identity`），由 `consistency` 重导出。
+
+| 调用 | 上一轮 | 本轮 |
+| --- | --- | --- |
+| t3（2,500 文件）`--query child000001` | 0.80 s | **0.34 s** |
+| t3 `--query zzz-nothing` | 0.75 s | **0.32 s** |
+| 50k 工作区 `--query child000001` | 16.2 s | **10.2 s** |
+| 50k 工作区 `--query zzz-nothing` | 17.2 s | **11.0 s** |
+
+**仍未达 T1 验收（50k p95 ≤1 s）**：50k 上剩下的 ~10 s 是 20 个成员各自的**记录读取 + 新鲜度**（每成员 ~0.5 s），
+即"每成员固定成本"，与 `consistency` 那边同一形状 ⇒ 下一刀：**把每成员的新鲜度做成一次目录级遍历**
+（现在每成员都要走一遍 `src/**` 列路径 + 读回记录过的文件内容），或按 K1 的方向把"未变即复用"做进去。
+

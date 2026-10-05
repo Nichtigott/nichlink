@@ -36,8 +36,10 @@ pub(crate) use support::tree_census;
 // The shape vocabulary the write path's family verdict reads, re-exported so there is one spelling of
 // "what does this declaration declare" rather than two (audit `W5-6`).
 // 写入路径的家族判定所读的形状词汇，重导出以便"这条声明声明了什么"只有一份拼写而不是两份（审计 `W5-6`）。
+pub(crate) use support::current_identity;
 pub(crate) use support::declared_shape;
 pub(super) use support::deviations;
+pub(crate) use support::roots_with_freshness;
 
 use support::*;
 

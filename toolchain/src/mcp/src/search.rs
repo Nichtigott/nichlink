@@ -287,9 +287,20 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // nothing to a longer list of file hits.
     // 工作区那一半在顶层遵循同一条规则：虚拟根的普查是关于"被读到的那棵树"的事实，因此完整写出
     // ——每个成员带它的状态——而推导不出树的成员明说，而不是在一份更长的文件命中里什么都不贡献。
+    // One freshness verdict per member, taken **once** and shared by both halves below (audit `T1`):
+    // it used to be asked twice per member, which at 50,000 files was the whole remaining cost. Passing
+    // it down is the fix; a cache is not — a remembered verdict is the shape that made an earlier
+    // attempt wrong.
+    // 每个成员只取**一次**新鲜度判定，由下面两半共用（审计 `T1`）：过去每个成员问两次，而在 50,000 文件上
+    // 那就是剩下的全部成本。把判定往下传就是修法；缓存不是——"记住一个判定"正是让先前一次尝试出错的那种形状。
+    let members_with_freshness = crate::mcp::consistency::roots_with_freshness(root);
     match workspace::scope(root) {
         Ok(Scope::Package(namespace)) => {
-            match record_face_lines(root, &query, limit, &mut hits, &mut withheld_hits)? {
+            let current = members_with_freshness
+                .iter()
+                .find(|(member, _)| member == root)
+                .is_some_and(|(_, current)| *current);
+            match record_face_lines(root, current, &query, limit, &mut hits, &mut withheld_hits)? {
                 Some(lines) => results.extend(lines),
                 None => {
                     let (faces, unparsable) = crate::mcp::resolve::derived_faces(root, &namespace)?;
@@ -315,9 +326,17 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         Ok(Scope::Workspace(members)) => {
             results.push(workspace::roster(root, &members));
             for member in &members {
-                if let Some(lines) =
-                    record_face_lines(&member.dir, &query, limit, &mut hits, &mut withheld_hits)?
-                    && !lines.is_empty()
+                if let Some(lines) = record_face_lines(
+                    &member.dir,
+                    members_with_freshness
+                        .iter()
+                        .find(|(root, _)| root == &member.dir)
+                        .is_some_and(|(_, current)| *current),
+                    &query,
+                    limit,
+                    &mut hits,
+                    &mut withheld_hits,
+                )? && !lines.is_empty()
                 {
                     results.push(format!("member {} ({})", member.name, member.status()));
                     results.extend(lines);
@@ -373,7 +392,13 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
     // 实测 **96 s**（什么也没命中的查询）；命中的那个看着便宜 8 倍，只因它按 `limit` 提前退出——这也是这个工具
     // 早先那些数是**部分**运行的原因。记录答不了时下面的扫描保持原样，而预筛的规则照旧：它决定**词法什么**，
     // 绝不决定**列出什么**。
-    if let Some(lines) = record_source_lines(root, &query, limit, &mut hits, &mut withheld_hits)? {
+    if let Some(lines) = record_source_lines(
+        &members_with_freshness,
+        &query,
+        limit,
+        &mut hits,
+        &mut withheld_hits,
+    )? {
         results.extend(lines);
     } else {
         let files =
@@ -779,7 +804,7 @@ const DERIVED_SOURCE: &str =
 /// 文件，与本桥每个读者遵循的是同一条规则：一份只列出"带函数的文件"的清单，会把路径问题答成整棵树的一个子集，
 /// 而"格式正常但错"正是这一带反复生产的答案。
 fn record_source_lines(
-    root: &Path,
+    members: &[(std::path::PathBuf, bool)],
     query: &str,
     limit: usize,
     hits: &mut usize,
@@ -792,19 +817,20 @@ fn record_source_lines(
     // 工作区根没有自己的记录——它的成员才有——因此读的是成员，与 `consistency` 的普查同形。少了这一步，
     // 对着工作区根的查询会退回扫描它里面的每个文件（在 50,000 文件上实测 12.8 s），尽管每个成员的清单都是
     // 新鲜的。
-    let roots = match crate::mcp::workspace::scope(root) {
-        Ok(crate::mcp::workspace::Scope::Package(_)) => vec![root.to_path_buf()],
-        Ok(crate::mcp::workspace::Scope::Workspace(members)) => {
-            members.into_iter().map(|member| member.dir).collect()
-        }
-        Ok(crate::mcp::workspace::Scope::Unresolvable(_)) | Err(_) => return Ok(None),
-    };
+    // No member at all means no record to answer from — a root cargo cannot resolve, or a directory
+    // with no manifest. That is a fall-back, not an empty list: the scan below still answers the
+    // source half, which is exactly what such a tree needs.
+    // 一个成员都没有，就意味着没有可据以作答的记录——cargo 解析不了的根，或没有清单的目录。那是**回退**，
+    // 不是空清单：下面的扫描照样回答源码那一半，而那正是一棵这样的树所需要的。
+    if members.is_empty() {
+        return Ok(None);
+    }
     let mut rows = Vec::new();
-    for root in roots {
-        let out = crate::mcp::build_evidence::out_dir(&root);
-        if !crate::build_time::build_output_is_current(&root, &out) {
+    for (root, current) in members {
+        if !*current {
             return Ok(None);
         }
+        let out = crate::mcp::build_evidence::out_dir(root);
         let Ok(member_rows) = crate::build_time::read_file_manifest(&out) else {
             return Ok(None);
         };
@@ -840,31 +866,9 @@ fn record_source_lines(
     Ok(Some(lines))
 }
 
-/// The identity the face in this file carries **now** (audit `T1`).
-/// 这份文件里的面**此刻**携带的身份（审计 `T1`）。
-///
-/// Parsed with the kernel's own face reader and hashed with the build's own identity rule, so a
-/// record-answered row and a derived row cannot disagree about what "re-identified" means. `None` when
-/// the file cannot be read or parsed: the caller then falls back to the recorded identity and the reply
-/// keeps saying the build it describes is stale.
-/// 用内核自己的面读取器解析、用构建自己的身份规则散列，因此"记录作答的行"与"推导出来的行"不可能对
-/// "re-identified"给出两种意思。文件读不到或解析不了时回 `None`：调用方退回记录里的身份，而回复继续说明
-/// 它所描述的那次构建已经陈旧。
-fn current_identity(root: &Path, row: &crate::build_time::PruningRow) -> Option<NodeId> {
-    let namespace = crate::mcp::registry::namespace(root).ok()?;
-    let text = std::fs::read_to_string(root.join("src").join(&row.source)).ok()?;
-    let face = crate::mcp::consistency::one_face(&text).ok()?;
-    // `field` and not `string`: the declaration writes `kind: X` and the kernel's face reader keeps
-    // that as the field's raw value (measured: `string("kind")` is `None` here while
-    // `field("kind")` is `Some("RenamedButton")`).
-    // 用 `field` 而不是 `string`：声明写的是 `kind: X`，内核的面读取器把它保留为字段的原始取值（实测：
-    // 这里 `string("kind")` 是 `None`，而 `field("kind")` 是 `Some("RenamedButton")`）。
-    let kind = face.field("kind").or_else(|| row.kind.clone())?;
-    Some(NodeId::from_namespaced_path(&namespace, &row.source, &kind))
-}
-
 fn record_face_lines(
     root: &Path,
+    current: bool,
     query: &str,
     limit: usize,
     hits: &mut usize,
@@ -881,7 +885,7 @@ fn record_face_lines(
     for row in &rows {
         by_id.entry(row.id).or_insert(row);
     }
-    let built = TreeDelta::read(root);
+    let built = TreeDelta::read_with(root, current);
     // A **stale** record no longer describes this tree, and every verdict below is relative to it:
     // the round's `kind`-change pin needs the derivation to see that a face was re-identified, and the
     // `added since build` pin needs it to see a face the build never saw. Presenting the old rows with
@@ -927,7 +931,7 @@ fn record_face_lines(
             let judged = if built.current {
                 *id
             } else {
-                current_identity(root, row).unwrap_or(*id)
+                crate::mcp::consistency::current_identity(root, row).unwrap_or(*id)
             };
             lines.push(record_face_line(judged, row, &built));
             *hits += 1;

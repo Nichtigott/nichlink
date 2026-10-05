@@ -798,3 +798,61 @@ pub(super) fn published_faces(
         ),
     ))
 }
+
+/// Every root a record read must cover, with its freshness verdict taken **once** (audit `T1`).
+/// 记录读取要覆盖的每个根，以及**只取一次**的新鲜度判定（审计 `T1`）。
+///
+/// A workspace root has no record of its own; its members do. Taking the verdict here and passing it
+/// down means one call asks each member once — it used to be asked twice, and at 50,000 files that was
+/// the whole remaining cost.
+/// 工作区根没有自己的记录，成员才有。判定在这里取一次并往下传，于是一次调用对每个成员只问一次——过去问两次，
+/// 而在 50,000 文件上那就是剩下的全部成本。
+pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool)> {
+    let roots = match crate::mcp::workspace::scope(root) {
+        Ok(crate::mcp::workspace::Scope::Package(_)) => vec![root.to_path_buf()],
+        Ok(crate::mcp::workspace::Scope::Workspace(members)) => {
+            members.into_iter().map(|member| member.dir).collect()
+        }
+        Ok(crate::mcp::workspace::Scope::Unresolvable(_)) | Err(_) => Vec::new(),
+    };
+    roots
+        .into_iter()
+        .map(|root| {
+            let current = crate::build_time::build_output_is_current(
+                &root,
+                &crate::mcp::build_evidence::out_dir(&root),
+            );
+            (root, current)
+        })
+        .collect()
+}
+
+/// The identity the face in this file carries **now** (audit `T1`).
+/// 这份文件里的面**此刻**携带的身份（审计 `T1`）。
+///
+/// Parsed with the kernel's own face reader and hashed with the build's own identity rule, so a
+/// record-answered row and a derived row cannot disagree about what "re-identified" means. `None` when
+/// the file cannot be read or parsed: the caller then falls back to the recorded identity and the reply
+/// keeps saying the build it describes is stale.
+/// 用内核自己的面读取器解析、用构建自己的身份规则散列，因此"记录作答的行"与"推导出来的行"不可能对
+/// "re-identified"给出两种意思。文件读不到或解析不了时回 `None`：调用方退回记录里的身份，而回复继续说明
+/// 它所描述的那次构建已经陈旧。
+pub(crate) fn current_identity(
+    root: &Path,
+    row: &crate::build_time::PruningRow,
+) -> Option<nichlink_kernel::identity::NodeId> {
+    let namespace = crate::mcp::registry::namespace(root).ok()?;
+    let text = std::fs::read_to_string(root.join("src").join(&row.source)).ok()?;
+    let face = crate::mcp::consistency::one_face(&text).ok()?;
+    // `field` and not `string`: the declaration writes `kind: X` and the kernel's face reader keeps
+    // that as the field's raw value (measured: `string("kind")` is `None` here while
+    // `field("kind")` is `Some("RenamedButton")`).
+    // 用 `field` 而不是 `string`：声明写的是 `kind: X`，内核的面读取器把它保留为字段的原始取值（实测：
+    // 这里 `string("kind")` 是 `None`，而 `field("kind")` 是 `Some("RenamedButton")`）。
+    let kind = face.field("kind").or_else(|| row.kind.clone())?;
+    Some(nichlink_kernel::identity::NodeId::from_namespaced_path(
+        &namespace,
+        &row.source,
+        &kind,
+    ))
+}
