@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 
 #[path = "commands/build.rs"]
 mod build_command;
+#[path = "commands/crates.rs"]
+mod crates_command;
+
 #[path = "commands/check.rs"]
 mod check_command;
 #[path = "explain.rs"]
@@ -54,6 +57,7 @@ USAGE:
 COMMANDS:
     new       Create a NichLink host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
+    crates    Plan the crate split a host declared (`--write` creates it)
     build     Validate the registration tree, then run cargo build
     snippets  Inject the face-field editor snippets (VS Code project file, or
               the LuaSnip file Neovim loads)
@@ -154,6 +158,7 @@ pub fn run_to(argv: impl IntoIterator<Item = String>, out: &mut dyn Write) -> Re
         }
         Some("new") => new_command::new(&mut args, out),
         Some("check") => check_command::check(&mut args, out),
+        Some("crates") => crates_command::crates(&mut args, out),
         Some("build") => build_command::build(&mut args, out),
         Some("snippets") => snippets_command::snippets(&mut args, out),
         Some("explain") => explain::explain(&mut args, out),

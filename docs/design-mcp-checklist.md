@@ -1876,3 +1876,15 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **四份产物**（规划器产出字节，仍然什么都不写）：`lib_rs` = 宿主的 `NICHLINK_NAMESPACE` 常量 + `include!(OUT_DIR/generated_lib.rs)` · `build_rs` = `run_for(宿主 Cargo.toml, OUT_DIR, 宿主命名空间)` + 两条 `rerun-if-changed` + `NICHLINK_SHAPE_ONLY=<认领>`（`unsafe { set_var }`，构建脚本此刻单线程）· `cargo_toml` = 宿主的 `[dependencies]`/`[build-dependencies]` **逐字照抄** + `publish = false` · `config_patch` = 需要**合并**进**工作区根** `.cargo/config.toml` 的 `--remap-path-prefix=<前缀>=` 条目（rustflag 是每次调用的、cargo 从当前目录找 config ⇒ 放包里只在从那个目录跑 cargo 时生效）。钉子 1 条覆盖四份产物（含"逐字照抄的依赖"与"remap 条目逐条拼出"）。
 
 **门禁纠了我一处真违规**，而且纠得对：动词门禁把我生成串里的 `fn main` 当成裸动词声明 ✗ —— 根因是它扫**原文**而没屏蔽字符串字面量 ✗。仓库早就有唯一词法规则 `nichlink_kernel::source::mask_non_code`（`size` 门禁就用它 ✓）⇒ 修法是**让动词门禁也读掩码**（一处改动 + 新钉子：字面量里的声明不算、同一句作为代码仍算 ✓）。这是"门禁必须建模自己的文本"那条教训的第二次现身（第一次是新写的 `namespace_source` 门禁抓到自己 ✗）。
+
+### §M7.29 P3.4 的写盘一半：`nichlink crates --check|--write`（2026-10-06）
+
+**命令**：`nichlink crates [<包目录>] [--check|--write]`（默认 `--check`）。`--check` 读声明与**已发布的记录**（缺记录时按名拒绝并给 `run nichlink check first` 那条出路 ✓）算出计划并打印"会创建哪个包、在哪、几次挂载、几条 remap"；`--write` 真写下幽灵的三份文件，并把缺少的 `--remap-path-prefix` 条目**合并**进**工作区根**的 `.cargo/config.toml`（`workspace_root_of` 从包目录向上找最外层带 `[workspace]` 的 `Cargo.toml`，没有就退回包自己 ✓）。
+
+**写盘的两条规则**（`build_time::crate_write`，`#[cfg(feature = "cli")]` 门控——唯一调用方是 CLI 那一面）：① **幂等且先比内容**（`write_if_changed`）：第二遍不改一个字节，因为拆分是要提交的东西；② **配置是合并、从不整体写下**：没有文件就建（含目录 ✓）、有 `[build]` 无 `rustflags` 就追加、有**单行**数组就插进缺少的条目并**原样保留其余每行每键**；**多行数组/别的语法一律点名拒绝**并给出该手写上去的条目 —— 盲目往用户维护的文件里合并，是一件工具吃掉别人配置的方式 ✓。
+
+**钉子 3 条又是它们先抓到了两个真问题**：① 创建 `.cargo/config.toml` 时没先建 `.cargo/` 目录 ✗；② **文件先写、配置后合并** ⇒ 配置不可合并时幽灵包已经落盘 ✗（钉子断言了相反的顺序 ✓）。修法：配置**先**合并（拒绝必须让树保持原样——留下一次没有 remap 的拆分，等于留下一次身份已经悄悄搬家的拆分）。
+
+**端到端实测**（自足夹具宿主）：`crates --check` ⇒ `crate fix-widgets at /tmp/fix-widgets (2 mounted file(s), 2 remap entr(ies))` + `preview only…` ✓；`--write` ⇒ `wrote 3 file(s) under /tmp/fix; workspace config updated` ✓，产物是 `/tmp/fix-widgets/{Cargo.toml,build.rs,src/lib.rs}` ✓，配置里两条 remap 各自对应一个内联深度 ✓。⚠️ 顺带如实记：那个夹具的 `check` 仍报一条诊断（`parent declaration cannot be resolved`，与写盘无关）——夹具的 `src/lib.rs` 是手写入口、没有 `host!()`，值得下一轮查清它是不是产品侧的第二个口径。
+
+**未做**：`--revert`（删幽灵包 + 撤销配置条目）与 `--at`（指定输出位置）；CLI 的 `--help` 里已列出 `crates` 一行 ✓。

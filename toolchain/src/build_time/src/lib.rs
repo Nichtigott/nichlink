@@ -27,6 +27,14 @@ mod contracts;
 
 #[path = "crate_plan.rs"]
 pub(crate) mod crate_plan;
+
+// Its only caller is the authoring CLI face (`nichlink crates`), so the module rides that feature:
+// a default build has no writer, and dead code is a warning this workspace refuses.
+// 它唯一的调用方是创作面的 CLI（`nichlink crates`），因此该模块随那个特性走：默认构建没有写入方，而死代码是
+// 本工作区拒绝的告警。
+#[cfg(feature = "cli")]
+#[path = "crate_write.rs"]
+pub(crate) mod crate_write;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "discovery_cache.rs"]
@@ -164,6 +172,15 @@ pub(crate) use source_walk::{parallel_map_with_threshold, worker_budget};
 // would be an unused import in a non-test build.
 // 这里刻意不导出 `resolve_host_entry`：生产代码只经 `host_entry_from_environment`
 // 到达它，仅为测试而导出会在非测试构建里成为未使用导入。
+// The authoring surface's CLI face (`nichlink crates`) is the only caller of these, so they ride the
+// same feature: a default build has no use for them, and an unused re-export is a warning this
+// workspace refuses.
+// 这些名字唯一的调用方是创作面的 CLI（`nichlink crates`），因此它们随着同一个特性走：默认构建用不到它们，
+// 而未使用的再导出是本工作区拒绝的告警。
+#[cfg(feature = "cli")]
+pub(crate) use crate_plan::plan as plan_crates;
+#[cfg(feature = "cli")]
+pub(crate) use crate_write::write_partition;
 pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;
@@ -179,11 +196,15 @@ pub(crate) use manifests::{
     write_shape_manifest, write_source_scope_manifest,
 };
 pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
+#[cfg(feature = "cli")]
+pub(crate) use registry_identity::NodeId;
 pub(crate) use renderer::render_lib;
 pub(crate) use scope::{
     SourceScope, collect_active_ids, face_source_is_active, module_feature, source_is_active,
 };
 pub(crate) use scope_faces::{FaceSource, collect_faces};
+#[cfg(feature = "cli")]
+pub(crate) use shape_decl::read_shape_declaration;
 pub(crate) use static_plan::static_plan;
 
 /// Run the build-time discovery and validation pipeline from a Cargo build
