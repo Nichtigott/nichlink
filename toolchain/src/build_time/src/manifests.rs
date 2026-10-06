@@ -35,16 +35,26 @@ use std::fs;
 use std::path::Path;
 
 use super::Node;
+use super::face_view::PruningRow;
 use super::registry_identity::NodeId;
 use super::registry_syntax::{FaceSyntax, GraftSyntax};
 use super::static_plan::source_module_path;
 use super::{SourceScope, collect_faces, parsed_face, relative_display, write_if_changed};
 
+/// Write the pruning manifest and hand back the rows it published (audit `M7`, P1.1).
+/// 写剪枝清单，并把它发布出去的行交回来（审计 `M7`，P1.1）。
+///
+/// The rows are a **result**, not an internal detail: the build-time graph is a second view of
+/// exactly these rows, and a caller that had to read the file back to get them would pay a second
+/// parse of the same fifty thousand lines — the "computed it and handed over nothing" shape this
+/// batch keeps removing, in its other direction.
+/// 这些行是**结果**而不是内部细节：构建期的图正是这些行的第二个视图，而一个不得不把文件读回来才能拿到它的
+/// 调用方，要付同一批五万行的第二次解析——也就是这一批一直在去掉的"算出来了却不交出来"，只是方向相反。
 pub(crate) fn write_pruning_manifest(
     src: &Path,
     nodes: &[Node],
     out_dir: &Path,
-) -> Result<(), String> {
+) -> Result<Vec<PruningRow>, String> {
     // Pass one: every face's own identity, indexed by the module path a `parent:` declaration
     // spells. The resolution cannot happen while walking, because a child may be visited before the
     // face that owns the module it names.
@@ -73,6 +83,35 @@ pub(crate) fn write_pruning_manifest(
     let mut rows = Vec::new();
     visit_pruning_symbols(src, nodes, &modules, &paths, &mut rows);
     write_face_rows(out_dir.join("pruning_manifest.tsv"), rows)
+}
+
+impl FaceColumns {
+    /// The published row for one face, spelling "the declaration named none" the way the reader reads it.
+    /// 一个面的已发布行，"声明里没有它"按读者读到的样子拼写。
+    ///
+    /// The rule is the reader's own (`read_pruning_manifest`): an empty field and `-` both mean the
+    /// declaration named none. It is written here in the other direction so the writer and the reader
+    /// cannot drift about what a published row says.
+    /// 规则就是读者自己的（`read_pruning_manifest`）：空字段与 `-` 都意为声明里没有它。这里写的是反方向，
+    /// 因此写入方与读取方不会对"一条已发布的行说了什么"漂开。
+    fn to_row(&self, id: NodeId, source: String, symbol: String) -> PruningRow {
+        let named = |value: &str| (!value.is_empty() && value != "-").then(|| value.to_owned());
+        PruningRow {
+            id,
+            source,
+            symbol,
+            path: named(&self.path),
+            kind: named(&self.kind),
+            registry_name: named(&self.registry_name),
+            parent: named(&self.parent),
+            source_hash: named(&self.source_hash),
+            fields: named(&self.fields),
+            calls: named(&self.calls),
+            parent_node: named(&self.parent_node),
+            owns_registry: named(&self.owns_registry),
+            logical_path: named(&self.logical_path),
+        }
+    }
 }
 
 /// The face facts the pruning manifest publishes beside each symbol.
@@ -319,7 +358,7 @@ pub(crate) fn write_file_manifest(
     src: &Path,
     nodes: &[Node],
     out_dir: &Path,
-) -> Result<(), String> {
+) -> Result<Vec<(String, String, String)>, String> {
     let mut rows = Vec::new();
     visit_file_functions(src, nodes, &mut rows);
     write_file_rows(out_dir.join("file_manifest.tsv"), rows)
@@ -422,12 +461,13 @@ pub(crate) fn write_graft_manifest(out_dir: &Path, grafts: &[GraftSyntax]) -> Re
 fn write_face_rows(
     path: impl AsRef<Path>,
     mut rows: Vec<(NodeId, String, String, FaceColumns)>,
-) -> Result<(), String> {
+) -> Result<Vec<PruningRow>, String> {
     rows.sort();
     rows.dedup();
     let mut output = String::from(
         "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\tparent_node\towns_registry\tlogical_path\n",
     );
+    let mut published = Vec::with_capacity(rows.len());
     for (id, source, symbol, columns) in rows {
         writeln!(
             output,
@@ -444,8 +484,10 @@ fn write_face_rows(
             columns.logical_path
         )
         .unwrap();
+        published.push(columns.to_row(id, source, symbol));
     }
-    write_if_changed(path.as_ref(), &output)
+    write_if_changed(path.as_ref(), &output)?;
+    Ok(published)
 }
 
 fn write_rows(
@@ -466,14 +508,15 @@ fn write_rows(
 fn write_file_rows(
     path: impl AsRef<Path>,
     mut rows: Vec<(String, String, String)>,
-) -> Result<(), String> {
+) -> Result<Vec<(String, String, String)>, String> {
     rows.sort();
     rows.dedup();
     let mut output = String::from("# source\tfunction\tnote\n");
-    for (source, name, note) in rows {
+    for (source, name, note) in &rows {
         writeln!(output, "{source}\t{name}\t{note}").unwrap();
     }
-    write_if_changed(path.as_ref(), &output)
+    write_if_changed(path.as_ref(), &output)?;
+    Ok(rows)
 }
 
 /// The rows of a record keyed by source path rather than by identity (audit `W6-2`, step three).

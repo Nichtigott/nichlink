@@ -42,6 +42,8 @@ pub mod face_view;
 mod graft_plan_check;
 #[path = "graft_view.rs"]
 mod graft_view;
+#[path = "graph.rs"]
+mod graph;
 #[path = "identity_cache.rs"]
 mod identity_cache;
 #[path = "manifests.rs"]
@@ -160,6 +162,7 @@ pub(crate) use face_syntax_check::{
     face_syntax_errors, parsed_face, unplaced_face_errors,
 };
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
+pub(crate) use graph::write_graph_manifest;
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
 pub(crate) use manifests::{
     write_file_manifest, write_function_manifest, write_graft_manifest, write_pruning_manifest,

@@ -1432,3 +1432,29 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 **仍然待裁的是 P3.3（身份规则）**：分区后幽灵 crate 的包名不同，而声明宏现在烤 `env!("CARGO_PKG_NAME")` ⇒ 同一个面的 `NodeId` 会变（记录/租约失效）。选项 A＝宏改读 `crate::NICHLINK_NAMESPACE`（`host!()` 与生成器各提供一次；只有"不走 `host!()` 直接用宏"的调用方要在 crate 根加一行）；选项 B＝先按计划顺序做 P1/P2，P3.3 与 P3.2 一起裁。**未裁之前 P3 不动工。**
 
+### §M7.12 P1.1 落地：图成一等产物 `graph_edges.tsv`（2026-10-05）
+
+**一句话**：把散落在 `pruning_manifest.tsv` / `file_manifest.tsv` 与读者各自的重新推导里的图事实，变成**一个带节点数、边数与内容摘要的产物**——而且它和记录是**同一次计算的两个视图**，因此两份文件不可能对一个面产生分歧。
+
+**改法**：① 新增 `toolchain/src/build_time/src/graph.rs`：`write_graph_manifest(out_dir, rows, file_rows, grafts)`；② 记录写入方**把行交回来**（`write_pruning_manifest` 与 `write_file_manifest` 现在返回它们发布的行）：图是同一批行的第二个视图，而把清单读回来建图要付同一批五万行的第二次解析——这正是本批一直在去掉的"算出来了却不交出来"，只是方向相反；③ 管线在记录之后、指纹之前写图（载荷全部落地才写指纹，因此**半份图不会被当成完整的**）。
+
+**产物形状**（`# graph\tnichlink-build-graph` / `# nodes` / `# edges` / `# digest` / `# from\tto\tkind`）：
+
+| 边 | 从 → 到 | 事实 |
+| --- | --- | --- |
+| `parent` | `face:<id>` → `face:<父 id>` | 记录里**解析过**的父链；解析不出的不猜 |
+| `in` | `face:<id>` → `file:<源码路径>` | 这个面长在哪份文件里 |
+| `calls-file` | `face:<id>` → `file:<声明它的文件>` | 调用的名字**恰好被一份文件声明**时，就是对那份文件的依赖 |
+| `calls` | `face:<id>` → `name:<拼写>` | 名字被两份文件声明、或没有文件声明 ⇒ **按歧义发布**，不挑一个 |
+| `graft` | `cut:<切口>` → `graft:<嫁接路径>` | 来自 graft 计划；两端是计划携带的 Rust 路径（解析属于手里有声明的读者） |
+
+**如实说明它不做的**：不把被调用的名字解析成**面**（那需要读路径调用图手里的声明；在这里再订一条更弱的规则，会让两个答案对"这条边在不在"产生分歧）。图的节点因此有四类（face/file/name/cut），而"面依赖面"要由能解析的读者走两跳。
+
+**验收（实测）**：
+- **发布物逐字节不变**：t3（2,504 文件）用改前/改后二进制各 `verify` 一次 ⇒ 原有八份产物 `diff` 全同、sha256 全等，**新增第九份** `graph_edges.tsv` 一个 ✓
+- **图上真实规模**：t3 = **5,003 节点 / 5,002 边**（2,501 `in` + 2,501 `parent`，摘要 `8290a465…`）；`examples/control-button` = 11 节点 / 8 边，含两条 `graft` 边 ✓
+- **钉子**（`build_time::graph::graph_tests`，15 项）：`the_graph_is_the_records_own_rows_seen_as_edges`（记录里每个面都是节点、`face:` 节点里记录没有对应行的**只有包根**、`parent` 边等于记录的 `parent_node`、解析不出的父级**不成边**、`calls-file` 指向唯一声明的文件）· `a_name_two_files_declare_stays_a_name`（歧义按歧义发布）· `the_header_counts_and_digest_vouch_for_the_body`（计数与摘要对得上正文，截断/手改可被发现）
+
+**门禁**：fmt ✓ · workspace test ✓ · `--features mcp` **591 项** ✓ · conventions 158 项（含 600 行棘轮）✓ · 两面 clippy ✓ · `--check-table` ✓。
+
+**下一步**：P1.2（写路径刷新 + 外部编辑靠 stamp 差分发现落后）与 P1.3（MCP `graph` 读工具：扇入扇出/强连通分量，输出有界）。

@@ -4,8 +4,8 @@ use super::{
     aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root_reporting,
     emit_rerun_paths, face_syntax_errors, graft_plan_check, prime_node_id_cache, render_lib,
     static_plan, unplaced_face_errors, update_discovery_cache, write_file_manifest,
-    write_function_manifest, write_graft_manifest, write_if_changed, write_pruning_manifest,
-    write_shape_manifest, write_source_scope_manifest,
+    write_function_manifest, write_graft_manifest, write_graph_manifest, write_if_changed,
+    write_pruning_manifest, write_shape_manifest, write_source_scope_manifest,
 };
 use nichlink_kernel::lexicon;
 
@@ -169,13 +169,34 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 相信那次运行留下的产物。先写凭据——也就是这里过去做的事——会在某份载荷写失败时留下"新凭据 +
     // 旧或缺的清单"，下一个读取方把这种混代产物称作 `current` 并相信它的行；而修剪列正是维护者在发布
     // 剪枝前读的东西。这段说明一直要求"干净的一次运行"，但检查只看诊断，从不看写入。
+    // The record's rows are produced **once** and published twice: `pruning_manifest.tsv` is their
+    // record form, and `graph_edges.tsv` is the same rows seen as the graph (audit `M7`, P1.1).
+    // Reading the manifest back to build the graph would be a second parse of the same fifty
+    // thousand lines, and it would also let the two files disagree about a face.
+    // 记录的行**只产出一次**、发布两次：`pruning_manifest.tsv` 是它们的记录形态，而 `graph_edges.tsv`
+    // 是同一批行按图来看的样子（审计 `M7`，P1.1）。把清单读回来建图等于把同一批五万行解析第二遍，而且会让
+    // 两份文件对一个面产生分歧。
+    let mut pruning_rows = Vec::new();
+    match write_pruning_manifest(src, &nodes, out_dir) {
+        Ok(rows) => pruning_rows = rows,
+        Err(error) => write_errors.push(error),
+    }
+    // The declarations are the second half of the graph's raw material: a called name that exactly
+    // one file declares is a dependency on that file, and the graph carries that edge rather than
+    // making every reader re-derive it (audit `M7`, P1.1).
+    // 声明是图的另一半原料：一个恰好被一份文件声明的被调用名字，就是对那份文件的一处依赖，而图直接带上
+    // 那条边，而不是让每个读者重新推导（审计 `M7`，P1.1）。
+    let mut file_rows = Vec::new();
+    match write_file_manifest(src, &nodes, out_dir) {
+        Ok(rows) => file_rows = rows,
+        Err(error) => write_errors.push(error),
+    }
     for result in [
-        write_pruning_manifest(src, &nodes, out_dir),
         write_function_manifest(src, &nodes, out_dir),
         write_source_scope_manifest(src, &nodes, &scope, out_dir),
         write_shape_manifest(src, &nodes, out_dir),
-        write_file_manifest(src, &nodes, out_dir),
         write_graft_manifest(out_dir, &graft_entries.enabled),
+        write_graph_manifest(out_dir, &pruning_rows, &file_rows, &graft_entries.enabled),
         write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
     ] {
         if let Err(error) = result {
