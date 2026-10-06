@@ -280,6 +280,77 @@ mod tests {
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }
 
+    /// The `SUBTREE` marker exists **exactly** on the nodes that have children — which is what makes
+    /// "a crate is a subtree" the compiler's rule rather than a convention: a leaf is mounted straight
+    /// at its own file, so it gets no inline module, so it gets no marker, so `…::button::SUBTREE`
+    /// cannot be written. Nothing else enforces that rule (it lives in this renderer's shape, not in a
+    /// line of code), so it is pinned here.
+    /// `SUBTREE` 标记**恰好**存在于有子节点的节点上——这正是"crate 是一棵子树"成为编译器规则而不是约定的
+    /// 原因：叶子直接挂到它自己的文件上，因此没有内联模块、拿不到标记，于是 `…::button::SUBTREE` 写不出来。
+    /// 除此之外没有东西守这条规则（它住在本渲染器的**形状**里，而不是某一行代码里），所以在这里钉住。
+    #[test]
+    fn the_subtree_marker_exists_only_where_a_subtree_does() {
+        let root = temporary_directory("subtree-marker");
+        let control = root.join("control/control.rs");
+        let button = root.join("control/object/button/button.rs");
+        write_registry(&control, "root_object", "Control", "crate::ROOT_NODE_ID");
+        write_registry(
+            &button,
+            "control_object",
+            "Button",
+            "crate::control::NODE_ID",
+        );
+        let nodes = vec![Node {
+            name: "control".to_owned(),
+            file: Some(control),
+            children: vec![Node {
+                name: "object".to_owned(),
+                file: None,
+                children: vec![Node {
+                    name: "button".to_owned(),
+                    file: Some(button),
+                    children: Vec::new(),
+                }],
+            }],
+        }];
+
+        let output = render_lib(
+            &root,
+            &nodes,
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            &[],
+            &[],
+        );
+
+        assert_eq!(
+            output.matches("pub const SUBTREE").count(),
+            2,
+            "exactly the two nodes with children carry the marker:\n{output}"
+        );
+        assert!(
+            output.contains("pub mod control {\n    pub const SUBTREE"),
+            "the container face carries the marker:\n{output}"
+        );
+        assert!(
+            output.contains("pub mod object {\n        pub const SUBTREE"),
+            "the directory node with children carries the marker:\n{output}"
+        );
+        assert!(
+            output.contains("pub mod button;\n"),
+            "the leaf is mounted straight at its file:\n{output}"
+        );
+        assert!(
+            !output.contains("pub mod button {\n"),
+            "a leaf gains no inline module, so it gains no marker:\n{output}"
+        );
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
     /// Every baked face identity is asserted against the face's own `NODE_ID`, so a face compiled
     /// from a different namespace or `#[path]` spelling fails the build instead of quietly owning an
     /// identity the plan never heard of (measured 2026-10-06: without this, remapping the host's
