@@ -27,6 +27,8 @@ pub mod registry;
 // not a second concept.  合并后保留了该执行面自己的历史模块名；这层嵌套是合并的结果，不是第二个概念。
 #[allow(clippy::module_inception)]
 pub mod runtime;
+#[path = "shape.rs"]
+pub mod shape;
 
 pub use nichlink_kernel::registry_core;
 // This glob names the same kernel items the historical `nichlink_kernel::*` glob did,
@@ -86,6 +88,7 @@ pub use crate::__runtime_static_graft_plan as static_graft_plan;
 pub use authoring::*;
 pub use call_report::*;
 pub use runtime::*;
+pub use shape::*;
 
 // The trace artifact is the one document a host hands to a separate reader, so
 // its entry points are worth a crate-root path: `runtime::trace::*` stays the

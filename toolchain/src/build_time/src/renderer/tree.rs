@@ -159,6 +159,18 @@ fn render_node(
     )
     .unwrap();
     writeln!(output, "{indent}pub mod {} {{", node.name).unwrap();
+    // Every mounted module carries a `Subtree` marker, so a host's `add_crates.rs` can name this
+    // subtree as a real path: that is what makes the declaration complete in an editor, a typo a
+    // compile error, and the shape the build reads the same shape the compiler checked.
+    // 每个挂载的模块都带一个 `Subtree` 标记，因此宿主的 `add_crates.rs` 能把这棵子树当真实路径点名：这正是
+    // 让声明在编辑器里可补全、写错就是编译错误，并让构建读到的形状与编译器查过的形状是同一份的原因。
+    writeln!(
+        output,
+        "{inner}pub const SUBTREE: ::nichlink_toolchain::runtime::Subtree = \
+         ::nichlink_toolchain::runtime::Subtree::new(module_path!());",
+        inner = "    ".repeat(depth + 1)
+    )
+    .unwrap();
     if let (true, Some(absolute)) = (include_source, absolute.as_ref()) {
         // A container face owns child registries, so its file always loads into
         // a child module one level deeper: it always needs the IDE view.

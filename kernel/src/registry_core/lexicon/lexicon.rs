@@ -86,6 +86,24 @@ pub const GENERATION_FILE: &str = "graph.generation";
 /// generation 记录的第一行。
 pub const GENERATION_MARKER: &str = "nichlink-build-index";
 
+/// The host's crate-shape declaration, read at the **package root** (not under `src/`).
+/// 宿主的 crate 形状声明，在**包根**读取（不在 `src/` 之下）。
+///
+/// It sits beside `Cargo.toml` and `build.rs` because it says what the package *is* rather than what
+/// it contains, and because `src/` is the registration tree: a declaration filed there would be read
+/// by the discovery walk and, once the shape macro names it, mistaken for a face.
+/// 它和 `Cargo.toml`、`build.rs` 放在一起，因为它说的是这个包**是什么**而不是它包含什么，也因为 `src/` 是
+/// 注册树：把声明放在那里会被发现遍历读到，而且在形状宏认得它之后会被误当成一个注册面。
+pub const ADD_CRATES_FILE: &str = "add_crates.rs";
+
+/// The published record of a declared crate shape, beside the build's other artifacts.
+/// 已声明的 crate 形状的落盘记录，与构建的其它产物放在一起。
+pub const ADD_CRATES_LOCK_FILE: &str = "add-crates.lock";
+
+/// The first line of the crate-shape lock.
+/// crate 形状锁的第一行。
+pub const ADD_CRATES_MARKER: &str = "nichlink-crate-shape";
+
 /// The front-end marker that selects the collector adapter.
 /// 选择 collector 适配层的前端标记。
 pub const FACE_FIELD_COLLECTOR: &str = "collector";

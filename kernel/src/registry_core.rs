@@ -30,6 +30,8 @@ pub mod plugin;
 pub mod release;
 #[path = "registry_core/requirements.rs"]
 pub mod requirements;
+#[path = "registry_core/shape/shape.rs"]
+pub mod shape;
 #[path = "registry_core/source/source.rs"]
 pub mod source;
 #[path = "registry_core/syntax/syntax.rs"]
@@ -49,6 +51,7 @@ pub use mir::*;
 pub use plugin::*;
 pub use release::*;
 pub use requirements::*;
+pub use shape::*;
 pub use source::*;
 #[cfg(feature = "syntax")]
 pub use syntax::*;

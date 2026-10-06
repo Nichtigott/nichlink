@@ -68,6 +68,8 @@ pub mod scaffold;
 mod scope;
 #[path = "scope_faces.rs"]
 mod scope_faces;
+#[path = "shape_decl.rs"]
+mod shape_decl;
 #[path = "source_layout.rs"]
 mod source_layout;
 #[path = "source_walk.rs"]

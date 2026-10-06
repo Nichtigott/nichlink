@@ -1503,3 +1503,64 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 2. **"这个桥从不构建"这句话现在不成立了**，`build_evidence.rs` 的两处文案已改成事实：`apply` 在后台启动一次、一次性客户端会等它、`verify` 按需构建。**自我描述与行为必须一致**，这是本仓的红线之一。
 3. **一处钉子因批次的真实行为而失效并被修好**（不是放宽）：`every_report_spells_the_freshness_word_that_one_place_produces` 里的 "stale" 夹具原本是"经写入路径写下、还没有证据"——而写入现在会启动索引刷新 ⇒ 夹具一瞬之后自己就发布了证据，报告叫它 `current` 是**对的**。夹具改成**真实的过期态**：经写入路径写下 → `wait_until_idle` 等到刷新结束 → 改一个**指纹连内容一起覆盖**的文件（`src/label/label.rs`；`src/lib.rs` 不行——原始文件集合只按路径取哈希，发现过程也跳过它）。
 4. **两处门禁被新代码顶到上限，按规则处置**：`tools.rs` 越过 600 行 ⇒ 把图工具的**描述与 schema 搬到它实现旁边**（`graph.rs` 的 `DESCRIPTION` / `schema()`，两者因此不会漂开）、把 `READ_KEYS` 表搬进 `tools_tests.rs`（测试预算 800）；`mcp::graph` 里的裸动词 `resolve` 违反动词表 ⇒ 改名 `resolve_nodes`。`--list` 的字节预算从 5000 提到 5200（第 29 个工具；理由写在钉子旁）。
+
+### §M7.14 P3.1 落地：`add_crates!` 的**函数/常量**形态（2026-10-06）
+
+维护者两句指示定了这一版的形状：命名用 **Add crates**（`partitions` 有歧义），而且**声明要是函数、不是宏**——"不然连自动补全都没有"。第二句是对的，而且理由比补全更深：宏里那点补全靠"镜像宏"补丁，而函数/常量形态下，**字段名、方法名、子树路径都是真 Rust**，于是编辑器原生补全、写错是编译错误、类型不对是类型错误。
+
+**声明的成品样子**（包根 `add_crates.rs`，包级文件，与 `Cargo.toml`/`build.rs` 同级——放 `src/` 下会被发现遍历读到）：
+
+```rust
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "nichlink-example-control-button",
+    crates: &[
+        Crate::named("widgets").at(&[crate::control::object::SUBTREE]),
+        Crate::named("rules").at(&[crate::control::registry_rule::SUBTREE]),
+    ],
+};
+```
+
+**落地清单**（每项一个提交，门禁在批末跑）：
+
+| 件 | 位置 | 钉了什么 |
+| --- | --- | --- |
+| 规则（唯一一份） | `kernel/src/registry_core/shape/shape.rs` | 边界是**整个 `::` 段**（`control` 含 `control::object`、不含 `control_extra`）；重叠/嵌套/重名/空名/空前缀各**点名**拒绝。5 条钉子 |
+| 函数面 | `toolchain/src/runtime/src/shape.rs` | `Subtree` / `Crate` / `Shape` / `add_crates(&Shape)`；宿主自己的 crate 装载时校验。2 条钉子 |
+| 构建期读者 | `toolchain/src/build_time/src/shape_decl.rs` | 读包根那份文件（**文本**，不链接宿主），只认 `Crate::named(…).at(&[…::SUBTREE])`，别的拼写**点名拒绝**；写 `add-crates.lock`（声明身份 + 每 crate 的子树与面集合身份 + 留在宿主的面数）。6 条钉子 |
+| 渲染器 | `build_time/src/renderer/tree.rs` | 每个**生成的内联模块**发一个 `pub const SUBTREE: Subtree = Subtree::new(module_path!())` |
+| 词汇表 | `kernel/src/registry_core/lexicon/lexicon.rs` | `ADD_CRATES_FILE` / `ADD_CRATES_LOCK_FILE` / `ADD_CRATES_MARKER` |
+| 管线 | `build_time/src/pipeline.rs` | 树干净时校验声明；不成立 ⇒ `add-crates` 诊断，且**发布任何产物之前**失败。没有声明 = 一个 crate 的包（不是错误） |
+
+**端到端实测**（真的在 `examples/control-button` 上加了声明 + 一行 `#[path]` 挂载，跑完已还原）：`cargo build` 过 ✓；CLI `check` 写出
+
+```
+# add-crates	nichlink-crate-shape
+# declaration	28815a30eab2b8f39b7daedebba59911
+package_prefix	nichlink-example-control-button
+crate	widgets	subtrees=control::object	faces=2	face_set=25404c233d3361da27fb78d24e167410
+crate	rules	subtrees=control::registry_rule	faces=0	face_set=e3b0c44298fc1c149afbf4c8996fb924
+host	faces=1
+```
+
+顺带两条**免费的证据**：加 `add_crates.rs` **没有**改变 `discovery.fingerprint` 与 generation 的摘要（`92ef0bd3…` 不变）——因为发现只走 `src/**`，这正是"声明必须放包根"的另一个理由；以及 `rules` 那个子树 `faces=0` 是对的（`registry_rule.rs` 是**规则**不是注册面）。
+
+**测出来的一个真缺口（未解决，需要裁决）**：**文件叶子节点没有可点名的标记**。生成树对"有自己文件的叶子"是直接挂载 `#[path=…] pub mod <name>;`（模块**就是用户那份文件**），而 `SUBTREE` 只能发在**生成器拥有的内联模块**里 ⇒ 于是
+
+```
+error[E0425]: cannot find value `SUBTREE` in module `crate::control::registry_rule`
+ --> examples/control-button/src/../add_crates.rs:9:67
+```
+
+目录节点（`control`、`control::object`）今天就能点名 ✓；叶子（`…::button`、`…::registry_rule`）不能 ✗。三条出路：
+
+| | 做法 | 好处 | 代价 |
+| --- | --- | --- | --- |
+| **A** | 叶子也套一层生成的内联模块（`pub mod button { #[path] pub mod button; pub use button::*; pub const SUBTREE = … }`），与容器面今天的形态一致 | 统一、拼法最好看（`…::button::SUBTREE`） | 改动核心渲染器、影响每个宿主；必须用"改动前后记录逐字节相同"的闸门实测（身份来自 `file!()` + `module_path!()` 的**最后一段** + 父链，理论上不变） |
+| **B** | 父模块为每个子节点发一个标记常量（`SUBTREE_BUTTON`） | 零结构变化 | 声明拼法难看，且名字是拼出来的 |
+| **C** | 叶子面用**今天就有**的 `::NODE_ID`；非面的文件叶子（规则）暂时不能单独成 crate，点名拒绝 | 零风险、马上可用 | 两种标记；规则文件不能单独切 |
+
+我倾向 **A**（配上逐字节闸门实测），**C** 作为过渡。这一条定下来之前，`add_crates.rs` 只能点名**目录子树**。
+
+**仍待补（本轮有意没做）**：① 生成的挂载树自动引入 `add_crates.rs` 并调用 `add_crates(&SHAPE)`（今天宿主自己写一行 `#[path = "../add_crates.rs"] pub mod add_crates;` 即可）；② `.nichlink/add-crates.lock` 的进 git 副本（现在只写进构建产物目录）；③ CLI/Studio 的 `--add/--remove` 写这份文件；④ P3.2 的生成器、facade 与 graft 渲染。

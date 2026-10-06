@@ -207,6 +207,18 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         Ok(header) => graph = Some(header),
         Err(error) => write_errors.push(error),
     }
+    // The crate-shape declaration is a build input like any face: a shape that does not hold
+    // together fails the build here, before anything is published, and its lock is written the same
+    // way. A host without a declaration is not an error — it is the one-crate package every host was
+    // before this file existed.
+    // crate 形状声明与任何注册面一样是构建输入：不成立的形状在这里、在发布任何东西之前让构建失败，而它的锁
+    // 以同样的方式写下。没有声明的宿主不是错误——它就是这份文件存在之前每个宿主的样子：一个 crate 的包。
+    if compile_errors.is_empty()
+        && let Err(refusal) =
+            super::shape_decl::check_shape_declaration(&layout.package_root, out_dir, &pruning_rows)
+    {
+        compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+    }
     if compile_errors.is_empty() && write_errors.is_empty() {
         if let Err(error) = write_if_changed(
             &out_dir.join("discovery.fingerprint"),
