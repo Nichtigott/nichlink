@@ -30,12 +30,17 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
         "crate::control_object! {\n    kind: Button,\n    parent: crate::control::NODE_ID,\n}\n",
     )
     .expect("the leaf face");
-    fs::create_dir_all(src.join("dial")).expect("a second face directory");
+    fs::create_dir_all(src.join("panel/gauge")).expect("a container face's subtree");
     fs::write(
-        src.join("dial/dial.rs"),
-        "crate::root_object! {\n    kind: Dial,\n}\n",
+        src.join("panel/panel.rs"),
+        "crate::root_object! {\n    kind: Panel,\n}\n",
     )
-    .expect("the dial face");
+    .expect("the container face");
+    fs::write(
+        src.join("panel/gauge/gauge.rs"),
+        "crate::control_object! {\n    kind: Gauge,\n    parent: crate::panel::NODE_ID,\n}\n",
+    )
+    .expect("the gauge face");
     fs::create_dir_all(src.join("control/registry_rule")).expect("second subtree directory");
     fs::write(
         src.join("control/registry_rule/registry_rule.rs"),
@@ -56,7 +61,7 @@ pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
     crates: &[
         Crate::named("widgets").at(&[crate::control::object::SUBTREE]),
-        Crate::named("dial").faces(&[crate::dial::NODE_ID]),
+        Crate::named("panel").at(&[crate::panel::SUBTREE]),
     ],
 };
 "#;
@@ -83,24 +88,11 @@ fn a_declaration_resolves_to_the_crates_it_names() {
         .expect("it reads")
         .expect("it declares a shape");
     assert_eq!(declaration.package_prefix, "myapp");
-    let claims: Vec<(&str, Vec<(&str, bool)>)> = declaration
-        .crates
-        .iter()
-        .map(|(name, claims)| {
-            (
-                name.as_str(),
-                claims
-                    .iter()
-                    .map(|claim| (claim.path.as_str(), claim.face))
-                    .collect(),
-            )
-        })
-        .collect();
     assert_eq!(
-        claims,
+        declaration.crates,
         vec![
-            ("widgets", vec![("control::object", false)]),
-            ("dial", vec![("dial", true)]),
+            ("widgets".to_owned(), vec!["control::object".to_owned()]),
+            ("panel".to_owned(), vec!["panel".to_owned()]),
         ]
     );
     // The digest is the identity `NodeId` derives from the file's bytes (128 bits, 32 hex digits),
@@ -133,8 +125,11 @@ fn the_lock_says_which_faces_each_crate_would_own() {
         lock.contains("crate\twidgets\tsubtrees=control::object\tfaces=1"),
         "{lock}"
     );
+    // The claimed node is a **container face**: its own face goes with the crate, and so does the one
+    // below it.
+    // 被认领的节点是一个**容器面**：它自己的面跟着 crate 走，它下面那个面也是。
     assert!(
-        lock.contains("crate\tdial\tfaces_named=dial\tfaces=1"),
+        lock.contains("crate\tpanel\tsubtrees=panel\tfaces=2"),
         "{lock}"
     );
     // The host keeps the two faces no crate claimed: the root face and the rule face.
@@ -154,7 +149,6 @@ fn another_spelling_is_refused_by_name() {
     );
     let refusal = read_shape_declaration(&root).expect_err("refused");
     assert!(refusal.contains("::SUBTREE"), "{refusal}");
-    assert!(refusal.contains("::NODE_ID"), "{refusal}");
     assert!(refusal.contains("add_crates.rs"), "{refusal}");
 }
 
@@ -188,7 +182,7 @@ fn the_empty_and_overlapping_shapes_are_refused_where_they_are_wrong() {
         "overlap",
         "pub const SHAPE: Shape = Shape { package_prefix: \"myapp\", crates: &[\n\
          Crate::named(\"widgets\").at(&[crate::control::object::SUBTREE]),\n\
-         Crate::named(\"tiny\").faces(&[crate::control::object::button::NODE_ID]),\n] };\n",
+         Crate::named(\"tiny\").at(&[crate::control::object::button::SUBTREE]),\n] };\n",
     );
     let refusal = read_shape_declaration(&overlap).expect_err("overlap");
     assert!(refusal.contains("`widgets`"), "{refusal}");
@@ -213,4 +207,44 @@ fn the_build_and_the_host_apply_one_rule() {
             .expect_err("declared twice")
             .contains("declared twice")
     );
+}
+
+/// A claim on a **face** is refused, and the refusal names the node that does have a subtree.
+/// 认领一个**面**会被拒绝，而拒绝点名那个真正拥有子树的节点。
+///
+/// The compiler refuses this one too (a face has no `SUBTREE` marker); this is the reader saying the
+/// same rule for a declaration no crate mounts — and, because it reads the tree, it can name the way
+/// forward instead of leaving the author to guess.
+/// 编译器也会拒它（面没有 `SUBTREE` 标记）；这里是读取器对"没有 crate 挂载的声明"说同一条规则——而且因为它
+/// 读得到树，它能点名出路，而不是让作者去猜。
+#[test]
+fn a_claim_on_a_face_names_the_node_that_has_a_subtree() {
+    let (root, src, out) = package(
+        "leafclaim",
+        "pub const SHAPE: Shape = Shape { package_prefix: \"myapp\", crates: &[\n\
+         Crate::named(\"button\").at(&[crate::control::object::button::SUBTREE]),\n] };\n",
+    );
+    let nodes = crate::build_time::source_walk::discover_root(&src);
+    let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
+        .expect("the record writes");
+    let refusal = super::check_shape_declaration(&root, &out, &rows).expect_err("refused");
+    assert!(refusal.contains("is a face and not a subtree"), "{refusal}");
+    assert!(refusal.contains("control::object"), "{refusal}");
+}
+
+/// A claim on a node with no faces below it is refused as an empty crate.
+/// 认领一个下面没有面的节点，被拒为空 crate。
+#[test]
+fn a_claim_with_no_faces_below_it_is_an_empty_crate() {
+    let (root, src, out) = package(
+        "emptyclaim",
+        "pub const SHAPE: Shape = Shape { package_prefix: \"myapp\", crates: &[\n\
+         Crate::named(\"nothing\").at(&[crate::nowhere::SUBTREE]),\n] };\n",
+    );
+    let nodes = crate::build_time::source_walk::discover_root(&src);
+    let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
+        .expect("the record writes");
+    let refusal = super::check_shape_declaration(&root, &out, &rows).expect_err("refused");
+    assert!(refusal.contains("no faces below it"), "{refusal}");
+    assert!(refusal.contains("would be empty"), "{refusal}");
 }

@@ -27,24 +27,6 @@ use super::discovery_cache::write_if_changed;
 use super::face_view::PruningRow;
 use super::static_plan::source_module_path;
 
-/// One subtree a host claimed, and which of the two markers it named it with.
-/// 宿主认领的一棵子树，以及它用两种标记中的哪一种点名了它。
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Claim {
-    /// The claimed subtree as a `::`-separated module path, with the marker stripped.
-    /// 被认领的子树，`::` 分隔的模块路径，标记已剥掉。
-    pub(crate) path: String,
-    /// Whether the declaration named it with `::NODE_ID` (a face) rather than `::SUBTREE`.
-    /// 声明是用 `::NODE_ID`（一个面）而不是 `::SUBTREE` 点名它的吗。
-    ///
-    /// The difference matters for the one thing the two markers say differently: a face already has
-    /// an identity, and a directory node has none — so a claim that names a face can be matched
-    /// against faces, while a directory claim is matched by path prefix.
-    /// 这个差别对两种标记唯一说不到一起的地方有意义：面本来就有身份，而目录节点没有——因此点名面的认领可以与面
-    /// 对上，而目录认领按路径前缀对上。
-    pub(crate) face: bool,
-}
-
 /// What one host declared, with the digest of the file it came from.
 /// 一个宿主声明了什么，以及它来自哪个文件的摘要。
 #[derive(Debug)]
@@ -52,9 +34,9 @@ pub(crate) struct ShapeDeclaration {
     /// The prefix every published crate name is built from.
     /// 每个发布包名所依据的前缀。
     pub(crate) package_prefix: String,
-    /// One entry per declared crate: its name, and the claims it makes.
-    /// 每个已声明 crate 一项：它的名字，以及它认领的东西。
-    pub(crate) crates: Vec<(String, Vec<Claim>)>,
+    /// One entry per declared crate: its name, and the `::`-separated module paths it claims.
+    /// 每个已声明 crate 一项：它的名字，以及它认领的 `::` 分隔模块路径。
+    pub(crate) crates: Vec<(String, Vec<String>)>,
     /// The identity derived from the declaration file's bytes, which is what the lock records.
     /// 从声明文件字节推导出的身份，也就是锁记录的东西。
     pub(crate) digest: String,
@@ -106,10 +88,7 @@ pub(crate) fn read_shape_declaration(
             .ok_or_else(|| {
                 unreadable(
                     &path,
-                    &format!(
-                        "`{name}` has neither `.at(&[…::SUBTREE])` nor `.faces(&[…::NODE_ID])`, so \
-                         it claims nothing"
-                    ),
+                    &format!("`{name}` has no `.at(&[…::SUBTREE])`, so it claims nothing"),
                 )
             })?;
         let mut subtrees = Vec::new();
@@ -123,32 +102,26 @@ pub(crate) fn read_shape_declaration(
             // accident.
             // 声明点名的是一个**标记**：`<path>::SUBTREE`。别的拼写是本读取器不认识的，而猜它的意思正是
             // 形状被意外决定的方式。
-            // The two markers are the two things a generated node can actually have: a directory
-            // node carries `SUBTREE` (it has no identity of its own) and a face carries the
-            // `NODE_ID` its own file declares. Anything else is a spelling this reader does not
-            // know, and guessing what it meant is how a shape gets decided by accident.
-            // 这两种标记就是生成节点**实际可能拥有**的两种东西：目录节点带 `SUBTREE`（它没有自己的身份），而面
-            // 带它自己那份文件声明的 `NODE_ID`。别的拼写是本读取器不认识的，而猜它的意思正是形状被意外决定的方式。
-            let (entry, face) = match entry
+            // The marker is `SUBTREE`, and it exists exactly on the nodes that **have children** —
+            // the renderer gives a node with children an inline module of the build's own, and mounts
+            // a node without children straight at its file. So a leaf cannot be named at all, which is
+            // the rule rather than a gap: a crate is a subtree, and one object in its own crate buys
+            // nothing.
+            // 标记是 `SUBTREE`，而它恰好只存在于**有子节点**的节点上——渲染器给有子节点的节点搭一个构建自己的
+            // 内联模块，而没有子节点的节点直接挂到它的文件上。因此叶子根本点不了名，这是**规则**而不是缺口：
+            // crate 是一棵子树，而一个对象单独成 crate 什么也换不来。
+            let module = entry
                 .strip_suffix("::SUBTREE")
-                .map(|rest| (rest, false))
-                .or_else(|| entry.strip_suffix("::NODE_ID").map(|rest| (rest, true)))
-            {
-                Some(split) => split,
-                None => {
-                    return Err(unreadable(
+                .ok_or_else(|| {
+                    unreadable(
                         &path,
-                        &format!(
-                            "`{name}` names `{entry}`, which is neither a `…::SUBTREE` nor a \
-                             `…::NODE_ID` marker"
-                        ),
-                    ));
-                }
-            };
-            subtrees.push(Claim {
-                path: entry.trim().trim_start_matches("crate::").to_owned(),
-                face,
-            });
+                        &format!("`{name}` names `{entry}`, which is not a `…::SUBTREE` marker"),
+                    )
+                })?
+                .trim()
+                .trim_start_matches("crate::")
+                .to_owned();
+            subtrees.push(module);
         }
         crates.push((name, subtrees));
     }
@@ -160,19 +133,12 @@ pub(crate) fn read_shape_declaration(
     }
     let modules: Vec<Vec<&str>> = crates
         .iter()
-        .map(|(_, claims)| claims.iter().map(|claim| claim.path.as_str()).collect())
+        .map(|(_, subtrees)| subtrees.iter().map(String::as_str).collect())
         .collect();
     let declared: Vec<DeclaredCrate<'_>> = crates
         .iter()
         .zip(&modules)
-        .map(|((name, _), subtrees)| DeclaredCrate {
-            name,
-            subtrees,
-            // This reader sees the path behind **both** markers, so it checks every claim in full and
-            // has no opaque count to hand over.
-            // 本读取器在**两种**标记背后都看得到路径，因此它完整地检查每一条认领，没有不透明的计数要交。
-            faces: 0,
-        })
+        .map(|((name, _), subtrees)| DeclaredCrate { name, subtrees })
         .collect();
     validate_shape(&package_prefix, &declared).map_err(|refusal| unreadable(&path, &refusal))?;
     Ok(Some(ShapeDeclaration {
@@ -211,10 +177,11 @@ pub(crate) fn write_shape_lock(
         }
         let module = source_module_path(&row.source);
         let mut claimed = false;
-        for (position, (_, claims)) in declaration.crates.iter().enumerate() {
-            if claims.iter().any(|claim| {
-                module == claim.path || module.starts_with(&format!("{}::", claim.path))
-            }) {
+        for (position, (_, subtrees)) in declaration.crates.iter().enumerate() {
+            if subtrees
+                .iter()
+                .any(|subtree| module == *subtree || module.starts_with(&format!("{subtree}::")))
+            {
                 owner[position].1.push(row.source.clone());
                 claimed = true;
                 break;
@@ -230,30 +197,14 @@ pub(crate) fn write_shape_lock(
         declaration.digest,
         declaration.package_prefix
     );
-    for (position, (name, claims)) in declaration.crates.iter().enumerate() {
+    for (position, (name, subtrees)) in declaration.crates.iter().enumerate() {
         let mut faces = owner[position].1.clone();
         faces.sort();
         let face_set = NodeId::from_bytes(faces.join("\n").as_bytes()).to_string();
-        let listed = |wanted: bool| -> String {
-            claims
-                .iter()
-                .filter(|claim| claim.face == wanted)
-                .map(|claim| claim.path.as_str())
-                .collect::<Vec<_>>()
-                .join(",")
-        };
-        let subtrees = listed(false);
-        let named_faces = listed(true);
-        let mut claim_line = String::new();
-        if !subtrees.is_empty() {
-            write!(claim_line, "\tsubtrees={subtrees}").unwrap();
-        }
-        if !named_faces.is_empty() {
-            write!(claim_line, "\tfaces_named={named_faces}").unwrap();
-        }
         writeln!(
             output,
-            "crate\t{name}{claim_line}\tfaces={}\tface_set={face_set}",
+            "crate\t{name}\tsubtrees={}\tfaces={}\tface_set={face_set}",
+            subtrees.join(","),
             faces.len()
         )
         .unwrap();
@@ -274,9 +225,60 @@ pub(crate) fn check_shape_declaration(
     rows: &[PruningRow],
 ) -> Result<(), String> {
     match read_shape_declaration(package_root)? {
-        Some(declaration) => write_shape_lock(out_dir, &declaration, rows),
+        Some(declaration) => {
+            for (name, subtrees) in &declaration.crates {
+                for subtree in subtrees {
+                    claim_has_a_subtree(name, subtree, rows)?;
+                }
+            }
+            write_shape_lock(out_dir, &declaration, rows)
+        }
         None => Ok(()),
     }
+}
+
+/// Refuse a claim that does not name a subtree, and say which node does.
+/// 拒绝一条没有点名子树的认领，并说出哪个节点才是。
+///
+/// The compiler already refuses a leaf (there is no `SUBTREE` marker on one), so this is the second
+/// reader saying the same rule in the case the compiler cannot see: a declaration the build reads as
+/// text but that no crate mounts. It reads the tree, so it can name the way forward — which node
+/// contains the claimed one — instead of leaving the author to guess.
+/// 编译器已经会拒绝叶子（叶子上没有 `SUBTREE` 标记），因此这是第二个读者在编译器看不见的情形里说同一条规则：
+/// 构建当文本读、却没有 crate 挂载的声明。它读得到树，因此能点名出路——哪个节点包含被认领的那个——而不是让
+/// 作者去猜。
+fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result<(), String> {
+    let below = |module: &str| -> usize {
+        rows.iter()
+            .filter(|row| {
+                let face = source_module_path(&row.source);
+                face.starts_with(&format!("{module}::"))
+            })
+            .count()
+    };
+    if below(subtree) > 0 {
+        return Ok(());
+    }
+    let is_a_face = rows
+        .iter()
+        .any(|row| source_module_path(&row.source) == subtree);
+    let containing = subtree.rsplit_once("::").map(|(parent, _)| parent);
+    if is_a_face {
+        return Err(match containing {
+            Some(parent) => format!(
+                "add_crates: `{name}` names `{subtree}`, which is a face and not a subtree; a crate \
+                 is a subtree — name `{parent}` (or another node that contains it) instead"
+            ),
+            None => format!(
+                "add_crates: `{name}` names `{subtree}`, which is a face and not a subtree; a crate \
+                 is a subtree, and this one is a single object at the top of the tree"
+            ),
+        });
+    }
+    Err(format!(
+        "add_crates: `{name}` names `{subtree}`, which has no faces below it; that crate would be \
+         empty"
+    ))
 }
 
 /// The one refusal spelling for a declaration the build cannot read.
@@ -285,7 +287,7 @@ fn unreadable(path: &Path, why: &str) -> String {
     format!(
         "{}: {why}. The declaration is ordinary Rust, so the compiler checks the paths; this reader \
          only accepts `Shape {{ package_prefix: \"…\", crates: &[Crate::named(\"…\").at(&[\
-         crate::…::SUBTREE])` or `.faces(&[crate::…::NODE_ID])] }}`",
+         crate::…::SUBTREE])] }}`",
         path.display()
     )
 }

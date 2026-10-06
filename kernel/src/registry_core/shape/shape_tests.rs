@@ -11,12 +11,10 @@ fn a_shape_that_holds_together_is_accepted() {
         DeclaredCrate {
             name: "widgets",
             subtrees: &["control::object"],
-            faces: 0,
         },
         DeclaredCrate {
             name: "rules",
             subtrees: &["control::registry_rule"],
-            faces: 0,
         },
     ];
     assert_eq!(validate_shape("myapp", &crates), Ok(()));
@@ -43,12 +41,10 @@ fn two_crates_claiming_overlapping_subtrees_are_named() {
         DeclaredCrate {
             name: "widgets",
             subtrees: &["control::object"],
-            faces: 0,
         },
         DeclaredCrate {
             name: "tiny",
             subtrees: &["control::object::button"],
-            faces: 0,
         },
     ];
     let refusal = validate_shape("myapp", &crates).expect_err("refused");
@@ -64,7 +60,6 @@ fn one_crate_naming_nested_subtrees_is_named() {
     let crates = [DeclaredCrate {
         name: "widgets",
         subtrees: &["control::object", "control::object::slider"],
-        faces: 0,
     }];
     let refusal = validate_shape("myapp", &crates).expect_err("refused");
     assert!(refusal.contains("`widgets`"), "{refusal}");
@@ -82,13 +77,11 @@ fn the_empty_shapes_are_refused_where_they_are_empty() {
     let unnamed = [DeclaredCrate {
         name: "",
         subtrees: &["control"],
-        faces: 0,
     }];
     assert!(validate_shape("myapp", &unnamed).is_err());
     let empty = [DeclaredCrate {
         name: "widgets",
         subtrees: &[],
-        faces: 0,
     }];
     assert!(
         validate_shape("myapp", &empty)
@@ -99,12 +92,10 @@ fn the_empty_shapes_are_refused_where_they_are_empty() {
         DeclaredCrate {
             name: "widgets",
             subtrees: &["control"],
-            faces: 0,
         },
         DeclaredCrate {
             name: "widgets",
             subtrees: &["rules"],
-            faces: 0,
         },
     ];
     assert!(
@@ -112,19 +103,4 @@ fn the_empty_shapes_are_refused_where_they_are_empty() {
             .expect_err("declared twice")
             .contains("twice")
     );
-}
-
-/// A crate that claims faces by identity alone is not empty, even though this reader sees no path
-/// for those faces: the host's own crate can only hand over a hash, and the count is what it can
-/// hand over.
-/// 只按身份认领面的 crate 不是空的——即使这个读者看不到那些面的路径：宿主自己的 crate 只能交出散列，而它能
-/// 交出来的就是这个计数。
-#[test]
-fn a_crate_that_claims_faces_by_identity_is_not_empty() {
-    let crates = [DeclaredCrate {
-        name: "slider",
-        subtrees: &[],
-        faces: 1,
-    }];
-    assert_eq!(validate_shape("myapp", &crates), Ok(()));
 }

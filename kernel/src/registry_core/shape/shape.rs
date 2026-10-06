@@ -28,17 +28,6 @@ pub struct DeclaredCrate<'a> {
     /// The registration subtrees it claims, as `::`-separated module paths.
     /// 它认领的注册子树，`::` 分隔的模块路径。
     pub subtrees: &'a [&'a str],
-    /// How many **faces** it claims, when the reader can see the identity but not the path.
-    /// 它认领了多少个**面**——读者看得到身份、却看不到路径时用这个计数。
-    ///
-    /// A host's own crate can name a face by its `NODE_ID` (which is a hash, not a path), so the
-    /// runtime half of this rule knows how many faces a crate claims but not where they live; the
-    /// build reads the same declaration as text and therefore checks those paths in full. The
-    /// count is what keeps "a crate that claims nothing" a refusal on both sides.
-    /// 宿主自己的 crate 可以用面的 `NODE_ID`（一个散列，不是路径）点名它，因此这条规则的运行期那一半知道一个
-    /// crate 认领了几个面、却不知道它们在哪；构建把同一份声明当文本读，因此那些路径由它完整地查。这个计数正是
-    /// 让"什么都没认领的 crate"在两边都被拒的东西。
-    pub faces: usize,
 }
 
 /// Whether one subtree contains or equals the other.
@@ -79,9 +68,9 @@ pub fn validate_shape(package_prefix: &str, crates: &[DeclaredCrate<'_>]) -> Res
         if krate.name.trim().is_empty() {
             return Err("add_crates: a crate needs a name".to_owned());
         }
-        if krate.subtrees.is_empty() && krate.faces == 0 {
+        if krate.subtrees.is_empty() {
             return Err(format!(
-                "add_crates: `{}` names no subtree and no face, so it would be an empty crate",
+                "add_crates: `{}` names no subtree, so it would be an empty crate",
                 krate.name
             ));
         }

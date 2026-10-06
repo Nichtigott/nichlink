@@ -1565,26 +1565,29 @@ error[E0425]: cannot find value `SUBTREE` in module `crate::control::registry_ru
 
 **仍待补（本轮有意没做）**：① 生成的挂载树自动引入 `add_crates.rs` 并调用 `add_crates(&SHAPE)`（今天宿主自己写一行 `#[path = "../add_crates.rs"] pub mod add_crates;` 即可）；② `.nichlink/add-crates.lock` 的进 git 副本（现在只写进构建产物目录）；③ CLI/Studio 的 `--add/--remove` 写这份文件；④ P3.2 的生成器、facade 与 graft 渲染。
 
-**裁决：走 C（维护者 2026-10-06，原话「C我感觉也没有啥不优雅的啊」）** —— 而且这个直觉有语汇上的硬理由：`NODE_ID` **本来就是这个框架里点名一个面的词**（面文件里天天写 `parent: crate::control::NODE_ID`，graft 计划里也写它），用一个已有的词点名子树，比新造 `SUBTREE` 更省认知。只是两种标记对应的是"节点**实际拥有**的东西"：
+**裁决：撤掉 C —— 规则是"有子树的节点才成得了 crate"（维护者 2026-10-06，原话「**而且就一个对象我包裹成crate我不是有毛病吗？？我的理解是就是这个节点必须有子树才能打包crate呗**」）**
 
-| 节点 | 拥有的东西 | 点名方式 |
+他是对的，而且 C 是在解一个**不该存在的问题**：把一个对象包成 crate 什么也换不来。于是 `faces(&[…::NODE_ID])` 撤掉（内核的 `faces` 计数、runtime 的第二个构造器、读者的第二种标记一并撤），只剩一条拼法 `.at(&[…::SUBTREE])`。
+
+更值得记的是：**这条规则已经由编译器守着，不需要任何新机制**。`SUBTREE` 恰好只发在**有子节点**的节点上——渲染器给有子节点的节点搭一个构建自己的内联模块，而没有子节点的节点是直接 `#[path]` 挂到它的文件上（模块**就是**那份文件，而文件写不进去）。所以：
+
+| 节点 | 有 `SUBTREE` 吗 | 能成 crate 吗 |
 | --- | --- | --- |
-| **目录节点**（构建拼出来的子树，如 `control::object`） | 没有自己的身份 | `.at(&[…::SUBTREE])`（生成器发的标记） |
-| **面**（有自己的 `NODE_ID`） | 身份（散列） | `.faces(&[…::NODE_ID])` |
-| **不是面的文件叶子**（规则文件） | 两样都没有 | **今天点不了**（编译期就红） |
+| `control`（有文件 + 有子节点） | ✓ | ✓（它带着自己的子树） |
+| `control::object`（只有子节点） | ✓ | ✓ |
+| `button` / `slider` / `registry_rule`（文件叶子） | ✗ | ✗ —— 编译器直接拒 |
 
-落地四件：① 内核规则加 `faces: usize` —— 面只有身份没有路径，所以**运行期那一半**只计个数（判"什么都没认领"仍然成立），而**构建期**把同一份声明当文本读、两种标记的路径都看得到 ⇒ 完整检查（`faces: 0` 传给规则）；② runtime 加 `Crate::faces(&[…::NODE_ID])`（与 `.at(&[…::SUBTREE])` 并列，都是 `const fn`）；③ 读取器接受这两种标记，别的拼写点名拒绝；④ 锁把两种认领分开写（`subtrees=` / `faces_named=`）。
-
-**C 在真宿主上的实测**（`examples/control-button`，跑完已还原）：把 `button` 与 `slider` 各自切成一个 crate，
+真宿主实测（`examples/control-button`，跑完已还原）：写 `Crate::named("button").at(&[crate::control::object::button::SUBTREE])` ⇒
 
 ```
-crate	button	faces_named=control::object::button	faces=1	face_set=77147ada4648e744a7c34cd5120bd268
-crate	slider	faces_named=control::object::slider	faces=1	face_set=9403567a51e9e95f104084593be52476
-host	faces=1
+error[E0425]: cannot find value `SUBTREE` in module `crate::control::object::button`
+ --> examples/control-button/src/../add_crates.rs:8:69
 ```
 
-`cargo build` 过 ✓（真实 `NODE_ID` 路径由编译器检查），generation 摘要仍是 `92ef0bd3…` ✓（声明不碰记录）。这是在真宿主上暴露"叶子没有标记"之后，同一条路径上的闭环。
+**所以先前记的"叶子缺口"与出路 A 一起作废**（A 也不必做了：叶子本就不该成 crate，不是"缺失的能力"）。
 
-**仍未覆盖**：**不是面的文件叶子**（如 `control/registry_rule/registry_rule.rs` 这种规则文件）既没有 `SUBTREE` 也没有 `NODE_ID` ⇒ 今天不能单独成 crate（写 `.at(&[…::SUBTREE])` 会在编译期报 `cannot find value SUBTREE in module …`）。**出路 A 仍留在桌上**：给叶子套一层生成的内联模块（与容器面今天同形），那样所有节点都有同一个词 `SUBTREE`，规则文件的缺口一并消失——代价是要用"改动前后记录逐字节相同"的闸门实测它多加的那段模块路径。**现在不欠这一条**：C 覆盖了"把某个面单独切出去"这个最常见的诉求。
+构建期读者说同一条规则，覆盖编译器看不见的那一半（声明没有被任何 crate 挂载时），而且它读得到树，所以能**点名出路**：① 认领的是一个面 ⇒ `` `X` is a face and not a subtree; name `parent` instead``；② 认领的子树下面没有面 ⇒ `` `X` has no faces below it; that crate would be empty``。
 
-钉子：内核 6 条 · runtime 3 条 · 构建期读者 6 条。
+**合法形状的真宿主实测**（已还原）：`widgets = [crate::control::object::SUBTREE]` ⇒ `cargo build` 过 ✓，锁里 `crate widgets subtrees=control::object faces=2` / `host faces=1` ✓，generation 摘要仍是 `92ef0bd3…` ✓（声明不碰记录）。
+
+钉子：内核 5 条 · runtime 2 条 · 构建期读者 8 条（其中两条就是上面那两条点名拒绝）。
