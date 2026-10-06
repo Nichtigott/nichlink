@@ -1910,3 +1910,21 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **为什么值得改**：① 它是 `--at <目录>` 的前置（§M7.31 记的下一刀第一件事 ✓）；② **facade 的位置计算需要同一套算术**（facade 也在别处 ✓）；③ 公式从此不再隐含"同级"这个未经声明的假设 ✓ —— 而唯一必须成立的东西仍是那条不变量：`file!()` 最终读起来就是宿主相对源码 ✓。
 
 **钉子**：既有的"精确拼写 `../../../../host/src/…`"与"两棵子树 ⇒ 两个不同前缀"两条**原样通过** ✓（推广没有改变同级时的结果 ✓）；新增一条**非同级**用例：幽灵嵌深两层 ⇒ 相对走法的 `../` 正好多两个、且终点仍是宿主自己的源码 ✓。**写这条钉子时我又错了一次**：我最初断言"走法会点名它经过的目录（`nested/deep/`）" ✗ —— **向上走不会点名经过的目录** ✓，改成断言 `../` 的个数差 ✓。
+
+### §M7.33 第三刀 facade：设计冻结（照它实现，不再改口径）（2026-10-06）
+
+**为什么必须有它**（实测，不是推理）：切出 `control::object` 之后，宿主自己的生成树仍要写 `assert_static_registration(control::REGISTRATION.registry_rule, control::object::button::REGISTRATION)` 与 `StaticGraftCut::from_ids(crate::control::object::button::NODE_ID, …)`（生成树第 120/151 行），而 `control::object` 已经不由它编译 ⇒ `cargo build` 报 `cannot find 'object' in 'control'` ✓。facade 就是那个**两端都看得见**的 crate。
+
+**它必须携带**：① `pub use <registry>::*;` ✓；② **`BUILTIN_STATIC_FACES` = 整棵树的并集**（宿主的面 + 每个幽灵的面 —— facade 依赖全部，因此它是唯一能给出完整表的那一个；宿主仍保留自己那部分，两者是同一棵树的两个视图，不矛盾 ✓）；③ **切口表**（类型化：`StaticGraftCut::from_ids(cut, graft, full)`；字符串写法 `new("path","name",full)` **不需要改写** ✓）；④ **两条 `assert_contract::<cut::__Preset, impl::__Parts>`** ✓。
+
+**它必须不携带**：任何 `#[path]` 挂载（facade 一个面都不编译 ✓）与任何 `assert_static_identity`（那条断言属于**编译该面的 crate**——幽灵自己有 ✓，在 facade 里它只会指向不存在的模块 ✗）。
+
+**改写规则（一条，覆盖一切）**：facade 的生成树里，**每一个** `crate::<模块路径>` 都要改写成 `<属主>::<模块路径>`——**包括宿主自己的面**（`crate::` 在 facade 里指的是 facade 自己 ✗）。属主来自规划器：每条认领（含其**根面**）与其祖先壳都属于那个幽灵的包 ✓，其余属于宿主 ✓。这正是维护者那句"**生成器只改写生成代码里的路径拼写**"的落地 ✓。
+
+**三份文件**：`Cargo.toml`（依赖 = 宿主 + 每个幽灵 + **切口表达式里出现的每个实现 crate** + `nichlink-toolchain`；`publish = false`）· `src/lib.rs`（宿主命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`run_for(宿主清单, OUT_DIR, 宿主命名空间)` + `NICH_LINK_SHAPE_FACADE=1` + 两条 `rerun-if-changed`）✓。命名：`<package_prefix>-facade` ✓（发布形状是 P3.5 的问题 ✓）。
+
+**渲染侧**：`ShapeRender` 多一个 `facade: bool` ⇒ `render_nodes` 一个模块都不发 ✓；`render_lib` 跳过别名/IDE 影子/身份断言 ✓，保留注册机再导出、静态面表、切口表与契约断言 ✓（后者按上面的规则改写 ✓）。
+
+**验收（维护者四条 + 新增第五条）**：入口 `src/lib.rs` 逐字节相同 · `graft_plan.tsv` 的 `(cut, graft, full)` 逐字节相同 · 切口两端 id 逐字节相同 · `promote` 在分区形状下仍能落地 · **⑤ 分区后的树真的编译得过**（今天不能，实测见本段开头 ✓：这正是 facade 存在的理由）。
+
+**实现顺序**（下一轮照此做，不重排）：① 规划器加"属主映射 + facade 三份产物"（并给钉子）→ ② 渲染侧加 `facade` 模式与改写（钉子：一条切口两端被改成两个包、字符串写法不动、没有 `#[path]`、没有身份断言）→ ③ `write_partition` 连 facade 一起写（CLI 的 `--check/--write/--revert` 一并覆盖）→ ④ 端到端：真宿主两形状各 `cargo build` 一次 + 四条逐字节比对。
