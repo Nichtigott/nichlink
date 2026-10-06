@@ -1940,3 +1940,19 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **顺带踩到尺寸棘轮**：`pass.rs` 加到 **656** 行（上限 600）✗ ⇒ 按仓库规矩**按职责拆同级模块**（不加基线）：`renderer/owners.rs` + `renderer/owners_tests.rs` 收走 `owned`/`face_module` 与那条钉子 ✓，`pass.rs` 回到 600 以内 ✓。
 
 **十面的一次环境性红（如实记）**：第一次跑，`toolchain+dev-supervisor,studio` 面里 `new_project_and_explicit_root_face_compile` 红，原因是 **`rustc` 编译第三方 `syn` 时 SIGSEGV**（不是 NichLink 的错误）✗；单跑该条**转绿** ✓，重跑十面**全绿** ✓ ⇒ 判**环境性失败**（并行资源压力下的 rustc 崩溃），非本批回归 ✓。
+
+### §M7.35 第三刀 facade：规划与写盘落地（§M7.33 的第①③步）（2026-10-06）
+
+**规划器**（新模块 `build_time::crate_facade`，随 `cli` 特性门控；`crate_plan.rs` 已 540 行，按职责另立同级模块 ✓）：`plan_facade(host_root, package_prefix, namespace, host_package, &planned) -> Result<Option<PlannedFacade>, String>` 给出 facade 的三份产物 —— `Cargo.toml`（**宿主的依赖表逐字照抄** + 同级 `path` 依赖 `host`/每个幽灵 + `publish = false`）· `src/lib.rs`（宿主命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`run_for(宿主清单, OUT_DIR, 宿主命名空间)` + **`NICH_LINK_SHAPE_FACADE=1`** + 宿主 `src` 与声明各一条 `rerun-if-changed`）✓。
+
+**两个边界（都钉住了）**：① 声明没交出任何东西 ⇒ **返回 `None`**（没有跨 crate 的东西要承载的 facade 是为说空话而存在的 crate ✓）；② facade 包名与宿主包名相同 ⇒ **点名拒绝**（`package_prefix` 是那个旋钮 ✓，一个 crate 不能依赖它自己 ✓）。
+
+**一处简化（wiring 时发现）**：**实现 crate 不需要参数** ✓ —— 类型化切口要求实现 crate 是宿主的依赖，而宿主的依赖表是逐字照抄的 ⇒ 可能出现在切口表达式里的 crate 正好就是照抄带来的那些 ✓（原设计要多传一份 `implementation_crates`，删掉后少一个会漂的输入 ✓）。
+
+**写盘**：`write_partition`/`revert_partition` 多收一个 `Option<&PlannedFacade>` ⇒ **两个包走同一个写入方**（三份文件同一套逻辑 ✓），撤回的标记检查同样覆盖 facade ✓。属主表提取成 `crate_plan::owners`（**一处实现、两个调用方**：渲染 pass 与 facade 规划器 ✓）。
+
+**端到端（夹具 `/tmp/fix`）**：`--check` ⇒ `crate fix-widgets at /tmp/fix-widgets (2 mounted file(s), 2 remap entr(ies))` + `facade fix-facade at /tmp/fix-facade (dependencies: fix, fix-widgets)` ✓；`--write` ⇒ **`wrote 6 file(s)`**（2 包 × 3 文件 ✓），facade 的清单确实是"宿主依赖逐字 + `fix`/`fix-widgets` 两条 path"✓，`build.rs` 带 `NICH_LINK_SHAPE_FACADE` ✓ 而幽灵带 `SHAPE_ONLY` ✓；`--revert` ⇒ `removed 2 generated package(s)` ✓、两个目录都没了、配置里再无 remap ✓。
+
+**两处自纠（都由钉子/告警当场抓出）**：① 我用**行区间**删旧 `revert_partition` 主体时，把新主体的尾部一起切掉了 ✗ ⇒ 三条写盘钉子立刻红并点名"什么都没删"✓（按行删除的锚点不可靠，改为显式重写整段 ✓）；② `PlannedFacade::namespace` **没有读者**（已经烤进那两份文件）⇒ 按仓库规矩**删字段**而不是留着当占位 ✓。
+
+**还差（下一轮做）**：**能编译的端到端** —— 要一棵真正的**工作区形状**夹具（成员＝宿主＋幽灵＋facade），因为 `rustflags` 落在工作区根、而 cargo 从当前目录找 config：夹具没有工作区时配置会落在包目录里，而幽灵是从**它自己的目录**被构建的 ⇒ remap 不生效、身份断言会响 ✓（这正是"发布形状的身份"那条边界的近亲 ✓）。随后才是验收四条（入口逐字节相同 · `graft_plan.tsv` 三列逐字节相同 · 切口两端 id 逐字节相同 · `promote` 仍能落地）。

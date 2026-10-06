@@ -212,22 +212,9 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 面**，因为 facade 里的 `crate::` 指的是 facade 自己。
     let facade = std::env::var(nichlink_kernel::lexicon::SHAPE_FACADE_ENV).is_ok();
     let host_crate = super::package::package_name(manifest)
-        .unwrap_or_else(|_| super::registry_identity::package_namespace())
-        .replace('-', "_");
-    let mut owner_map: std::collections::BTreeMap<String, String> = shape_faces
-        .iter()
-        .map(|(_, module, _)| (module.clone(), host_crate.clone()))
-        .collect();
-    for planned in &planned {
-        let owner = planned.package.replace('-', "_");
-        for mount in &planned.mounts {
-            owner_map.insert(mount.module_path.clone(), owner.clone());
-        }
-        for (module, _) in &planned.ancestors {
-            owner_map.insert(module.clone(), owner.clone());
-        }
-    }
-    let owners: Vec<(String, String)> = owner_map.into_iter().collect();
+        .unwrap_or_else(|_| super::registry_identity::package_namespace());
+    let owners: Vec<(String, String)> =
+        super::crate_plan::owners(&host_crate, &shape_faces, &planned);
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。

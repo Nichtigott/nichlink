@@ -33,6 +33,10 @@ pub(crate) mod crate_plan;
 // 它唯一的调用方是创作面的 CLI（`nichlink crates`），因此该模块随那个特性走：默认构建没有写入方，而死代码是
 // 本工作区拒绝的告警。
 #[cfg(feature = "cli")]
+#[path = "crate_facade.rs"]
+pub(crate) mod crate_facade;
+
+#[cfg(feature = "cli")]
 #[path = "crate_write.rs"]
 pub(crate) mod crate_write;
 #[path = "diagnostics.rs"]
@@ -177,6 +181,8 @@ pub(crate) use source_walk::{parallel_map_with_threshold, worker_budget};
 // workspace refuses.
 // 这些名字唯一的调用方是创作面的 CLI（`nichlink crates`），因此它们随着同一个特性走：默认构建用不到它们，
 // 而未使用的再导出是本工作区拒绝的告警。
+#[cfg(feature = "cli")]
+pub(crate) use crate_facade::plan_facade;
 #[cfg(feature = "cli")]
 pub(crate) use crate_plan::plan as plan_crates;
 #[cfg(feature = "cli")]

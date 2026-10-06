@@ -73,6 +73,13 @@ pub(crate) fn crates(
         })
         .collect();
     let planned = crate::build_time::plan_crates(&package_root, &package, &declaration, &faces)?;
+    let facade = crate::build_time::plan_facade(
+        &package_root,
+        &declaration.package_prefix,
+        &package,
+        &package,
+        &planned,
+    )?;
     if planned.is_empty() {
         return line(out, format!("nothing declared: {package} names no crate"));
     }
@@ -88,9 +95,20 @@ pub(crate) fn crates(
             ),
         )?;
     }
+    if let Some(facade) = &facade {
+        line(
+            out,
+            format!(
+                "facade {} at {} (dependencies: {})",
+                facade.package,
+                facade.directory.display(),
+                facade.dependencies.join(", ")
+            ),
+        )?;
+    }
     if revert {
         let workspace = workspace_root_of(&package_root);
-        let reverted = crate::build_time::revert_partition(&workspace, &planned)?;
+        let reverted = crate::build_time::revert_partition(&workspace, &planned, facade.as_ref())?;
         return line(
             out,
             format!(
@@ -114,7 +132,7 @@ pub(crate) fn crates(
         return Ok(());
     }
     let workspace = workspace_root_of(&package_root);
-    let written = crate::build_time::write_partition(&workspace, &planned)?;
+    let written = crate::build_time::write_partition(&workspace, &planned, facade.as_ref())?;
     line(
         out,
         format!(

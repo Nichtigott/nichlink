@@ -20,6 +20,7 @@
 use std::fs;
 use std::path::Path;
 
+use super::crate_facade::PlannedFacade;
 use super::crate_plan::{GENERATED_MARKER, PlannedCrate};
 use super::discovery_cache::write_if_changed;
 
@@ -40,9 +41,42 @@ pub(crate) struct Written {
 pub(crate) fn write_partition(
     workspace_root: &Path,
     planned: &[PlannedCrate],
+    facade: Option<&PlannedFacade>,
 ) -> Result<Written, String> {
     let mut written = Written::default();
     let mut remap: Vec<(String, String)> = Vec::new();
+    let mut directories: Vec<(&Path, &str)> = planned
+        .iter()
+        .map(|planned| (planned.directory.as_path(), planned.package.as_str()))
+        .collect();
+    if let Some(facade) = facade {
+        directories.push((facade.directory.as_path(), facade.package.as_str()));
+    }
+    for (directory, package) in &directories {
+        let directory = *directory;
+        if !directory.exists() {
+            continue;
+        }
+        let marker = [directory.join("Cargo.toml"), directory.join("src/lib.rs")]
+            .iter()
+            .any(|path| {
+                fs::read_to_string(path)
+                    .map(|text| text.contains(GENERATED_MARKER))
+                    .unwrap_or(false)
+            });
+        if !marker {
+            return Err(format!(
+                "add_crates: {package} at {} does not look like a package this action created (no \
+                 `{GENERATED_MARKER}` line in its Cargo.toml or src/lib.rs), so it is left alone.\
+                 \nway forward: remove it by hand if it really is a leftover",
+                directory.display()
+            ));
+        }
+        fs::remove_dir_all(directory).map_err(|error| {
+            format!("add_crates: cannot remove {}: {error}", directory.display())
+        })?;
+        written.files.push(relative(workspace_root, directory));
+    }
     for planned in planned {
         remap.extend(planned.remap.iter().cloned());
     }
@@ -54,17 +88,38 @@ pub(crate) fn write_partition(
     // 配置**先**做：本动作不肯合并的 `rustflags` 是一句拒绝，而拒绝必须让树保持原样——先写包会留下一次没有
     // remap 的拆分，而那样的拆分里身份已经悄悄搬了家。
     written.config_changed = merge_workspace_config(workspace_root, &remap)?;
-    for planned in planned {
-        let lib = planned.directory.join("src/lib.rs");
-        let build = planned.directory.join("build.rs");
-        let manifest = planned.directory.join("Cargo.toml");
+    // The facade is one more package with the same three files, so it goes through the same writer —
+    // and a partition that hands work away always has one, because handing work away is what makes the
+    // cross-crate half exist (audit `M7`, §M7.33).
+    // facade 就是再多一个、同样三份文件的包，因此走同一个写入方——而一次交出工作的拆分总有它，因为"交出工作"
+    // 正是跨 crate 那一半存在的原因（审计 `M7`，§M7.33）。
+    let mut packages: Vec<(&Path, &str, &str, &str)> = planned
+        .iter()
+        .map(|planned| {
+            (
+                planned.directory.as_path(),
+                planned.cargo_toml.as_str(),
+                planned.lib_rs.as_str(),
+                planned.build_rs.as_str(),
+            )
+        })
+        .collect();
+    if let Some(facade) = facade {
+        packages.push((
+            facade.directory.as_path(),
+            facade.cargo_toml.as_str(),
+            facade.lib_rs.as_str(),
+            facade.build_rs.as_str(),
+        ));
+    }
+    for (directory, cargo_toml, lib_rs, build_rs) in packages {
         for (path, content) in [
-            (&manifest, &planned.cargo_toml),
-            (&lib, &planned.lib_rs),
-            (&build, &planned.build_rs),
+            (directory.join("Cargo.toml"), cargo_toml),
+            (directory.join("src/lib.rs"), lib_rs),
+            (directory.join("build.rs"), build_rs),
         ] {
-            write_ghost_file(path, content)?;
-            written.files.push(relative(workspace_root, path));
+            write_ghost_file(&path, content)?;
+            written.files.push(relative(workspace_root, &path));
         }
     }
     written.files.sort();
@@ -89,41 +144,47 @@ pub(crate) fn write_partition(
 pub(crate) fn revert_partition(
     workspace_root: &Path,
     planned: &[PlannedCrate],
+    facade: Option<&PlannedFacade>,
 ) -> Result<Written, String> {
     let mut written = Written::default();
     let mut remap: Vec<(String, String)> = Vec::new();
-    for planned in planned {
-        remap.extend(planned.remap.iter().cloned());
-        if !planned.directory.exists() {
+    // One list of packages to take back: every ghost this action planned, plus the facade, which is
+    // planned as the host's sibling and carries the cross-crate half (audit `M7`, §M7.33).
+    // 一份要撤回的包清单：本动作规划的每个幽灵，加上 facade——它被规划成宿主的同级目录、承载跨 crate 那一半
+    // （审计 `M7`，§M7.33）。
+    let mut directories: Vec<(&Path, &str)> = planned
+        .iter()
+        .map(|planned| (planned.directory.as_path(), planned.package.as_str()))
+        .collect();
+    if let Some(facade) = facade {
+        directories.push((facade.directory.as_path(), facade.package.as_str()));
+    }
+    for (directory, package) in directories {
+        if !directory.exists() {
             continue;
         }
-        let marker = [
-            planned.directory.join("Cargo.toml"),
-            planned.directory.join("src/lib.rs"),
-        ]
-        .iter()
-        .any(|path| {
-            fs::read_to_string(path)
-                .map(|text| text.contains(GENERATED_MARKER))
-                .unwrap_or(false)
-        });
+        let marker = [directory.join("Cargo.toml"), directory.join("src/lib.rs")]
+            .iter()
+            .any(|path| {
+                fs::read_to_string(path)
+                    .map(|text| text.contains(GENERATED_MARKER))
+                    .unwrap_or(false)
+            });
         if !marker {
             return Err(format!(
-                "add_crates: {} does not look like a package this action created (no `{GENERATED_MARKER}` \
-                 line in its Cargo.toml or src/lib.rs), so it is left alone.\
-                 \nway forward: remove it by hand if it really is a leftover ghost",
-                planned.directory.display()
+                "add_crates: {package} at {} does not look like a package this action created (no \
+                 `{GENERATED_MARKER}` line in its Cargo.toml or src/lib.rs), so it is left alone.\
+                 \nway forward: remove it by hand if it really is a leftover",
+                directory.display()
             ));
         }
-        fs::remove_dir_all(&planned.directory).map_err(|error| {
-            format!(
-                "add_crates: cannot remove {}: {error}",
-                planned.directory.display()
-            )
+        fs::remove_dir_all(directory).map_err(|error| {
+            format!("add_crates: cannot remove {}: {error}", directory.display())
         })?;
-        written
-            .files
-            .push(relative(workspace_root, &planned.directory));
+        written.files.push(relative(workspace_root, directory));
+    }
+    for planned in planned {
+        remap.extend(planned.remap.iter().cloned());
     }
     remap.sort();
     remap.dedup();

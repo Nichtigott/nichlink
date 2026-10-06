@@ -37,6 +37,7 @@
 //! 本模块**什么都不写**。它回答"会写下什么、这样成立吗"——那是创作动作的 `--check` 一半，也是它
 //! `--write` 一半的输入。
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -215,7 +216,7 @@ fn ghost_cargo_toml(package_root: &Path, package: &str) -> Result<String, String
 
 /// One `key = "value"` from a manifest's top-level lines, without quotes.
 /// 清单顶层某行 `key = "value"` 的值，不含引号。
-fn toml_value(text: &str, key: &str) -> Option<String> {
+pub(crate) fn toml_value(text: &str, key: &str) -> Option<String> {
     text.lines()
         .find_map(|line| line.trim().strip_prefix(&format!("{key} = ")))
         .map(|value| value.trim().trim_matches('"').to_owned())
@@ -223,7 +224,7 @@ fn toml_value(text: &str, key: &str) -> Option<String> {
 
 /// One manifest section's body, header excluded and trailing blank lines trimmed.
 /// 清单里某一节的正文，不含表头、去掉尾部空行。
-fn toml_section(text: &str, section: &str) -> Option<String> {
+pub(crate) fn toml_section(text: &str, section: &str) -> Option<String> {
     let header = format!("[{section}]");
     let start = text.lines().position(|line| line.trim() == header)? + 1;
     let body: Vec<&str> = text
@@ -384,6 +385,38 @@ pub(crate) fn plan(
     Ok(planned)
 }
 
+/// `(module path, crate name)` for every module in the tree: the crate that compiles it.
+/// `(模块路径, crate 名)` 对，覆盖树里每个模块：编译它的那个 crate。
+///
+/// The facade needs this to rewrite `crate::<module>` into `<owner>::<module>`, because `crate::` inside
+/// a facade means the facade itself. One implementation, two callers (the render pass and the facade
+/// planner): a claim, its **root face** and its ancestor shells all belong to that ghost's package, and
+/// every other module — including the host's own faces — belongs to the host.
+/// facade 需要它来把 `crate::<模块>` 改写成 `<属主>::<模块>`，因为 facade 里的 `crate::` 指的是 facade
+/// 自己。一处实现、两个调用方（渲染 pass 与 facade 规划器）：一条认领、它的**根面**与它的祖先壳都归那个
+/// 幽灵的包，其余每个模块——**包括宿主自己的面**——归宿主。
+pub(crate) fn owners(
+    host_package: &str,
+    faces: &[(String, String, NodeId)],
+    planned: &[PlannedCrate],
+) -> Vec<(String, String)> {
+    let host_crate = host_package.replace('-', "_");
+    let mut owner_map: BTreeMap<String, String> = faces
+        .iter()
+        .map(|(_, module, _)| (module.clone(), host_crate.clone()))
+        .collect();
+    for planned in planned {
+        let owner = planned.package.replace('-', "_");
+        for mount in &planned.mounts {
+            owner_map.insert(mount.module_path.clone(), owner.clone());
+        }
+        for (module, _) in &planned.ancestors {
+            owner_map.insert(module.clone(), owner.clone());
+        }
+    }
+    owner_map.into_iter().collect()
+}
+
 /// The `#[path]` spelling one mounted face file needs, and the prefix to remap away.
 /// 一份被挂载的面文件所需的 `#[path]` 拼写，以及要映射掉的前缀。
 ///
@@ -419,7 +452,7 @@ fn inline_directory(ghost_dir: &Path, module_path: &str) -> PathBuf {
 
 /// The walk from one directory to one file, both absolute, as a `/`-separated relative path.
 /// 从一个目录走到一个文件的相对路径（两者都是绝对路径），用 `/` 分隔。
-fn relative_walk(from_dir: &Path, to_file: &Path) -> Option<String> {
+pub(crate) fn relative_walk(from_dir: &Path, to_file: &Path) -> Option<String> {
     let from: Vec<_> = from_dir.components().collect();
     let to: Vec<_> = to_file.components().collect();
     let common = from
