@@ -135,8 +135,24 @@ pub(crate) fn render_lib(
             .unwrap();
         }
     }
+    let mut face_identities = String::new();
+    // A face's own `NODE_ID` must be the one this build baked: the two are computed by different code
+    // (the build walks the tree, the face hashes the path it was compiled from), so a partitioned
+    // crate or a missing remap makes them disagree — silently, until this assertion exists.
+    // 一个面自己的 `NODE_ID` 必须就是这个构建烤进去的那个：两者由不同的代码算出（构建走一遍树，面散列它被编译时
+    // 的路径），因此分区 crate 或漏掉的 remap 会让它们不一致——在这条断言存在之前，那是静默的。
+    for face in static_faces {
+        writeln!(
+            face_identities,
+            "#[cfg(not(rust_analyzer))]\nconst _: () = {registry}::assert_static_identity(crate::{module}::NODE_ID, {registry}::NodeId::from_raw({:?}));",
+            face.id.into_bytes(),
+            module = face.module
+        )
+        .unwrap();
+    }
     output.push_str("];\n\n");
     output.push_str(&cut_contracts);
+    output.push_str(&face_identities);
     // The host may have `#![warn(missing_docs)]` on, and it cannot edit this
     // generated file — so the raw static stays hidden plumbing the way
     // `BUILTIN_STATIC_FACES`/`BUILTIN_GRAFT_CUTS` do, while the two functions a
@@ -260,6 +276,43 @@ mod tests {
         assert!(
             !output.contains("new_range"),
             "a literal path is not a range: {output}"
+        );
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    /// Every baked face identity is asserted against the face's own `NODE_ID`, so a face compiled
+    /// from a different namespace or `#[path]` spelling fails the build instead of quietly owning an
+    /// identity the plan never heard of (measured 2026-10-06: without this, remapping the host's
+    /// `src` path built cleanly while every face identity had moved).
+    /// 烤进去的每个面身份都会与面自己的 `NODE_ID` 对账，因此用不同命名空间或 `#[path]` 拼写编译出来的面会让
+    /// 构建失败，而不是悄悄拥有一个计划从没听说过的身份（2026-10-06 实测：没有这条断言时，把宿主的 `src`
+    /// 路径 remap 走后构建照样成功，而每个面的身份都已经变了）。
+    #[test]
+    fn every_baked_face_identity_is_asserted_against_the_face_itself() {
+        let root = temporary_directory("static-identity");
+        let records = [crate::build_time::static_plan::StaticFaceRecord {
+            id: nichlink_kernel::registry_core::identity::NodeId::from_bytes(b"face"),
+            parent: nichlink_kernel::registry_core::identity::NodeId::from_bytes(b"parent"),
+            owns_registry: false,
+            source: "control/object/button/button.rs".to_owned(),
+            module: "control::object::button".to_owned(),
+        }];
+        let output = render_lib(
+            &root,
+            &[],
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            &records,
+            &[],
+        );
+
+        assert!(
+            output.contains("assert_static_identity(crate::control::object::button::NODE_ID"),
+            "the face's own id must be checked against the baked one: {output}"
         );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
     }

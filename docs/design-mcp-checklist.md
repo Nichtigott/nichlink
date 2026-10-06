@@ -1591,3 +1591,19 @@ error[E0425]: cannot find value `SUBTREE` in module `crate::control::object::but
 **合法形状的真宿主实测**（已还原）：`widgets = [crate::control::object::SUBTREE]` ⇒ `cargo build` 过 ✓，锁里 `crate widgets subtrees=control::object faces=2` / `host faces=1` ✓，generation 摘要仍是 `92ef0bd3…` ✓（声明不碰记录）。
 
 钉子：内核 5 条 · runtime 2 条 · 构建期读者 8 条（其中两条就是上面那两条点名拒绝）。
+
+### §M7.15 身份漂移：从静默变成编译错误（2026-10-06）
+
+**动机**是 P3 的失效形态：分区 crate 用 `#[path]` 挂载同一个面文件，若拼写（或 `--remap-path-prefix`）不能把 `file!()` 还原成树记录的那条路径，面的 `NODE_ID` 就会与构建烤进 `BUILTIN_STATIC_FACES` 的那个不一致 —— 而在此之前**没有任何东西会报错**。
+
+**实测（改动前）**：`cargo rustc -p nichlink-example-control-button --lib -- --remap-path-prefix=<宿主 src>=/tmp/ghost` ⇒ **exit 0** ✗ —— 构建成功，而每个面的身份都已经变了（`manifest_relative_source` 在前缀不匹配时**回退成原始 `file!()`**，于是相对路径变了）。graft 切口随后点名的是一个没有任何面拥有的身份。
+
+**修法**：内核新增 `release::assert_static_identity(face: NodeId, planned: NodeId)`（`const fn`，逐字节比较，不符即 panic 并点名"这个面编译出的 id 不是构建烤进去的那个"）；渲染器为**每个静态面**在数组之外发一条 `#[cfg(not(rust_analyzer))] const _: () = assert_static_identity(crate::<模块>::NODE_ID, NodeId::from_raw([…]));`。
+
+**实测（改动后）**：同一条 remap 命令 ⇒ **exit 101**，`error[E0080]: evaluation panicked: static identity failed: this face compiles an id the build did not bake, so its namespace or source path differs from the tree this plan came from (see the `#[path]` spelling a partitioned crate mounts it through, and `NICHLINK_NAMESPACE`)` ✓；正常构建仍 **exit 0** ✓（真宿主上零误报）。
+
+**它管什么、不管什么（边界要说清）**：
+- **管**：构建的算法与编译器的算法**不一致**（分区挂载拼写错、漏 remap、命名空间来源不同）⇒ 当场红；
+- **不管**：两边**一起变**的情形（例如把面文件搬走 ⇒ 构建与编译器都算出新 id ⇒ 断言照过），那属于"记录/租约漂移"，仍由既有的漂移检测（`freshness`/台账）负责。⇒ 两条规则各管一半，不互相替代。
+
+钉子：内核 doctest 两条（同 id 通过 / 异 id `compile_fail`）· 渲染器 1 条（烤进去的每个面身份都要与面对账）。

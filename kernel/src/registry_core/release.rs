@@ -304,6 +304,89 @@ impl StaticPlan {
 /// 接口，或 preset 的 parts 没有被该面提供。生成的 crate 在 `const` 项里调用它，因此这次
 /// panic 是点名声明来源的编译错误，而不是运行期失败——这正是放在那里求值的目的。
 #[doc(hidden)]
+/// Assert that a face's own identity is the one this build baked into the static plan.
+/// 断言一个面自己的身份就是这个构建烤进静态计划里的那个。
+///
+/// `BUILTIN_STATIC_FACES` publishes identities the **build** computed from the source tree, while
+/// each face compiles its own `NODE_ID` from its namespace, source path and name. The two agree only
+/// while the face is compiled from the very path the tree recorded — and a partitioned crate mounting
+/// the file through a different `#[path]` spelling, or a missing `--remap-path-prefix`, is exactly how
+/// they stop agreeing. That disagreement used to be **silent** (measured 2026-10-06: remapping the
+/// host's `src` path built cleanly while every face identity had moved), and a graft cut then names an
+/// identity no face owns. Asserting it here turns it into a compile error that names the face.
+/// `BUILTIN_STATIC_FACES` 发布的是**构建**从源码树算出的身份，而每个面自己按其命名空间、源码路径与名字编译出
+/// `NODE_ID`。两者只在"这个面正是从树记录的那条路径编译出来"时一致——而分区 crate 用不同的 `#[path]` 拼写挂载
+/// 同一个文件、或漏了 `--remap-path-prefix`，正是它们不一致的方式。这种不一致过去是**静默**的（2026-10-06
+/// 实测：把宿主的 `src` 路径 remap 走后构建照样成功，而每个面的身份都已经变了），随后 graft 切口点名的是一个没有
+/// 任何面拥有的身份。在这里断言，把它变成一条点名该面的编译错误。
+/// # Examples
+///
+/// The identity a build baked for a face passes:
+///
+/// ```
+/// # use nichlink_kernel::registry_core::release::assert_static_identity;
+/// # use nichlink_kernel::registry_core::identity::NodeId;
+/// const FACE: NodeId = NodeId::from_bytes(b"face");
+/// const _: () = assert_static_identity(FACE, FACE);
+/// ```
+///
+/// A face compiled from another namespace or path does not compile:
+///
+/// ```compile_fail
+/// # use nichlink_kernel::registry_core::release::assert_static_identity;
+/// # use nichlink_kernel::registry_core::identity::NodeId;
+/// const FACE: NodeId = NodeId::from_bytes(b"face");
+/// const _: () = assert_static_identity(FACE, NodeId::from_bytes(b"other"));
+/// ```
+pub const fn assert_static_identity(face: NodeId, planned: NodeId) {
+    let face_bytes = face.into_bytes();
+    let planned_bytes = planned.into_bytes();
+    let mut index = 0;
+    while index < face_bytes.len() {
+        if face_bytes[index] != planned_bytes[index] {
+            panic!(
+                "static identity failed: this face compiles an id the build did not bake, so its \
+                 namespace or source path differs from the tree this plan came from (see the \
+                 `#[path]` spelling a partitioned crate mounts it through, and `NICHLINK_NAMESPACE`)"
+            );
+        }
+        index += 1;
+    }
+}
+
+/// Evaluate mounting and construction rules during crate generation.
+/// 在生成 crate 时求值挂载规则与构造规则。
+///
+/// # Why this is a const twin
+///
+/// This is the **const twin** of [`RegistrationRule::validate`]: same five
+/// checks, same order, different cost. The runtime side collects one `String` per
+/// failure and names it; this side cannot allocate or format inside const
+/// evaluation, so it stops at the first failure with a fixed message. They must be
+/// changed together — the runtime side is pinned by
+/// `parent_rule_aggregates_every_missing_structural_requirement`, and this side by
+/// every registry-owning face in the workspace compiling (or not) under the rule
+/// its own declaration carries. Folding the two into one function is not possible
+/// while this one is `const`: the shared checker returns a `Vec<String>`.
+/// 这是 [`RegistrationRule::validate`] 的 **const 孪生**：同样五项检查、同样顺序、不同代价。
+/// 运行期一侧为每个失败收集一个 `String` 并点名它；本侧在常量求值里无法分配或格式化，因此停
+/// 在第一个失败上并给出固定消息。两者必须一起改——运行期一侧由
+/// `parent_rule_aggregates_every_missing_structural_requirement` 钉住，本侧则由工作区里每个
+/// 拥有注册机的注册面按它自己声明所带的规则能否编译来钉住。在本函数仍是 `const` 期间把两者
+/// 合成一个是不可能的：共享的那个校验器返回 `Vec<String>`。
+///
+/// # Panics
+///
+/// Panics when `info` does not satisfy `rule`: a wrong preset, a missing
+/// structural part, export, handle interface, or parts interface, or a preset
+/// whose parts the face does not provide. The generated crate calls this in a
+/// `const` item, so the panic is a compile error naming the declaration source
+/// rather than a runtime failure — which is the whole point of evaluating it
+/// there.
+/// 当 `info` 不满足 `rule` 时 panic：preset 不符，缺少结构部件、导出、handle 接口或 parts
+/// 接口，或 preset 的 parts 没有被该面提供。生成的 crate 在 `const` 项里调用它，因此这次
+/// panic 是点名声明来源的编译错误，而不是运行期失败——这正是放在那里求值的目的。
+#[doc(hidden)]
 pub const fn assert_static_registration(rule: RegistrationRule, info: RegistrationInfo) {
     if let Some(required) = rule.required_preset
         && !str_eq(required, info.preset)
