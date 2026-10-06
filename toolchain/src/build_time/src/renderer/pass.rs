@@ -646,6 +646,7 @@ mod tests {
                     cut_out,
                     only: None,
                     mounts: &[],
+                    ancestors: &[],
                 },
             )
         };
@@ -730,6 +731,7 @@ mod tests {
             ShapeRender {
                 cut_out: &[],
                 only: Some(&claimed),
+                ancestors: &[("control".to_owned(), [7u8; 16])],
                 // The spelling the plan computed: a walk out of the ghost and into the host's `src`,
                 // which is what `file!()` will report and therefore what the identity is built from.
                 // 规划算出的拼写：走出幽灵、走进宿主 `src`，也就是 `file!()` 会报告、因而身份由之构建的那个。
@@ -758,11 +760,18 @@ mod tests {
             ),
             "and not through this fixture's own path: {output}"
         );
-        // The ancestors are shells: their module paths exist, their face files are not mounted.
-        // 祖先是壳：模块路径在，它们的面文件不挂载。
+        // The ancestors are shells: their module paths exist, their face files are not mounted, and
+        // they carry the identity a fragment's `parent:` names.
+        // 祖先是壳：模块路径在、面文件不挂载，而且携带碎片 `parent:` 点名的那个身份。
         assert!(
             !output.contains("control/control.rs"),
             "an ancestor's file is not mounted here: {output}"
+        );
+        assert!(
+            output.contains(
+                "pub const NODE_ID: ::nichlink_toolchain::runtime::registry_core::NodeId"
+            ) && output.contains(&format!("from_raw({:?})", [7u8; 16])),
+            "the shell carries the ancestor's identity: {output}"
         );
         // Everything outside the claim is left out entirely.
         // 认领之外的一律不发射。

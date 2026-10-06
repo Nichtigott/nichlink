@@ -60,6 +60,16 @@ pub(crate) struct ShapeRender<'a> {
     /// "走出自己的包、走进宿主 `src`"的拼写，而那个拼写是 `crate_plan` 算出来的——因为 `file!()` 报告的就是
     /// 它，而身份是 `hash(命名空间, 源码路径, 名字)`，**拼写就是身份**。
     pub(crate) mounts: &'a [(String, String)],
+    /// `(module path, identity bytes)` for the faces a ghost's shell modules stand for.
+    ///
+    /// A fragment's `parent: crate::<ancestor>::NODE_ID` has to resolve in a crate that does not
+    /// compile the ancestor, so the shell carries that one constant and nothing else. It is the id
+    /// the host's build baked, so the fragment's parent link is the same node the host sees.
+    /// `(模块路径, 身份字节)` 对，供幽灵的壳模块代表的那些面。
+    ///
+    /// 碎片的 `parent: crate::<祖先>::NODE_ID` 必须在一个不编译祖先的 crate 里解析得到，因此壳只携带那一个
+    /// 常量、别的什么都不带。它就是宿主的构建烤进去的那个 id，于是碎片的父级链接与宿主看见的是同一个节点。
+    pub(crate) ancestors: &'a [(String, [u8; 16])],
 }
 
 impl<'a> ShapeRender<'a> {
@@ -70,6 +80,7 @@ impl<'a> ShapeRender<'a> {
             cut_out: &[],
             only: None,
             mounts: &[],
+            ancestors: &[],
         }
     }
 }
@@ -260,6 +271,27 @@ fn render_node(
         inner = "    ".repeat(depth + 1)
     )
     .unwrap();
+    // A shell stands in for a face this crate does not compile: it carries that face's identity so a
+    // fragment's `parent:` still resolves, and carries nothing else (audit `M7`, P3.2).
+    // 壳代替的是本 crate 不编译的那个面：它携带那个面的身份，好让碎片的 `parent:` 仍然解析，别的什么都不带
+    // （审计 `M7`，P3.2）。
+    if shell
+        && let Some((_, bytes)) = pass
+            .shape
+            .ancestors
+            .iter()
+            .find(|(path, _)| path == module_path)
+    {
+        writeln!(
+            output,
+            "{inner}/// The identity of the registration face this module stands for in the host's tree.\n\
+             {inner}/// 本模块在宿主的树里所代表的注册面的身份。\n\
+             {inner}pub const NODE_ID: ::nichlink_toolchain::runtime::registry_core::NodeId = \
+             ::nichlink_toolchain::runtime::registry_core::NodeId::from_raw({bytes:?});",
+            inner = "    ".repeat(depth + 1)
+        )
+        .unwrap();
+    }
     if let (true, Some(absolute)) = (include_source, absolute.as_ref()) {
         // A container face owns child registries, so its file always loads into
         // a child module one level deeper: it always needs the IDE view.

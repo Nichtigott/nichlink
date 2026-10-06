@@ -40,6 +40,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::registry_identity::NodeId;
 use super::shape_decl::ShapeDeclaration;
 
 /// One ghost crate: the package to create, and the mounts that make it the same faces.
@@ -61,6 +62,14 @@ pub(crate) struct PlannedCrate {
     /// The subtree module paths this crate claims.
     /// 这个 crate 认领的子树模块路径。
     pub(crate) subtrees: Vec<String>,
+    /// The proper prefixes of the claims that are **faces**, with their identities: a shell module
+    /// needs them so a fragment's `parent: crate::<ancestor>::NODE_ID` still resolves in a crate that
+    /// does not compile the ancestor. Nothing else of the ancestor's is offered — a trait defined up
+    /// there stays unreachable, which is the honest boundary this planner refuses on.
+    /// 认领的**是注册面**的真前缀，连同它们的身份：壳模块需要它们，好让碎片里的
+    /// `parent: crate::<祖先>::NODE_ID` 在一个不编译祖先的 crate 里仍然解析得到。祖先的其它东西一概不提供
+    /// ——定义在上面的 trait 仍不可达，那是本规划器据以拒绝的诚实边界。
+    pub(crate) ancestors: Vec<(String, NodeId)>,
     /// One mount per face file below those subtrees.
     /// 那些子树之下的每份面文件一项挂载。
     pub(crate) mounts: Vec<PlannedMount>,
@@ -117,7 +126,7 @@ pub(crate) fn plan(
     package_root: &Path,
     namespace: &str,
     declaration: &ShapeDeclaration,
-    faces: &[(String, String)],
+    faces: &[(String, String, NodeId)],
 ) -> Result<Vec<PlannedCrate>, String> {
     let host = package_root
         .file_name()
@@ -137,10 +146,15 @@ pub(crate) fn plan(
         let mut mounts = Vec::new();
         let mut files = Vec::new();
         for subtree in subtrees {
-            for (source, module_path) in faces
-                .iter()
-                .filter(|(_, module)| module.starts_with(&format!("{subtree}::")))
-            {
+            // The claim names a subtree **rooted at** that node, so the face at the node itself is
+            // part of the fragment too: the host hands the whole module away (its render skips the
+            // module and everything under it), and a fragment whose root face went to neither crate
+            // would be a face nobody compiles.
+            // 认领点名的是**以该节点为根**的子树，因此该节点自己的面也属于碎片：宿主把整个模块交出去（它的渲染
+            // 跳过该模块及其下的一切），而根面若不归任何一方，就是一个没人编译的面。
+            for (source, module_path, _) in faces.iter().filter(|(_, module, _)| {
+                *module == *subtree || module.starts_with(&format!("{subtree}::"))
+            }) {
                 mounts.push(PlannedMount {
                     spelling: spelling_for(&host, source, module_path),
                     module_path: module_path.clone(),
@@ -152,12 +166,38 @@ pub(crate) fn plan(
         mounts.sort_by(|left, right| left.module_path.cmp(&right.module_path));
         files.sort();
         files.dedup();
-        // The reachability check comes **after** the mounts, so a refusal can name every file it read
-        // and speak about the crate as a whole (a reference between two subtrees of one crate is fine).
-        // 可及性检查放在挂载之后，这样拒绝能点名它读过的每份文件，并就整个 crate 说话（同一个 crate 的两棵
-        // 子树之间的引用是允许的）。
+        // The proper prefixes of the claims that are **faces**: their identities are what a shell can
+        // carry so a fragment's `parent:` still resolves (a non-face prefix is a plain directory and
+        // has no identity for anyone to name).
+        // 认领里**是注册面**的真前缀：它们的身份正是壳可以携带、好让碎片的 `parent:` 仍然解析的东西（不是面的
+        // 前缀只是普通目录，没有任何身份可被点名）。
+        let mut ancestors: Vec<(String, NodeId)> = Vec::new();
+        for subtree in subtrees {
+            let mut prefix = String::new();
+            for segment in subtree.split("::") {
+                if !prefix.is_empty()
+                    && let Some((_, _, id)) = faces.iter().find(|(_, module, _)| *module == prefix)
+                {
+                    ancestors.push((prefix.clone(), *id));
+                }
+                prefix = if prefix.is_empty() {
+                    segment.to_owned()
+                } else {
+                    format!("{prefix}::{segment}")
+                };
+            }
+        }
+        ancestors.sort_by(|left, right| left.0.cmp(&right.0));
+        ancestors.dedup();
+        // The reachability check comes **after** both, so a refusal can name every file it read and
+        // speak about the crate as a whole (a reference between two subtrees of one crate is fine, and
+        // so is an ancestor's `NODE_ID`, which the shell carries).
+        // 可及性检查排在两者之后，这样拒绝能点名它读过的每份文件、并就整个 crate 说话（同一个 crate 的两棵子树
+        // 之间的引用是允许的，祖先的 `NODE_ID` 也允许——壳携带它）。
+        let ancestor_modules: Vec<String> =
+            ancestors.iter().map(|(module, _)| module.clone()).collect();
         for file in &files {
-            check_reachability(package_root, name, file, subtrees)?;
+            check_reachability(package_root, name, file, subtrees, &ancestor_modules)?;
         }
         let mut remap: Vec<(String, String)> = mounts
             .iter()
@@ -171,6 +211,7 @@ pub(crate) fn plan(
             namespace: namespace.to_owned(),
             directory,
             subtrees: subtrees.clone(),
+            ancestors,
             mounts,
             remap,
         });
@@ -224,6 +265,7 @@ fn check_reachability(
     crate_name: &str,
     source: &str,
     subtrees: &[String],
+    ancestors: &[String],
 ) -> Result<(), String> {
     let path = package_root.join("src").join(source);
     let Ok(text) = fs::read_to_string(&path) else {
@@ -260,7 +302,7 @@ fn check_reachability(
             if rest[head.len()..].trim_start().starts_with('!') {
                 continue;
             }
-            if reachable(&head, subtrees) {
+            if reachable(&head, subtrees, ancestors) {
                 continue;
             }
             return Err(format!(
@@ -280,16 +322,27 @@ fn check_reachability(
 
 /// Whether a `crate::` path stays inside the fragment (or names something every crate has).
 /// 一条 `crate::` 路径是否留在碎片之内（或者点名了每个 crate 都有的东西）。
-fn reachable(head: &str, subtrees: &[String]) -> bool {
+fn reachable(head: &str, subtrees: &[String], ancestors: &[String]) -> bool {
     // The constants and helpers the declaration macros themselves expand to.
     // 声明宏自己展开出来的那些常量与帮手。
     const ALWAYS: &[&str] = &["NICHLINK_NAMESPACE", "root_node_id", "ROOT_NODE_ID"];
     if ALWAYS.contains(&head) {
         return true;
     }
-    subtrees
+    if subtrees
         .iter()
         .any(|subtree| head == subtree || head.starts_with(&format!("{subtree}::")))
+    {
+        return true;
+    }
+    // An ancestor is reachable as a **module** and for its `NODE_ID` alone: the shell carries that
+    // one constant so a fragment's `parent:` still resolves, and carries nothing else — a trait
+    // defined above the fragment is exactly what this planner refuses on.
+    // 祖先作为**模块**、以及仅为它的 `NODE_ID` 可达：壳携带那一个常量，好让碎片的 `parent:` 仍然解析，别的
+    // 什么都不带——定义在碎片之上的 trait 正是本规划器据以拒绝的东西。
+    ancestors
+        .iter()
+        .any(|ancestor| head == ancestor || head == format!("{ancestor}::NODE_ID"))
 }
 
 #[cfg(test)]

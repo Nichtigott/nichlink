@@ -43,12 +43,13 @@ fn plan_host(root: &Path) -> Result<Vec<PlannedCrate>, String> {
     // The pipeline hands the planner its face list as `(source, module)` pairs, computed before the
     // render; the fixture derives the same pairs from the rows the build published.
     // 管线把面清单以 `(源码, 模块)` 对交给规划器（在渲染之前算好）；夹具从构建发布的行里推导出同样的对。
-    let faces: Vec<(String, String)> = rows
+    let faces: Vec<(String, String, crate::build_time::registry_identity::NodeId)> = rows
         .iter()
         .map(|row| {
             (
                 row.source.clone(),
                 crate::build_time::static_plan::source_module_path(&row.source),
+                row.id,
             )
         })
         .collect();
@@ -208,15 +209,24 @@ pub const SHAPE: Shape = Shape {
     );
     let planned = plan_host(&root).expect("a reference between two claimed subtrees resolves");
     assert_eq!(planned.len(), 1);
+    // Three, not two: a claim names a subtree **rooted at** its node, so the face at that node is
+    // part of it — `panel/panel.rs` belongs to the `panel` claim exactly as the button belongs to
+    // `control::object`.
+    // 三个而不是两个：认领点名的是**以该节点为根**的子树，因此该节点自己的面也属于它——`panel/panel.rs` 属于
+    // `panel` 这条认领，正如 button 属于 `control::object`。
     assert_eq!(
         planned[0].mounts.len(),
-        2,
-        "both subtrees are mounted: {:?}",
+        3,
+        "both subtrees are mounted, each including its root face: {:?}",
         planned[0].mounts
     );
     // Two inline depths ⇒ two distinct prefixes, each mapping to nothing.
     // 两个不同的内联深度 ⇒ 两个不同的前缀，各自映射为空。
-    assert_eq!(planned[0].remap.len(), 2, "{:?}", planned[0].remap);
+    // One prefix per inline depth, and the depths differ by construction: `control::object::button`
+    // sits three modules deep, `panel` one, `panel::gauge` two.
+    // 每个内联深度一个前缀，而深度按构造各不相同：`control::object::button` 深三层、`panel` 一层、
+    // `panel::gauge` 两层。
+    assert_eq!(planned[0].remap.len(), 3, "{:?}", planned[0].remap);
     assert!(
         planned[0]
             .remap
@@ -266,6 +276,84 @@ fn a_host_hands_its_claims_away_and_a_ghost_hands_nothing_away() {
         super::cut_out_for(None, false),
         Vec::<String>::new(),
         "no declaration: the whole tree"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// A fragment may name its **ancestor's identity** — the shell carries that one constant so
+/// `parent: crate::panel::NODE_ID` still resolves in a crate that does not compile `panel` — and may
+/// name nothing else of it: a trait defined above the fragment stays a refusal, which is the honest
+/// boundary (audit `M7`, P3.2).
+/// 碎片可以点名**祖先的身份**——壳携带那一个常量，好让 `parent: crate::panel::NODE_ID` 在一个不编译 `panel`
+/// 的 crate 里仍然解析——而祖先的其它东西一概不能点名：定义在碎片之上的 trait 仍被拒绝，那是诚实的边界
+/// （审计 `M7`，P3.2）。
+#[test]
+fn an_ancestors_identity_is_reachable_and_its_traits_are_not() {
+    let declaration = r#"use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "myapp",
+    crates: &[Crate::named("widgets").at(&[crate::panel::frame::SUBTREE])],
+};
+"#;
+    let files = [
+        (
+            "panel/panel.rs",
+            "crate::root_object! {\n    kind: Panel,\n}\n",
+        ),
+        (
+            "panel/frame/frame.rs",
+            "crate::control_object! {\n    kind: Frame,\n    parent: crate::panel::NODE_ID,\n}\n",
+        ),
+        (
+            "panel/frame/widget/widget.rs",
+            "crate::control_object! {\n    kind: Widget,\n    parent: crate::panel::frame::NODE_ID,\n}\n",
+        ),
+    ];
+    let root = host("ancestor-identity", &files, declaration);
+    let planned = plan_host(&root).expect("an ancestor's identity is reachable");
+    assert_eq!(planned.len(), 1);
+    assert_eq!(
+        planned[0].ancestors.len(),
+        1,
+        "exactly the faces above the claim: {:?}",
+        planned[0].ancestors
+    );
+    assert_eq!(planned[0].ancestors[0].0, "panel");
+    assert_eq!(
+        planned[0]
+            .mounts
+            .iter()
+            .map(|mount| mount.module_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["panel::frame", "panel::frame::widget"],
+        "the fragment includes the face **at** its root, which the host hands away whole"
+    );
+
+    // The same fragment reaching for a **trait** above it is refused, by file and line.
+    // 同一个碎片若去够它上面的**trait**，则被点名拒绝（文件与行）。
+    let root = host(
+        "ancestor-trait",
+        &[
+            (
+                "panel/panel.rs",
+                "pub trait ControlHandle {}\n\ncrate::root_object! {\n    kind: Panel,\n}\n",
+            ),
+            (
+                "panel/frame/frame.rs",
+                "use crate::panel::ControlHandle;\n\ncrate::control_object! {\n    kind: Frame,\n}\n",
+            ),
+            (
+                "panel/frame/widget/widget.rs",
+                "crate::control_object! {\n    kind: Widget,\n}\n",
+            ),
+        ],
+        declaration,
+    );
+    let refused = plan_host(&root).expect_err("a trait above the fragment stays unreachable");
+    assert!(
+        refused.contains("crate::panel::ControlHandle") && refused.contains("way forward"),
+        "the refusal names the path and the way forward: {refused}"
     );
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }

@@ -163,26 +163,18 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 规划在**这里**、渲染之前算，因为渲染需要它的产物：每个面的挂载拼写。幽灵的文件住在宿主包里，因此拼写
     // 必须走出幽灵、走进宿主的 `src`——而 `file!()` 报告的就是那个拼写，于是它是身份的一部分（审计 `M7`，
     // P3.2）。本次构建做不出的规划在这里被点名拒绝，而生成树也正好能承载那条拒绝。
-    let shape_faces: Vec<(String, String)> = static_faces
+    let shape_faces: Vec<(String, String, super::registry_identity::NodeId)> = static_faces
         .iter()
-        .map(|face| (face.source.clone(), face.module.clone()))
+        .map(|face| (face.source.clone(), face.module.clone(), face.id))
         .collect();
-    let mounts: Vec<(String, String)> = match &shape {
+    let planned = match &shape {
         Some(shape) => match super::crate_plan::plan(
             &layout.package_root,
             &super::registry_identity::package_namespace(),
             shape,
             &shape_faces,
         ) {
-            Ok(planned) => planned
-                .iter()
-                .flat_map(|crate_plan| {
-                    crate_plan
-                        .mounts
-                        .iter()
-                        .map(|mount| (mount.module_path.clone(), mount.spelling.clone()))
-                })
-                .collect(),
+            Ok(planned) => planned,
             Err(refusal) => {
                 compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
                 Vec::new()
@@ -190,6 +182,27 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         },
         None => Vec::new(),
     };
+    // One plan, two consumers: the mounts (the `#[path]` spelling per face) and the shells (the
+    // ancestors' identities, so a fragment's `parent:` still resolves).
+    // 一份规划、两个消费者：挂载（每个面的 `#[path]` 拼写）与壳（祖先的身份，好让碎片的 `parent:` 仍然解析）。
+    let mounts: Vec<(String, String)> = planned
+        .iter()
+        .flat_map(|crate_plan| {
+            crate_plan
+                .mounts
+                .iter()
+                .map(|mount| (mount.module_path.clone(), mount.spelling.clone()))
+        })
+        .collect();
+    let ancestors: Vec<(String, [u8; 16])> = planned
+        .iter()
+        .flat_map(|crate_plan| {
+            crate_plan
+                .ancestors
+                .iter()
+                .map(|(module, id)| (module.clone(), id.into_bytes()))
+        })
+        .collect();
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
@@ -211,6 +224,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
                 cut_out: &cut_out,
                 only: only.as_deref(),
                 mounts: &mounts,
+                ancestors: &ancestors,
             }
         },
     );
