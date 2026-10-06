@@ -2,6 +2,7 @@
 //! 宿主声明的形状的钉子：它会被校验，而坏的会被点名。
 
 use super::{Crate, Shape, Subtree, add_crates};
+use nichlink_kernel::identity::NodeId;
 
 /// A shape that holds together is accepted and handed back unchanged.
 /// 一份成立的形状会被接受，并原样交回。
@@ -48,4 +49,21 @@ fn an_overlapping_shape_is_refused_by_name() {
     assert!(message.contains("`widgets`"), "{message}");
     assert!(message.contains("`tiny`"), "{message}");
     assert!(message.contains("exactly one crate"), "{message}");
+}
+
+/// A crate that claims a face by identity is accepted, and its claim is visible to the host's own
+/// crate without any tree: the count is the half a host can check about itself.
+/// 按身份认领一个面的 crate 会被接受，而它的认领不需要任何树就对宿主自己的 crate 可见：那个计数正是宿主能对
+/// 自己查的那一半。
+#[test]
+fn a_crate_that_claims_a_face_by_identity_is_accepted() {
+    static SLIDER: NodeId = NodeId::from_bytes(b"host::control::object::slider");
+    static SHAPE: Shape = Shape {
+        package_prefix: "myapp",
+        crates: &[Crate::named("slider").faces(&[SLIDER])],
+    };
+    let shape = add_crates(&SHAPE);
+    assert_eq!(shape.crates[0].name(), "slider");
+    assert_eq!(shape.crates[0].named_faces().len(), 1);
+    assert!(shape.crates[0].subtrees().is_empty());
 }

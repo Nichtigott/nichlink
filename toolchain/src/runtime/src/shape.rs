@@ -10,6 +10,7 @@
 //!     package_prefix: "myapp",
 //!     crates: &[
 //!         Crate::named("widgets").at(&[crate::control::object::SUBTREE]),
+//!         Crate::named("slider").faces(&[crate::control::object::slider::NODE_ID]),
 //!     ],
 //! };
 //! ```
@@ -30,6 +31,7 @@
 //! `crate::control::object::SUBTREE` 存在当且仅当那棵子树存在。什么算合法形状这条规则住在内核里、只有一份，
 //! 因为构建脚本在编译之前就把同一份声明当文本查一遍。
 
+use nichlink_kernel::identity::NodeId;
 use nichlink_kernel::registry_core::{DeclaredCrate, validate_shape};
 
 /// One registration subtree, as the generated tree marks it.
@@ -59,27 +61,69 @@ impl Subtree {
     }
 }
 
-/// One crate a host asks for: a name and the registration subtrees it claims.
-/// 宿主要求的一个 crate：一个名字，以及它认领的注册子树。
+/// One crate a host asks for: a name, and what it claims.
+/// 宿主要求的一个 crate：一个名字，以及它认领的东西。
+///
+/// There are **two** ways to name a claim, and the difference is not a matter of taste — it is what
+/// each node in the generated tree actually has:
+///
+/// * a **directory node** (a subtree the build assembled, like `control::object`) has no identity of
+///   its own, so the generated tree marks it with [`Subtree`]: `Crate::named("widgets").at(&[…::SUBTREE])`.
+/// * a **face** already has an identity — the same `NODE_ID` its own file writes in `parent:` — so it
+///   is named with that: `Crate::named("slider").faces(&[…::NODE_ID])`.
+///
+/// A **file leaf that is not a face** (a registry-rule file, for instance) has neither, so it cannot
+/// be named at all yet; the build refuses it by name rather than guessing.
+/// 点名有**两种**方式，而差别不是口味问题——它是生成树里每个节点**实际拥有**的东西：
+///
+/// * **目录节点**（构建拼出来的子树，如 `control::object`）没有自己的身份，因此生成树用 [`Subtree`] 标记它：
+///   `Crate::named("widgets").at(&[…::SUBTREE])`。
+/// * **面**本来就有身份——就是它自己那份文件在 `parent:` 里写的同一个 `NODE_ID`——所以用它点名：
+///   `Crate::named("slider").faces(&[…::NODE_ID])`。
+///
+/// **不是面的文件叶子**（例如规则文件）两样都没有，因此今天还不能被点名；构建会点名拒绝它，而不是猜。
 #[derive(Clone, Copy, Debug)]
 pub struct Crate {
     name: &'static str,
     at: &'static [Subtree],
+    faces: &'static [NodeId],
 }
 
 impl Crate {
     /// A crate with this name and no subtrees yet.
     /// 一个以此命名的 crate，还没有子树。
     pub const fn named(name: &'static str) -> Self {
-        Self { name, at: &[] }
+        Self {
+            name,
+            at: &[],
+            faces: &[],
+        }
     }
 
-    /// The same crate, claiming these subtrees.
-    /// 同一个 crate，认领这些子树。
+    /// The same crate, claiming these directory subtrees.
+    /// 同一个 crate，认领这些目录子树。
     pub const fn at(self, at: &'static [Subtree]) -> Self {
         Self {
             name: self.name,
             at,
+            faces: self.faces,
+        }
+    }
+
+    /// The same crate, claiming these faces by the identity their own files declare.
+    /// 同一个 crate，按这些面各自文件声明的身份认领它们。
+    ///
+    /// The identity is a hash, so this half of the shape cannot say **where** a face lives — which
+    /// is why the build reads the same declaration as text and checks those paths in full. What this
+    /// half still answers is "did the host name anything at all", and that is the question a host can
+    /// ask about itself without a tree.
+    /// 身份是散列，因此形状的这一半说不出一个面**住在哪**——这正是构建把同一份声明当文本读、完整地查那些路径
+    /// 的原因。这一半仍然回答的是"宿主到底点名了什么没有"，而那是宿主不需要树就能问自己的问题。
+    pub const fn faces(self, faces: &'static [NodeId]) -> Self {
+        Self {
+            name: self.name,
+            at: self.at,
+            faces,
         }
     }
 
@@ -89,10 +133,16 @@ impl Crate {
         self.name
     }
 
-    /// The subtrees this crate claims.
-    /// 这个 crate 认领的子树。
+    /// The directory subtrees this crate claims.
+    /// 这个 crate 认领的目录子树。
     pub const fn subtrees(self) -> &'static [Subtree] {
         self.at
+    }
+
+    /// The faces this crate claims, by identity.
+    /// 这个 crate 认领的面，按身份。
+    pub const fn named_faces(self) -> &'static [NodeId] {
+        self.faces
     }
 }
 
@@ -139,6 +189,7 @@ pub fn add_crates(shape: &'static Shape) -> &'static Shape {
         .map(|(krate, subtrees)| DeclaredCrate {
             name: krate.name(),
             subtrees,
+            faces: krate.named_faces().len(),
         })
         .collect();
     if let Err(refusal) = validate_shape(shape.package_prefix, &declared) {

@@ -30,6 +30,12 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
         "crate::control_object! {\n    kind: Button,\n    parent: crate::control::NODE_ID,\n}\n",
     )
     .expect("the leaf face");
+    fs::create_dir_all(src.join("dial")).expect("a second face directory");
+    fs::write(
+        src.join("dial/dial.rs"),
+        "crate::root_object! {\n    kind: Dial,\n}\n",
+    )
+    .expect("the dial face");
     fs::create_dir_all(src.join("control/registry_rule")).expect("second subtree directory");
     fs::write(
         src.join("control/registry_rule/registry_rule.rs"),
@@ -50,7 +56,7 @@ pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
     crates: &[
         Crate::named("widgets").at(&[crate::control::object::SUBTREE]),
-        Crate::named("rules").at(&[crate::control::registry_rule::SUBTREE]),
+        Crate::named("dial").faces(&[crate::dial::NODE_ID]),
     ],
 };
 "#;
@@ -77,14 +83,24 @@ fn a_declaration_resolves_to_the_crates_it_names() {
         .expect("it reads")
         .expect("it declares a shape");
     assert_eq!(declaration.package_prefix, "myapp");
-    assert_eq!(
-        declaration.crates,
-        vec![
-            ("widgets".to_owned(), vec!["control::object".to_owned()]),
+    let claims: Vec<(&str, Vec<(&str, bool)>)> = declaration
+        .crates
+        .iter()
+        .map(|(name, claims)| {
             (
-                "rules".to_owned(),
-                vec!["control::registry_rule".to_owned()]
-            ),
+                name.as_str(),
+                claims
+                    .iter()
+                    .map(|claim| (claim.path.as_str(), claim.face))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        claims,
+        vec![
+            ("widgets", vec![("control::object", false)]),
+            ("dial", vec![("dial", true)]),
         ]
     );
     // The digest is the identity `NodeId` derives from the file's bytes (128 bits, 32 hex digits),
@@ -118,10 +134,12 @@ fn the_lock_says_which_faces_each_crate_would_own() {
         "{lock}"
     );
     assert!(
-        lock.contains("crate\trules\tsubtrees=control::registry_rule\tfaces=1"),
+        lock.contains("crate\tdial\tfaces_named=dial\tfaces=1"),
         "{lock}"
     );
-    assert!(lock.contains("host\tfaces=1"), "{lock}");
+    // The host keeps the two faces no crate claimed: the root face and the rule face.
+    // 宿主留着没有 crate 认领的那两个面：根面与规则面。
+    assert!(lock.contains("host\tfaces=2"), "{lock}");
 }
 
 /// A second spelling of the same declaration is refused, because guessing is how a shape is decided
@@ -132,10 +150,11 @@ fn another_spelling_is_refused_by_name() {
     let (root, _, _) = package(
         "spelling",
         "pub const SHAPE: Shape = Shape { package_prefix: \"myapp\", crates: &[\n\
-         Crate::named(\"widgets\").at(&[crate::control::object::NODE_ID]),\n] };\n",
+         Crate::named(\"widgets\").at(&[crate::control::object::REGISTRATION]),\n] };\n",
     );
     let refusal = read_shape_declaration(&root).expect_err("refused");
     assert!(refusal.contains("::SUBTREE"), "{refusal}");
+    assert!(refusal.contains("::NODE_ID"), "{refusal}");
     assert!(refusal.contains("add_crates.rs"), "{refusal}");
 }
 
@@ -150,8 +169,8 @@ fn the_empty_and_overlapping_shapes_are_refused_where_they_are_wrong() {
     );
     assert!(
         read_shape_declaration(&no_subtree)
-            .expect_err("no subtrees")
-            .contains("claims no subtree")
+            .expect_err("nothing claimed")
+            .contains("claims nothing")
     );
 
     let (prefix, _, _) = package(
@@ -169,7 +188,7 @@ fn the_empty_and_overlapping_shapes_are_refused_where_they_are_wrong() {
         "overlap",
         "pub const SHAPE: Shape = Shape { package_prefix: \"myapp\", crates: &[\n\
          Crate::named(\"widgets\").at(&[crate::control::object::SUBTREE]),\n\
-         Crate::named(\"tiny\").at(&[crate::control::object::button::SUBTREE]),\n] };\n",
+         Crate::named(\"tiny\").faces(&[crate::control::object::button::NODE_ID]),\n] };\n",
     );
     let refusal = read_shape_declaration(&overlap).expect_err("overlap");
     assert!(refusal.contains("`widgets`"), "{refusal}");
