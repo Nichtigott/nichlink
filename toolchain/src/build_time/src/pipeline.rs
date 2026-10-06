@@ -155,6 +155,41 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
                 .collect::<Vec<String>>()
         });
     let cut_out = super::crate_plan::cut_out_for(shape.as_ref(), only.is_some());
+    // The plan is computed **here**, before the render, because the render needs what it produces: the
+    // mount spelling per face. A ghost's files live in the host package, so the spelling has to walk
+    // out of the ghost and into the host's `src` — and `file!()` reports that spelling, which makes it
+    // part of the identity (audit `M7`, P3.2). A plan this build cannot make is refused by name here,
+    // which is also where the generated tree can carry the refusal.
+    // 规划在**这里**、渲染之前算，因为渲染需要它的产物：每个面的挂载拼写。幽灵的文件住在宿主包里，因此拼写
+    // 必须走出幽灵、走进宿主的 `src`——而 `file!()` 报告的就是那个拼写，于是它是身份的一部分（审计 `M7`，
+    // P3.2）。本次构建做不出的规划在这里被点名拒绝，而生成树也正好能承载那条拒绝。
+    let shape_faces: Vec<(String, String)> = static_faces
+        .iter()
+        .map(|face| (face.source.clone(), face.module.clone()))
+        .collect();
+    let mounts: Vec<(String, String)> = match &shape {
+        Some(shape) => match super::crate_plan::plan(
+            &layout.package_root,
+            &super::registry_identity::package_namespace(),
+            shape,
+            &shape_faces,
+        ) {
+            Ok(planned) => planned
+                .iter()
+                .flat_map(|crate_plan| {
+                    crate_plan
+                        .mounts
+                        .iter()
+                        .map(|mount| (mount.module_path.clone(), mount.spelling.clone()))
+                })
+                .collect(),
+            Err(refusal) => {
+                compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+                Vec::new()
+            }
+        },
+        None => Vec::new(),
+    };
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
@@ -175,6 +210,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             super::renderer::ShapeRender {
                 cut_out: &cut_out,
                 only: only.as_deref(),
+                mounts: &mounts,
             }
         },
     );
@@ -295,18 +331,10 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             // 先校验声明（每条认领都点名了一棵子树吗？），再规划它（每条认领的子树都能变成一个编译得过的
             // crate 吗？）。拒绝一份本次构建变不成可用 crate 的声明，就是"现在得到一句点名拒绝"与"留下一棵
             // 没人编译的子树、以后由 rustc 报 `cannot find 'object' in 'control'`"之间的差别（审计 `M7`，P3.2）。
-            let refusal = super::shape_decl::check_shape(shape, out_dir, &pruning_rows)
-                .err()
-                .or_else(|| {
-                    super::crate_plan::plan(
-                        &layout.package_root,
-                        &super::registry_identity::package_namespace(),
-                        shape,
-                        &pruning_rows,
-                    )
-                    .err()
-                });
-            if let Some(refusal) = refusal {
+            // The plan was already made before the render (it produced the mount spellings); here the
+            // declaration's claims are checked against the rows, which is the half that needs them.
+            // 规划已在渲染之前做过（它产出了挂载拼写）；这里拿行对账声明里的认领，那是需要行的那一半。
+            if let Err(refusal) = super::shape_decl::check_shape(shape, out_dir, &pruning_rows) {
                 compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
             }
         }

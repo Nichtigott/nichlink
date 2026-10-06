@@ -645,6 +645,7 @@ mod tests {
                 ShapeRender {
                     cut_out,
                     only: None,
+                    mounts: &[],
                 },
             )
         };
@@ -729,6 +730,13 @@ mod tests {
             ShapeRender {
                 cut_out: &[],
                 only: Some(&claimed),
+                // The spelling the plan computed: a walk out of the ghost and into the host's `src`,
+                // which is what `file!()` will report and therefore what the identity is built from.
+                // 规划算出的拼写：走出幽灵、走进宿主 `src`，也就是 `file!()` 会报告、因而身份由之构建的那个。
+                mounts: &[(
+                    "control::object::button".to_owned(),
+                    "../../../../host/src/control/object/button/button.rs".to_owned(),
+                )],
             },
         );
 
@@ -738,8 +746,17 @@ mod tests {
         assert!(output.contains("pub mod object"), "{output}");
         assert!(output.contains("pub mod button"), "{output}");
         assert!(
-            output.contains("control/object/button/button.rs"),
-            "the claimed leaf is mounted: {output}"
+            output.contains("../../../../host/src/control/object/button/button.rs"),
+            "the claimed leaf is mounted through the planned spelling: {output}"
+        );
+        assert!(
+            !output.contains(
+                &root
+                    .join("control/object/button/button.rs")
+                    .display()
+                    .to_string()
+            ),
+            "and not through this fixture's own path: {output}"
         );
         // The ancestors are shells: their module paths exist, their face files are not mounted.
         // 祖先是壳：模块路径在，它们的面文件不挂载。

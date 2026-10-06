@@ -48,6 +48,18 @@ pub(crate) struct ShapeRender<'a> {
     /// 本 crate 是唯一编译者的那些子树（当它是幽灵时）：其余节点一律不发射，而认领子树**之上**的节点变成
     /// **空的容器模块**。
     pub(crate) only: Option<&'a [String]>,
+    /// `(module path, #[path] spelling)` for the faces a ghost mounts from the host.
+    ///
+    /// A host mounts its own files by their portable path, which is right there because the file *is*
+    /// in this package. A ghost's file is not: it must spell a walk out of its own package and into
+    /// the host's `src`, and that spelling is what `crate_plan` computed — because `file!()` reports
+    /// it, and identity is `hash(namespace, source path, name)`, the spelling *is* the identity.
+    /// `(模块路径, #[path] 拼写)` 对，供幽灵挂载宿主的文件。
+    ///
+    /// 宿主按可移植路径挂载自己的文件，这在那里是对的，因为文件**就在**这个包里。幽灵的文件不在：它必须写出
+    /// "走出自己的包、走进宿主 `src`"的拼写，而那个拼写是 `crate_plan` 算出来的——因为 `file!()` 报告的就是
+    /// 它，而身份是 `hash(命名空间, 源码路径, 名字)`，**拼写就是身份**。
+    pub(crate) mounts: &'a [(String, String)],
 }
 
 impl<'a> ShapeRender<'a> {
@@ -57,6 +69,7 @@ impl<'a> ShapeRender<'a> {
         Self {
             cut_out: &[],
             only: None,
+            mounts: &[],
         }
     }
 }
@@ -172,10 +185,27 @@ fn render_node(
     // 这里不再注入逐面常量。叶子面以自身名字载入，公开模块路径保持不变；拥有
     // 子注册机的面必须同时充当容器，于是载入到同名子模块再重导出——只有这种
     // 情况会多出一段模块路径。
-    let absolute = node
-        .file
-        .as_ref()
-        .map(|file| nichlink_kernel::declaration::portable_path(&file.to_string_lossy()));
+    // A ghost mounts the host's file through the spelling the plan computed; a host mounts its own
+    // file by its portable path. The lookup is by module path because that is what both sides agree
+    // on, and a face this run renders without a planned mount keeps the portable path — a wrong
+    // identity cannot pass silently, because the build bakes one id and the compiler computes the
+    // other (audit `M7`, §M7.15).
+    // 幽灵经规划算出的拼写挂载宿主的文件；宿主按可移植路径挂载自己的文件。查表用模块路径，因为那是两边一致
+    // 的东西；本次渲染到、却没有规划挂载的面保留可移植路径——错的身份不可能悄悄通过，因为构建烤进一个 id、
+    // 编译器算出另一个（审计 `M7`，§M7.15）。
+    let mounted = pass
+        .shape
+        .mounts
+        .iter()
+        .find(|(path, _)| path == module_path)
+        .map(|(_, spelling)| spelling.clone());
+    let absolute = match (mounted, node.file.as_ref()) {
+        (Some(spelling), _) => Some(spelling),
+        (None, Some(file)) => Some(nichlink_kernel::declaration::portable_path(
+            &file.to_string_lossy(),
+        )),
+        (None, None) => None,
+    };
     let chain = if parent_chain.is_empty() {
         node.name.clone()
     } else {

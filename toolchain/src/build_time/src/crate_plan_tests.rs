@@ -40,7 +40,19 @@ fn plan_host(root: &Path) -> Result<Vec<PlannedCrate>, String> {
     let nodes = crate::build_time::source_walk::discover_root(&src);
     let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
         .expect("the record writes");
-    plan(root, "myapp", &declaration, &rows)
+    // The pipeline hands the planner its face list as `(source, module)` pairs, computed before the
+    // render; the fixture derives the same pairs from the rows the build published.
+    // 管线把面清单以 `(源码, 模块)` 对交给规划器（在渲染之前算好）；夹具从构建发布的行里推导出同样的对。
+    let faces: Vec<(String, String)> = rows
+        .iter()
+        .map(|row| {
+            (
+                row.source.clone(),
+                crate::build_time::static_plan::source_module_path(&row.source),
+            )
+        })
+        .collect();
+    plan(root, "myapp", &declaration, &faces)
 }
 
 /// A declaration for one crate claiming `control::object`.

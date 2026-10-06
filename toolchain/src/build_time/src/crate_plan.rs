@@ -40,9 +40,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::face_view::PruningRow;
 use super::shape_decl::ShapeDeclaration;
-use super::static_plan::source_module_path;
 
 /// One ghost crate: the package to create, and the mounts that make it the same faces.
 /// 一个幽灵 crate：要创建的包，以及让它成为同一批面的那些挂载。
@@ -107,11 +105,19 @@ pub(crate) fn cut_out_for(declaration: Option<&ShapeDeclaration>, ghost: bool) -
 
 /// Plan every crate a declaration asks for, or refuse by name.
 /// 规划声明要求的每个 crate，或者点名拒绝。
+///
+/// `faces` is the tree's face list as `(host-relative source, module path)` pairs, handed in rather
+/// than re-derived: the caller already holds it (the pipeline's `static_faces`, computed **before**
+/// the render, which is where the mounts are needed), and a second derivation is a second chance to
+/// disagree about which module a file declares.
+/// `faces` 是这棵树的面清单，形如 `(宿主相对源码, 模块路径)` 对，由调用方交进来而不是重新推导：调用方手里
+/// 已经有了（管线的 `static_faces`，在**渲染之前**算好，而渲染正是需要挂载的地方），而第二次推导就是第二次
+/// 对"某文件声明了哪个模块"产生分歧的机会。
 pub(crate) fn plan(
     package_root: &Path,
     namespace: &str,
     declaration: &ShapeDeclaration,
-    rows: &[PruningRow],
+    faces: &[(String, String)],
 ) -> Result<Vec<PlannedCrate>, String> {
     let host = package_root
         .file_name()
@@ -131,17 +137,16 @@ pub(crate) fn plan(
         let mut mounts = Vec::new();
         let mut files = Vec::new();
         for subtree in subtrees {
-            for row in rows
+            for (source, module_path) in faces
                 .iter()
-                .filter(|row| source_module_path(&row.source).starts_with(&format!("{subtree}::")))
+                .filter(|(_, module)| module.starts_with(&format!("{subtree}::")))
             {
-                let module_path = source_module_path(&row.source);
                 mounts.push(PlannedMount {
-                    spelling: spelling_for(&host, &row.source, &module_path),
-                    module_path,
-                    source: row.source.clone(),
+                    spelling: spelling_for(&host, source, module_path),
+                    module_path: module_path.clone(),
+                    source: source.clone(),
                 });
-                files.push(row.source.clone());
+                files.push(source.clone());
             }
         }
         mounts.sort_by(|left, right| left.module_path.cmp(&right.module_path));
