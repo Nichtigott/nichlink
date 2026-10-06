@@ -28,11 +28,16 @@ pub(crate) fn crates(
 ) -> Result<(), String> {
     let mut directory: Option<PathBuf> = None;
     let mut write = false;
+    let mut revert = false;
     for arg in args.by_ref() {
         match arg.as_str() {
             "-h" | "--help" => return crate::cli::usage(out),
-            "--check" => write = false,
+            "--check" => {
+                write = false;
+                revert = false;
+            }
             "--write" => write = true,
+            "--revert" => revert = true,
             _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
             _ if directory.is_none() => directory = Some(PathBuf::from(arg)),
             _ => return Err("crates accepts at most one project path".to_owned()),
@@ -82,6 +87,23 @@ pub(crate) fn crates(
                 planned.remap.len()
             ),
         )?;
+    }
+    if revert {
+        let workspace = workspace_root_of(&package_root);
+        let reverted = crate::build_time::revert_partition(&workspace, &planned)?;
+        return line(
+            out,
+            format!(
+                "removed {} generated package(s) under {}; workspace config {}",
+                reverted.files.len(),
+                workspace.display(),
+                if reverted.config_changed {
+                    "updated"
+                } else {
+                    "carried none of this action's entries"
+                }
+            ),
+        );
     }
     if !write {
         line(

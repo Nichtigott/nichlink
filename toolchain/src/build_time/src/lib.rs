@@ -180,7 +180,7 @@ pub(crate) use source_walk::{parallel_map_with_threshold, worker_budget};
 #[cfg(feature = "cli")]
 pub(crate) use crate_plan::plan as plan_crates;
 #[cfg(feature = "cli")]
-pub(crate) use crate_write::write_partition;
+pub(crate) use crate_write::{revert_partition, write_partition};
 pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;
