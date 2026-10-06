@@ -262,18 +262,27 @@ impl<'a> GraftVisitor<'a> {
             // `cut(<expr>)` / `cut(<expr> to <expr>)` 用 Rust 表达式命名目标，
             // 让编译器和任何能解析 Rust 路径的编辑器看到真实的注册面，而不是
             // 需要工具自己解释的字符串。
+            // The span travels with the pair: a typed cut's own location is the parenthesis group
+            // that spells it, not the macro invocation that carries it. Publishing the macro's
+            // location for every entry (what this used to do) put two cuts on one line — the line of
+            // `static_graft_plan!(` — and every reader of `graft_plan.tsv` or of a refusal message
+            // then pointed at the wrong place (audit 2026-10-06).
+            // 位置随这一对一起走：类型化切口自己的位置是拼出它的那个括号组，而不是承载它的宏调用。
+            // 过去给每条条目都发布宏的位置，于是两条切口落在同一行——`static_graft_plan!(` 那一行——
+            // 而 `graft_plan.tsv` 或拒绝文案的每个读者都被指到了错的地方（审计 2026-10-06）。
             let typed_cut = match &path_token {
                 Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis => {
                     let inner = group.stream().into_iter().collect::<Vec<_>>();
-                    Some(match split_typed_range(inner) {
+                    let pair = match split_typed_range(inner) {
                         Some((start, finish)) => (start, Some(finish)),
                         None => (compact_tokens(group.stream()), None),
-                    })
+                    };
+                    Some((pair, group.span()))
                 }
                 _ => None,
             };
             let (cut, end, cut_span, typed) = match typed_cut {
-                Some((start, finish)) => (start, finish, mac.span(), true),
+                Some(((start, finish), span)) => (start, finish, span, true),
                 None => {
                     let (path_tokens, path_span, path_text) = match path_token {
                         Some(TokenTree::Group(group)) => (
@@ -355,7 +364,7 @@ impl<'a> GraftVisitor<'a> {
             }
             if !matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "graft") {
                 self.error = Some(syntax_error(
-                    mac.span(),
+                    cut_span,
                     "graft cut expects `graft <implementation>`",
                 ));
                 return;
@@ -379,7 +388,7 @@ impl<'a> GraftVisitor<'a> {
                 }
                 _ => {
                     self.error = Some(syntax_error(
-                        mac.span(),
+                        cut_span,
                         "graft expects a string literal or `(<expression>)`",
                     ));
                     return;
@@ -397,7 +406,7 @@ impl<'a> GraftVisitor<'a> {
                 (false, None) => None,
                 _ => {
                     self.error = Some(syntax_error(
-                        mac.span(),
+                        cut_span,
                         "a graft cut must name both sides with Rust expressions or both with strings",
                     ));
                     return;
@@ -413,7 +422,7 @@ impl<'a> GraftVisitor<'a> {
                 cut_end: end,
                 graft,
                 full,
-                location: location(mac.span()),
+                location: location(cut_span),
                 cfg: combined_cfg(&self.module_cfgs, cfg.as_deref()),
                 expressions,
             });

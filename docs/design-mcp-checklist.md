@@ -1607,3 +1607,22 @@ error[E0425]: cannot find value `SUBTREE` in module `crate::control::object::but
 - **不管**：两边**一起变**的情形（例如把面文件搬走 ⇒ 构建与编译器都算出新 id ⇒ 断言照过），那属于"记录/租约漂移"，仍由既有的漂移检测（`freshness`/台账）负责。⇒ 两条规则各管一半，不互相替代。
 
 钉子：内核 doctest 两条（同 id 通过 / 异 id `compile_fail`）· 渲染器 1 条（烤进去的每个面身份都要与面对账）。
+
+### §M7.16 `graft_plan.tsv` 的位置列：从"宏那一行"改成"每条切口自己的行"（2026-10-06）
+
+**症状**（查账时实测）：`graft_plan.tsv` 两条切口的 `line`/`column` 都是 `48 1`，而它们在入口里是**第 50 与第 52 行**；48 是 `static_graft_plan!(` 那一行。于是 `apply_promote` 的消息（"the declaration at …:48"）与 `grafts.rs` 的 "declared at entry line 48" 都把读者指到宏上。
+
+**根因**（`kernel/src/registry_core/syntax/entries/graft.rs`）：每条条目发布的是**宏的**位置 —— `location(mac.span())`；而且类型化分支的 `cut_span` 本身也被赋成了 `mac.span()`（字符串分支用的是字面量/组的 span，本来就是对的）。
+
+**修法**：类型化切口的 `cut_span` 用那个**括号组**的 span（`group.span()`，随解析出的一对一起传出来）；条目发布 `location(cut_span)`；同一处三条"条目内部的拒绝"（`graft cut expects graft …`、`a graft cut must name both sides …`、`graft expects a string literal or (…)`）也改成指向该条目的切口。
+
+**实测（真宿主）**：
+
+```
+# 修前                      # 修后
+… button  false  48  1      … button  false  50  8
+… slider  false  48  1      … slider  false  52  8
+```
+（入口里 `grep -n "cut("` 给的就是第 50/52 行 ✓；列 8 是那个 `(…::NODE_ID)` 组的起始列 ✓。）
+
+**钉子**：`graft_tests` 新增两条 —— 一条断言"一个宏里的两条条目各报自己的行，且位置不同"，一条断言"条目内部的拒绝指到那条条目所在的行"（该模块 15 条全绿）。写入路径不受影响：`repoint_graft` 一直按**字节**定位，从不读这个列（它的注释就写着为什么）。

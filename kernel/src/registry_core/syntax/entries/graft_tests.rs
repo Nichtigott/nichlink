@@ -241,3 +241,38 @@ fn the_renderer_refuses_a_spelling_it_cannot_guarantee() {
         "nothing was written yet, so there is no location to point at"
     );
 }
+
+/// Every entry reports the line its own cut is on, not the line the macro starts on.
+/// 每条条目报告的是**它自己那条切口**所在的行，而不是宏开始的那一行。
+///
+/// This used to be one location for all of them — the `static_graft_plan!(` line — which made
+/// `graft_plan.tsv` claim two cuts sat on one line and pointed every refusal message at the macro.
+/// Measured before the fix on the example host: both rows said `48 1` while the cuts are on lines
+/// 50 and 52 (audit 2026-10-06).
+/// 过去它们共用一个位置——`static_graft_plan!(` 那一行——于是 `graft_plan.tsv` 声称两条切口在同一行，
+/// 而每条拒绝文案都指向那个宏。修前在示例宿主上实测：两行都写 `48 1`，而两条切口在第 50 与第 52 行
+/// （审计 2026-10-06）。
+#[test]
+fn each_entry_reports_its_own_location() {
+    let source = "nichlink_kernel::static_graft_plan!(\n    FRAMEWORK,\n    cut(a::one::NODE_ID)\n        graft(g::one::NODE_ID),\n    cut(a::two::NODE_ID) graft(g::two::NODE_ID),\n);\n";
+    let entries = graft_entries(source).expect("the declaration parses");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].location.line, 3, "{:?}", entries[0].location);
+    assert_eq!(entries[1].location.line, 5, "{:?}", entries[1].location);
+    assert_ne!(
+        entries[0].location, entries[1].location,
+        "two entries on two lines cannot share one location"
+    );
+}
+
+/// A refusal inside one entry points at that entry's cut, not at the macro that carries it.
+/// 一条条目内部的拒绝指向**那条条目**的切口，而不是承载它的宏。
+#[test]
+fn a_refusal_points_at_the_entry_it_is_about() {
+    let source = "nichlink_kernel::static_graft_plan!(\n    FRAMEWORK,\n    cut(a::one::NODE_ID) graft(g::one::NODE_ID),\n    cut(a::two::NODE_ID) wrong(g::two::NODE_ID),\n);\n";
+    let error = graft_entries(source).expect_err("the second entry is malformed");
+    let location = error
+        .location
+        .expect("a refusal inside an entry can point at it");
+    assert_eq!(location.line, 4, "the refusal belongs to the fourth line");
+}
