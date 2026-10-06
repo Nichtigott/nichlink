@@ -1678,6 +1678,35 @@ consequences (static, text-level): 2 in-tree test line(s) name this face
 
 ### §M7.18 十面跑测器抓到一个真缺陷：跨进程的命名空间竞态（2026-10-06，**未修**）
 
+**可复现的演示（确定性，不靠时序）**：把一个包的记录发布在一个身份域下，再**用另一个身份域去读**——记录一个字节都没动，答案却变成"这个面换了身份"：
+
+```bash
+mkdir -p /tmp/nsrace/src && printf '[package]\nname = "nsrace"\nversion = "0.1.0"\nedition = "2021"\n' > /tmp/nsrace/Cargo.toml
+printf '// host entry\n' > /tmp/nsrace/src/lib.rs
+MCP="cargo run --offline -q -p nichlink-toolchain --features mcp --bin nichlink-mcp --"
+
+# 1) 按【包名命名空间】发布记录
+$MCP --call apply --root /tmp/nsrace --json '{"action":"add","apply":true,"fields":{"module":"label","kind":"Label"}}'
+
+# 2) 同一个身份域读 ⇒ 健康
+$MCP --call diff --root /tmp/nsrace
+#   faces 1 (source) vs 1 (build)
+#   added since build 0  gone 0  re-identified 0
+
+# 3) 换一个身份域读（记录没动）
+NICH_LINK_NAMESPACE=t48-override $MCP --call diff --root /tmp/nsrace
+#   namespace t48-override
+#   faces 1 (source) vs 1 (build)
+#   added since build 0  gone 0  re-identified 1      ← ✗ 错但看起来对的答案
+#   re-identified:
+#     ~ root/label 3424be7f7d83f46afb39b00a08565f5e -> 30926530a158f3572ba61e3bd387b42a
+```
+
+两个 id 的差别**只来自命名空间**（记录里的 `3424be7f…` 是在包名下算的，`30926530…` 是按 `t48-override` 算的），而答案把它说成"这个面被 re-identified"，还附一条 `~` 的**旧→新映射** ⇒ 读起来更像"身份真的搬家了" ✗✗。这正是"看起来正确的错误答案"：源码没改、记录完好，而读者会去查一个不存在的问题。
+
+**而它在测试里怎么现形的**（本节的另一半）：那条钉子构造"两个进程 + 两个身份域"，父进程的 `apply` 还会在后台再刷一次索引 ⇒ 那次刷新可能落在子进程 `verify` 之后、`diff` 之前，于是子进程读到的记录属于父进程的身份域 ⇒ 同一族的错答案以**间歇**的形式出现（单独跑必过、整面并行跑才红）。
+
+
 **症状**：`toolchain+mcp` 面里 `mcp::verify::verify_tests::the_override_is_the_namespace_the_run_publishes_under` **间歇红**；子进程输出
 
 ```
