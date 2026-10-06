@@ -1833,3 +1833,9 @@ legal answer), or make the fragment self-contained by moving the item into it
 **顺带发现（本次不修，记录在案）**：`cli` 而**不开** `studio` 的组合下有构建告警（`studio/ui/graph/nodes.rs` 的 `unused variable: cache`）——没有门禁对这个组合跑 `-D warnings`（clippy 只跑默认与 all-features 两面，十面跑测器会构建 `toolchain+cli` 但**不因告警失败**）⇒ 一个小的门禁缺口。
 
 **还差**：幽灵的三份文件内容（`lib.rs` 定义常量 + `build.rs` 跑管线 + `Cargo.toml` 依赖 + 承载 remap 的 `.cargo/config.toml`）· 渲染侧的"**只**编译这个 crate 的子树"模式（第一刀的反面）· 第三刀 facade · 验收四条。
+
+**第二刀的另一半：三个已确认的设计点（动手前写清，免得半途改口径）**
+
+1. **幽灵的 `src/lib.rs` 只有两项**：`pub const NICHLINK_NAMESPACE: &str = "<宿主命名空间>";` + `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));` —— 它自己**没有**面文件（面在宿主那边），生成树由它自己的构建脚本产出。
+2. **幽灵的 `build.rs` 为宿主的清单跑管线**：`build_time::run_for(<宿主>/Cargo.toml, OUT_DIR, "<宿主命名空间>")`（`run_for` 已是公开入口 ✓），并打印 `cargo:rerun-if-changed=<宿主>/src`。也就是说**幽灵的生成树 = 按 `crate_plan` 的挂载清单渲染出来的树**：祖先节点只发**空的容器模块**（绝不挂载祖先的面文件——挂了就是同一个面在两个注册机里 ✗），子树下的叶子按 `PlannedMount.spelling` 挂载宿主的文件。
+3. **remap 只能落在工作区根的 `.cargo/config.toml`**：rustflags 是**每次调用**的，不是按包生效的（cargo 的 config 发现基于当前目录而不是被构建的包 ⇒ 幽灵目录里的 `.cargo/config.toml` 只在从那个目录跑 cargo 时才生效 ✗）。因此规划器只**报告**需要的 `(from, to)` 对，写入方必须**合并**工作区根的配置而不是覆盖它 ⚠ —— 这条同时是 P3.5"发布形状的身份"边界的近亲：依赖方不会继承我们的 `config.toml`，所以**跨发布形状的身份今天仍无解**。
