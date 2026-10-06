@@ -322,6 +322,18 @@ This Button satisfies that rule:
 use crate::control::{ActionPartsContract, ControlFrame, ControlHandle};
 use crate::{PartsContract, PresetContract};
 
+crate::control_object! {
+    kind: Button,
+    preset: ActionParts,
+    parts: ButtonParts,
+    parent: crate::control::NODE_ID,
+    exports: ["control.render"],
+    handle_traits: ["ControlHandle"],
+    handle_contracts: [crate::control::ControlHandle],
+    part_traits: ["ActionPartsContract"],
+    part_contracts: [crate::control::ActionPartsContract],
+}
+
 pub struct Button;
 pub struct ActionParts;
 
@@ -356,17 +368,6 @@ impl ActionPartsContract for ButtonParts {
     }
 }
 
-crate::control_object! {
-    kind: Button,
-    preset: ActionParts,
-    parts: ButtonParts,
-    parent: crate::control::NODE_ID,
-    exports: ["control.render"],
-    handle_traits: ["ControlHandle"],
-    handle_contracts: [crate::control::ControlHandle],
-    part_traits: ["ActionPartsContract"],
-    part_contracts: [crate::control::ActionPartsContract],
-}
 ```
 
 The `control_object!` name mirrors the parent folder, making the relationship

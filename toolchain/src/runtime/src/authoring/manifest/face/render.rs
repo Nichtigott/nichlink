@@ -350,8 +350,17 @@ impl FaceManifest {
         } else {
             String::new()
         };
+        // The declaration comes **first** in the file, right after the module docs and the imports:
+        // a reader (and an agent) should see what this face *is* before reading what it does, and the
+        // marker type it names follows immediately below. Items are order-independent in Rust, so the
+        // marker type does not have to precede the macro that names it — measured on the example host:
+        // moving the declaration above `pub struct Slider;` compiles and leaves every identity byte
+        // identical.
+        // 声明写在文件的**最前面**，紧跟模块文档与导入：读者（以及代理）应当先看到这个面**是什么**，再读它做什么；
+        // 它点名的标记类型紧随其后。Rust 条目与顺序无关，因此标记类型不必写在点名它的宏之前——在示例宿主上实测：
+        // 把声明移到 `pub struct Slider;` 之前照样编译，且每个身份逐字节不变。
         let source = format!(
-            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\n{handle_doc}\npub struct {kind};\n\ncrate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{exports_decl}{stable_decl}{needs_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{flow}{flow_provider}{runtime_decl}}}\n"
+            "{module_doc}\n\nuse crate::{{NoParts, NoPreset}};\n\ncrate::{object_macro}! {{\n    kind: {kind},\n{preset_decl}{parts_decl}{name_decl}{summary_decl}{exports_decl}{stable_decl}{needs_decl}{parent_decl}{getting_decl}{registry_fields}{admission_decl}{handle_traits}{handle_contracts_decl}{part_traits}{part_contracts_decl}{requirements_decl}{provides_decl}{flow}{flow_provider}{runtime_decl}}}\n\n{handle_doc}\npub struct {kind};\n"
         );
         Ok(format!("{GENERATED_MARKER}\n{source}"))
     }

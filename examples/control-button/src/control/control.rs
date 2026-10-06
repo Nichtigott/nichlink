@@ -4,18 +4,6 @@
 
 use nichlink_toolchain::runtime::{ContractId, FlowContract};
 
-/// 父注册面交给子对象的绘制结果。
-/// The frame a parent face hands to its children for painting.
-pub struct ControlFrame;
-
-/// 每个直接子对象必须实现的接口。
-/// The interface every direct child must implement.
-pub trait ControlHandle {
-    fn paint(&self) -> ControlFrame;
-}
-
-pub struct Control;
-
 crate::root_object! {
     kind: Control,
     needs_registry: true,
@@ -37,3 +25,15 @@ crate::root_object! {
         "ControlFrame",
     ),
 }
+
+/// 父注册面交给子对象的绘制结果。
+/// The frame a parent face hands to its children for painting.
+pub struct ControlFrame;
+
+/// 每个直接子对象必须实现的接口。
+/// The interface every direct child must implement.
+pub trait ControlHandle {
+    fn paint(&self) -> ControlFrame;
+}
+
+pub struct Control;

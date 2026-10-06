@@ -4,14 +4,6 @@
 use crate::control::{ControlFrame, ControlHandle};
 use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 
-pub struct Button;
-
-impl ControlHandle for Button {
-    fn paint(&self) -> ControlFrame {
-        ControlFrame
-    }
-}
-
 crate::control_object! {
     kind: Button,
     exports: ["control.render"],
@@ -37,4 +29,12 @@ crate::control_object! {
     // 它不该移动身份；`built_in_tree_has_the_expected_paths_and_derived_sources` 与
     // `outline()` 钉住这一点。
     runtime_checks: [NON_EMPTY_TEXT],
+}
+
+pub struct Button;
+
+impl ControlHandle for Button {
+    fn paint(&self) -> ControlFrame {
+        ControlFrame
+    }
 }

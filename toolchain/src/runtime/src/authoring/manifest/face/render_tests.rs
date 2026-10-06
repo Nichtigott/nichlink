@@ -168,6 +168,44 @@ mod field_truth_tests {
         }
     }
 
+    /// The declaration is the **first** thing a rendered face file says (after the module docs and the
+    /// imports), with the marker type it names right below it: a reader — and an agent — should see what
+    /// the face *is* before reading what it does. Items are order-independent in Rust, so the marker type
+    /// does not have to precede the block that names it; measured on the example host, moving the
+    /// declaration above `pub struct Slider;` compiles and leaves every identity byte identical.
+    /// 渲染出来的面文件**第一件**说的就是声明（在模块文档与导入之后），它点名的标记类型紧随其后：读者——以及
+    /// 代理——应当先看到这个面**是什么**，再读它做什么。Rust 的条目与顺序无关，因此标记类型不必写在点名它的
+    /// 那块之前；在示例宿主上实测，把声明移到 `pub struct Slider;` 之前照样编译，且每个身份逐字节不变。
+    #[test]
+    fn the_declaration_is_the_first_thing_the_file_says() {
+        let root = unique_root("declaration-first");
+        let face_path = root.join("widget/widget.rs");
+        std::fs::create_dir_all(face_path.parent().expect("fixture parent")).expect("fixture dir");
+        std::fs::write(
+            &face_path,
+            "// generated-by=NichLink\npub struct Widget;\n\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+        )
+        .expect("fixture face");
+
+        let manifest = parse::source(&face_path).expect("the fixture parses");
+        let rendered = manifest.render_source().expect("the face renders");
+        let declaration = rendered
+            .find("crate::root_object! {")
+            .expect("the declaration renders");
+        let marker = rendered
+            .find("pub struct Widget;")
+            .expect("the marker type renders");
+        assert!(
+            declaration < marker,
+            "the declaration comes first, with the marker type below it:\n{rendered}"
+        );
+        assert!(
+            !rendered[..declaration].contains("impl "),
+            "no implementation may precede the declaration:\n{rendered}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// The three keys that were accepted while nothing rendered them are now
     /// refused by name, so an edit fails loudly instead of being dropped.
     /// 三个"被接受却无人渲染"的键现在按名被拒，因此编辑会响亮地失败，而不是被丢掉。

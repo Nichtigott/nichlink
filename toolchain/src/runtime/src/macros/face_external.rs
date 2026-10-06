@@ -2,13 +2,14 @@
 //! 外部 crate 的注册面声明形式。
 
 /// `kind` is the handle-marker type this file declares (`pub struct <Kind>;`), so
-/// write that type first and reference it here: an editor cannot complete a name
-/// the author has not written yet, and `kind` is captured as an identifier
-/// rather than an expression, which is also why value completion does not fire
-/// there. Every other field completes normally.
-/// `kind` 就是本文件声明的那个 handle 标记类型（`pub struct <Kind>;`）：先写出该类型，
-/// 再在这里引用它。编辑器无法补全一个作者还没写下的名字，而且 `kind` 是以标识符而非
-/// 表达式捕获的——这也是它的值位不会弹候选的原因。其余字段的值都能正常补全。
+/// This declaration belongs at the **top of the face file**, right after the module docs and
+/// the imports; the marker type it names follows immediately below, since items are
+/// order-independent in Rust. `kind` is captured as an identifier rather than an
+/// expression, which is why value completion does not fire there. Every other field
+/// completes normally.
+/// 这条声明住在**面文件的最前面**，紧跟模块文档与导入；它点名的标记类型紧随其后，因为 Rust 的条目
+/// 与顺序无关。`kind` 是以标识符而非表达式捕获的，这也是它的值位不会弹候选的原因；其余字段的值都能
+/// 正常补全。
 /// Declare a registration face: `kind` is the only required field; every other
 /// field is optional and defaults the way the generated compact form defaults
 /// them — `source` to this file, `preset`/`parts` to `NoPreset`/`NoParts`,

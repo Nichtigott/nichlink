@@ -5,14 +5,6 @@
 use crate::control::{ControlFrame, ControlHandle};
 use nichlink_toolchain::runtime::{ContractId, FlowContract};
 
-pub struct Slider;
-
-impl ControlHandle for Slider {
-    fn paint(&self) -> ControlFrame {
-        ControlFrame
-    }
-}
-
 crate::control_object! {
     kind: Slider,
     exports: ["control.render"],
@@ -24,4 +16,12 @@ crate::control_object! {
         "ControlInput",
         "ControlFrame",
     ),
+}
+
+pub struct Slider;
+
+impl ControlHandle for Slider {
+    fn paint(&self) -> ControlFrame {
+        ControlFrame
+    }
 }
