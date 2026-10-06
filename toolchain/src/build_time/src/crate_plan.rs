@@ -149,7 +149,6 @@ fn ghost_lib_rs(namespace: &str) -> String {
 /// 它把**宿主的**清单交给同一条管线、写本 crate 的 `OUT_DIR`，并且只要那个碎片（`NICH_LINK_SHAPE_ONLY`）：
 /// 源码是宿主的、身份是宿主的，落在这里的是这棵树中由本 crate 负责编译的那部分。
 fn ghost_build_rs(package_root: &Path, namespace: &str, subtrees: &[String]) -> String {
-    let manifest = package_root.join("Cargo.toml");
     let src = package_root.join("src");
     let declaration = package_root.join(lexicon::ADD_CRATES_FILE);
     format!(
@@ -163,7 +162,7 @@ fn ghost_build_rs(package_root: &Path, namespace: &str, subtrees: &[String]) -> 
          {i}// 构建脚本此刻是单线程的，而这个值由下面的那次运行读取。\n\
          {i}unsafe {{ std::env::set_var({env:?}, {claims:?}) }};\n\
          {i}nichlink_toolchain::build_time::run_for(\n\
-         {i}    std::path::Path::new({manifest:?}),\n\
+         {i}    std::path::Path::new({root:?}),\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
          {i})\n\
@@ -174,7 +173,7 @@ fn ghost_build_rs(package_root: &Path, namespace: &str, subtrees: &[String]) -> 
         declaration = declaration.display(),
         env = lexicon::SHAPE_ONLY_ENV,
         claims = subtrees.join(","),
-        manifest = manifest.display(),
+        root = package_root.display(),
         namespace = namespace,
         marker = GENERATED_MARKER,
     )

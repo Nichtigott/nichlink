@@ -121,7 +121,6 @@ fn facade_lib_rs(namespace: &str) -> String {
 /// 形状与幽灵的相同，只有一处不同而这处正是要点：模式是 **facade**，因此这个 crate 渲染出来的树不发模块、
 /// 不发面的身份——它携带切口表与契约断言，并改写成各自模块的属主 crate。
 fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
-    let manifest = host_root.join("Cargo.toml");
     let src = host_root.join("src");
     let declaration = host_root.join(lexicon::ADD_CRATES_FILE);
     format!(
@@ -135,7 +134,7 @@ fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
          {i}// 构建脚本此刻是单线程的，而这个值由下面的那次运行读取。\n\
          {i}unsafe {{ std::env::set_var({env:?}, \"1\") }};\n\
          {i}nichlink_toolchain::build_time::run_for(\n\
-         {i}    std::path::Path::new({manifest:?}),\n\
+         {i}    std::path::Path::new({root:?}),\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
          {i})\n\
@@ -145,7 +144,7 @@ fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
         src = src.display(),
         declaration = declaration.display(),
         env = lexicon::SHAPE_FACADE_ENV,
-        manifest = manifest.display(),
+        root = host_root.display(),
         marker = GENERATED_MARKER,
     )
 }

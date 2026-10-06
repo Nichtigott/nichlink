@@ -406,12 +406,16 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
         widgets.lib_rs
     );
 
-    // build.rs: the host's manifest, the host's namespace, and the fragment as the render mode.
-    // build.rs：宿主的清单、宿主的命名空间，以及作为渲染模式的碎片。
+    // build.rs: the host's **package root**, the host's namespace, and the fragment as the render
+    // mode. The root, not the manifest: the first end-to-end build failed with
+    // `<root>/Cargo.toml/src is not a source directory`, which is what passing the manifest does.
+    // build.rs：宿主的**包根**、宿主的命名空间，以及作为渲染模式的碎片。是包根而不是清单：第一次端到端
+    // 构建报出 `<root>/Cargo.toml/src is not a source directory`，那正是传清单的后果。
     assert!(
-        widgets
-            .build_rs
-            .contains(&format!("{}/Cargo.toml", root.display()))
+        widgets.build_rs.contains(&format!("{:?}", root))
+            && !widgets
+                .build_rs
+                .contains(&format!("{}/Cargo.toml", root.display()))
             && widgets
                 .build_rs
                 .contains("nichlink_toolchain::build_time::run_for"),

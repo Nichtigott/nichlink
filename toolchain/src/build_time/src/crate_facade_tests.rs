@@ -105,7 +105,11 @@ fn a_facade_sees_the_host_and_every_ghost() {
     );
     assert!(
         facade.build_rs.contains("NICH_LINK_SHAPE_FACADE")
-            && facade.build_rs.contains("Cargo.toml")
+            // The pipeline takes the **package root**, not the manifest path: passing the manifest made
+            // it look for `<…>/Cargo.toml/src`, which the first end-to-end build reported.
+            // 管线收的是**包根**而不是清单路径：传清单会让它去找 `<…>/Cargo.toml/src`，这是第一次端到端
+            // 构建报出来的。
+            && facade.build_rs.contains(&format!("{:?}", root))
             && facade.build_rs.matches("rerun-if-changed").count() == 2,
         "its build script runs the host's manifest in facade mode: {}",
         facade.build_rs

@@ -1956,3 +1956,17 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **两处自纠（都由钉子/告警当场抓出）**：① 我用**行区间**删旧 `revert_partition` 主体时，把新主体的尾部一起切掉了 ✗ ⇒ 三条写盘钉子立刻红并点名"什么都没删"✓（按行删除的锚点不可靠，改为显式重写整段 ✓）；② `PlannedFacade::namespace` **没有读者**（已经烤进那两份文件）⇒ 按仓库规矩**删字段**而不是留着当占位 ✓。
 
 **还差（下一轮做）**：**能编译的端到端** —— 要一棵真正的**工作区形状**夹具（成员＝宿主＋幽灵＋facade），因为 `rustflags` 落在工作区根、而 cargo 从当前目录找 config：夹具没有工作区时配置会落在包目录里，而幽灵是从**它自己的目录**被构建的 ⇒ remap 不生效、身份断言会响 ✓（这正是"发布形状的身份"那条边界的近亲 ✓）。随后才是验收四条（入口逐字节相同 · `graft_plan.tsv` 三列逐字节相同 · 切口两端 id 逐字节相同 · `promote` 仍能落地）。
+
+### §M7.36 第一次"分区后的树真能 cargo build"：三个真缺陷，两个已修（2026-10-06）
+
+**夹具**：`/tmp/ws2` —— 真**工作区形状**（`[workspace] members = ["app","app-widgets","app-facade"]`），宿主 `app` 是自足碎片（`panel` 根面 → `frame`（有注册机）→ `widget` 叶子，**没有任何跨碎片引用** ✓），声明 `Crate::named("widgets").at(&[crate::panel::frame::SUBTREE])` ✓。**注意**：真宿主 `examples/control-button` 的 `control::object` 会被规划器**点名拒绝**（`button.rs` 用 `crate::control::ControlHandle`，碎片不自足 ✓）——这是设计里的规则 ✓，因此"能编译"的验证必须用自足碎片 ✓。
+
+**第 8 个真缺陷（已修）**：生成的 `build.rs`（幽灵与 facade **都是**）把**清单路径**传给了 `run_for`，而它收的是**包根** ✗ ⇒ 构建报 `<root>/Cargo.toml/src is not a source directory` ✓。修：两处生成器改传包根，两条钉子同时**反向断言**清单路径不再出现 ✓。
+
+**第 9 个真缺陷（已修）**：分区后**每个 crate 只该为自己编译的面发表** ✗ —— 宿主仍为被切走的面发注册断言、幽灵仍为宿主的面发断言 ⇒ 实测 `error[E0433]: cannot find 'frame' in 'panel'`（宿主）+ 幽灵侧同理 ✓。修：管线按模式过滤面表 —— **facade 全留**（并集 ✓）· **幽灵只留自己认领之下的**（`under_a_claim(module, only)` ✓）· **宿主只留不在任何认领之下的** ✓。`whole()`（无声明）时是恒等 ✓，因此既有钉子不受影响 ✓。
+
+**第 10 个真缺陷（未修，下一轮第一件事）**：**容器面的挂载拼写少算一层** ✗ —— 有子节点的面被渲染成"内联模块 + 在它**自己**的目录里挂载自己" ⇒ 该挂载的 `#[path]` 是相对 `<ghost>/src/<容器路径>/<面名>/` 的，而 `inline_directory` 只按**容器**段算（少一层 ✓）⇒ 实测 `couldn't read …/out/panel/frame/../../../app/src/panel/frame/frame.rs` ✓（差一个 `../` ✓）。修法：`plan` 需要知道这个面**是不是容器**（可由面清单推出：存在别的面的模块以 `它::` 开头 ✓）⇒ `spelling_for` 多一个 `container: bool`，容器情形多走一层 ✓ + 一条钉子（容器面的拼写比叶子多一个 `../` ✓）。
+
+**第 11 个真缺陷（未修，紧随其后）**：宿主侧 `error[E0433]: cannot find 'registry_rule' in 'super'` ✗ —— 过滤掉 `panel::frame` 之后，注册断言仍在某个内联模块里找 `super` 的注册规则 ✓。下一轮先读那一段生成代码（`…/out/generated_lib.rs` 第 ~104 行）再定修法；候选是"断言只在该面**自己的容器**作用域里发"或"父规则取不到时退回 `ANY` 并明写" ✓。
+
+**实测状态**：`check`/`--write`/`--revert` 在真工作区里全部正常 ✓（`wrote 6 file(s)`、`removed 2 generated package(s)` ✓），宿主的**非分区**构建绿（25.48 s ✓），分区构建卡在上面两条 ✓。门禁（fmt · workspace 36 · clippy 两面 · conventions）在后一条修复后全绿 ✓。

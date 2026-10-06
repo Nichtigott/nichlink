@@ -215,6 +215,31 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         .unwrap_or_else(|_| super::registry_identity::package_namespace());
     let owners: Vec<(String, String)> =
         super::crate_plan::owners(&host_crate, &shape_faces, &planned);
+    // A crate asserts only about the faces **it compiles**. The registration block and the identity
+    // assertions both name modules, so after a partition the host must drop every face a ghost took and
+    // a ghost must keep only its own — otherwise the host's generated tree names `panel::frame::…`, a
+    // module it no longer has (`error[E0433]: cannot find 'frame' in 'panel'`, measured on the first
+    // end-to-end build). The facade carries the union, which is why it keeps them all.
+    // 一个 crate 只为**自己编译的面**做断言。注册块与身份断言都点名模块，因此分区之后宿主必须丢掉被幽灵拿走的
+    // 每个面、幽灵必须只留自己的——否则宿主的生成树会点名 `panel::frame::…`，一个它已经没有的模块
+    // （第一次端到端构建实测 `error[E0433]: cannot find 'frame' in 'panel'`）。facade 携带并集，因此它全都留。
+    let all_claims: Vec<String> = shape
+        .as_ref()
+        .map(|shape| shape.cut_subtrees())
+        .unwrap_or_default();
+    let visible: Vec<super::static_plan::StaticFaceRecord> = static_faces
+        .iter()
+        .filter(|face| {
+            if facade {
+                return true;
+            }
+            match only.as_deref() {
+                Some(claims) => under_a_claim(&face.module, claims.iter().map(String::as_str)),
+                None => !under_a_claim(&face.module, all_claims.iter().map(String::as_str)),
+            }
+        })
+        .cloned()
+        .collect();
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
@@ -224,7 +249,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         &compile_errors,
         &demo_errors,
         &scope,
-        &static_faces,
+        &visible,
         &graft_entries.enabled,
         if only.is_none() && cut_out.is_empty() {
             // No declaration at all: this crate renders the whole tree, which is what every host did
@@ -502,3 +527,11 @@ fn layout_diagnostic(input: &BuildInput, message: String) -> Option<BuildDiagnos
 #[cfg(test)]
 #[path = "pipeline_tests.rs"]
 mod pipeline_tests;
+
+/// Whether a module is at or under one of the claimed subtrees.
+/// 某个模块是否就在某条认领的子树之下（含它自己）。
+fn under_a_claim<'a>(module: &str, claims: impl Iterator<Item = &'a str>) -> bool {
+    claims
+        .filter(|claim| !claim.is_empty())
+        .any(|claim| module == claim || module.starts_with(&format!("{claim}::")))
+}
