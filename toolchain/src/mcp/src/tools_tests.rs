@@ -764,7 +764,7 @@ fn every_key_a_handler_reads_is_advertised_and_every_entry_is_accounted_for() {
     let mut missing: Vec<String> = Vec::new();
     for entry in &entries {
         let name = entry["name"].as_str().expect("a name");
-        let (_, keys) = super::READ_KEYS
+        let (_, keys) = READ_KEYS
             .iter()
             .find(|(listed, _)| *listed == name)
             .unwrap_or_else(|| {
@@ -790,7 +790,7 @@ fn every_key_a_handler_reads_is_advertised_and_every_entry_is_accounted_for() {
     assert!(missing.is_empty(), "{missing:#?}");
     assert_eq!(
         entries.len(),
-        super::READ_KEYS.len(),
+        READ_KEYS.len(),
         "the catalogue and the read-keys table must name the same entries"
     );
     // And the enum that carries the signals is not narrower than the signals the handler accepts.
@@ -839,3 +839,97 @@ fn walk_properties(value: &serde_json::Value, into: &mut std::collections::BTree
         _ => {}
     }
 }
+
+/// The keys each handler **reads**, per tool, pinned against what its schema advertises.
+/// 每个处理函数**读**的键，逐工具与它 schema 广告的内容钉在一起。
+///
+/// Capability has twice run ahead of the advertisement: `apply` accepted `cut`/`graft`/`to`/`full`
+/// while its schema named none of them (audit `W2-4`), and `consistency` accepted `by: "shape"` and
+/// `full` — the second one being the **only way out** of a bounded answer — while its enum stopped at
+/// three signals and its properties did not mention `full` at all. A reader can only call what the
+/// schema names, so a lagging schema is a missing capability however well the handler works.
+/// 能力已经两次跑到广告前面：`apply` 早就接受 `cut`/`graft`/`to`/`full`，而它的 schema 一个都没写
+/// （审计 `W2-4`）；`consistency` 早就接受 `by: "shape"` 与 `full`——后者还是**有界答案唯一的出路**
+/// ——而它的 enum 停在三个信号上、properties 里根本没有 `full`。读者只能调用 schema 点名的东西，
+/// 因此滞后的 schema 就是缺失的能力，处理函数再能干也一样。
+///
+/// The pin below walks the catalogue and requires this list to name **every** entry: a new tool that
+/// nobody adds here fails the suite, which is the half a hand-kept list always loses.
+/// 下面的钉子遍历目录，要求这张表点名**每一个**条目：新工具没人加进来就会失败——这正是一份手工
+/// 清单总会丢掉的那一半。
+///
+/// It lives in the test file rather than beside the catalogue because a table only the pin reads is
+/// test code, and the source file it used to sit in has a budget of its own (audit `M7`).
+/// 它住在测试文件里而不是目录旁边，因为只有钉子读的表就是测试代码，而它原来所在的源码文件有自己的预算
+/// （审计 `M7`）。
+const READ_KEYS: &[(&str, &[&str])] = &[
+    (
+        "nichlink.search",
+        &["names", "query", "literal", "converge"],
+    ),
+    ("nichlink.digest", &["file"]),
+    ("nichlink.conformance", &["anchor"]),
+    // `files` is read by `adopted`'s renewal path alone (`renew`, adopted.rs), not by the comparison.
+    // `files` 只由 `adopted` 的续期路径读（`renew`，adopted.rs），比对那条路不读。
+    ("nichlink.consistency", &["parent", "full"]),
+    ("nichlink.why", &["at"]),
+    ("nichlink.locate", &[]),
+    ("nichlink.inspect", &[]),
+    (
+        "nichlink.callgraph",
+        &["function", "orphans", "path", "source"],
+    ),
+    ("nichlink.read", &["context", "line", "lines", "whole"]),
+    ("nichlink.status", &[]),
+    (
+        "nichlink.apply",
+        &["action", "confirm", "fields", "full", "selector"],
+    ),
+    (
+        "nichlink.new_project",
+        &[
+            "confirm",
+            "dependency",
+            "directory",
+            "faces",
+            "git",
+            "kind",
+            "package",
+        ],
+    ),
+    (
+        "nichlink.plugin",
+        &[
+            "checksum",
+            "confirm",
+            "crate",
+            "fingerprint",
+            "framework",
+            "mode",
+            "package",
+            "revocations",
+            "signature",
+            "source",
+            "version",
+        ],
+    ),
+    ("nichlink.registry", &["full", "offset"]),
+    ("nichlink.explain", &["node", "overlay"]),
+    ("nichlink.diff", &["against", "records"]),
+    ("nichlink.trace", &["query", "values"]),
+    ("nichlink.mir", &["against", "against_trace", "jsonl"]),
+    ("nichlink.unified", &["against"]),
+    ("nichlink.grafts", &[]),
+    ("nichlink.impact", &["depth"]),
+    ("nichlink.usages", &["node"]),
+    ("nichlink.converge", &["trace"]),
+    ("nichlink.adopted", &["anchor", "apply", "confirm", "files"]),
+    ("nichlink.affected", &["files"]),
+    ("nichlink.check", &["census", "target_dir", "verbose"]),
+    ("nichlink.verify", &[]),
+    (
+        "nichlink.graph",
+        &["node", "direction", "depth", "cycles", "limit"],
+    ),
+    ("nichlink_tools", &["tool", "full"]),
+];

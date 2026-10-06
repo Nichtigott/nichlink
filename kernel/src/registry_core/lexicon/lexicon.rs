@@ -66,6 +66,26 @@ pub const RUN_METHOD_CRATE: &str = "nichlink_toolchain";
 /// 标记可替换插件面的注册面字段。
 pub const FACE_FIELD_PLUGIN: &str = "plugin";
 
+/// The build-time graph the pipeline publishes beside the records (audit `M7`, P1.1).
+/// 管线在记录旁边发布的构建期图（审计 `M7`，P1.1）。
+pub const GRAPH_FILE: &str = "graph_edges.tsv";
+
+/// The readiness record for the published index (audit `M7`, P2.1).
+/// 已发布索引的就绪记录（审计 `M7`，P2.1）。
+///
+/// One file, written **last** and atomically: a reader that finds it can tell whether the index it
+/// describes has finished, and a run that died halfway leaves the previous one rather than a
+/// half-written claim. This is the "signal" the maintainer asked for — the terminal line and the
+/// readers both come from here rather than from a guess about elapsed time.
+/// 一个文件，**最后**写、且原子地写：找到它的读者能判断它所描述的索引是否已经完成，而中途死掉的一次运行
+/// 留下的是上一次的记录，而不是半份声称。这就是维护者要的"信号"——终端那一行与读取方都从这里来，而不是
+/// 从对耗时的猜测来。
+pub const GENERATION_FILE: &str = "graph.generation";
+
+/// The first line of the generation record.
+/// generation 记录的第一行。
+pub const GENERATION_MARKER: &str = "nichlink-build-index";
+
 /// The front-end marker that selects the collector adapter.
 /// 选择 collector 适配层的前端标记。
 pub const FACE_FIELD_COLLECTOR: &str = "collector";

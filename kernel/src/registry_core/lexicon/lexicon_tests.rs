@@ -33,6 +33,9 @@ fn the_text_contracts_keep_their_published_values() {
     // 工作线程上限由遍历读取、并在这里只命名一次（审计 `T1`）；它是契约的理由与入口变量相同：有两处读它，
     // 而第二个字面量会漂。
     assert_eq!(JOBS_ENV, "NICH_LINK_JOBS");
+    assert_eq!(GRAPH_FILE, "graph_edges.tsv");
+    assert_eq!(GENERATION_FILE, "graph.generation");
+    assert_eq!(GENERATION_MARKER, "nichlink-build-index");
 }
 
 /// The package-root rule, at each of its three steps and at the boundary a

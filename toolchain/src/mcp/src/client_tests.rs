@@ -146,8 +146,17 @@ fn the_one_line_list_stays_small_and_keeps_the_entry_calls() {
         .chain(list_tool_lines())
         .collect::<Vec<_>>()
         .join("\n");
+    // The bound is per **catalogue size**, not a constant of nature: it was 5000 while there were
+    // twenty-eight tools, `nichlink.graph` is the twenty-ninth, and each entry costs about ninety
+    // characters (a name, a five-word handle and its keys) — so the number moved with the catalogue
+    // rather than the entry being cut to fit it. What the bound is for has not changed: `--list` is
+    // read once per session and must stay a screenful. A tool that pushes past this needs the same
+    // arithmetic, not a silent bump.
+    // 上限是跟着**目录规模**走的，不是自然常数：二十八个工具时它是 5000，`nichlink.graph` 是第二十九个，
+    // 而每个条目约九十字符（名字、五个词的手柄、它的键）——因此动的是这个数，而不是把条目削到能塞进去。
+    // 它的用途没有变：`--list` 每会话读一次，必须还是一屏。把它再推上去的工具需要同样的算术，而不是偷偷加一个数。
     assert!(
-        whole.len() < 5000,
+        whole.len() < 5200,
         "`--list` is the largest reply of a session and must stay a screenful: {}",
         whole.len()
     );

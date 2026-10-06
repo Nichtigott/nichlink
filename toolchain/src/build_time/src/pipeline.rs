@@ -4,8 +4,8 @@ use super::{
     aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root_reporting,
     emit_rerun_paths, face_syntax_errors, graft_plan_check, prime_node_id_cache, render_lib,
     static_plan, unplaced_face_errors, update_discovery_cache, write_file_manifest,
-    write_function_manifest, write_graft_manifest, write_graph_manifest, write_if_changed,
-    write_pruning_manifest, write_shape_manifest, write_source_scope_manifest,
+    write_function_manifest, write_generation, write_graft_manifest, write_graph_manifest,
+    write_if_changed, write_pruning_manifest, write_shape_manifest, write_source_scope_manifest,
 };
 use nichlink_kernel::lexicon;
 
@@ -191,23 +191,38 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         Ok(rows) => file_rows = rows,
         Err(error) => write_errors.push(error),
     }
+    let mut graph = None;
     for result in [
         write_function_manifest(src, &nodes, out_dir),
         write_source_scope_manifest(src, &nodes, &scope, out_dir),
         write_shape_manifest(src, &nodes, out_dir),
         write_graft_manifest(out_dir, &graft_entries.enabled),
-        write_graph_manifest(out_dir, &pruning_rows, &file_rows, &graft_entries.enabled),
         write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
     ] {
         if let Err(error) = result {
             write_errors.push(error);
         }
     }
+    match write_graph_manifest(out_dir, &pruning_rows, &file_rows, &graft_entries.enabled) {
+        Ok(header) => graph = Some(header),
+        Err(error) => write_errors.push(error),
+    }
     if compile_errors.is_empty() && write_errors.is_empty() {
         if let Err(error) = write_if_changed(
             &out_dir.join("discovery.fingerprint"),
             &discovery_fingerprint,
         ) {
+            write_errors.push(error);
+        }
+        // The readiness record is the **last** thing a clean run writes (audit `M7`, P2.1): a reader
+        // that finds it knows this run finished, and one that does not knows the previous run (or
+        // none) is what is on disk. It is written after the fingerprint for the same reason the
+        // fingerprint is written last among the payloads.
+        // 就绪记录是干净的一次运行写的**最后**一样东西（审计 `M7`，P2.1）：找到它的读者知道这次运行完成了，
+        // 而找不到的读者知道磁盘上是上一次（或者没有）。它排在指纹之后，理由与指纹排在载荷之后相同。
+        if let Some(header) = &graph
+            && let Err(error) = write_generation(out_dir, &layout.package_root, header)
+        {
             write_errors.push(error);
         }
     } else {

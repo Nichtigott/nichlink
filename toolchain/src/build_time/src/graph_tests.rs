@@ -147,12 +147,8 @@ fn the_graph_is_the_records_own_rows_seen_as_edges() {
         "a face is in its file: {graph}"
     );
     assert!(
-        edges.contains(&(
-            format!("face:{}", dial.id).as_str(),
-            "file:dial/dial.rs",
-            "calls-file"
-        )),
-        "a call exactly one file declares is a dependency on that file: {graph}"
+        edges.contains(&(format!("face:{}", dial.id).as_str(), "name:helper", "calls")),
+        "a call that stays inside its own file keeps the face and the name: {graph}"
     );
     let _ = fs::remove_dir_all(&root);
 }
@@ -197,6 +193,41 @@ fn a_name_two_files_declare_stays_a_name() {
         !graph.contains("file:twin/twin.rs\tcalls-file")
             && !graph.contains("file:third/third.rs\tcalls-file"),
         "and it is not guessed onto either declaration: {graph}"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// A call that crosses files is an edge **between the two files**, which is the dependency a
+/// partitioner has to keep inside one crate (audit `M7`, P1.1).
+/// 跨文件的调用是**两份文件之间**的边，也就是分区器必须留在同一个 crate 里的那种依赖（审计 `M7`，P1.1）。
+#[test]
+fn a_call_that_crosses_files_is_an_edge_between_them() {
+    let (root, src) = package("crossing");
+    // The two faces call each other's uniquely declared function, so the file graph has a cycle —
+    // the shape that must not be split across crates.
+    // 两个面互相调用对方唯一声明的函数，因此文件图上有一个环——那正是不该被切到两个 crate 里的形状。
+    fs::write(
+        src.join("dial/dial.rs"),
+        "crate::root_object! {\n    kind: Dial,\n}\npub fn dial_work() { other_work() }\n",
+    )
+    .expect("dial");
+    fs::create_dir_all(src.join("other")).expect("other directory");
+    fs::write(
+        src.join("other/other.rs"),
+        "crate::control_object! {\n    kind: Other,\n    parent: crate::dial::NODE_ID,\n}\n\
+         pub fn other_work() { dial_work() }\n",
+    )
+    .expect("other");
+    let out = root.join("out");
+    fs::create_dir_all(&out).expect("out directory");
+    let graph = publish(&src, &out);
+    assert!(
+        graph.contains("file:dial/dial.rs\tfile:other/other.rs\tcalls-file"),
+        "the call crosses into the declaring file: {graph}"
+    );
+    assert!(
+        graph.contains("file:other/other.rs\tfile:dial/dial.rs\tcalls-file"),
+        "and back, which is the cycle: {graph}"
     );
     let _ = fs::remove_dir_all(&root);
 }

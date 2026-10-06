@@ -338,7 +338,7 @@ pub(crate) fn consult(root: &Path, out: &Path, policy: Policy) -> Consultation {
 /// Touches no memo: this is the half that may run on a worker thread.
 /// 不碰任何记忆：这是可以跑在工作线程上的那一半。
 pub(crate) fn pay_with_stamp(root: &Path, out: &Path, stamp: Option<(usize, u64)>) -> Paid {
-    let stamp = stamp.unwrap_or_else(|| tree_stamp(root));
+    let stamp = stamp.unwrap_or_else(|| crate::build_time::source_stamp(root));
     Paid {
         current: build_output_is_current(root, out),
         clock: wall_clock(),
@@ -459,57 +459,9 @@ fn stamp_for(key: &(PathBuf, PathBuf), root: &Path) -> (usize, u64) {
     if let Some(stamp) = STAMPS.with(|stamps| stamps.borrow().get(key).copied()) {
         return stamp;
     }
-    let stamp = tree_stamp(root);
+    let stamp = crate::build_time::source_stamp(root);
     STAMPS.with(|stamps| stamps.borrow_mut().insert(key.clone(), stamp));
     stamp
-}
-
-/// The cheap stamp of a tree's sources: how many `.rs` files it has, and the newest modification time
-/// among them (audit `T1`, cut 6).
-/// 一棵树源码的廉价戳：有多少 `.rs` 文件，以及其中最新的修改时间（审计 `T1` 第六刀）。
-///
-/// Directory entries only — no file is opened, so this costs a walk rather than the bytes. It is a
-/// **guard for the memo**, never a verdict: freshness itself stays byte-exact, because a stamp that
-/// matched still leads to the stored content verdict and a stamp that did not match pays again. Its
-/// blind spot is by construction the same one the memo already had: an edit that preserves both the
-/// file count and the modification time (a `cp -p` restore inside the window) is not noticed, and the
-/// window is [`REUSE_WINDOW_SECONDS`] and per process.
-/// 只读目录项——不打开任何文件，因此它只花一次遍历、不花字节。它是**给记忆用的守卫**，从不是裁决：新鲜度本身仍
-/// 逐字节，因为戳匹配仍会走到那份已存的内容裁决，而戳不匹配就重新付费。它的盲区与那份记忆本来就有的是同一个：
-/// 同时保留文件数与修改时间的编辑（窗口内的 `cp -p` 还原）不会被发现，而窗口是
-/// [`REUSE_WINDOW_SECONDS`] 且只在一个进程内。
-fn tree_stamp(root: &Path) -> (usize, u64) {
-    let Ok(layout) = crate::build_time::source_layout(root) else {
-        return (0, 0);
-    };
-    let mut count = 0usize;
-    let mut newest = 0u64;
-    let mut stack = vec![layout.scan_root.clone()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(metadata) = entry.metadata() else {
-                continue;
-            };
-            if metadata.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().is_none_or(|extension| extension != "rs") {
-                continue;
-            }
-            count += 1;
-            if let Ok(modified) = metadata.modified()
-                && let Ok(since) = modified.duration_since(std::time::UNIX_EPOCH)
-            {
-                newest = newest.max(since.as_nanos() as u64);
-            }
-        }
-    }
-    (count, newest)
 }
 
 /// The line for a verification this answer may use, saying which of the two things it is.

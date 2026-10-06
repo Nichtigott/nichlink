@@ -117,18 +117,32 @@ fn check_json_emits_one_document_and_still_fails() {
     fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// Without `--json` the human output is byte-identical to the historical
-/// `nichlink check: ok (<package>)` line, and the public `run` entry point
-/// accepts the command.
-/// 不带 `--json` 时人类输出与历史的 `nichlink check: ok (<package>)` 行逐字节
-/// 一致，且公开的 `run` 入口接受该命令。
+/// Without `--json` the human output **opens** with the historical
+/// `nichlink check: ok (<package>)` line, byte for byte, and then carries the index line the run
+/// published (audit `M7`, P2.2).
+/// 不带 `--json` 时人类输出**以**历史的 `nichlink check: ok (<package>)` 行开头、逐字节一致，随后携带
+/// 这次运行发布的索引那一行（审计 `M7`，P2.2）。
+///
+/// The first line's bytes are a contract and stay one; the second line was **added** deliberately,
+/// because a reader has to be able to see that the index it is about to read is the one this run
+/// wrote — the maintainer's "see the terminal say it is ready" — and a line appended after the
+/// historical one changes no existing parser's first line.
+/// 第一行的字节是契约、也仍然是；第二行是有意**新增**的，因为读者必须能看见它即将读的索引就是这次运行写下的
+/// 那一份——也就是维护者说的"看到终端说就绪"——而接在历史行之后的一行，不改任何既有解析器的第一行。
 #[test]
 fn check_without_json_keeps_the_human_line() {
     let root = fixture_host("cli-check-human", "// host\n", &[]);
     let path = root.display().to_string();
     let (result, stdout) = run_capture(&["nichlink", "check", &path]);
     assert!(result.is_ok(), "{result:?}");
-    assert_eq!(stdout, "nichlink check: ok (cli-check-human)\n");
+    let mut lines = stdout.lines();
+    assert_eq!(lines.next(), Some("nichlink check: ok (cli-check-human)"));
+    let index = lines.next().expect("the index line follows the verdict");
+    assert!(
+        index.starts_with("graph updated: generation 1, "),
+        "the run names the index it published: {index}"
+    );
+    assert_eq!(lines.next(), None, "and there is nothing else: {stdout}");
     assert!(
         run(["nichlink".to_owned(), "check".to_owned(), path]).is_ok(),
         "the public `run` entry point accepts check"

@@ -1458,3 +1458,48 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 **门禁**：fmt ✓ · workspace test ✓ · `--features mcp` **591 项** ✓ · conventions 158 项（含 600 行棘轮）✓ · 两面 clippy ✓ · `--check-table` ✓。
 
 **下一步**：P1.2（写路径刷新 + 外部编辑靠 stamp 差分发现落后）与 P1.3（MCP `graph` 读工具：扇入扇出/强连通分量，输出有界）。
+### §M7.13 P1.2 · P1.3 · P2 落地：写即调度、索引就绪信号、图读工具（2026-10-05）
+
+**一句话**：写入落盘后**索引在后台开始构建**；一条**就绪记录**说明它什么时候完成；而**读图的那个工具**每份答案第一行就说"这些边描述的正是此刻的源码 / 不是"。**"写一个文件是个调度问题"这句话，成了代码。**
+
+#### 一、就绪记录 `graph.generation`（P2.1）
+
+管线在一次**干净**运行里**最后**写它（排在 `discovery.fingerprint` 之后），原子写（temp + rename，`write_if_changed` 本就是这个形状）。字段：`generation`（数**运行次数**，从上一份 +1）、`digest`（图的边正文摘要）、`faces`/`files`（记录里的面数、源码 `.rs` 文件数）、`graph_nodes`/`graph_edges`、`stamp`（`文件数:最新 mtime`，用的是与核验记忆**同一个** `source_stamp`——这条规则在本轮从桥里搬进 `build_time`，只剩一份实现）、`finished_at`（UTC `HH:MM:SS`）。**它在＝这次运行完成了，它不在＝磁盘上是上一次（或没有）**。
+
+#### 二、写入路径：落盘即启动刷新（P1.2）
+
+`nichlink.apply` 在**落盘成功**（不是预览）之后调 `index::start(root)`：一个后台线程驱动的是 **CLI 的 `check` 与桥的 `verify` 所驱动的那同一个入口**（`check_for`），因此刷新不可能发布一棵那两者会拒绝的树；同一个根**一次只跑一次**（两次运行发布同一个目录会互相抢载荷）；判断结果不是丢掉而是**发布**（失败的一次移除指纹、不写就绪记录）。回复末尾带上索引那一行。
+
+#### 三、信号（P2.2）与落后即报（P2.3）
+
+- **终端**：`nichlink check` 的人类输出**第一行不变**（历史契约），其后新增一行 `graph updated: generation N, X file(s), Y face(s), <digest>`。既有钉子 `check_without_json_keeps_the_human_line` 随之更新为"第一行逐字节不变 + 第二行就是索引行"——这是**有意的契约变更**，记录在此。
+- **桥**：写入回复与 `graph` 的每份答案都带这一行（同一份实现 `index::line`，因此同一个目录不会被说出两种说法）。
+- **落后**：外部编辑（编辑器 / `cp` / `git`）**不靠监听**，靠**廉价戳差分**发现 ⇒ 那一行变成 `index behind: generation N covers <digest>; the sources have changed since — run nichlink check`（或 `a refresh is running (Ns)`）。端到端实测：`/tmp/cb` 上 `graph` 先答 `graph updated: generation 1, …`，`>> src/control/control.rs` 之后再答 `index behind: generation 1 covers 92ef0bd3…`，而边**照旧被读出来**（说清楚，而不是静默走旧图）。
+- **`Damaged`**：图与它旁边的记录对不上（截断、手改、半写）⇒ 拒绝读，并把原因说出来。这是"就绪"必须可检查的那一半。
+
+#### 四、`nichlink.graph` 读工具（P1.3）
+
+三个问题一个工具：**不带参数**＝普查（节点/边数、边的种类、被边触及最多的节点）；`node`＋`direction`(out/in/both)＋`depth`(1–3)＝邻域；`cycles: true`＝**强连通分量**。要点三条：① 节点按**记录自己的词汇**点名（逻辑路径 / 声明路径 / kind / `registry_name` / 源码路径，或裸键 `face:`/`file:`/`name:`/`cut:`/`graft:`）——解析是记录的职责，这里不发明第二套词汇；② `cycles` 只在**依赖边**（`calls-file`、`graft`）上算（Kosaraju，**迭代**不递归，深图不会爆栈），结构边 `in`/`parent` 与未解析的 `calls` **不算依赖**，答案**明说**这一点（在错误的边集上说"没有环"是一句让人安心的假话）；③ 输出有界（默认 20 行、上限 200，超出写 `N more withheld`），并点名下一问该问什么。
+
+**为什么 `search`/`registry`/`consistency` 不额外加这句（与计划的偏差，必须说出来）**：这三者的记录新鲜度是**逐字节**的（`freshness::verdict`），源码一变它们立刻判 `stale` 并**退回推导**——比戳差分**更强**，而且它们已经给出同一个出路（`run \`nichlink check\``）。在图工具上加这句是因为**图没有可回退的推导**。计划表里的"读工具落后即报"因此**只落在图工具与写入回复上**，其余三者的行为一个字节都没改。
+
+#### 五、验收与门禁
+
+| 项 | 证据 |
+| --- | --- |
+| 就绪记录与图互相对不上 ⇒ 拒绝 | 钉子 `mcp::index::index_tests::a_record_that_does_not_match_its_graph_is_refused`（切掉最后一条边 ⇒ `Damaged`，理由点名计数/摘要不符） |
+| 没发布过 ⇒ 说该跑什么 | `a_run_that_published_nothing_reads_as_absent`、`mcp::graph::graph_tests::an_unpublished_index_says_what_to_run` |
+| 就绪 / 落后 两态 | `a_finished_run_publishes_a_record_that_says_ready`、`an_edit_makes_the_index_behind_and_the_line_says_so`、`a_behind_index_is_answered_from_and_named` |
+| 图工具三问 | `mcp::graph::graph_tests::{the_census_opens_with_the_index_line_and_counts_the_edges, a_logical_path_resolves_through_the_record_and_shows_its_edges, the_cycle_between_the_two_files_is_named_as_one_component, a_name_the_record_does_not_know_is_refused_with_the_spellings_it_does}` |
+| 跨文件调用是文件之间的边（环的原料） | `build_time::graph::graph_tests::a_call_that_crosses_files_is_an_edge_between_them` |
+| CLI 那一行 | `cli::lib_tests::check_without_json_keeps_the_human_line`（第一行不变 + 第二行是索引行） |
+| 工具注册 | `tools_tests::the_dispatch_table_follows_the_catalog`、`READ_KEYS` 的表点名 `nichlink.graph`；`--list` 预算从 5000 提到 **5200**（第 29 个工具，约 90 字符/条目——**动的是界，不是把条目削到能塞进去**，理由写在钉子旁） |
+
+端到端（真二进制）：`--call graph --root /tmp/cb` ⇒ `graph updated: generation 1, 5 file(s), 3 face(s), 92ef0bd3…` + 11 节点 / 8 边（含两条 `graft`）；`--cycles true` ⇒ 0 个分量并写明只数依赖边；`nichlink check /tmp/cb` ⇒ `nichlink check: ok (…)` + `graph updated: generation 1, …`。
+
+#### 六、这一批补记的四处（都是"自我保护"而不是功能）
+
+1. **一次性客户端会等**：`--call` 在回复写出之后、退出之前调 `index::settle(60s)`——进程退出会杀掉它刚启动的后台刷新，而"启动了"在那条路径上本来是句空话。等一段（有界）让常见的 `--call apply` 真把它开始的事做完；超时就往 stderr 说清楚并**留下可被报告的状态**（载荷逐个原子写、就绪记录最后写 ⇒ 半途停下会被报出来，不会被相信）。stdio 服务路径不经过这里（它没有理由退出）。
+2. **"这个桥从不构建"这句话现在不成立了**，`build_evidence.rs` 的两处文案已改成事实：`apply` 在后台启动一次、一次性客户端会等它、`verify` 按需构建。**自我描述与行为必须一致**，这是本仓的红线之一。
+3. **一处钉子因批次的真实行为而失效并被修好**（不是放宽）：`every_report_spells_the_freshness_word_that_one_place_produces` 里的 "stale" 夹具原本是"经写入路径写下、还没有证据"——而写入现在会启动索引刷新 ⇒ 夹具一瞬之后自己就发布了证据，报告叫它 `current` 是**对的**。夹具改成**真实的过期态**：经写入路径写下 → `wait_until_idle` 等到刷新结束 → 改一个**指纹连内容一起覆盖**的文件（`src/label/label.rs`；`src/lib.rs` 不行——原始文件集合只按路径取哈希，发现过程也跳过它）。
+4. **两处门禁被新代码顶到上限，按规则处置**：`tools.rs` 越过 600 行 ⇒ 把图工具的**描述与 schema 搬到它实现旁边**（`graph.rs` 的 `DESCRIPTION` / `schema()`，两者因此不会漂开）、把 `READ_KEYS` 表搬进 `tools_tests.rs`（测试预算 800）；`mcp::graph` 里的裸动词 `resolve` 违反动词表 ⇒ 改名 `resolve_nodes`。`--list` 的字节预算从 5000 提到 5200（第 29 个工具；理由写在钉子旁）。

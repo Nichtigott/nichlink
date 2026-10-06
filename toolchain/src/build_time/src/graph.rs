@@ -33,6 +33,24 @@ use super::{graft_view::graft_cut_label, write_if_changed};
 /// 图产物的第一行，好让读者说出自己手里是什么。
 pub(crate) const GRAPH_MARKER: &str = "nichlink-build-graph";
 
+/// What the writer published: the counts and the digest a reader (and the readiness record) needs.
+/// 写入方发布了什么：计数与摘要——读者（以及就绪记录）需要的东西。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GraphHeader {
+    /// How many distinct nodes the edges name.
+    /// 边点名了多少个不同的节点。
+    pub(crate) nodes: usize,
+    /// How many edges the body holds.
+    /// 正文里有多少条边。
+    pub(crate) edges: usize,
+    /// How many faces the edges name.
+    /// 边点名了多少个面。
+    pub(crate) faces: usize,
+    /// The digest of the edge body, which is what a reader compares.
+    /// 边正文的摘要，也就是读者用来比对的东西。
+    pub(crate) digest: String,
+}
+
 /// One edge of the build-time graph, with the kind that made it.
 /// 构建期图的一条边，连同构成它的那种关系。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,7 +73,7 @@ pub(crate) fn write_graph_manifest(
     rows: &[PruningRow],
     file_rows: &[(String, String, String)],
     grafts: &[GraftSyntax],
-) -> Result<(), String> {
+) -> Result<GraphHeader, String> {
     // Which file declares each bare name, and `None` as soon as two of them do: the ambiguity has to
     // be remembered rather than dropped, or a name declared twice would silently become an edge to
     // whichever file happened to be visited last.
@@ -108,13 +126,21 @@ pub(crate) fn write_graph_manifest(
             .map(str::trim)
             .filter(|name| !name.is_empty() && *name != "-")
         {
+            // A call that crosses files is a **dependency between compilation units**, so it is
+            // recorded between the two files — that is the edge a partitioner has to keep inside one
+            // crate. A call that stays inside its own file is not a dependency between units, so it
+            // keeps the face as its origin and the name as its target; and a name two files declare
+            // (or none) cannot be an edge at all, so it stays a name.
+            // 跨文件的调用是**编译单元之间的依赖**，因此记在两份文件之间——那正是分区器必须留在同一个 crate
+            // 里的边。留在自己文件里的调用不是单元之间的依赖，因此它保留面作出发点、名字作目标；而被两份文件
+            // 声明（或没有文件声明）的名字根本成不了边，于是留作名字。
             match declared_in.get(name).copied().flatten() {
-                Some(source) => edges.push(Edge {
-                    from: face.clone(),
+                Some(source) if source != row.source => edges.push(Edge {
+                    from: format!("file:{}", row.source),
                     to: format!("file:{source}"),
                     kind: "calls-file",
                 }),
-                None => edges.push(Edge {
+                _ => edges.push(Edge {
                     from: face.clone(),
                     to: format!("name:{name}"),
                     kind: "calls",
@@ -149,13 +175,90 @@ pub(crate) fn write_graph_manifest(
         writeln!(body, "{}\t{}\t{}", edge.from, edge.to, edge.kind).unwrap();
     }
     let digest = super::registry_identity::NodeId::from_bytes(body.as_bytes()).to_string();
+    // `faces` counts the faces the **record** published, not the `face:` nodes: the graph also names
+    // the package root, which has no row, and a success line saying "2502 faces" beside a `registry`
+    // that says "2501 faces" would be two numbers for one tree.
+    // `faces` 数的是**记录**发布的面，而不是 `face:` 节点：图还会点名包根，而包根没有行；一行
+    // "2502 faces" 的成功提示挨着一个说 "2501 faces" 的 `registry`，会是同一棵树的两个数。
+    let faces = rows
+        .iter()
+        .map(|row| row.id)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
     let mut output = format!(
         "# graph\t{GRAPH_MARKER}\n# nodes\t{}\n# edges\t{}\n# digest\t{digest}\n# from\tto\tkind\n",
         nodes.len(),
         edges.len()
     );
     output.push_str(&body);
-    write_if_changed(&out_dir.join("graph_edges.tsv"), &output)
+    write_if_changed(&out_dir.join(nichlink_kernel::lexicon::GRAPH_FILE), &output)?;
+    Ok(GraphHeader {
+        nodes: nodes.len(),
+        edges: edges.len(),
+        faces,
+        digest,
+    })
+}
+
+/// Write the readiness record for the index this run just published (audit `M7`, P2.1).
+/// 为这次运行刚刚发布的索引写下就绪记录（审计 `M7`，P2.1）。
+///
+/// This is the **last** thing a clean run writes, and it is what makes "the index is ready" a fact a
+/// reader can check instead of a duration it has to guess: the pipeline writes it only after every
+/// payload landed, so its presence means this run finished, and its absence means the previous one
+/// (or none) is what is on disk. The generation counts **runs**, so a reader can see that a refresh
+/// happened even when the bytes did not change; the digest and the stamp are what say whether the
+/// bytes did.
+/// 这是干净的一次运行写的**最后**一样东西，也是让"索引已就绪"成为读者可检查的事实、而不是它必须猜的时长
+/// 的东西：管线只在每份载荷都落地之后才写它，因此它在＝这次运行完成了，它不在＝磁盘上是上一次（或者没有）。
+/// generation 数的是**运行次数**，因此即使字节没变读者也能看到发生过一次刷新；而摘要与戳说的是字节到底变没变。
+pub(crate) fn write_generation(
+    out_dir: &Path,
+    root: &Path,
+    header: &GraphHeader,
+) -> Result<(), String> {
+    let path = out_dir.join(nichlink_kernel::lexicon::GENERATION_FILE);
+    let generation = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find_map(|line| line.strip_prefix("generation\t"))
+                .and_then(|value| value.trim().parse::<u64>().ok())
+        })
+        .unwrap_or(0)
+        + 1;
+    let (source_files, newest) = super::source_stamp(root);
+    let output = format!(
+        "# generation\t{marker}\ngeneration\t{generation}\ndigest\t{digest}\nfaces\t{faces}\n\
+         files\t{source_files}\ngraph_nodes\t{nodes}\ngraph_edges\t{edges}\n\
+         stamp\t{source_files}:{newest}\nfinished_at\t{clock}\n",
+        marker = nichlink_kernel::lexicon::GENERATION_MARKER,
+        digest = header.digest,
+        faces = header.faces,
+        nodes = header.nodes,
+        edges = header.edges,
+        clock = clock(),
+    );
+    write_if_changed(&path, &output)
+}
+
+/// The wall-clock time as `HH:MM:SS` in UTC, the shape the bridge's own reports print.
+/// 挂钟时间的 UTC `HH:MM:SS`，也就是桥自己的报告打印的形状。
+///
+/// UTC rather than local time for the same reason every other moment in this tree is: a report whose
+/// clock silently followed the environment would be a different token on two machines. It is spelled
+/// here rather than borrowed from the bridge's freshness reporter because this file is written by the
+/// **build**, which has no bridge; a pin holds the shape, which is what the two readers share.
+/// 用 UTC 而不是本地时间，理由与本树其它每个时刻相同：一个悄悄跟着环境走的时刻会在两台机器上成为不同的凭据。
+/// 它写在这里而不是借用桥的新鲜度报告，是因为这份文件由**构建**写、而构建没有桥；一枚钉子守住这个形状，那才
+/// 是两个读者共用的东西。
+fn clock() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let (hours, minutes, seconds) = ((seconds / 3600) % 24, (seconds / 60) % 60, seconds % 60);
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
 }
 
 #[cfg(test)]

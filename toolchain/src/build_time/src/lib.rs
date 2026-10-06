@@ -139,7 +139,9 @@ pub(crate) use discovery_cache::{
     CACHE_SCHEMA, cached_parent_id, update_discovery_cache, write_if_changed,
 };
 pub use source_layout::{SourceLayout, source_layout};
-pub(crate) use source_walk::{discover_root_reporting, discovery_fingerprint, emit_rerun_paths};
+pub(crate) use source_walk::{
+    discover_root_reporting, discovery_fingerprint, emit_rerun_paths, source_stamp,
+};
 // The read path of the bridge is the only caller of these two: the member map exists to verify the
 // members of a workspace beside each other, and the budget is the rule it runs under. They are
 // re-exported **under that feature** because a build without the bridge would otherwise carry an
@@ -162,7 +164,7 @@ pub(crate) use face_syntax_check::{
     face_syntax_errors, parsed_face, unplaced_face_errors,
 };
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
-pub(crate) use graph::write_graph_manifest;
+pub(crate) use graph::{write_generation, write_graph_manifest};
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
 pub(crate) use manifests::{
     write_file_manifest, write_function_manifest, write_graft_manifest, write_pruning_manifest,

@@ -171,6 +171,10 @@ mod impact;
 
 #[path = "grafts.rs"]
 mod grafts;
+#[path = "graph.rs"]
+mod graph;
+#[path = "index.rs"]
+pub(crate) mod index;
 
 #[path = "overlay.rs"]
 mod overlay;

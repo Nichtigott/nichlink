@@ -25,6 +25,9 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        // The wait for a refresh a call started lives in the library's one-shot client, so an
+        // embedding host and this binary behave the same (audit `M7`, P1.2).
+        // 调用所启动的刷新那一段等待住在库里的一次性客户端里，因此嵌入宿主与本二进制行为一致（审计 `M7`，P1.2）。
         nichlink_toolchain::mcp::client::Client::Called(code) => std::process::exit(code),
     }
 }

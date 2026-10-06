@@ -174,7 +174,30 @@ fn current_build_package(label: &str) -> (PathBuf, String) {
 #[test]
 fn every_report_spells_the_freshness_word_that_one_place_produces() {
     let (current, _) = current_build_package("freshness-current");
+    // A **real** stale state: evidence was published and then a source changed, so the fingerprint no
+    // longer describes the tree. It used to be "written through the write path and no evidence yet",
+    // and that stopped being a stable state the moment a write began starting the index refresh in
+    // the background — the fixture would publish its own evidence a moment later and the report
+    // would have been right to call it `current` (audit `M7`, P1.2).
+    // 一个**真实的**过期状态：证据发布过，随后源码变了，因此指纹不再描述这棵树。它过去是"经写入路径写下、
+    // 还没有证据"，而写入一开始在后台启动索引刷新，那就不再是一个稳定状态——夹具会在一瞬之后发布自己的证据，
+    // 而报告那时叫它 `current` 是对的（审计 `M7`，P1.2）。
     let (stale, _) = generated_package("freshness-stale");
+    // The write started the index refresh in the background; wait for the signal before making the
+    // tree stale, so the fixture describes a state rather than a race.
+    // 写入在后台启动了索引刷新；在把树弄成过期之前等那个信号，因此夹具描述的是一种状态而不是一场竞态。
+    assert!(
+        crate::mcp::index::wait_until_idle(&stale, std::time::Duration::from_secs(30)),
+        "the refresh a write starts must finish"
+    );
+    // The edit has to land in a file the fingerprint **covers with content**: the raw file set is
+    // hashed by path alone, and `src/lib.rs` is skipped by discovery, so touching it would leave the
+    // stored fingerprint matching (see `discovery_fingerprint`'s two halves).
+    // 改动的落点必须是指纹**连内容一起**覆盖的文件：原始文件集合只按路径取哈希，而 `src/lib.rs` 被发现
+    // 过程跳过，因此动它对已存指纹毫无影响（见 `discovery_fingerprint` 的两半）。
+    let face = stale.join("src/label/label.rs");
+    let source = std::fs::read_to_string(&face).expect("the written face");
+    std::fs::write(&face, format!("{source}// edited after the build\n")).expect("the edit lands");
     let (stale_build, stale_build_name) = package("freshness-stale-build");
     publish(&stale_build, &stale_build_name, true);
     let mut drifted = Vec::new();

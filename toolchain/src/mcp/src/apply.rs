@@ -196,6 +196,14 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         text.push_str("\ndiff:\n");
         text.push_str(&diff);
     }
+    // A write that landed is the scheduling problem the maintainer named; the whole story — start the
+    // refresh, then say what the index is — lives in one place (audit `M7`, P1.2 / P2.2).
+    // 落盘的写入正是维护者点名的那个调度问题；整段说法——启动刷新、再说索引如何——只住在一处
+    // （审计 `M7`，P1.2 / P2.2）。
+    if matches!(target, Target::Project) {
+        text.push('\n');
+        text.push_str(&crate::mcp::index::after_write(root));
+    }
     Ok(text)
 }
 

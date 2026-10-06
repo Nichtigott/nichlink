@@ -691,6 +691,14 @@ fn answered(
             let _ = writeln!(file, "{line}");
         }
     }
+    // The reply is out; if the call started the index refresh, this process is about to exit and an
+    // exit kills it. Wait (bounded) here, in the one-shot client, so `--call apply` finishes what it
+    // began; giving up is safe because a run that stopped halfway is reported rather than trusted
+    // (audit `M7`, P1.2). The serve path never reaches this — it has no reason to exit.
+    // 回复已经写出；若这次调用启动了索引刷新，本进程即将退出，而退出会杀掉它。就在这里、在一次性客户端
+    // 里等一段（有界），好让 `--call apply` 把它开始的事做完；放弃是安全的，因为半途停下的一次运行会被
+    // **报告出来**而不是被相信（审计 `M7`，P1.2）。stdio 服务路径到不了这里——它没有理由退出。
+    crate::mcp::index::settle(std::time::Duration::from_secs(60));
     match code {
         0 => Client::Called(emit_or_stop(&text).unwrap_or(0)),
         _ => {

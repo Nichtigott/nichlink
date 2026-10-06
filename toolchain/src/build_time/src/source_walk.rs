@@ -554,6 +554,57 @@ impl Drop for MappingGuard {
     }
 }
 
+/// The cheap stamp of a package's sources: how many `.rs` files it has, and the newest modification
+/// time among them (audit `T1`).
+/// 一个包源码的廉价戳：有多少 `.rs` 文件，以及其中最新的修改时间（审计 `T1`）。
+///
+/// Directory entries only — not a single file is opened — so this costs a walk rather than the bytes.
+/// It is a **guard**, never a verdict: the freshness rule beside it in the bridge still compares
+/// bytes, and the generation file records this stamp only so that a reader can tell *cheaply* whether
+/// the published index could still describe these sources. Its blind spot is by construction the
+/// memo's: an edit that preserves both the file count and the modification time is not noticed.
+/// 只读目录项——一个文件都不打开——因此它花一次遍历而不是字节。它是**守卫**，从不是裁决：桥里那条新鲜度
+/// 规则仍然逐字节比较，而 generation 文件记下这个戳，只是为了让读者能**廉价地**判断已发布的索引是否仍可能
+/// 描述着这批源码。它的盲区与那份记忆本来就相同：同时保留文件数与修改时间的编辑不会被发现。
+///
+/// `(0, 0)` when the package has no readable source layout at all: an absent tree is not an empty one,
+/// and answering "zero files" would let a reader treat a missing tree as a clean one.
+/// 包连可读的源码布局都没有时是 `(0, 0)`：缺一棵树不等于那是一棵空树，而答"零个文件"会让读者把缺失的树
+/// 当成干净的树。
+pub(crate) fn source_stamp(root: &Path) -> (usize, u64) {
+    let Ok(layout) = crate::build_time::source_layout(root) else {
+        return (0, 0);
+    };
+    let mut count = 0usize;
+    let mut newest = 0u64;
+    let mut stack = vec![layout.scan_root.clone()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if metadata.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            count += 1;
+            if let Ok(modified) = metadata.modified()
+                && let Ok(since) = modified.duration_since(std::time::UNIX_EPOCH)
+            {
+                newest = newest.max(since.as_nanos() as u64);
+            }
+        }
+    }
+    (count, newest)
+}
+
 /// Every `.rs` file under `dir`, by path, without reading any of them.
 /// `dir` 下每个 `.rs` 文件的路径，不读取其中任何一个。
 fn visit_rust_paths(dir: &Path, into: &mut Vec<std::path::PathBuf>) {

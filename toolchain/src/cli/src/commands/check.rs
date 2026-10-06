@@ -89,5 +89,15 @@ pub(crate) fn check(
     crate::build_time::run_for(&manifest, &out_dir, &package)?;
     writeln!(out, "nichlink check: ok ({package})")
         .map_err(|error| format!("cannot write output: {error}"))?;
+    // The line the maintainer asked for: "see the terminal say the index is ready before you read
+    // from it" (audit `M7`, P2.2). The historical line above is untouched — it stays the first line
+    // and keeps its exact bytes — and this one names the index this run published, by generation and
+    // by numbers, so a script or a person can wait on a *fact* rather than on elapsed time.
+    // 维护者要的那一行："看到终端说索引就绪，再从它读"（审计 `M7`，P2.2）。上面那行历史输出没有被动过——
+    // 它仍是第一行、字节不变——而这一行按 generation 与数字点名这次运行发布的索引，因此脚本或人都能等一个
+    // **事实**，而不是等时间。
+    let state = crate::mcp::index::state(&manifest);
+    writeln!(out, "{}", crate::mcp::index::line(&manifest, &state))
+        .map_err(|error| format!("cannot write output: {error}"))?;
     Ok(())
 }
