@@ -7,6 +7,20 @@ use std::path::PathBuf;
 
 use super::{read_shape_declaration, write_shape_lock};
 
+/// Read the declaration the way a run does, then validate it — the two halves the pipeline keeps
+/// apart (read once, use twice), put back together for a test.
+/// 照一次运行的方式读声明、再校验它——管线拆开的那两半（读一次、用两次），在测试里合回来。
+fn check_declaration(
+    package_root: &std::path::Path,
+    out_dir: &std::path::Path,
+    rows: &[super::PruningRow],
+) -> Result<(), String> {
+    match super::read_shape_declaration(package_root)? {
+        Some(declaration) => super::check_shape(&declaration, out_dir, rows),
+        None => Ok(()),
+    }
+}
+
 /// A throwaway package with a declaration and a two-face tree under it.
 /// 一个一次性包：一份声明，以及声明之下两个面的树。
 fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
@@ -227,7 +241,7 @@ fn a_claim_on_a_face_names_the_node_that_has_a_subtree() {
     let nodes = crate::build_time::source_walk::discover_root(&src);
     let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
         .expect("the record writes");
-    let refusal = super::check_shape_declaration(&root, &out, &rows).expect_err("refused");
+    let refusal = check_declaration(&root, &out, &rows).expect_err("refused");
     assert!(refusal.contains("is a face and not a subtree"), "{refusal}");
     assert!(refusal.contains("control::object"), "{refusal}");
 }
@@ -244,7 +258,7 @@ fn a_claim_with_no_faces_below_it_is_an_empty_crate() {
     let nodes = crate::build_time::source_walk::discover_root(&src);
     let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
         .expect("the record writes");
-    let refusal = super::check_shape_declaration(&root, &out, &rows).expect_err("refused");
+    let refusal = check_declaration(&root, &out, &rows).expect_err("refused");
     assert!(refusal.contains("no faces below it"), "{refusal}");
     assert!(refusal.contains("would be empty"), "{refusal}");
 }

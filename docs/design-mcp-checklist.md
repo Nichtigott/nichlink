@@ -1792,3 +1792,19 @@ P3.3 把身份来源改成 crate 根常量，这道门禁是它不回退的保�
 **第二刀**：生成幽灵 crate（`<package_prefix>-<name>/`，`src/lib.rs` 用 `#[path = "../../<host>/src/…"]` 挂载宿主面文件，且**显式定义** `pub const NICHLINK_NAMESPACE: &str = "<宿主的命名空间>";` ⇒ P3.3 正是为它做的）＋路径 remap（`--remap-path-prefix`）保证 `file!()` 逐字节回到宿主相对路径 ⇒ 身份不变（`b261fe0` 那道闸会在拼错时当场红）。
 **第三刀**：facade crate —— 它同时依赖宿主、所有幽灵 crate 与实现 crate，**切口表与两条 `assert_contract` 渲染进它**（分区后被切的面在宿主里解析不到 ⇒ 只有 facade 两端都可见）。
 **验收（维护者定的四条）**：同一份含 graft 的宿主，在不分区与分区两形状下：入口 `src/lib.rs` **逐字节相同**（唯一新增是 `add_crates.rs`）· `graft_plan.tsv` 的 `(cut, graft, full)` **逐字节相同** · 切口两端 id **逐字节相同** · `promote` 在分区形状下**仍能落地**。
+
+### §M7.23 P3.2 第一刀落地：宿主生成树跳过被切出的子树（2026-10-06）
+
+**改动**：`shape_decl` 拆成"**读一次**（`read_shape_declaration`，本来就是）+ **校验已读的**（`check_shape`）"，并新增 `ShapeDeclaration::cut_subtrees()`；管线在**渲染之前**读一次形状，把 `cut_out` 交给 `render_lib` ⇒ `render_nodes` 拿到这一组 `::` 分隔模块路径，`render_node` 命中即**直接返回**（连整棵子树一起跳过）。七个既有渲染钉子调用点补了那个新参数；新钉子 `a_subtree_handed_to_another_crate_is_not_rendered_here`（对照：不切时 `control`/`object`/`button` 三个模块都在；切 `control::object` 后父模块在、子模块与其下都不在；点名不存在的路径渲染结果**逐字节相同** ⇒ 精确匹配）。
+
+**端到端实证（检出外副本 `/tmp/cut`，声明 `Crate::named("widgets").at(&[crate::control::object::SUBTREE])`）**：
+
+| 观察 | 结果 |
+| --- | --- |
+| 生成树 `generated_lib.rs` | 只剩 `pub mod control` ✓ **没有** `pub mod object`/`pub mod button` |
+| `pruning_manifest.tsv` | 仍是**全部面**（control + button + slider）✓ |
+| generation 摘要 | 仍 `92ef0bd3…` ✓（**树没变**，变的只是"哪个 crate 编译它"） |
+| `add-crates.lock` | `package_prefix cut` · `crate widgets subtrees=control::object faces=2 face_set=25404c23…` · `host faces=1` ✓ |
+| 直接 `cargo build` 那棵树 | **编译失败**，`cannot find 'object' in 'control'` ✓ —— 正是"第三刀"的理由：切口表与 `assert_static_registration` 仍渲染在宿主里（生成树第 120/151 行仍引用被切出的面）|
+
+⇒ 这一刀只做"不重复编译"这一半；**把切口表搬到 facade** 是下一刀（否则宿主自己编译不过——这是一次**编译期拒绝**，不是静默的双注册 ✓，方向是对的）。

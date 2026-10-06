@@ -42,6 +42,23 @@ pub(crate) struct ShapeDeclaration {
     pub(crate) digest: String,
 }
 
+impl ShapeDeclaration {
+    /// Every subtree the declaration hands to another crate, as `::`-separated module paths.
+    /// 声明交给另一个 crate 的每一棵子树，写成 `::` 分隔的模块路径。
+    ///
+    /// These are what the host's own generated tree must **not** emit: a subtree that belongs to
+    /// another crate and is compiled here as well would be one face compiled twice, with two
+    /// registries that can disagree (audit `M7`, P3.2).
+    /// 这些正是宿主自己的生成树**不得**发射的东西：属于另一个 crate、却在这里也编译一遍的子树，等于同一个面
+    /// 编译两遍，还带两个可能互相分歧的注册机（审计 `M7`，P3.2）。
+    pub(crate) fn cut_subtrees(&self) -> Vec<String> {
+        self.crates
+            .iter()
+            .flat_map(|(_, subtrees)| subtrees.iter().cloned())
+            .collect()
+    }
+}
+
 /// Read the shape `package_root/add_crates.rs` declares, or `None` when the host has none.
 /// 读取 `package_root/add_crates.rs` 声明的形状；宿主没有这个文件时是 `None`。
 ///
@@ -219,22 +236,25 @@ pub(crate) fn write_shape_lock(
 /// A host with no declaration is not an error: it is the one-crate package every host was before
 /// this file existed, and the pipeline does nothing at all for it.
 /// 没有声明的宿主不是错误：它就是这份文件存在之前每个宿主的样子——一个 crate 的包，而管线对它什么都不做。
-pub(crate) fn check_shape_declaration(
-    package_root: &Path,
+/// Validate a declaration the caller has **already read**, and record its lock.
+/// 校验调用方**已经读过**的声明，并写下它的锁。
+///
+/// Split from the reader because a run reads the declaration once and needs it twice: the render
+/// skips the subtrees it hands away, and the release checks validate the claims against the rows.
+/// Reading twice would be two chances to disagree about one file.
+/// 与读者拆开，是因为一次运行读一次、却要用两次：渲染要跳过它交出去的子树，发布校验要拿认领与行对账。读两遍
+/// 等于给同一个文件两次分歧的机会。
+pub(crate) fn check_shape(
+    declaration: &ShapeDeclaration,
     out_dir: &Path,
     rows: &[PruningRow],
 ) -> Result<(), String> {
-    match read_shape_declaration(package_root)? {
-        Some(declaration) => {
-            for (name, subtrees) in &declaration.crates {
-                for subtree in subtrees {
-                    claim_has_a_subtree(name, subtree, rows)?;
-                }
-            }
-            write_shape_lock(out_dir, &declaration, rows)
+    for (name, subtrees) in &declaration.crates {
+        for subtree in subtrees {
+            claim_has_a_subtree(name, subtree, rows)?;
         }
-        None => Ok(()),
     }
+    write_shape_lock(out_dir, declaration, rows)
 }
 
 /// Refuse a claim that does not name a subtree, and say which node does.

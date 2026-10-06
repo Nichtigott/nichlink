@@ -19,14 +19,16 @@ pub(super) fn render_nodes(
     src: &Path,
     scope: &SourceScope,
     nodes: &[Node],
+    cut_out: &[String],
 ) -> Vec<IdeShadow> {
     let mut pass = RenderPass {
         src,
         scope,
+        cut_out,
         ide_shadows: Vec::new(),
     };
     for node in nodes {
-        render_node(output, &mut pass, node, 0, false, "");
+        render_node(output, &mut pass, node, 0, false, "", &node.name);
     }
     pass.ide_shadows
 }
@@ -36,6 +38,12 @@ pub(super) fn render_nodes(
 struct RenderPass<'a> {
     src: &'a Path,
     scope: &'a SourceScope,
+    /// The `::`-separated module paths the crate shape hands to **another** crate. This crate must
+    /// not emit them: the tree still records those faces, but compiling them here as well would be
+    /// one face in two registries (audit `M7`, P3.2).
+    /// crate 形状交给**另一个** crate 的 `::` 分隔模块路径。本 crate 不得发射它们：树仍记录那些面，但在这里
+    /// 也编译一遍就等于同一个面落在两个注册机里（审计 `M7`，P3.2）。
+    cut_out: &'a [String],
     ide_shadows: Vec<IdeShadow>,
 }
 
@@ -46,7 +54,15 @@ fn render_node(
     depth: usize,
     selected_ancestor: bool,
     parent_chain: &str,
+    module_path: &str,
 ) {
+    // A subtree another crate owns is not rendered here — and returning skips its whole subtree,
+    // which is what "the same face is not compiled twice" means (audit `M7`, P3.2).
+    // 另一个 crate 拥有的子树不在这里渲染——而直接返回会连整棵子树一起跳过，这正是"同一个面不编译两遍"的
+    // 含义（审计 `M7`，P3.2）。
+    if pass.cut_out.iter().any(|cut| cut == module_path) {
+        return;
+    }
     if node
         .file
         .as_ref()
@@ -193,6 +209,7 @@ fn render_node(
         );
     }
     for child in &node.children {
+        let child_path = format!("{module_path}::{}", child.name);
         render_node(
             output,
             pass,
@@ -200,6 +217,7 @@ fn render_node(
             depth + 1,
             selected_ancestor || selected_here,
             &chain,
+            &child_path,
         );
     }
     if depth == 0 && node.name == lexicon::SCOPE_REGISTRATION_MODULE {

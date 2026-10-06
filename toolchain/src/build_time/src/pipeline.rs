@@ -126,6 +126,24 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         |id| graft_plan_check::slot_module(src, &nodes, id),
     );
     append_error(&mut compile_errors, plan_errors);
+    // The crate shape is an input to the **render** as well as to the release checks: a subtree the
+    // declaration hands to another crate must not be compiled here a second time, so the host's
+    // generated tree emits no module for it while the records below still carry every face (the tree
+    // is unchanged; what changes is which crate compiles it). Read once, used twice — audit `M7`, P3.2.
+    // crate 形状既是发布校验的输入，也是**渲染**的输入：被声明交给另一个 crate 的子树不能在这里再编译一遍，
+    // 因此宿主的生成树不为它发射模块，而下面的记录仍带着每一个面（树没变，变的是"由哪个 crate 编译"）。
+    // 读一次、用两次——审计 `M7`，P3.2。
+    let shape = match super::shape_decl::read_shape_declaration(&layout.package_root) {
+        Ok(shape) => shape,
+        Err(refusal) => {
+            compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+            None
+        }
+    };
+    let cut_out = shape
+        .as_ref()
+        .map(super::shape_decl::ShapeDeclaration::cut_subtrees)
+        .unwrap_or_default();
     let generated = render_lib(
         src,
         &nodes,
@@ -134,6 +152,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         &scope,
         &static_faces,
         &graft_entries.enabled,
+        &cut_out,
     );
     let out_dir = &input.out_dir;
     // Write failures are collected rather than fatal here. They are the one
@@ -242,11 +261,8 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         // crate 形状声明与任何注册面一样是构建输入：不成立的形状在这里、在发布任何东西之前让构建失败，而它的锁
         // 以同样的方式写下。没有声明的宿主不是错误——它就是这份文件存在之前每个宿主的样子：一个 crate 的包。
         if compile_errors.is_empty()
-            && let Err(refusal) = super::shape_decl::check_shape_declaration(
-                &layout.package_root,
-                out_dir,
-                &pruning_rows,
-            )
+            && let Some(shape) = &shape
+            && let Err(refusal) = super::shape_decl::check_shape(shape, out_dir, &pruning_rows)
         {
             compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
         }
