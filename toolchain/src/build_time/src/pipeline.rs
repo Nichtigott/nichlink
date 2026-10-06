@@ -140,10 +140,24 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             None
         }
     };
-    let cut_out = shape
-        .as_ref()
-        .map(super::shape_decl::ShapeDeclaration::cut_subtrees)
-        .unwrap_or_default();
+    // The render mode comes first, because it decides **which** subtrees this run must not render: a
+    // ghost is the crate the declared subtrees were handed to, so it hands nothing away.
+    // 先定渲染模式，因为它决定本次运行**不得**渲染哪些子树：幽灵正是那些被交出去的子树所交给的 crate，因此它
+    // 什么都不交出去。
+    let only = std::env::var(nichlink_kernel::lexicon::SHAPE_ONLY_ENV)
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<String>>()
+        });
+    let cut_out = super::crate_plan::cut_out_for(shape.as_ref(), only.is_some());
+    // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
+    // renders only its fragment (audit `M7`, P3.2).
+    // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
     let generated = render_lib(
         src,
         &nodes,
@@ -152,7 +166,17 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         &scope,
         &static_faces,
         &graft_entries.enabled,
-        &cut_out,
+        if only.is_none() && cut_out.is_empty() {
+            // No declaration at all: this crate renders the whole tree, which is what every host did
+            // before `add_crates.rs` existed.
+            // 完全没有声明：本 crate 渲染整棵树，也就是 `add_crates.rs` 存在之前每个宿主的样子。
+            super::renderer::ShapeRender::whole()
+        } else {
+            super::renderer::ShapeRender {
+                cut_out: &cut_out,
+                only: only.as_deref(),
+            }
+        },
     );
     let out_dir = &input.out_dir;
     // Write failures are collected rather than fatal here. They are the one

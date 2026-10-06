@@ -1839,3 +1839,20 @@ legal answer), or make the fragment self-contained by moving the item into it
 1. **幽灵的 `src/lib.rs` 只有两项**：`pub const NICHLINK_NAMESPACE: &str = "<宿主命名空间>";` + `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));` —— 它自己**没有**面文件（面在宿主那边），生成树由它自己的构建脚本产出。
 2. **幽灵的 `build.rs` 为宿主的清单跑管线**：`build_time::run_for(<宿主>/Cargo.toml, OUT_DIR, "<宿主命名空间>")`（`run_for` 已是公开入口 ✓），并打印 `cargo:rerun-if-changed=<宿主>/src`。也就是说**幽灵的生成树 = 按 `crate_plan` 的挂载清单渲染出来的树**：祖先节点只发**空的容器模块**（绝不挂载祖先的面文件——挂了就是同一个面在两个注册机里 ✗），子树下的叶子按 `PlannedMount.spelling` 挂载宿主的文件。
 3. **remap 只能落在工作区根的 `.cargo/config.toml`**：rustflags 是**每次调用**的，不是按包生效的（cargo 的 config 发现基于当前目录而不是被构建的包 ⇒ 幽灵目录里的 `.cargo/config.toml` 只在从那个目录跑 cargo 时才生效 ✗）。因此规划器只**报告**需要的 `(from, to)` 对，写入方必须**合并**工作区根的配置而不是覆盖它 ⚠ —— 这条同时是 P3.5"发布形状的身份"边界的近亲：依赖方不会继承我们的 `config.toml`，所以**跨发布形状的身份今天仍无解**。
+
+### §M7.25 幽灵渲染模式：只编译本 crate 的子树（祖先只发壳）（2026-10-06）
+
+**输入**：`NICH_LINK_SHAPE_ONLY=<子树>[,<子树>]`（lexicon `SHAPE_ONLY_ENV`）。**渲染规则**（`renderer::tree::ShapeRender`，把"切出"与"只渲染"合成一个概念，`render_lib` 因此仍只多一个参数）：`only` 存在时，只保留**认领的子树**与它们**之上**的节点；之上的节点是**壳**——保留模块路径（好让认领的面经它解析）但**不挂载自己的文件**（挂载祖先的面文件会把那个面第二次注册进本 crate 的注册机），其余节点一律不发射。`only` 为空时退回第一刀的"整棵树减去交出去的子树"。
+
+**端到端实测**（`NICH_LINK_SHAPE_ONLY=control::object` 跑真宿主副本）：
+
+```
+pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 ✓ 不会二次注册）
+    pub mod object {              ← 认领的碎片
+        #[path = "…/control/object/button/button.rs"] pub mod button;
+        #[path = "…/control/object/slider/slider.rs"] pub mod slider;
+```
+
+**端到端抓到一个钉子看不见的真 bug**（值得记住的形状）：幽灵那次运行仍按**宿主**的声明算 `cut_out` ⇒ 它把恰好要编译的碎片跳过了 ✗✗ —— 钉子看不到，因为钉子自己传的是 `cut_out: &[] , only: Some(..)`（正是幽灵的意图 ✓），**错的在管线怎么构造这个组合**。修法：`crate_plan::cut_out_for(declaration, ghost)` —— 宿主交出去、**幽灵什么都不交** —— 并给它一条钉子（两种模式读同一份形状、读法不同）。
+
+**还差**：幽灵的**挂载拼写**必须改用 `PlannedMount.spelling`（今天渲染器按 `relative_display` 发的是**绝对路径** ✓ 宿主可以，幽灵不行——它需要"走出去再走进宿主 src"的那种拼写才能保住 `file!()`）+ 三份文件内容（`lib.rs`/`build.rs`/`Cargo.toml`）+ facade。

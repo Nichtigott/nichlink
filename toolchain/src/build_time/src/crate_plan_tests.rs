@@ -215,3 +215,45 @@ pub const SHAPE: Shape = Shape {
     );
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }
+
+/// The two render modes read one shape differently: a host hands its claims away, a ghost is the crate
+/// they were handed **to** and therefore hands nothing away (the end-to-end demonstration is what
+/// found this — the plan was right and the render was not).
+/// 两种渲染模式对同一份形状的读法不同：宿主把认领交出去，幽灵是它们被交给的 crate、因此什么都不交出去
+/// （端到端演示发现了这件事——规划是对的，渲染不是）。
+#[test]
+fn a_host_hands_its_claims_away_and_a_ghost_hands_nothing_away() {
+    let root = host(
+        "modes",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "crate::control_object! {\n    kind: Button,\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let declaration = read_shape_declaration(&root)
+        .expect("it reads")
+        .expect("it declares a shape");
+    assert_eq!(
+        super::cut_out_for(Some(&declaration), true),
+        Vec::<String>::new(),
+        "a ghost renders exactly the fragment it was handed"
+    );
+    assert_eq!(
+        super::cut_out_for(Some(&declaration), false),
+        vec!["control::object".to_owned()],
+        "a host renders everything but the subtrees it hands away"
+    );
+    assert_eq!(
+        super::cut_out_for(None, false),
+        Vec::<String>::new(),
+        "no declaration: the whole tree"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}

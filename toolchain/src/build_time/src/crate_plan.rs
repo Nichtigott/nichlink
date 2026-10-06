@@ -89,6 +89,22 @@ pub(crate) struct PlannedMount {
     pub(crate) spelling: String,
 }
 
+/// Which subtrees **this** run must not render: the ones the declaration hands to another crate.
+/// 本次运行**不得**渲染哪些子树：声明交给另一个 crate 的那些。
+///
+/// A host hands its claimed subtrees away and renders the rest; a **ghost** is the crate those
+/// subtrees were handed to, so it renders exactly them and hands nothing away — clearing the list is
+/// what keeps the ghost from skipping the fragment it exists to compile (found by the end-to-end
+/// demonstration: the render, not the plan, was where the two modes disagreed).
+/// 宿主把它认领的子树交出去、渲染其余；**幽灵**正是那些子树被交给的 crate，因此它渲染的恰好是它们、什么都不
+/// 交出去——清空这份清单，才不会让幽灵跳过它存在的理由（由端到端演示发现：两种模式分歧的地方在渲染，不在规划）。
+pub(crate) fn cut_out_for(declaration: Option<&ShapeDeclaration>, ghost: bool) -> Vec<String> {
+    match (ghost, declaration) {
+        (true, _) | (false, None) => Vec::new(),
+        (false, Some(declaration)) => declaration.cut_subtrees(),
+    }
+}
+
 /// Plan every crate a declaration asks for, or refuse by name.
 /// 规划声明要求的每个 crate，或者点名拒绝。
 pub(crate) fn plan(

@@ -95,6 +95,18 @@ pub const GENERATION_MARKER: &str = "nichlink-build-index";
 /// 运行不会互相争抢。
 pub const PUBLISH_LOCK_FILE: &str = ".publishing.lock";
 
+/// The environment variable that tells a run to render **only** one crate's subtrees.
+/// 告诉一次运行**只**渲染某一个 crate 的子树的环境变量。
+///
+/// A ghost crate compiles a fragment the host no longer compiles, and its own build script sets this
+/// to the claimed subtrees (`control::object,panel`). Every other node is left out, and the nodes
+/// **above** a claimed subtree are emitted as empty container modules: mounting an ancestor's face
+/// file would register that face a second time, in a second registry (audit `M7`, P3.2).
+/// 幽灵 crate 编译的是宿主不再编译的碎片，而它自己的构建脚本把这里设成认领的子树
+/// （`control::object,panel`）。其余节点一律不发射，而认领子树**之上**的节点发成空的容器模块：挂载祖先的
+/// 面文件会把那个面第二次注册进第二个注册机（审计 `M7`，P3.2）。
+pub const SHAPE_ONLY_ENV: &str = "NICH_LINK_SHAPE_ONLY";
+
 /// The environment variable bounding how long a publish waits for that lock, in milliseconds.
 /// 限制一次发布为那把锁等待多久的环境变量，单位毫秒。
 pub const LOCK_WAIT_ENV: &str = "NICH_LINK_LOCK_WAIT_MS";

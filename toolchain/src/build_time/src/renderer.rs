@@ -25,6 +25,7 @@ mod pass;
 mod tree;
 
 pub(crate) use pass::render_lib;
+pub(crate) use tree::ShapeRender;
 
 /// Fixtures shared by the renderer's child test modules.
 /// 渲染器各子模块测试共享的夹具。

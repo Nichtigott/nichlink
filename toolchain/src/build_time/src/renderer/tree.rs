@@ -19,12 +19,12 @@ pub(super) fn render_nodes(
     src: &Path,
     scope: &SourceScope,
     nodes: &[Node],
-    cut_out: &[String],
+    shape: ShapeRender<'_>,
 ) -> Vec<IdeShadow> {
     let mut pass = RenderPass {
         src,
         scope,
-        cut_out,
+        shape,
         ide_shadows: Vec::new(),
     };
     for node in nodes {
@@ -33,17 +33,40 @@ pub(super) fn render_nodes(
     pass.ide_shadows
 }
 
+/// The crate shape as a **render** sees it: what this crate does not compile, and what it is the one
+/// to compile (audit `M7`, P3.2).
+/// crate 形状在**渲染**眼里的样子：本 crate 不编译什么，以及它是唯一的编译者的是什么（审计 `M7`，P3.2）。
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ShapeRender<'a> {
+    /// Subtrees that belong to another crate: this crate emits no module for them, though the records
+    /// still carry every face (the tree is unchanged; what changes is which crate compiles it).
+    /// 属于另一个 crate 的子树：本 crate 不为它们发射模块，而记录仍带着每一个面（树没变，变的是"由哪个 crate
+    /// 编译"）。
+    pub(crate) cut_out: &'a [String],
+    /// The subtrees this crate is the one to compile, when it is a ghost: every other node is left
+    /// out, and the nodes above a claimed subtree become **empty container modules**.
+    /// 本 crate 是唯一编译者的那些子树（当它是幽灵时）：其余节点一律不发射，而认领子树**之上**的节点变成
+    /// **空的容器模块**。
+    pub(crate) only: Option<&'a [String]>,
+}
+
+impl<'a> ShapeRender<'a> {
+    /// The whole tree, nothing handed away: what a host without a declaration renders.
+    /// 整棵树、什么都不交出去：没有声明的宿主渲染的东西。
+    pub(crate) fn whole() -> Self {
+        Self {
+            cut_out: &[],
+            only: None,
+        }
+    }
+}
+
 /// Mutable state threaded through one render pass.
 /// 一次渲染过程中传递的可变状态。
 struct RenderPass<'a> {
     src: &'a Path,
     scope: &'a SourceScope,
-    /// The `::`-separated module paths the crate shape hands to **another** crate. This crate must
-    /// not emit them: the tree still records those faces, but compiling them here as well would be
-    /// one face in two registries (audit `M7`, P3.2).
-    /// crate 形状交给**另一个** crate 的 `::` 分隔模块路径。本 crate 不得发射它们：树仍记录那些面，但在这里
-    /// 也编译一遍就等于同一个面落在两个注册机里（审计 `M7`，P3.2）。
-    cut_out: &'a [String],
+    shape: ShapeRender<'a>,
     ide_shadows: Vec<IdeShadow>,
 }
 
@@ -60,9 +83,29 @@ fn render_node(
     // which is what "the same face is not compiled twice" means (audit `M7`, P3.2).
     // 另一个 crate 拥有的子树不在这里渲染——而直接返回会连整棵子树一起跳过，这正是"同一个面不编译两遍"的
     // 含义（审计 `M7`，P3.2）。
-    if pass.cut_out.iter().any(|cut| cut == module_path) {
+    if pass.shape.cut_out.iter().any(|cut| cut == module_path) {
         return;
     }
+    // A ghost compiles one fragment and nothing else: keep the claimed subtrees, keep the nodes above
+    // them (as shells), and leave the rest out.
+    // 幽灵只编译一个碎片：保留认领的子树、保留它们**之上**的节点（作为壳），其余一律不发射。
+    let below_a_claim = pass.shape.only.is_some_and(|only| {
+        only.iter()
+            .any(|claim| claim.starts_with(&format!("{module_path}::")))
+    });
+    let inside_a_claim = pass.shape.only.is_some_and(|only| {
+        only.iter()
+            .any(|claim| claim == module_path || module_path.starts_with(&format!("{claim}::")))
+    });
+    if pass.shape.only.is_some() && !below_a_claim && !inside_a_claim {
+        return;
+    }
+    // A node **above** a claim is a shell: it keeps the module path so the claimed faces resolve
+    // through it, and mounts no file of its own — mounting an ancestor's file would register that
+    // face a second time, in this crate's registry (audit `M7`, P3.2).
+    // 认领**之上**的节点是壳：它保住模块路径好让认领的面经它解析，而不挂载自己的文件——挂载祖先的文件会把那个
+    // 面第二次注册进本 crate 的注册机（审计 `M7`，P3.2）。
+    let shell = below_a_claim;
     if node
         .file
         .as_ref()
@@ -80,7 +123,7 @@ fn render_node(
     if !pass.scope.includes(pass.src, node, selected_ancestor) {
         return;
     }
-    let include_source = source_is_active(pass.src, node, pass.scope, selected_ancestor);
+    let include_source = !shell && source_is_active(pass.src, node, pass.scope, selected_ancestor);
     let indent = "    ".repeat(depth);
     let mut shadow_cfg = String::new();
     if depth == 0 && node.name == crate::build_time::DEMO_ONLY_DIRECTORY {
