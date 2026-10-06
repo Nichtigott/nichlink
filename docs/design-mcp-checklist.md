@@ -1888,3 +1888,7 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **端到端实测**（自足夹具宿主）：`crates --check` ⇒ `crate fix-widgets at /tmp/fix-widgets (2 mounted file(s), 2 remap entr(ies))` + `preview only…` ✓；`--write` ⇒ `wrote 3 file(s) under /tmp/fix; workspace config updated` ✓，产物是 `/tmp/fix-widgets/{Cargo.toml,build.rs,src/lib.rs}` ✓，配置里两条 remap 各自对应一个内联深度 ✓。⚠️ 顺带如实记：那个夹具的 `check` 仍报一条诊断（`parent declaration cannot be resolved`，与写盘无关）——夹具的 `src/lib.rs` 是手写入口、没有 `host!()`，值得下一轮查清它是不是产品侧的第二个口径。
 
 **未做**：`--revert`（删幽灵包 + 撤销配置条目）与 `--at`（指定输出位置）；CLI 的 `--help` 里已列出 `crates` 一行 ✓。
+
+### §M7.30 §M7.29 里那条诊断的结案（2026-10-06）
+
+上一节如实记下"夹具的 `check` 报 `parent declaration cannot be resolved`，下一轮查清"。**查明：那是夹具欠规格，不是产品侧的第二个口径** ✓。三条真实诊断按顺序是：① `parent-specific registration macro requires an explicit parent`（嵌套面必须显式写 `parent:` ✓）· ② `parent does not own a registry`（子面只能挂在**拥有注册机**的父级下 ⇒ 中间层要 `needs_registry: true` ✓）。补齐后同一棵树 **exit 0 + `nichlink check: ok (fix)` + 3 face(s)** ✓。⇒ 记录的价值在于：**当时没有把"夹具没报绿"当成产品缺陷去改产品** ✓，而是先记下、再查；查的过程只动夹具、一处产品代码都没碰 ✓。
