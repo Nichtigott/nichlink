@@ -1657,3 +1657,40 @@ compile_error!("NICHLink BUILD CHECK FAILED …")
 **拒绝是干净的**：三次被拒之后逐字节比对——入口 `src/lib.rs` 未变 ✓、目标面文件未变 ✓、计划仍留在 `.nichlink/external-grafts/`（没进 trash）✓ ⇒ **没有半成品写入**。
 
 **还没跑通的那半**：**promote 的成功路径**需要一个**由 `apply add` 生成**的目标面（外加一个真的声明了对应实现面的实现 crate），本轮没搭；另外 `create_external_graft` 目前**只从 Studio 调用**（`studio/app/graft.rs`），CLI/桥都没有创建计划的入口 ⇒ 无可视界面的用户只能手写计划文件。这两条都记进待办。
+
+**promote 的成功路径（本轮也跑通了）**：需要一个**由 `apply add` 生成**的目标面（外加一个真的声明了对应实现面的实现 crate），因为 promote 会同时改写**目标面的声明**（经创作执行器，只改它生成的文件）与**入口里那条切口**。步骤：`apply add`（要带 `handle_traits`/`handle_contracts`，否则父注册机的规则会以 `must implement interface ControlHandle` 点名拒绝）→ 给实现 crate 加一个名字匹配的实现面 → 计划写进 `.nichlink/external-grafts/<实现名>/graft.plan` → 入口里把该槽位声明成**类型化**写法 → `apply promote`。成功时的回复要点：
+
+```
+landed `toggle_fast` into `root/control/toggle`: the declaration … now carries the external
+implementation's fields, the entry in src/lib.rs now points that slot at **this face itself**,
+and the record moved to `.nichlink/trash/external-grafts/`
+the entry at src/lib.rs:54 now reads `cut(crate::control::object::toggle::NODE_ID) graft(crate::control::object::toggle::NODE_ID)` (3 → 3 entries, unchanged)
+note   the kind moved: `Toggle` → `ToggleFast`. `kind` is an identity input …, so this face is no longer `4dbbd3f9…`
+consequences (static, text-level): 2 in-tree test line(s) name this face
+  tests/registry.rs:181 / tests/registry.rs:187 …
+```
+
+重建后生成表里第三条切口是**自嫁接**：`from_ids(crate::control::object::toggle::NODE_ID, crate::control::object::toggle::NODE_ID, false)` ✓。
+
+**顺带修掉一个真 bug**：字符串写法的拒绝说「…or pass `implementation` with the external crate's path」，可那段代码**在那句话之前就返回了** ⇒ `implementation` 永远救不了字符串写法 ✗（`tools.rs` 的工具自述与 `implementation` 键的描述也照着这么写）。已改成事实：**字符串说不出实现在哪，`implementation` 是给类型化声明定位 crate 用的** ⇒ 出路是先把该槽位改写成 `graft(<crate>::<module>::NODE_ID)` 再来一次；两处自述同步。
+
+⚠️ **门禁教训（本轮踩到）**：既有钉子 `repointing_one_entry_keeps_the_others_as_they_were` 里有一句 **"前提"** 断言——"解析器给每条条目都报同一行"——它住的模块属于 **`mcp` 面**，而 `cargo test --workspace`（默认特性）**不跑那个面** ⇒ `ac96d69` 把这个 bug 修好之后，那条钉子**在暗处变红了**，而我当时跑的门禁（workspace + clippy 两面 + conventions + 发布表）都没碰到它。已把它的前提改成"各条目报各自的行（`[3, 4, 6]`）"，并把 **`tools/nichlink-test`（十面跑测器）** 作为本批门禁之一重跑。
+
+### §M7.18 十面跑测器抓到一个真缺陷：跨进程的命名空间竞态（2026-10-06，**未修**）
+
+**症状**：`toolchain+mcp` 面里 `mcp::verify::verify_tests::the_override_is_the_namespace_the_run_publishes_under` **间歇红**；子进程输出
+
+```
+faces 1 (source) vs 1 (build)
+added since build 0  gone 0  re-identified 1
+```
+
+（断言要 `re-identified 0`）；**单独跑必过、整面并行跑才红**（我先跑单条得绿，再跑模块/整面得红，最后给测试临时加一行 eprintln 打印子进程 stderr 才看清——stderr 是空的，不是崩溃）。
+
+**机制**：这条钉子先在**本进程** `apply add`，再起一个**子进程**（`NICH_LINK_NAMESPACE=t48-override`）跑 `verify` + `diff` ✓。而 P1.2 之后 `apply` 落盘会**在后台**再刷一次索引（与 CLI `check`/桥 `verify` 同一个入口）⇒ 父进程那次刷新可能落在**子进程 `verify` 之后、`diff` 之前**，把记录改回**父进程命名空间**的版本 ⇒ 子进程的 `diff` 读到的记录属于另一个身份域 ⇒ 它如实地说"每个面都 re-identified" ✗。
+
+**为什么算缺陷而不是测试毛病**：两个进程共用一棵树是**正常**用法（CLI 与桥同时看着一棵树）；而"每个面都搬家了"正是"**这份记录属于另一个身份域**"的签名——今天没有任何一处把这个原因说出来（`graph.generation` 的字段里**没有命名空间**）⇒ 读者拿到的就是 `LGC-LG-13` 那条钉子当年防的"看起来正确的错误答案"。
+
+**候选修法**：① **在记录里盖命名空间**（`graph.generation` 增一列/一行）⇒ 读者能直说"这些记录是在命名空间 X 下发布的，你按 Y 读 ⇒ 先跑 `check`"，而不是"所有面都搬家了" ✓（我推荐）；② 只在"全部 re-identified"时加一行提示（记录里没有依据 ⇒ 只能猜 ✗）；③ 测试侧在 `apply` 后等刷新结束（**只掩盖产品问题** ✗）。
+
+**现状**：本批不修，记入待办；`tools/nichlink-test` 因此**恰好在这一条上红**（其余九面全绿，`toolchain+mcp` 615 通过 / 1 失败）。

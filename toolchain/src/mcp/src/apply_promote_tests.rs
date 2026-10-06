@@ -187,9 +187,14 @@ external_object! {
 /// the plan's naming is what keeps a face in the generated tree, so this action never removes one.
 /// 改写一条声明时邻居逐字不变，而且**条目保留**：计划的点名才是面留在生成树里的原因，因此这个动作从不删条目。
 ///
-/// The location is found in the bytes rather than by line, because `GraftSyntax::location` reports
-/// line 1 for every entry here — which a line-based rewrite would get wrong.
-/// 位置在字节里找而不是按行，因为这里每个条目的 `GraftSyntax::location` 都报第 1 行——按行改写会改错。
+/// The location is found in the bytes rather than by line. That used to be forced by a defect
+/// (`GraftSyntax::location` reported the macro's line for every entry); the defect is fixed
+/// (2026-10-06, `ac96d69`: each entry now carries the line of its own `cut(…)`), and the byte search
+/// stays because it is the stronger method — it does not care whether a location is right, and this
+/// pin now checks that the entries report *their own* distinct lines instead of assuming they do not.
+/// 位置在字节里找而不是按行。这过去是被一个缺陷逼的（`GraftSyntax::location` 给每条条目都报宏那一行）；
+/// 缺陷已修（2026-10-06，`ac96d69`：每条条目现在携带它自己那条 `cut(…)` 的行），而按字节找保留下来，因为它
+/// 是更强的方法——它不依赖位置对不对；本钉子现在改为断言各条目报**各自的**行，而不是假设它们报同一行。
 #[test]
 fn repointing_one_entry_keeps_the_others_as_they_were() {
     let source = "\
@@ -203,9 +208,16 @@ static_graft_plan!(
 ";
     let before = nichlink_kernel::syntax::entries::graft_entries(source).expect("parses");
     assert_eq!(before.len(), 3, "three entries to start");
-    assert!(
-        before.iter().all(|item| item.location.line == 1),
-        "the premise of this pin: the parser reports one line for every entry"
+    // The entries report their own lines (the fixture spreads them over lines 3–6), and the
+    // neighbours' lines are what the rewrite must not disturb.
+    // 各条目报自己的行（夹具把它们摊在第 3–6 行），而邻居的行正是这次改写不许扰动的东西。
+    assert_eq!(
+        before
+            .iter()
+            .map(|item| item.location.line)
+            .collect::<Vec<_>>(),
+        vec![3, 4, 6],
+        "each entry carries the line of its own cut"
     );
 
     // The middle entry, spread over two lines: the neighbours must come back untouched.

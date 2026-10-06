@@ -129,9 +129,10 @@ pub(crate) fn run_promote(
         format!(
             "the declaration for `{path}` names its implementation by string (`cut \"…\" graft \
              \"{}\"`), and a string names nothing about *where* that implementation lives, so \
-             there is no source to land. Two ways forward: declare it as a Rust path \
-             (`graft(<crate>::<module>::NODE_ID)`), or pass `implementation` with the external \
-             crate's path",
+             there is no source to land. This action cannot take `implementation` for it either: \
+             that argument locates the crate a **Rust path** already named, and there is no path \
+             here to locate. Way forward: redeclare the slot as a Rust path — \
+             `cut(<face>::NODE_ID) graft(<crate>::<module>::NODE_ID)` — and run this again",
             cut.graft
         )
     })?)?;
