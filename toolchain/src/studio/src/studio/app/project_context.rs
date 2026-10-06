@@ -149,13 +149,14 @@ pub(super) fn package_root() -> PathBuf {
 /// Resolving and adopting are one step: the caller gets the root, and the session
 /// starts with that root, its manifest, and the identity namespace the manifest
 /// names. Splitting them left the namespace at `nichlink.default` for a launched
-/// Studio even though the host's own build script stamps
-/// `env!("CARGO_PKG_NAME")` — so Studio rebuilt the registration tree in a
+/// Studio even though the host's own faces compile under the package name
+/// (`host!()` defines `crate::NICHLINK_NAMESPACE` from it, audit `M7`, P3.3) — so Studio rebuilt the registration tree in a
 /// different identity domain from the one the host compiled, and every recorded
 /// `NodeId` (a trace, a graft record) named a node this session could not find.
 /// 解析与采纳是同一步：调用方拿到根，会话同时带着该根、它的清单，以及清单写明的身份命名空间启动。
-/// 把两者分开会让启动后的 Studio 停在 `nichlink.default`，而宿主自己的构建脚本盖的是
-/// `env!("CARGO_PKG_NAME")`——于是 Studio 在一个与宿主编译产物不同的身份域里重建注册树，任何
+/// 把两者分开会让启动后的 Studio 停在 `nichlink.default`，而宿主自己的面是用包名编译的
+/// （`host!()` 用它定义 `crate::NICHLINK_NAMESPACE`，审计 `M7`，P3.3）——于是 Studio 在一个与宿主编译
+/// 产物不同的身份域里重建注册树，任何
 /// 已记录的 `NodeId`（trace、graft 记录）都指不到本会话能找的节点。
 pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String> {
     let configured = std::env::var_os(crate::runtime::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);

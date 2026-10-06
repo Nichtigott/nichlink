@@ -232,9 +232,9 @@ pub(crate) fn registry_body(member: &Member, arguments: &Value) -> Result<String
 ///
 /// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
 /// is the namespace, because that is exactly what the declaration macros bake in as
-/// `env!("CARGO_PKG_NAME")`.
+/// `crate::NICHLINK_NAMESPACE`, which `host!()` defines from the package name (audit `M7`, P3.3).
 /// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
-/// `env!("CARGO_PKG_NAME")` 正是它。
+/// `crate::NICHLINK_NAMESPACE` 正是它，而 `host!()` 用包名定义它（审计 `M7`，P3.3）。
 ///
 /// What this is **not**: a rule every surface reads. Studio reads the same override, the CLI reads
 /// none of it (it always asks Cargo for the package name), and no build-side code reads it either —

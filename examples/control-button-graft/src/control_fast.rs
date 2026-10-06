@@ -19,7 +19,7 @@ nichlink_toolchain::runtime::external_object! {
     summary: { zh: "整体替换", en: "Whole-subtree replacement" },
     exports: ["control.render"],
     needs_registry: true,
-    parent: root_node_id(env!("CARGO_PKG_NAME")),
+    parent: root_node_id(crate::NICHLINK_NAMESPACE),
     getting_from_other_registry: None,
     registry_rule_path: "control_fast/control_fast.rs",
     registry_rule: RegistrationRule::ANY,

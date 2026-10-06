@@ -2,6 +2,16 @@
 //! declaration macros compute.
 //! `src/` 之外的库目标就地读取，身份与声明宏计算的一致。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself: the declaration macros
+/// read it (audit `M7`, P3.3), so the test crate has to provide the same one-line value a host gets
+/// from `host!()`.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量：声明宏读它（审计 `M7`，P3.3），因此测试
+/// crate 必须提供宿主从 `host!()` 得到的那一行同样的值。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 

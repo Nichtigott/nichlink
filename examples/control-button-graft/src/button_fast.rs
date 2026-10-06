@@ -19,7 +19,7 @@ nichlink_toolchain::runtime::external_object! {
     summary: { zh: "项目外实现", en: "Out-of-project implementation" },
     exports: ["control.render"],
     needs_registry: false,
-    parent: root_node_id(env!("CARGO_PKG_NAME")),
+    parent: root_node_id(crate::NICHLINK_NAMESPACE),
     getting_from_other_registry: None,
     registry_rule_path: "button_fast/button_fast.rs",
     registry_rule: RegistrationRule::ANY,

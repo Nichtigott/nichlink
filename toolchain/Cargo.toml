@@ -158,6 +158,17 @@ path = "tests/runtime_face_arm_defaults.rs"
 name = "runtime_face_fields"
 path = "tests/runtime_face_fields.rs"
 
+# The declaration macros read `crate::NICHLINK_NAMESPACE` (audit `M7`, P3.3), so this target proves
+# they read the constant rather than the package name. It carries **no** `required-features`: the
+# macros and `NodeId` are reachable under the default features *and* under none of them, and naming a
+# default feature here would keep nothing out (the `features` gate refuses exactly that).
+# 声明宏读 `crate::NICHLINK_NAMESPACE`（审计 `M7`，P3.3），因此这个 target 证明它们读的是常量而不是包名。
+# 它**不**声明 `required-features`：宏与 `NodeId` 在默认特性下与一个特性都不开时都可达，而在这里点名一个
+# 默认特性什么也挡不住（`features` 门禁拒绝的正是这个）。
+[[test]]
+name = "namespace_constant"
+path = "tests/namespace_constant.rs"
+
 [[test]]
 name = "runtime_face_preset_parts"
 path = "tests/runtime_face_preset_parts.rs"

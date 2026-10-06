@@ -130,7 +130,7 @@ macro_rules! __external_object {
             $(stable_name: $stable_name,)?
             needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
             registry_name: $crate::runtime::registry_core::last_path_segment(module_path!()),
-            parent: $crate::__face_expr_or!($crate::runtime::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?),
+            parent: $crate::__face_expr_or!($crate::runtime::root_node_id(crate::NICHLINK_NAMESPACE); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
             registry_rule_path: $crate::__face_expr_or!($crate::runtime::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
             // Why the generated compact arm's default is wrong here: that arm

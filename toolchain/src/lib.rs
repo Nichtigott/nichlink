@@ -24,6 +24,21 @@
 // "cannot find `nichlink_toolchain` in the crate root" 失败，这正是 `(b)` 遗留当初被搁置的原因。
 extern crate self as nichlink_toolchain;
 
+/// The identity namespace the in-crate face probes declare under.
+/// crate 内的面探针声明注册面时所用的身份命名空间。
+///
+/// The probes (the `call_evidence` collector probe and its siblings) declare faces with the
+/// declaration macros, which read `crate::NICHLINK_NAMESPACE` — **this** crate's root, because a
+/// probe is mounted inside the crate (audit `M7`, P3.3). The value is the one those probes used to
+/// bake in by hand, so nothing about them moves. It exists only for test builds: a published
+/// toolchain crate is not a host and has no identity domain of its own.
+/// 探针（`call_evidence` 的采集探针及其同类）用声明宏声明注册面，而声明宏读的是
+/// `crate::NICHLINK_NAMESPACE`——**本** crate 的根，因为探针挂载在 crate 之内（审计 `M7`，P3.3）。
+/// 这个值就是那些探针过去手工烤进去的那个，因此它们什么都不移动。它只存在于测试构建里：发布出去的工具链
+/// crate 不是宿主、没有自己的身份域。
+#[cfg(test)]
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 // t115-mount: begin
 #[cfg(feature = "build")]
 #[path = "build_time/src/lib.rs"]

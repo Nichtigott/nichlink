@@ -3,12 +3,12 @@
 //!
 //! Every identity in this bridge is hashed over `(namespace, source path, declared
 //! name)`, and the namespace is the *package's own name* — that is the design, not a
-//! coincidence: `env!("CARGO_PKG_NAME")` is what the declaration macros bake in, so
+//! coincidence: the declaration macros read `crate::NICHLINK_NAMESPACE`, which `host!()` defines from the package name, so
 //! "package = namespace" is exactly what a built host compiled. A workspace root is
 //! not a package, so it has no namespace of its own, and every tree tool used to
 //! refuse there with Cargo's own words. The machine was there; the entrance was not.
 //! 本桥里的每个身份都是对 `(命名空间, 源码路径, 声明名)` 取散列，而命名空间就是**包自己的名字**
-//! ——这是设计而不是巧合：`env!("CARGO_PKG_NAME")` 正是声明宏烤进去的值，因此"包 = 命名空间"恰恰
+//! ——这是设计而不是巧合：声明宏读的是 `crate::NICHLINK_NAMESPACE`，而 `host!()` 用包名定义它，因此"包 = 命名空间"恰恰
 //! 就是已构建宿主编译出的那一个。工作区根不是一个包，因此它没有自己的命名空间，而每个树级工具过去
 //! 都在那里用 Cargo 自己的话拒绝。机器在，入口不在。
 //!

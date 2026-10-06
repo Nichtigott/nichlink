@@ -11,6 +11,18 @@
 //! 与每个执行面有四种方式命名同一个身份，四种都必须继续可解析：官方模块路径、内核自己的
 //! 模块页、执行面的平铺重导出、执行面的内核模块路径。任何一种消失，本文件就编译不过。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself — the declaration macros
+/// read it (audit `M7`, P3.3) — so a test crate provides the same one-line value a host gets from
+/// `host!()`. It lives at this file's top level because the invocations sit inside `mod` blocks and
+/// `crate::` in their expansion resolves to the crate root.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
+/// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
+/// 而展开里的 `crate::` 解析到 crate 根。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 use std::marker::PhantomData;
 
 use nichlink_kernel::identity::NodeId as OfficialNodeId;

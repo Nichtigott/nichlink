@@ -1,15 +1,16 @@
 //! The identity namespace Studio authors under, from the host manifest.
 //! Studio 创作所用的身份命名空间，读自宿主清单。
 //!
-//! A host's build script stamps `env!("CARGO_PKG_NAME")` as the identity namespace
-//! of every registration face it compiles, and every `NodeId` is a hash over
+//! `host!()` defines the host's `crate::NICHLINK_NAMESPACE` from the package name, and every
+//! registration face compiles its identity from that constant (audit `M7`, P3.3); every `NodeId` is a hash over
 //! `(namespace, source path, declared name)`. Studio rebuilds the same tree from
 //! source, so it has to derive the *same* namespace or its ids name nodes the host
 //! never compiled: a recorded trace, a graft record on disk, and the editor's tree
 //! would each live in a different identity domain. Cargo's answer for the adopted
 //! manifest is what makes the two agree without asking the user to export
 //! `NICH_LINK_NAMESPACE`.
-//! 宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成它编译的每个注册面的身份命名空间，而每个
+//! `host!()` 用包名定义宿主的 `crate::NICHLINK_NAMESPACE`，而每个注册面的身份都由那个常量算出
+//! （审计 `M7`，P3.3）；每个
 //! `NodeId` 都是对 `(命名空间, 源码路径, 声明名)` 的散列。Studio 从源码重建同一棵树，因此必须
 //! 推出**同一个**命名空间，否则它的 id 指的是宿主从未编译过的节点：已记录的 trace、落盘的 graft
 //! 记录、编辑器里的树会各处在不同的身份域。Cargo 对已采纳清单的回答，正是让两端在不要求用户
@@ -63,10 +64,10 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// 一份宿主清单所代表的身份命名空间。
 ///
 /// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
-/// is the namespace, because that is exactly what the build script's `env!("CARGO_PKG_NAME")`
-/// stamps.
-/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为构建脚本的
-/// `env!("CARGO_PKG_NAME")` 盖的正是它。
+/// is the namespace, because that is what the declaration macros read there — `host!()` defines
+/// `crate::NICHLINK_NAMESPACE` from the package name (audit `M7`, P3.3).
+/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为那里的声明宏读的
+/// 就是它——`host!()` 用包名定义 `crate::NICHLINK_NAMESPACE`（审计 `M7`，P3.3）。
 ///
 /// What it is **not**: a rule the build side reads. The namespace is baked into the host at compile
 /// time, this surface and the MCP bridge read the override, and the CLI reads none of it — so with

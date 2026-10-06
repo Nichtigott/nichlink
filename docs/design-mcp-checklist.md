@@ -1740,3 +1740,27 @@ NICH_LINK_NAMESPACE=nsrace and ask again
 **代价与效果（实测）**：记录多一行（约 20 字节）；两端本来就**按键解析**（`header_value(&text, "key\t")`）⇒ 新写×旧读忽略未知行 ✓、旧写×新读降级 ✓，不是格式迁移。**域匹配时输出一个字节都不变**（实测 `re-identified 0` 与修前逐字相同）；**域不匹配时**从「每个面都搬家 + 一串 `~` 旧→新映射」变成「一句原因 + 两条出路」⇒ 出错时更短更准，且不再让读者去追一个不存在的问题。**仍未解决**：并发**写**同一棵树仍是后写者赢（这道闸只让读者看懂「这不是我的域」）；要彻底避免得加跨进程互斥，单独立项。
 
 **钉子**：① `index_tests::the_record_stamps_the_namespace_and_old_records_read_as_none`（盖戳 + 旧记录降级）；② `diff_tests::records_published_under_another_namespace_are_refused`（**就是上面那个演示**：父进程按 A 发布、子进程按 B 读 ⇒ 断言拒绝里点名两个域、带出路、且**不**输出 `re-identified`）；③ 那条「间歇红」的 verify 钉子改为**先等它自己启动的那次刷新**（`index::wait_until_idle`）再起读者 —— 产品对那个状态的答复现在是**点名拒绝**，测试侧的等待因此不再掩盖任何东西 ✓。
+
+### §M7.19 P3.3 落地：身份命名空间从"每处 `env!`"改成"crate 根常量"（2026-10-06）
+
+**改什么**：声明宏过去在**每个声明处**读 `env!("CARGO_PKG_NAME")`；现在读 crate 根的 `crate::NICHLINK_NAMESPACE`，而 `host!()` 用包名定义这个常量。四处宏内落点：`face_objects.rs`（默认父级）、`face_external.rs`（同上）、`face_registration.rs`（`NODE_ID` 与 `REGISTRATION.namespace`）。**为什么是分区的前置**：分区后的 crate 会用另一个 `#[path]` 挂载同一个面文件，在那里读 `env!` 得到的是**幽灵 crate 的**包名，而身份是 `hash(命名空间, 源码路径, 名字)` ⇒ 每个面都会被**静默重命名**；根上一个常量，正是分区能指向宿主那个值的唯一位置。
+
+**代价（写清楚，因为它出现在用户面上）**：不走 `host!()` 而直接用声明宏的 crate，要自己在 crate 根写一行 `pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");`。本仓已按此处理：外部实现 crate（`examples/control-button-graft`）· 八个 `toolchain/tests/*.rs` 集成测试 · `toolchain/src/lib.rs` 里给 crate 内探针的 `#[cfg(test)]` 常量（值与它们过去烤进去的**完全相同**）· 宏文档里那道 doctest 也把这个常量写进示例（并显式给一个 `fn main`，否则整块会被包进函数、常量就落不到 crate 根）。
+
+**验收：身份逐字节不变（这是 P3.3 唯一真正的判据）**。先复制改前的 `examples/control-button/target/nichlink/out`，再用新代码重跑同一棵树：
+
+| 产物 | 结果 |
+| --- | --- |
+| `pruning_manifest.tsv` 的 **(id, source)** 列（4 个面） | **逐字节相同** ✓ |
+| `graph_edges.tsv` · `source_scope.tsv` · `function_manifest.tsv` · `file_manifest.tsv` · `graft_plan.tsv` | **整份逐字节相同** ✓ |
+| `shape_manifest.tsv` | 只有那一行如预期地变：`parent crate::root_node_id(env!("CARGO_PKG_NAME"))` → `crate::root_node_id(crate::NICHLINK_NAMESPACE)` ✓ |
+| `discovery.fingerprint` · `graph.generation` | 变了（源码字节变了 ⇒ 指纹变；新一轮 ⇒ generation +1，且多了 §M7.18 的 `namespace` 行）✓ |
+| 生成树里的 `assert_static_identity`（§M7.15 那道闸） | **3 条都在，且编译通过** ⇒ 编译器算出的 id 与构建烤进去的仍然一致 ✓✓ |
+
+**钉子**：新增集成测试 `toolchain/tests/namespace_constant.rs` —— 它的常量**故意不等于包名**（`"p33-probe-domain"`），两个宏族各声明一个面，断言 `NODE_ID == from_namespaced_path(NICHLINK_NAMESPACE, 相对源码, kind)` 且 **≠** 用包名算的那个 ⇒ 宏若改回读包名，这条立刻红 ✓。该 target 不声明 `required-features`：`features` 门禁拒绝"点名默认开着的特性"（我第一版写了 `["run"]`，被它按规矩拒了 ✓）。
+
+**自述同步**：`package.rs` · `identity.rs` · `mcp/workspace.rs` · `mcp/registry.rs` · `studio/app/namespace.rs` · `studio/app/project_context.rs` · `runtime/trace/snapshot/io.rs` · `kernel/syntax/face.rs` 以及宏自己的 `NODE_ID` 文档——凡是说"宏把 `env!(CARGO_PKG_NAME)` 烤进去"的地方都改成事实（中英各一遍）✓。
+
+**一处 clippy 取舍**：`clippy::crate_in_macro_def` 认为宏里写 `crate::` 是想写 `$crate`，而这里**必须**是调用点的 crate 根（`$crate` 会指工具链自己、什么都解析不到）。处理方式是 `macros.rs` 里**一处**模块级 `#![allow(clippy::crate_in_macro_def)]` + 中英理由 ✓（不是逐处 allow）。
+
+**已知未做**：`conventions` 里还**没有**"面文件不得拼 `env!("CARGO_PKG_NAME")`"的门禁——它是这条规则不回退的保障，下一步就补（新规则约百行：只判**声明了注册面**的文件，因为测试 crate 给自己的常量、以及 `host!()` 自己的定义都必须保留这个拼法）。

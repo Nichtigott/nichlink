@@ -6,6 +6,18 @@
 //! 由于 `handle` 由 `kind` 派生，过去用来区分 arm 的形态已不存在，这些用例现在钉住
 //! 那唯一一条 arm 的默认行为。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself — the declaration macros
+/// read it (audit `M7`, P3.3) — so a test crate provides the same one-line value a host gets from
+/// `host!()`. It lives at this file's top level because the invocations sit inside `mod` blocks and
+/// `crate::` in their expansion resolves to the crate root.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
+/// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
+/// 而展开里的 `crate::` 解析到 crate 根。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 /// A custom preset whose recorded name is distinguishable from the default.
 /// 一个自定义 preset，其记录名可与默认值区分。
 struct ProbePreset;

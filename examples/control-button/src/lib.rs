@@ -56,7 +56,7 @@ nichlink_toolchain::runtime::static_graft_plan!(
 /// 按框架和包命名空间装配这个示例的注册机。
 /// Assemble the example's registry from its framework and package namespace.
 pub fn base_registry() -> Registry {
-    let mut registry = Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"));
+    let mut registry = Registry::root_for_namespace(FRAMEWORK, NICHLINK_NAMESPACE);
     registry
         .register_all(&registrations())
         .expect("example faces register");

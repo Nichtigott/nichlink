@@ -1,6 +1,18 @@
 //! The kind-only face shape and the `registry_name` it derives.
 //! 只有 kind 的注册面形态，以及它推导出的 `registry_name`。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself — the declaration macros
+/// read it (audit `M7`, P3.3) — so a test crate provides the same one-line value a host gets from
+/// `host!()`. It lives at this file's top level because the invocations sit inside `mod` blocks and
+/// `crate::` in their expansion resolves to the crate root.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
+/// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
+/// 而展开里的 `crate::` 解析到 crate 根。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 /// A face declared with `collector` and `kind` and nothing else: no `handle`,
 /// no explicit `registry_name`, no `needs_registry`.
 /// 只写 `collector` 与 `kind`、别无其它字段的注册面：没有 `handle`，没有显式

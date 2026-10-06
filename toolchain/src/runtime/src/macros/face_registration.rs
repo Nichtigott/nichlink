@@ -37,15 +37,30 @@
 //! ```rust
 //! pub struct LinkedProbe;
 //!
+//! // A crate that declares faces without `host!()` owns the identity namespace itself: the
+//! // declaration macros read this constant, not `env!("CARGO_PKG_NAME")` at each site, because a
+//! // partitioned crate mounts the same file under another `#[path]` and would read *its own*
+//! // package name there (audit `M7`, P3.3).
+//! // 声明注册面却不调用 `host!()` 的 crate 自己拥有身份命名空间：声明宏读这个常量，而不是在每个声明处
+//! // 读 `env!("CARGO_PKG_NAME")`——因为分区后的 crate 会用另一个 `#[path]` 挂载同一个文件，在那里会读到
+//! // **它自己的**包名（审计 `M7`，P3.3）。
+//! pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+//!
 //! nichlink_toolchain::runtime::external_object! {
 //!     kind: LinkedProbe,
 //! }
 //!
-//! // The declaration is compiled in and reachable through its consts; nothing was
-//! // submitted, which is what `linked` and `development` share one arm for.
-//! // 声明被编译进来、经它的常量可达；没有任何提交发生，这正是 `linked` 与 `development`
-//! // 共用一条臂的原因。
-//! assert_eq!(REGISTRATION.kind, "LinkedProbe");
+//! // An explicit `main` keeps this fence from being wrapped in one: the constant above has to sit
+//! // at the crate root, because that is where the macros look for it.
+//! // 显式写一个 `main`，这道围栏就不会被包进一个函数里：上面的常量必须位于 crate 根，因为宏就是在
+//! // 那里找它。
+//! fn main() {
+//!     // The declaration is compiled in and reachable through its consts; nothing was
+//!     // submitted, which is what `linked` and `development` share one arm for.
+//!     // 声明被编译进来、经它的常量可达；没有任何提交发生，这正是 `linked` 与 `development`
+//!     // 共用一条臂的原因。
+//!     assert_eq!(REGISTRATION.kind, "LinkedProbe");
+//! }
 //! ```
 //!
 //! This fence is the pin for audit `LGC-LG-14`: refusing `linked` (or moving that
@@ -131,13 +146,15 @@ macro_rules! __registration_face {
         /// The face's compile-time identity, for typed graft cuts and parent links.
         /// 该注册面的编译期身份，供类型化 graft 切口与父级链接使用。
         ///
-        /// It hashes the package namespace, the declaration's relative source path
+        /// It hashes `crate::NICHLINK_NAMESPACE` (the crate root constant, audit `M7`, P3.3),
+        /// the declaration's relative source path
         /// and its kind — never the registry name, so renaming the registry name
         /// does not move an identity.
-        /// 它哈希包命名空间、声明的相对源码路径与 kind——绝不含注册面名，因此改注册面名
+        /// 它哈希 `crate::NICHLINK_NAMESPACE`（crate 根常量，审计 `M7`，P3.3）、声明的相对源码路径
+        /// 与 kind——绝不含注册面名，因此改注册面名
         /// 不会移动身份。
         pub const NODE_ID: $crate::runtime::NodeId = $crate::runtime::NodeId::from_namespaced_path(
-            env!("CARGO_PKG_NAME"),
+            crate::NICHLINK_NAMESPACE,
             $source,
             stringify!($kind),
         );
@@ -159,7 +176,7 @@ macro_rules! __registration_face {
         /// The same declaration in the owned form registration consumes.
         /// 同一份声明的拥有型快照，注册过程消费它。
         pub const REGISTRATION: $crate::runtime::RegistrationInfo = $crate::runtime::RegistrationInfo {
-            namespace: env!("CARGO_PKG_NAME"),
+            namespace: crate::NICHLINK_NAMESPACE,
             id: NODE_ID,
             parent: $parent,
             kind: stringify!($kind),

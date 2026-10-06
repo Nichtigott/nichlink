@@ -52,6 +52,20 @@ const _: () = assert!(::nichlink_kernel::lexicon::same_text(
 #[macro_export]
 macro_rules! host {
     () => {
+        /// The identity namespace every face in this crate is compiled under.
+        /// 本 crate 里每个注册面编译时所用的身份命名空间。
+        ///
+        /// It is a **crate-root constant**, not an `env!` read at each declaration site, because a
+        /// partitioned crate mounts the same face file through a different `#[path]` spelling: the
+        /// package name it would read there is the *ghost crate's*, and identity is
+        /// `hash(namespace, source path, name)` — so reading it locally would silently rename every
+        /// face (audit `M7`, P3.3). One constant at the root is the one place a partition can point
+        /// at the host's value.
+        /// 它是**crate 根的常量**，而不是在每个声明处读一次 `env!`：分区后的 crate 会用不同的 `#[path]`
+        /// 拼写挂载同一个面文件，在那里读到的包名是**幽灵 crate 的**，而身份是
+        /// `hash(命名空间, 源码路径, 名字)`——就地读会静默重命名每一个面（审计 `M7`，P3.3）。根上这样一个
+        /// 常量，正是分区时能指向宿主那个值的唯一位置。
+        pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
         include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
     };
 }

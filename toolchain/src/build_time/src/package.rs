@@ -3,14 +3,16 @@
 //!
 //! A host's package name *is* its `NodeId` namespace: every face identity is a
 //! hash over `(namespace, source path, declared name)`, and the declaration
-//! macros bake `env!("CARGO_PKG_NAME")` in as that namespace. Two surfaces need
+//! macros read `crate::NICHLINK_NAMESPACE` as that namespace, and `host!()` defines that constant
+//! from `env!("CARGO_PKG_NAME")` (audit `M7`, P3.3). Two surfaces need
 //! the same answer — `nichlink-toolchain` to name faces from the command line, and the
 //! MCP bridge to report the tree it is asked about — so the read lives in one
 //! place and the policy is stated once: Cargo answers, and a question Cargo
 //! cannot answer is an error rather than a guess.
 //! 宿主的包名**就是**它的 `NodeId` 命名空间：每个面的身份都是对
-//! `(命名空间, 源码路径, 声明名)` 的散列，而声明宏把 `env!("CARGO_PKG_NAME")` 烤进去作为
-//! 该命名空间。两个执行面需要同一个答案——`nichlink-toolchain` 从命令行命名面，MCP 桥报告被问到的
+//! `(命名空间, 源码路径, 声明名)` 的散列，而声明宏读的是 crate 根常量
+//! `crate::NICHLINK_NAMESPACE` 作为该命名空间——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")`
+//! 定义（审计 `M7`，P3.3）。两个执行面需要同一个答案——`nichlink-toolchain` 从命令行命名面，MCP 桥报告被问到的
 //! 那棵树——因此这次读取只有一个住址，策略也只声明一次：由 Cargo 作答，而 Cargo 答不出的问题
 //! 是错误，不是猜测。
 //!

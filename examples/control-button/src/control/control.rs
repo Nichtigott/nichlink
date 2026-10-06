@@ -7,7 +7,7 @@ use nichlink_toolchain::runtime::{ContractId, FlowContract};
 crate::root_object! {
     kind: Control,
     needs_registry: true,
-    parent: crate::root_node_id(env!("CARGO_PKG_NAME")),
+    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),
     // 规则不再重复写第二遍：`needs_registry: true` 的面省略 `registry_rule:` 时，
     // 规则解析到注册面旁边那份规范规则（`super::registry_rule::REGISTRATION_RULE`）。
     // The rule is no longer written twice: a face with `needs_registry: true` that

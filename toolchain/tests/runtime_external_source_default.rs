@@ -34,6 +34,16 @@
 //! Pinned by `an_external_face_defaults_its_source_to_this_file`.
 //! 由 `an_external_face_defaults_its_source_to_this_file` 钉住。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself: the declaration macros
+/// read it (audit `M7`, P3.3), so the test crate has to provide the same one-line value a host gets
+/// from `host!()`.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量：声明宏读它（审计 `M7`，P3.3），因此测试
+/// crate 必须提供宿主从 `host!()` 得到的那一行同样的值。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 use std::path::Path;
 
 use nichlink_toolchain::runtime::registry_core::declaration::portable_path;

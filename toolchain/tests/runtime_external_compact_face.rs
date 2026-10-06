@@ -9,6 +9,16 @@
 //! “每一项都可省略”的外部形式只有把每个默认值手写一遍才编译得过。本文件钉住紧凑
 //! arm：下面的声明只写 `collector` 与 `kind`，别的什么都不写。
 
+/// The identity namespace this test crate's faces are compiled under.
+/// 本测试 crate 的注册面编译时所用的身份命名空间。
+///
+/// A crate that declares faces without `host!()` owns this constant itself — the declaration macros
+/// read it (audit `M7`, P3.3) — so a test crate provides the same one-line value a host gets from
+/// `host!()`.
+/// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此
+/// 测试 crate 要提供宿主从 `host!()` 得到的那一行同样的值。
+pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+
 /// The handle-marker type the declaration below names. `kind` is captured as an
 /// identifier, so it has to be an item the author wrote before the macro.
 /// 下面那条声明命名的 handle 标记类型。`kind` 以标识符捕获，因此它必须是作者在宏
@@ -39,7 +49,7 @@ fn a_kind_only_external_face_derives_its_registry_name_from_the_module() {
 fn a_kind_only_external_face_hangs_from_the_package_root() {
     assert_eq!(
         REGISTRATION.parent,
-        nichlink_toolchain::runtime::root_node_id(env!("CARGO_PKG_NAME"))
+        nichlink_toolchain::runtime::root_node_id(NICHLINK_NAMESPACE)
     );
 }
 

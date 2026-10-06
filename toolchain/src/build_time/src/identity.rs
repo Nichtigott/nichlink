@@ -99,9 +99,9 @@ pub(crate) fn freeze_test_namespace() {
 ///
 /// Cargo exposes the consuming package name to a build-script process. Using
 /// that value keeps build-time identities byte-for-byte compatible with the
-/// `env!("CARGO_PKG_NAME")` value captured by the declaration macros.
+/// `crate::NICHLINK_NAMESPACE` value the declaration macros read, which `host!()` defines from `env!("CARGO_PKG_NAME")` (audit `M7`, P3.3).
 /// Cargo 把消费方包名暴露给构建脚本进程。使用该值让构建期身份与声明宏捕获的
-/// `env!("CARGO_PKG_NAME")` 逐字节一致。
+/// `crate::NICHLINK_NAMESPACE` 逐字节一致——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")` 定义（审计 `M7`，P3.3）。
 ///
 /// An in-process run's namespace wins over both the pinned override and
 /// `CARGO_PKG_NAME`; see [`IN_PROCESS_NAMESPACE`].
