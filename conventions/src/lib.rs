@@ -46,6 +46,9 @@ pub mod lint;
 pub mod mounting;
 #[path = "naming.rs"]
 pub mod naming;
+
+#[path = "namespace_source.rs"]
+pub mod namespace_source;
 #[path = "online_analysis.rs"]
 pub mod online_analysis;
 #[path = "purity.rs"]

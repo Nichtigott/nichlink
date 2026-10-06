@@ -54,6 +54,9 @@ mod node_identity;
 mod package;
 #[path = "pipeline.rs"]
 mod pipeline;
+
+#[path = "publish_lock.rs"]
+pub(crate) mod publish_lock;
 #[path = "registration_phase.rs"]
 mod registration_phase;
 #[path = "identity.rs"]

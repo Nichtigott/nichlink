@@ -86,6 +86,19 @@ pub const GENERATION_FILE: &str = "graph.generation";
 /// generation 记录的第一行。
 pub const GENERATION_MARKER: &str = "nichlink-build-index";
 
+/// The name of the file that admits **one writer per tree** at a time.
+/// 一次只允许**一棵树一个写者**的那份文件的文件名。
+///
+/// It sits beside the output directory rather than inside it, so the published artifact set stays
+/// exactly the set a reader expects, and two runs with different output directories do not contend.
+/// 它住在输出目录**旁边**而不是里面，这样已发布的产物集合保持读者预期的那一份，而两个输出目录不同的
+/// 运行不会互相争抢。
+pub const PUBLISH_LOCK_FILE: &str = ".publishing.lock";
+
+/// The environment variable bounding how long a publish waits for that lock, in milliseconds.
+/// 限制一次发布为那把锁等待多久的环境变量，单位毫秒。
+pub const LOCK_WAIT_ENV: &str = "NICH_LINK_LOCK_WAIT_MS";
+
 /// The key the generation record stamps the **namespace** it was published under.
 /// generation 记录盖下"它发布时所用**命名空间**"的那把钥匙。
 ///

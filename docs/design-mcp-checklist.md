@@ -1764,3 +1764,21 @@ NICH_LINK_NAMESPACE=nsrace and ask again
 **一处 clippy 取舍**：`clippy::crate_in_macro_def` 认为宏里写 `crate::` 是想写 `$crate`，而这里**必须**是调用点的 crate 根（`$crate` 会指工具链自己、什么都解析不到）。处理方式是 `macros.rs` 里**一处**模块级 `#![allow(clippy::crate_in_macro_def)]` + 中英理由 ✓（不是逐处 allow）。
 
 **已知未做**：`conventions` 里还**没有**"面文件不得拼 `env!("CARGO_PKG_NAME")`"的门禁——它是这条规则不回退的保障，下一步就补（新规则约百行：只判**声明了注册面**的文件，因为测试 crate 给自己的常量、以及 `host!()` 自己的定义都必须保留这个拼法）。
+
+### §M7.20 跨进程互斥：一棵树一个写者（2026-10-06）
+
+**为什么**：CLI 与桥、两个 agent 会话、或构建脚本与编辑器的 `check` 可能**同时**看着一棵树。每次发布写的是一**组**文件（清单/图/graft/指纹/就绪记录），每份各自原子（`write_if_changed` 写临时文件再改名），但**这一组不是** ⇒ 没有锁时后写者逐份取胜：读者可能读到"新指纹 + 旧清单"，一次运行也可能静默覆盖另一次刚发布的代。
+
+**是什么**：`<output 目录的父目录>/.publishing.lock`（住在输出目录**旁边**，因此 `target/nichlink/out/**` 的产物集合一个文件都不多），用 `create_new` 原子创建，内容两行 `pid\t…` / `started\t…`（与本工作区其它记录同形），发布结束时由 Drop 删除。**陈旧锁**：持有者活着就等；pid 已死（Linux 查 `/proc/<pid>`，其它平台"假定活着"）或没有 pid 且年龄 ≥ 10 分钟 ⇒ 接管，并在真宿主构建时印一行 `cargo:warning=removed a stale publish lock left by pid N`。**等待有界**：`NICH_LINK_LOCK_WAIT_MS`（默认 30 s）⇒ 超时不是挂死，而是一句点名锁文件、持有者与两条出路的拒绝。
+
+**锁在哪一段**：只包住**载荷写入**这一段（`pipeline.rs` 的写阶段），而不是整次运行——上面的发现/解析/渲染是计算、幂等、而且昂贵；不许交错的只有写入。拿不到锁的那次运行**什么都不发布**（不会在别人的文件旁留下半代产物），并以 `BuildDiagnostic`（phase `publish-lock`）失败。
+
+**边界（写明）**：它不是通用跨进程互斥，也**不是给读者的保证**——想要一致"一组"的读者最后读就绪记录（`graph.generation`，管线一向最后写它）；两个进程的**写**仍然独立，只是不再交错。
+
+**钉子**（`build_time::publish_lock`，7 条 + 1 子进程）：取到即存在、点名持有者、Drop 后消失 · 第二个写者**等**而不是并肩写 · 活持有者被**点名拒绝**（含 `way forward` 与预算变量名）· 已死 pid 的锁被**接管**且报告 pid · 无法辨认但新鲜的锁被**尊重** · 预算从环境读 · **端到端**：占住锁 ⇒ 子进程那次发布被拒且**一个载荷都没落盘**，清掉锁后**同一个夹具**能发布（正对照）。实测真宿主：`check` 后**无锁残留**、五份产物仍逐字节未变、`(id, source)` 列不变、digest 仍 `92ef0bd3…`。
+
+### §M7.21 门禁：面文件不得拼 `env!("CARGO_PKG_NAME")`（2026-10-06）
+
+P3.3 把身份来源改成 crate 根常量，这道门禁是它不回退的保障（`conventions::namespace_source`）。**只判**：某个 crate `src/` 树里**调用声明宏**的**代码行**。**不判**（各有理由）：`tests/` 下的路径与 `<name>_tests.rs`（集成测试与仅检出可用的夹具是给自己常量下定义的测试 crate；解析器的字符串夹具根本不编译）· 注释与文档行（文档可以、也必须谈论旧拼法）· 不是调用的拼法（字符串里或数组里的名字）。**唯一允许的例外**：**定义常量本身**那一行。
+
+**它当场抓到一处我 sweep 漏掉的真命中**：`examples/control-button-graft/src/lib.rs` 的 `external_registry()` 仍写 `Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"))`（我先前只替换了 `root_node_id(env!(…))` 那种形状）⇒ 已改成读常量 ✓。

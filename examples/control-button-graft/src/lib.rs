@@ -27,7 +27,7 @@ pub mod slider_fast;
 /// 外部实现自己的注册机（项目外注册）。
 /// The external implementation's own registry (out-of-project registration).
 pub fn external_registry() -> Registry {
-    let mut registry = Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"));
+    let mut registry = Registry::root_for_namespace(FRAMEWORK, NICHLINK_NAMESPACE);
     registry
         .register_all(&[
             button_fast::REGISTRATION,

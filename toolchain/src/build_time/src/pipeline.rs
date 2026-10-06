@@ -176,81 +176,116 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 记录的行**只产出一次**、发布两次：`pruning_manifest.tsv` 是它们的记录形态，而 `graph_edges.tsv`
     // 是同一批行按图来看的样子（审计 `M7`，P1.1）。把清单读回来建图等于把同一批五万行解析第二遍，而且会让
     // 两份文件对一个面产生分歧。
-    let mut pruning_rows = Vec::new();
-    match write_pruning_manifest(src, &nodes, out_dir) {
-        Ok(rows) => pruning_rows = rows,
-        Err(error) => write_errors.push(error),
-    }
-    // The declarations are the second half of the graph's raw material: a called name that exactly
-    // one file declares is a dependency on that file, and the graph carries that edge rather than
-    // making every reader re-derive it (audit `M7`, P1.1).
-    // 声明是图的另一半原料：一个恰好被一份文件声明的被调用名字，就是对那份文件的一处依赖，而图直接带上
-    // 那条边，而不是让每个读者重新推导（审计 `M7`，P1.1）。
-    let mut file_rows = Vec::new();
-    match write_file_manifest(src, &nodes, out_dir) {
-        Ok(rows) => file_rows = rows,
-        Err(error) => write_errors.push(error),
-    }
-    let mut graph = None;
-    for result in [
-        write_function_manifest(src, &nodes, out_dir),
-        write_source_scope_manifest(src, &nodes, &scope, out_dir),
-        write_shape_manifest(src, &nodes, out_dir),
-        write_graft_manifest(out_dir, &graft_entries.enabled),
-        write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
-    ] {
-        if let Err(error) = result {
-            write_errors.push(error);
+    // One writer per tree for the duration of the **payload set** (audit `M7`, P3.4-lock): each file
+    // below is atomic on its own, but the set is not, and two processes publishing one tree would let
+    // the later one win file by file. The lock is taken here rather than around the whole run because
+    // everything above is computation (discovery, parsing, rendering) — idempotent, and the expensive
+    // part — while what must not interleave is this write phase.
+    // 在**载荷集合**的整个期间一棵树只有一个写者（审计 `M7`，P3.4-lock）：下面每一份文件各自原子，但这一组
+    // 不是，而两个进程发布同一棵树会让后写者逐份取胜。锁在这里取、而不是包住整次运行，因为上面的全是计算
+    // （发现、解析、渲染）——幂等，而且是昂贵的部分——不许交错的是这段写入。
+    let publish_lock = match super::publish_lock::acquire(out_dir) {
+        Ok(lock) => Some(lock),
+        Err(refusal) => {
+            // A run that cannot take the tree's lock publishes **nothing**: half a generation beside
+            // another run's files is exactly the state the lock exists to prevent.
+            // 拿不到这棵树的锁的运行**什么都不发布**：半代产物躺在另一次运行的文件旁边，正是这把锁存在的
+            // 理由。
+            compile_errors.push(BuildDiagnostic::new("publish-lock", refusal));
+            None
         }
-    }
-    match write_graph_manifest(out_dir, &pruning_rows, &file_rows, &graft_entries.enabled) {
-        Ok(header) => graph = Some(header),
-        Err(error) => write_errors.push(error),
-    }
-    // The crate-shape declaration is a build input like any face: a shape that does not hold
-    // together fails the build here, before anything is published, and its lock is written the same
-    // way. A host without a declaration is not an error — it is the one-crate package every host was
-    // before this file existed.
-    // crate 形状声明与任何注册面一样是构建输入：不成立的形状在这里、在发布任何东西之前让构建失败，而它的锁
-    // 以同样的方式写下。没有声明的宿主不是错误——它就是这份文件存在之前每个宿主的样子：一个 crate 的包。
-    if compile_errors.is_empty()
-        && let Err(refusal) =
-            super::shape_decl::check_shape_declaration(&layout.package_root, out_dir, &pruning_rows)
+    };
+    if let Some(lock) = &publish_lock
+        && let Some(pid) = lock.stolen_from
+        && input.emit_cargo_directives
     {
-        compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+        println!(
+            "cargo:warning=removed a stale publish lock left by pid {pid} (that process is gone)"
+        );
     }
-    if compile_errors.is_empty() && write_errors.is_empty() {
-        if let Err(error) = write_if_changed(
-            &out_dir.join("discovery.fingerprint"),
-            &discovery_fingerprint,
-        ) {
-            write_errors.push(error);
+    if publish_lock.is_some() {
+        let mut pruning_rows = Vec::new();
+        match write_pruning_manifest(src, &nodes, out_dir) {
+            Ok(rows) => pruning_rows = rows,
+            Err(error) => write_errors.push(error),
         }
-        // The readiness record is the **last** thing a clean run writes (audit `M7`, P2.1): a reader
-        // that finds it knows this run finished, and one that does not knows the previous run (or
-        // none) is what is on disk. It is written after the fingerprint for the same reason the
-        // fingerprint is written last among the payloads.
-        // 就绪记录是干净的一次运行写的**最后**一样东西（审计 `M7`，P2.1）：找到它的读者知道这次运行完成了，
-        // 而找不到的读者知道磁盘上是上一次（或者没有）。它排在指纹之后，理由与指纹排在载荷之后相同。
-        if let Some(header) = &graph
-            && let Err(error) = write_generation(out_dir, &layout.package_root, header)
+        // The declarations are the second half of the graph's raw material: a called name that exactly
+        // one file declares is a dependency on that file, and the graph carries that edge rather than
+        // making every reader re-derive it (audit `M7`, P1.1).
+        // 声明是图的另一半原料：一个恰好被一份文件声明的被调用名字，就是对那份文件的一处依赖，而图直接带上
+        // 那条边，而不是让每个读者重新推导（审计 `M7`，P1.1）。
+        let mut file_rows = Vec::new();
+        match write_file_manifest(src, &nodes, out_dir) {
+            Ok(rows) => file_rows = rows,
+            Err(error) => write_errors.push(error),
+        }
+        let mut graph = None;
+        for result in [
+            write_function_manifest(src, &nodes, out_dir),
+            write_source_scope_manifest(src, &nodes, &scope, out_dir),
+            write_shape_manifest(src, &nodes, out_dir),
+            write_graft_manifest(out_dir, &graft_entries.enabled),
+            write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
+        ] {
+            if let Err(error) = result {
+                write_errors.push(error);
+            }
+        }
+        match write_graph_manifest(out_dir, &pruning_rows, &file_rows, &graft_entries.enabled) {
+            Ok(header) => graph = Some(header),
+            Err(error) => write_errors.push(error),
+        }
+        // The crate-shape declaration is a build input like any face: a shape that does not hold
+        // together fails the build here, before anything is published, and its lock is written the same
+        // way. A host without a declaration is not an error — it is the one-crate package every host was
+        // before this file existed.
+        // crate 形状声明与任何注册面一样是构建输入：不成立的形状在这里、在发布任何东西之前让构建失败，而它的锁
+        // 以同样的方式写下。没有声明的宿主不是错误——它就是这份文件存在之前每个宿主的样子：一个 crate 的包。
+        if compile_errors.is_empty()
+            && let Err(refusal) = super::shape_decl::check_shape_declaration(
+                &layout.package_root,
+                out_dir,
+                &pruning_rows,
+            )
         {
-            write_errors.push(error);
+            compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+        }
+        if compile_errors.is_empty() && write_errors.is_empty() {
+            if let Err(error) = write_if_changed(
+                &out_dir.join("discovery.fingerprint"),
+                &discovery_fingerprint,
+            ) {
+                write_errors.push(error);
+            }
+            // The readiness record is the **last** thing a clean run writes (audit `M7`, P2.1): a reader
+            // that finds it knows this run finished, and one that does not knows the previous run (or
+            // none) is what is on disk. It is written after the fingerprint for the same reason the
+            // fingerprint is written last among the payloads.
+            // 就绪记录是干净的一次运行写的**最后**一样东西（审计 `M7`，P2.1）：找到它的读者知道这次运行完成了，
+            // 而找不到的读者知道磁盘上是上一次（或者没有）。它排在指纹之后，理由与指纹排在载荷之后相同。
+            if let Some(header) = &graph
+                && let Err(error) = write_generation(out_dir, &layout.package_root, header)
+            {
+                write_errors.push(error);
+            }
+        } else {
+            // A token that cannot be removed still claims this output describes the
+            // current sources, so the failure is reported rather than discarded: the
+            // previous `let _ =` left exactly that claim standing.
+            // 删不掉的凭据仍然声称这份产物描述的是当前源码，因此这次失败被报出而不是被丢弃：过去的
+            // `let _ =` 恰恰让那句话继续成立。
+            match std::fs::remove_file(out_dir.join("discovery.fingerprint")) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => write_errors.push(format!(
+                    "cannot remove {}: {error}",
+                    out_dir.join("discovery.fingerprint").display()
+                )),
+            }
         }
     } else {
-        // A token that cannot be removed still claims this output describes the
-        // current sources, so the failure is reported rather than discarded: the
-        // previous `let _ =` left exactly that claim standing.
-        // 删不掉的凭据仍然声称这份产物描述的是当前源码，因此这次失败被报出而不是被丢弃：过去的
-        // `let _ =` 恰恰让那句话继续成立。
-        match std::fs::remove_file(out_dir.join("discovery.fingerprint")) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => write_errors.push(format!(
-                "cannot remove {}: {error}",
-                out_dir.join("discovery.fingerprint").display()
-            )),
-        }
+        // Nothing was published, and the diagnostic above says which lock to clear.
+        // 什么都没发布，上面那条诊断说明了该清哪把锁。
     }
     if !write_errors.is_empty() {
         let message = format!(
