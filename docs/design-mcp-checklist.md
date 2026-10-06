@@ -1284,17 +1284,17 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 | 项 | 目标 | 现状 | 具体改动 | 验收 |
 | --- | --- | --- | --- | --- |
-| **P1.1** | 图有产物 | 图信息散在 `pruning_manifest`（`parent_node`/`calls`/`logical_path`）、`file_manifest`、MIR 调用图 | 构建期在内存建图（节点＝面/文件，边＝`parent`/`call`/`uses`/`graft`），并发布 **`graph_edges.tsv`**：`from<TAB>to<TAB>kind`；头部带**节点/边计数 + 内容哈希** | 与 `pruning_manifest` 事实一致（钉子）；`registry --full` 逐字节不变 |
-| **P1.2** | 写路径异步刷新 | 无 | ① **我们的写路径**（`apply`/`new_project`/CLI `check`/Studio 保存）落盘后刷新；② **外部编辑**（编辑器/`cp`/`git`）不靠监听，靠 **stamp 差分**（廉价 walk）在查询时发现"落后" | 保存后终端出现成功行（P2.2）；外部编辑在**不**触发刷新的情况下被 P2.3 报出来 |
-| **P1.3** | MCP `graph` 读工具 | 无 | `graph {query, direction, depth}`：给节点/边/扇入扇出/**强连通分量**；输出有界（`withheld` 带出路）；**不做倒排索引**（§7 红线） | 承诺面（schema）与能力面对上；答案自报 generation 与出处 |
+| **P1.1** | 图有产物 | **完成**（`0417572`，见 §M7.12）：`graph.rs` 发布 **`graph_edges.tsv`**（头部 `# graph`/`# nodes`/`# edges`/`# digest` + `from<TAB>to<TAB>kind`）；五类边 `parent`/`in`/`calls-file`/`calls`/`graft`；**记录与图是同一次计算的两个视图**（写入方把行交回来，不重读清单） | 与记录一致（钉子 `graph::graph_tests::{the_graph_is_the_records_own_rows_seen_as_edges, a_name_two_files_declare_stays_a_name, the_header_counts_and_digest_vouch_for_the_body}`）；**原有八份产物逐字节不变** + 新增第九份（t3 实测 `diff` 为空、sha256 全等） |
+| **P1.2** | 写路径异步刷新 | **完成**（`b1069f8`，见 §M7.13）：`apply` 落盘后 `index::start` 在**后台**驱动 CLI `check` 与桥 `verify` 的**同一个入口**（一个根一次只跑一次）；一次性客户端 `settle(60s)` 等它做完；外部编辑**不靠监听**，靠**廉价戳差分** | 端到端实测：`--call apply …` 回复尾 `index behind … a refresh is running (0s)`，下一次 `--call graph` 已是 `graph updated: generation 2, 6 file(s), 4 face(s), 723f2f71…`；外部 `>>` 改一个源码文件后**不触发刷新**也报 `index behind: generation 1 covers 92ef0bd3…` ✓ |
+| **P1.3** | MCP `graph` 读工具 | **完成**（`b1069f8`，见 §M7.13）：`nichlink.graph`＝普查（节点/边/种类/最忙节点）· `node`+`direction`(out/in/both)+`depth`(1–3) 邻域 · `cycles: true`（**只在依赖边 `calls-file`/`graft` 上**跑的迭代 Kosaraju，答案明说结构边与未解析 `calls` 不算依赖）；节点按**记录自己的词汇**解析；输出有界（默认 20、上限 200，超出写 `N more withheld`） | 承诺面与能力面对上（`tools_tests` 的目录＝分派钉子 + `READ_KEYS` 点名它）；每份答案第一行就是索引行；**不做倒排索引**（§7 红线）✓ |
 
 #### P2 异步的信号对齐（维护者点名的机制）
 
 | 项 | 目标 | 具体改动 | 验收 |
 | --- | --- | --- | --- |
-| **P2.1** | generation + 就绪 | `graph.generation` 单行：`generation\tcontent_hash\tfiles\tfaces\tfinished_at`，**temp + rename** 原子写；**没有它 = 没就绪** | 钉子：截断/半写的 generation **必须被拒**（不猜） |
-| **P2.2** | 终端明确成功行 | 写路径结束打印：`graph updated: generation N, X file(s), Y face(s), <hash>`；MCP 回复里同形一行 | 文本被钉子钉住（形状是承诺） |
-| **P2.3** | 落后即报，不重试 | `search`/`registry`/`consistency`/`graph` 启动时比 generation 与当前 stamp；不一致 ⇒ 回复 `index behind: generation N covers <hash>; run nichlink check (or wait for the refresh)`；**绝不重试、绝不猜** | 钉子：落后时必须出现该行；**且不得**静默走旧图 |
+| **P2.1** | generation + 就绪 | **完成**（`b1069f8`，见 §M7.13）：`graph.generation` 由管线在干净运行里**最后**原子写（`write_if_changed` 本就是 temp+rename），字段 `generation`/`digest`/`faces`/`files`/`graph_nodes`/`graph_edges`/`stamp`/`finished_at`；**它在＝这次运行完成，它不在＝磁盘上是上一次（或没有）** | 钉子：`index_tests::{a_record_that_does_not_match_its_graph_is_refused, a_finished_run_publishes_a_record_that_says_ready, a_run_that_published_nothing_reads_as_absent}`（切掉一条边 ⇒ `Damaged` 并点名计数/摘要不符） |
+| **P2.2** | 终端明确成功行 | **完成**（`b1069f8`）：`index::line` **只有一种拼法**，CLI `check` 的**第二行**（第一行历史契约逐字节不变）/ 写入回复 / 图工具共用 ⇒ 同一个目录不会被说出两种说法 | 钉子 `cli::lib_tests::check_without_json_keeps_the_human_line`（第一行不变 + 第二行是索引行）；端到端 `nichlink check /tmp/cb` ⇒ `graph updated: generation 1, 5 file(s), 3 face(s), 92ef0bd3…` |
+| **P2.3** | 落后即报，不重试 | **完成**（`b1069f8`）：`graph` 与写入回复比 generation 的 `stamp` 与当前 `source_stamp`，不一致即首行 `index behind: generation N covers <digest>; the sources have changed since — run \`nichlink check\``（或 `a refresh is running (Ns)`）；**绝不重试、绝不猜**，边照旧读出来但在首行说清楚 | 钉子 `index_tests::an_edit_makes_the_index_behind_and_the_line_says_so`、`graph_tests::a_behind_index_is_answered_from_and_named`；端到端见 P1.2 行。**与计划的偏差已写进 §M7.13**：`search`/`registry`/`consistency` **不**加这句——它们的记录新鲜度是**逐字节**的（比戳差分更强）且已给出同一出路 |
 | **边界（必须写进文档）** | 新鲜度规则**不变** | generation 只服务**图这种加速器**；记录的**逐字节裁决**仍走 `freshness::verdict`，落后时按既有规则"回退推导"——两件事分开说 | 两条规则都各有钉子 |
 
 #### P3 crate 分区（"变形金刚"）
