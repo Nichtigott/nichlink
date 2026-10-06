@@ -262,9 +262,29 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         // 以同样的方式写下。没有声明的宿主不是错误——它就是这份文件存在之前每个宿主的样子：一个 crate 的包。
         if compile_errors.is_empty()
             && let Some(shape) = &shape
-            && let Err(refusal) = super::shape_decl::check_shape(shape, out_dir, &pruning_rows)
         {
-            compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+            // The declaration is validated first (does every claim name a subtree?), then planned
+            // (can every claimed subtree become a crate that compiles?). Refusing a declaration this
+            // build cannot turn into a working crate is the difference between a named refusal now
+            // and a subtree nobody compiles, which rustc reports later as `cannot find 'object' in
+            // 'control'` (audit `M7`, P3.2).
+            // 先校验声明（每条认领都点名了一棵子树吗？），再规划它（每条认领的子树都能变成一个编译得过的
+            // crate 吗？）。拒绝一份本次构建变不成可用 crate 的声明，就是"现在得到一句点名拒绝"与"留下一棵
+            // 没人编译的子树、以后由 rustc 报 `cannot find 'object' in 'control'`"之间的差别（审计 `M7`，P3.2）。
+            let refusal = super::shape_decl::check_shape(shape, out_dir, &pruning_rows)
+                .err()
+                .or_else(|| {
+                    super::crate_plan::plan(
+                        &layout.package_root,
+                        &super::registry_identity::package_namespace(),
+                        shape,
+                        &pruning_rows,
+                    )
+                    .err()
+                });
+            if let Some(refusal) = refusal {
+                compile_errors.push(BuildDiagnostic::new("add-crates", refusal));
+            }
         }
         if compile_errors.is_empty() && write_errors.is_empty() {
             if let Err(error) = write_if_changed(

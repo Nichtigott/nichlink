@@ -1808,3 +1808,28 @@ P3.3 把身份来源改成 crate 根常量，这道门禁是它不回退的保�
 | 直接 `cargo build` 那棵树 | **编译失败**，`cannot find 'object' in 'control'` ✓ —— 正是"第三刀"的理由：切口表与 `assert_static_registration` 仍渲染在宿主里（生成树第 120/151 行仍引用被切出的面）|
 
 ⇒ 这一刀只做"不重复编译"这一半；**把切口表搬到 facade** 是下一刀（否则宿主自己编译不过——这是一次**编译期拒绝**，不是静默的双注册 ✓，方向是对的）。
+
+### §M7.24 P3.2 第二刀（一半）：规划器 —— 幽灵 crate 会变成什么，先算清楚再写（2026-10-06）
+
+`build_time::crate_plan`：**纯规划器，什么都不写**。对声明里的每个 crate 给出：包名 `<package_prefix>-<name>` · 目录（宿主包的**同级**）· **宿主自己的命名空间**（幽灵必须定义它，P3.3 正是为它引入的常量）· 每条子树之下**每份面文件**一项挂载（`module_path` / 宿主相对 `source` / `#[path]` 拼写）· 以及 `--remap-path-prefix` 要用的前缀对。
+
+**拼写规则（可推导，不靠猜）**：`#[path]` 相对**内联模块所在目录**解析，而内联模块把自己的名字加进那个目录 ⇒ 深度 `d` 的挂载需要 `../`×`(d+1)` 走出内联目录、`src` 与幽灵包，再 `<host>/src/` 走进去 ⇒ 拼写恰好是 `<前缀><宿主相对源码>` ✓ ⇒ 把前缀映射为**空**，`file!()` 读起来就是宿主记录点名的那个拼写，身份因此逐字节不变（`b261fe0` 那道闸守着它）。
+
+**挂载修不了的那一件事**（诚实边界）：幽灵只有内联容器模块与被挂载的叶子，**它上面没有 `control.rs`** ⇒ 够到碎片之外的 `crate::<模块>` 引用解析不到 ⇒ **点名拒绝**（文件:行 + 那条路径 + 两条出路：把定义搬进碎片，或**分区一个更大的子树**——"crate 是一棵子树"，更大的子树是合法答案 ✓）。**宏路径不算**（`crate::control_object!` 是宏调用，别名会发射进每个 crate 自己的生成树 ⇒ 与宿主一样拥有 ✓）。
+
+**这一刀是载重的**：管线**先校验、再规划**（都在拿到 `pruning_rows` 之后）⇒ 一份本次构建变不成可用 crate 的声明**当场**得到可操作的拒绝。实测真宿主副本：
+
+```
+phase=add-crates
+add_crates: `widgets` would not compile: control/object/button/button.rs:4 reaches `crate::control::ControlHandle`,
+which lives outside the subtree(s) this crate claims (control::object) …
+way forward: partition a node that contains the definition (a crate is a subtree, so a larger subtree is a
+legal answer), or make the fragment self-contained by moving the item into it
+```
+（exit 1 ✓）——对比第一刀时"留下一棵没人编译的子树、由 rustc 报 `cannot find 'object' in 'control'`"，这是把失败提前到**能说清原因**的位置 ✓。
+
+**钉子 3 条**：自足碎片 ⇒ 一个 crate、一次挂载、一对映射（并断言拼写＝前缀＋源码这条**不变量**，以及精确拼写 `../../../../host/src/…`）· 向外引用 ⇒ 点名拒绝（含"不打印以 `::` 结尾的路径"）· **同一个 crate 的两棵子树之间可以互相引用** ⇒ 两次挂载、两个不同前缀 ✓。
+
+**顺带发现（本次不修，记录在案）**：`cli` 而**不开** `studio` 的组合下有构建告警（`studio/ui/graph/nodes.rs` 的 `unused variable: cache`）——没有门禁对这个组合跑 `-D warnings`（clippy 只跑默认与 all-features 两面，十面跑测器会构建 `toolchain+cli` 但**不因告警失败**）⇒ 一个小的门禁缺口。
+
+**还差**：幽灵的三份文件内容（`lib.rs` 定义常量 + `build.rs` 跑管线 + `Cargo.toml` 依赖 + 承载 remap 的 `.cargo/config.toml`）· 渲染侧的"**只**编译这个 crate 的子树"模式（第一刀的反面）· 第三刀 facade · 验收四条。

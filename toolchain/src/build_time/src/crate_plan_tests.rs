@@ -1,0 +1,217 @@
+//! Pins for planning a host's ghost crates: what gets mounted, and what is refused by name.
+//! 规划宿主幽灵 crate 的钉子：挂载什么，以及什么被点名拒绝（审计 `M7`，P3.2）。
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use super::{PlannedCrate, plan};
+use crate::build_time::shape_decl::read_shape_declaration;
+
+/// A throwaway host package: `src/` files as written below, plus a declaration.
+/// 一个一次性宿主包：下面写下的 `src/` 文件，外加一份声明。
+fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let parent = std::env::temp_dir().join(format!(
+        "nichlink-plan-{label}-{}-{sequence}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&parent);
+    let root = parent.join("host");
+    fs::create_dir_all(root.join("src")).expect("src");
+    for (relative, text) in files {
+        let path = root.join("src").join(relative);
+        fs::create_dir_all(path.parent().expect("a parent")).expect("face directory");
+        fs::write(&path, text).expect("face");
+    }
+    fs::write(root.join("add_crates.rs"), declaration).expect("the declaration");
+    root
+}
+
+/// Plan the declaration the host wrote, through the real rows.
+/// 用真实的行规划宿主写下的声明。
+fn plan_host(root: &Path) -> Result<Vec<PlannedCrate>, String> {
+    let src = root.join("src");
+    let out = root.join("out");
+    fs::create_dir_all(&out).expect("out");
+    let declaration = read_shape_declaration(root)
+        .expect("it reads")
+        .expect("it declares a shape");
+    let nodes = crate::build_time::source_walk::discover_root(&src);
+    let rows = crate::build_time::manifests::write_pruning_manifest(&src, &nodes, &out)
+        .expect("the record writes");
+    plan(root, "myapp", &declaration, &rows)
+}
+
+/// A declaration for one crate claiming `control::object`.
+/// 一份声明：一个 crate 认领 `control::object`。
+const DECLARATION: &str = r#"use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "myapp",
+    crates: &[Crate::named("widgets").at(&[crate::control::object::SUBTREE])],
+};
+"#;
+
+/// A self-contained fragment plans into one crate, one mount, and the remap that keeps `file!()`
+/// reading as the host's own source spelling.
+/// 一个自足的碎片规划成一个 crate、一次挂载，以及让 `file!()` 读起来就是宿主源码拼写的那对映射。
+#[test]
+fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
+    let root = host(
+        "self-contained",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "crate::control_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let planned = plan_host(&root).expect("the fragment is self-contained");
+    assert_eq!(planned.len(), 1, "one declared crate");
+    let widgets = &planned[0];
+    assert_eq!(widgets.name, "widgets");
+    assert_eq!(widgets.package, "myapp-widgets");
+    assert_eq!(
+        widgets.directory,
+        root.parent().expect("a parent").join("myapp-widgets"),
+        "the ghost is the host's sibling"
+    );
+    assert_eq!(
+        widgets.namespace, "myapp",
+        "the ghost declares the host's namespace"
+    );
+    assert_eq!(
+        widgets.mounts.len(),
+        1,
+        "only the faces below the claimed subtree: {:?}",
+        widgets.mounts
+    );
+    let mount = &widgets.mounts[0];
+    assert_eq!(mount.module_path, "control::object::button");
+    assert_eq!(mount.source, "control/object/button/button.rs");
+
+    // The invariant that makes the remap derivable rather than guessed: the spelling is exactly the
+    // prefix plus the host-relative source, so remapping the prefix to nothing leaves `file!()`
+    // reading as the source the host's records name.
+    // 让映射**可推导**而不是靠猜的那条不变量：拼写恰好是前缀加宿主相对源码，因此把前缀映射为空之后，
+    // `file!()` 读起来就是宿主记录点名的那个源码。
+    assert_eq!(widgets.remap.len(), 1, "{:?}", widgets.remap);
+    let (from, to) = &widgets.remap[0];
+    assert_eq!(to, "", "the prefix maps to nothing");
+    assert_eq!(
+        mount.spelling,
+        format!("{from}{}", mount.source),
+        "the spelling is the prefix plus the source"
+    );
+    assert_eq!(
+        mount.spelling, "../../../../host/src/control/object/button/button.rs",
+        "four levels out: the inline directories, src, and the ghost package"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// A face that reaches outside the fragment is refused **by name**, with the line, the reason and the
+/// two ways forward — because a ghost mounts only the fragment and has no module above it.
+/// 够到碎片之外的引用会被**点名**拒绝，带上行号、原因与两条出路——因为幽灵只挂载碎片，它上面没有模块。
+#[test]
+fn a_face_reaching_outside_the_fragment_is_refused_by_name() {
+    let root = host(
+        "reaching-out",
+        &[
+            (
+                "control/control.rs",
+                "pub trait ControlHandle {}\n\ncrate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "use crate::control::ControlHandle;\n\ncrate::control_object! {\n    kind: Button,\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let refused = plan_host(&root).expect_err("refused");
+    assert!(
+        refused.contains("control/object/button/button.rs:1"),
+        "the refusal names the file and line: {refused}"
+    );
+    assert!(
+        refused.contains("`crate::control::ControlHandle`"),
+        "and the whole path that would not resolve: {refused}"
+    );
+    assert!(
+        !refused.contains("::`,"),
+        "no path is printed with a dangling `::`: {refused}"
+    );
+    assert!(
+        refused.contains("way forward") && refused.contains("larger subtree"),
+        "and the two ways forward: {refused}"
+    );
+    // A reference the ghost *can* resolve — its own subtree, or the constant the macros read — is not
+    // a refusal, which the self-contained pin above shows from the other side.
+    // 幽灵**解析得到**的引用——它自己的子树，或宏读的那个常量——不是拒绝的理由；上面那条自足的钉子从另一侧
+    // 展示了这一点。
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// Two subtrees of **one** crate may reference each other: both are mounted, so both resolve.
+/// **同一个** crate 的两棵子树之间可以互相引用：两棵都被挂载，因此都解析得到。
+#[test]
+fn two_subtrees_of_one_crate_may_reference_each_other() {
+    let root = host(
+        "siblings",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "crate::control_object! {\n    kind: Button,\n    parent: crate::panel::NODE_ID,\n}\n",
+            ),
+            (
+                "panel/panel.rs",
+                "crate::root_object! {\n    kind: Panel,\n}\n",
+            ),
+            (
+                "panel/gauge/gauge.rs",
+                "crate::control_object! {\n    kind: Gauge,\n}\n",
+            ),
+        ],
+        r#"use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "myapp",
+    crates: &[Crate::named("widgets").at(&[
+        crate::control::object::SUBTREE,
+        crate::panel::SUBTREE,
+    ])],
+};
+"#,
+    );
+    let planned = plan_host(&root).expect("a reference between two claimed subtrees resolves");
+    assert_eq!(planned.len(), 1);
+    assert_eq!(
+        planned[0].mounts.len(),
+        2,
+        "both subtrees are mounted: {:?}",
+        planned[0].mounts
+    );
+    // Two inline depths ⇒ two distinct prefixes, each mapping to nothing.
+    // 两个不同的内联深度 ⇒ 两个不同的前缀，各自映射为空。
+    assert_eq!(planned[0].remap.len(), 2, "{:?}", planned[0].remap);
+    assert!(
+        planned[0]
+            .remap
+            .iter()
+            .all(|(from, to)| from.ends_with("host/src/") && to.is_empty()),
+        "every remap walks out of the ghost into the host's src: {:?}",
+        planned[0].remap
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}

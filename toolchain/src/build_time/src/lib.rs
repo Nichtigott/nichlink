@@ -24,6 +24,9 @@ use std::path::Path;
 mod build_input;
 #[path = "contracts.rs"]
 mod contracts;
+
+#[path = "crate_plan.rs"]
+pub(crate) mod crate_plan;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "discovery_cache.rs"]
