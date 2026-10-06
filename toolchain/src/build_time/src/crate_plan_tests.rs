@@ -463,3 +463,80 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
     );
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }
+
+/// The spelling is a **walk between two paths**, not "sibling plus depth": a ghost the author puts
+/// somewhere else walks out of its own nesting, through the shared ancestors, and in through the
+/// host's path — and the invariant that makes the remap derivable holds there too.
+/// 拼写是**两个路径之间的一段路**，而不是"同级 + 深度"：作者把幽灵放在别处时，它要走出自己的嵌套、穿过共同的
+/// 祖先、再顺着宿主的路径走进去——而让映射可推导的那条不变量在那里同样成立。
+#[test]
+fn a_ghost_placed_elsewhere_still_spells_a_walk_to_the_host() {
+    let root = host(
+        "elsewhere",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "crate::control_object! {\n    kind: Button,\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let planned = plan_host(&root).expect("the fragment is self-contained");
+    let sibling = &planned[0];
+    // The same plan, computed for a ghost nested two levels deeper: the walk grows by two `../` and
+    // names the directories it crosses.
+    // 同一份规划，但幽灵嵌深两层：那段路多出两个 `../`，并点名它穿过的目录。
+    let deeper_dir = root
+        .parent()
+        .expect("a parent")
+        .join("nested/deep")
+        .join(&sibling.package);
+    let host_dir = root.canonicalize().expect("the host canonicalizes");
+    let deeper = crate_plan_spelling(
+        &host_dir,
+        &deeper_dir,
+        "control/object/button/button.rs",
+        "control::object::button",
+    );
+    // Going **up** does not name the directories it passes: the deeper placement simply needs two
+    // more `../` before it turns into the host's path.
+    // **向上走**不会点名它经过的目录：嵌得更深只意味着在拐进宿主路径之前多两个 `../`。
+    assert_eq!(
+        deeper.matches("../").count(),
+        sibling
+            .mounts
+            .iter()
+            .map(|mount| mount.spelling.matches("../").count())
+            .max()
+            .unwrap_or(0)
+            + 2,
+        "two levels deeper, two more `../`: {deeper}"
+    );
+    assert!(
+        deeper.ends_with("host/src/control/object/button/button.rs"),
+        "and it ends at the host's own source: {deeper}"
+    );
+    let (from, to) = super::remap_for(&deeper, "control/object/button/button.rs");
+    assert_eq!(to, "", "the prefix maps to nothing");
+    assert_eq!(
+        format!("{from}control/object/button/button.rs"),
+        deeper,
+        "the invariant: the spelling is the prefix plus the source"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// The planner's spelling rule, reached the way the module reaches it.
+/// 规划器的拼写规则，按模块自己的方式到达它。
+fn crate_plan_spelling(
+    host_dir: &Path,
+    ghost_dir: &Path,
+    source: &str,
+    module_path: &str,
+) -> String {
+    super::spelling_for(host_dir, ghost_dir, source, module_path)
+}

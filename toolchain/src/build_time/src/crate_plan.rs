@@ -295,16 +295,6 @@ pub(crate) fn plan(
     declaration: &ShapeDeclaration,
     faces: &[(String, String, NodeId)],
 ) -> Result<Vec<PlannedCrate>, String> {
-    let host = package_root
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| {
-            format!(
-                "add_crates: the package root {} has no directory name to build a sibling crate from",
-                package_root.display()
-            )
-        })?
-        .to_owned();
     let parent = package_root.parent().unwrap_or(package_root);
     let mut planned = Vec::new();
     for (name, subtrees) in &declaration.crates {
@@ -323,7 +313,7 @@ pub(crate) fn plan(
                 *module == *subtree || module.starts_with(&format!("{subtree}::"))
             }) {
                 mounts.push(PlannedMount {
-                    spelling: spelling_for(&host, source, module_path),
+                    spelling: spelling_for(package_root, &directory, source, module_path),
                     module_path: module_path.clone(),
                     source: source.clone(),
                 });
@@ -368,7 +358,7 @@ pub(crate) fn plan(
         }
         let mut remap: Vec<(String, String)> = mounts
             .iter()
-            .map(|mount| remap_for(&host, &mount.module_path))
+            .map(|mount| remap_for(&mount.spelling, &mount.source))
             .collect();
         remap.sort();
         remap.dedup();
@@ -398,37 +388,62 @@ pub(crate) fn plan(
 /// 一份被挂载的面文件所需的 `#[path]` 拼写，以及要映射掉的前缀。
 ///
 /// `#[path]` resolves relative to the **directory the inline module stands in**, and an inline module
-/// adds its own name to that directory — so a mount for `control::object::button` sits in
-/// `<ghost>/src/control/object/`, and the spelling walks back out of `src`, out of the ghost package,
-/// and into the host's `src`. Written that way the spelling is exactly `<prefix><host-relative
-/// source>`, which is what makes the remap pair *derivable* instead of guessed: remapping `<prefix>`
-/// to nothing leaves `file!()` reading as `control/object/button/button.rs` — the very spelling the
-/// host's records name, and therefore the same identity (audit `M7`, P3.2/§M7.15).
-/// `#[path]` 相对**内联模块所在目录**解析，而内联模块会把自己的名字加进那个目录——因此
-/// `control::object::button` 的挂载位于 `<ghost>/src/control/object/`，而拼写要走出 `src`、走出幽灵包、走进
-/// 宿主的 `src`。这样写出来，拼写恰好是 `<前缀><宿主相对源码>`，这正是让映射对**可推导**而不是靠猜的原因：
-/// 把 `<前缀>` 映射为空，`file!()` 读起来就是 `control/object/button/button.rs`——宿主记录点名的那个拼写，
-/// 因此也是同一个身份（审计 `M7`，P3.2/§M7.15）。
-fn spelling_for(host: &str, source: &str, module_path: &str) -> String {
-    let prefix = prefix_for(host, module_path);
-    format!("{prefix}{source}")
+/// adds its own name to that directory — so a mount for `a::b::c` sits in
+/// `<ghost>/src/a/b/`, and the spelling is the walk from there to the host's file. Computed as a real
+/// relative walk between two paths rather than as "sibling plus depth", because the ghost's location
+/// is the author's choice (`--at`) and the facade needs the same arithmetic: the only thing that must
+/// hold is that `file!()` ends up reading as the host-relative source, which is what makes the remap
+/// pair derivable instead of guessed (audit `M7`, P3.2/§M7.15).
+/// `#[path]` 相对**内联模块所在目录**解析，而内联模块会把自己的名字加进那个目录——因此 `a::b::c` 的挂载
+/// 位于 `<ghost>/src/a/b/`，而拼写就是从那里走到宿主文件的那段路。它按**两个路径之间的真实相对走法**算，
+/// 而不是按"同级 + 深度"：幽灵的位置是作者的選擇（`--at`），而 facade 需要同一套算术；唯一必须成立的是
+/// `file!()` 最终读起来就是宿主相对源码，那正是让映射对**可推导**而不是靠猜的东西（审计 `M7`，P3.2/§M7.15）。
+fn spelling_for(host_dir: &Path, ghost_dir: &Path, source: &str, module_path: &str) -> String {
+    let inline = inline_directory(ghost_dir, module_path);
+    let target = host_dir.join("src").join(source);
+    relative_walk(&inline, &target).unwrap_or_else(|| source.to_owned())
 }
 
-/// The walk-out prefix one mount needs, given how deep its inline module sits.
-/// 一次挂载所需的"走出去"前缀，取决于它的内联模块有多深。
-///
-/// `depth` `../` leave the inline directories and `src`, one more leaves the ghost package, and the
-/// host package name walks back in.
-/// `depth` 个 `../` 走出内联目录与 `src`，再多一个走出幽灵包，然后由宿主包名走回去。
-fn prefix_for(host: &str, module_path: &str) -> String {
-    let depth = module_path.split("::").count();
-    format!("{}{host}/src/", "../".repeat(depth + 1))
+/// The directory a mounted face's `#[path]` is resolved from: the ghost's `src`, plus one segment per
+/// **container** module above the face.
+/// 被挂载面的 `#[path]` 所依据的目录：幽灵的 `src`，加上该面之上每个**容器**模块一段。
+fn inline_directory(ghost_dir: &Path, module_path: &str) -> PathBuf {
+    let mut directory = ghost_dir.join("src");
+    if let Some((container, _)) = module_path.rsplit_once("::") {
+        for segment in container.split("::") {
+            directory = directory.join(segment);
+        }
+    }
+    directory
 }
 
-/// The pair `--remap-path-prefix` receives: the walk-out prefix, mapped to nothing.
-/// `--remap-path-prefix` 收到的那一对：走出去的前缀，映射为空。
-fn remap_for(host: &str, module_path: &str) -> (String, String) {
-    (prefix_for(host, module_path), String::new())
+/// The walk from one directory to one file, both absolute, as a `/`-separated relative path.
+/// 从一个目录走到一个文件的相对路径（两者都是绝对路径），用 `/` 分隔。
+fn relative_walk(from_dir: &Path, to_file: &Path) -> Option<String> {
+    let from: Vec<_> = from_dir.components().collect();
+    let to: Vec<_> = to_file.components().collect();
+    let common = from
+        .iter()
+        .zip(&to)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let mut walk: Vec<String> = Vec::new();
+    for _ in common..from.len() {
+        walk.push("..".to_owned());
+    }
+    for component in &to[common..] {
+        walk.push(component.as_os_str().to_string_lossy().into_owned());
+    }
+    (!walk.is_empty()).then(|| walk.join("/"))
+}
+
+/// The pair `--remap-path-prefix` receives: the spelling minus the source itself, mapped to nothing.
+/// `--remap-path-prefix` 收到的那一对：拼写里去掉源码本身的那部分，映射为空。
+fn remap_for(spelling: &str, source: &str) -> (String, String) {
+    match spelling.strip_suffix(source) {
+        Some(prefix) => (prefix.to_owned(), String::new()),
+        None => (spelling.to_owned(), String::new()),
+    }
 }
 
 /// Refuse a face that reaches **outside** the fragment: the ghost has no `control.rs` above it, so
