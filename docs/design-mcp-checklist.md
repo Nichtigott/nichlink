@@ -1782,3 +1782,13 @@ NICH_LINK_NAMESPACE=nsrace and ask again
 P3.3 把身份来源改成 crate 根常量，这道门禁是它不回退的保障（`conventions::namespace_source`）。**只判**：某个 crate `src/` 树里**调用声明宏**的**代码行**。**不判**（各有理由）：`tests/` 下的路径与 `<name>_tests.rs`（集成测试与仅检出可用的夹具是给自己常量下定义的测试 crate；解析器的字符串夹具根本不编译）· 注释与文档行（文档可以、也必须谈论旧拼法）· 不是调用的拼法（字符串里或数组里的名字）。**唯一允许的例外**：**定义常量本身**那一行。
 
 **它当场抓到一处我 sweep 漏掉的真命中**：`examples/control-button-graft/src/lib.rs` 的 `external_registry()` 仍写 `Registry::root_for_namespace(FRAMEWORK, env!("CARGO_PKG_NAME"))`（我先前只替换了 `root_node_id(env!(…))` 那种形状）⇒ 已改成读常量 ✓。
+
+### §M7.22 P3.2 起点（已勘察，下一步就动这几处）
+
+**第一刀（自包含、可判定）：宿主生成树必须**跳过**已被切出的子树** —— 否则同一批面在两个 crate 里各编译一遍，正是分区要避免的事。已勘察的落点：
+- `shape_decl::check_shape_declaration(package_root, out_dir, rows) -> Result<(), String>` 已经**解析出**声明（`declaration.crates: Vec<(name, subtrees)>`，子树的拼法是 `control::object` 这样的模块路径），但只用于校验与写 `add-crates.lock` ⇒ 让它把声明**交出去**（或由管线读一次传下去）。
+- `renderer::pass::render(…)` 里 `let ide_shadows = render_nodes(&mut output, src, scope, nodes);` ⇒ `render_nodes` 增加一个"被切出的模块路径前缀集合"，命中即**不发射**该内联模块（及其整棵子树）。
+- 语义边界（重要）：**记录不变、只有生成树变** —— `pruning_manifest.tsv` 仍列出全部面（它们是这棵树的面），变的是**这个 crate 编译哪些**；因此"切口两端身份逐字节相同"的验收成立。
+**第二刀**：生成幽灵 crate（`<package_prefix>-<name>/`，`src/lib.rs` 用 `#[path = "../../<host>/src/…"]` 挂载宿主面文件，且**显式定义** `pub const NICHLINK_NAMESPACE: &str = "<宿主的命名空间>";` ⇒ P3.3 正是为它做的）＋路径 remap（`--remap-path-prefix`）保证 `file!()` 逐字节回到宿主相对路径 ⇒ 身份不变（`b261fe0` 那道闸会在拼错时当场红）。
+**第三刀**：facade crate —— 它同时依赖宿主、所有幽灵 crate 与实现 crate，**切口表与两条 `assert_contract` 渲染进它**（分区后被切的面在宿主里解析不到 ⇒ 只有 facade 两端都可见）。
+**验收（维护者定的四条）**：同一份含 graft 的宿主，在不分区与分区两形状下：入口 `src/lib.rs` **逐字节相同**（唯一新增是 `add_crates.rs`）· `graft_plan.tsv` 的 `(cut, graft, full)` **逐字节相同** · 切口两端 id **逐字节相同** · `promote` 在分区形状下**仍能落地**。
