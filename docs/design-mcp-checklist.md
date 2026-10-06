@@ -1870,3 +1870,9 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **② 认领根面归碎片**（**这一刀自己抓到的第三个真 bug**）：过滤条件只认 `module.starts_with("<claim>::")` ⇒ **认领节点自己的面文件既没被挂载、也没被扫描** ✗✗ ⇒ 碎片的**根面没人编译**，而它对外引用**逃过了可达性检查** ✗。修法：`module == claim || module.starts_with("<claim>::")` ✓（宿主把整个模块交出去——它的渲染正是跳过该模块及其下的一切 ✓ ⇒ 根面必须归幽灵 ✓）。两个既有钉子因此要从 2 个挂载/2 个前缀改成 3 个（每个认领**含它自己的根面**、每个内联深度一个前缀 ✓），断言也跟着写清理由 ✓。
 
 ⇒ 三个真 bug 全部由"把功能一路做到端到端"暴露（`cut_out` 与 `only` 冲突 · 祖先身份缺失 · 认领根面漏掉），**没有一个是钉子先看见的**——钉子证明的是"我实现的这条规则在我想到的输入上成立"。
+
+### §M7.28 幽灵的三份文件 + 工作区根的 remap 补丁；动词门禁改成读掩码（2026-10-06）
+
+**四份产物**（规划器产出字节，仍然什么都不写）：`lib_rs` = 宿主的 `NICHLINK_NAMESPACE` 常量 + `include!(OUT_DIR/generated_lib.rs)` · `build_rs` = `run_for(宿主 Cargo.toml, OUT_DIR, 宿主命名空间)` + 两条 `rerun-if-changed` + `NICHLINK_SHAPE_ONLY=<认领>`（`unsafe { set_var }`，构建脚本此刻单线程）· `cargo_toml` = 宿主的 `[dependencies]`/`[build-dependencies]` **逐字照抄** + `publish = false` · `config_patch` = 需要**合并**进**工作区根** `.cargo/config.toml` 的 `--remap-path-prefix=<前缀>=` 条目（rustflag 是每次调用的、cargo 从当前目录找 config ⇒ 放包里只在从那个目录跑 cargo 时生效）。钉子 1 条覆盖四份产物（含"逐字照抄的依赖"与"remap 条目逐条拼出"）。
+
+**门禁纠了我一处真违规**，而且纠得对：动词门禁把我生成串里的 `fn main` 当成裸动词声明 ✗ —— 根因是它扫**原文**而没屏蔽字符串字面量 ✗。仓库早就有唯一词法规则 `nichlink_kernel::source::mask_non_code`（`size` 门禁就用它 ✓）⇒ 修法是**让动词门禁也读掩码**（一处改动 + 新钉子：字面量里的声明不算、同一句作为代码仍算 ✓）。这是"门禁必须建模自己的文本"那条教训的第二次现身（第一次是新写的 `namespace_source` 门禁抓到自己 ✗）。

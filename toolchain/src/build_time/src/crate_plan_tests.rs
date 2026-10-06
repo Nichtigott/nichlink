@@ -25,6 +25,16 @@ fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
         fs::write(&path, text).expect("face");
     }
     fs::write(root.join("add_crates.rs"), declaration).expect("the declaration");
+    // The ghost's manifest is built from the host's, so the fixture needs one — and its dependency
+    // section is what the copy has to carry verbatim.
+    // 幽灵的清单由宿主的清单生成，因此夹具需要一份——而它的依赖节正是照抄要带走的东西。
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"host\"\nversion = \"9.9.9\"\nedition = \"2024\"\n\n\
+         [dependencies]\nnichlink-toolchain = { path = \"../toolchain\", features = [\"run\"] }\n\n\
+         [build-dependencies]\nnichlink-toolchain = { path = \"../toolchain\" }\n",
+    )
+    .expect("the host manifest");
     root
 }
 
@@ -354,6 +364,102 @@ pub const SHAPE: Shape = Shape {
     assert!(
         refused.contains("crate::panel::ControlHandle") && refused.contains("way forward"),
         "the refusal names the path and the way forward: {refused}"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// The three files a ghost is made of, and the config the workspace root has to carry.
+/// 幽灵由哪三份文件组成，以及工作区根必须携带的那份配置。
+#[test]
+fn a_ghost_is_three_files_and_one_workspace_config() {
+    let root = host(
+        "artifacts",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "crate::control_object! {\n    kind: Button,\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let planned = plan_host(&root).expect("the fragment is self-contained");
+    let widgets = &planned[0];
+
+    // lib.rs: the host's namespace, and nothing else but the include of its own generated tree.
+    // lib.rs：宿主的命名空间，除自己那棵生成树的 include 之外没有别的。
+    assert!(
+        widgets
+            .lib_rs
+            .contains("pub const NICHLINK_NAMESPACE: &str = \"myapp\";"),
+        "the ghost declares the host's namespace: {}",
+        widgets.lib_rs
+    );
+    assert!(
+        widgets
+            .lib_rs
+            .contains("include!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));"),
+        "and includes its own generated tree: {}",
+        widgets.lib_rs
+    );
+
+    // build.rs: the host's manifest, the host's namespace, and the fragment as the render mode.
+    // build.rs：宿主的清单、宿主的命名空间，以及作为渲染模式的碎片。
+    assert!(
+        widgets
+            .build_rs
+            .contains(&format!("{}/Cargo.toml", root.display()))
+            && widgets
+                .build_rs
+                .contains("nichlink_toolchain::build_time::run_for"),
+        "the ghost builds the host's manifest: {}",
+        widgets.build_rs
+    );
+    assert!(
+        widgets
+            .build_rs
+            .contains("NICH_LINK_SHAPE_ONLY\", \"control::object\""),
+        "and asks for the fragment only: {}",
+        widgets.build_rs
+    );
+    assert!(
+        widgets.build_rs.contains("\"myapp\""),
+        "with the host's namespace: {}",
+        widgets.build_rs
+    );
+
+    // Cargo.toml: the host's dependencies verbatim, and no publishing.
+    // Cargo.toml：宿主的依赖逐字照抄，且不发布。
+    assert!(
+        widgets
+            .cargo_toml
+            .contains("nichlink-toolchain = { path = \"../toolchain\", features = [\"run\"] }"),
+        "the dependencies are the host's: {}",
+        widgets.cargo_toml
+    );
+    assert!(
+        widgets.cargo_toml.contains("[build-dependencies]")
+            && widgets.cargo_toml.contains("publish = false"),
+        "build-dependencies too, and no publishing: {}",
+        widgets.cargo_toml
+    );
+
+    // The config patch: every remap prefix, and the reason it is the workspace root's file.
+    // config 补丁：每一个 remap 前缀，以及它为何属于工作区根那份文件。
+    assert!(
+        widgets
+            .config_patch
+            .contains("--remap-path-prefix=../../../../host/src/="),
+        "the remap entries are spelled out: {}",
+        widgets.config_patch
+    );
+    assert!(
+        widgets.config_patch.contains("workspace root"),
+        "and say where they belong: {}",
+        widgets.config_patch
     );
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }

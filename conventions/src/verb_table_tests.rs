@@ -94,3 +94,25 @@ fn the_shipped_workspace_verb_table_holds() {
         found.len()
     );
 }
+
+/// A string literal that spells a declaration is **data**: a generator writing a `build.rs` emits
+/// `fn main` inside a literal, and the gate has to read the workspace's one lexical rule rather than
+/// the raw text (audit `M7`, P3.2).
+/// 恰好拼出声明的字符串字面量是**数据**：一个生成 `build.rs` 的生成器会在字面量里发出 `fn main`，而门禁必须
+/// 读本工作区唯一的词法规则而不是原文（审计 `M7`，P3.2）。
+#[test]
+fn a_declaration_inside_a_string_literal_is_not_a_declaration() {
+    let source =
+        "fn ghost_build_rs() -> String {\n    format!(\"fn main() {{\\n    work();\\n}}\\n\")\n}\n";
+    let violations = violations_in("toolchain/src/build_time/src/generator.rs", source);
+    assert!(
+        violations.is_empty(),
+        "a literal is not a declaration: {violations:?}"
+    );
+    // The control: the same declaration **as code** is still judged, so the masking did not simply
+    // stop the gate from working.
+    // 对照：同一句声明**作为代码**仍然被判定，因此掩码没有把门禁变成不干活。
+    let real = "fn main() {\n    work();\n}\n";
+    let violations = violations_in("toolchain/src/build_time/src/generator.rs", real);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+}
