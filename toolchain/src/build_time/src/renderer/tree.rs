@@ -60,6 +60,15 @@ pub(crate) struct ShapeRender<'a> {
     /// "走出自己的包、走进宿主 `src`"的拼写，而那个拼写是 `crate_plan` 算出来的——因为 `file!()` 报告的就是
     /// 它，而身份是 `hash(命名空间, 源码路径, 名字)`，**拼写就是身份**。
     pub(crate) mounts: &'a [(String, String)],
+    /// Whether this run renders the **facade**: the cross-crate half only (no modules, no faces).
+    /// 本次运行是否渲染 **facade**：只渲染跨 crate 那一半（不发模块、不发面）。
+    pub(crate) facade: bool,
+    /// `(module path, crate name)` for every module in the tree: the crate that compiles it. In facade
+    /// mode every `crate::<module>` becomes `<owner>::<module>`, because `crate::` there means the
+    /// facade itself (audit `M7`, §M7.33).
+    /// `(模块路径, crate 名)` 对，覆盖树里每个模块：编译它的那个 crate。facade 模式里每个
+    /// `crate::<模块>` 都变成 `<owner>::<模块>`，因为那里的 `crate::` 指的是 facade 自己（审计 `M7`，§M7.33）。
+    pub(crate) owners: &'a [(String, String)],
     /// `(module path, identity bytes)` for the faces a ghost's shell modules stand for.
     ///
     /// A fragment's `parent: crate::<ancestor>::NODE_ID` has to resolve in a crate that does not
@@ -81,6 +90,8 @@ impl<'a> ShapeRender<'a> {
             only: None,
             mounts: &[],
             ancestors: &[],
+            facade: false,
+            owners: &[],
         }
     }
 }
@@ -107,6 +118,13 @@ fn render_node(
     // which is what "the same face is not compiled twice" means (audit `M7`, P3.2).
     // 另一个 crate 拥有的子树不在这里渲染——而直接返回会连整棵子树一起跳过，这正是"同一个面不编译两遍"的
     // 含义（审计 `M7`，P3.2）。
+    if pass.shape.facade {
+        // A facade compiles no faces: no module is rendered into it at all. What it carries is the
+        // cross-crate half, which `pass.rs` emits after this walk.
+        // facade 不编译任何面：一个模块都不渲染进它。它携带的是跨 crate 那一半，由 `pass.rs` 在这次遍历之后
+        // 发射。
+        return;
+    }
     if pass.shape.cut_out.iter().any(|cut| cut == module_path) {
         return;
     }

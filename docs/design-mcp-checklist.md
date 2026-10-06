@@ -1928,3 +1928,15 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **验收（维护者四条 + 新增第五条）**：入口 `src/lib.rs` 逐字节相同 · `graft_plan.tsv` 的 `(cut, graft, full)` 逐字节相同 · 切口两端 id 逐字节相同 · `promote` 在分区形状下仍能落地 · **⑤ 分区后的树真的编译得过**（今天不能，实测见本段开头 ✓：这正是 facade 存在的理由）。
 
 **实现顺序**（下一轮照此做，不重排）：① 规划器加"属主映射 + facade 三份产物"（并给钉子）→ ② 渲染侧加 `facade` 模式与改写（钉子：一条切口两端被改成两个包、字符串写法不动、没有 `#[path]`、没有身份断言）→ ③ `write_partition` 连 facade 一起写（CLI 的 `--check/--write/--revert` 一并覆盖）→ ④ 端到端：真宿主两形状各 `cargo build` 一次 + 四条逐字节比对。
+
+### §M7.34 第三刀 facade 的渲染侧落地（2026-10-06）
+
+按 §M7.33 的规格做了**第②步**（也是这一刀最难的一半）：`NICH_LINK_SHAPE_FACADE=1` 驱动一个新渲染模式。**它做什么**：`render_nodes` 一个模块都不发（facade 不编译任何面 ✓）、别名与 IDE 影子一并跳过 ✓、`assert_static_identity` 全部跳过（那条断言属于**编译该面**的 crate ✓）；保留注册机再导出、`BUILTIN_STATIC_FACES`、切口表与契约断言 ✓。**改写**：新增 `renderer::owners`（`owned()` 一条规则）——facade 里**每个** `crate::<模块>` 与裸模块路径都改写成 `<属主>::<模块>`，属主来自规划（认领、它的根面、它的祖先壳都归那个幽灵；其余归宿主，**包括宿主自己的面**，因为 facade 里的 `crate::` 指的是 facade 自己 ✓）；外部实现 crate 原样通过 ✓；非 facade 模式**逐字节不变** ✓。属主表由管线从 `planned` + 面清单构出（`BTreeMap` 让幽灵覆盖宿主的同名项 ✓）。
+
+**端到端（真夹具 `/tmp/fix`）**：facade 模式下 `pub mod`/`#[path]` **0** 处 ✓、`assert_static_identity` **0** 处 ✓、跨 crate 部分保留 ✓、三行注册断言全部改写成 `fix_widgets::…` ✓（回退分支 `::nichlink_toolchain::…` 未被动 ✓）。
+
+**这一刀又抓到一个真 bug（第 7 个）**：`assert_static_registration` 有**两个**参数都点名模块（父级注册规则 + 被断言的面），我第一版只改写了第二个 ✗ ⇒ 端到端跑出一行裸的 `panel::REGISTRATION.registry_rule` 站在一个不编译 `panel` 的 crate 里 ✓。修完三行全对 ✓。
+
+**顺带踩到尺寸棘轮**：`pass.rs` 加到 **656** 行（上限 600）✗ ⇒ 按仓库规矩**按职责拆同级模块**（不加基线）：`renderer/owners.rs` + `renderer/owners_tests.rs` 收走 `owned`/`face_module` 与那条钉子 ✓，`pass.rs` 回到 600 以内 ✓。
+
+**十面的一次环境性红（如实记）**：第一次跑，`toolchain+dev-supervisor,studio` 面里 `new_project_and_explicit_root_face_compile` 红，原因是 **`rustc` 编译第三方 `syn` 时 SIGSEGV**（不是 NichLink 的错误）✗；单跑该条**转绿** ✓，重跑十面**全绿** ✓ ⇒ 判**环境性失败**（并行资源压力下的 rustc 崩溃），非本批回归 ✓。

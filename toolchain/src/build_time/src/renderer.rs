@@ -27,6 +27,9 @@ mod tree;
 pub(crate) use pass::render_lib;
 pub(crate) use tree::ShapeRender;
 
+#[path = "renderer/owners.rs"]
+pub(super) mod owners;
+
 /// Fixtures shared by the renderer's child test modules.
 /// 渲染器各子模块测试共享的夹具。
 #[cfg(test)]

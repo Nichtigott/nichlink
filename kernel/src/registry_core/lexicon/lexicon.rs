@@ -95,6 +95,18 @@ pub const GENERATION_MARKER: &str = "nichlink-build-index";
 /// 运行不会互相争抢。
 pub const PUBLISH_LOCK_FILE: &str = ".publishing.lock";
 
+/// The environment variable that tells a run to render the **cross-crate** half: the facade's plan.
+/// 告诉一次运行渲染**跨 crate**那一半（facade 的计划）的环境变量。
+///
+/// A facade compiles no faces of its own; what it carries is the graft cut table and the contract
+/// assertions, with every `crate::<module>` rewritten to the crate that compiles that module. The
+/// host cannot carry those once a subtree is cut out — its generated tree would name a module it no
+/// longer compiles (audit `M7`, P3.2/§M7.33).
+/// facade 自己不编译任何面；它携带的是 graft 切口表与契约断言，而其中每一个 `crate::<模块>` 都被改写成
+/// **编译该模块的那个 crate**。子树被切出之后宿主无法携带它们——它的生成树会点名一个自己不再编译的模块
+/// （审计 `M7`，P3.2/§M7.33）。
+pub const SHAPE_FACADE_ENV: &str = "NICH_LINK_SHAPE_FACADE";
+
 /// The environment variable that tells a run to render **only** one crate's subtrees.
 /// 告诉一次运行**只**渲染某一个 crate 的子树的环境变量。
 ///

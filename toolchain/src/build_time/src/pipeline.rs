@@ -203,6 +203,31 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
                 .map(|(module, id)| (module.clone(), id.into_bytes()))
         })
         .collect();
+    // The facade renders the **cross-crate** half: no modules, and every `crate::<module>` rewritten to
+    // the crate that compiles that module. The owner of a module comes from the plan (a claim, its root
+    // face and its ancestor shells all belong to that ghost), and every other module stays with the
+    // host — including the host's own faces, because `crate::` inside the facade means the facade.
+    // facade 渲染的是**跨 crate**那一半：不发模块，且每个 `crate::<模块>` 都改写成编译该模块的那个 crate。
+    // 模块的属主来自规划：一条认领、它的根面与它的祖先壳都归那个幽灵，其余模块留在宿主——**包括宿主自己的
+    // 面**，因为 facade 里的 `crate::` 指的是 facade 自己。
+    let facade = std::env::var(nichlink_kernel::lexicon::SHAPE_FACADE_ENV).is_ok();
+    let host_crate = super::package::package_name(manifest)
+        .unwrap_or_else(|_| super::registry_identity::package_namespace())
+        .replace('-', "_");
+    let mut owner_map: std::collections::BTreeMap<String, String> = shape_faces
+        .iter()
+        .map(|(_, module, _)| (module.clone(), host_crate.clone()))
+        .collect();
+    for planned in &planned {
+        let owner = planned.package.replace('-', "_");
+        for mount in &planned.mounts {
+            owner_map.insert(mount.module_path.clone(), owner.clone());
+        }
+        for (module, _) in &planned.ancestors {
+            owner_map.insert(module.clone(), owner.clone());
+        }
+    }
+    let owners: Vec<(String, String)> = owner_map.into_iter().collect();
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
@@ -225,6 +250,8 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
                 only: only.as_deref(),
                 mounts: &mounts,
                 ancestors: &ancestors,
+                facade,
+                owners: &owners,
             }
         },
     );
