@@ -228,16 +228,25 @@ pub(crate) fn write_generation(
         .unwrap_or(0)
         + 1;
     let (source_files, newest) = super::source_stamp(root);
+    // The namespace is stamped because it is an **input to every identity in these records** and it
+    // comes from the environment, not from the sources: a reader under another namespace computes a
+    // different id for the same face, so without this line it cannot tell "these records are not
+    // mine" from "every face moved" (audit 2026-10-06, §M7.18).
+    // 命名空间被盖进来，因为它是这些记录里**每个身份的输入**，而且来自环境、不来自源码：在另一个命名空间下
+    // 的读者会为同一个面算出不同的 id，因此没有这一行它就无法把"这些记录不是我的"与"每个面都搬家了"分开
+    // （2026-10-06 审计，§M7.18）。
     let output = format!(
         "# generation\t{marker}\ngeneration\t{generation}\ndigest\t{digest}\nfaces\t{faces}\n\
          files\t{source_files}\ngraph_nodes\t{nodes}\ngraph_edges\t{edges}\n\
-         stamp\t{source_files}:{newest}\nfinished_at\t{clock}\n",
+         stamp\t{source_files}:{newest}\nfinished_at\t{clock}\n{key}{namespace}\n",
         marker = nichlink_kernel::lexicon::GENERATION_MARKER,
         digest = header.digest,
         faces = header.faces,
         nodes = header.nodes,
         edges = header.edges,
         clock = clock(),
+        key = nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY,
+        namespace = super::registry_identity::package_namespace(),
     );
     write_if_changed(&path, &output)
 }

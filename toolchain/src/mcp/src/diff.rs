@@ -82,6 +82,18 @@ pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, St
     let (faces, unparsable) = member.derived_tree()?;
     let faces = faces.as_slice();
     let unparsable = unparsable.as_str();
+    // Before any comparison, ask whose records these are: a published record carries the namespace it
+    // was published under, and when that is not the namespace this run reads identities as, **every**
+    // face has two different ids, so all three comparisons below would report every face as moved.
+    // This guard sits above the branches so none of them can answer from another identity domain
+    // (audit 2026-10-06, §M7.18).
+    // 做任何比较之前先问"这些记录是谁的"：已发布的记录携带它发布时所用的命名空间，而当它不是本次运行读取
+    // 身份所用的那个时，**每个**面都有两个不同的 id，下面三种比较都会把每个面报成搬了家。这道闸放在分支
+    // 之前，因此没有一条分支能拿另一个身份域的记录作答（2026-10-06 审计，§M7.18）。
+    if let Some(refusal) = crate::mcp::tree_delta::TreeDelta::other_domain_refusal(root, namespace)
+    {
+        return Err(refusal);
+    }
     // Two sets of published records, compared as data: what this package's build wrote against
     // what another directory holds (a saved build, another checkout, a CI artifact). This is the
     // one comparison here whose *both* sides are records, so it needs no derivation and says

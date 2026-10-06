@@ -148,3 +148,43 @@ fn an_edit_makes_the_index_behind_and_the_line_says_so() {
     }
     let _ = fs::remove_dir_all(&root);
 }
+
+/// The readiness record stamps the namespace it was published under; a record **without** the stamp
+/// reads as "no namespace", and a reader then says nothing about namespaces instead of guessing.
+/// 就绪记录盖下它发布时所用的命名空间；**没有**这枚戳的记录读出来是"没有命名空间"，读者此时对命名空间
+/// 什么都不说，而不是猜。
+///
+/// Identity is `hash(namespace, source path, name)` and the namespace comes from the environment, so
+/// this stamp is what lets a reader tell "these records are not mine" from "every face moved" (§M7.18).
+/// 身份是 `hash(命名空间, 源码路径, 名字)`，而命名空间来自环境，因此这枚戳正是让读者把"这些记录不是我的"与
+/// "每个面都搬了家"分开的东西（§M7.18）。
+#[test]
+fn the_record_stamps_the_namespace_and_old_records_read_as_none() {
+    let (root, name) = package("namespace");
+    publish(&root, &name);
+    let generation = super::read_generation(&root).expect("the record reads");
+    assert_eq!(
+        generation.namespace.as_deref(),
+        Some(name.as_str()),
+        "the run's namespace is stamped"
+    );
+
+    // An older binary wrote no such line: the reader degrades to `None` rather than inventing one.
+    // 更早的二进制不写这一行：读者降级成 `None`，而不是编一个。
+    let path =
+        crate::mcp::build_evidence::out_dir(&root).join(nichlink_kernel::lexicon::GENERATION_FILE);
+    let text = fs::read_to_string(&path).expect("the record is readable");
+    let without: String = text
+        .lines()
+        .filter(|line| !line.starts_with(nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    fs::write(&path, without).expect("the stamp is removed");
+    assert_eq!(
+        super::read_generation(&root)
+            .expect("a record without the stamp still reads")
+            .namespace,
+        None
+    );
+    let _ = fs::remove_dir_all(&root);
+}

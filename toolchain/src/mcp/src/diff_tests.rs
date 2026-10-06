@@ -377,3 +377,60 @@ fn a_record_directory_outside_the_root_is_refused() {
     assert!(error.contains("must stay inside"), "{error}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Records published under **another namespace** are refused, not compared: every face would look
+/// like it moved, and that is the wrong answer that looks like a right one (§M7.18).
+/// 发布在**另一个命名空间**下的记录会被**拒绝**，而不是被比较：每个面都会看起来搬了家，而那正是"看起来
+/// 正确的错误答案"（§M7.18）。
+///
+/// The two ids differ *only* by the namespace (`hash(namespace, path, name)`), so this pins both
+/// halves: the refusal names both domains and the way forward, and **no** comparison is emitted.
+/// 两个 id **只**差命名空间（`hash(命名空间, 路径, 名字)`），因此这条钉子钉住两半：拒绝点名两个身份域与
+/// 出路，而且**不**输出任何比较。
+///
+/// The read happens in a child process because the namespace is process-global — the same reason
+/// `verify`'s namespace pin uses one.
+/// 读取发生在子进程里，因为命名空间是进程级的——与 `verify` 那条命名空间钉子同一个理由。
+#[test]
+fn records_published_under_another_namespace_are_refused() {
+    let (root, name) = package("other-domain");
+    crate::build_time::check_for(&root, &crate::mcp::build_evidence::out_dir(&root), &name)
+        .expect("the tree publishes cleanly");
+    let child = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+        .args([
+            "--ignored",
+            "--exact",
+            "mcp::diff::diff_tests::other_domain_child",
+            "--nocapture",
+        ])
+        .env("NICH_LINK_NAMESPACE", "n52-elsewhere")
+        .env("N52_FIXTURE", &root)
+        .output()
+        .expect("the child runs");
+    let stdout = String::from_utf8_lossy(&child.stdout);
+    assert!(stdout.contains("namespace mismatch"), "{stdout}");
+    assert!(
+        stdout.contains(&name),
+        "the refusal names the domain these records belong to: {stdout}"
+    );
+    assert!(
+        stdout.contains("way forward"),
+        "the refusal carries the one way forward: {stdout}"
+    );
+    assert!(
+        !stdout.contains("re-identified"),
+        "no identity comparison is emitted from another domain: {stdout}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The child half of the pin above; it prints whatever `diff` answers.
+/// 上面那条钉子的子进程那一半；它打印 `diff` 给出的任何答复。
+#[test]
+#[ignore = "child of records_published_under_another_namespace_are_refused"]
+fn other_domain_child() {
+    let root = PathBuf::from(std::env::var("N52_FIXTURE").expect("the fixture path"));
+    match diff(&root, &json!({})) {
+        Ok(reply) | Err(reply) => println!("{reply}"),
+    }
+}

@@ -1676,7 +1676,7 @@ consequences (static, text-level): 2 in-tree test line(s) name this face
 
 ⚠️ **门禁教训（本轮踩到）**：既有钉子 `repointing_one_entry_keeps_the_others_as_they_were` 里有一句 **"前提"** 断言——"解析器给每条条目都报同一行"——它住的模块属于 **`mcp` 面**，而 `cargo test --workspace`（默认特性）**不跑那个面** ⇒ `ac96d69` 把这个 bug 修好之后，那条钉子**在暗处变红了**，而我当时跑的门禁（workspace + clippy 两面 + conventions + 发布表）都没碰到它。已把它的前提改成"各条目报各自的行（`[3, 4, 6]`）"，并把 **`tools/nichlink-test`（十面跑测器）** 作为本批门禁之一重跑。
 
-### §M7.18 十面跑测器抓到一个真缺陷：跨进程的命名空间竞态（2026-10-06，**未修**）
+### §M7.18 跨进程的命名空间竞态：读者不再把「别人的记录」读成「身份搬家」（2026-10-06，**已修**）
 
 **可复现的演示（确定性，不靠时序）**：把一个包的记录发布在一个身份域下，再**用另一个身份域去读**——记录一个字节都没动，答案却变成"这个面换了身份"：
 
@@ -1723,3 +1723,20 @@ added since build 0  gone 0  re-identified 1
 **候选修法**：① **在记录里盖命名空间**（`graph.generation` 增一列/一行）⇒ 读者能直说"这些记录是在命名空间 X 下发布的，你按 Y 读 ⇒ 先跑 `check`"，而不是"所有面都搬家了" ✓（我推荐）；② 只在"全部 re-identified"时加一行提示（记录里没有依据 ⇒ 只能猜 ✗）；③ 测试侧在 `apply` 后等刷新结束（**只掩盖产品问题** ✗）。
 
 **现状**：本批不修，记入待办；`tools/nichlink-test` 因此**恰好在这一条上红**（其余九面全绿，`toolchain+mcp` 615 通过 / 1 失败）。
+
+**修法（已落地）**：① 记录里盖命名空间 —— `graph.generation` 多一行 `namespace\t<本次运行的命名空间>`（写方与身份用同一个来源：`identity::package_namespace()`）；② 读取方在**任何比较之前**先过一道闸（`TreeDelta::other_domain_refusal`，一条规则一处实现）：记录里的域与本次运行的域不同 ⇒ **拒绝**，点名两个域与唯一出路：
+
+```
+namespace mismatch: the records in /tmp/nsrace/target/nichlink/out were published under `nsrace`, and
+this run reads identities as `t48-override`. Identity is the namespace plus the source path plus the
+name, so the same face has two different ids here — comparing them would report every face as moved,
+which is what this refuses to do.
+way forward: run `nichlink check` in this tree (it republishes under `t48-override`), or set
+NICH_LINK_NAMESPACE=nsrace and ask again
+```
+
+③ **旧记录降级**：没有这一行（更早的二进制写的）⇒ 读出 `None` ⇒ 对命名空间**什么都不说**（退回旧措辞），不许猜 ✓。这道闸放在 `diff_body` 的三个分支**之前**，因此 `against` 与 `records: true` 那两条「记录对记录」的比较也走同一道闸 ✓。
+
+**代价与效果（实测）**：记录多一行（约 20 字节）；两端本来就**按键解析**（`header_value(&text, "key\t")`）⇒ 新写×旧读忽略未知行 ✓、旧写×新读降级 ✓，不是格式迁移。**域匹配时输出一个字节都不变**（实测 `re-identified 0` 与修前逐字相同）；**域不匹配时**从「每个面都搬家 + 一串 `~` 旧→新映射」变成「一句原因 + 两条出路」⇒ 出错时更短更准，且不再让读者去追一个不存在的问题。**仍未解决**：并发**写**同一棵树仍是后写者赢（这道闸只让读者看懂「这不是我的域」）；要彻底避免得加跨进程互斥，单独立项。
+
+**钉子**：① `index_tests::the_record_stamps_the_namespace_and_old_records_read_as_none`（盖戳 + 旧记录降级）；② `diff_tests::records_published_under_another_namespace_are_refused`（**就是上面那个演示**：父进程按 A 发布、子进程按 B 读 ⇒ 断言拒绝里点名两个域、带出路、且**不**输出 `re-identified`）；③ 那条「间歇红」的 verify 钉子改为**先等它自己启动的那次刷新**（`index::wait_until_idle`）再起读者 —— 产品对那个状态的答复现在是**点名拒绝**，测试侧的等待因此不再掩盖任何东西 ✓。

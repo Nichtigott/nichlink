@@ -86,6 +86,18 @@ pub const GENERATION_FILE: &str = "graph.generation";
 /// generation 记录的第一行。
 pub const GENERATION_MARKER: &str = "nichlink-build-index";
 
+/// The key the generation record stamps the **namespace** it was published under.
+/// generation 记录盖下"它发布时所用**命名空间**"的那把钥匙。
+///
+/// Identity is `hash(namespace, source path, name)` and the namespace comes from the environment, so
+/// a record read under another namespace holds a different id for the same face — every face would
+/// look like it moved. Stamping it lets a reader tell "these records are not mine" from "this face
+/// moved", which is the difference between a refusal and a wrong answer.
+/// 身份是 `hash(命名空间, 源码路径, 名字)`，而命名空间来自环境，因此在另一个命名空间下读到的记录对同一个面
+/// 持有不同的 id——每个面看起来都搬了家。把它盖进记录，读者才能把"这些记录不是我的"与"这个面搬了家"区分开，
+/// 而那正是"拒绝"与"错误答案"的差别。
+pub const GENERATION_NAMESPACE_KEY: &str = "namespace\t";
+
 /// The host's crate-shape declaration, read at the **package root** (not under `src/`).
 /// 宿主的 crate 形状声明，在**包根**读取（不在 `src/` 之下）。
 ///

@@ -65,6 +65,18 @@ pub(crate) struct Generation {
     /// The moment the run finished, as `HH:MM:SS` (UTC).
     /// 那次运行结束的时刻，`HH:MM:SS`（UTC）。
     pub(crate) finished_at: String,
+    /// The namespace these records were published under, when the record carries it.
+    /// 这些记录发布时所用的命名空间——记录携带它时才有。
+    ///
+    /// `None` means the record predates the stamp (or an older binary wrote it), and a reader must
+    /// then say nothing about namespaces rather than guess: identity is
+    /// `hash(namespace, source path, name)`, so a record read under another namespace holds a
+    /// different id for the same face, and "every face moved" is what that looks like when nobody
+    /// knows to check this field (audit 2026-10-06, §M7.18).
+    /// `None` 意为记录早于这枚戳（或更早的二进制写的），此时读者对命名空间**什么都不要说**，而不是猜：
+    /// 身份是 `hash(命名空间, 源码路径, 名字)`，因此在另一个命名空间下读同一份记录，同一个面持有不同的 id，
+    /// 而"每个面都搬了家"正是没人知道该查这个字段时它看起来的样子（2026-10-06 审计，§M7.18）。
+    pub(crate) namespace: Option<String>,
 }
 
 /// What a reader finds when it asks whether the index describes these sources.
@@ -188,6 +200,7 @@ pub(crate) fn read_generation(root: &Path) -> Result<Generation, String> {
         })
         .ok_or_else(|| format!("{} has no readable `stamp`", path.display()))?;
     let generation = Generation {
+        namespace: header_value(&text, nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY),
         generation: number("generation\t")?,
         digest: header_value(&text, "digest\t")
             .ok_or_else(|| format!("{} has no digest", path.display()))?,

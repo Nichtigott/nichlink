@@ -246,6 +246,19 @@ fn the_override_is_the_namespace_the_run_publishes_under() {
         &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
     )
     .expect("the face is added");
+    // `apply` schedules a background refresh (audit `M7`, P1.2) and this test spawns a reader right
+    // after it: without waiting, the child can read records the refresh rewrote under **this**
+    // process's namespace while the child reads as its own — which the reader now refuses by name
+    // (§M7.18) instead of answering wrongly. Waiting here makes the test deterministic without
+    // hiding anything: the product's answer for that state is a refusal, and it is pinned separately.
+    // `apply` 会排一次后台刷新（审计 `M7`，P1.2），而本测试紧接着要起一个读者：不等它，子进程就可能读到
+    // 被这次刷新改写成**本进程**命名空间的记录，而它按自己的命名空间读——那种状态读者现在会点名拒绝
+    // （§M7.18），而不是给出错答案。在这里等待让测试变确定，且不掩盖任何东西：产品对那种状态的答复是拒绝，
+    // 而它由另一条钉子单独钉住。
+    assert!(
+        crate::mcp::index::wait_until_idle(&root, std::time::Duration::from_secs(60)),
+        "the refresh this test started must finish before it reads"
+    );
     let child = std::process::Command::new(std::env::current_exe().expect("the test binary"))
         .args([
             "--ignored",

@@ -130,6 +130,40 @@ impl TreeDelta {
         }
     }
 
+    /// The refusal one comparison earns when its published side belongs to **another identity
+    /// domain** than `reader`.
+    ///
+    /// Identity is the namespace plus the source path plus the name, and the namespace comes from the
+    /// environment rather than from the sources — so a record read under another namespace holds a
+    /// different id for the *same* face, and every comparison against it would report every face as
+    /// moved. That is the wrong answer that looks like a right one (audit 2026-10-06, §M7.18), so it
+    /// is refused here instead, naming both namespaces and the one way forward.
+    /// `None` when the record carries no stamp (it predates the field): then nothing can be said
+    /// about namespaces, and saying nothing beats guessing.
+    /// 当一次比较的已发布一侧属于 `reader` **之外的另一个身份域**时，它所换来的拒绝。
+    ///
+    /// 身份 = 命名空间 + 源码路径 + 名字，而命名空间来自环境而非源码——因此在另一个命名空间下读同一份
+    /// 记录，**同一个**面持有不同的 id，与它做的每次比较都会把每个面报成搬了家。那正是"看起来正确的错误
+    /// 答案"（2026-10-06 审计，§M7.18），所以这里改为拒绝，并点名两个命名空间与唯一的那条出路。
+    /// 记录没有携带戳时（它早于该字段）返回 `None`：此时关于命名空间什么都说不出来，什么都不说胜过去猜。
+    pub(crate) fn other_domain_refusal(root: &Path, reader: &str) -> Option<String> {
+        let published = crate::mcp::index::read_generation(root)
+            .ok()
+            .and_then(|generation| generation.namespace)?;
+        if published == reader {
+            return None;
+        }
+        Some(format!(
+            "namespace mismatch: the records in {} were published under `{published}`, and this run \
+             reads identities as `{reader}`. Identity is the namespace plus the source path plus the \
+             name, so the same face has two different ids here — comparing them would report every \
+             face as moved, which is what this refuses to do.\n\
+             way forward: run `nichlink check` in this tree (it republishes under `{reader}`), or set \
+             NICH_LINK_NAMESPACE={published} and ask again",
+            out_dir(root).display()
+        ))
+    }
+
     /// The delta built from rows a caller has **already read** (audit `T1`, cut 7).
     /// 由调用方**已经读过**的行构成的差异（审计 `T1` 第七刀）。
     ///
