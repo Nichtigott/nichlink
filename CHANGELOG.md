@@ -78,6 +78,62 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 会校验失败——`cargo publish` 不可变，这正是重发必须先有那次删除的原因）。能升到 `0.2.1` 或更高时，
 优先用新版本。
 
+## [0.2.1] — 2026-10-07
+
+### Added
+
+- **Crate splits are operable from every authoring surface (2026-10-07).** A host declares at its
+  package root which subtrees become crates of their own (`add_crates.rs`), and that declaration is now
+  something the tools edit rather than something a reader only reads: `nichlink crates --declare <name>
+  --subtree <crate::…::SUBTREE>` adds a crate and `--undeclare <name>` removes one (both preview the
+  exact text diff; `--write` applies), the bridge's `nichlink.crates` gained `action: "declare"` /
+  `"undeclare"`, and Studio's `CRATE PARTITION` screen lost its blind spot — `D` removes the selected
+  declared crate. The edit is **text**, not a re-render: `add_crates.rs` is hand-written source the
+  author also reads, so only the named entry moves and every other byte stays. Removing the last
+  declared crate removes the file (the host is one crate again, which is what a declaration naming no
+  crate would try to mean); `undeclare` refuses while that crate's package is still on disk (`revert`
+  first, or the directory becomes an orphan nothing can reach); and a change whose resulting
+  declaration does not plan is rolled back rather than left behind. `plan`/`write`/`release`/`revert`
+  answer the other half — what the split would write, what is on disk, how large each package is, and
+  what `cargo publish` would still want.
+  **分区的声明层现在每个创作面都改得动（2026-10-07）。** 宿主在包根声明哪些子树各自成为一个 crate
+  （`add_crates.rs`），而这份声明现在是被工具编辑的东西，不再只是被读的东西：`nichlink crates --declare
+  <name> --subtree <crate::…::SUBTREE>` 加一个 crate、`--undeclare <name>` 去掉一个（两者都先预览那段
+  确切的文本差异，`--write` 才落盘），桥的 `nichlink.crates` 多了 `action: "declare"` / `"undeclare"`，
+  而 Studio 的 **CRATE PARTITION** 屏补上了它的盲点——`D` 移除选中的已声明 crate。改动是**文本**而不是
+  重渲染：`add_crates.rs` 是作者也会读的手写源码，因此只动被点名的那一条、其余每个字节保持原样。移除最后
+  一个已声明的 crate 会连文件一起移除（宿主回到"就是一个 crate"，也就是一份不点名任何 crate 的声明想表达的
+  意思）；该 crate 的包还在磁盘上时 `undeclare` 会拒绝（先 `revert`，否则那个目录会变成谁也够不到的孤儿）；
+  而改完之后规划不成立的改动会被回滚而不是留下。另一半问题——这次拆分要写什么、磁盘上有什么、每个包多大、
+  `cargo publish` 还差什么——由 `plan`/`write`/`release`/`revert` 回答。
+
+### Fixed
+
+- **Three stale references left over from the nine-crates-into-three merge (2026-10-07).** The tmux
+  visual check named the pre-merge fixture directory (`studio/tests/fixtures/…`, now under
+  `toolchain/`), and the release and scale audits still ran `cargo … -p nichlink-run-method`, a package
+  the merge removed — so the visual step could only fail and the release-audit job could only report a
+  missing package. A caretaker's tooling is not compiled, which is why no gate saw them;
+  `tools/nichlink-visual` also waits longer and prints a scene's stderr when its session dies, because
+  the first three failures of that step were indistinguishable from "the app is slow to draw".
+  **九→三合并遗留的三处引用（2026-10-07）。** tmux 视觉检查点名的是合并前的夹具目录
+  （`studio/tests/fixtures/…`，现在在 `toolchain/` 下），而发布审计与规模审计仍在跑
+  `cargo … -p nichlink-run-method`——一个合并已经删掉的包：因此视觉步骤只可能失败、release-audit 作业只
+  可能报"包不存在"。工具不会被编译，所以没有任何门禁看见它们；`tools/nichlink-visual` 同时把等待放宽，
+  并在会话死掉时打印该场景的 stderr——那一步最初三次失败与"程序画得慢"无法区分。
+
+- **Platform assumptions the CI matrix had never exercised (2026-10-07).** macOS spells a temp path
+  through a symlink (`/var` → `/private/var`) and Windows through `\?\C:\…` with `\` separators, so
+  two spellings of one file are not string-equal there; the publish lock answers "is that pid alive"
+  through `/proc`, which only Linux has, and the rule on other platforms is deliberately "assume
+  alive" — the test asserted a takeover those platforms cannot perform. The assertions now compare
+  through `Path` or normalize first, and the lock pin branches on what the platform can actually
+  answer.
+  **CI 矩阵从未跑到的平台假设（2026-10-07）。** macOS 的临时目录经符号链接拼写（`/var` →
+  `/private/var`），Windows 则是 `\?\C:\…` 加 `\` 分隔符，因此同一个文件的两处拼写在那里并不逐字相等；
+  发布锁经 `/proc` 回答"那个 pid 还活着吗"，而只有 Linux 有它，其它平台上的规则有意是"假定活着"——测试却
+  断言了一次那些平台做不到的接管。现在断言改经 `Path` 比较或先归一化，而锁那条钉子按平台**能**回答什么分支。
+
 ## [0.2.0] — 2026-09-29, re-published 2026-10-07
 
 ### Changed

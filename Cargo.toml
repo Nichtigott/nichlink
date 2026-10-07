@@ -6,11 +6,11 @@ resolver = "2"
 # The internal dependencies live here so a version bump has **one** home beside `version` above.
 # 内部依赖住在这里，因此推进版本线时它和上面的 `version` 一样只有一个家。
 [workspace.dependencies]
-nichlink-kernel = { path = "kernel", version = "0.2.0" }
-nichlink-macro = { path = "macro", version = "0.2.0" }
+nichlink-kernel = { path = "kernel", version = "0.2.1" }
+nichlink-macro = { path = "macro", version = "0.2.1" }
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.96.0"
 license = "MIT"
