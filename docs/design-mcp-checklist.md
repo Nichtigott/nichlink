@@ -2217,3 +2217,37 @@ examples/partitioned-button/
 **门禁**：`tools/nichlink-partition-rehearsal` 加 **leg 5**（构建这个入库示例，断言三个 build 0 且切口 0/2/2 + facade 点名属主 ✓）。**它当场抓出我自己脚本里的一个真 bug** ✗：`cuts_in()` 写成 `grep -c … || printf '0'` —— `grep -c` 无匹配时**既打印 `0` 又退出 1**，于是 `||` 又打一个 `0`，比较读到 `"00"` ⇒ 腿误报红；另外 `find … | head -1` 会挑到**声明存在之前那份旧产物**（构建目录会活过形状改变）⇒ 改为取最新一份 ✓。修后整条演练 **OK** ✓。
 
 **一处已知小瑕疵（未修，记账）**：生成包构建时会报 `unexpected_cfgs: rust_analyzer` 警告（宿主若 `deny(warnings)` 会硬失败 ✗）—— 已在本项目 todo 里，处置方式是在生成的清单里补 `[lints.rust] unexpected_cfgs` ✓。
+
+### §M7.53 提交进仓库的示例改成**发布（复制）形状**：开发形状的 remap 会毒死 rust-analyzer（2026-10-07）
+
+**起因**：维护者报「我所有的补全都失效了，连 cargo.toml 都不高亮」，截图里 nvim 的横幅是
+`LSP client log is large (2782 MB): ~/.local/state/nvim/lsp.log`。看日志尾部，刷屏的是：
+
+```
+rust-analyzer stderr ERROR flycheck 0: File with cargo diagnostic not found in VFS:
+  file not found: …/examples/partitioned-button/control/control.rs
+```
+
+**链条**：我提交的示例当时是**开发形状**（幽灵 `#[path]` 挂载宿主源码 + `.cargo/config.toml` 里一条
+`--remap-path-prefix`，后者是**身份**所必需）⇒ rustc 报出的诊断路径是被 remap 过的**宿主相对路径**
+（`control/control.rs`）⇒ rust-analyzer 拿它去工作区根找、找不到 ⇒ **每次 flycheck、每个文件一条 ERROR**，
+`lsp.log` 涨到 2.6 GB ⇒ nvim 的 LSP 客户端被拖死 ⇒ **所有补全/高亮全灭**。⇒ **开发形状与 rust-analyzer
+天生冲突**，这不是示例写错了，而是那个形状的性质。
+
+**处置**：把提交进仓库的示例按 **`crates --release --write`** 重写成**自包含复制形状** —— 每个生成包携带
+自己编译的源码副本，**没有** `.cargo/config.toml`、**没有** remap ⇒ 编辑器不再报错、不再刷日志 ✓；同时它
+天然满足 crates.io 的自包含要求 ✓。代价＝包里是复制品（改动要重生成 ✓），这与维护者早先的
+「**为啥不全按正常的目录放置呢**」是同一个方向。
+
+**顺带修掉的两处真缺陷**（都由这次切换当场抓到）：
+1. **CLI 打印的 facade 路径是自己拼的**（`package_root.parent().join("<prefix>-facade")`），比实际写下处
+   **高一层**（打印 `…/partitioned-button-facade`，实写 `…/crates/partitioned-button-facade`）——正是那种会把
+   读者送去追一个不存在的缺陷的自我描述 ✗；改成**问**共用规则 `crate_plan::crates_dir` ✓（排查时它把我误导了三轮）。
+2. **发布形状的 facade 清单漏了重拼 `[build-dependencies]`** ⇒ 同一个 crate 在 `[dependencies]`（4 层）与
+   `[build-dependencies]`（3 层）里指向不同路径 ⇒ cargo 直接拒绝（`Dependency 'nichlink-toolchain' has different
+   source paths depending on the build target`）✓；已与 `[dependencies]` 走同一条重拼 ✓。
+
+**实测**：`host` / `crates/partitioned-button-objects` / `crates/partitioned-button-facade` 三个 `cargo build`
+**exit=0** ✓；示例里 `.cargo/config.toml` 数量 **0** ✓、`--remap-path-prefix` **0** 处 ✓；
+`tools/nichlink-partition-rehearsal` OK ✓（它自己的四条腿仍在 `/tmp` 里写开发形状夹具 —— 那些不进编辑器，
+因此无害 ✓，但**形状之争（挂载 vs 复制）的总账仍开着** ✓）。

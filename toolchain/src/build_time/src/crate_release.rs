@@ -403,6 +403,12 @@ fn facade_cargo_toml(
         marker = super::crate_plan::GENERATED_MARKER,
     );
     if let Some(block) = toml_section(&text, "build-dependencies") {
+        // Re-spelled exactly like `[dependencies]`: cargo refuses a crate whose path differs between
+        // build targets ("different source paths depending on the build target"), and the host spells
+        // its toolchain path relative to the host, not to this package.
+        // 与 `[dependencies]` 一样重拼：cargo 会拒绝"同一个 crate 在不同 target 下路径不同"的清单，而宿主
+        // 那条 toolchain 路径是相对**宿主**写的，不是相对本包。
+        let block = respell_dependency_paths(&block, host_root, directory);
         output.push_str(&format!("\n[build-dependencies]\n{block}"));
     }
     Ok(output)

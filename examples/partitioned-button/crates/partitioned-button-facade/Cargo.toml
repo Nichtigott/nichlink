@@ -5,7 +5,10 @@
 name = "partitioned-button-facade"
 version = "0.2.1"
 edition = "2024"
-publish = false
+
+[package.metadata.nichlink]
+shape = "release"
+host = "nichlink-example-partitioned-button"
 
 [dependencies]
 nichlink-toolchain = { path = "../../../../toolchain", features = ["run", "authoring"] }

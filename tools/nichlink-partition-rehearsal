@@ -517,10 +517,14 @@ step "leg 5: the committed example (examples/partitioned-button) still builds an
 EXAMPLE="$ROOT/examples/partitioned-button"
 [ -f "$EXAMPLE/host/add_crates.rs" ] || fail "the committed example lost its declaration"
 (cd "$EXAMPLE" && build --workspace) || fail "the committed example does not build"
-# Each crate emits exactly the cuts it compiles: the host handed `control` away (0), the ghost that
-# owns it emits both, and the facade carries the union with the owner rewritten.
-# 每个 crate 只发它编译得到的那几条切口：宿主把 `control` 交出去了（0），拥有它的幽灵两条都发，而 facade
-# 携带并集并把属主改写。
+# The committed example is the **release** shape, and that changes who emits the cuts: a release
+# ghost builds its **own** manifest (it carries copies, so it never reads the host's entry, and the
+# host's graft plan lives there) ⇒ the ghost emits none, and the **facade** carries the union with the
+# owner rewritten. In the development shape the ghost emits its own two — the difference is
+# self-containment, not a rule about faces.
+# 入库示例用的是**发布**形状，而它改变了"谁发切口"：发布幽灵构建的是**它自己的**清单（它携带副本，
+# 因此从不读宿主的入口，而宿主的 graft 计划住在那里）⇒ 幽灵一条都不发，由 **facade** 携带并集并改写属主。
+# 开发形状下幽灵会发自己那两条——差别来自自包含，而不是"面归谁"的规则变了。
 cuts_in() {
   # The **newest** file, because a build directory survives a change of shape: an artifact from
   # before the declaration existed still sits there and would answer for the old tree. And the count
@@ -535,10 +539,10 @@ cuts_in() {
 }
 [ "$(cuts_in nichlink-example-partitioned-button)" = "0" ] ||
   fail "the partitioned host still emits graft cuts for faces it does not compile"
-[ "$(cuts_in partitioned-button-objects)" = "2" ] ||
-  fail "the ghost that owns the cuts does not emit both"
+[ "$(cuts_in partitioned-button-objects)" = "0" ] ||
+  fail "the release ghost emits cuts, but it builds its own manifest and carries no host plan"
 [ "$(cuts_in partitioned-button-facade)" = "2" ] ||
-  fail "the facade does not carry the union"
+  fail "the facade does not carry the union — nothing else in the release shape does"
 facade_file=$(find "$EXAMPLE/target" -path "*/partitioned-button-facade-*/out/generated_lib.rs" 2>/dev/null | head -1)
 grep -q 'partitioned_button_objects::control::object::button::NODE_ID' "$facade_file" ||
   fail "the facade does not name the crate that compiles the cut face"

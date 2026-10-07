@@ -145,11 +145,18 @@ pub(crate) fn crates(
             format!(
                 "facade {}-facade at {} (release shape, resolves the host through cargo at build time)",
                 declaration.package_prefix,
-                package_root
-                    .parent()
-                    .unwrap_or(&package_root)
-                    .join(format!("{}-facade", declaration.package_prefix))
-                    .display(),
+                // The same rule the packager uses, asked rather than re-derived: this line used to
+                // spell the path itself and printed the facade one level above the directory it was
+                // actually written to (`…/partitioned-button-facade` instead of `…/crates/…`), which
+                // is exactly the kind of self-description that sends a reader hunting a phantom bug.
+                // 与打包方同一条规则，**问**它而不是自己再拼一遍：这一行原先自己拼路径，于是打印的 facade
+                // 比实际写下处高了一层（`…/partitioned-button-facade` 而不是 `…/crates/…`），正是那种会把
+                // 读者送去追一个并不存在的缺陷的自我描述。
+                crate::build_time::crate_plan::crates_dir(
+                    package_root.parent().unwrap_or(&package_root)
+                )
+                .join(format!("{}-facade", declaration.package_prefix))
+                .display(),
             ),
         )?;
     } else {
