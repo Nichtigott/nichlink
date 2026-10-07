@@ -635,13 +635,15 @@ mod tests {
         // 本地来源把两个表都指向合并之后的那一个 crate。
         let (runtime, build_dependency) = dependency_specs(&source);
         for spec in [&runtime, &build_dependency] {
-            // The template writes the path with the platform's separators, so the assertion reads it
-            // the same way on Windows as here.
-            // 模板用平台自己的分隔符写这条路径，因此这个断言在 Windows 上与这里读法一致。
-            assert!(
-                spec.replace('\\', "/").contains("/checkout/toolchain"),
-                "{spec}"
-            );
+            // The spec is a TOML **basic string**, so a Windows path appears with its backslashes
+            // escaped (`toml_path` does that escape) and TOML is what would unescape them: undo the
+            // escape first, then compare separators. Doing it the other way round turns one
+            // backslash into two slashes and fails on a path that is spelled correctly.
+            // 这条 spec 是一个 TOML **基本字符串**，因此 Windows 路径的反斜杠是转义过的（`toml_path` 负责
+            // 那次转义），而要解开它的是 TOML：先还原转义，再统一分隔符。反过来做会把一个反斜杠变成两个斜杠，
+            // 让一条拼写正确的路径判为失败。
+            let spelling = spec.replace("\\\\", "\\").replace('\\', "/");
+            assert!(spelling.contains("/checkout/toolchain"), "{spec}");
             for stale in ["run_method", "build_method"] {
                 assert!(!spec.contains(stale), "{stale} no longer exists: {spec}");
             }

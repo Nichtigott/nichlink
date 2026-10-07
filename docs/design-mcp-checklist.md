@@ -2138,3 +2138,15 @@ error[E0433]: cannot find `frame` in `panel`
 **修法**：路径一律经 `Path` 判断（`is_absolute`、`ends_with("src/…")`——Windows 的解析器同时接受 `\` 与 `/`），或在比较前把两侧的分隔符拍平；"幽灵位置不影响拼写"那条钉子改成比较**同一个根**拼出的两个字符串（平台无关 ✓），规范化那一半只比 `file_name()`；发布锁那条按平台分支：有 `/proc` 走接管（并断言锁文件随后点名本次运行），否则走拒绝（并断言拒绝点名文件与 pid、且锁还在）✓。同时为 1.99 的同类形状做了全仓扫描（单元素 `for … in [..]` 归零、`.filter(|_|` 只剩迭代器上的一处与两行注释）。
 
 **验证**：本机 fmt ✓ · workspace 全绿 ✓ · clippy 两面 0 ✗error ✓ · 发布表 ✓ · 十面见提交说明 ✓；平台相关的那几条本机跑的是 Linux 分支，macOS/Windows 分支由 CI 矩阵判定 ✓。
+
+### §M7.46 第二轮推 CI：两条归一化、两处合并遗留的 crate 名、以及视觉步骤的等待与诊断（2026-10-07）
+
+第二轮结果：**macOS 两个 + ubuntu stable + ubuntu 1.96 全绿** ✓（1.99 的两条 lint 修好了）。剩三个作业红，逐个定性：
+
+① **macOS/Windows 上还剩两条**（`publish_lock_tests.rs:249`、`scaffold/project.rs:641`）——我上一轮的两处"归一化"各自错了一层：
+- 锁那条断言比较的是子进程报告，而报告是 **`{:?}` 打印**的，因此 Windows 路径在**文本里就是双反斜杠**；只把 `\` 换成 `/` 会把 `C:\\Users` 变成 `C://Users` ✗。正确顺序是**先**把 `\\` 折成 `/`、**再**处理单个 `\`。
+- 脚手架那条更微妙：`toml_path` **已经**做了正确的转义（`\` → `\\`，因为拼出来的是一段 TOML **基本字符串**）✓，产品是对的；错的是我的断言——它把转义过的 `\\` 又各换成一个 `/`，于是 `/checkout\\toolchain` 变成 `/checkout//toolchain` ✗。修法是**按 TOML 的规则先还原转义、再统一分隔符**（顺序反过来就判错一条拼写正确的路径）。
+② **`release-audit` 的真实原因与 lint 无关**：`tools/nichlink-release-audit:150` 与 `tools/nichlink-scale-audit:10,15` 仍写着 **`-p nichlink-run-method`** ——九→三合并之后那个包不存在了，于是整个作业在 `cargo run` 处报 `package(s) nichlink-run-method not found in workspace` ✗（与 `tools/nichlink-visual` 的 `-p nichlink-studio` 同一族：**合并遗留的 crate 名**）。改成 `-p nichlink-toolchain --example scale_audit` ✓；本机跑 `tools/nichlink-release-audit` 通过：`symbol_audit=…/artifacts.tsv (126 artifacts, each with defined symbols)` ✓。注意这一族里 `scale-audit` 那一半此前从未跑到过（上一步先红），因此它是**顺带修掉的第二个潜伏失败** ✓。
+③ **视觉步骤 `Visual check (tmux)` 第一次真的跑到 tmux 那一步，就在第一次等待上红了**，面板**完全空白**：分不清"会话没起来"与"程序还没画第一帧"。这一族以前从没跑过（构建行是坏的 ⇒ 更早的步骤就红 ✗）。工具因此收三处：等待预算从 150×0.2s（30 s）提到 **600×0.2s（120 s）**并可用 `NICHLINK_VISUAL_TRIES` 覆盖（冷的 CI runner 在 Studio 画出第一帧之前要解析工程并跑 `cargo metadata`）；每轮用 `tmux has-session` 判"会话是否已经死掉"，死了立刻失败并**打印该场景的 stderr**（启动失败时那就是答案）；超时时也把 stderr 一并打出。本地无法复现 tmux 这一步（本机沙箱不允许 tmux 在 `/tmp` 建 socket，会话直接消失），因此这一半**由 CI 判定** ✓。
+
+**门禁**：fmt ✓ · workspace 全绿 ✓ · clippy 两面 0 error ✓ · 发布表 ✓ · `tools/nichlink-release-audit` 本机通过 ✓ · 十面见提交说明。

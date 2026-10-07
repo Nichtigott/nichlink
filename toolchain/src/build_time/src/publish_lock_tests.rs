@@ -244,8 +244,9 @@ fn a_held_lock_stops_the_publish_and_names_itself() {
     // before `contains` can mean anything.
     // 比较时统一一种分隔符：报告用平台自己的分隔符打印路径，`lock.display()` 也一样，因此在 Windows 上
     // 两者都得先拍平，`contains` 才有意义。
-    let flattened = report.replace('\\', "/");
-    let lock_text = lock.display().to_string().replace('\\', "/");
+    let flatten = |text: &str| text.replace("\\\\", "/").replace('\\', "/");
+    let flattened = flatten(&report);
+    let lock_text = flatten(&lock.display().to_string());
     assert!(
         report.contains("publish-lock") && flattened.contains(&lock_text),
         "the run names the lock it could not take: {report}"

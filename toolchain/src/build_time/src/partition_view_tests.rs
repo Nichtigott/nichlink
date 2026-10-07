@@ -5,7 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::{OnDisk, view};
-use crate::build_time::registry_identity::freeze_test_namespace;
 
 /// A throwaway host package with a declaration and the records a plan reads.
 /// 一个一次性宿主包：带声明，以及规划要读的那些记录。
@@ -27,7 +26,6 @@ fn host(label: &str, declaration: Option<&str>) -> PathBuf {
     // 宿主在下一层：幽灵是宿主的**同级**，因此直接坐在临时目录里的宿主的包会被规划进 `/tmp`——那里任何一次
     // 早先运行留下的东西都可能让本夹具读到别人的目录（实测：确实读到了）。
     let root = area.join("host");
-    freeze_test_namespace();
     fs::create_dir_all(root.join("src/panel/frame/widget")).expect("the host's sources");
     // A lib target, because the package's name *is* the identity namespace and cargo has to be able
     // to read it (a manifest with no target is a `cargo metadata` failure, not a package).

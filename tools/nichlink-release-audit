@@ -147,7 +147,7 @@ now_ms() {
 }
 
 start=$(now_ms)
-cargo run --quiet --release -p nichlink-run-method --example scale_audit -- 10000 >/dev/null
+cargo run --quiet --release -p nichlink-toolchain --example scale_audit -- 10000 >/dev/null
 end=$(now_ms)
 printf 'startup_ms=%s\n' "$(( end - start ))"
 # Still the closing line, and still only reachable when every artifact was

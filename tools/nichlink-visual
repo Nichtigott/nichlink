@@ -224,18 +224,38 @@ trap cleanup EXIT INT TERM
 # Wait until the pane shows the marker, or fail loudly instead of saving the
 # wrong screen.
 # 等待面板出现标记；否则明确失败，而不是把错误的屏幕存下来。
+#
+# Two facts a failure has to separate, because they have different fixes: the **session is gone**
+# (the command died — usually a startup failure, and its stderr is the answer) and the **screen is
+# not there yet** (the app is up and slow). The budget is generous for the second: a cold CI runner
+# parses a project and runs `cargo metadata` before Studio draws its first frame, and the first
+# measured CI run failed at exactly this wait with a completely empty pane.
+# 失败必须分开的两件事，因为修法不同：**会话没了**（命令死了——通常是启动失败，答案在它的 stderr 里）与
+# **画面还没到**（程序活着但慢）。预算对第二种情况给得宽：冷的 CI runner 在 Studio 画出第一帧之前要解析
+# 工程并跑 `cargo metadata`，而第一次实测的 CI 运行正是在这个等待上失败、面板完全空白。
+WAIT_TRIES="${NICHLINK_VISUAL_TRIES:-600}"
 wait_for() {
     marker="$1"
+    scene="${2:-}"
     tries=0
-    while [ "$tries" -lt 150 ]; do
+    while [ "$tries" -lt "$WAIT_TRIES" ]; do
         if tmux capture-pane -p -t "$SESSION" 2>/dev/null | grep -q "$marker"; then
             return 0
+        fi
+        if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+            printf 'the session died before "%s" appeared; its stderr followed:\n' "$marker" >&2
+            [ -n "$scene" ] && cat "$OUT_DIR/$scene.stderr" >&2 2>/dev/null
+            return 1
         fi
         tries=$((tries + 1))
         sleep 0.2
     done
-    printf 'scene did not reach "%s" in time; pane followed:\n' "$marker" >&2
+    printf 'scene did not reach "%s" in %s tries; pane followed:\n' "$marker" "$WAIT_TRIES" >&2
     tmux capture-pane -p -t "$SESSION" 2>/dev/null >&2 || true
+    if [ -n "$scene" ]; then
+        printf 'and its stderr:\n' >&2
+        cat "$OUT_DIR/$scene.stderr" >&2 2>/dev/null || true
+    fi
     return 1
 }
 
@@ -268,12 +288,12 @@ run_scene() {
     # would sometimes save the previous screen.
     # 两次等待，因为一个场景要证明两件事：程序起来了，以及按键产生了本场景要看的那一屏。
     # 在两者之间抓屏有时会存下上一屏。
-    wait_for "NICH LINK"
+    wait_for "NICH LINK" "$name"
     for key in $(scene_keys "$name"); do
         tmux send-keys -t "$SESSION" "$key"
         sleep 0.4
     done
-    wait_for "$marker"
+    wait_for "$marker" "$name"
     tmux capture-pane -p -t "$SESSION" >"$OUT_DIR/$name.txt"
     tmux capture-pane -p -e -t "$SESSION" >"$OUT_DIR/$name.ansi.txt"
     cleanup
