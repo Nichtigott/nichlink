@@ -87,8 +87,8 @@ pub struct GraftExpressions {
     pub graft: String,
 }
 
-/// Collects the graft declarations an item-position `graft_plan!` states.
-/// 收集条目位置的 `graft_plan!` 所声明的 graft 切口。
+/// Collects the graft declarations an item-position `static_graft_plan!` states.
+/// 收集条目位置的 `static_graft_plan!` 所声明的 graft 切口。
 struct GraftVisitor<'a> {
     entries: &'a mut Vec<GraftSyntax>,
     error: Option<FaceSyntaxError>,
@@ -102,11 +102,11 @@ struct GraftVisitor<'a> {
 }
 impl<'ast> Visit<'ast> for GraftVisitor<'_> {
     /// Only a declaration written as an item belongs in the build's plan: a
-    /// `graft_plan!` inside a function is a runtime expression, and a plan
+    /// `runtime_graft_plan!` inside a function is a runtime expression, and a plan
     /// inside `#[cfg(test)] mod tests` describes tests. Both used to be
     /// captured, shipping test cuts into the release table and pinning faces
     /// against pruning.
-    /// 只有写成条目的声明才属于构建计划：函数里的 `graft_plan!` 是运行时表达式，
+    /// 只有写成条目的声明才属于构建计划：函数里的 `runtime_graft_plan!`（旧名 `graft_plan!`）是运行时表达式，
     /// `#[cfg(test)] mod tests` 里的计划描述的是测试。两者过去都会被收集，把测试
     /// 切口带进发布表，并让注册面躲过剪枝。
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
@@ -242,7 +242,10 @@ impl<'a> GraftVisitor<'a> {
         else {
             return;
         };
-        if !matches!(name.as_str(), "graft_plan" | "static_graft_plan") {
+        if !matches!(
+            name.as_str(),
+            "runtime_graft_plan" | "graft_plan" | "static_graft_plan"
+        ) {
             return;
         }
         let tokens = mac.tokens.clone().into_iter().collect::<Vec<_>>();

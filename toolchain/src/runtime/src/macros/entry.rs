@@ -76,11 +76,11 @@ macro_rules! host {
 ///
 /// Put this at the host crate entry. `nichlink-toolchain` validates the grammar and
 /// stores the cuts in the generated `StaticPlan`. Use the dynamic
-/// [`graft_plan!`](crate::graft_plan) expression only when code needs to build
+/// [`runtime_graft_plan!`](crate::runtime_graft_plan) expression only when code needs to build
 /// or edit a plan at runtime.
 /// 将它放在宿主 crate 入口。`nichlink-toolchain` 校验语法并把切口写入生成的
 /// `StaticPlan`；只有运行时代码确实要构造或编辑计划时才使用动态
-/// [`graft_plan!`](crate::graft_plan) 表达式。
+/// [`runtime_graft_plan!`](crate::runtime_graft_plan) 表达式（旧名 `graft_plan!` 仍接受）。
 #[macro_export]
 macro_rules! static_graft_plan {
     ($framework:expr, $($cuts:tt)+) => {
@@ -94,21 +94,39 @@ macro_rules! static_graft_plan {
 ///
 /// ```
 /// # use nichlink_toolchain::runtime::FrameworkId;
+/// # use nichlink_toolchain::runtime_graft_plan;
 /// # use nichlink_toolchain::graft_plan;
 /// # let framework = FrameworkId::new("example");
-/// let plan = graft_plan!(framework,
+/// let plan = runtime_graft_plan!(framework,
 ///     cut ["root/a1/b2"] graft "canvas_fast",
 ///     cut ["root/a"] full graft "a_fast",
 /// );
 /// assert_eq!(plan.cuts.len(), 2);
+/// // The old name still works: it forwards here.
+/// // 旧名仍然可用：它转发到这里。
+/// # let same = graft_plan!(framework, cut ["root/a1/b2"] graft "canvas_fast");
+/// # assert_eq!(same.cuts.len(), 1);
 /// ```
+///
+/// Formerly named `graft_plan!`. That name still compiles (it forwards here), but it sat one word
+/// away from `static_graft_plan!` and said nothing about which of the two entries it was — the
+/// build-time one that captures the source text, or this one that builds the value at run time.
+/// 原名 `graft_plan!`。那个名字仍然能编译（它转发到这里），但它与 `static_graft_plan!` 只差一个词，
+/// 也没有说明自己是两个入口中的哪一个——构建期捕获源码文本的那个，还是运行期构造值的这个。
 #[macro_export]
-macro_rules! graft_plan {
+macro_rules! runtime_graft_plan {
     ($framework:expr, $($cuts:tt)+) => {{
         let mut plan = $crate::runtime::GraftPlan::new($framework);
         $crate::__graft_plan_cuts!(plan; $($cuts)+);
         plan
     }};
+}
+
+/// The **old name** of [`runtime_graft_plan!`], kept so existing hosts compile unchanged.
+/// [`runtime_graft_plan!`] 的**旧名**，保留它以便既有宿主编译不改。
+#[macro_export]
+macro_rules! graft_plan {
+    ($($tokens:tt)*) => { $crate::runtime_graft_plan! { $($tokens)* } };
 }
 
 #[doc(hidden)]

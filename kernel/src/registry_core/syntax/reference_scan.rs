@@ -38,7 +38,12 @@ fn is_build_macro(name: &str) -> bool {
     // 入口接线：生成的计划、入口提示与 graft 计划分别由入口解析器与 `graft_entries` 读取。
     matches!(
         name,
-        "host" | "application" | "static_graft_plan" | "graft_plan" | "__graft_plan_cuts"
+        "host"
+            | "application"
+            | "static_graft_plan"
+            | "runtime_graft_plan"
+            | "graft_plan"
+            | "__graft_plan_cuts"
     ) ||
     // Registration declarations: their field values are registration metadata,
     // which is exactly what the reference scan is documented to ignore
