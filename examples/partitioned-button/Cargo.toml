@@ -6,4 +6,4 @@
 # 因为"顶层声明一次、提交时生成"就是这套东西的约定。
 [workspace]
 resolver = "3"
-members = ["host", "graft", "partitioned-button-facade", "partitioned-button-objects"]
+members = ["host", "graft", "crates/partitioned-button-facade", "crates/partitioned-button-objects"]

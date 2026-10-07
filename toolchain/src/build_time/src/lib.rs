@@ -267,8 +267,59 @@ pub fn run_for(manifest: &Path, out_dir: &Path, package: &str) -> Result<(), Str
     // `create <dir>: <reason>`。
     std::fs::create_dir_all(out_dir)
         .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
-    check_for(manifest, out_dir, package)
+    let (only, facade) = legacy_shape_from_environment();
+    run_shape(manifest, out_dir, package, only, facade)
+}
+
+/// Run the pipeline for **one fragment of a partition**: this package compiles `only` (a comma-joined
+/// list of claimed subtrees) instead of the whole host, or — with `None` and `facade` — it is the
+/// cross-crate half.
+/// 为**划分出来的一个碎片**运行管线：这个包编译 `only`（逗号分隔的认领子树表）而不是整个宿主；或者以
+/// `None` + `facade` 表示它就是跨 crate 那一半。
+///
+/// The claim travels as an **argument** rather than as an environment variable, because a generated
+/// build script could only set one with `unsafe { std::env::set_var(…) }` under Rust 2024, and a claim
+/// is a literal the generator already knows.
+/// 认领以**参数**传递而不是环境变量：Rust 2024 下生成的构建脚本只能靠 `unsafe { std::env::set_var(…) }`
+/// 设置环境变量，而认领本来就是生成器已知的字面量。
+pub fn run_for_partition(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<&str>,
+    facade: bool,
+) -> Result<(), String> {
+    run_shape(manifest, out_dir, package, only.map(str::to_owned), facade)
+}
+
+/// The shared body of [`run_for`] and [`run_for_partition`].
+/// [`run_for`] 与 [`run_for_partition`] 共用的主体。
+fn run_shape(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<String>,
+    facade: bool,
+) -> Result<(), String> {
+    std::fs::create_dir_all(out_dir)
+        .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
+    check_for_shape(manifest, out_dir, package, only, facade)
         .map_err(|diagnostics| diagnostics.render_build_diagnostics())
+}
+
+/// The shape the **earlier** generator declared, read from the two variables it set.
+/// **早先**的生成器声明的形状，从它设置的两个变量读回。
+///
+/// Kept so a tree someone already partitioned keeps rendering exactly the same plan without
+/// re-running the writer; the current generator writes neither variable, and its build scripts set
+/// nothing at all.
+/// 保留它是为了让已经划分过的树无需重跑写入方就继续渲染出同一份计划；现在的生成器两个变量都不写，
+/// 它生成的构建脚本什么都不设置。
+fn legacy_shape_from_environment() -> (Option<String>, bool) {
+    (
+        std::env::var(nichlink_kernel::lexicon::SHAPE_ONLY_ENV).ok(),
+        std::env::var(nichlink_kernel::lexicon::SHAPE_FACADE_ENV).is_ok(),
+    )
 }
 
 /// Run the same discovery and validation pipeline as [`run_for`], but hand the
@@ -290,6 +341,18 @@ pub fn check_for(
     out_dir: &Path,
     package: &str,
 ) -> Result<(), nichlink_kernel::BuildDiagnostics> {
+    check_for_shape(manifest, out_dir, package, None, false)
+}
+
+/// [`check_for`] for one fragment of a partition: it compiles `only`, or it is the facade.
+/// [`check_for`] 用于划分出来的一个碎片：它编译 `only`，或者它就是 facade。
+pub fn check_for_shape(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<String>,
+    facade: bool,
+) -> Result<(), nichlink_kernel::BuildDiagnostics> {
     std::fs::create_dir_all(out_dir).map_err(|error| {
         let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
         diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
@@ -299,7 +362,8 @@ pub fn check_for(
         diagnostics
     })?;
     registry_identity::set_package_namespace(package.to_owned());
-    let input = BuildInput::new(manifest.to_path_buf(), out_dir.to_path_buf(), false);
+    let input = BuildInput::new(manifest.to_path_buf(), out_dir.to_path_buf(), false)
+        .with_shape(only, facade);
     // `package` is the authority for this run, not the process-wide pin: a
     // bridge or a test binary runs several packages in one process, and the pin
     // is first-write-wins, so a second run would otherwise publish identities

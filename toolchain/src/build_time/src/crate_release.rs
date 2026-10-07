@@ -37,7 +37,8 @@ use nichlink_kernel::identity::NodeId;
 use nichlink_kernel::lexicon;
 
 use super::crate_facade::sibling_dependencies;
-use super::crate_plan::PlannedCrate;
+use super::crate_plan::respell_dependency_paths;
+use super::crate_plan::{PlannedCrate, crates_dir};
 use super::crate_plan::{toml_section, toml_value};
 
 /// One package of the release shape, planned but not written.
@@ -81,10 +82,17 @@ pub(crate) fn plan_ghost(
     let text = host_manifest(host_root)?;
     let version = toml_value(&text, "version").unwrap_or_else(|| "0.1.0".to_owned());
     let edition = toml_value(&text, "edition").unwrap_or_else(|| "2024".to_owned());
-    let dependencies = toml_section(&text, "dependencies").unwrap_or_default();
+    // Re-spelled for this package's directory: the host's paths are relative to the host, and this
+    // ghost is one level down in `crates/` (the same walk the development shapes do).
+    // 按本包所在目录重拼：宿主的路径是相对宿主写的，而这个幽灵在 `crates/` 下低一层（开发形状走的是同一个走法）。
+    let dependencies = respell_dependency_paths(
+        &toml_section(&text, "dependencies").unwrap_or_default(),
+        host_root,
+        &planned.directory,
+    );
     let mut cargo_toml = format!(
-        "# {marker}: the dependencies are the host's, copied verbatim.\n\
-         # 由 NichLink 生成：依赖是宿主的、逐字照抄。\n\
+        "# {marker}: the dependencies are the host's, with their relative paths re-spelled.\n\
+         # 由 NichLink 生成：依赖是宿主的，相对路径已按本包所在目录重拼。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\n\
          [package.metadata.nichlink]\nshape = \"release\"\n\
          # The host this fragment was split out of, for a reader of the published package.\n\
@@ -95,6 +103,7 @@ pub(crate) fn plan_ghost(
         host = planned.namespace,
     );
     if let Some(block) = toml_section(&text, "build-dependencies") {
+        let block = respell_dependency_paths(&block, host_root, &planned.directory);
         cargo_toml.push_str(&format!("\n[build-dependencies]\n{block}"));
     }
     // What the fragment's own build **derives** from is more than what it compiles: the ancestor faces
@@ -192,7 +201,10 @@ pub(crate) fn plan_facade(
              Rename the host or pick a different `package_prefix`; a crate cannot depend on itself."
         ));
     }
-    let directory = host_root.parent().unwrap_or(host_root).join(&package);
+    // The same one implementation the ghost and the development facade use: a release shape that put
+    // its packages somewhere else would be a fourth answer to "where does a partition write".
+    // 与幽灵、开发形状的 facade 共用同一份实现：发布形状若把包写到别处，就是"划分写到哪里"的第四个答案。
+    let directory = crates_dir(host_root.parent().unwrap_or(host_root)).join(&package);
     let cargo_toml = facade_cargo_toml(
         host_root,
         &package,
@@ -276,15 +288,18 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String]) -> String {
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let root = std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\"));\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}// A build script is single-threaded at this point, and the value is read by the run below.\n\
-         {i}// 构建脚本此刻是单线程的，而这个值由下面的那次运行读取。\n\
-         {i}unsafe {{ std::env::set_var({env:?}, {claims:?}) }};\n\
-         {i}nichlink_toolchain::build_time::run_for(root, &out, {namespace:?}).expect(\"nichlink\");\n\
+         {i}nichlink_toolchain::build_time::run_for_partition(\n\
+         {i}    root,\n\
+         {i}    &out,\n\
+         {i}    {namespace:?},\n\
+         {i}    Some({claims:?}),\n\
+         {i}    false,\n\
+         {i})\n\
+         {i}.expect(\"nichlink\");\n\
          }}\n",
         i = "    ",
         marker = super::crate_plan::GENERATED_MARKER,
         declaration = lexicon::ADD_CRATES_FILE,
-        env = lexicon::SHAPE_ONLY_ENV,
         claims = subtrees.join(","),
         namespace = namespace,
     )
@@ -335,15 +350,18 @@ fn facade_build_rs(host_package: &str, namespace: &str) -> String {
          {i}let host = host_root();\n\
          {i}println!(\"cargo:rerun-if-changed={{}}\", host.join(\"src\").display());\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}// A build script is single-threaded at this point, and the value is read by the run below.\n\
-         {i}// 构建脚本此刻是单线程的，而这个值由下面的那次运行读取。\n\
-         {i}unsafe {{ std::env::set_var({env:?}, \"1\") }};\n\
-         {i}nichlink_toolchain::build_time::run_for(&host, &out, {namespace:?}).expect(\"nichlink\");\n\
+         {i}nichlink_toolchain::build_time::run_for_partition(\n\
+         {i}    &host,\n\
+         {i}    &out,\n\
+         {i}    {namespace:?},\n\
+         {i}    None,\n\
+         {i}    true,\n\
+         {i})\n\
+         {i}.expect(\"nichlink\");\n\
          }}\n",
         i = "    ",
         marker = super::crate_plan::GENERATED_MARKER,
         host = host_package,
-        env = lexicon::SHAPE_FACADE_ENV,
         namespace = namespace,
     )
 }
@@ -368,13 +386,18 @@ fn facade_cargo_toml(
     let text = host_manifest(host_root)?;
     let version = toml_value(&text, "version").unwrap_or_else(|| "0.1.0".to_owned());
     let edition = toml_value(&text, "edition").unwrap_or_else(|| "2024".to_owned());
-    let mut dependencies = toml_section(&text, "dependencies").unwrap_or_default();
+    let mut dependencies = respell_dependency_paths(
+        &toml_section(&text, "dependencies").unwrap_or_default(),
+        host_root,
+        directory,
+    );
     for (name, path) in sibling_dependencies(directory, host_root, host_package, planned) {
         dependencies.push_str(&format!("{name} = {{ path = {path:?} }}\n"));
     }
     let mut output = format!(
-        "# {marker}: the dependencies are the host's, copied verbatim, plus the crates it hands work to.\n\
-         # 由 NichLink 生成：依赖是宿主的、逐字照抄，再加上它把工作交出去的那些 crate。\n\
+        "# {marker}: the dependencies are the host's, with their relative paths re-spelled, plus the\n\
+         # crates it hands work to.\n\
+         # 由 NichLink 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\n\
          [package.metadata.nichlink]\nshape = \"release\"\nhost = {namespace:?}\n\n[dependencies]\n{dependencies}",
         marker = super::crate_plan::GENERATED_MARKER,

@@ -23,7 +23,10 @@ use std::path::{Path, PathBuf};
 
 use nichlink_kernel::lexicon;
 
-use super::crate_plan::{GENERATED_MARKER, PlannedCrate, relative_walk, toml_section, toml_value};
+use super::crate_plan::{
+    GENERATED_MARKER, PlannedCrate, relative_walk, respell_dependency_paths, toml_section,
+    toml_value,
+};
 
 /// A facade, planned but not written.
 /// 一个已规划但尚未写下的 facade。
@@ -79,7 +82,8 @@ pub(crate) fn plan_facade(
              Rename the host or pick a different `package_prefix`; a crate cannot depend on itself."
         ));
     }
-    let directory = host_root.parent().unwrap_or(host_root).join(&package);
+    let directory =
+        super::crate_plan::crates_dir(host_root.parent().unwrap_or(host_root)).join(&package);
     let mut dependencies: Vec<String> = vec![host_package.to_owned()];
     dependencies.extend(planned.iter().map(|planned| planned.package.clone()));
     dependencies.sort();
@@ -130,33 +134,32 @@ fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
          {i}println!(\"cargo:rerun-if-changed={src}\");\n\
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}// A build script is single-threaded at this point, and the value is read by the run below.\n\
-         {i}// 构建脚本此刻是单线程的，而这个值由下面的那次运行读取。\n\
-         {i}unsafe {{ std::env::set_var({env:?}, \"1\") }};\n\
-         {i}nichlink_toolchain::build_time::run_for(\n\
+         {i}nichlink_toolchain::build_time::run_for_partition(\n\
          {i}    std::path::Path::new({root:?}),\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
+         {i}    None,\n\
+         {i}    true,\n\
          {i})\n\
          {i}.expect(\"nichlink\");\n\
          }}\n",
         i = "    ",
         src = src.display(),
         declaration = declaration.display(),
-        env = lexicon::SHAPE_FACADE_ENV,
         root = host_root.display(),
         marker = GENERATED_MARKER,
     )
 }
 
-/// The facade's `Cargo.toml`: the host's dependencies verbatim, plus the sibling path dependencies.
-/// facade 的 `Cargo.toml`：宿主的依赖逐字照抄，加上同级目录的 path 依赖。
+/// The facade's `Cargo.toml`: the host's dependencies, with their relative paths re-spelled, plus the
+/// sibling path dependencies.
+/// facade 的 `Cargo.toml`：宿主的依赖（相对路径已重拼），加上同级目录的 path 依赖。
 ///
-/// The sibling paths are spelled **relative to the facade**, which is why it is planned as the host's
-/// sibling: every relative path in the host's own dependency table then resolves to the same directory
-/// it does for the host, and a copied table is not a second answer to "what does this source need".
-/// 同级路径是**相对 facade** 拼写的，这也正是把它规划成宿主同级目录的原因：宿主自己依赖表里的每个相对路径
-/// 于是都解析到与宿主相同的位置，而照抄来的表不是"这份源码需要什么"的第二个答案。
+/// Every path in the copied table is re-spelled **relative to the facade** rather than copied verbatim:
+/// a copied table is not a second answer to "what does this source need", but a copied *path* is not an
+/// answer at all unless it lands on the same package, and the facade no longer sits where the host does.
+/// 照抄来的表里每条路径都**相对 facade 重拼**，而不是逐字照抄：照抄来的表不是"这份源码需要什么"的第二个
+/// 答案，但照抄来的**路径**只有落在同一个包上才算答案，而 facade 已经不在宿主所在的位置了。
 fn facade_cargo_toml(
     host_root: &Path,
     package: &str,
@@ -173,18 +176,24 @@ fn facade_cargo_toml(
     })?;
     let version = toml_value(&text, "version").unwrap_or_else(|| "0.1.0".to_owned());
     let edition = toml_value(&text, "edition").unwrap_or_else(|| "2024".to_owned());
-    let mut dependencies = toml_section(&text, "dependencies").unwrap_or_default();
+    let mut dependencies = respell_dependency_paths(
+        &toml_section(&text, "dependencies").unwrap_or_default(),
+        host_root,
+        directory,
+    );
     for (name, path) in sibling_dependencies(directory, host_root, host_package, planned) {
         dependencies.push_str(&format!("{name} = {{ path = {path:?} }}\n"));
     }
     let mut output = format!(
-        "# {marker}: the dependencies are the host's, copied verbatim, plus the crates it hands work to.\n\
-         # 由 NichLink 生成：依赖是宿主的、逐字照抄，再加上它把工作交出去的那些 crate。\n\
+        "# {marker}: the dependencies are the host's, with their relative paths re-spelled, plus the\n\
+         # crates it hands work to.\n\
+         # 由 NichLink 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\
          publish = false\n\n[dependencies]\n{dependencies}",
         marker = GENERATED_MARKER,
     );
     if let Some(block) = toml_section(&text, "build-dependencies") {
+        let block = respell_dependency_paths(&block, host_root, directory);
         output.push_str(&format!("\n[build-dependencies]\n{block}"));
     }
     Ok(output)

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::plan_facade;
-use crate::build_time::crate_plan::{PlannedCrate, PlannedMount};
+use crate::build_time::crate_plan::{PlannedCrate, PlannedMount, crates_dir};
 
 /// A throwaway host package with the dependency tables a real host has.
 /// 一个一次性宿主包，带着真宿主会有的那两张依赖表。
@@ -23,7 +23,7 @@ fn host(label: &str) -> PathBuf {
         root.join("Cargo.toml"),
         "[package]\nname = \"control-button\"\nversion = \"0.2.0\"\nedition = \"2024\"\n\n\
          [dependencies]\nnichlink-toolchain = { path = \"../../toolchain\" }\n\
-         control-button-graft = { path = \"../control-button-graft\" }\n\n\
+         control-button-graft = { path = \"../../control-button-graft\" }\n\n\
          [build-dependencies]\nnichlink-toolchain = { path = \"../../toolchain\" }\n",
     )
     .expect("host manifest");
@@ -38,7 +38,10 @@ fn ghost(root: &Path, package: &str) -> PlannedCrate {
         name: package.trim_start_matches("control-button-").to_owned(),
         package: package.to_owned(),
         namespace: "control-button".to_owned(),
-        directory: parent.join(package),
+        // The real helper, not a hand-built path: a fixture that spells the layout itself goes
+        // stale the moment the layout moves, and then it answers for the old tree.
+        // 调用真助手，而不是手拼路径：自己拼布局的夹具会在布局一挪就过期，然后替旧树作答。
+        directory: crates_dir(parent).join(package),
         subtrees: vec!["control::object".to_owned()],
         ancestors: Vec::new(),
         mounts: vec![PlannedMount {
@@ -81,12 +84,12 @@ fn a_facade_sees_the_host_and_every_ghost() {
     );
     for expected in [
         "publish = false",
-        "control-button = { path = \"../control-button\" }",
+        "control-button = { path = \"../../control-button\" }",
         "control-button-widgets = { path = \"../control-button-widgets\" }",
-        // The host's own table, copied verbatim: this is where the implementation crates a typed cut
-        // names come from.
-        // 宿主自己的表，逐字照抄：类型化切口点名的实现 crate 就是从这里来的。
-        "control-button-graft = { path = \"../control-button-graft\" }",
+        // The host's own table, re-spelled for this package's directory: this is where the
+        // implementation crates a typed cut names come from, and the facade sits one level down.
+        // 宿主自己的表，按本包所在目录重拼：类型化切口点名的实现 crate 就是从这里来的，而 facade 低一层。
+        "control-button-graft = { path = \"../../../control-button-graft\" }",
         "[build-dependencies]",
     ] {
         assert!(
@@ -104,7 +107,8 @@ fn a_facade_sees_the_host_and_every_ghost() {
         facade.lib_rs
     );
     assert!(
-        facade.build_rs.contains("NICH_LINK_SHAPE_FACADE")
+        facade.build_rs.contains("run_for_partition")
+            && !facade.build_rs.contains("unsafe")
             // The pipeline takes the **package root**, not the manifest path: passing the manifest made
             // it look for `<…>/Cargo.toml/src`, which the first end-to-end build reported.
             // 管线收的是**包根**而不是清单路径：传清单会让它去找 `<…>/Cargo.toml/src`，这是第一次端到端

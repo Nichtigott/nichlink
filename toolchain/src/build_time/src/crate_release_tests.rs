@@ -137,7 +137,8 @@ fn a_release_ghost_carries_the_files_its_build_reads() {
     // The build reads **this package's** root and asks for the fragment; nothing points at the host.
     // 构建读的是**本包自己**的根，并只要那个碎片；没有任何东西指向宿主。
     assert!(ghost.build_rs.contains("env!(\"CARGO_MANIFEST_DIR\")"));
-    assert!(ghost.build_rs.contains("NICH_LINK_SHAPE_ONLY"));
+    assert!(ghost.build_rs.contains("run_for_partition"));
+    assert!(!ghost.build_rs.contains("unsafe") && !ghost.build_rs.contains("set_var"));
     assert!(ghost.build_rs.contains("\"panel::frame\""));
     assert!(
         !ghost.build_rs.contains(&root.display().to_string()),
@@ -178,7 +179,8 @@ fn a_release_facade_resolves_its_host_instead_of_carrying_it() {
         "the host root is resolved through cargo: {}",
         facade.build_rs
     );
-    assert!(facade.build_rs.contains("NICH_LINK_SHAPE_FACADE"));
+    assert!(facade.build_rs.contains("run_for_partition"));
+    assert!(!facade.build_rs.contains("unsafe") && !facade.build_rs.contains("set_var"));
     assert!(
         !facade.build_rs.contains(&root.display().to_string()),
         "the facade's build script must not bake the author's host path: {}",

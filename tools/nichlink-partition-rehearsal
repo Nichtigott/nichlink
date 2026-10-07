@@ -333,8 +333,8 @@ cmp "$WORK/host-before.sha256" "$WORK/host-after.sha256" ||
 # The generated packages are materialized into the workspace's member list, and the remap lands in the
 # config cargo reads from the workspace root.
 # 生成的包被物化进工作区的成员清单，而 remap 落在 cargo 从工作区根读取的那份配置里。
-grep -q '"app-widgets"' "$WS/Cargo.toml" || fail "the ghost is not a workspace member"
-grep -q '"app-facade"' "$WS/Cargo.toml" || fail "the facade is not a workspace member"
+grep -q '"crates/app-widgets"' "$WS/Cargo.toml" || fail "the ghost is not a workspace member"
+grep -q '"crates/app-facade"' "$WS/Cargo.toml" || fail "the facade is not a workspace member"
 grep -q '\[workspace.package\]' "$WS/Cargo.toml" || fail "the merge ate another table"
 grep -q '# a workspace the user maintains' "$WS/Cargo.toml" || fail "the merge ate a comment"
 [ -f "$WS/.cargo/config.toml" ] || fail "the remap is not at the workspace root"
@@ -351,8 +351,8 @@ cmp "$WORK/host-after.sha256" "$WORK/host-twice.sha256" || fail "a second --writ
 "$NICHLINK" crates --revert "$WS/app" >/dev/null
 cmp "$WORK/ws-manifest-before" "$WS/Cargo.toml" ||
   fail "the revert did not restore the workspace manifest byte for byte"
-[ ! -d "$WS/app-widgets" ] || fail "the revert left the ghost behind"
-[ ! -d "$WS/app-facade" ] || fail "the revert left the facade behind"
+[ ! -d "$WS/crates/app-widgets" ] || fail "the revert left the ghost behind"
+[ ! -d "$WS/crates/app-facade" ] || fail "the revert left the facade behind"
 [ ! -f "$WS/.cargo/config.toml" ] || fail "the revert left the remap behind"
 (cd "$WS" && command cargo metadata $CARGO_FLAGS --no-deps --format-version 1 >/dev/null) ||
   fail "the workspace does not load after the revert"
@@ -375,7 +375,7 @@ write_declaration "$SOL/app"
   fail "the remap was written where cargo never reads it while building a sibling"
 
 step "leg 2: building the partitioned tree from the facade's own directory"
-(cd "$SOL/app-facade" && build) ||
+(cd "$SOL/crates/app-facade" && build) ||
   fail "the standalone partitioned tree does not build (the remap never reached the ghost)"
 
 "$NICHLINK" crates --revert "$SOL/app" >/dev/null
@@ -419,7 +419,7 @@ EOF
 
 "$NICHLINK" check "$PR/app" >/dev/null || fail "the scaffolded host does not check"
 "$NICHLINK" crates --write "$PR/app" >/dev/null
-(cd "$PR/app-facade" && build) || fail "the scaffolded partition does not build before the promote"
+(cd "$PR/crates/app-facade" && build) || fail "the scaffolded partition does not build before the promote"
 
 # The record the landing consumes: its target is the identity the tool reports for the cut face, so the
 # script never hard-codes a hash.
@@ -447,7 +447,7 @@ grep -q 'graft(crate::panel::object::frame::object::widget::NODE_ID)' "$PR/app/s
   fail "the record was not retired"
 [ -n "$(find "$PR/app/.nichlink/trash/external-grafts" -mindepth 1 -maxdepth 1 2>/dev/null)" ] ||
   fail "the record did not move to the trash"
-(cd "$PR/app-facade" && build) || fail "the tree does not build after the promote"
+(cd "$PR/crates/app-facade" && build) || fail "the tree does not build after the promote"
 
 # ============================================================ leg 4: the publishable shape
 step "leg 4/4: the release shape carries its own sources"
@@ -464,32 +464,32 @@ write_declaration "$REL/app"
 # The fragment brings its own files, the ancestor faces its derivation reads, and its declaration.
 # 碎片带来自己的文件、推导要读的祖先面，以及它的声明。
 for file in \
-  "$REL/app-widgets/src/panel/frame/frame.rs" \
-  "$REL/app-widgets/src/panel/frame/widget/widget.rs" \
-  "$REL/app-widgets/src/panel/frame/registry_rule/registry_rule.rs" \
-  "$REL/app-widgets/src/panel/panel.rs" \
-  "$REL/app-widgets/add_crates.rs"; do
+  "$REL/crates/app-widgets/src/panel/frame/frame.rs" \
+  "$REL/crates/app-widgets/src/panel/frame/widget/widget.rs" \
+  "$REL/crates/app-widgets/src/panel/frame/registry_rule/registry_rule.rs" \
+  "$REL/crates/app-widgets/src/panel/panel.rs" \
+  "$REL/crates/app-widgets/add_crates.rs"; do
   [ -f "$file" ] || fail "the release ghost does not carry $file"
 done
-grep -q 'shape = "release"' "$REL/app-widgets/Cargo.toml" || fail "no shape fingerprint"
+grep -q 'shape = "release"' "$REL/crates/app-widgets/Cargo.toml" || fail "no shape fingerprint"
 # Nothing is mounted out of the host, and nothing needs a remap.
-if grep -q "$REL/app/src" "$REL/app-widgets/build.rs"; then
+if grep -q "$REL/app/src" "$REL/crates/app-widgets/build.rs"; then
   fail "the release build script names the host's source directory"
 fi
 [ ! -f "$REL/.cargo/config.toml" ] ||
   fail "the release shape wrote a remap config it does not need"
 
 step "leg 4: building the release shape, and packaging it"
-(cd "$REL/app-facade" && build) || fail "the release shape does not build"
+(cd "$REL/crates/app-facade" && build) || fail "the release shape does not build"
 # `cargo package --list` is the check that the package is self-contained: a file it needs but does not
 # carry is exactly the state crates.io rejects later.
-(cd "$REL/app-widgets" && command cargo package --list $CARGO_FLAGS --allow-dirty >/dev/null 2>&1) ||
+(cd "$REL/crates/app-widgets" && command cargo package --list $CARGO_FLAGS --allow-dirty >/dev/null 2>&1) ||
   fail "the release ghost cannot be packaged"
 [ -z "$(find "$REL" -name config.toml -path '*/.cargo/*' 2>/dev/null)" ] ||
   fail "the release shape left a remap config behind"
 
 "$NICHLINK" crates --revert "$REL/app" >/dev/null || fail "the release shape does not revert"
-[ ! -d "$REL/app-widgets" ] || fail "the revert left the release ghost behind"
+[ ! -d "$REL/crates/app-widgets" ] || fail "the revert left the release ghost behind"
 
 step "leg 5: the committed example (examples/partitioned-button) still builds and still carries its graft"
 

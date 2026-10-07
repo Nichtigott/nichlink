@@ -144,16 +144,14 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // ghost is the crate the declared subtrees were handed to, so it hands nothing away.
     // 先定渲染模式，因为它决定本次运行**不得**渲染哪些子树：幽灵正是那些被交出去的子树所交给的 crate，因此它
     // 什么都不交出去。
-    let only = std::env::var(nichlink_kernel::lexicon::SHAPE_ONLY_ENV)
-        .ok()
-        .map(|value| {
-            value
-                .split(',')
-                .map(str::trim)
-                .filter(|part| !part.is_empty())
-                .map(str::to_owned)
-                .collect::<Vec<String>>()
-        });
+    let only = input.only.clone().map(|value| {
+        value
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<String>>()
+    });
     let cut_out = super::crate_plan::cut_out_for(shape.as_ref(), only.is_some());
     // The plan is computed **here**, before the render, because the render needs what it produces: the
     // mount spelling per face. A ghost's files live in the host package, so the spelling has to walk
@@ -210,7 +208,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // facade 渲染的是**跨 crate**那一半：不发模块，且每个 `crate::<模块>` 都改写成编译该模块的那个 crate。
     // 模块的属主来自规划：一条认领、它的根面与它的祖先壳都归那个幽灵，其余模块留在宿主——**包括宿主自己的
     // 面**，因为 facade 里的 `crate::` 指的是 facade 自己。
-    let facade = std::env::var(nichlink_kernel::lexicon::SHAPE_FACADE_ENV).is_ok();
+    let facade = input.facade;
     let host_crate = super::package::package_name(manifest)
         .unwrap_or_else(|_| super::registry_identity::package_namespace());
     let owners: Vec<(String, String)> =

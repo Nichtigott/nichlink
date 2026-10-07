@@ -102,8 +102,11 @@ fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
     assert_eq!(widgets.package, "myapp-widgets");
     assert_eq!(
         widgets.directory,
-        root.parent().expect("a parent").join("myapp-widgets"),
-        "the ghost is the host's sibling"
+        root.parent()
+            .expect("a parent")
+            .join("crates")
+            .join("myapp-widgets"),
+        "the ghost sits in the partition's `crates/`, beside the host"
     );
     assert_eq!(
         widgets.namespace, "myapp",
@@ -536,10 +539,19 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
         widgets.build_rs
     );
     assert!(
-        widgets
-            .build_rs
-            .contains("NICH_LINK_SHAPE_ONLY\", \"control::object\""),
-        "and asks for the fragment only: {}",
+        widgets.build_rs.contains("run_for_partition")
+            && widgets.build_rs.contains("Some(\"control::object\")"),
+        "and asks for the fragment only, as an argument: {}",
+        widgets.build_rs
+    );
+    // A generated build script must not reach for `unsafe`: the claim is a literal the generator
+    // already knows, so it travels as an argument. Rust 2024 made `env::set_var` unsafe, and that
+    // `unsafe` used to be in every generated build script.
+    // 生成的构建脚本不得动用 `unsafe`：认领本就是生成器已知的字面量，以参数传递即可。Rust 2024 把
+    // `env::set_var` 变成了 unsafe，而那个 `unsafe` 曾经出现在每一个生成的构建脚本里。
+    assert!(
+        !widgets.build_rs.contains("unsafe") && !widgets.build_rs.contains("set_var"),
+        "and sets no environment variable: {}",
         widgets.build_rs
     );
     assert!(
@@ -548,12 +560,14 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
         widgets.build_rs
     );
 
-    // Cargo.toml: the host's dependencies verbatim, and no publishing.
-    // Cargo.toml：宿主的依赖逐字照抄，且不发布。
+    // Cargo.toml: the host's dependencies with their relative paths re-spelled for this package, and
+    // no publishing. The host spells `../toolchain`; this ghost sits one level down in `crates/`.
+    // Cargo.toml：宿主的依赖按本包所在目录重拼，且不发布。宿主写的是 `../toolchain`；这个幽灵在 `crates/`
+    // 下低一层。
     assert!(
         widgets
             .cargo_toml
-            .contains("nichlink-toolchain = { path = \"../toolchain\", features = [\"run\"] }"),
+            .contains("nichlink-toolchain = { path = \"../../toolchain\", features = [\"run\"] }"),
         "the dependencies are the host's: {}",
         widgets.cargo_toml
     );

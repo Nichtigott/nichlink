@@ -265,7 +265,10 @@ fn an_unlisted_generated_package_is_named() {
     let view = view(&root).expect("reads").expect("declared");
     assert_eq!(
         view.members_missing,
-        vec!["host-facade".to_owned(), "host-widgets".to_owned()],
+        vec![
+            "crates/host-facade".to_owned(),
+            "crates/host-widgets".to_owned()
+        ],
         "both generated packages are missing from the list"
     );
     assert!(

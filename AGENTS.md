@@ -132,7 +132,8 @@ crate 内，因为它读的是**本 crate** 的注册表。接回它们才暴露
 - `source` — lexical source scanning (functions, spans, calls)
 - `release` — release-time pruning/plan vocabulary
 - `json` — shared JSON string encoding for every artifact this workspace writes (build diagnostics, MIR JSONL, editor snippets)
-- `lexicon` — shared text contracts (generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions)
+- `lexicon` — shared text contracts (generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, the partition's generated-crate
+directory, scope exemptions)
 
 Module mounting is uniform workspace-wide: a module file is declared by its parent
 with `#[path = "<dir>/<name>.rs"] pub mod <name>;`. There is no `mod.rs`. The
@@ -386,7 +387,9 @@ crates, and it needs the index.
 workspace, with no workspace above it, and in the publishable release shape — builds each,
 and checks the four facts a partition must not change: the host's own sources byte-identical,
 the same `graft_plan.tsv` in every shape, the same face identities, and a `promote` that still
-lands. Three batches of this feature were verified by hand and every defect it had was found by
+lands. A fifth leg builds the **committed** partitioned example (`examples/partitioned-button`),
+because the four legs above build fixtures the script writes itself and nothing in the repository
+would otherwise *be* a partitioned host. Three batches of this feature were verified by hand and every defect it had was found by
 doing the whole thing once; this is that run, as a gate.
 `tools/nichlink-partition-rehearsal` 把宿主分区三次——作为某个工作区的成员、在它之上没有任何工作区、
 以及写成可发布的形状——各构建一次，并检查拆分绝不能改变的四条事实：宿主自己的源码逐字节相同 · 每个形状里

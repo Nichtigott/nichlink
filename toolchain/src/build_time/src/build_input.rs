@@ -22,6 +22,15 @@ pub(crate) struct BuildInput {
     /// 是否在 stdout 输出 `cargo:` 指令。Cargo build script 置位；独立 CLI
     /// 运行时不输出。
     pub(crate) emit_cargo_directives: bool,
+    /// The subtrees this package compiles instead of the whole host (`None` = the whole host), and
+    /// whether it is the facade — the cross-crate half. Both come from the generator as **arguments**
+    /// now: they used to arrive through `NICH_LINK_SHAPE_*`, which a generated build script can only
+    /// set with `unsafe { std::env::set_var(…) }` under Rust 2024.
+    /// 这个包编译哪些子树（`None`＝整个宿主），以及它是不是 facade（跨 crate 那一半）。两者现在由生成器
+    /// 以**参数**给出：过去经 `NICH_LINK_SHAPE_*` 传递，而生成的构建脚本在 Rust 2024 下只能靠
+    /// `unsafe { std::env::set_var(…) }` 设置它们。
+    pub(crate) only: Option<String>,
+    pub(crate) facade: bool,
 }
 
 impl BuildInput {
@@ -41,6 +50,17 @@ impl BuildInput {
             layout,
             out_dir,
             emit_cargo_directives,
+            only: None,
+            facade: false,
         }
+    }
+
+    /// The same input, for a fragment a partition generated: it compiles `only` instead of the whole
+    /// host, or it is the facade.
+    /// 同一个输入，但用于划分生成的碎片：它编译 `only` 而不是整个宿主，或者它就是 facade。
+    pub(crate) fn with_shape(mut self, only: Option<String>, facade: bool) -> Self {
+        self.only = only;
+        self.facade = facade;
+        self
     }
 }
