@@ -33,7 +33,9 @@ use overlay::draw_overlay;
 pub(crate) mod panels;
 use panels::{draw_brand, draw_workspace};
 mod forms;
-use forms::{draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_plugin};
+use forms::{
+    draw_add, draw_delete, draw_edit, draw_graft, draw_new_project, draw_partition, draw_plugin,
+};
 mod search;
 use search::draw_search;
 #[path = "status.rs"]
@@ -41,7 +43,7 @@ mod status;
 use status::{draw_event, draw_keys};
 
 use super::app::{
-    AddState, App, CallRef, Focus, Overlay, SearchState, app_function_source_range,
+    AddState, App, CallRef, Focus, Overlay, PartitionState, SearchState, app_function_source_range,
     face_field_indices, new_project_field, plugin_field, source_path_for,
 };
 // The call-tree model types are named only by the widget drawing path, so they are

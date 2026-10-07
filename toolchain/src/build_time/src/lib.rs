@@ -32,17 +32,17 @@ pub(crate) mod crate_plan;
 // a default build has no writer, and dead code is a warning this workspace refuses.
 // 它唯一的调用方是创作面的 CLI（`nichlink crates`），因此该模块随那个特性走：默认构建没有写入方，而死代码是
 // 本工作区拒绝的告警。
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 #[path = "crate_facade.rs"]
 pub(crate) mod crate_facade;
 
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 #[path = "crate_members.rs"]
 pub(crate) mod crate_members;
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 #[path = "crate_release.rs"]
 pub(crate) mod crate_release;
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 #[path = "crate_write.rs"]
 pub(crate) mod crate_write;
 #[path = "diagnostics.rs"]
@@ -73,6 +73,9 @@ mod manifests;
 mod node_identity;
 #[path = "package.rs"]
 mod package;
+#[cfg(any(feature = "cli", feature = "studio"))]
+#[path = "partition_view.rs"]
+pub(crate) mod partition_view;
 #[path = "pipeline.rs"]
 mod pipeline;
 
@@ -195,7 +198,10 @@ pub(crate) use crate_plan::plan as plan_crates;
 pub(crate) use crate_release::plan_facade as plan_release_facade;
 #[cfg(feature = "cli")]
 pub(crate) use crate_release::plan_ghost as plan_release_ghost;
+#[cfg(any(feature = "cli", feature = "studio"))]
 #[cfg(feature = "cli")]
+pub(crate) use crate_write::partition_roots;
+#[cfg(any(feature = "cli", feature = "studio"))]
 pub(crate) use crate_write::{guard_shape, revert_partition, write_partition, write_release};
 pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
@@ -212,6 +218,8 @@ pub(crate) use manifests::{
     write_shape_manifest, write_source_scope_manifest,
 };
 pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
+#[cfg(any(feature = "cli", feature = "studio"))]
+pub use partition_view::{OnDisk, PackageView, PartitionView};
 #[cfg(feature = "cli")]
 pub(crate) use registry_identity::NodeId;
 pub(crate) use renderer::render_lib;

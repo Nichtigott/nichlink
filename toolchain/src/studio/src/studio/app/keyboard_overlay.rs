@@ -20,6 +20,8 @@ mod face_form;
 mod graft;
 #[path = "overlay/new_project.rs"]
 mod new_project;
+#[path = "overlay/partition.rs"]
+mod partition;
 #[path = "overlay/plugin.rs"]
 mod plugin;
 #[path = "overlay/search.rs"]
@@ -53,6 +55,7 @@ impl App {
             Overlay::Plugin(plugin) => self.handle_plugin_overlay_key(key, plugin),
             Overlay::Graft(graft) => self.handle_graft_overlay_key(key, graft),
             Overlay::Delete(id) => self.handle_delete_overlay_key(key, id),
+            Overlay::Partition(state) => self.handle_partition_overlay_key(key, state),
         }
     }
 }

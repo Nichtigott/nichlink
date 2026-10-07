@@ -2102,3 +2102,17 @@ error[E0433]: cannot find `frame` in `panel`
 **CI**：分区演练加了**第四条腿**（发布形状：断言携带的源码齐全、没有 remap 配置、`cargo build` 通过、`cargo package --list` 成功、`--revert` 干净），四条腿在 `tools/nichlink-partition-rehearsal` 上全绿 ✓。
 
 **仍差（P3.5 收尾）**：同级依赖的**版本号**（`path` + `version`，发布时 cargo 只保留 version）与 `license`/`description` 等发布元数据是宿主作者的字段，本形状不代填；`cargo publish --workspace` 那一步要等一次真正的发布（需要 index 与维护者一句"发布"）。
+
+### §M7.43 P3.6：**Studio 可视化分区**（2026-10-07）
+
+维护者愿景里的最后半句——「**然后也可以在studio中操作**」——落地：`c` 打开 **CRATE PARTITION** 屏，`w`（开发形状）/ `R`（发布形状）/ `x`（撤回）各要按一次 `y` 确认。
+
+**一份读取器，两个执行面**：新模块 `build_time::partition_view`（`pub(crate) fn plan` / `pub fn view`）是 CLI `nichlink crates` 与 Studio 本屏共用的**唯一**读取器，读的是**已发布的记录**（`target/nichlink/out`）而不是现推导一遍——理由与写入路径相同：计划就是构建发布出来的东西，自己推导的画面会描述一棵写入方并不打算写的树。它给出：声明的前缀、宿主自己那棵树有多少面、每个生成包**服务哪个 crate/哪棵子树**、**编译几个面**、开发形状**挂载几个文件**、发布形状**复制几个文件**、磁盘上**是哪种形状**（`OnDisk::{Absent,Development,Release,Foreign}`）、**文件数与字节数**（维护者要的"自动判断大小"）、facade 的**分区内依赖**（发布顺序），以及逐条的**发布说明**（缺 `description`/`license` · `publish = false` · **只有 path 没有 version 的依赖** · 开发形状不可发布）。`OnDisk::Foreign` 与"包名读不出来"都是**点名拒绝**而不是兜底（原先 `package_name` 失败会静默回退成 `"host"` —— 而包名**就是**身份命名空间，猜一个会描述出没人烤过的 id ✗）。
+
+**三个动作调用的是 CLI 同一批写入方**（`write_partition` / `write_release` / `revert_partition` + `guard_shape`），因此两个执行面不可能写下不同的树。为此把这几族模块的**特性门从 `cli` 放宽到 `any(cli, studio)`**（`cli = [..., "studio", ...]` 包含 studio、但 studio 不包含 cli，所以此前 Studio 根本够不到它们），并把 `partition_roots`（配置与成员清单该落在哪）与 `build_out_dir`（记录在哪）从 CLI 移进 `build_time` —— **一条规则只有一份实现**，CLI 现在调用它们。UI 层：`ui/forms/partition.rs` 画屏（分区块 + 每包一行 + 页脚 `w development · R release · x revert`），`app/overlay/partition.rs` 收键（**任何键都消费掉已装备的动作**，与删除/graft 同一套"两次按键"纪律），`state/partition.rs` 存状态，页脚加入 `c crates`。
+
+**实测**：`target/visual/partition.txt`（真 tmux 面板，300×60）里 `CRATE PARTITION` 屏显示出 `declared package_prefix … · 2 generated package(s)`、幽灵行 `role crate widgets (panel::frame)` + `carries 1 face(s) compiled · 1 mounted (development) · 3 copied (release)`、facade 行 `depends on partition-demo, partition-demo-widgets` ✓。**顺带修一个 CI 一直红着的东西**：`tools/nichlink-visual` 的构建行仍写着合并前的 `-p nichlink-studio`（那个包在九→三合并后已不存在）⇒ 整条视觉步骤只可能失败 ✗；改成 `-p nichlink-toolchain --features studio --bin nichlink-studio` ✓，并把 `partition` 场景接进 `ci.yml` 的视觉步骤（场景自带一个声明了拆分的宿主，因为它**不能**往真实示例宿主里加 `add_crates.rs`——那会改变示例构建出来的东西）。
+
+**钉子 7 条**（4 条视图 + 3 条 Studio）：无声明 ⇒ 视图是 `None` · 视图描述两种形状与磁盘状态（含 `Foreign` 与"开发形状不可发布"）· 未列入工作区成员清单的包被点名 · **屏幕打开时看到声明出来的两个包**（含 facade 的依赖顺序）· 无声明的宿主被说出来而不是给空清单 · **三个动作真的写下/收回**（`R` + `y` ⇒ 幽灵带 `shape = "release"` 且携带碎片源码、facade 就位、屏幕随即读到 release；`x` + `y` ⇒ 两个包都消失）✓。夹具两处地雷同时修掉：**宿主必须放在自己的一层目录里**（幽灵是同级，直接坐在 `/tmp` 的宿主会把包规划进 `/tmp`——实测真读到了别人的目录 ✗）、以及夹具的 `../toolchain` 依赖要指向本检出（否则 `cargo metadata` 读不出包名）。
+
+**门禁**：fmt ✓ · workspace 全绿 ✓ · clippy 两面 exit 0 ✓ · conventions（含 size）✓ · 发布表 ✓ · 视觉场景 ✓ · 十面见提交说明。**仍差**：P4（MCP 工具面接 `add_crates`）——`partition_view` 已经是为它准备的公开读取器。

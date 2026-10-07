@@ -3,6 +3,7 @@
 
 use super::forms::{AddState, NewProjectState, PluginState};
 use super::graft::GraftState;
+use super::partition::PartitionState;
 use super::search::SearchState;
 use crate::runtime::NodeId;
 
@@ -31,4 +32,7 @@ pub enum Overlay {
     /// Delete confirmation for one node.
     /// 针对某个节点的删除确认。
     Delete(NodeId),
+    /// The crate partition this host declares, and the three actions that write it.
+    /// 本宿主声明的 crate 分区，以及写下它的三个动作。
+    Partition(PartitionState),
 }

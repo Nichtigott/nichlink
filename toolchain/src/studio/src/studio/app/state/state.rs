@@ -18,6 +18,8 @@ pub(crate) mod new_project_field;
 mod overlays;
 #[path = "pages.rs"]
 mod pages;
+#[path = "partition.rs"]
+mod partition;
 #[path = "plugin_field.rs"]
 pub(crate) mod plugin_field;
 #[path = "reload.rs"]
@@ -30,6 +32,7 @@ pub use forms::{AddState, NewProjectState, PluginState};
 pub use graft::{GraftDeclaration, GraftPlanRow, GraftState};
 pub use overlays::Overlay;
 pub use pages::{Focus, StudioPage};
+pub use partition::{PartitionAction, PartitionState};
 pub use reload::ReloadError;
 pub(crate) use search::SearchMemo;
 pub use search::{SearchRow, SearchState};

@@ -293,7 +293,11 @@ pub(crate) fn resolve_package(directory: &str) -> Result<(PathBuf, String), Stri
 /// `explain` 从这里读 `source_scope.tsv` 与 `pruning_manifest.tsv`；该路径与
 /// `registration_check` 写出的相同。
 pub(crate) fn build_out_dir(manifest: &Path) -> PathBuf {
-    manifest.join("target/nichlink/out")
+    // One implementation, shared with Studio and the bridge: three copies of this path are three
+    // chances for one of them to read a directory the build never wrote (audit `M7`, P3.6).
+    // 一份实现，与 Studio 和桥共用：这条路径有三份拷贝，就是三次"其中一个读到的目录构建从没写过"的机会
+    // （审计 `M7`，P3.6）。
+    crate::build_time::partition_view::build_out_dir(manifest)
 }
 
 /// Run registration discovery and validation for the host project at

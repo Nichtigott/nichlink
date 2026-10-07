@@ -43,6 +43,11 @@ impl App {
                 self.overlay = Some(Overlay::Add(add));
             }
             KeyCode::Char('p') => self.overlay = Some(Overlay::Plugin(PluginState::new())),
+            // `c` for the crate partition this host declares: one screen that says what a split
+            // would write, what is on disk, and whether it could be published (audit `M7`, P3.6).
+            // `c` 打开本宿主声明的 crate 分区：一屏说清一次拆分要写什么、磁盘上已有什么、以及能不能发布
+            // （审计 `M7`，P3.6）。
+            KeyCode::Char('c') => self.open_partition(),
             KeyCode::Char('d') => {
                 if self.selected == self.registry.id() {
                     self.note(ROOT_HAS_NO_SOURCE.to_owned());

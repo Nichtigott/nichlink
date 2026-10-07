@@ -27,6 +27,8 @@ mod lifecycle;
 mod mutations;
 #[path = "namespace.rs"]
 mod namespace;
+#[path = "partition.rs"]
+mod partition;
 mod pointer;
 // The subjects `support` used to carry are one module each now: the project context and
 // the source paths derived from it, the `cargo` probe, the editor handoff, and the hot

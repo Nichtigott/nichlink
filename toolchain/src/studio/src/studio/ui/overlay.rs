@@ -87,6 +87,11 @@ pub(super) fn draw_overlay(frame: &mut Frame<'_>, app: &App, cache: &mut RenderC
             cache.hot.action_exit_area = exit;
             cache.hot.graft_compose_area = compose;
         }
+        Overlay::Partition(state) => {
+            let (exit, confirm) = draw_partition(frame, area, &state);
+            cache.hot.action_exit_area = exit;
+            cache.hot.action_confirm_area = confirm;
+        }
         Overlay::Delete(id) => {
             let (cancel, confirm) = draw_delete(frame, area, app, id);
             cache.hot.delete_cancel_area = cancel;

@@ -133,8 +133,8 @@ jobs:
           NICHLINK_VISUAL_CARGO_FLAGS: ""
         run: |
           command -v tmux >/dev/null || (sudo apt-get update && sudo apt-get install -y tmux)
-          tools/nichlink-visual home graph tree-demo
-          for scene in home graph tree-demo; do
+          tools/nichlink-visual home graph tree-demo partition
+          for scene in home graph tree-demo partition; do
             test -s "target/visual/$scene.txt"
           done
       - name: Release tables match the manifests

@@ -57,6 +57,7 @@ scene_marker() {
         search) echo "/ $QUERY" ;;
         graph) echo "CALL TREE" ;;
         tree-demo) echo "CALL TREE" ;;
+        partition) echo "CRATE PARTITION" ;;
         tree-steps) echo "CALL TREE" ;;
         tree) echo "CALL TREE" ;;
         data) echo "DATA FLOW" ;;
@@ -70,9 +71,77 @@ scene_marker() {
     esac
 }
 
+# The project a scene opens, when it is not the shared fixture.
+# 场景打开的项目，当它不是共用夹具时。
+#
+# One scene needs a host that **declares a crate split** (`add_crates.rs`), and the shared fixture —
+# a real example host — must not grow one: that file changes what the example builds. So the scene
+# brings its own tiny host, written under the build-output directory like every other artifact here.
+# 有一个场景需要一个**声明了 crate 拆分**（`add_crates.rs`）的宿主，而共用夹具是一个真实示例宿主、不能加
+# 这个文件：它会改变示例构建出来的东西。因此该场景自带一个很小的宿主，与其他产物一样写在构建输出目录下。
+scene_fixture() {
+    case "$1" in
+        partition) echo "$OUT_DIR/partition-host" ;;
+        *) echo "" ;;
+    esac
+}
+
+scene_namespace() {
+    case "$1" in
+        partition) echo "partition.demo" ;;
+        *) echo "$NAMESPACE" ;;
+    esac
+}
+
+# Write the scene's own host, before the app is started on it.
+# 在程序打开它之前，写下该场景自己的宿主。
+prepare_scene() {
+    case "$1" in
+        partition)
+            host=$(scene_fixture "$1")
+            mkdir -p "$host/src/panel/frame" "$host/target/nichlink/out"
+            # Its own `[workspace]`, like every project `nichlink new` writes: without one, a package
+            # nested under this checkout would be claimed by the checkout's workspace and cargo could
+            # not name it — and the package name is the identity namespace.
+            # 自带 `[workspace]`，与 `nichlink new` 写的每个项目一样：没有它，嵌套在本检出之下的包会被本检出的
+            # 工作区认领，cargo 就说不出它的名字——而包名就是身份命名空间。
+            cat >"$host/Cargo.toml" <<'EOF'
+[workspace]
+
+[package]
+name = "partition-demo"
+version = "0.1.0"
+edition = "2024"
+EOF
+            cat >"$host/src/lib.rs" <<'EOF'
+// A demo host for the partition screen: its declaration is the whole point of the scene.
+EOF
+            cat >"$host/src/panel/panel.rs" <<'EOF'
+crate::root_object! { kind: Panel, parent: crate::ROOT_NODE_ID, }
+EOF
+            cat >"$host/src/panel/frame/frame.rs" <<'EOF'
+crate::panel_object! { kind: Frame, parent: crate::panel::NODE_ID, }
+EOF
+            cat >"$host/add_crates.rs" <<'EOF'
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "partition-demo",
+    crates: &[Crate::named("widgets").at(&[crate::panel::frame::SUBTREE])],
+};
+EOF
+            cat >"$host/target/nichlink/out/pruning_manifest.tsv" <<'EOF'
+# node	source	symbol	path	kind	registry_name	parent	source_hash	fields	calls	parent_node	owns_registry	logical_path
+00000000000000000000000000000001	panel/panel.rs	Panel	-	Panel	Panel	-	-	-	-	-	false	-
+00000000000000000000000000000002	panel/frame/frame.rs	Frame	-	Frame	Frame	-	-	-	-	-	false	-
+EOF
+            ;;
+    esac
+}
+
 scene_query() {
     case "$1" in
-        home | add-form) echo "" ;;
+        home | add-form | partition) echo "" ;;
         tree-demo | tree-steps) echo "$TREE_DEMO_QUERY" ;;
         *) echo "$QUERY" ;;
     esac
@@ -83,6 +152,7 @@ scene_keys() {
         home | search) echo "" ;;
         graph) echo "Enter" ;;
         tree-demo) echo "Enter" ;;
+        partition) echo "c" ;;
         tree-steps) echo "Enter Down Down Right" ;;
         tree) echo "Enter Tab" ;;
         data) echo "Enter Tab Tab" ;;
@@ -91,7 +161,7 @@ scene_keys() {
 }
 
 scenes() {
-    echo "home search add-form graph tree-demo tree-steps tree data"
+    echo "home search add-form graph tree-demo tree-steps tree data partition"
 }
 
 # Whether a scene name is one of the registered ones.
@@ -137,7 +207,13 @@ build() {
     # `--offline` 是本地的默认值，因为本检出在离线环境下开发。CI 有网络，且冷启动时注册表
     # 缓存为空，因此它在这里传空值；展开用的是 `-` 而不是 `:-`，正是为了让显式传入的空值
     # 得以保留。
-    (cd "$ROOT" && cargo build -p nichlink-studio ${NICHLINK_VISUAL_CARGO_FLAGS---offline})
+    # The bin belongs to `nichlink-toolchain` since the nine-crates-into-three merge: the old
+    # `-p nichlink-studio` names a package that no longer exists, so this line could only fail.
+    # `required-features` gates the bin on `studio`, which is why the feature is named here.
+    # 合并（九 crate → 三）之后这个 bin 属于 `nichlink-toolchain`：旧的 `-p nichlink-studio` 点名的包
+    # 已经不存在，因此这一行只可能失败。`required-features` 把该 bin 门控在 `studio` 之后，所以这里点名该特性。
+    (cd "$ROOT" && cargo build -p nichlink-toolchain --features studio --bin nichlink-studio \
+        ${NICHLINK_VISUAL_CARGO_FLAGS---offline})
 }
 
 cleanup() {
@@ -172,6 +248,7 @@ run_scene() {
     query=$(scene_query "$name")
     marker=$(scene_marker "$name")
     mkdir -p "$OUT_DIR"
+    prepare_scene "$name"
     # An empty query must leave the variable unset: Studio opens the search
     # overlay for an empty value too, which would hide the screen this scene is
     # about.
@@ -181,8 +258,11 @@ run_scene() {
     else
         command="'$BIN'"
     fi
+    fixture=$(scene_fixture "$name")
+    [ -n "$fixture" ] || fixture="$FIXTURE"
+    namespace=$(scene_namespace "$name")
     tmux new-session -d -s "$SESSION" -x "$COLUMNS" -y "$ROWS" \
-        "cd '$FIXTURE' && NICH_LINK_PACKAGE_ROOT='$FIXTURE' NICH_LINK_NAMESPACE='$NAMESPACE' $command 2>'$OUT_DIR/$name.stderr'"
+        "cd '$fixture' && NICH_LINK_PACKAGE_ROOT='$fixture' NICH_LINK_NAMESPACE='$namespace' $command 2>'$OUT_DIR/$name.stderr'"
     # Two waits, because a scene has two things to prove: the app came up, and
     # the keys produced the screen this scene is about. Capturing between them
     # would sometimes save the previous screen.

@@ -20,6 +20,8 @@ mod face;
 mod face_fields;
 #[path = "forms/graft.rs"]
 mod graft;
+#[path = "forms/partition.rs"]
+mod partition;
 #[path = "forms/plugin.rs"]
 mod plugin;
 #[path = "forms/project.rs"]
@@ -28,6 +30,7 @@ mod project;
 pub(super) use delete::draw_delete;
 pub(super) use face::{draw_add, draw_edit};
 pub(super) use graft::draw_graft;
+pub(super) use partition::draw_partition;
 pub(super) use plugin::draw_plugin;
 pub(super) use project::draw_new_project;
 

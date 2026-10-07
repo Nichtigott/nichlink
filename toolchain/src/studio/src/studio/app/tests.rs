@@ -22,8 +22,8 @@ pub(super) use super::project_context::{
 };
 pub(super) use super::write_guard::{selected_package_root, with_selected_project};
 pub(super) use super::{
-    AddState, App, GraftDeclaration, Overlay, StudioPage, TraceStatus, app_function_source_range,
-    body_calls, function_bodies, function_symbols,
+    AddState, App, GraftDeclaration, Overlay, PartitionState, StudioPage, TraceStatus,
+    app_function_source_range, body_calls, function_bodies, function_symbols,
 };
 // `SearchState` is named by the fixture-gated call-tree tests only, so it is
 // imported with them: the default build refuses an unused import.
@@ -171,6 +171,11 @@ mod graph;
 mod mir_target;
 #[path = "tests/navigation.rs"]
 mod navigation;
+// The partition screen's pins: what it opens on, and the three actions it shares with
+// `nichlink crates` (audit `M7`, P3.6).
+// 分区屏的钉子：它打开时看到什么，以及它与 `nichlink crates` 共用的三个动作（审计 `M7`，P3.6）。
+#[path = "tests/partition.rs"]
+mod partition;
 // The old `tests/project.rs` held four subjects; it is now three files, each named
 // for what it covers: the project root/manifest/namespace, the new-project wizard,
 // and the MIR target resolver.

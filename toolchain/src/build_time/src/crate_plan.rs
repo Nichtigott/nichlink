@@ -458,7 +458,7 @@ fn spelling_for(host_dir: &Path, source: &str) -> String {
 // the build path no longer walks at all, because a mount is an absolute path (audit `M7`, §M7.37).
 // 只有创作面的 CLI 需要它（facade 用相对路径写它的同级依赖）；构建路径不再走任何相对路，因为挂载是绝对路径
 // （审计 `M7`，§M7.37）。
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 pub(crate) fn relative_walk(from_dir: &Path, to_file: &Path) -> Option<String> {
     let from: Vec<_> = from_dir.components().collect();
     let to: Vec<_> = to_file.components().collect();

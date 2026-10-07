@@ -10,7 +10,7 @@
 //! 那一半是**幂等**的：第二遍什么都不重写。
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::resolve_package;
 
@@ -140,7 +140,7 @@ pub(crate) fn crates(
             )?;
         }
     }
-    let (root, workspace) = partition_roots(&package_root);
+    let (root, workspace) = crate::build_time::partition_roots(&package_root);
     if revert {
         let reverted = crate::build_time::revert_partition(
             &root,
@@ -248,63 +248,4 @@ fn members_reply(changed: bool, in_a_workspace: bool) -> String {
     } else {
         "; workspace members already listed".to_owned()
     }
-}
-
-/// The directory cargo reads config from when it builds the generated packages, and the workspace
-/// manifest they are materialized into (`None` when the host belongs to no workspace).
-/// cargo 构建这些生成包时读取配置的目录，以及把它们物化进去的那份工作区清单（宿主不属于任何工作区时是
-/// `None`）。
-///
-/// The config location is **not** the host package when there is no enclosing workspace: the generated
-/// packages are the host's siblings, cargo finds config from the directory it is invoked in and that
-/// directory's ancestors, and a `.cargo/config.toml` inside the host is never read while cargo builds
-/// a sibling. Measured: with the config written inside the host, the remap never reached the ghost and
-/// every mounted face failed `assert_static_identity` (audit `M7`, §M7.40). The directory both the host
-/// and its siblings share is the parent.
-/// 没有外层工作区时，配置的位置**不是**宿主包本身：生成的包是宿主的同级包，cargo 从它被调用的目录及其祖先
-/// 目录找配置，而宿主的 `.cargo/config.toml` 在 cargo 构建一个同级包时永远不会被读到。实测：配置写在宿主
-/// 里面时，remap 从未到达幽灵，于是每个被挂载的面都让 `assert_static_identity` 失败（审计 `M7`，§M7.40）。
-/// 宿主与它的同级包共同拥有的那个目录，就是父目录。
-///
-/// Writing it there is not "leaking into an unrelated directory": the partition **puts its packages** in
-/// that directory, so it is the partition's build area, and every rustflags entry this action adds is a
-/// `--remap-path-prefix` scoped to one absolute host path — a no-op for anything else built from there.
-/// An existing config in that directory is merged, never replaced, on the same terms as everywhere else.
-/// 写在那里并不是"漏进一个无关目录"：拆分**把它的包放在**那个目录里，因此它就是这次拆分的构建区，而本动作
-/// 加的每一条 rustflags 都是作用域限于某一个宿主绝对路径的 `--remap-path-prefix`——对从那里构建的其它东西
-/// 是空操作。那里已有的配置会被合并、从不替换，条件与别处相同。
-fn partition_roots(package_root: &Path) -> (PathBuf, Option<PathBuf>) {
-    let workspace = workspace_root_of(package_root);
-    if workspace == package_root {
-        let parent = package_root.parent().unwrap_or(package_root).to_path_buf();
-        (parent, None)
-    } else {
-        (workspace.clone(), Some(workspace))
-    }
-}
-
-/// The outer-most ancestor that is a workspace, or the package itself when there is none.
-/// 最外层的、是工作区的祖先目录；没有时就是包自己。
-///
-/// `rustflags` belong to the workspace root because they are per **invocation** and cargo finds config
-/// from the current directory: a config inside the package would only apply when cargo is run from
-/// there, which is not where a workspace builds from.
-/// `rustflags` 属于工作区根，因为它们是每次调用生效的，而 cargo 从当前目录找 config：放在包里的 config 只在
-/// 从那个目录跑 cargo 时才生效，而工作区并不是从那里构建的。
-fn workspace_root_of(package_root: &Path) -> PathBuf {
-    let mut root = package_root.to_path_buf();
-    let mut current = package_root.parent();
-    while let Some(parent) = current {
-        let manifest = parent.join("Cargo.toml");
-        let is_workspace = std::fs::read_to_string(&manifest)
-            .map(|text| text.lines().any(|line| line.trim() == "[workspace]"))
-            .unwrap_or(false);
-        if is_workspace {
-            root = parent.to_path_buf();
-            current = parent.parent();
-        } else {
-            break;
-        }
-    }
-    root
 }
