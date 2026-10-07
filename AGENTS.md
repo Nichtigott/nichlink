@@ -382,6 +382,17 @@ crates, and it needs the index.
 这样熬过了两个改名批次。`tools/nichlink-publish --verify-consumers` 是它在已发布 crate 上的
 对应物，那条需要 index。
 
+`tools/nichlink-partition-rehearsal` partitions a host twice — once as a member of a
+workspace and once with no workspace above it — builds both, and checks the four facts a
+partition must not change: the host's own sources byte-identical, the same `graft_plan.tsv`
+in every shape, the same face identities, and a `promote` that still lands. Three batches of
+this feature were verified by hand and every defect it had was found by doing the whole thing
+once; this is that run, as a gate.
+`tools/nichlink-partition-rehearsal` 把宿主分区两次——一次作为某个工作区的成员、一次在它之上
+没有任何工作区——各构建一次，并检查拆分绝不能改变的四条事实：宿主自己的源码逐字节相同 · 每个形状里
+同一份 `graft_plan.tsv` · 同样的注册面身份 · 以及 `promote` 仍能落地。这个特性被手工验证了三个批次，
+而它每一个缺陷都是靠把整件事完整做一遍才发现的；本工具就是那次运行，作为一道门禁。
+
 `tools/nichlink-package-audit` checks two different things. Package *contents* —
 every `src/**/*.rs` module and the declared README must be in the package — are
 verified for all nine crates, because `cargo package --list` needs no

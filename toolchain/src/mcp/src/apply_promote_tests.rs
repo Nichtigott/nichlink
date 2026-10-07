@@ -311,3 +311,73 @@ static_graft_plan!(
     );
     assert!(!first.contains("button_fast"), "{first}");
 }
+
+/// A preview learns the namespace from the **project**, not from the copy it works in (audit `M7`,
+/// §M7.41).
+/// 预览从**项目**而不是它动手的副本那里学命名空间（审计 `M7`，§M7.41）。
+///
+/// A preview copies the package into the temp directory. Any relative `path` dependency in the host's
+/// manifest then points beside that copy, where nothing exists, and `cargo metadata` cannot name the
+/// package — so a host that depends on its implementation crate by path (which is exactly what a
+/// partitioned host does) could not be previewed at all, while the apply half, running in the project
+/// itself, was fine. This fixture reproduces that shape: a project whose sibling dependency resolves,
+/// and a copy of it taken the way a preview takes one.
+/// 预览把包复制进临时目录。宿主清单里任何相对的 `path` 依赖于是指向那个副本旁边、那里什么都没有，而
+/// `cargo metadata` 说不出包名——于是一个按 path 依赖其实现 crate 的宿主（分区后的宿主正是这样）**完全无法
+/// 预览**，而落盘那一半在项目里跑、一切正常。本夹具复现的正是这个形状：一个兄弟依赖能解析的项目，以及一次
+/// 按预览的方式取下的副本。
+#[test]
+fn a_preview_learns_the_namespace_from_the_project_not_the_copy() {
+    let area = scratch("namespace");
+    let root = area.join("app");
+    let sibling = area.join("fast-widget");
+    std::fs::create_dir_all(root.join("src")).expect("the project's source directory");
+    std::fs::create_dir_all(sibling.join("src")).expect("the sibling's source directory");
+    std::fs::write(
+        sibling.join("Cargo.toml"),
+        "[package]\nname = \"fast-widget\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("the sibling manifest");
+    std::fs::write(sibling.join("src/lib.rs"), "").expect("the sibling source");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\nfast-widget = { path = \"../fast-widget\" }\n",
+    )
+    .expect("the project manifest");
+    std::fs::write(root.join("src/lib.rs"), "").expect("the project source");
+    // A record the preview can load from the project root, so the call gets past that step and reaches
+    // the namespace it used to ask the copy for.
+    // 一条预览能从项目根读到的记录，好让这次调用越过那一步、到达它过去向副本索要的命名空间。
+    let record = root.join(".nichlink/external-grafts/fast/graft.plan");
+    std::fs::create_dir_all(record.parent().expect("the record directory")).expect("record dir");
+    std::fs::write(
+        &record,
+        "version = 1\ntarget = 00000000000000000000000000000000\ntarget_path = root/panel\n\
+         graft = fast\nfull = false\n",
+    )
+    .expect("the record");
+
+    let work = crate::mcp::preview::copy_package(&root).expect("the preview copy");
+    let refused = refusal(run_promote(
+        &root,
+        &work,
+        false,
+        &json!({"selector": "fast", "confirm": true}),
+    ));
+    // The copy's `../fast-widget` is gone, so the *copy* has no namespace to learn — and that is exactly
+    // why the answer must come from the project. The refusal is a later one, about the record.
+    // 副本的 `../fast-widget` 不在，因此*副本*没有命名空间可学——这正是答案必须来自项目的原因。拒绝来自更
+    // 后面的一步，而且说的是那条记录。
+    assert!(
+        !refused.contains("cannot learn the identity namespace"),
+        "the namespace was asked of the copy: {refused}"
+    );
+    assert!(
+        refused.contains("does not resolve against the tree")
+            || refused.contains("no declaration keeps this record's slot alive"),
+        "the call should reach the record's own resolution: {refused}"
+    );
+    let _ = std::fs::remove_dir_all(&work);
+    let _ = std::fs::remove_dir_all(&area);
+}

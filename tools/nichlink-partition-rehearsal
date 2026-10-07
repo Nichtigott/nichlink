@@ -1,0 +1,448 @@
+#!/bin/sh
+# Rehearse a crate partition end to end: **both shapes build**, and the four acceptance facts the
+# maintainer fixed hold byte for byte.
+# 端到端演练一次 crate 拆分：**两个形状都构建**，而维护者定下的四条验收事实逐字节成立。
+#
+#   tools/nichlink-partition-rehearsal
+#   NICHLINK_REHEARSAL_CARGO_FLAGS="" tools/nichlink-partition-rehearsal
+#
+# Why it exists: the partition (`nichlink crates --write`, the `add_crates.rs` declaration, the ghost
+# and facade packages) was verified by hand for three batches — and every defect it ever had was found
+# by *doing the whole thing once*: the mount spelling that cannot be relative, the two cross-crate
+# references the facade had to rewrite, the host emitting a graft table for a face it had handed away,
+# the reachability check refusing the scaffold's own imports, the implementation file layout `promote`
+# could not find, and a remap written where cargo never reads it (audit `M7`, §M7.37–§M7.40). Hand runs
+# leave nothing behind; this script leaves a gate.
+# 为什么需要它：拆分（`nichlink crates --write`、`add_crates.rs` 声明、幽灵与 facade 两个包）被手工验证了
+# 三个批次——而它曾有过的每一个缺陷都是**把整件事完整做一遍**才发现的：不可能相对的挂载拼写、facade 必须改写
+# 的两处跨 crate 引用、宿主为已经交出去的切口面发 graft 表、可达性检查拒绝脚手架自己的导入、`promote` 找不到
+# 的实现文件版式、以及写在 cargo 永远不会读的地方的 remap（审计 `M7`，§M7.37–§M7.40）。手工跑什么都不留下；
+# 这个脚本留下的是一道门禁。
+#
+# Three legs, because the three shapes are different code paths:
+#   1. **workspace** — the host is a member of a workspace, the generated packages have to be
+#      materialized into its `members`, and the unpartitioned tree, the host's partitioned tree, the
+#      ghost's tree and the facade's tree have to carry the same graft plan and the same identities;
+#   2. **standalone** — nothing above the host is a workspace, so the remap belongs to the directory the
+#      host and its generated siblings share (measured: writing it inside the host left every mounted
+#      face failing `assert_static_identity`, §M7.40);
+#   3. **promote on a partitioned tree** — a scaffolded host (`new_project` writes faces the authoring
+#      executor owns) that is partitioned *and* has a graft record landed into it.
+# 三条腿，因为三种形状是三条不同的代码路径：
+#   1. **工作区**——宿主是某个工作区的成员，生成的包必须被物化进它的 `members`，而不分区的树、宿主分区后的树、
+#      幽灵的树与 facade 的树必须带同样的 graft 计划与同样的身份；
+#   2. **独立**——宿主之上没有任何工作区，因此 remap 属于宿主与它生成的同级包共同拥有的那个目录（实测：写在
+#      宿主里面时，每个被挂载的面都在 `assert_static_identity` 上失败，§M7.40）；
+#   3. **在分区树上 promote**——一个脚手架建出来的宿主（`new_project` 写的注册面归创作执行器所有）既被分区，
+#      又落下一条 graft 记录。
+#
+# The three trees are taken through `check` with the same environment the generated build scripts set
+# (`NICH_LINK_SHAPE_ONLY`, `NICH_LINK_SHAPE_FACADE`), because that is the same pipeline the build runs —
+# and the cargo build below is what proves the trees compile. Nothing here guesses at cargo's hashed
+# build directories.
+# 三棵树是通过 `check` 加生成构建脚本所设的同一套环境变量（`NICH_LINK_SHAPE_ONLY`、`NICH_LINK_SHAPE_FACADE`）
+# 取得的，因为那就是构建所跑的同一套管线——而下面的 cargo build 正是证明这些树编译得过的东西。这里没有任何
+# 地方去猜 cargo 带哈希的构建目录。
+#
+# It needs no network when the registry cache is warm, which is why the flag below defaults to
+# `--offline` and CI, which has a network, can set it empty.
+# 注册表缓存是热的时候它不需要网络，这正是下面那个标志默认 `--offline`、而有网络的 CI 可以把它置空的原因。
+
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CARGO_FLAGS="${NICHLINK_REHEARSAL_CARGO_FLAGS---offline}"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+step() { echo "== $1" >&2; }
+fail() { echo "partition rehearsal FAILED: $1" >&2; exit 1; }
+# shellcheck disable=SC2086  # the flags are a deliberate word list
+build() { command cargo build $CARGO_FLAGS "$@"; }
+
+step "building the checkout's CLI and bridge"
+build -p nichlink-toolchain --features cli,mcp --bin nichlink --bin nichlink-mcp \
+  --manifest-path "$ROOT/Cargo.toml"
+NICHLINK="$ROOT/target/debug/nichlink"
+BRIDGE="$ROOT/target/debug/nichlink-mcp"
+
+# The implementation crate every fixture grafts onto. Its face lives at `src/fast/fast.rs`, i.e. the
+# module `fast` — the layout this repository's own generator writes.
+# 每个夹具都嫁接到的实现 crate。它的注册面住在 `src/fast/fast.rs`，也就是模块 `fast`——本仓库自己的生成器
+# 写出的那种版式。
+write_fast_widget() {
+  mkdir -p "$1/src/fast"
+  cat >"$1/Cargo.toml" <<EOF
+[package]
+name = "fast-widget"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["run"] }
+
+[build-dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["build"] }
+EOF
+  cat >"$1/build.rs" <<'EOF'
+fn main() {
+    println!("cargo:rerun-if-changed=src");
+    nichlink_toolchain::build_time::run();
+}
+EOF
+  cat >"$1/src/lib.rs" <<'EOF'
+nichlink_toolchain::runtime::host!();
+EOF
+  cat >"$1/src/fast/fast.rs" <<'EOF'
+//! 项目外的 Widget 实现。
+//! The out-of-project replacement for Widget.
+
+use nichlink_toolchain::runtime::registry_core::{
+    ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
+};
+
+pub struct WidgetFast;
+
+nichlink_toolchain::runtime::external_object! {
+    source: "fast/fast.rs",
+    kind: WidgetFast,
+    preset: NoPreset,
+    parts: NoParts,
+    name: { zh: "快速控件", en: "Fast widget" },
+    summary: { zh: "项目外实现", en: "Out-of-project implementation" },
+    exports: ["panel.render"],
+    needs_registry: false,
+    parent: root_node_id(crate::NICHLINK_NAMESPACE),
+    getting_from_other_registry: None,
+    registry_rule_path: "fast.rs",
+    registry_rule: RegistrationRule::ANY,
+    requires: [],
+    provides: [],
+    flow: FlowContract::new(
+        ContractId::new("panel.render.v1"),
+        1,
+        "PanelInput",
+        "PanelFrame",
+    ),
+    runtime_checks: [],
+}
+EOF
+}
+
+# The declaration that makes the split: `panel::frame` is handed to a crate of its own.
+# 让拆分成立的声明：`panel::frame` 被交给一个属于它自己的 crate。
+write_declaration() {
+  cat >"$1/add_crates.rs" <<'EOF'
+//! The crate shape this hosted tree declares.
+//! 这棵宿主树声明的 crate 形状。
+
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "app",
+    crates: &[
+        Crate::named("widgets").at(&[crate::panel::frame::SUBTREE]),
+    ],
+};
+EOF
+}
+
+# A self-contained host: `panel` (root face) → `panel::frame` (owns a registry) → `panel::frame::widget`,
+# with a typed graft cut on the leaf. `$2` is its package name, `$3` is `yes` when the manifest has to be
+# its own workspace root (what `new_project` writes).
+# 一个自足的宿主：`panel`（根面）→ `panel::frame`（拥有注册机）→ `panel::frame::widget`，叶子带一条类型化
+# graft 切口。`$2` 是包名，`$3` 为 `yes` 时清单要自带 `[workspace]` 表（也就是 `new_project` 写的样子）。
+write_host() {
+  mkdir -p "$1/src/panel/frame/widget" "$1/src/panel/frame/registry_rule" "$1/src/panel/registry_rule"
+  {
+    if [ "$3" = "yes" ]; then
+      printf '[workspace]\n\n'
+    fi
+    cat <<EOF
+[package]
+name = "$2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["run"] }
+fast-widget = { path = "../fast-widget" }
+
+[build-dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["build"] }
+EOF
+  } >"$1/Cargo.toml"
+  cat >"$1/build.rs" <<'EOF'
+fn main() {
+    println!("cargo:rerun-if-changed=src");
+    nichlink_toolchain::build_time::run();
+}
+EOF
+  cat >"$1/src/lib.rs" <<'EOF'
+nichlink_toolchain::runtime::host!();
+
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.rehearsal.partition");
+
+nichlink_toolchain::runtime::static_graft_plan!(
+    FRAMEWORK,
+    cut(crate::panel::frame::widget::NODE_ID) graft(fast_widget::fast::NODE_ID),
+);
+EOF
+  cat >"$1/src/panel/panel.rs" <<'EOF'
+crate::root_object! {
+    kind: Panel,
+    needs_registry: true,
+    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),
+}
+EOF
+  cat >"$1/src/panel/registry_rule/registry_rule.rs" <<'EOF'
+//! Panel 对直接子对象的最低结构要求。
+//! Panel's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  cat >"$1/src/panel/frame/frame.rs" <<'EOF'
+crate::panel_object! {
+    kind: Frame,
+    needs_registry: true,
+    parent: crate::panel::NODE_ID,
+}
+EOF
+  cat >"$1/src/panel/frame/registry_rule/registry_rule.rs" <<'EOF'
+//! Frame 对直接子对象的最低结构要求。
+//! Frame's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  cat >"$1/src/panel/frame/widget/widget.rs" <<'EOF'
+crate::frame_object! {
+    kind: Widget,
+    parent: crate::panel::frame::NODE_ID,
+}
+EOF
+}
+
+# Every `crate::` path a host's mounted faces use, with whitespace removed, for a byte comparison.
+# 宿主每个被挂载面用到的 `crate::` 身份断言，去掉空白，用于逐字节比较。
+cut_identity() {
+  line=$(grep 'assert_static_identity(crate::panel::frame::widget::NODE_ID' "$1/generated_lib.rs" || true)
+  [ -n "$line" ] || fail "no identity assertion for the cut face in $1"
+  printf '%s' "$line" | tr -d ' '
+}
+
+# ============================================================ leg 1: the workspace shape
+step "leg 1/3: a host inside a workspace"
+
+WS="$WORK/ws"
+mkdir -p "$WS"
+# A workspace the user maintains: a comment, a multi-line list, and another table after it. The merge
+# has to leave every one of those alone.
+# 一份用户维护的工作区：一条注释、一份多行清单，后面还有别的表。合并必须把它们一个都不动。
+cat >"$WS/Cargo.toml" <<'EOF'
+# a workspace the user maintains
+[workspace]
+resolver = "3"
+members = [
+    "app",
+    "fast-widget",
+]
+
+[workspace.package]
+version = "0.1.0"
+EOF
+cp "$WS/Cargo.toml" "$WORK/ws-manifest-before"
+write_fast_widget "$WS/fast-widget"
+write_host "$WS/app" app no
+OUT="$WS/app/target/nichlink/out"
+
+step "leg 1: the unpartitioned baseline (one crate, no declaration)"
+"$NICHLINK" check "$WS/app" >/dev/null || fail "the unpartitioned host does not check"
+cp -R "$OUT" "$WORK/base-out"
+
+step "leg 1: the three shapes of the partitioned tree"
+write_declaration "$WS/app"
+# The host's own sources are what ① compares, and the declaration is part of what the host's tree is —
+# so the baseline for it is taken with the declaration in place.
+# ① 比较的是宿主自己的源码，而声明是宿主这棵树的一部分——因此基准是在声明就位之后取的。
+(cd "$WS/app" && find src -type f | sort | xargs sha256sum) >"$WORK/host-before.sha256"
+sha256sum "$WS/app/Cargo.toml" "$WS/app/build.rs" >>"$WORK/host-before.sha256"
+
+"$NICHLINK" check "$WS/app" >/dev/null || fail "the partitioned host does not check"
+cp -R "$OUT" "$WORK/host-out"
+NICH_LINK_SHAPE_ONLY=panel::frame "$NICHLINK" check "$WS/app" >/dev/null ||
+  fail "the ghost shape does not check"
+cp -R "$OUT" "$WORK/ghost-out"
+NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$WS/app" >/dev/null ||
+  fail "the facade shape does not check"
+cp -R "$OUT" "$WORK/facade-out"
+
+# ② The graft plan is the same data in every shape: the declaration did not move, so the cut, the graft
+# and the `full` flag cannot differ.
+# ② graft 计划在每个形状里都是同一份数据：声明没有搬家，因此切口、替换与 `full` 不可能不同。
+for shape in host ghost facade; do
+  cmp "$WORK/base-out/graft_plan.tsv" "$WORK/$shape-out/graft_plan.tsv" ||
+    fail "② the graft plan differs in the $shape shape"
+done
+
+# ③ Identity is unchanged: the facade carries the union of the faces with byte-identical triples, and the
+# cut face baked into the ghost is the one the unpartitioned build baked.
+# ③ 身份不变：facade 携带面的并集、三元组逐字节相同，而烤进幽灵的切口面就是不分区构建烤进去的那一个。
+grep -o 'StaticFace::new([^;]*),' "$WORK/base-out/generated_lib.rs" | sort >"$WORK/base.faces"
+grep -o 'StaticFace::new([^;]*),' "$WORK/facade-out/generated_lib.rs" | sort >"$WORK/facade.faces"
+cmp "$WORK/base.faces" "$WORK/facade.faces" ||
+  fail "③ the facade's face identities differ from the unpartitioned tree"
+cut_identity "$WORK/base-out" >"$WORK/cut.base"
+cut_identity "$WORK/ghost-out" >"$WORK/cut.ghost"
+cmp "$WORK/cut.base" "$WORK/cut.ghost" ||
+  fail "③ the cut face's identity moved when the subtree changed crates"
+# A crate asserts only about the faces **it** compiles: the host keeps the one that stayed with it and
+# drops the two it handed away; the ghost is the mirror image. Getting this wrong is what made the first
+# partitioned build fail with `cannot find 'frame' in 'panel'` (audit `M7`, §M7.36).
+# 一个 crate 只为**自己**编译的面做断言：宿主留着留给它的那一个、丢掉交出去的那两个；幽灵正好相反。搞错这一点
+# 正是第一次分区构建报 `cannot find 'frame' in 'panel'` 的原因（审计 `M7`，§M7.36）。
+if grep -q 'assert_static_identity(crate::panel::frame::NODE_ID' "$WORK/host-out/generated_lib.rs"; then
+  fail "③ the host asserts about a face it handed away"
+fi
+if grep -q 'assert_static_identity(crate::panel::NODE_ID' "$WORK/ghost-out/generated_lib.rs"; then
+  fail "③ the ghost asserts about a face that stayed with the host"
+fi
+
+step "leg 1: writing the partition"
+# The plan is read from the published manifest, so publish the host's own shape again before planning.
+# 规划读的是已发布的清单，因此在规划之前把宿主自己那一形状再发布一次。
+"$NICHLINK" check "$WS/app" >/dev/null || fail "the partitioned host does not check"
+"$NICHLINK" crates --write "$WS/app"
+
+# ① The host's own sources are not touched: partitioning changes which crate compiles a face, never the
+# face. The declaration file is the only thing that appears.
+# ① 宿主自己的源码一个字节都没动：分区改的是"哪个 crate 编译某个面"，从不是那个面。唯一新增的是声明文件。
+(cd "$WS/app" && find src -type f | sort | xargs sha256sum) >"$WORK/host-after.sha256"
+sha256sum "$WS/app/Cargo.toml" "$WS/app/build.rs" >>"$WORK/host-after.sha256"
+cmp "$WORK/host-before.sha256" "$WORK/host-after.sha256" ||
+  fail "① the host's sources changed during --write"
+
+# The generated packages are materialized into the workspace's member list, and the remap lands in the
+# config cargo reads from the workspace root.
+# 生成的包被物化进工作区的成员清单，而 remap 落在 cargo 从工作区根读取的那份配置里。
+grep -q '"app-widgets"' "$WS/Cargo.toml" || fail "the ghost is not a workspace member"
+grep -q '"app-facade"' "$WS/Cargo.toml" || fail "the facade is not a workspace member"
+grep -q '\[workspace.package\]' "$WS/Cargo.toml" || fail "the merge ate another table"
+grep -q '# a workspace the user maintains' "$WS/Cargo.toml" || fail "the merge ate a comment"
+[ -f "$WS/.cargo/config.toml" ] || fail "the remap is not at the workspace root"
+
+step "leg 1: building the partitioned tree from the workspace root"
+(cd "$WS" && build -p app-facade) || fail "the partitioned workspace does not build"
+
+step "leg 1: idempotence and revert"
+"$NICHLINK" crates --write "$WS/app" >/dev/null
+(cd "$WS/app" && find src -type f | sort | xargs sha256sum) >"$WORK/host-twice.sha256"
+sha256sum "$WS/app/Cargo.toml" "$WS/app/build.rs" >>"$WORK/host-twice.sha256"
+cmp "$WORK/host-after.sha256" "$WORK/host-twice.sha256" || fail "a second --write changed something"
+
+"$NICHLINK" crates --revert "$WS/app" >/dev/null
+cmp "$WORK/ws-manifest-before" "$WS/Cargo.toml" ||
+  fail "the revert did not restore the workspace manifest byte for byte"
+[ ! -d "$WS/app-widgets" ] || fail "the revert left the ghost behind"
+[ ! -d "$WS/app-facade" ] || fail "the revert left the facade behind"
+[ ! -f "$WS/.cargo/config.toml" ] || fail "the revert left the remap behind"
+(cd "$WS" && command cargo metadata $CARGO_FLAGS --no-deps --format-version 1 >/dev/null) ||
+  fail "the workspace does not load after the revert"
+
+# ============================================================ leg 2: the standalone shape
+step "leg 2/3: a host with no enclosing workspace"
+
+SOL="$WORK/sol"
+mkdir -p "$SOL"
+write_fast_widget "$SOL/fast-widget"
+write_host "$SOL/app" app yes
+write_declaration "$SOL/app"
+
+"$NICHLINK" check "$SOL/app" >/dev/null || fail "the standalone host does not check"
+"$NICHLINK" crates --write "$SOL/app" >/dev/null
+
+[ -f "$SOL/.cargo/config.toml" ] ||
+  fail "the remap is not in the directory the host and its siblings share"
+[ ! -f "$SOL/app/.cargo/config.toml" ] ||
+  fail "the remap was written where cargo never reads it while building a sibling"
+
+step "leg 2: building the partitioned tree from the facade's own directory"
+(cd "$SOL/app-facade" && build) ||
+  fail "the standalone partitioned tree does not build (the remap never reached the ghost)"
+
+"$NICHLINK" crates --revert "$SOL/app" >/dev/null
+[ ! -f "$SOL/.cargo/config.toml" ] || fail "the revert left the remap behind in the standalone shape"
+
+# ============================================================ leg 3: promote on a partitioned tree
+step "leg 3/3: promote landing into a partitioned tree"
+
+PR="$WORK/promote"
+mkdir -p "$PR"
+write_fast_widget "$PR/fast-widget"
+"$BRIDGE" --call new_project --json "{\"directory\":\"app\",\"package\":\"app\",\"kind\":\"library\",\"dependency\":\"path\",\"path\":\"$ROOT\",\"faces\":[{\"fields\":{\"module\":\"panel\",\"kind\":\"Panel\",\"needs_registry\":true}},{\"fields\":{\"module\":\"frame\",\"kind\":\"Frame\",\"needs_registry\":true},\"parent\":\"root/panel\"},{\"fields\":{\"module\":\"widget\",\"kind\":\"Widget\"},\"parent\":\"root/panel/frame\"}],\"apply\":true}" --root "$PR" >/dev/null ||
+  fail "the scaffold did not run"
+
+# The scaffold writes faces the authoring executor owns (that is what `promote` may rewrite) but no graft
+# plan and no implementation dependency; both are the host author's to add, and `fast-widget` has to be a
+# path dependency because the typed cut names it.
+# 脚手架写出的注册面归创作执行器所有（这正是 `promote` 可以改写的东西），但它不写 graft 计划、也不写实现依赖；
+# 两者都是宿主作者该加的，而 `fast-widget` 必须是一条 path 依赖，因为类型化切口点名了它。
+sed 's|^\[build-dependencies\]|fast-widget = { path = "../fast-widget" }\n\n[build-dependencies]|' \
+  "$PR/app/Cargo.toml" >"$PR/app/Cargo.toml.with-dep"
+mv "$PR/app/Cargo.toml.with-dep" "$PR/app/Cargo.toml"
+cat >>"$PR/app/src/lib.rs" <<'EOF'
+
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.rehearsal.promote");
+
+nichlink_toolchain::runtime::static_graft_plan!(
+    FRAMEWORK,
+    cut(crate::panel::object::frame::object::widget::NODE_ID) graft(fast_widget::fast::NODE_ID),
+);
+EOF
+cat >"$PR/app/add_crates.rs" <<'EOF'
+//! The crate shape this host declares.
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "app",
+    crates: &[Crate::named("widgets").at(&[crate::panel::object::frame::SUBTREE])],
+};
+EOF
+
+"$NICHLINK" check "$PR/app" >/dev/null || fail "the scaffolded host does not check"
+"$NICHLINK" crates --write "$PR/app" >/dev/null
+(cd "$PR/app-facade" && build) || fail "the scaffolded partition does not build before the promote"
+
+# The record the landing consumes: its target is the identity the tool reports for the cut face, so the
+# script never hard-codes a hash.
+# 落地所消费的那条记录：它的目标是工具为切口面报出的身份，因此脚本从不硬编码哈希。
+target=$("$NICHLINK" explain root/panel/frame/widget --path "$PR/app" | awk '/^node /{print $2; exit}')
+[ -n "$target" ] || fail "could not read the cut face's identity"
+mkdir -p "$PR/app/.nichlink/external-grafts/fast"
+cat >"$PR/app/.nichlink/external-grafts/fast/graft.plan" <<EOF
+version = 1
+target = $target
+target_path = root/panel/frame/widget
+graft = fast
+full = false
+EOF
+
+step "leg 3: previewing and landing the promote"
+"$BRIDGE" --call apply --json '{"action":"promote","selector":"fast","confirm":true}' --root "$PR/app" >/dev/null ||
+  fail "the promote preview was refused on the partitioned tree"
+"$BRIDGE" --call apply --json '{"action":"promote","selector":"fast","confirm":true,"apply":true}' --root "$PR/app" >/dev/null ||
+  fail "the promote did not land on the partitioned tree"
+
+grep -q 'graft(crate::panel::object::frame::object::widget::NODE_ID)' "$PR/app/src/lib.rs" ||
+  fail "the entry does not point the slot at the face itself after the landing"
+[ -z "$(find "$PR/app/.nichlink/external-grafts" -mindepth 1 -maxdepth 1 2>/dev/null)" ] ||
+  fail "the record was not retired"
+[ -n "$(find "$PR/app/.nichlink/trash/external-grafts" -mindepth 1 -maxdepth 1 2>/dev/null)" ] ||
+  fail "the record did not move to the trash"
+(cd "$PR/app-facade" && build) || fail "the tree does not build after the promote"
+
+step "OK — both shapes build, the four facts hold, and the promote lands"

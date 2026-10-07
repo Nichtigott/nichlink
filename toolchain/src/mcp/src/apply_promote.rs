@@ -76,7 +76,18 @@ pub(crate) fn run_promote(
         )
     })?;
     let recorded = RecordedGraft::new(selector.clone(), document.clone());
-    let namespace = crate::mcp::registry::namespace(work)?;
+    // The namespace comes from the **project**, not from the work directory: in a preview the work
+    // directory is a throwaway copy in the temp directory, so any relative `path` dependency in the
+    // host's manifest points at something that does not exist beside that copy and `cargo metadata`
+    // cannot name the package at all. Measured by the partition rehearsal: a host that depends on its
+    // implementation crate by path could not be previewed at all ("cannot learn the identity
+    // namespace"), while the apply half — which runs in the project itself — worked, so the defect only
+    // ever showed up in previews. Every other action already asks `root`; this one asked the copy.
+    // 命名空间取自**项目**，而不是工作目录：预览时工作目录是临时目录里的一次性副本，因此宿主清单里任何相对的
+    // `path` 依赖都指向那个副本旁边并不存在的东西，`cargo metadata` 根本说不出包名。由分区演练实测：一个按
+    // path 依赖其实现 crate 的宿主**完全无法预览**（"cannot learn the identity namespace"），而落盘那一半
+    // ——它就在项目里跑——是好的，因此这个缺陷只在预览里现形。其它动作早就是问 `root`，只有它问的是副本。
+    let namespace = crate::mcp::registry::namespace(root)?;
     let registry = load_registry(work, &namespace)?;
     let resolved = registry
         .resolve_record(&recorded)

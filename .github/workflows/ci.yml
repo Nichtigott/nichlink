@@ -46,6 +46,22 @@ jobs:
         env:
           NICHLINK_REHEARSAL_CARGO_FLAGS: ""
         run: tools/nichlink-external-rehearsal
+      - name: Partition rehearsal (both shapes)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # Partitions a host in both shapes it can be built in — a member of a workspace, and a host with
+        # no workspace above it — builds each one, and checks the four facts the maintainer fixed: the
+        # host's own sources byte-identical, the same graft plan in every shape, the same face
+        # identities, and a `promote` that still lands on a partitioned tree. Every defect this feature
+        # ever had was found by doing the whole thing once, by hand; this step is that run, as a gate.
+        # It runs on one cell because it builds three throwaway projects from scratch.
+        # 把宿主在它能被构建的**两个形状**里各分区一次——某个工作区的成员，以及上面没有任何工作区的宿主
+        # ——各构建一次，并检查维护者定下的四条事实：宿主自己的源码逐字节相同 · 每个形状里同一份 graft
+        # 计划 · 同样的注册面身份 · 以及 `promote` 在分区树上仍能落地。这个特性有过的每一个缺陷都是靠手工
+        # 把整件事完整做一遍才发现的；本步骤就是那次运行，作为一道门禁。它只在一个矩阵单元上跑，因为它要
+        # 从零构建三个一次性项目。
+        env:
+          NICHLINK_REHEARSAL_CARGO_FLAGS: ""
+        run: tools/nichlink-partition-rehearsal
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging

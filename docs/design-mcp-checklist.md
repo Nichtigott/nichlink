@@ -2064,3 +2064,20 @@ error[E0433]: cannot find `frame` in `panel`
 **钉子 8 条**：`crate_members` 7 条（单行合并 · 多行保形 · 没有清单时在表头下加一行 · 收回后逐字节还原/键本身是本动作加的就整键去掉 · 别人的条目与 glob 不动 · 三种读不懂的形状都拒绝且不写一个字节 · 拼写是相对路径、排序去重）+ `crate_write` 1 条（**有工作区才编辑清单**：写入 `members_changed` 为真、撤回后清单逐字节还原；`workspace: None` 时清单一个字都不动）✓。
 
 **仍差（P3.5 余下）**：`--release` 物化真实包（自包含副本 + `[package.metadata.nichlink] shape` + 身份/记录/租约迁移并显式列出哪些记录失效）· **CI 两个形状都构建都测**。
+
+### §M7.41 P3.5 第二件：**CI 两个形状都构建都测** = 一道可复跑的门禁（2026-10-07）
+
+新工具 `tools/nichlink-partition-rehearsal`（POSIX sh，与 `tools/nichlink-external-rehearsal` 同一套写法：`NICHLINK_REHEARSAL_CARGO_FLAGS` 控制 cargo 标志、默认 `--offline`，`mktemp -d` + `trap` 清理），接进 `.github/workflows/ci.yml` 的 `verify` 任务（Linux + stable 那一个单元，与外部路径演练并列）。**它存在的理由写在脚本头上**：这个特性被手工验证了三个批次，而它每一个缺陷都是靠**把整件事完整做一遍**才发现的——不可能相对的挂载拼写、facade 必须改写的两处跨 crate 引用、宿主为交出去的切口面发 graft 表、可达性检查拒绝脚手架自己的导入、`promote` 找不到的实现文件版式、写在 cargo 永远不会读的地方的 remap（§M7.37–§M7.40）。手工跑什么都不留下。
+
+**三条腿**（三种形状是三条代码路径）：
+1. **工作区形状**——宿主是某个工作区的成员：先 `check` 取不分区的基线，再取**分区后的三个形状**（宿主 / `NICH_LINK_SHAPE_ONLY=panel::frame` / `NICH_LINK_SHAPE_FACADE=1`），然后 `crates --write`、从**工作区根** `cargo build -p app-facade`、跑一次幂等写、再 `--revert`；四条验收事实逐字节断言（① 宿主 `src/**`+清单+build.rs 的 sha256 前后相同 ② `graft_plan.tsv` 在四个形状里逐字节相同 ③ facade 的 `StaticFace::new` 三元组与基线逐行相同、切割端的身份断言与幽灵树相同、**且各自只为自己的面断言**——宿主不为交出去的面断言、幽灵不为留下的面断言 ④ 见第 3 条腿），另加 `members` 物化、注释/别的表未被吃掉、revert 后清单**逐字节**还原、`cargo metadata` 仍能加载。
+2. **独立形状**——宿主之上没有任何工作区：`--write` 后 remap 必须在**宿主与其同级包共享的父目录**（⑯ 的回归），`cargo build` 在 facade 自己的目录里必须通过。
+3. **在分区树上 `promote`**——用 `new_project` 建一个脚手架宿主（它写的面归创作执行器所有，这正是 `promote` 能改写的前提），补上 graft 计划、实现依赖与声明，分区并构建，然后写一条记录（**目标身份用 `nichlink explain` 读出，脚本不硬编码哈希**），先预览、再落盘，断言：入口改成自嫁接、记录进 `trash/`、**落地后仍能构建**。
+
+**它第一次跑就抓到 ⑰（真缺陷）**：leg 3 的**预览**被拒——`promote` 读命名空间时问的是**工作目录**，而预览时工作目录是临时目录里的一次性副本，宿主清单里相对的 `path` 依赖（`../fast-widget`，也就是分区后宿主**必然**有的那条实现依赖）在那个副本旁边什么都不存在 ⇒ `cargo metadata` 说不出包名（`cannot learn the identity namespace of /tmp/nichlink-toolchain-preview-…: failed to read /tmp/fast-widget/Cargo.toml`）。**落盘那一半是好的**（它在项目里跑），因此这个缺陷**只在预览里现形**——手工那一次之所以"看起来能预览"，是因为 `/tmp/fast-widget` 恰好是先前实验的残留 ✗（假绿，正是本门禁存在的理由）。修法：与其它动作一致，命名空间取自**项目根**（`namespace(root)`），副本只当工作目录用 ✓。钉子：`a_preview_learns_the_namespace_from_the_project_not_the_copy`（夹具里兄弟 crate 在项目旁边解析得到、在副本旁边解析不到；断言拒绝**不是**"学不到命名空间"，而是后面那一步关于记录的拒绝）✓。
+
+**无哈希猜测**：三棵树不是从 cargo 带哈希的构建目录里刮出来的，而是用**生成构建脚本所设的同一套环境变量**经 `check` 取到——那是构建跑的同一套管线；而 `cargo build` 那一步正是证明这些树编译得过的东西 ✓。
+
+**实测**：`tools/nichlink-partition-rehearsal` 三条腿全绿（`== OK — both shapes build, the four facts hold, and the promote lands`）✓。
+
+**P3.5 仍差**：`--release` 物化真实包（自包含副本 + `[package.metadata.nichlink] shape` + 身份/记录/租约迁移并显式列出哪些记录失效）。
