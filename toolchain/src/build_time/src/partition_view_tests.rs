@@ -15,10 +15,13 @@ use super::{OnDisk, view};
 fn host(label: &str, declaration: Option<&str>) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let area = std::env::temp_dir().join(format!(
-        "nichlink-partition-view-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let area = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-partition-view-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&area);
     // The host is one level down: a ghost is the host's **sibling**, so a host sitting directly in
     // the temp directory would plan its packages into `/tmp` — where a leftover from any earlier run
@@ -234,14 +237,17 @@ fn the_disk_state_names_the_shape_and_refuses_to_claim_a_foreign_package() {
 /// 成员清单也是这幅画的一部分：工作区没列出的生成包会被点名。
 #[test]
 fn an_unlisted_generated_package_is_named() {
-    let parent = std::env::temp_dir().join(format!(
-        "nichlink-partition-ws-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
+    let parent = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-partition-ws-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
     let _ = fs::remove_dir_all(&parent);
     let root = parent.join("host");
     fs::create_dir_all(&root).expect("the host");

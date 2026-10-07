@@ -13,10 +13,13 @@ use std::path::PathBuf;
 fn package(label: &str, body: &str) -> (PathBuf, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-manifests-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-manifests-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&root);
     let src = root.join("src");
     fs::create_dir_all(src.join("dial")).expect("face directory");

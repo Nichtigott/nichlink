@@ -24,14 +24,17 @@ use crate::build_time::entry_default::calls_host;
 fn fixture(name: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-entry-{name}-{}-{}-{sequence}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-entry-{name}-{}-{}-{sequence}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
     std::fs::create_dir_all(root.join("src")).expect("fixture dir");
     root
 }

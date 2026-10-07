@@ -48,10 +48,13 @@ fn successful_build_is_silent_unless_verbose_output_is_requested() {
 #[should_panic(expected = "face-layout")]
 fn a_build_script_without_a_source_tree_fails_with_the_layout_diagnostic() {
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-pipeline-missing-src-{}-{sequence}",
-        std::process::id()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-pipeline-missing-src-{}-{sequence}",
+            std::process::id()
+        ));
     std::fs::create_dir_all(&root).expect("fixture root");
     let input = super::BuildInput::new(root.clone(), root.join("target/nichlink/out"), true);
     let _ = super::run(&input);
@@ -73,7 +76,10 @@ fn an_unrepresentable_directory_cannot_veto_the_build() {
     let face = "crate::root_object! {\n    kind: Hidden,\n    requires: [\"missing.capability\" => \"MissingProvider\"],\n}\n";
     let mut outcomes = Vec::new();
     for (tag, dir) in [("valid", "hidden"), ("invalid", "bad-name")] {
-        let root = std::env::temp_dir().join(format!("nichlink-hidden-{tag}-{suffix}-{sequence}"));
+        let root = std::env::temp_dir()
+            .join("nichlink-scratch")
+            .join(module_path!().replace("::", "-"))
+            .join(format!("nichlink-hidden-{tag}-{suffix}-{sequence}"));
         let manifest = root.join("host");
         let folder = manifest.join("src").join(dir);
         std::fs::create_dir_all(&folder).expect("face folder");
@@ -96,7 +102,10 @@ fn run_for_validates_outside_cargo_and_reports_diagnostics() {
         .expect("clock")
         .as_nanos();
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("nichlink-run-for-{suffix}-{sequence}"));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!("nichlink-run-for-{suffix}-{sequence}"));
     let manifest = root.join("host");
     std::fs::create_dir_all(manifest.join("src")).expect("src");
     let out = root.join("out");
@@ -133,7 +142,10 @@ fn host_root(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
         .expect("clock")
         .as_nanos();
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("nichlink-{tag}-{suffix}-{sequence}"));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!("nichlink-{tag}-{suffix}-{sequence}"));
     let manifest = root.join("host");
     std::fs::create_dir_all(manifest.join("src")).expect("src");
     (root, manifest)

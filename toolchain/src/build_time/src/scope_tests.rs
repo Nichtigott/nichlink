@@ -32,14 +32,17 @@ fn selected_sources(
 /// 声明槽位才是这个面被发布出来的原因。
 #[test]
 fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-scope-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-scope-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
     let src = root.join("src");
     let entry = src.join("lib.rs");
     for module in ["a", "b"] {
@@ -90,14 +93,17 @@ fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
 /// 报告 `alpha` 的切口。
 #[test]
 fn a_configured_entry_drives_the_scope_and_the_cut_table() {
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-scope-configured-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-scope-configured-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
     let src = root.join("src");
     for module in ["alpha", "beta", "preview"] {
         std::fs::create_dir_all(src.join(module)).expect("fixture dir");
@@ -161,14 +167,17 @@ fn a_configured_entry_drives_the_scope_and_the_cut_table() {
 /// 保留整棵树，而不是错误裁剪。
 #[test]
 fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-scope-unrecognized-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-scope-unrecognized-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
     let src = root.join("src");
     let entry = src.join("lib.rs");
     std::fs::create_dir_all(src.join("a")).expect("fixture dir");
@@ -200,7 +209,10 @@ fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
 /// 构建拒绝的范围取值是诊断而不是 panic：`check --json` 拿到文档，回退什么都不剪。
 #[test]
 fn a_refused_scope_value_is_a_diagnostic() {
-    let src = std::env::temp_dir().join("nichlink-scope-diagnostics");
+    let src = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join("nichlink-scope-diagnostics");
     let entry = super::HostEntry::Convention(src.join("lib.rs"));
     let cases = [
         (

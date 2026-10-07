@@ -12,10 +12,13 @@ use crate::build_time::crate_plan::{PlannedCrate, PlannedMount, crates_dir};
 fn host(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let parent = std::env::temp_dir().join(format!(
-        "nichlink-facade-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let parent = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-facade-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&parent);
     let root = parent.join("control-button");
     fs::create_dir_all(root.join("src")).expect("host dirs");

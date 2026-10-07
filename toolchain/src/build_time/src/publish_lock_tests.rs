@@ -19,10 +19,13 @@ fn out_dir(label: &str) -> std::path::PathBuf {
     // shared parent would make every fixture (and every parallel test) contend for one lock file.
     // 每个用例有自己的**容器**，因为锁住在输出目录旁边：共用一个父目录会让所有夹具（以及并行的每个
     // 测试）争抢同一把锁文件。
-    let container = std::env::temp_dir().join(format!(
-        "nichlink-lock-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let container = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-lock-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = std::fs::remove_dir_all(&container);
     let dir = container.join("out");
     std::fs::create_dir_all(&dir).expect("out dir");
@@ -185,10 +188,13 @@ fn the_wait_budget_comes_from_the_environment() {
 fn fixture_host(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-lock-host-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-lock-host-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = std::fs::remove_dir_all(&root);
     let manifest = root.join("host");
     std::fs::create_dir_all(manifest.join("src/button")).expect("src");

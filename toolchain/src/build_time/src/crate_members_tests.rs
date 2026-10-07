@@ -11,10 +11,13 @@ use super::{entries, merged, stripped};
 fn scratch(label: &str, manifest: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-members-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-members-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("the fixture directory");
     fs::write(root.join("Cargo.toml"), manifest).expect("the workspace manifest");

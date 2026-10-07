@@ -9,13 +9,21 @@ use crate::build_time::shape_decl::read_shape_declaration;
 
 /// A throwaway host package: `src/` files as written below, plus a declaration.
 /// 一个一次性宿主包：下面写下的 `src/` 文件，外加一份声明。
+// Scratch lives under the package's `target/`, not under `/tmp`: this repository has lost whole
+// fixture sets to a reboot or a cleaner twice, and a mid-run wipe shows up as a *different* test
+// failing each time (which is exactly how this suite flaked in the ten-face runner).
+// 临时目录放在包的 `target/` 之下，而不是 `/tmp`：本仓已经因为重启或清理**两次**丢掉整套夹具，而运行中途被
+// 清掉的表现是"每次红的是另一条测试"——这套测试在十面 runner 里正是这样 flake 的。
 fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let parent = std::env::temp_dir().join(format!(
-        "nichlink-plan-{label}-{}-{sequence}",
-        std::process::id()
-    ));
+    let parent = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-plan-{label}-{}-{sequence}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&parent);
     let root = parent.join("host");
     fs::create_dir_all(root.join("src")).expect("src");
