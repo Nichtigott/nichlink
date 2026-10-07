@@ -175,3 +175,143 @@ fn a_crate_emits_only_the_graft_entries_it_compiles() {
     ));
     std::fs::remove_dir_all(root).expect("temporary fixture cleanup");
 }
+
+/// A second face, under a subtree a **different** guest claims: the two-guest case the partition has
+/// never been tested with (audit `M7`, §M7.50).
+/// 第二个面，位于**另一个**幽灵认领的子树之下：分区从未被两个幽灵同时在场地测过的情形（审计 `M7`，§M7.50）。
+fn dial() -> StaticFaceRecord {
+    StaticFaceRecord {
+        id: NodeId::from_bytes(b"dial"),
+        parent: NodeId::from_bytes(b"gauge"),
+        owns_registry: false,
+        source: "panel/gauge/dial/dial.rs".to_owned(),
+        module: "panel::gauge::dial".to_owned(),
+    }
+}
+
+/// One typed graft entry, spelled the way the host writes it.
+/// 一条类型化 graft 条目，按宿主书写的样子。
+fn typed_graft(cut: &str, replacement: &str) -> GraftSyntax {
+    GraftSyntax {
+        cfg: None,
+        cut: cut.to_owned(),
+        cut_end: None,
+        graft: replacement.to_owned(),
+        full: false,
+        location: SyntaxLocation { line: 7, column: 8 },
+        expressions: Some(GraftExpressions {
+            cut: cut.to_owned(),
+            cut_end: None,
+            graft: replacement.to_owned(),
+        }),
+    }
+}
+
+/// **Two guests at once**: each ghost emits only its own cut, and the facade carries **both**, each
+/// rewritten to the crate that compiles it (audit `M7`, §M7.50).
+/// **两个幽灵同时在场**：每个幽灵只发射自己那条切口，而 facade 携带**两条**，各自改写成编译它的那个 crate
+/// （审计 `M7`，§M7.50）。
+///
+/// The one-guest case is pinned above; what this adds is the case the maintainer asked about — a plan
+/// whose cuts fall in **different** crates of the same partition, which is the only shape in which the
+/// facade's owner table has to hold two answers at once.
+/// 单个幽灵的情形上面已经钉过；这一条补的是维护者问的那种情形——一个计划的切口落在同一次拆分里**不同**的
+/// crate 上，而那是 facade 的属主表必须同时装下两个答案的唯一形状。
+#[test]
+fn two_guests_each_emit_their_own_cut_and_the_facade_carries_both() {
+    let root = temporary_directory("graft-two-crates");
+    let entries = [
+        typed_graft(
+            "crate::panel::frame::widget::NODE_ID",
+            "fast_widget::fast::NODE_ID",
+        ),
+        typed_graft(
+            "crate::panel::gauge::dial::NODE_ID",
+            "fast_gauge::fast::NODE_ID",
+        ),
+    ];
+    let render = |faces: &[StaticFaceRecord], shape: ShapeRender<'_>| {
+        render_lib(
+            &root,
+            &[],
+            &BuildDiagnostics::default(),
+            &BuildDiagnostics::default(),
+            &SourceScope {
+                roots: None,
+                reason: "test",
+            },
+            faces,
+            &entries,
+            shape,
+        )
+    };
+    // Owner names are **crate** names: `crate_plan::owners` underscores the package's hyphens, because
+    // a Rust path segment cannot contain one (the fixture here spells them the way the pipeline does).
+    // 属主名是 **crate** 名：`crate_plan::owners` 把包名的连字符换成下划线，因为 Rust 的路径段不能含它
+    // （这里的夹具按管线的写法拼）。
+    let owners = [
+        ("panel::frame".to_owned(), "app_widgets".to_owned()),
+        ("panel::gauge".to_owned(), "app_gauges".to_owned()),
+    ];
+    let facade_shape = ShapeRender {
+        cut_out: &["panel::frame".to_owned(), "panel::gauge".to_owned()],
+        only: None,
+        mounts: &[],
+        ancestors: &[],
+        facade: true,
+        owners: &owners,
+    };
+
+    // The host compiles neither claimed subtree, so it emits neither entry.
+    // 宿主不编译任何被认领的子树，因此两条都不发射。
+    let host = render(&[], ShapeRender::whole());
+    assert!(
+        !host.contains("fast_widget") && !host.contains("fast_gauge"),
+        "the host handed both subtrees away: {host}"
+    );
+
+    // Each ghost emits exactly its own, and not the other's.
+    // 每个幽灵只发射自己那条，不发射另一条。
+    let ghost_a = render(&[widget()], ShapeRender::whole());
+    assert!(
+        ghost_a.contains("StaticGraftCut::from_ids(crate::panel::frame::widget::NODE_ID, fast_widget::fast::NODE_ID, false)"),
+        "{ghost_a}"
+    );
+    assert!(
+        !ghost_a.contains("fast_gauge"),
+        "the other crate's cut is not this crate's: {ghost_a}"
+    );
+    let ghost_b = render(&[dial()], ShapeRender::whole());
+    assert!(
+        ghost_b.contains(
+            "StaticGraftCut::from_ids(crate::panel::gauge::dial::NODE_ID, fast_gauge::fast::NODE_ID, false)"
+        ),
+        "{ghost_b}"
+    );
+    assert!(
+        !ghost_b.contains("fast_widget"),
+        "the other crate's cut is not this crate's: {ghost_b}"
+    );
+
+    // The facade carries the union, and each entry names the crate that compiles its cut — which is
+    // the whole question of a plan that spans two crates.
+    // facade 携带并集，而每条条目点名编译它那个切口面的 crate——这正是"计划横跨两个 crate"的全部问题。
+    let facade = render(&[widget(), dial()], facade_shape);
+    assert!(
+        facade.contains("StaticGraftCut::from_ids(app_widgets::panel::frame::widget::NODE_ID"),
+        "the facade names crate A's owner: {facade}"
+    );
+    assert!(
+        facade.contains("assert_contract::<app_widgets::panel::frame::widget::__Preset, fast_widget::fast::__Parts>()"),
+        "and its contract assertion belongs to the same owner: {facade}"
+    );
+    assert!(
+        !facade.contains("app-widgets"),
+        "a hyphen would make the generated path invalid Rust: {facade}"
+    );
+    assert!(
+        facade.contains("app_gauges::panel::gauge::dial::NODE_ID"),
+        "the facade names crate B's owner: {facade}"
+    );
+    std::fs::remove_dir_all(root).expect("temporary fixture cleanup");
+}

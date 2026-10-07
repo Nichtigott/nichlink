@@ -2180,3 +2180,20 @@ error[E0433]: cannot find `frame` in `panel`
 **这条键当场抓出一个真 bug（值得记）**：它第一次跑就报 `the widgets entry has no ending comma, so this writer cannot say where it ends` ✗ —— 我的 `entry_span` 只把**结尾逗号**当条目终点，于是**单行** `crates: &[Crate::named("widgets").at(&[…])]` 里的最后一条（**合法地没有**逗号）永远移除不掉 ✗。修法是让"关掉这条条目所在列表的那个括号"也成为终点（`]`/`}` 使深度 < 0 时收尾 ✓），并补一条**单行声明**的钉子 —— 原来的夹具都是多行写法，所以这个洞在 CLI/MCP 两级钉子那里都没露出来 ✓✓（**同一份实现，两套夹具的形状不同，就能漏掉一种版式**）。
 
 **实测**：真 tmux 面板里页脚已宣传该键（`… · D remove the selected crate from the declaration (each asks once more) · …` ✓）；钉子 3 条（`D`+`y` 移除且屏上随即读到"宿主又只有一个 crate" · facade 上按键会被说明 · 包在磁盘上时被拒并提示先 `x`）+ 1 条（单行声明可移除）✓。门禁：fmt ✓ · clippy 两面 0 error ✓ · workspace 全绿 ✓ · studio 分区钉子 6/6 ✓。
+
+### §M7.50 graft × 多 crate：两个 guest 同时在场（维护者点的测试轴）
+
+维护者：「**你不仅仅要测试你说的那些，你还要测试比如 graft 的部分有 crateA 也同时有 crateB 等等，就是它是不是全代码域都可以随意 graft**」。先测他点的这一轴（**两个 guest 同时在场**），方式是**先写红钉子**：新钉子 `two_guests_each_emit_their_own_cut_and_the_facade_carries_both`（renderer 级，故意用两个 guest：`panel::frame` → `app_widgets`、`panel::gauge` → `app_gauges`，计划里两条切口分别落在两者之内）。
+
+**第一次跑红了** ✓（这就是它的价值）：facade 发出的属主是 `app-widgets::…`（**连字符**）。查下去发现是**我夹具的错**——真实管线里 `crate_plan::owners` 会 `planned.package.replace('-', "_")` ✓（Rust 路径段不能含连字符），我手工传的属主表没做这一步 ✗。产品是对的 ✓，钉子随即改成按管线的拼法并**加了一条反向断言**（生成的文件里不许出现 `app-widgets` ✓）。
+
+**结论：这一轴是通的** ✓，且现在被钉住了。实测（真渲染输出）：
+```
+pub static BUILTIN_GRAFT_CUTS: &[…StaticGraftCut] = &[
+    …StaticGraftCut::from_ids(app_widgets::panel::frame::widget::NODE_ID, fast_widget::fast::NODE_ID, false),
+    …StaticGraftCut::from_ids(app_gauges::panel::gauge::dial::NODE_ID, fast_gauge::fast::NODE_ID, false),
+];
+```
+⇒ ①**宿主**（两条切口都落在交出去的子树里）**两条都不发**（表为空 ✓）；②**幽灵 A** 只发自己那条、**幽灵 B** 只发自己那条（各自都不点名对方的模块 ✓）；③**facade 携带并集**，两条各自改写成**编译它的那个 crate**（`app_widgets` / `app_gauges` ✓），契约断言同属主 ✓。**这正是"crateA 与 crateB 同时在场"的答案**：切口按**面**归属到编译它的 crate，跨 crate 的那一半归 facade ✓。
+
+**仍未测的（"全代码域随意 graft"的其余位置，下一批）**：切口落在**根面** / **容器面**（含 `full` 跨两个 crate 的子树：`panel` 自己有面、其子 `frame`(A) 与 `gauge`(B) 已交出去 ⇒ 谁携带这条切口？）/ **项目外面**（现有钉子只断言 facade 原样通过 ✓）/ **插件宣告的面** / **链式 graft**（切口面本身是别人 graft 来的）。这些要靠**真 cargo 的端到端**（现成载体：`tools/nichlink-partition-rehearsal` 加一条腿），不是渲染级钉子能收口的 ✓。
