@@ -63,17 +63,7 @@ pub(crate) fn render_lib(
         .collect::<BTreeMap<_, _>>();
     output.push_str("\n// Registration rules are consumed by const evaluation only.\n// 注册规则只参与常量求值，不进入发布态数据。\n");
     for face in static_faces {
-        let rule = modules.get(&face.parent).map_or_else(
-            || format!("{registry}::RegistrationRule::ANY"),
-            |parent| format!("{parent}::REGISTRATION.registry_rule"),
-        );
-        // **Both** arguments name modules: the rule is the parent's registration, and the asserted face
-        // is this one. A facade has to rewrite the rule too — the first version of this rewrote only the
-        // second argument, and the end-to-end run showed a bare `panel::REGISTRATION.registry_rule`
-        // left standing in a crate that does not compile `panel` (audit `M7`, §M7.33).
-        // **两个**参数都点名模块：规则是父级的注册，被断言的面是它自己。facade 必须把规则也改写——第一版只改了
-        // 第二个参数，而端到端跑出来一行裸的 `panel::REGISTRATION.registry_rule` 站在一个不编译 `panel` 的
-        // crate 里（审计 `M7`，§M7.33）。
+        let rule = super::owners::parent_rule(&shape, &modules, face.parent, &registry);
         writeln!(
             output,
             "const _: () = {registry}::assert_static_registration({}, {}::REGISTRATION);",
@@ -192,7 +182,17 @@ pub(crate) fn render_lib(
          pub fn registrations() -> Vec<RegistrationInfo> {\n    vec![\n",
     );
     for face in static_faces {
-        writeln!(output, "        {}::REGISTRATION,", face.module).unwrap();
+        // This snapshot names modules too, so it goes through the same rewrite as every other
+        // cross-crate reference: a facade that left these bare failed with `cannot find module or crate
+        // panel` (measured, §M7.38).
+        // 这段快照同样点名模块，因此和其他跨 crate 引用一样走同一条改写：facade 里留裸名就会
+        // `cannot find module or crate panel`（实测，§M7.38）。
+        writeln!(
+            output,
+            "        {}::REGISTRATION,",
+            owned(&shape, &face.module)
+        )
+        .unwrap();
     }
     output.push_str("    ]\n        .into_iter()\n        .collect()\n}\n");
     if !errors.is_empty() {

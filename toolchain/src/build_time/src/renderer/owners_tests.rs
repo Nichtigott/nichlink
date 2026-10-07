@@ -34,6 +34,20 @@ fn facade_mode_names_the_crate_that_compiles_each_module() {
         owned(&facade, "panel::frame::REGISTRATION"),
         "fix_widgets::panel::frame::REGISTRATION"
     );
+    // A **registration rule** spells `<module>::REGISTRATION.registry_rule`: the whole expression has to
+    // be matched against the owner table, because splitting at the last `::` yields
+    // `panel::frame::REGISTRATION`, an owner nobody has (measured in the facade, §M7.38).
+    // **注册规则**写的是 `<模块>::REGISTRATION.registry_rule`：整条表达式都要拿去匹配属主表，因为按最后一个
+    // `::` 切会得到 `panel::frame::REGISTRATION`——一个谁都不是的属主（在 facade 里实测，§M7.38）。
+    assert_eq!(
+        owned(&facade, "panel::frame::REGISTRATION.registry_rule"),
+        "fix_widgets::panel::frame::REGISTRATION.registry_rule"
+    );
+    assert_eq!(
+        owned(&facade, "crate::panel::frame::widget::NODE_ID"),
+        "fix_widgets::panel::frame::widget::NODE_ID"
+    );
+
     // An external implementation crate is not part of this tree: it passes through untouched.
     // 项目外的实现 crate 不属于这棵树：原样通过。
     assert_eq!(

@@ -14,6 +14,7 @@
 //! 它住在 pass 旁边而不是里面，因为这条改写是一条有自己钉子的规则，而 pass 已经用满了尺寸预算。
 
 use super::tree::ShapeRender;
+use crate::build_time::registry_identity;
 
 /// The crate that compiles one module, as an expression the facade can name.
 /// 编译某个模块的那个 crate，写成 facade 能点名的表达式。
@@ -32,11 +33,19 @@ pub(super) fn owned(shape: &ShapeRender<'_>, expression: &str) -> String {
     }
     let had_prefix = trimmed.starts_with("crate::");
     let rest = trimmed.strip_prefix("crate::").unwrap_or(trimmed);
-    let module = rest.rsplit_once("::").map_or(rest, |(module, _)| module);
+    // Match the **whole** expression against the owner table, taking the longest module that is a
+    // prefix at a `::` boundary. Extracting "the module" first only works for `<module>::<ITEM>`; a
+    // registration rule spells `<module>::REGISTRATION.registry_rule`, and splitting at the last `::`
+    // produced `panel::frame::REGISTRATION`, an owner nobody has — which is why the facade emitted that
+    // line bare and failed to resolve it (measured, §M7.38).
+    // 用**整条**表达式去匹配属主表，取最长的、在 `::` 边界上构成前缀的模块。先抠出"那个模块"只对
+    // `<模块>::<ITEM>` 成立；而注册规则写的是 `<模块>::REGISTRATION.registry_rule`，按最后一个 `::`
+    // 切会得到 `panel::frame::REGISTRATION`——一个谁都不是的属主，这正是 facade 把那一行原样发出去、
+    // 解析不到的原因（实测，§M7.38）。
     let owner = shape
         .owners
         .iter()
-        .filter(|(path, _)| module == path || module.starts_with(&format!("{path}::")))
+        .filter(|(path, _)| rest == path || rest.starts_with(&format!("{path}::")))
         .max_by_key(|(path, _)| path.len())
         .map(|(_, owner)| owner.clone());
     match (owner, had_prefix) {
@@ -59,6 +68,30 @@ pub(super) fn owned(shape: &ShapeRender<'_>, expression: &str) -> String {
 /// 说明，而不是猜。
 pub(super) fn face_module(expression: &str) -> Option<&str> {
     expression.trim().strip_suffix("::NODE_ID")
+}
+
+/// The registration rule one face asserts against, spelled for the crate that compiles it.
+/// 某个面据以断言的那条注册规则，按编译它的 crate 拼写。
+///
+/// A parent that is an **ancestor shell** owns no `REGISTRATION` — the shell carries the ancestor's
+/// `NODE_ID` and nothing else — so it asserts against `ANY`; so does a face whose parent is not a face at
+/// all. The ghost reached that answer by accident (its face list holds no shells); the facade named the
+/// shell and could not resolve it until this rule existed (measured, §M7.38).
+/// **祖先壳**不拥有 `REGISTRATION`（壳只携带祖先的 `NODE_ID`），因此按 `ANY` 断言；父级根本不是面的面也一样。
+/// 幽灵是**碰巧**得到这个答案的（它的面表里没有壳）；facade 点名了那个壳，直到有了这条规则才解析得到
+/// （实测，§M7.38）。
+pub(super) fn parent_rule(
+    shape: &ShapeRender<'_>,
+    modules: &std::collections::BTreeMap<registry_identity::NodeId, &str>,
+    parent: registry_identity::NodeId,
+    registry: &str,
+) -> String {
+    let parent_bytes = parent.into_bytes();
+    let is_shell = shape.ancestors.iter().any(|(_, id)| *id == parent_bytes);
+    match modules.get(&parent) {
+        Some(module) if !is_shell => format!("{module}::REGISTRATION.registry_rule"),
+        _ => format!("{registry}::RegistrationRule::ANY"),
+    }
 }
 
 #[cfg(test)]

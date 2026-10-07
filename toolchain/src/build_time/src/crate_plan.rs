@@ -409,9 +409,16 @@ pub(crate) fn owners(
         for mount in &planned.mounts {
             owner_map.insert(mount.module_path.clone(), owner.clone());
         }
-        for (module, _) in &planned.ancestors {
-            owner_map.insert(module.clone(), owner.clone());
-        }
+        // **Ancestor shells do not go in the owner table.** A shell is a module the ghost builds to carry
+        // the ancestor's `NODE_ID`, but the *face* at that module is compiled by whoever keeps it — the
+        // host — so face-level items (`REGISTRATION`, its rule) must be spelled with the host's crate. The
+        // first facade build measured the alternative: it emitted `app_widgets::panel::REGISTRATION`, a
+        // shell that carries no `REGISTRATION` (`cannot find value REGISTRATION in module app_widgets::panel`).
+        // **祖先壳不进属主表。** 壳是幽灵为携带祖先 `NODE_ID` 而搭的模块，但那个模块上的**面**是由留住它的
+        // 那个 crate（宿主）编译的，因此面级别的项（`REGISTRATION` 及其规则）必须用宿主的 crate 拼。第一次
+        // facade 构建量到了另一种做法：它发 `app_widgets::panel::REGISTRATION`——一个不携带 `REGISTRATION`
+        // 的壳（`cannot find value REGISTRATION in module app_widgets::panel`）。
+        for _ in &planned.ancestors {}
     }
     owner_map.into_iter().collect()
 }

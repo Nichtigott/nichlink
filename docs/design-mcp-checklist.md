@@ -1982,3 +1982,13 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **顺带简化**：remap 从"每个内联深度一条"变成"**每个宿主一条**" ✓（夹具实测 `1 remap entr(ies)`，此前是 2 ✓）；`relative_walk` 只剩创作面 CLI 用（facade 写同级 path 依赖 ✓）⇒ 移到 `#[cfg(feature = "cli")]` 之下 ✓；`inline_directory` 删除 ✓。**`--at` 因此自动成立**（拼写不再依赖幽灵的位置 ✓）。钉子相应改成**性质断言**：拼写是绝对路径且以宿主相对源码结尾 ✓ · remap 只有一条 ✓ · **幽灵放在哪里都拼出同一个字符串** ✓（原"位置影响拼写"那条的前提已作废 ✓）；配置补丁那条改成形状断言（宿主根是临时目录，精确串不可预知 ✓）。
 
 **实测**：真工作区夹具里 `--revert` ⇒ `--write` ⇒ `wrote 6 file(s); workspace config updated`、`1 remap entr(ies)` ✓；随后 `cargo build` 的分区树里 **宿主 `app` 与幽灵 `app-widgets` 都不再报原来的错** ✓，剩下**全在 facade**：① 注册断言把父级规则指向一个**祖先壳**的 `REGISTRATION` ✗（壳只携带 `NODE_ID` ✓ ⇒ 应当回退成 `ANY` ✓）；② 一行裸的 `panel::frame::REGISTRATION` 没被改写成幽灵 crate ✗（§M7.34 的 `owned()` 没覆盖这一处 ✓）。这两条是下一轮的第一件事 ✓。
+
+### §M7.38 **分区后的树真的能 `cargo build` 了**（2026-10-06，第 ⑫ 个真缺陷收尾）
+
+**里程碑**：真工作区形状夹具（`[workspace] members = ["app","app-widgets","app-facade"]`，声明认领 `panel::frame`）里，**三个 crate 全部编译通过** ✓ —— 宿主 `app` · 幽灵 `app-widgets` · facade `app-facade`，强制重编（`touch` 三个 `src/lib.rs`）后明确看到三条 `Compiling` + `Finished` ✓✓。这是 P3.2 从第一刀以来一直缺的那块：**"分区"不再只是"文件写对了"，而是"真的编得过"** ✓。
+
+**收尾的两个真缺陷（都在 facade，同族：跨 crate 引用漏改写）**：① 属主表把**祖先壳**算成了幽灵的 ✗ ⇒ facade 发 `app_widgets::panel::REGISTRATION`，而**壳只携带 `NODE_ID`** ⇒ `cannot find value REGISTRATION in module app_widgets::panel` ✓。修法：**祖先壳不进属主表**（壳是幽灵搭的，但那个模块上的**面**是宿主编译的 ⇒ 面级别的项必须用宿主的 crate 拼 ✓）；两者其实各答对一半 —— `NODE_ID` 幽灵有、`REGISTRATION` 宿主有 ⇒ 现在按"面级别项归宿主"统一 ✓。② **`owned()` 的模块提取对 `<模块>::REGISTRATION.registry_rule` 失效** ✗（按最后一个 `::` 切得到 `panel::frame::REGISTRATION`，一个谁都不是的属主 ⇒ 原样发出 ⇒ `cannot find module or crate panel` ✓）。修法：拿**整条**表达式去匹配属主表、取最长的 `::` 边界前缀 ✓。③ 顺带：`registrations()` 那段快照也点名模块 ⇒ 同样走 `owned()` ✓；父级规则抽成 `owners::parent_rule`（"父级是壳 ⇒ `ANY`" ✓），它同时把 `pass.rs` 从 605 行压回 600 以内（尺寸棘轮 ✓）。
+
+**为什么这几条一直躲着**：它们只在**facade**（依赖三个 crate 的那一个）里现形 ✓，而此前每一轮都停在"宿主与幽灵过了"就以为是拼写问题 ✓。⇒ 教训已记：**凡是"跨 crate 引用"，要问"这个名字在**哪个** crate 里存在"** ✓。
+
+**状态**：`check`/`crates --write/--revert` 在真工作区里全绿 ✓；分区树构建绿 ✓；非分区宿主构建绿 ✓。**下一步**：验收四条（入口逐字节相同 · `graft_plan.tsv` 三列逐字节相同 · 切口两端 id 逐字节相同 · `promote` 在分区形状下仍能落地）→ P3.5 → P3.6 → P4。
