@@ -313,7 +313,7 @@ pub(crate) fn plan(
                 *module == *subtree || module.starts_with(&format!("{subtree}::"))
             }) {
                 mounts.push(PlannedMount {
-                    spelling: spelling_for(package_root, &directory, source, module_path),
+                    spelling: spelling_for(package_root, source),
                     module_path: module_path.clone(),
                     source: source.clone(),
                 });
@@ -416,41 +416,32 @@ pub(crate) fn owners(
     owner_map.into_iter().collect()
 }
 
-/// The `#[path]` spelling one mounted face file needs, and the prefix to remap away.
-/// 一份被挂载的面文件所需的 `#[path]` 拼写，以及要映射掉的前缀。
+/// The `#[path]` spelling one mounted face file needs: the host's **absolute** path.
+/// 一份被挂载的面文件所需的 `#[path]` 拼写：宿主的**绝对**路径。
 ///
-/// `#[path]` resolves relative to the **directory the inline module stands in**, and an inline module
-/// adds its own name to that directory — so a mount for `a::b::c` sits in
-/// `<ghost>/src/a/b/`, and the spelling is the walk from there to the host's file. Computed as a real
-/// relative walk between two paths rather than as "sibling plus depth", because the ghost's location
-/// is the author's choice (`--at`) and the facade needs the same arithmetic: the only thing that must
-/// hold is that `file!()` ends up reading as the host-relative source, which is what makes the remap
-/// pair derivable instead of guessed (audit `M7`, P3.2/§M7.15).
-/// `#[path]` 相对**内联模块所在目录**解析，而内联模块会把自己的名字加进那个目录——因此 `a::b::c` 的挂载
-/// 位于 `<ghost>/src/a/b/`，而拼写就是从那里走到宿主文件的那段路。它按**两个路径之间的真实相对走法**算，
-/// 而不是按"同级 + 深度"：幽灵的位置是作者的選擇（`--at`），而 facade 需要同一套算术；唯一必须成立的是
-/// `file!()` 最终读起来就是宿主相对源码，那正是让映射对**可推导**而不是靠猜的东西（审计 `M7`，P3.2/§M7.15）。
-fn spelling_for(host_dir: &Path, ghost_dir: &Path, source: &str, module_path: &str) -> String {
-    let inline = inline_directory(ghost_dir, module_path);
-    let target = host_dir.join("src").join(source);
-    relative_walk(&inline, &target).unwrap_or_else(|| source.to_owned())
-}
-
-/// The directory a mounted face's `#[path]` is resolved from: the ghost's `src`, plus one segment per
-/// **container** module above the face.
-/// 被挂载面的 `#[path]` 所依据的目录：幽灵的 `src`，加上该面之上每个**容器**模块一段。
-fn inline_directory(ghost_dir: &Path, module_path: &str) -> PathBuf {
-    let mut directory = ghost_dir.join("src");
-    if let Some((container, _)) = module_path.rsplit_once("::") {
-        for segment in container.split("::") {
-            directory = directory.join(segment);
-        }
-    }
-    directory
+/// It used to be a relative walk from the ghost's own directory, and that cannot work: the generated
+/// tree lives in the build script's `OUT_DIR`, which cargo chooses, so `#[path]` resolves relative to a
+/// directory the planner never sees. The first end-to-end build measured exactly that
+/// (`<out>/panel/frame/../../../app/src/…`: three `../` short of a file that is seven levels away).
+/// The host's own generated tree already spells its mounts absolutely, for the same reason. Identity is
+/// unaffected because the remap strips the host's `src` prefix back off, so `file!()` still reads as the
+/// host-relative source the records name (audit `M7`, P3.2/§M7.15).
+/// 它过去是"从幽灵自己目录出发的相对走法"，而那条路不成立：生成树住在构建脚本的 `OUT_DIR`（由 cargo 决定），
+/// 因此 `#[path]` 相对一个规划器根本看不见的目录解析。第一次端到端构建量到的正是这个
+/// （`<out>/panel/frame/../../../app/src/…`：离那个文件差了七层里的三层）。宿主自己的生成树早就用绝对路径
+/// 拼它的挂载，原因相同。身份不受影响，因为 remap 会把宿主的 `src` 前缀摘回去，于是 `file!()` 读起来仍是记录
+/// 点名的那个宿主相对源码（审计 `M7`，P3.2/§M7.15）。
+fn spelling_for(host_dir: &Path, source: &str) -> String {
+    host_dir.join("src").join(source).display().to_string()
 }
 
 /// The walk from one directory to one file, both absolute, as a `/`-separated relative path.
 /// 从一个目录走到一个文件的相对路径（两者都是绝对路径），用 `/` 分隔。
+// Only the authoring CLI face needs this (the facade spells its sibling dependencies relatively);
+// the build path no longer walks at all, because a mount is an absolute path (audit `M7`, §M7.37).
+// 只有创作面的 CLI 需要它（facade 用相对路径写它的同级依赖）；构建路径不再走任何相对路，因为挂载是绝对路径
+// （审计 `M7`，§M7.37）。
+#[cfg(feature = "cli")]
 pub(crate) fn relative_walk(from_dir: &Path, to_file: &Path) -> Option<String> {
     let from: Vec<_> = from_dir.components().collect();
     let to: Vec<_> = to_file.components().collect();

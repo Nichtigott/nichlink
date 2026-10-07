@@ -1970,3 +1970,15 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **第 11 个真缺陷（未修，紧随其后）**：宿主侧 `error[E0433]: cannot find 'registry_rule' in 'super'` ✗ —— 过滤掉 `panel::frame` 之后，注册断言仍在某个内联模块里找 `super` 的注册规则 ✓。下一轮先读那一段生成代码（`…/out/generated_lib.rs` 第 ~104 行）再定修法；候选是"断言只在该面**自己的容器**作用域里发"或"父规则取不到时退回 `ANY` 并明写" ✓。
 
 **实测状态**：`check`/`--write`/`--revert` 在真工作区里全部正常 ✓（`wrote 6 file(s)`、`removed 2 generated package(s)` ✓），宿主的**非分区**构建绿（25.48 s ✓），分区构建卡在上面两条 ✓。门禁（fmt · workspace 36 · clippy 两面 · conventions）在后一条修复后全绿 ✓。
+
+### §M7.37 挂载改成**绝对路径**：相对走法这条路本身不成立（2026-10-06）
+
+**第一次真正编译分区树时量到的**（§M7.36 的 ⑩）：`couldn't read <out>/panel/frame/../../../app/src/panel/frame/frame.rs` ✓。我原先判成"容器面少算一层" ✗ —— 算一下就知道不对：`#[path]` 实际相对**生成树所在的 `OUT_DIR`** 解析（cargo 决定的、规划时看不见的目录 ✓），而那个文件离它有**七层** ✓。
+
+⇒ **根因**：拼写的起点用的是**幽灵的包目录** ✗，而 `#[path]` 的解析基准是 `OUT_DIR` ✓ ⇒ **相对走法在原理上不成立** ✓（不是差一层，是差一个不可知的位置 ✓）。前几轮夹具没暴露它，是因为它们只跑 `crates --write`（写文件 ✓），**从没编译过** ✓。
+
+**修法**：挂载用宿主的**绝对路径** ✓（`spelling_for(host_dir, source) = <宿主>/src/<宿主相对源码>` ✓），remap 用**一条** `<宿主>/src/` → 空 ✓。**不变量仍然成立**（拼写＝前缀＋源码 ✓）⇒ `file!()` 读起来仍是记录点名的那个相对源码、身份逐字节不变 ✓。这不是权宜：**宿主自己的生成树早就这么发**（它给 `registry_rule` 的是 `#[path = "/home/nich/…/src/control/registry_rule/registry_rule.rs"]` ✓）。
+
+**顺带简化**：remap 从"每个内联深度一条"变成"**每个宿主一条**" ✓（夹具实测 `1 remap entr(ies)`，此前是 2 ✓）；`relative_walk` 只剩创作面 CLI 用（facade 写同级 path 依赖 ✓）⇒ 移到 `#[cfg(feature = "cli")]` 之下 ✓；`inline_directory` 删除 ✓。**`--at` 因此自动成立**（拼写不再依赖幽灵的位置 ✓）。钉子相应改成**性质断言**：拼写是绝对路径且以宿主相对源码结尾 ✓ · remap 只有一条 ✓ · **幽灵放在哪里都拼出同一个字符串** ✓（原"位置影响拼写"那条的前提已作废 ✓）；配置补丁那条改成形状断言（宿主根是临时目录，精确串不可预知 ✓）。
+
+**实测**：真工作区夹具里 `--revert` ⇒ `--write` ⇒ `wrote 6 file(s); workspace config updated`、`1 remap entr(ies)` ✓；随后 `cargo build` 的分区树里 **宿主 `app` 与幽灵 `app-widgets` 都不再报原来的错** ✓，剩下**全在 facade**：① 注册断言把父级规则指向一个**祖先壳**的 `REGISTRATION` ✗（壳只携带 `NODE_ID` ✓ ⇒ 应当回退成 `ANY` ✓）；② 一行裸的 `panel::frame::REGISTRATION` 没被改写成幽灵 crate ✗（§M7.34 的 `owned()` 没覆盖这一处 ✓）。这两条是下一轮的第一件事 ✓。

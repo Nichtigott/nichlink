@@ -132,9 +132,18 @@ fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
         format!("{from}{}", mount.source),
         "the spelling is the prefix plus the source"
     );
-    assert_eq!(
-        mount.spelling, "../../../../host/src/control/object/button/button.rs",
-        "four levels out: the inline directories, src, and the ghost package"
+    // The spelling is the host's **absolute** path: the generated tree lives in the build script's
+    // `OUT_DIR`, which cargo chooses, so a relative walk from the ghost's own directory cannot resolve.
+    // The remap strips the host's `src` prefix back off, which is why identity is unaffected.
+    // 拼写是宿主的**绝对**路径：生成树住在构建脚本的 `OUT_DIR`（由 cargo 决定），因此"从幽灵自己目录出发的
+    // 相对走法"无法解析。remap 会把宿主的 `src` 前缀摘回去，因此身份不受影响。
+    assert!(
+        mount.spelling.starts_with('/')
+            && mount
+                .spelling
+                .ends_with("/src/control/object/button/button.rs"),
+        "the spelling is the host's absolute source path: {}",
+        mount.spelling
     );
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }
@@ -236,7 +245,11 @@ pub const SHAPE: Shape = Shape {
     // sits three modules deep, `panel` one, `panel::gauge` two.
     // 每个内联深度一个前缀，而深度按构造各不相同：`control::object::button` 深三层、`panel` 一层、
     // `panel::gauge` 两层。
-    assert_eq!(planned[0].remap.len(), 3, "{:?}", planned[0].remap);
+    // One prefix, not three: an absolute spelling gives every mount the **same** host `src` prefix,
+    // which is the whole point of dropping the per-depth walk (audit `M7`, §M7.37).
+    // 一条前缀，而不是三条：绝对拼写让每个挂载都共享**同一个**宿主 `src` 前缀——这正是丢掉"按深度走"的要点
+    // （审计 `M7`，§M7.37）。
+    assert_eq!(planned[0].remap.len(), 1, "{:?}", planned[0].remap);
     assert!(
         planned[0]
             .remap
@@ -454,9 +467,7 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
     // The config patch: every remap prefix, and the reason it is the workspace root's file.
     // config 补丁：每一个 remap 前缀，以及它为何属于工作区根那份文件。
     assert!(
-        widgets
-            .config_patch
-            .contains("--remap-path-prefix=../../../../host/src/="),
+        widgets.config_patch.contains("--remap-path-prefix="),
         "the remap entries are spelled out: {}",
         widgets.config_patch
     );
@@ -491,56 +502,26 @@ fn a_ghost_placed_elsewhere_still_spells_a_walk_to_the_host() {
     );
     let planned = plan_host(&root).expect("the fragment is self-contained");
     let sibling = &planned[0];
-    // The same plan, computed for a ghost nested two levels deeper: the walk grows by two `../` and
-    // names the directories it crosses.
-    // 同一份规划，但幽灵嵌深两层：那段路多出两个 `../`，并点名它穿过的目录。
-    let deeper_dir = root
-        .parent()
-        .expect("a parent")
-        .join("nested/deep")
-        .join(&sibling.package);
     let host_dir = root.canonicalize().expect("the host canonicalizes");
-    let deeper = crate_plan_spelling(
-        &host_dir,
-        &deeper_dir,
-        "control/object/button/button.rs",
-        "control::object::button",
-    );
-    // Going **up** does not name the directories it passes: the deeper placement simply needs two
-    // more `../` before it turns into the host's path.
-    // **向上走**不会点名它经过的目录：嵌得更深只意味着在拐进宿主路径之前多两个 `../`。
+    // Where the ghost sits no longer enters the spelling at all: it is the host's absolute path, so a
+    // ghost two levels deeper spells the *same* string. That is the property that makes `--at` work.
+    // 幽灵坐在哪里不再影响拼写：拼写是宿主的绝对路径，因此嵌深两层的幽灵拼出**同一个**字符串。这条性质正是
+    // `--at` 能成立的原因。
+    let deeper = crate_plan_spelling(&host_dir, "control/object/button/button.rs");
+    let sibling_spelling = sibling
+        .mounts
+        .iter()
+        .map(|mount| mount.spelling.clone())
+        .next()
+        .expect("one mount");
     assert_eq!(
-        deeper.matches("../").count(),
-        sibling
-            .mounts
-            .iter()
-            .map(|mount| mount.spelling.matches("../").count())
-            .max()
-            .unwrap_or(0)
-            + 2,
-        "two levels deeper, two more `../`: {deeper}"
+        deeper, sibling_spelling,
+        "the ghost's location does not matter"
     );
-    assert!(
-        deeper.ends_with("host/src/control/object/button/button.rs"),
-        "and it ends at the host's own source: {deeper}"
-    );
-    let (from, to) = super::remap_for(&deeper, "control/object/button/button.rs");
-    assert_eq!(to, "", "the prefix maps to nothing");
-    assert_eq!(
-        format!("{from}control/object/button/button.rs"),
-        deeper,
-        "the invariant: the spelling is the prefix plus the source"
-    );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }
 
 /// The planner's spelling rule, reached the way the module reaches it.
 /// 规划器的拼写规则，按模块自己的方式到达它。
-fn crate_plan_spelling(
-    host_dir: &Path,
-    ghost_dir: &Path,
-    source: &str,
-    module_path: &str,
-) -> String {
-    super::spelling_for(host_dir, ghost_dir, source, module_path)
+fn crate_plan_spelling(host_dir: &Path, source: &str) -> String {
+    super::spelling_for(host_dir, source)
 }
