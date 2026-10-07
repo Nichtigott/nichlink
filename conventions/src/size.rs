@@ -48,7 +48,7 @@
 //!
 //! Boundary: every measured file has the budget of its kind, and the kind is proven
 //! rather than guessed. A file mounted behind `#[cfg(test)]` — directly or through an
-//! ancestor, which is what [`is_mounted_as_test`] decides — is a test file and is
+//! ancestor, which is what `is_mounted_as_test` decides — is a test file and is
 //! measured against [`TEST_CEILING`]; everything else is production source and is
 //! measured against [`CEILING`]. Test files used to be exempt outright, and that
 //! exemption made the largest files in the tree the ones nothing bounded; a budget is
@@ -57,7 +57,7 @@
 //! `x_tests.rs` used to move it out of the measurement silently. The crate-root
 //! `build.rs` is measured like `src/`: it is source a maintainer reads.
 //! 边界：每个被度量的文件都用与它种类相称的预算，而种类是被证明的、不是猜的。挂在
-//! `#[cfg(test)]` 之后的文件——直接挂或经由祖先挂，由 [`is_mounted_as_test`] 判定——是测试
+//! `#[cfg(test)]` 之后的文件——直接挂或经由祖先挂，由 `is_mounted_as_test` 判定——是测试
 //! 文件，按 [`TEST_CEILING`] 度量；其余是生产源码，按 [`CEILING`] 度量。测试文件过去整体豁免，
 //! 而这个豁免让树里最大的文件恰恰是没有东西约束的那些；预算本来就是豁免本该成为的东西。位于
 //! `tests/` 目录下的文件仍按其挂载判定，因为位置本身不是证明，而把真实代码改名成 `x_tests.rs`
@@ -97,9 +97,9 @@ pub const TEST_CEILING: usize = 800;
 /// 过期项上失败，正是为了让"忘记删除"不可能发生。
 ///
 /// How many entries the list holds is deliberately not restated in prose: it is
-/// [`BASELINE.len()`], and a number written here drifts from the list. Audit `G-17` found the
+/// `BASELINE.len()`, and a number written here drifts from the list. Audit `G-17` found the
 /// roadmap's version of this sentence claiming a count ten times the list's own.
-/// 清单有几项刻意不在散文里复述：它就是 [`BASELINE.len()`]，而写在这里的数字终会与清单漂移。
+/// 清单有几项刻意不在散文里复述：它就是 `BASELINE.len()`，而写在这里的数字终会与清单漂移。
 /// 审计 `G-17` 发现路线图那句自称的项数是清单实际项数的十倍。
 /// The list is empty: `contracts.rs` was the last entry, and splitting its test module into
 /// `contracts_tests.rs` (the sanctioned `#[path]` mount, measured against [`TEST_CEILING`])

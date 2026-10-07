@@ -76,11 +76,11 @@ macro_rules! host {
 ///
 /// Put this at the host crate entry. `nichlink-toolchain` validates the grammar and
 /// stores the cuts in the generated `StaticPlan`. Use the dynamic
-/// [`graft_plan!`](crate::runtime::graft_plan) expression only when code needs to build
+/// [`graft_plan!`](crate::graft_plan) expression only when code needs to build
 /// or edit a plan at runtime.
 /// 将它放在宿主 crate 入口。`nichlink-toolchain` 校验语法并把切口写入生成的
 /// `StaticPlan`；只有运行时代码确实要构造或编辑计划时才使用动态
-/// [`graft_plan!`](crate::runtime::graft_plan) 表达式。
+/// [`graft_plan!`](crate::graft_plan) 表达式。
 #[macro_export]
 macro_rules! static_graft_plan {
     ($framework:expr, $($cuts:tt)+) => {

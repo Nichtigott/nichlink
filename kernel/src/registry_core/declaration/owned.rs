@@ -314,21 +314,21 @@ impl RegistrationSnapshot {
     ///
     /// **The one rule: an author-side value is applied only when the source file declared it;
     /// a field the file left silent keeps the compiled value.** "Declared" is each type's own
-    /// spelling of "the file spoke" — [`Declared`] holds those spellings in one place: the flow
+    /// spelling of "the file spoke" — `Declared` holds those spellings in one place: the flow
     /// contract answers `is_declared`, a named provider answers `Some`, an editable list answers
     /// non-empty. A field with no such marker (names, identifiers, paths, the rule and admission
     /// this face carries) is **unconditional**: the author-side value wins even when it is empty.
-    /// Copy this sentence for a new field and ask [`Declared`]; do not write another spelling
+    /// Copy this sentence for a new field and ask `Declared`; do not write another spelling
     /// (audit `t84`).
     ///
     /// Above the split: `export`, `handle` and the parts lists used to be dropped here because a
     /// source-only reload cannot rebuild them, so the compiled evidence stayed. That is what the
     /// two folds below still say where it applies.
     /// **唯一的规则：作者侧取值仅在该源文件声明过时应用；文件没提的字段保留编译期取值。**
-    /// "声明过"是各类型自己的说法——[`Declared`] 把这些说法收在一处：数据流合同答 `is_declared`、
+    /// "声明过"是各类型自己的说法——`Declared` 把这些说法收在一处：数据流合同答 `is_declared`、
     /// 具名 provider 答 `Some`、可编辑列表答非空。没有这类标记的字段（名字、标识、路径，以及本
     /// 注册面携带的规范与门禁）是**无条件**的：作者侧取值即使为空也生效。新增字段照抄这一句并去问
-    /// [`Declared`]，不要另写一套（审计 `t84`）。
+    /// `Declared`，不要另写一套（审计 `t84`）。
     pub fn merge_authored(mut self, authored: Self) -> Self {
         self.namespace = authored.namespace;
         self.kind = authored.kind;

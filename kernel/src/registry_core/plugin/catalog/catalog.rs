@@ -349,13 +349,13 @@ impl PluginCatalog {
     /// record the parser rejects produces an artifact the host refuses to read
     /// while the writer reports success (audit `LGC-LG-03`: a second record
     /// reusing the identity five-tuple, and a lock whose last line carried no
-    /// terminator, both went through). The rule is [`PluginCatalog::parse`], and
+    /// terminator, both went through). The rule is [`PluginCatalog::parse_plugin_catalog`], and
     /// the separator is the one that parser reads — a lock not ending in a
     /// newline is completed rather than glued to the new record, because `a`
     /// followed by `b` written as `ab` is neither record.
     /// 写入方不得自行决定什么是合法锁：追加一条解析器会拒绝的记录，会产出一份宿主拒绝读、
     /// 而写入方却报成功的工件（审计 `LGC-LG-03`：复用身份五元组的第二条记录、以及末行没有
-    /// 终止符的锁，两者都曾写进去）。规则就是 [`PluginCatalog::parse`]，分隔符就是它读的
+    /// 终止符的锁，两者都曾写进去）。规则就是 [`PluginCatalog::parse_plugin_catalog`]，分隔符就是它读的
     /// 那一个——不以换行结尾的锁先补一个换行，而不是与新记录粘在一起，因为把 `a` 之后接
     /// `b` 写成 `ab` 后两条都不是。
     ///

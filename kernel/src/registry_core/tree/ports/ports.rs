@@ -170,9 +170,9 @@ impl PortIndex {
     /// 一个分支暴露的端口，先按名字再按路径排序。
     ///
     /// Collisions are **not** collapsed here: the caller reports them (see
-    /// [`PortIndex::resolve`]), because a renderer that published an arbitrary
+    /// [`PortIndex::resolve_port_index`]), because a renderer that published an arbitrary
     /// winner would hide the very conflict the rule exists to surface.
-    /// 冲突**不会**在这里被合并：由调用方报出（见 [`PortIndex::resolve`]），因为发布一个随意
+    /// 冲突**不会**在这里被合并：由调用方报出（见 [`PortIndex::resolve_port_index`]），因为发布一个随意
     /// 胜出者的渲染器会藏起这条规则本就要暴露的冲突。
     pub fn exposed_ports(&self, branch: &str) -> Vec<ExposedPort> {
         let mut found = Vec::new();

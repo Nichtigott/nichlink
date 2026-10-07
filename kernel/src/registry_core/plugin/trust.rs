@@ -101,13 +101,13 @@ impl PluginTrustPolicy {
     /// caller that wants the trust list to filter on an out-of-band identity must pass the
     /// fingerprint rather than rely on this policy. `MissingOfficialKey` therefore means
     /// "neither an external fingerprint nor a self-declared one", not "no external source".
-    /// The actual signature verification is the host's verifier's job ([`Self::verify_signed`]);
+    /// The actual signature verification is the host's verifier's job ([`PluginSignatureVerifier::verify`]);
     /// this method only classifies.
     /// `key_fingerprint` 是**调用方**为这个工件确立的身份，给了就以它为准。为 `None` 且工件是官方
     /// 来源时，检查回落到 `manifest.public_key_fingerprint`——工件自己的声明——因此想用信任列表按
     /// 带外身份过滤的调用方必须传入该指纹，而不能依赖本策略。`MissingOfficialKey` 因此意为"既没有
     /// 外部指纹、也没有自述指纹"，而不是"没有外部来源"。真正的签名校验由宿主的验证器负责
-    /// （[`Self::verify_signed`]）；本方法只做分类。
+    /// （[`PluginSignatureVerifier::verify`]）；本方法只做分类。
     pub fn verify(
         self,
         manifest: PluginManifest,

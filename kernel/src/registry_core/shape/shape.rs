@@ -7,7 +7,7 @@
 //! they see different things: the host's own crate compiles the declaration (so a wrong path is a
 //! compile error), and the build script reads the same file as text (so a wrong shape is a build
 //! error even before anything compiles). Two copies of "overlap" would drift; one cannot.
-//! 宿主在包根一个文件（`add_crates.rs`）里、用普通 Rust 声明它的形状：一个 [`Shape`] 值，其中的 crate 用
+//! 宿主在包根一个文件（`add_crates.rs`）里、用普通 Rust 声明它的形状：一个 `Shape` 值，其中的 crate 用
 //! 生成模块的标记来点名子树。**规则**——什么算一份合法声明——只住在这里一次，因为有两个读者、而他们看到的
 //! 东西不同：宿主自己的 crate 会**编译**这份声明（路径写错就是编译错误），而构建脚本把同一个文件当**文本**
 //! 读（形状写错在编译之前就是构建错误）。"重叠"这条规则有两份副本就会漂，一份不会。

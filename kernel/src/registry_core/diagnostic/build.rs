@@ -163,9 +163,9 @@ impl BuildDiagnostics {
         self.items.is_empty()
     }
 
-    /// Iterate the diagnostics in the exact order [`BuildDiagnostics::render`]
+    /// Iterate the diagnostics in the exact order `render_build_diagnostics`
     /// prints them, with byte-identical duplicates collapsed.
-    /// 按 [`BuildDiagnostics::render`] 打印它们的完全相同顺序迭代诊断，并折叠完全相同的
+    /// 按 `render_build_diagnostics` 打印它们的完全相同顺序迭代诊断，并折叠完全相同的
     /// 重复项。
     ///
     /// The read surface and the human renderer must agree: a CI job that counts
@@ -199,9 +199,9 @@ impl BuildDiagnostics {
         items.into_iter()
     }
 
-    /// The number of distinct diagnostics [`BuildDiagnostics::render`] would
+    /// The number of distinct diagnostics `render_build_diagnostics` would
     /// print.
-    /// [`BuildDiagnostics::render`] 会打印的去重后诊断条数。
+    /// `render_build_diagnostics` 会打印的去重后诊断条数。
     pub fn len(&self) -> usize {
         self.iter().count()
     }
