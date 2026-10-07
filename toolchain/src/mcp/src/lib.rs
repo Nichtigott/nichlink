@@ -88,6 +88,8 @@ mod registry;
 
 #[path = "apply.rs"]
 mod apply;
+#[path = "crates.rs"]
+mod crates;
 
 #[path = "apply_target.rs"]
 mod apply_target;

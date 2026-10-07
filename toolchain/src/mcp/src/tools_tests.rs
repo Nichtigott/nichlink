@@ -680,6 +680,7 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
         writers,
         vec![
             "nichlink.apply".to_owned(),
+            "nichlink.crates".to_owned(),
             "nichlink.new_project".to_owned(),
             "nichlink.plugin".to_owned(),
         ],
@@ -695,8 +696,8 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
             "`{name}` is a writer the write path knows"
         );
     }
-    // `apply` is the one that can remove what is there (`delete` moves a subtree into the
-    // trash), so it is the one that says `destructiveHint: true`.
+    // `apply` can remove what is there (`delete` moves a subtree into the trash) and `crates`
+    // can take a generated partition back (`revert`), so those two say `destructiveHint: true`.
     // `apply` 是唯一能移除已有东西的（`delete` 把子树移进回收目录），因此它是唯一写
     // `destructiveHint: true` 的那个。
     let catalogue = crate::mcp::tools::tools();
@@ -705,7 +706,11 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
         .filter(|entry| entry["annotations"]["destructiveHint"].as_bool() == Some(true))
         .filter_map(|entry| entry["name"].as_str())
         .collect();
-    assert_eq!(destructive, vec!["nichlink.apply"], "{destructive:?}");
+    assert_eq!(
+        destructive,
+        vec!["nichlink.apply", "nichlink.crates"],
+        "{destructive:?}"
+    );
     assert!(readers.len() > writers.len(), "most tools only read");
 }
 
@@ -931,5 +936,8 @@ const READ_KEYS: &[(&str, &[&str])] = &[
         "nichlink.graph",
         &["node", "direction", "depth", "cycles", "limit"],
     ),
+    // `crates` reads the action and whether to apply it; `root` is read by every tool's entry.
+    // `crates` 读动作与是否写入；`root` 由每个工具的入口读。
+    ("nichlink.crates", &["action", "apply"]),
     ("nichlink_tools", &["tool", "full"]),
 ];

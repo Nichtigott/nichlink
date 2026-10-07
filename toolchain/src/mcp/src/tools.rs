@@ -700,6 +700,34 @@ pub(crate) fn tools() -> Vec<Value> {
             crate::mcp::graph::DESCRIPTION,
             crate::mcp::graph::schema(),
         ),
+        tool(
+            "nichlink.crates",
+            "The crate partition this host declares at its package root (`add_crates.rs`), and the \
+             three writers that make it real. A host can hand a subtree to a crate of its own; the \
+             declaration is ordinary Rust (`Crate::named(\"widgets\").at(&[…::SUBTREE])` inside a \
+             `Shape`), so the compiler checks the paths and an editor completes them. This tool \
+             answers all three questions a split raises before it is written: **what would be \
+             written** (one package per declared crate, plus a *facade* that carries the cross-crate \
+             half — the graft table and the two contract assertions), **what is on disk now** \
+             (absent, the development shape, the publishable release shape, or a directory that is \
+             not this action's), and **how big each package is and whether it could be published** \
+             (its file count and bytes, its dependencies inside the partition — which is the order \
+             they can be published in — and what `cargo publish` would still want: a `description`, \
+             a `license`, a `version` on a path-only sibling, or the release shape instead of the \
+             development one, which mounts the host's files and needs the workspace remap). \
+             `action` is `plan` (the default, and the only one that writes nothing), `write` (the \
+             development shape), `release` (the publishable shape) or `revert` (take the generated \
+             packages back). **A request is a preview unless `apply` is true**: without it the reply \
+             is the partition plus the sentence naming what the action would change; with it the \
+             write happens and the reply is the tree as read back from the disk. Identities survive \
+             both shapes — a face derives its identity input from `file!()` by dropping \
+             `CARGO_MANIFEST_DIR` and one leading `src/` — so a split never renames a face.",
+            json!({"type":"object","properties":{
+                "action":{"type":"string","enum":["plan","write","release","revert"],"description":"plan (default) reads only; write/release/revert change the tree"},
+                "apply":{"type":"boolean","description":"false previews the action; true writes it"},
+                "root":{"type":"string"}
+            }}),
+        ),
         catalogue_entry(),
     ]
 }
@@ -798,6 +826,11 @@ fn advertised_schema(tool: &str) -> Value {
             "timeout_ms":{"type":"integer","description":"default 900000; a timeout is `unknown`"},
             "root":{"type":"string"}
         }}),
+        "nichlink.crates" => json!({"type":"object","properties":{
+            "action":{"type":"string","enum":["plan","write","release","revert"],"description":"plan (default) reads only; write/release/revert change the tree"},
+            "apply":{"type":"boolean","description":"false previews the action; true writes it"},
+            "root":{"type":"string"}
+        }}),
         "nichlink.apply" => json!({"type":"object","properties":{
             "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: generated files"},
             "node":{"type":"string","description":"edit/rename/delete/deepen: the face"},
@@ -871,7 +904,7 @@ pub(crate) fn effect(tool: &str) -> Effect {
         // `apply` can move a subtree into the trash (`delete`), which is the one action here
         // that takes something away from the caller.
         // `apply` 能把一棵子树移进回收目录（`delete`）——这是这里唯一一个把东西从调用方手里拿走的动作。
-        "nichlink.apply" => Effect::Rewrite,
+        "nichlink.apply" | "nichlink.crates" => Effect::Rewrite,
         _ => Effect::Read,
     }
 }
@@ -958,6 +991,7 @@ const DISPATCH: &[(&str, Handler)] = &[
     ("nichlink.check", check),
     ("nichlink.verify", verify),
     ("nichlink.graph", crate::mcp::graph::graph),
+    ("nichlink.crates", crate::mcp::crates::crates),
     ("nichlink_tools", catalogue),
 ];
 
@@ -1102,6 +1136,11 @@ fn next_hint(name: &str) -> Option<&'static str> {
              on a tree with **no registered face** `explain` can only say `no such node` — there \
              \"the object\" means a *symbol*, so go `search {query}` / `locate {symptom}` / \
              `read {path, line}` first\n"
+        }
+        "nichlink.crates" => {
+            "next   `crates {action: \"write\"}` (or `\"release\"`) previews the write — the reply \
+             names what it would change — and the same call with `apply: true` writes it; `revert` \
+             takes the generated packages back\n"
         }
         "nichlink.explain" => {
             "next   `callgraph {function}` for its callers and callees, `read {path, line}` for the body\n"

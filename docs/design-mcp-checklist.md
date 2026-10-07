@@ -2116,3 +2116,11 @@ error[E0433]: cannot find `frame` in `panel`
 **钉子 7 条**（4 条视图 + 3 条 Studio）：无声明 ⇒ 视图是 `None` · 视图描述两种形状与磁盘状态（含 `Foreign` 与"开发形状不可发布"）· 未列入工作区成员清单的包被点名 · **屏幕打开时看到声明出来的两个包**（含 facade 的依赖顺序）· 无声明的宿主被说出来而不是给空清单 · **三个动作真的写下/收回**（`R` + `y` ⇒ 幽灵带 `shape = "release"` 且携带碎片源码、facade 就位、屏幕随即读到 release；`x` + `y` ⇒ 两个包都消失）✓。夹具两处地雷同时修掉：**宿主必须放在自己的一层目录里**（幽灵是同级，直接坐在 `/tmp` 的宿主会把包规划进 `/tmp`——实测真读到了别人的目录 ✗）、以及夹具的 `../toolchain` 依赖要指向本检出（否则 `cargo metadata` 读不出包名）。
 
 **门禁**：fmt ✓ · workspace 全绿 ✓ · clippy 两面 exit 0 ✓ · conventions（含 size）✓ · 发布表 ✓ · 视觉场景 ✓ · 十面见提交说明。**仍差**：P4（MCP 工具面接 `add_crates`）——`partition_view` 已经是为它准备的公开读取器。
+
+### §M7.44 P4：MCP 工具面接 `add_crates` —— `nichlink.crates`（2026-10-07）
+
+维护者的话「进 MCP 工具与 Studio 工作流」两半里的后半：**桥**是第三个执行面，而它用**同一个**读取器（`build_time::partition_view`）与**同一批**写入方，因此三个面不可能对"这次拆分要写什么"给出不同答案。`action` 是 `plan`（默认，也是唯一不写入的）/ `write`（开发形状）/ `release`（可发布形状）/ `revert`（收回来）；**不带 `apply: true` 一律只是预览**——回复是分区加上一句"这个动作会改什么"，带上才真的写，并且回复携带**从磁盘读回**的那棵树（下一次调用可以据此瞄准，而不是据调用方希望发生的事）。答案逐包给出：它服务哪个 crate/哪棵子树 · 编译几个面 · 开发形状挂载几个 · 发布形状复制几个 · **磁盘上是哪种形状** · **文件数与字节数** · facade 的**分区内依赖**（＝可发布顺序）· 逐条**发布说明**（缺 `description`/`license` · `publish = false` · 只有 path 没有 version 的依赖 · 开发形状不可发布）；没有声明的宿主被告知声明该写在哪、长什么样，而不是拿到一张空表。
+
+**登记要成套**（四条表缺一不可，钉子会当场点名）：目录 `tools()` 的一句话 + `advertised_schema` 的 schema 臂 + `DISPATCH` 的顺序（与目录同序）+ `effect`（`Effect::Rewrite` ⇒ 自动 `destructiveHint: true`，因为 `revert` 真的会把包拿走）+ `ownership::subject` 归到 `Subject::Write` + `READ_KEYS` 行（`action`/`apply`）+ 写者名单与 destructive 名单各一行 + `next_hint` 一句话。**顺带把特性门放宽到 mcp**：`partition_view`/`crate_write`/`crate_release`/`crate_facade`/`crate_members` 与 `crate_plan::relative_walk` 的门从 `any(cli, studio)` 变成 `any(cli, studio, mcp)`——桥要用同一批写入方，而它此前根本够不到它们。
+
+**实测（真二进制、真调用）**：`nichlink-mcp --list crates` 列出 `keys: action, apply, root` ✓；`--call nichlink.crates --root <fixture> --action plan` 打出分区 + "no action taken" + 双语说明 + `next` 提示 + 可引用的 `evidence` 行 ✓；`--action release`（不带 apply）**磁盘上什么都没变** ✓；`--action release --apply true` 写下 **9 个文件**，`Cargo.toml` 里 `shape = "release"`，读回的行变成 `on disk release · … 6 file(s), 2.0 KiB` ✓；`--action revert --apply true` 把包收回去 ✓。**钉子 5 条**（`mcp/src/crates_tests.rs`）：无声明的宿主被告知声明在哪 · `plan` 不写任何东西 · 不带 `apply` 的动作不改变磁盘 · `apply` 写下发布形状后 `revert` 收回 · 未知动作按名字被拒并列出存在的四个 ✓。**门禁**：fmt ✓ · clippy 两面 exit 0 ✓ · 发布表 ✓ · 十面见提交说明。

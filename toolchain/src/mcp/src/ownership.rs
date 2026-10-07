@@ -119,7 +119,11 @@ pub(crate) fn subject(tool: &str) -> Subject {
     match tool {
         "nichlink.read" | "nichlink.inspect" | "nichlink.mir" | "nichlink.unified" => Subject::Path,
         "nichlink.callgraph" => Subject::WorkspaceOrOwner,
-        "nichlink.apply" | "nichlink.plugin" => Subject::Write,
+        // `crates` writes generated packages and `revert` takes them back, so the ownership
+        // question is the same one `apply` asks: is this root the tree being written.
+        // `crates` 写下生成包、`revert` 把它们收回去，因此归属问题与 `apply` 问的是同一个：这个根是不是
+        // 被写的那棵树。
+        "nichlink.apply" | "nichlink.plugin" | "nichlink.crates" => Subject::Write,
         // The scaffold names its own destination and writes a directory that does not exist
         // yet, so the root answers it directly: the ownership question is whether the
         // destination is inside this root, which is a fact about paths rather than about a
