@@ -491,4 +491,42 @@ step "leg 4: building the release shape, and packaging it"
 "$NICHLINK" crates --revert "$REL/app" >/dev/null || fail "the release shape does not revert"
 [ ! -d "$REL/app-widgets" ] || fail "the revert left the release ghost behind"
 
-step "OK — both shapes build, the four facts hold, the promote lands, and the release shape packages"
+step "leg 5: the committed example (examples/partitioned-button) still builds and still carries its graft"
+
+# The four legs above build fixtures the script itself writes, so nothing in the repository *is* a
+# partitioned host. This leg is the one that keeps a real one alive: a committed example carrying
+# `add_crates.rs`, its two generated packages, and a graft whose cuts moved into the crate the split
+# created. If a change ever breaks the shape, this fails where a reader can see it.
+# 上面四条腿构建的都是脚本自己写出来的夹具，因此仓库里没有一棵**真的**被划分过的宿主。这条腿守住那个真的：
+# 一个入库的示例，带 `add_crates.rs`、它那两个生成包，以及一次"切口随边界搬进新 crate"的 graft。以后谁把这条路
+# 走坏了，它会在这里红，而不是等读者自己撞上。
+EXAMPLE="$ROOT/examples/partitioned-button"
+[ -f "$EXAMPLE/host/add_crates.rs" ] || fail "the committed example lost its declaration"
+(cd "$EXAMPLE" && build --workspace) || fail "the committed example does not build"
+# Each crate emits exactly the cuts it compiles: the host handed `control` away (0), the ghost that
+# owns it emits both, and the facade carries the union with the owner rewritten.
+# 每个 crate 只发它编译得到的那几条切口：宿主把 `control` 交出去了（0），拥有它的幽灵两条都发，而 facade
+# 携带并集并把属主改写。
+cuts_in() {
+  # The **newest** file, because a build directory survives a change of shape: an artifact from
+  # before the declaration existed still sits there and would answer for the old tree. And the count
+  # goes through `$( )` rather than `grep -c || printf 0`: `grep -c` prints `0` *and* exits 1, so the
+  # `||` used to print a second `0` and the comparison read `"00"` (measured — this leg failed on it).
+  # 取**最新**的那份：构建目录会在形状改变后留下来，声明存在之前的那份产物还在，会替旧树作答。计数经 `$( )`
+  # 取，而不是 `grep -c || printf 0`：`grep -c` 会**打印** `0` **并**以 1 退出，于是 `||` 又打一个 `0`，
+  # 比较读到的是 `"00"`（实测：这条腿就是被它判红的）。
+  file=$(ls -t $(find "$EXAMPLE/target" -path "*/$1-*/out/generated_lib.rs" 2>/dev/null) 2>/dev/null | head -1)
+  [ -n "$file" ] || { printf 'missing'; return; }
+  printf '%s' "$(grep -c 'StaticGraftCut::from_ids' "$file" 2>/dev/null)"
+}
+[ "$(cuts_in nichlink-example-partitioned-button)" = "0" ] ||
+  fail "the partitioned host still emits graft cuts for faces it does not compile"
+[ "$(cuts_in partitioned-button-objects)" = "2" ] ||
+  fail "the ghost that owns the cuts does not emit both"
+[ "$(cuts_in partitioned-button-facade)" = "2" ] ||
+  fail "the facade does not carry the union"
+facade_file=$(find "$EXAMPLE/target" -path "*/partitioned-button-facade-*/out/generated_lib.rs" 2>/dev/null | head -1)
+grep -q 'partitioned_button_objects::control::object::button::NODE_ID' "$facade_file" ||
+  fail "the facade does not name the crate that compiles the cut face"
+
+step "OK — both shapes build, the four facts hold, the promote lands, the release shape packages, and the committed example still carries its graft"

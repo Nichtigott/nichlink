@@ -1,0 +1,13 @@
+[package]
+name = "nichlink-example-partitioned-button-graft"
+version = "0.2.1"
+edition = "2024"
+publish = false
+
+# 已发布的 crate 用 `[lib] name` 决定代码里的 crate 名 —— 宿主入口的 graft 表达式就按它写。
+[lib]
+name = "control_button_graft"
+path = "src/lib.rs"
+
+[dependencies]
+nichlink-toolchain = { path = "../../../toolchain", features = ["run", "authoring"] }

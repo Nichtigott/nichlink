@@ -2197,3 +2197,23 @@ pub static BUILTIN_GRAFT_CUTS: &[…StaticGraftCut] = &[
 ⇒ ①**宿主**（两条切口都落在交出去的子树里）**两条都不发**（表为空 ✓）；②**幽灵 A** 只发自己那条、**幽灵 B** 只发自己那条（各自都不点名对方的模块 ✓）；③**facade 携带并集**，两条各自改写成**编译它的那个 crate**（`app_widgets` / `app_gauges` ✓），契约断言同属主 ✓。**这正是"crateA 与 crateB 同时在场"的答案**：切口按**面**归属到编译它的 crate，跨 crate 的那一半归 facade ✓。
 
 **仍未测的（"全代码域随意 graft"的其余位置，下一批）**：切口落在**根面** / **容器面**（含 `full` 跨两个 crate 的子树：`panel` 自己有面、其子 `frame`(A) 与 `gauge`(B) 已交出去 ⇒ 谁携带这条切口？）/ **项目外面**（现有钉子只断言 facade 原样通过 ✓）/ **插件宣告的面** / **链式 graft**（切口面本身是别人 graft 来的）。这些要靠**真 cargo 的端到端**（现成载体：`tools/nichlink-partition-rehearsal` 加一条腿），不是渲染级钉子能收口的 ✓。
+
+### §M7.51 第一个**真的**被划分过的示例：`examples/partitioned-button`（2026-10-07）
+
+维护者问「我们现在声明的例子在哪里？」—— 查真树后的答案是：**仓库里没有真宿主带声明** ✗（`ls examples/*/add_crates.rs` 为空）；声明只存在于夹具、测试常量、`crates --declare` 的模板与文档片段里。他要「补真示例来测试一下」，于是补了这一个。
+
+**形状**（独立虚拟工作区，**不进根工作区** ✓ 实测根成员仍是 6 个、不含它 ✓）：
+```
+examples/partitioned-button/
+  Cargo.toml                 ← 虚拟工作区：members = host, graft, + 两个生成包
+  host/                      ← 真宿主：src/**（5 文件/3 面）+ add_crates.rs + 一条类型化 graft 计划
+  graft/                     ← 第三方 graft 实现（独立包，`[lib] name = control_button_graft`）
+  partitioned-button-objects/ ← 生成物：幽灵（3 mounted files、1 remap）
+  partitioned-button-facade/  ← 生成物：facade（依赖宿主 + 幽灵）
+  .cargo/config.toml          ← 生成物：partition 根的 remap（**入库**，否则换台机器构建不过）
+```
+**实测（原始退出码）**：`check exit=0` → `crates --write`（wrote 8 files；config 与 members 均已就位）→ **宿主 / 幽灵 / facade 三个 `cargo build` 全部 exit=0** ✓；各 crate 发出的切口 = **宿主 0 · 幽灵 2 · facade 2（属主改写为 `partitioned_button_objects::control::object::button::NODE_ID`）** ✓ —— 这就是"划分把 `control` 整棵交给新 crate 之后，graft 计划一个字没改、切口跟着面走"的可运行证据 ✓。
+
+**门禁**：`tools/nichlink-partition-rehearsal` 加 **leg 5**（构建这个入库示例，断言三个 build 0 且切口 0/2/2 + facade 点名属主 ✓）。**它当场抓出我自己脚本里的一个真 bug** ✗：`cuts_in()` 写成 `grep -c … || printf '0'` —— `grep -c` 无匹配时**既打印 `0` 又退出 1**，于是 `||` 又打一个 `0`，比较读到 `"00"` ⇒ 腿误报红；另外 `find … | head -1` 会挑到**声明存在之前那份旧产物**（构建目录会活过形状改变）⇒ 改为取最新一份 ✓。修后整条演练 **OK** ✓。
+
+**一处已知小瑕疵（未修，记账）**：生成包构建时会报 `unexpected_cfgs: rust_analyzer` 警告（宿主若 `deny(warnings)` 会硬失败 ✗）—— 已在本项目 todo 里，处置方式是在生成的清单里补 `[lints.rust] unexpected_cfgs` ✓。
