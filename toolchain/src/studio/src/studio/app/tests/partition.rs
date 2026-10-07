@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::build_time::OnDisk;
+use crate::build_time::crate_plan::crates_dir;
 use std::fs;
 use std::path::PathBuf;
 
@@ -144,8 +145,8 @@ fn a_host_that_declares_nothing_says_so() {
 fn the_actions_write_and_take_back_the_partition() {
     let root = partition_host("actions");
     let mut app = open_screen(&root);
-    let ghost = root.parent().expect("a parent").join("app-widgets");
-    let facade = root.parent().expect("a parent").join("app-facade");
+    let ghost = crates_dir(root.parent().expect("a parent")).join("app-widgets");
+    let facade = crates_dir(root.parent().expect("a parent")).join("app-facade");
 
     // Arm and confirm: one key arms, `y` runs, and the outcome is said out loud.
     app.handle_key(KeyEvent::from(KeyCode::Char('R')));
@@ -207,7 +208,7 @@ fn the_delete_key_removes_the_selected_crate_from_the_declaration() {
     let mut app = open_screen(&root);
     let file = root.join("add_crates.rs");
     let before = fs::read_to_string(&file).expect("the declaration");
-    let app_widgets = root.parent().expect("a parent").join("app-widgets");
+    let app_widgets = crates_dir(root.parent().expect("a parent")).join("app-widgets");
     assert!(before.contains(r#"Crate::named("widgets")"#), "{before}");
 
     // Arming writes nothing.
@@ -285,7 +286,7 @@ fn the_delete_key_refuses_while_the_package_is_on_disk() {
     let root = partition_host("guarded");
     let mut app = open_screen(&root);
     let area = root.parent().expect("a parent").to_path_buf();
-    fs::create_dir_all(area.join("app-widgets")).expect("a package directory");
+    fs::create_dir_all(crates_dir(&area).join("app-widgets")).expect("a package directory");
     app.handle_key(KeyEvent::from(KeyCode::Char('D')));
     app.handle_key(KeyEvent::from(KeyCode::Char('y')));
     let state = state(&app);
