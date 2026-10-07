@@ -39,7 +39,12 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-FIXTURE="$ROOT/studio/tests/fixtures/node-editor"
+# The fixture moved under `toolchain/` when the nine crates became three; the old
+# `studio/tests/fixtures/...` names a directory that does not exist, and a `cd` that fails makes the
+# tmux session die before its first frame — which is what the empty pane in CI was.
+# 夹具在九 crate 变三时移到了 `toolchain/` 下；旧的 `studio/tests/fixtures/...` 点名的目录不存在，而
+# 一次失败的 `cd` 会让 tmux 会话在第一帧之前就死掉——CI 里那个空面板就是它。
+FIXTURE="$ROOT/toolchain/tests/fixtures/node-editor"
 NAMESPACE="nichlink.fixture.node-editor"
 QUERY="${NICHLINK_VISUAL_QUERY:-preview_canvas_width}"
 TREE_DEMO_QUERY="paint_node_editor"

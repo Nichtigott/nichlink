@@ -2150,3 +2150,11 @@ error[E0433]: cannot find `frame` in `panel`
 ③ **视觉步骤 `Visual check (tmux)` 第一次真的跑到 tmux 那一步，就在第一次等待上红了**，面板**完全空白**：分不清"会话没起来"与"程序还没画第一帧"。这一族以前从没跑过（构建行是坏的 ⇒ 更早的步骤就红 ✗）。工具因此收三处：等待预算从 150×0.2s（30 s）提到 **600×0.2s（120 s）**并可用 `NICHLINK_VISUAL_TRIES` 覆盖（冷的 CI runner 在 Studio 画出第一帧之前要解析工程并跑 `cargo metadata`）；每轮用 `tmux has-session` 判"会话是否已经死掉"，死了立刻失败并**打印该场景的 stderr**（启动失败时那就是答案）；超时时也把 stderr 一并打出。本地无法复现 tmux 这一步（本机沙箱不允许 tmux 在 `/tmp` 建 socket，会话直接消失），因此这一半**由 CI 判定** ✓。
 
 **门禁**：fmt ✓ · workspace 全绿 ✓ · clippy 两面 0 error ✓ · 发布表 ✓ · `tools/nichlink-release-audit` 本机通过 ✓ · 十面见提交说明。
+
+### §M7.47 视觉步骤真正的病根：夹具路径也是合并遗留（2026-10-07）
+
+上一轮加的诊断（会话死掉就打印该场景 stderr）在 CI 上立刻给出了"会话死了、stderr 为空"，**还是没说出为什么**——因为 `cd` 的失败不在 `2>` 的覆盖范围内，而会话死得太快、`capture-pane` 已经抓不到面板。于是要一个真实 pty 才能继续：本机沙箱不允许 tmux 在 `/tmp` 建 socket（会话会直接消失，症状与 CI 一模一样 ✗），放行一次后**当场复现**，两条命令就定位了：
+
+`FIXTURE="$ROOT/studio/tests/fixtures/node-editor"` —— 这个目录在九→三合并后**不存在**（夹具在 `toolchain/tests/fixtures/node-editor`）✗；会话命令是 `cd '$FIXTURE' && …`，`cd` 失败 ⇒ shell 立刻退出 ⇒ **会话在第一帧之前就死了**，面板因此完全空白 ✓。这是同一族"合并遗留"的第三处（前两处：`-p nichlink-studio`、`-p nichlink-run-method`）——**改动 crate 布局时，工具里的路径与 `-p` 名字都是引用，而没有任何门禁读它们**。
+
+改成 `toolchain/tests/fixtures/node-editor` 后，本机真实 tmux 里四个场景（`home graph tree-demo partition`）**全部通过** ✓，抓屏非空且标记都在 ✓。教训写进 lesson：**"会话死了但 stderr 为空"时，先怀疑会话命令自己的第一步（`cd`/`exec`）失败——重定向只覆盖最后一条命令**；而"合并/搬目录之后，工具里的路径与包名要当成引用逐个核对"，这一族在这个仓库已经出现三次。
