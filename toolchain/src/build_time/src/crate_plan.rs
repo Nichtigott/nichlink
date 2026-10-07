@@ -389,15 +389,36 @@ pub(crate) fn plan(
             // would be a face nobody compiles.
             // 认领点名的是**以该节点为根**的子树，因此该节点自己的面也属于碎片：宿主把整个模块交出去（它的渲染
             // 跳过该模块及其下的一切），而根面若不归任何一方，就是一个没人编译的面。
+            let mut claimed = 0usize;
             for (source, module_path, _) in faces.iter().filter(|(_, module, _)| {
                 *module == *subtree || module.starts_with(&format!("{subtree}::"))
             }) {
+                claimed += 1;
                 mounts.push(PlannedMount {
                     spelling: spelling_for(package_root, source),
                     module_path: module_path.clone(),
                     source: source.clone(),
                 });
                 files.push(source.clone());
+            }
+            // A claim that matches nothing is never a quiet empty crate: either the path is misspelled,
+            // or the plan was built from an earlier declaration. Both are worth stopping for — a crate
+            // with no sources compiles, ships, and answers every later question wrongly.
+            // 匹配不到任何东西的认领，绝不能安静地变成一个空 crate：要么路径写错了，要么这份计划是上一版声明
+            // 构建的。两者都值得当场停下——没有源码的 crate 会编译、会发布，并在之后每个问题上都答错。
+            if claimed == 0 {
+                let nearest = super::shape_decl::closest(
+                    subtree,
+                    faces.iter().map(|(_, module, _)| module.as_str()),
+                )
+                .map(|module| format!("; the nearest published face is `{module}`"))
+                .unwrap_or_default();
+                return Err(format!(
+                    "add_crates: `{subtree}` matches none of the {} face(s) the build published, so \
+                     `{name}` would carry no sources{nearest}. Either the path is misspelled, or the \
+                     plan predates this declaration — run `nichlink check` and read what it says",
+                    faces.len(),
+                ));
             }
         }
         mounts.sort_by(|left, right| left.module_path.cmp(&right.module_path));

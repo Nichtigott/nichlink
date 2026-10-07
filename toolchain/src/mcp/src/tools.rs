@@ -705,7 +705,8 @@ pub(crate) fn tools() -> Vec<Value> {
             "The crate partition this host declares at its package root (`add_crates.rs`), and the \
              three writers that make it real. A host can hand a subtree to a crate of its own; the \
              declaration is ordinary Rust (`Crate::named(\"widgets\").at(&[…::SUBTREE])` inside a \
-             `Shape`), so the compiler checks the paths and an editor completes them. This tool \
+             the registration tree, so NichLink checks the paths against it (no compiler can: a \
+             partitioned host no longer compiles the subtrees its declaration names). This tool \
              answers all three questions a split raises before it is written: **what would be \
              written** (one package per declared crate, plus a *facade* that carries the cross-crate \
              half — the graft table and the two contract assertions), **what is on disk now** \

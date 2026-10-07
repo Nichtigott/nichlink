@@ -374,6 +374,37 @@ fn undeclaring_without_a_declaration_is_refused() {
 /// Declaring the first crate writes the canonical file, and declaring a second one appends a line
 /// without disturbing the first.
 /// 声明第一个 crate 会写下规范文件，声明第二个会在不动第一个的前提下追加一行。
+/// The refusal must say **who** checks these paths, and name the fix.
+/// 拒绝必须说清**谁**在检查这些路径，并点出改法。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn a_refusal_says_who_checks_the_paths_and_names_the_spelling_to_write() {
+    let (root, _, _) = package("refusal-wording", DECLARATION);
+    let path = root.join("add_crates.rs");
+    let text = fs::read_to_string(&path).expect("the declaration");
+    fs::write(
+        &path,
+        text.replace(
+            "crate::control::object::SUBTREE",
+            "crate::control::object::SUBTRE",
+        ),
+    )
+    .expect("a typo");
+    let refusal = read_shape_declaration(&root).expect_err("it is refused");
+    assert!(
+        refusal.contains("resolves these paths against the registration tree"),
+        "it says NichLink resolves them: {refusal}"
+    );
+    assert!(
+        !refusal.contains("the compiler checks the paths"),
+        "and does not send the reader to a compiler that never sees the file: {refusal}"
+    );
+    assert!(
+        refusal.contains("crate::control::object::SUBTREE"),
+        "and names the spelling to write: {refusal}"
+    );
+}
+
 #[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
 #[test]
 fn declaring_appends_without_disturbing_what_is_there() {

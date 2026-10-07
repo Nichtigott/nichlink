@@ -154,9 +154,21 @@ pub(crate) fn read_shape_declaration(
             let module = entry
                 .strip_suffix("::SUBTREE")
                 .ok_or_else(|| {
+                    // Every subtree path ends in `::SUBTREE`, so when one does not, the fix is usually
+                    // a spelling away — say it, instead of making the reader re-derive the grammar.
+                    // 每一棵子树路径都以 `::SUBTREE` 收尾；不合规时通常只差几个字母——直接说出来，
+                    // 不要让读者自己去推语法。
                     unreadable(
                         &path,
-                        &format!("`{name}` names `{entry}`, which is not a `…::SUBTREE` marker"),
+                        &format!(
+                            "`{name}` names `{entry}`, which is not a `…::SUBTREE` marker \
+                             (every subtree path ends in `::SUBTREE`, so `{suggested}` is the spelling \
+                             this one is missing)",
+                            suggested = format!(
+                                "{}::SUBTREE",
+                                entry.rsplit_once("::").map(|(head, _)| head).unwrap_or(entry)
+                            )
+                        ),
                     )
                 })?
                 .trim()
@@ -327,13 +339,62 @@ fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result
 
 /// The one refusal spelling for a declaration the build cannot read.
 /// 构建读不了的声明，其唯一的拒绝拼法。
+///
+/// It says who checks what, because the answer is not the obvious one: **NichLink** resolves these
+/// paths against the registration tree, and no compiler can. A partitioned host no longer compiles the
+/// subtrees its declaration names — they went to the crates the split created — so `crate::control::…`
+/// has nothing to resolve against *in the host*, while the tree still knows that node. Saying
+/// "the compiler checks the paths" sent a reader looking for a check that does not exist (the file is
+/// read as text, never compiled).
+/// 它说清"谁检查什么"，因为答案不是显而易见的那个：**NichLink** 对着注册树解析这些路径，而没有任何编译器
+/// 能做这件事。被划分的宿主不再编译声明点名的子树——它们已经去了拆分产生的 crate——因此 `crate::control::…`
+/// **在宿主里**没有可解析对象，而树仍然认得那个节点。写"编译器会检查这些路径"会让读者去找一个不存在的检查
+/// （本文件是按**文本**读的，从不参与编译）。
 fn unreadable(path: &Path, why: &str) -> String {
     format!(
-        "{}: {why}. The declaration is ordinary Rust, so the compiler checks the paths; this reader \
-         only accepts `Shape {{ package_prefix: \"…\", crates: &[Crate::named(\"…\").at(&[\
-         crate::…::SUBTREE])] }}`",
+        "{}: {why}. NichLink resolves these paths against the registration tree, not a compiler: a \
+         partitioned host no longer compiles the subtrees its declaration names. This reader accepts \
+         `Shape {{ package_prefix: \"…\", crates: &[Crate::named(\"…\").at(&[crate::…::SUBTREE])] }}`, \
+         or the same thing built through `Shape::of(…)`",
         path.display()
     )
+}
+
+/// The closest of `candidates` to `claim`, when one is close enough to be worth naming.
+/// 与 `claim` 最接近的那个候选（近到值得点名为止）。
+///
+/// A refusal that only says "no such node" makes the reader re-read the whole tree; naming the nearest
+/// one turns it into a one-character fix. The threshold is relative to the claim's length so a short
+/// name does not match everything.
+/// 只写"没有这个节点"的拒绝会让读者重新读整棵树；点出最近的那个就把它变成改一个字母。阈值与 `claim` 的
+/// 长度相关，免得短名字什么都"像"。
+pub(crate) fn closest<'a>(
+    claim: &str,
+    candidates: impl Iterator<Item = &'a str>,
+) -> Option<String> {
+    let allowed = (claim.len() / 3).max(1);
+    candidates
+        .map(|candidate| (distance(claim, candidate), candidate))
+        .filter(|(distance, _)| *distance <= allowed)
+        .min_by_key(|(distance, candidate)| (*distance, *candidate))
+        .map(|(_, candidate)| candidate.to_owned())
+}
+
+/// Levenshtein distance, two rows.
+/// 编辑距离，两行。
+fn distance(left: &str, right: &str) -> usize {
+    let right: Vec<char> = right.chars().collect();
+    let mut previous: Vec<usize> = (0..=right.len()).collect();
+    let mut current = vec![0; right.len() + 1];
+    for (i, a) in left.chars().enumerate() {
+        current[0] = i + 1;
+        for (j, b) in right.iter().enumerate() {
+            let substitute = previous[j] + usize::from(a != *b);
+            current[j + 1] = substitute.min(previous[j + 1] + 1).min(current[j] + 1);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()]
 }
 
 #[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]

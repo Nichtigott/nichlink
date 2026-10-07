@@ -494,6 +494,29 @@ pub const SHAPE: Shape = Shape {
 
 /// The three files a ghost is made of, and the config the workspace root has to carry.
 /// 幽灵由哪三份文件组成，以及工作区根必须携带的那份配置。
+/// A claim naming nothing the build published is refused by name — never a quiet empty crate.
+/// 点名不到任何已发布的面时，认领被点名拒绝——绝不变成一个安静的空 crate。
+#[test]
+fn a_claim_that_matches_no_published_face_is_refused_by_name() {
+    let root = host(
+        "claim-nothing",
+        &[(
+            "control/control.rs",
+            "crate::root_object! {\n    kind: Control,\n}\n",
+        )],
+        DECLARATION,
+    );
+    let error = plan_host(&root).expect_err("it is refused");
+    assert!(
+        error.contains("matches none"),
+        "it says the claim matched nothing: {error}"
+    );
+    assert!(
+        error.contains("run `nichlink check`"),
+        "and names the way out: {error}"
+    );
+}
+
 #[test]
 fn a_ghost_is_three_files_and_one_workspace_config() {
     let root = host(
