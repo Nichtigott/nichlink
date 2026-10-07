@@ -717,13 +717,22 @@ pub(crate) fn tools() -> Vec<Value> {
              development one, which mounts the host's files and needs the workspace remap). \
              `action` is `plan` (the default, and the only one that writes nothing), `write` (the \
              development shape), `release` (the publishable shape) or `revert` (take the generated \
-             packages back). **A request is a preview unless `apply` is true**: without it the reply \
+             packages back) — and the **declaration layer** is operable too: `declare` (needs \
+             `crate` and `subtree`, the host's own path to a `SUBTREE` constant) adds a crate to \
+             `add_crates.rs`, creating the file when the host has none, and `undeclare` (needs \
+             `crate`) removes exactly that entry, leaving every other byte of the author's \
+             hand-written source alone; removing the **last** declared crate removes the file, which \
+             is what a host going back to one crate means. `undeclare` refuses while that crate's \
+             package is still on disk, because after the entry is gone nothing knows that directory: \
+             `revert` first. **A request is a preview unless `apply` is true**: without it the reply \
              is the partition plus the sentence naming what the action would change; with it the \
              write happens and the reply is the tree as read back from the disk. Identities survive \
              both shapes — a face derives its identity input from `file!()` by dropping \
              `CARGO_MANIFEST_DIR` and one leading `src/` — so a split never renames a face.",
             json!({"type":"object","properties":{
-                "action":{"type":"string","enum":["plan","write","release","revert"],"description":"plan (default) reads only; write/release/revert change the tree"},
+                "action":{"type":"string","enum":["plan","write","release","revert","declare","undeclare"],"description":"plan (default) reads only; write/release/revert change the generated packages; declare/undeclare edit the host's `add_crates.rs`"},
+                "crate":{"type":"string","description":"declare/undeclare: the crate's name"},
+                "subtree":{"description":"declare: the host's path to a `SUBTREE` constant, e.g. `crate::panel::frame::SUBTREE` (or an array of them)","anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}}]},
                 "apply":{"type":"boolean","description":"false previews the action; true writes it"},
                 "root":{"type":"string"}
             }}),
@@ -827,7 +836,9 @@ fn advertised_schema(tool: &str) -> Value {
             "root":{"type":"string"}
         }}),
         "nichlink.crates" => json!({"type":"object","properties":{
-            "action":{"type":"string","enum":["plan","write","release","revert"],"description":"plan (default) reads only; write/release/revert change the tree"},
+            "action":{"type":"string","enum":["plan","write","release","revert","declare","undeclare"],"description":"plan (default) reads only; write/release/revert change the generated packages; declare/undeclare edit the host's `add_crates.rs`"},
+            "crate":{"type":"string","description":"declare/undeclare: the crate's name"},
+            "subtree":{"description":"declare: the host's path to a `SUBTREE` constant, e.g. `crate::panel::frame::SUBTREE` (or an array of them)","anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}}]},
             "apply":{"type":"boolean","description":"false previews the action; true writes it"},
             "root":{"type":"string"}
         }}),
@@ -1138,7 +1149,7 @@ fn next_hint(name: &str) -> Option<&'static str> {
              `read {path, line}` first\n"
         }
         "nichlink.crates" => {
-            "next   `crates {action: \"write\"}` (or `\"release\"`) previews the write — the reply \
+            "next   `crates {action: \"declare\", crate: \"…\", subtree: \"crate::…::SUBTREE\"}` adds a crate to the declaration (it creates `add_crates.rs` when the host has none) and `undeclare` takes one out — both preview the exact text diff — while `crates {action: \"write\"}` (or `\"release\"`) previews the write — the reply \
              names what it would change — and the same call with `apply: true` writes it; `revert` \
              takes the generated packages back\n"
         }

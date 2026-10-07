@@ -22,6 +22,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::build_time::partition_view::{OnDisk, PartitionView};
+use crate::build_time::{DeclarationEdit, declare, undeclare};
 
 /// The most package rows one reply prints before it says how many it left out.
 /// 一次回复在说明"省掉多少"之前最多打印多少个包行。
@@ -40,6 +41,42 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("apply")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    // The declaration layer comes first, because the case the view cannot describe — a host that
+    // declares nothing — is exactly what `declare` is for: it creates the file.
+    // 声明层放在最前面，因为视图描述不了的那种情形——一个什么都没声明的宿主——正是 `declare` 存在的理由：
+    // 它把这个文件建起来。
+    if matches!(action, "declare" | "undeclare") {
+        return match action {
+            "declare" => {
+                let name = required_argument(arguments, "crate")?;
+                let subtrees = subtrees_argument(arguments)?;
+                let edit = declare(root, &name, &subtrees)?;
+                finish_declaration_edit(root, &name, edit, apply)
+            }
+            _ => {
+                let name = required_argument(arguments, "crate")?;
+                // The packages on disk are named by the declaration this is about to change: once the
+                // entry is gone, no action knows that directory any more, so `revert` has to run
+                // **first** or the directory stays behind as an orphan this tool can no longer reach.
+                // 磁盘上的包是由这份即将被改动的声明命名的：条目一旦消失，就没有动作还知道那个目录了，因此
+                // `revert` 必须**先**跑，否则那个目录会作为孤儿留下、本工具再也够不到它。
+                if let Some(directory) = crate::build_time::package_directory_of(root, &name)? {
+                    return Err(format!(
+                        "`{name}` still has its package at {}: `revert` first (it takes the generated \
+                         packages back while the declaration still names them), then undeclare\n\
+                         `{name}` 的包还在 {}：先 `revert`（它趁声明还点名它们时把生成的包收回去），再 \
+                         undeclare\n",
+                        directory.display(),
+                        directory.display()
+                    ));
+                }
+                let edit = undeclare(root, &name)?;
+                // Nothing on disk is guaranteed here: the reader refuses by name when the crate is
+                // unknown, and a known crate with a package still on disk is refused before the edit.
+                finish_declaration_edit(root, &name, edit, apply)
+            }
+        };
+    }
     let view = crate::build_time::partition_view::view(root)?;
     let Some(view) = view else {
         return Ok(format!(
@@ -122,11 +159,102 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
         }
         other => Err(format!(
             "action `{other}` is not implemented; this tool supports `plan` (the default, and the \
-             only one that writes nothing), `write`, `release` and `revert`\n\
-             动作 `{other}` 未实现；本工具支持 `plan`（默认，也是唯一不写入的）、`write`、`release` \
-             与 `revert`\n"
+             only one that writes nothing), `write`, `release`, `revert`, `declare` and `undeclare`\n\
+             动作 `{other}` 未实现；本工具支持 `plan`（默认，也是唯一不写入的）、`write`、`release`、\
+             `revert`、`declare` 与 `undeclare`\n"
         )),
     }
+}
+
+/// One required string argument, refused by name when it is missing.
+/// 一个必需的字符串参数，缺失时按名字拒绝。
+fn required_argument(arguments: &Value, key: &str) -> Result<String, String> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "`{key}` is required for this action: `declare` needs the crate's name and the \
+                 subtree it claims (`subtree`), `undeclare` needs the name\n\
+                 本动作需要 `{key}`：`declare` 要 crate 的名字与它认领的子树（`subtree`），\
+                 `undeclare` 要名字\n"
+            )
+        })
+}
+
+/// The subtrees a `declare` claims: one string or an array of them.
+/// `declare` 认领的子树：一个字符串，或它们的数组。
+fn subtrees_argument(arguments: &Value) -> Result<Vec<String>, String> {
+    match arguments.get("subtree") {
+        Some(Value::String(one)) if !one.is_empty() => Ok(vec![one.clone()]),
+        Some(Value::Array(many)) => {
+            let subtrees: Vec<String> = many
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect();
+            if subtrees.is_empty() {
+                return Err(subtrees_help());
+            }
+            Ok(subtrees)
+        }
+        _ => Err(subtrees_help()),
+    }
+}
+
+fn subtrees_help() -> String {
+    "`subtree` is required: the host's own path to a `SUBTREE` constant, e.g. \
+     `crate::panel::frame::SUBTREE` (or an array of them)\n\
+     需要 `subtree`：宿主自己指向某个 `SUBTREE` 常量的路径，例如 `crate::panel::frame::SUBTREE`（或其数组）\n"
+        .to_owned()
+}
+
+/// Preview or apply one declaration edit, and say what the tree looks like afterwards.
+/// 预览或落盘一次声明改动，并说明改完之后这棵树是什么样。
+fn finish_declaration_edit(
+    root: &Path,
+    name: &str,
+    edit: DeclarationEdit,
+    apply: bool,
+) -> Result<String, String> {
+    let diff = edit.diff();
+    let action = if edit.removes_file {
+        format!(
+            "remove {} (removing the last declared crate gives the host back to one crate)",
+            edit.path.display()
+        )
+    } else if edit.before.is_empty() {
+        format!(
+            "create {} with `{name}` as its first crate",
+            edit.path.display()
+        )
+    } else {
+        format!(
+            "edit {} in place, touching only `{name}`'s entry",
+            edit.path.display()
+        )
+    };
+    if !apply {
+        return Ok(format!(
+            "preview: {action}\n{diff}\
+             the file is untouched — call this again with `apply: true` to write it\n\
+             预览：{action}\n{diff}\
+             文件未被动过——再次调用并带 `apply: true` 才会写入\n"
+        ));
+    }
+    let after = crate::build_time::apply_declaration_edit(root, edit)?;
+    Ok(format!(
+        "{action}\n{diff}\
+         the declaration changed, so the packages on disk describe the shape before it: `write` (or \
+         `release`) writes the new one, `plan` shows it\n\
+         声明变了，因此磁盘上的包描述的是改之前的形状：`write`（或 `release`）写下新的，`plan` 显示它\n{}",
+        after
+            .map(|view| describe(&view))
+            .unwrap_or_else(|| format!("{name}: no crate is declared now\n")),
+    ))
 }
 
 /// What the screen and the CLI both print: the declaration, then one row per package.

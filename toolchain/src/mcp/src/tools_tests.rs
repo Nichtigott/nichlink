@@ -938,6 +938,6 @@ const READ_KEYS: &[(&str, &[&str])] = &[
     ),
     // `crates` reads the action and whether to apply it; `root` is read by every tool's entry.
     // `crates` 读动作与是否写入；`root` 由每个工具的入口读。
-    ("nichlink.crates", &["action", "apply"]),
+    ("nichlink.crates", &["action", "apply", "crate", "subtree"]),
     ("nichlink_tools", &["tool", "full"]),
 ];

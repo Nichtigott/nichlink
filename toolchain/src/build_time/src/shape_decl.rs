@@ -18,6 +18,8 @@
 
 use std::fmt::Write as _;
 use std::path::Path;
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+use std::path::PathBuf;
 
 use nichlink_kernel::identity::NodeId;
 use nichlink_kernel::lexicon;
@@ -310,6 +312,332 @@ fn unreadable(path: &Path, why: &str) -> String {
          crate::…::SUBTREE])] }}`",
         path.display()
     )
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// One change to the declaration: which file, and its text before and after.
+/// 声明的一次改动：哪个文件，以及它改前改后的文本。
+///
+/// The edit is **text**, not a re-render, and that is the whole design: `add_crates.rs` is
+/// hand-written source the author also reads, so a writer that re-rendered the file would reformat
+/// somebody else's code — and any comment they wrote would be gone. This one touches exactly the
+/// entry it was asked about, and refuses when it cannot find that entry's end.
+/// 这次改动是**文本**而不是重渲染，而这正是全部设计：`add_crates.rs` 是作者也会读的手写源码，因此一个
+/// 重渲染的写入方会重排别人的代码——他们写的注释也会消失。这一份只动被点名的那一条，并在找不到那条的结尾时
+/// 拒绝。
+#[derive(Debug)]
+pub(crate) struct DeclarationEdit {
+    /// The file the edit belongs to.
+    /// 这次改动所属的文件。
+    pub(crate) path: PathBuf,
+    /// The text before, byte for byte.
+    /// 改前的文本，逐字节。
+    pub(crate) before: String,
+    /// The text after, byte for byte.
+    /// 改后的文本，逐字节。
+    pub(crate) after: String,
+    /// Whether this edit removes the file instead of writing it, which is what removing the **last**
+    /// declared crate means: the host goes back to being one crate, and a declaration that names no
+    /// crate is a shape the reader refuses on purpose.
+    /// 这次改动是删掉文件而不是写文件——这正是移除**最后一个**已声明 crate 的含义：宿主回到"就是一个
+    /// crate"，而一份不点名任何 crate 的声明是读取器有意拒绝的形状。
+    pub(crate) removes_file: bool,
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+impl DeclarationEdit {
+    /// The lines that differ, as `-`/`+` lines, for a preview or a log.
+    /// 有差异的那些行，写成 `-`/`+`，供预览或日志使用。
+    pub(crate) fn diff(&self) -> String {
+        let before: Vec<&str> = self.before.lines().collect();
+        let after: Vec<&str> = self.after.lines().collect();
+        // A line-level comparison is enough here because the edit is one entry: the diff is what the
+        // reader checks before letting it be written, and a general diff algorithm would be a second
+        // thing to trust.
+        // 行级比较在这里足够，因为改动就是一条条目：这段差异是读者在允许写入之前核对的东西，而一个通用 diff
+        // 算法只会是多一个需要信任的东西。
+        let mut start = 0;
+        while start < before.len() && start < after.len() && before[start] == after[start] {
+            start += 1;
+        }
+        let mut end_before = before.len();
+        let mut end_after = after.len();
+        while end_before > start
+            && end_after > start
+            && before[end_before - 1] == after[end_after - 1]
+        {
+            end_before -= 1;
+            end_after -= 1;
+        }
+        let mut text = String::new();
+        if self.removes_file {
+            // Every line goes, because the whole file does.
+            // 每一行都走，因为整个文件都走。
+            for line in &before {
+                let _ = writeln!(text, "-{line}");
+            }
+            return text;
+        }
+        for line in &before[start..end_before] {
+            let _ = writeln!(text, "-{line}");
+        }
+        for line in &after[start..end_after] {
+            let _ = writeln!(text, "+{line}");
+        }
+        if text.is_empty() {
+            text.push_str("(no change)\n");
+        }
+        text
+    }
+
+    /// Put the file back the way it was before this edit.
+    /// 把文件恢复成这次改动之前的样子。
+    ///
+    /// A change that turns out not to plan is rolled back with this rather than left behind: the
+    /// declaration is what the rest of the tools read, so a version of it they refuse describes a
+    /// shape nobody can act on.
+    /// 一次事后发现"规划不成立"的改动用它回滚，而不是留下：声明是其余工具读取的东西，因此一份它们拒绝的声明
+    /// 描述的是没人能据此行动的形态。
+    pub(crate) fn restore(&self) -> Result<(), String> {
+        if self.before.is_empty() {
+            return std::fs::remove_file(&self.path)
+                .map_err(|error| format!("cannot remove {}: {error}", self.path.display()));
+        }
+        write_if_changed(&self.path, &self.before)
+            .map_err(|error| format!("cannot restore {}: {error}", self.path.display()))
+    }
+
+    /// Write the edited text, leaving the file exactly as it was when the edit is a no-op.
+    /// 把改后的文本写下去；改动是空操作时，文件保持原样。
+    pub(crate) fn apply(&self) -> Result<(), String> {
+        if self.removes_file {
+            return std::fs::remove_file(&self.path)
+                .map_err(|error| format!("cannot remove {}: {error}", self.path.display()));
+        }
+        if self.before == self.after {
+            return Ok(());
+        }
+        write_if_changed(&self.path, &self.after)
+            .map_err(|error| format!("cannot write {}: {error}", self.path.display()))
+    }
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// The canonical declaration text for a host that has none yet.
+/// 一个还没有声明的宿主，其规范的声明文本。
+///
+/// It is the shape the reader accepts and an author can extend by hand — the package prefix is filled
+/// in from the host package the same way every generated crate name is derived, so the first crate
+/// declared here cannot disagree with the packages it will produce.
+/// 它既是读取器接受的形状，也是作者能手工扩展的形状——包前缀与每个生成包名的推导方式相同、取自宿主包，因此
+/// 这里声明的第一个 crate 不可能与它将要产出的包不一致。
+fn template(package_prefix: &str, name: &str, subtrees: &[String]) -> String {
+    let mut entries = String::new();
+    for subtree in subtrees {
+        entries.push_str("\n        ");
+        entries.push_str(&entry(name, subtree));
+        entries.push(',');
+    }
+    format!(
+        "// Which subtrees of this host become crates of their own. NichLink reads this file as text\n\
+         // at build time; `nichlink crates --check` prints what it would write.\n\
+         // 这个宿主里哪些子树各自成为一个 crate。NichLink 在构建期把本文件当**文本**读；\n\
+         // `nichlink crates --check` 打印它会写下什么。\n\
+         use nichlink_toolchain::runtime::{{Crate, Shape}};\n\
+         \n\
+         pub const SHAPE: Shape = Shape {{\n\
+         \x20   package_prefix: \"{package_prefix}\",\n\
+         \x20   crates: &[{entries}\n\
+         \x20   ],\n\
+         }};\n"
+    )
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// One `Crate::named(…).at(&[…])` entry, spelled the way the reader reads it.
+/// 一条 `Crate::named(…).at(&[…])` 条目，按读取器读的那种拼法。
+fn entry(name: &str, subtree: &str) -> String {
+    format!("Crate::named(\"{name}\").at(&[{subtree}])")
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// Where one declared crate's entry starts and ends in the file's text.
+/// 某个已声明 crate 的条目在文件文本里的起止位置。
+///
+/// The end is found by bracket depth from the entry's own `Crate::named(`, not by looking for the
+/// next newline: an entry may be written on several lines and may contain a nested `&[…::SUBTREE]`
+/// list, and guessing its end from the layout is how a writer eats the next entry.
+/// 结尾是从条目自己的 `Crate::named(` 起按括号深度找出来的，而不是找下一个换行：一条条目可能写成好几行、也可能
+/// 含一个嵌套的 `&[…::SUBTREE]` 列表，而按版式猜结尾正是写入方吃掉下一条的方式。
+fn entry_span(text: &str, name: &str) -> Result<std::ops::Range<usize>, String> {
+    let needle = format!("Crate::named(\"{name}\")");
+    let start = text.find(&needle).ok_or_else(|| {
+        let known: Vec<&str> = text
+            .split("Crate::named(\"")
+            .skip(1)
+            .filter_map(|chunk| chunk.split('"').next())
+            .collect();
+        format!(
+            "no `{name}` in this declaration; it declares {}",
+            if known.is_empty() {
+                "nothing".to_owned()
+            } else {
+                known.join(", ")
+            }
+        )
+    })?;
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, character) in text[start..].char_indices() {
+        match character {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                end = Some(start + offset + 1);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let end = end.ok_or_else(|| {
+        format!("the `{name}` entry has no ending comma, so this writer cannot say where it ends")
+    })?;
+    Ok(start..end)
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// Add a crate to the host's declaration, creating the file when the host has none.
+/// 往宿主的声明里加一个 crate；宿主还没有这个文件时就把它建起来。
+pub(crate) fn declare(
+    package_root: &Path,
+    name: &str,
+    subtrees: &[String],
+) -> Result<DeclarationEdit, String> {
+    if name.is_empty() {
+        return Err("a crate needs a name".to_owned());
+    }
+    if subtrees.is_empty() {
+        return Err(format!(
+            "`{name}` claims no subtree: a crate is a subtree — name one, e.g. \
+             `crate::panel::frame::SUBTREE`"
+        ));
+    }
+    for subtree in subtrees {
+        if !subtree.contains("::") || subtree.contains('"') || subtree.contains('\n') {
+            return Err(format!(
+                "`{subtree}` is not a subtree path: write the host's own path to a `SUBTREE` \
+                 constant, e.g. `crate::panel::frame::SUBTREE`"
+            ));
+        }
+    }
+    let path = package_root.join(lexicon::ADD_CRATES_FILE);
+    let Ok(before) = std::fs::read_to_string(&path) else {
+        let host = super::package::package_name(&package_root.join("Cargo.toml"))?;
+        // An empty prefix is the one thing a template must not carry: every generated package name
+        // is built from it, so a host whose name cargo cannot read is a refusal (audit `M7`, §M7.43).
+        // 空前缀是模板唯一不能带的东西：每个生成包名都由它拼出，因此 cargo 说不出名字的宿主是一句拒绝
+        // （审计 `M7`，§M7.43）。
+        let after = template(&host, name, subtrees);
+        return Ok(DeclarationEdit {
+            path,
+            before: String::new(),
+            after,
+            removes_file: false,
+        });
+    };
+    if before.contains(&format!("Crate::named(\"{name}\")")) {
+        return Err(format!(
+            "`{name}` is already declared in {}",
+            path.display()
+        ));
+    }
+    let list_start = before.find("crates: &[").ok_or_else(|| {
+        unreadable(
+            &path,
+            "it declares no `crates: &[…]` list, so this writer cannot say where a new crate goes",
+        )
+    })? + "crates: &[".len();
+    let close = before[list_start..].find(']').ok_or_else(|| {
+        unreadable(
+            &path,
+            "its `crates: &[` list is never closed, so this writer cannot say where it ends",
+        )
+    })? + list_start;
+    // Insert **before the closing bracket**, one entry per line: an inline list gains a line break
+    // first, a list that already spans lines keeps its own layout, and every byte outside this
+    // insertion is untouched.
+    // 插在**闭括号之前**，一条一行：单行列表先补一个换行，已经跨行的列表保持它自己的版式，而这次插入之外的
+    // 每一个字节都没被动过。
+    let mut inserted = String::new();
+    if !before[..close].ends_with('\n') {
+        inserted.push('\n');
+    }
+    for subtree in subtrees {
+        inserted.push_str("        ");
+        inserted.push_str(&entry(name, subtree));
+        inserted.push_str(",\n");
+    }
+    let mut after = String::with_capacity(before.len() + inserted.len());
+    after.push_str(&before[..close]);
+    after.push_str(&inserted);
+    after.push_str(&before[close..]);
+    Ok(DeclarationEdit {
+        path,
+        before,
+        after,
+        removes_file: false,
+    })
+}
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// Remove one crate from the host's declaration, leaving every other byte alone.
+/// 从宿主的声明里移除一个 crate，其余每一个字节都保持原样。
+pub(crate) fn undeclare(package_root: &Path, name: &str) -> Result<DeclarationEdit, String> {
+    let path = package_root.join(lexicon::ADD_CRATES_FILE);
+    let before = std::fs::read_to_string(&path).map_err(|error| {
+        format!(
+            "{}: {error}; this host declares no crates, so there is none to remove",
+            path.display()
+        )
+    })?;
+    let span = entry_span(&before, name).map_err(|why| format!("{}: {why}", path.display()))?;
+    // The last declared crate is the whole declaration: removing it is the host going back to one
+    // crate, so the file goes rather than becoming a `crates: &[]` the reader refuses.
+    // 最后一个已声明的 crate 就是整份声明：移除它等于宿主回到"就是一个 crate"，因此走的是文件本身，而不是
+    // 变成一份读取器会拒绝的 `crates: &[]`。
+    let only_entry = before[span.end..].find("Crate::named(").is_none()
+        && before[..span.start].find("Crate::named(").is_none();
+    // The entry's own line goes with it: leaving the indentation behind would be a whitespace-only
+    // edit no reviewer can see in a diff, and the next `declare` would then insert beside a blank.
+    // 条目所在的那一行连同它一起走：把缩进留下会变成 diff 里看不见的空白改动，而下一次 `declare` 会插在一行空白旁边。
+    let mut start = span.start;
+    while start > 0 && matches!(before.as_bytes()[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    let mut end = span.end;
+    while end < before.len() && matches!(before.as_bytes()[end], b' ' | b'\t') {
+        end += 1;
+    }
+    if end < before.len() && before.as_bytes()[end] == b'\n' {
+        end += 1;
+    }
+    if only_entry {
+        return Ok(DeclarationEdit {
+            path,
+            before,
+            after: String::new(),
+            removes_file: true,
+        });
+    }
+    let mut after = String::with_capacity(before.len());
+    after.push_str(&before[..start]);
+    after.push_str(&before[end..]);
+    Ok(DeclarationEdit {
+        path,
+        before,
+        after,
+        removes_file: false,
+    })
 }
 
 #[cfg(test)]

@@ -58,7 +58,10 @@ COMMANDS:
     new       Create a NichLink host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
     crates    Plan the crate split a host declared (`--write` creates it;
-              `--release` makes the packages publishable instead)
+              `--release` makes the packages publishable instead; `--revert`
+              takes the generated packages back; `--declare <name> --subtree
+              <crate::…::SUBTREE>` adds a crate to the declaration, `--undeclare
+              <name>` removes one — both print the text diff, `--write` applies)
     build     Validate the registration tree, then run cargo build
     snippets  Inject the face-field editor snippets (VS Code project file, or
               the LuaSnip file Neovim loads)

@@ -2158,3 +2158,15 @@ error[E0433]: cannot find `frame` in `panel`
 `FIXTURE="$ROOT/studio/tests/fixtures/node-editor"` —— 这个目录在九→三合并后**不存在**（夹具在 `toolchain/tests/fixtures/node-editor`）✗；会话命令是 `cd '$FIXTURE' && …`，`cd` 失败 ⇒ shell 立刻退出 ⇒ **会话在第一帧之前就死了**，面板因此完全空白 ✓。这是同一族"合并遗留"的第三处（前两处：`-p nichlink-studio`、`-p nichlink-run-method`）——**改动 crate 布局时，工具里的路径与 `-p` 名字都是引用，而没有任何门禁读它们**。
 
 改成 `toolchain/tests/fixtures/node-editor` 后，本机真实 tmux 里四个场景（`home graph tree-demo partition`）**全部通过** ✓，抓屏非空且标记都在 ✓。教训写进 lesson：**"会话死了但 stderr 为空"时，先怀疑会话命令自己的第一步（`cd`/`exec`）失败——重定向只覆盖最后一条命令**；而"合并/搬目录之后，工具里的路径与包名要当成引用逐个核对"，这一族在这个仓库已经出现三次。
+
+### §M7.48 声明层可操作：`declare` / `undeclare`（2026-10-07，维护者问出来的洞）
+
+维护者一句「**mcp 难道不能 delete crate 布局吗？**」点到的是真洞：P3.6/P4 只覆盖了**生成物**那一层 —— `write`/`release` 把声明的拆分写出来、`revert` 把生成的包收回去（三个面都有 ✓）—— 而**声明本身**（`add_crates.rs`：哪棵子树成为哪个 crate）在 CLI/MCP/Studio 里**都只能人手编辑** ✗。他原来那句「也可以在 studio 中操作」指的正是这一层。补上：
+
+**一份实现，三个面共用**（`build_time::shape_decl`）：`declare(root, name, subtrees)` 与 `undeclare(root, name)` 返回 `DeclarationEdit { path, before, after, removes_file }`，编辑是**文本**而不是重渲染 —— `add_crates.rs` 是作者也会读的手写源码，重渲染会重排版、还会丢掉他们的注释 ✗。`undeclare` 从 `Crate::named("<name>")` 起**按括号深度**找条目结尾（不按版式猜；条目可能跨行、还可能带嵌套 `&[…::SUBTREE]`），连同它那一行的缩进一起移除，**其余每个字节保持原样**（钉子逐行比对 ✓）。**移除最后一个 crate 就是移除文件**：宿主回到"就是一个 crate"，而一份 `crates: &[]` 是读取器有意拒绝的形状（`declare` 在无文件时会**创建**它，前缀取自宿主包名 —— 与每个生成包名的推导同一个值）。
+
+**三条守住语义的规则**：① **`undeclare` 在该 crate 的包还在磁盘上时拒绝**（"先 `revert`"）—— 条目一旦消失，就没有动作还知道那个目录了，留着就是本工具再也够不到的孤儿 ✓（这条还当场纠正了我自己写错的路径算法：生成包在宿主**旁边**，第二份"包在前缀里"的字符串运算第一次就找错了地方 ⇒ 改成问计划本身 ✓）。② **改动后会验证规划**：`apply_declaration_edit` 落盘 → 读回计划 → 不成立就**回滚原样**并说明（"声明已恢复原样"），而不是留下一份其余工具都拒绝的声明 ✓。③ **预览就是那段确切的文本差异**（`-`/`+` 行），`apply: true`／`--write` 才写 ✓。
+
+**三个面**：MCP `crates {action:"declare"|"undeclare", crate, subtree}`（schema/目录/READ_KEYS/next 提示成套登记 ✓）· CLI `nichlink crates --declare <name> --subtree <crate::…::SUBTREE> [--write]` / `--undeclare <name>` ✓ · **Studio 的删除键还没做**（列在余项里，没有假装完成 ✗）。
+
+**实测**：CLI 端到端（一次性宿主）：`--declare` 预览只打印 diff、文件未动 ✓ → `--write` 创建声明（`package_prefix: "smoke"` 取自宿主包名 ✓、读回 1 个 crate ✓）→ `--undeclare` 预览打印整份文件的 `-` 行 ✓ → `--write` 连文件一起收走（"declares no crates again"）✓。MCP 侧同路径由钉子覆盖（预览不动文件、`apply` 落盘、包在磁盘上时拒绝、缺参数按名字拒绝）✓。**钉子 7 条**（`shape_decl_tests`：只动被点名那条、最后一条连文件走、未知名字列出已知名、无声明时拒绝、首次声明创建文件、同名拒绝、非路径子树拒绝）+ 3 条 MCP 钉子 ✓。

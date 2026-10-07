@@ -10,7 +10,7 @@
 //! 那一半是**幂等**的：第二遍什么都不重写。
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::resolve_package;
 
@@ -30,7 +30,16 @@ pub(crate) fn crates(
     let mut write = false;
     let mut revert = false;
     let mut release = false;
-    for arg in args.by_ref() {
+    // The declaration layer, which is handled before the declaration is read: creating the first one
+    // is exactly the case where reading it would refuse.
+    // 声明层，在读取声明之前处理：创建第一份声明正是"读取它会拒绝"的那种情形。
+    let mut declaration: Option<DeclarationAction> = None;
+    let mut declared_subtrees: Vec<String> = Vec::new();
+    // `while let` rather than `for … in args.by_ref()`: the declaration flags take a value from the
+    // same iterator, which a `for` loop has already borrowed.
+    // 用 `while let` 而不是 `for … in args.by_ref()`：声明类旗标要从同一个迭代器取一个值，而 `for` 循环已经
+    // 借走了它。
+    while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => return crate::cli::usage(out),
             "--check" => {
@@ -46,6 +55,31 @@ pub(crate) fn crates(
             // 开发形状把碎片的文件从宿主包里挂载出来；发布形状把它们复制进去，因为 crates.io 拒绝 `#[path]`
             // 伸到包外的包（审计 `M7`，§M7.42）。两个形状落在同一批目录里，因此写一个之前要先撤回另一个。
             "--release" => release = true,
+            "--declare" => {
+                let name = args
+                    .next()
+                    .ok_or_else(|| "--declare needs the crate's name".to_owned())?;
+                declaration = Some(DeclarationAction::Declare {
+                    name,
+                    subtrees: Vec::new(),
+                });
+            }
+            // One subtree per flag, and a `declare` claims all of them: a crate is a subtree, and a
+            // crate that claims two is two entries in one `Crate`.
+            // 每个旗标一棵子树，而一次 `declare` 认领它们全部：crate 是一棵子树，认领两棵的 crate 就是同一个
+            // `Crate` 里的两条。
+            "--subtree" => {
+                let subtree = args.next().ok_or_else(|| {
+                    "--subtree needs the host's path to a SUBTREE constant".to_owned()
+                })?;
+                declared_subtrees.push(subtree);
+            }
+            "--undeclare" => {
+                let name = args
+                    .next()
+                    .ok_or_else(|| "--undeclare needs the crate's name".to_owned())?;
+                declaration = Some(DeclarationAction::Undeclare { name });
+            }
             _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
             _ if directory.is_none() => directory = Some(PathBuf::from(arg)),
             _ => return Err("crates accepts at most one project path".to_owned()),
@@ -57,6 +91,9 @@ pub(crate) fn crates(
             .map_err(|error| format!("cannot read the current directory: {error}"))?,
     };
     let (package_root, package) = resolve_package(&directory.to_string_lossy())?;
+    if let Some(action) = declaration {
+        return declaration_edit(&package_root, action, declared_subtrees, write, out);
+    }
     let declaration = crate::build_time::read_shape_declaration(&package_root)?.ok_or_else(|| {
         format!(
             "{} has no {}: a host without a declaration is one crate, so there is nothing to plan",
@@ -247,5 +284,92 @@ fn members_reply(changed: bool, in_a_workspace: bool) -> String {
         "; workspace members updated".to_owned()
     } else {
         "; workspace members already listed".to_owned()
+    }
+}
+
+/// Which declaration change the command line asked for.
+/// 命令行要求的是哪一种声明改动。
+enum DeclarationAction {
+    /// Add a crate, claiming every `--subtree` given beside it.
+    /// 加一个 crate，认领它旁边给出的每一个 `--subtree`。
+    Declare { name: String, subtrees: Vec<String> },
+    /// Remove a crate's entry.
+    /// 移除某个 crate 的条目。
+    Undeclare { name: String },
+}
+
+/// Edit the host's declaration, previewing unless `--write` was given.
+/// 编辑宿主的声明；除非给了 `--write`，否则只预览。
+///
+/// The same discipline as the write path: a declaration change is text the author also reads, so the
+/// preview is the exact diff, and the change is rolled back when the resulting declaration turns out
+/// not to plan.
+/// 与写入路径同一套纪律：声明改动是作者也会读的文本，因此预览就是那段确切的差异，而改动在"改完之后声明规划
+/// 不成立"时会被回滚。
+fn declaration_edit(
+    package_root: &Path,
+    action: DeclarationAction,
+    mut subtrees: Vec<String>,
+    write: bool,
+    out: &mut dyn Write,
+) -> Result<(), String> {
+    if let DeclarationAction::Declare {
+        subtrees: inline, ..
+    } = &action
+    {
+        subtrees.extend(inline.iter().cloned());
+    }
+    let edit = match action {
+        DeclarationAction::Declare { name, .. } => {
+            if subtrees.is_empty() {
+                return Err(format!(
+                    "`{name}` claims no subtree: pass `--subtree crate::…::SUBTREE` — a crate is a \
+                     subtree, not a name on its own"
+                ));
+            }
+            crate::build_time::declare(package_root, &name, &subtrees)?
+        }
+        DeclarationAction::Undeclare { name } => {
+            if let Some(directory) = crate::build_time::package_directory_of(package_root, &name)? {
+                return Err(format!(
+                    "`{name}` still has its package at {}: `--revert` first (it takes the generated \
+                     packages back while the declaration still names them), then undeclare",
+                    directory.display()
+                ));
+            }
+            crate::build_time::undeclare(package_root, &name)?
+        }
+    };
+    let diff = edit.diff();
+    if !write {
+        line(out, diff.clone())?;
+        return line(
+            out,
+            format!(
+                "preview: {} is untouched; pass --write to change it",
+                edit.path.display()
+            ),
+        );
+    }
+    let after = crate::build_time::apply_declaration_edit(package_root, edit)?;
+    line(out, diff)?;
+    match after {
+        Some(view) => line(
+            out,
+            format!(
+                "wrote {}: {} crate(s) declared",
+                package_root
+                    .join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
+                    .display(),
+                view.packages
+                    .iter()
+                    .filter(|package| package.crate_name.is_some())
+                    .count()
+            ),
+        ),
+        None => line(
+            out,
+            "wrote the removal: this host declares no crates again".to_owned(),
+        ),
     }
 }

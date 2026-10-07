@@ -6,6 +6,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::{read_shape_declaration, write_shape_lock};
+// The declaration's writers ride the authoring surfaces, so these pins do too: a default build has no
+// `declare`/`undeclare` to test, and dead code is a warning this workspace refuses.
+// 声明的写入方随创作面走，因此这些钉子也是：默认构建里没有 `declare`/`undeclare` 可测，而死代码是本工作区
+// 拒绝的告警。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+use super::{declare, undeclare};
 
 /// Read the declaration the way a run does, then validate it — the two halves the pipeline keeps
 /// apart (read once, use twice), put back together for a test.
@@ -62,6 +68,17 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
     )
     .expect("the rule face");
     fs::create_dir_all(&out).expect("out directory");
+    // A cargo-namable package: `declare` fills the template's `package_prefix` in from the host
+    // package's name, which is the same value every generated crate name is built from — so it has to
+    // be readable (`cargo metadata` needs a manifest and a target).
+    // 一个 cargo 说得出名字的包：`declare` 用宿主包名填模板里的 `package_prefix`，而那是每个生成包名所依据
+    // 的同一个值——因此它必须读得出来（`cargo metadata` 需要清单与一个 target）。
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"myapp\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("the host manifest");
+    fs::write(root.join("src/lib.rs"), "//! A host.\n").expect("the lib target");
     fs::write(root.join("add_crates.rs"), declaration).expect("the declaration");
     (root, src, out)
 }
@@ -261,4 +278,165 @@ fn a_claim_with_no_faces_below_it_is_an_empty_crate() {
     let refusal = check_declaration(&root, &out, &rows).expect_err("refused");
     assert!(refusal.contains("no faces below it"), "{refusal}");
     assert!(refusal.contains("would be empty"), "{refusal}");
+}
+
+/// Removing one crate leaves every other byte of the declaration alone.
+/// 移除一个 crate 时，声明的其余每一个字节都保持原样。
+///
+/// This is the property a text edit exists for: `add_crates.rs` is hand-written source the author also
+/// reads, so a writer that re-rendered it would reformat their code and drop their comments.
+/// 这正是"文本编辑"存在的理由：`add_crates.rs` 是作者也会读的手写源码，一个重渲染的写入方会重排他们的代码、
+/// 丢掉他们的注释。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn undeclaring_one_crate_touches_nothing_else() {
+    let (root, _, _) = package("undeclare", DECLARATION);
+    let edit = undeclare(&root, "panel").expect("panel is declared");
+    assert!(
+        edit.after.contains(r#"Crate::named("widgets")"#),
+        "the other crate stays: {}",
+        edit.after
+    );
+    assert!(
+        !edit.after.contains(r#"Crate::named("panel")"#),
+        "the named entry is gone: {}",
+        edit.after
+    );
+    // Everything that is not the removed line is byte-identical.
+    let kept: Vec<&str> = edit
+        .before
+        .lines()
+        .filter(|line| !line.contains(r#"Crate::named("panel")"#))
+        .collect();
+    let now: Vec<&str> = edit.after.lines().collect();
+    assert_eq!(kept, now, "no other line moved or changed shape");
+    let diff = edit.diff();
+    assert!(
+        diff.contains(r#"-        Crate::named("panel")"#),
+        "the preview shows the line that goes: {diff}"
+    );
+}
+
+/// Removing the **last** crate takes the file with it: the host is one crate again, which is what a
+/// declaration naming no crate would try (and fail) to mean.
+/// 移除**最后一个** crate 会连文件一起带走：宿主回到"就是一个 crate"，而一份不点名任何 crate 的声明只会
+/// 尝试表达那个意思（并且做不到）。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn undeclaring_the_last_crate_removes_the_declaration() {
+    let (root, _, _) = package("last", DECLARATION);
+    let first = undeclare(&root, "panel").expect("declared");
+    assert!(!first.removes_file, "one crate still stands");
+    first.apply().expect("the edit lands");
+    let last = undeclare(&root, "widgets").expect("declared");
+    assert!(last.removes_file, "the last one takes the file");
+    last.apply().expect("the removal lands");
+    assert!(
+        !root.join("add_crates.rs").exists(),
+        "the host declares nothing again"
+    );
+    assert!(
+        read_shape_declaration(&root).expect("it reads").is_none(),
+        "and the reader says this package is one crate"
+    );
+}
+
+/// A name the declaration does not carry is refused **with the names it does**, so the caller can aim
+/// the next call instead of guessing.
+/// 声明里没有的名字会被拒绝，**并附上它确实带着的名字**，好让调用方据此瞄准下一次调用而不是去猜。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn undeclaring_an_unknown_crate_names_the_ones_that_are_there() {
+    let (root, _, _) = package("unknown", DECLARATION);
+    let refusal = undeclare(&root, "slider").expect_err("refused");
+    assert!(refusal.contains("slider"), "{refusal}");
+    assert!(
+        refusal.contains("widgets") && refusal.contains("panel"),
+        "the refusal lists what is declared: {refusal}"
+    );
+}
+
+/// A host with no declaration has nothing to remove, and the refusal says so by name.
+/// 没有声明的宿主没有东西可移除，拒绝会点名说清这一点。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn undeclaring_without_a_declaration_is_refused() {
+    let (root, _, _) = package("none", DECLARATION);
+    fs::remove_file(root.join("add_crates.rs")).expect("remove the declaration");
+    let refusal = undeclare(&root, "widgets").expect_err("refused");
+    assert!(refusal.contains("add_crates.rs"), "{refusal}");
+    assert!(refusal.contains("no crates"), "{refusal}");
+}
+
+/// Declaring the first crate writes the canonical file, and declaring a second one appends a line
+/// without disturbing the first.
+/// 声明第一个 crate 会写下规范文件，声明第二个会在不动第一个的前提下追加一行。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn declaring_appends_without_disturbing_what_is_there() {
+    let (root, _, _) = package("declare", DECLARATION);
+    fs::remove_file(root.join("add_crates.rs")).expect("start with no declaration");
+    let first = declare(
+        &root,
+        "widgets",
+        &["crate::control::object::SUBTREE".to_owned()],
+    )
+    .expect("the file is created");
+    assert!(first.before.is_empty(), "there was no file");
+    assert!(
+        first.after.contains(r#"package_prefix: "myapp""#),
+        "the prefix comes from the host package: {}",
+        first.after
+    );
+    first.apply().expect("it lands");
+    let read = read_shape_declaration(&root)
+        .expect("it reads")
+        .expect("it declares");
+    assert_eq!(
+        read.crates,
+        vec![("widgets".to_owned(), vec!["control::object".to_owned()])],
+        "the reader reads back what the writer wrote"
+    );
+
+    let second =
+        declare(&root, "panel", &["crate::panel::SUBTREE".to_owned()]).expect("a second crate");
+    assert!(
+        second.after.contains(r#"Crate::named("widgets")"#),
+        "the first entry is untouched: {}",
+        second.after
+    );
+    second.apply().expect("it lands");
+    let read = read_shape_declaration(&root)
+        .expect("it reads")
+        .expect("it declares");
+    assert_eq!(read.crates.len(), 2, "{:?}", read.crates);
+}
+
+/// Declaring the same name twice is refused rather than silently producing two crates with one name.
+/// 同名声明两次会被拒绝，而不是静默产出两个同名的 crate。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn declaring_a_name_twice_is_refused() {
+    let (root, _, _) = package("twice", DECLARATION);
+    let refusal =
+        declare(&root, "panel", &["crate::panel::gauge::SUBTREE".to_owned()]).expect_err("refused");
+    assert!(refusal.contains("already declared"), "{refusal}");
+}
+
+/// A subtree that is not a path is refused before anything is written: the file is Rust, so a quote
+/// or a newline in it would be a syntax error in somebody else's source.
+/// 不是路径的子树会在写下任何东西之前被拒绝：这个文件是 Rust，里面出现引号或换行就是别人源码里的语法错误。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn declaring_a_non_path_is_refused() {
+    let (root, _, _) = package("nonpath", DECLARATION);
+    for bad in [r#"panel::frame"; evil()"#, "", "a\nb"] {
+        let refusal = declare(&root, "widgets", &[bad.to_owned()]).expect_err("refused");
+        assert!(
+            refusal.contains("not a subtree path")
+                || refusal.contains("claims no subtree")
+                || refusal.contains("already declared"),
+            "{bad:?} → {refusal}"
+        );
+    }
 }

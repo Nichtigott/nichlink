@@ -220,6 +220,8 @@ pub(crate) use manifests::{
 pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
 #[cfg(any(feature = "cli", feature = "studio", feature = "mcp"))]
 pub use partition_view::{OnDisk, PackageView, PartitionView};
+#[cfg(any(feature = "cli", feature = "studio", feature = "mcp"))]
+pub(crate) use partition_view::{apply_declaration_edit, package_directory_of};
 #[cfg(feature = "cli")]
 pub(crate) use registry_identity::NodeId;
 pub(crate) use renderer::render_lib;
@@ -227,8 +229,14 @@ pub(crate) use scope::{
     SourceScope, collect_active_ids, face_source_is_active, module_feature, source_is_active,
 };
 pub(crate) use scope_faces::{FaceSource, collect_faces};
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "cli", feature = "studio"))]
 pub(crate) use shape_decl::read_shape_declaration;
+// The declaration's two writers ride the authoring surfaces: the CLI's `crates` verb, the bridge's
+// `declare`/`undeclare`, and Studio's delete key all edit the same hand-written file through them.
+// 声明的两个写入方随创作面走：CLI 的 `crates` 动词、桥的 `declare`/`undeclare`，以及 Studio 的删除键，
+// 都经它们编辑同一个手写文件。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+pub(crate) use shape_decl::{DeclarationEdit, declare, undeclare};
 pub(crate) use static_plan::static_plan;
 
 /// Run the build-time discovery and validation pipeline from a Cargo build

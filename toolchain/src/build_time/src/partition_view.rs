@@ -133,6 +133,48 @@ pub(crate) fn plan(package_root: &Path) -> Result<Option<PartitionPlan>, String>
     }))
 }
 
+/// Where a declared crate's generated package is, when that directory exists.
+/// 某个已声明 crate 的生成包在哪里——当那个目录确实存在时。
+///
+/// The path comes from the plan, not from string arithmetic: a generated package sits **beside** the
+/// host (the ghost is the host's sibling), and a second implementation of that rule is a second
+/// chance to look in the wrong place — measured, it was.
+/// 这条路径取自计划，而不是字符串运算：生成的包坐在宿主**旁边**（幽灵是宿主的同级），而写第二份那条规则就是
+/// 第二次看错地方的机会——实测确实看错了。
+pub(crate) fn package_directory_of(root: &Path, name: &str) -> Result<Option<PathBuf>, String> {
+    let view = view(root)?.ok_or_else(|| format!("{} declares no crates yet", root.display()))?;
+    Ok(view
+        .packages
+        .iter()
+        .find(|package| package.crate_name.as_deref() == Some(name))
+        .map(|package| package.directory.clone())
+        .filter(|directory| directory.exists()))
+}
+
+/// Apply one declaration edit, and refuse to leave behind a declaration the plan cannot read.
+/// 落盘一次声明改动，并拒绝留下一份"计划读不了"的声明。
+///
+/// The edit is rolled back rather than left behind: the declaration is what every tool here reads, so
+/// a version of it they refuse describes a shape nobody can act on, and the author would have to work
+/// out which line to undo.
+/// 改动会被回滚而不是留下：声明是本处每个工具读取的东西，因此一份它们拒绝的声明描述的是没人能据此行动的形态，
+/// 而作者还得自己找出该撤销哪一行。
+pub(crate) fn apply_declaration_edit(
+    root: &Path,
+    edit: super::shape_decl::DeclarationEdit,
+) -> Result<Option<PartitionView>, String> {
+    edit.apply()?;
+    match view(root) {
+        Ok(after) => Ok(after),
+        Err(refusal) => {
+            edit.restore()?;
+            Err(format!(
+                "{refusal}\n(the declaration was put back as it was)\n（声明已恢复原样）\n"
+            ))
+        }
+    }
+}
+
 /// What one generated package looks like on disk right now.
 /// 某个生成包此刻在磁盘上的样子。
 ///

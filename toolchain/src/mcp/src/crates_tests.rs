@@ -38,6 +38,14 @@ fn host(label: &str) -> PathBuf {
         "crate::panel_object! { kind: Frame, parent: crate::panel::NODE_ID, }\n",
     )
     .expect("the fragment's face");
+    // A second subtree, so a test can declare a crate that claims something real.
+    // 第二棵子树，好让测试能声明一个认领了真实东西的 crate。
+    fs::create_dir_all(root.join("src/panel/gauge")).expect("the second subtree");
+    fs::write(
+        root.join("src/panel/gauge/gauge.rs"),
+        "crate::panel_object! { kind: Gauge, parent: crate::panel::NODE_ID, }\n",
+    )
+    .expect("the second fragment's face");
     fs::write(
         root.join("Cargo.toml"),
         format!(
@@ -70,6 +78,11 @@ fn host(label: &str) -> PathBuf {
             "00000000000000000000000000000002",
             "panel/frame/frame.rs",
             "Frame",
+        ),
+        (
+            "00000000000000000000000000000003",
+            "panel/gauge/gauge.rs",
+            "Gauge",
         ),
     ] {
         manifest.push_str(&format!(
@@ -175,5 +188,114 @@ fn an_unknown_action_is_refused_with_the_list() {
     assert!(refusal.contains("`publish`"), "{refusal}");
     assert!(refusal.contains("`plan`"), "{refusal}");
     assert!(refusal.contains("`revert`"), "{refusal}");
+    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+}
+
+/// The declaration layer is operable: `declare` adds a crate, `undeclare` takes it out, and both
+/// preview the exact text before writing it.
+/// 声明层可以操作：`declare` 加一个 crate，`undeclare` 把它去掉，两者在写入之前都预览那段确切的文本。
+#[test]
+fn the_declaration_layer_is_declarable_and_undeclarable() {
+    let root = host("declaration");
+    let area = root.parent().expect("the area").to_path_buf();
+    let file = root.join("add_crates.rs");
+
+    // `declare` previews and writes nothing.
+    let preview = crates(
+        &root,
+        &json!({"action":"declare","crate":"gauge","subtree":"crate::panel::gauge::SUBTREE"}),
+    )
+    .expect("previews");
+    assert!(preview.contains("preview:"), "{preview}");
+    assert!(
+        preview.contains(r#"+        Crate::named("gauge")"#),
+        "the preview is the text diff: {preview}"
+    );
+    let before = fs::read_to_string(&file).expect("the declaration");
+    assert!(
+        !before.contains("gauge"),
+        "the preview left the author's file alone"
+    );
+
+    // Applying it writes the entry, and `plan` then sees two crates.
+    let applied = crates(
+        &root,
+        &json!({"action":"declare","crate":"gauge","subtree":"crate::panel::gauge::SUBTREE","apply":true}),
+    )
+    .expect("writes");
+    assert!(applied.contains("gauge"), "{applied}");
+    let after = fs::read_to_string(&file).expect("the declaration");
+    assert!(after.contains(r#"Crate::named("gauge")"#), "{after}");
+    assert!(
+        after.contains(r#"Crate::named("widgets")"#),
+        "the crate that was already there is untouched: {after}"
+    );
+
+    // `undeclare` refuses while the crate's package is on disk, because after the entry is gone
+    // nothing knows that directory.
+    fs::create_dir_all(area.join("app-gauge")).expect("the package directory");
+    let refusal =
+        crates(&root, &json!({"action":"undeclare","crate":"gauge"})).expect_err("refused");
+    assert!(refusal.contains("revert"), "{refusal}");
+    fs::remove_dir_all(area.join("app-gauge")).expect("take it back");
+
+    // With nothing on disk it removes exactly that entry, and the file keeps the other crate.
+    let removed = crates(
+        &root,
+        &json!({"action":"undeclare","crate":"gauge","apply":true}),
+    )
+    .expect("writes");
+    assert!(
+        removed.contains(r#"-        Crate::named("gauge")"#),
+        "the reply shows the line that went: {removed}"
+    );
+    let after = fs::read_to_string(&file).expect("the declaration");
+    assert!(!after.contains("gauge"), "{after}");
+    assert!(
+        after.contains(r#"Crate::named("widgets")"#),
+        "and the crate that was not named is untouched: {after}"
+    );
+    let _ = fs::remove_dir_all(area);
+}
+
+/// A host that declares nothing gets its first crate declared, file and all — that is what "add a
+/// crate layout" means when there is no layout yet.
+/// 没有声明的宿主会把第一个 crate 声明出来，连文件一起——那就是"还没有布局时加一个 crate 布局"的含义。
+#[test]
+fn declaring_the_first_crate_creates_the_declaration() {
+    let root = host("first");
+    let area = root.parent().expect("the area").to_path_buf();
+    fs::remove_file(root.join("add_crates.rs")).expect("start with no declaration");
+    let answer = crates(&root, &json!({})).expect("answers");
+    assert!(answer.contains("declares no crates"), "{answer}");
+
+    crates(
+        &root,
+        &json!({"action":"declare","crate":"widgets","subtree":"crate::panel::frame::SUBTREE","apply":true}),
+    )
+    .expect("creates it");
+    let file = fs::read_to_string(root.join("add_crates.rs")).expect("the new declaration");
+    assert!(file.contains(r#"package_prefix: "app""#), "{file}");
+    let answer = crates(&root, &json!({"action":"plan"})).expect("plans");
+    assert!(answer.contains("app-widgets"), "{answer}");
+    let _ = fs::remove_dir_all(area);
+}
+
+/// A missing or empty argument is refused by name, with the shape the caller has to pass.
+/// 缺失或为空的参数按名字被拒，并给出调用方必须传的形状。
+#[test]
+fn a_missing_argument_is_refused_with_its_shape() {
+    let root = host("args");
+    for (arguments, expected) in [
+        (json!({"action":"declare"}), "`crate` is required"),
+        (
+            json!({"action":"declare","crate":"gauge"}),
+            "`subtree` is required",
+        ),
+        (json!({"action":"undeclare"}), "`crate` is required"),
+    ] {
+        let refusal = crates(&root, &arguments).expect_err("refused");
+        assert!(refusal.contains(expected), "{refusal}");
+    }
     let _ = fs::remove_dir_all(root.parent().expect("the area"));
 }
