@@ -12,7 +12,7 @@
 
 use serde_json::json;
 
-use super::source::External;
+use super::source::{External, external_file};
 use super::{repoint_graft, run_promote};
 
 /// The refusal text of one call, without asking the shared `Outcome` to be `Debug`.
@@ -91,6 +91,51 @@ fn a_missing_record_is_refused_with_the_path_it_looked_in() {
         refused.contains(".nichlink/external-grafts/button_fast/graft.plan"),
         "the refusal names the file it wanted: {refused}"
     );
+}
+
+/// The face layout this repository's own generator writes is one `external_file` finds.
+/// 本仓库自己的生成器写出的注册面版式，是 `external_file` 找得到的那一种。
+///
+/// The scaffold and `apply add` put a face whose module is `panel::object::frame` at
+/// `src/panel/object/frame/frame.rs` — its own directory, named after itself — and the generated tree
+/// mounts it from there. Only `src/<module>.rs` and `src/<module>/mod.rs` were searched before, so
+/// `promote` refused every face this tool itself creates, about a file that was right there one
+/// directory deeper (measured against a scaffolded host, audit `M7`, §M7.39).
+/// 脚手架与 `apply add` 把模块为 `panel::object::frame` 的注册面放在
+/// `src/panel/object/frame/frame.rs`——以自己的名字命名的目录里——生成树也从那里挂载它。此前只搜
+/// `src/<模块>.rs` 与 `src/<模块>/mod.rs`，因此 `promote` 拒绝本工具自己创建的每一个注册面，而那个文件
+/// 就在那里、只是深了一层（对照脚手架宿主实测，审计 `M7`，§M7.39）。
+#[test]
+fn the_generators_own_face_layout_is_found() {
+    let root = scratch("layout");
+    let generated = root.join("src/panel/object/frame/frame.rs");
+    std::fs::create_dir_all(generated.parent().expect("a parent")).expect("face directory");
+    std::fs::write(&generated, "// generated-by=NichLink\n").expect("the face");
+    assert_eq!(
+        external_file(&root, "panel::object::frame").expect("the generator's layout is found"),
+        generated
+    );
+
+    // The single-segment case follows the same rule: module `fast` is `src/fast/fast.rs`.
+    // 单段的情形同一条规则：模块 `fast` 就是 `src/fast/fast.rs`。
+    let single = root.join("src/fast/fast.rs");
+    std::fs::create_dir_all(single.parent().expect("a parent")).expect("face directory");
+    std::fs::write(&single, "// generated-by=NichLink\n").expect("the face");
+    assert_eq!(
+        external_file(&root, "fast").expect("a one-segment module is found too"),
+        single
+    );
+
+    // A crate that carries the flat spelling as well keeps answering what it answered before.
+    // 同时带平坦拼写的 crate 仍给出与从前相同的答案。
+    let flat = root.join("src/panel/object/frame.rs");
+    std::fs::create_dir_all(flat.parent().expect("a parent")).expect("face directory");
+    std::fs::write(&flat, "// flat\n").expect("the face");
+    assert_eq!(
+        external_file(&root, "panel::object::frame").expect("the flat form still wins"),
+        flat
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The declaration→patch mapping: an external `external_object!` is read through the kernel's own

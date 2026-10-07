@@ -1992,3 +1992,57 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 **为什么这几条一直躲着**：它们只在**facade**（依赖三个 crate 的那一个）里现形 ✓，而此前每一轮都停在"宿主与幽灵过了"就以为是拼写问题 ✓。⇒ 教训已记：**凡是"跨 crate 引用"，要问"这个名字在**哪个** crate 里存在"** ✓。
 
 **状态**：`check`/`crates --write/--revert` 在真工作区里全绿 ✓；分区树构建绿 ✓；非分区宿主构建绿 ✓。**下一步**：验收四条（入口逐字节相同 · `graft_plan.tsv` 三列逐字节相同 · 切口两端 id 逐字节相同 · `promote` 在分区形状下仍能落地）→ P3.5 → P3.6 → P4。
+
+### §M7.39 P3.2 第三刀的**验收四条**：全部成立；路上又逼出三个真缺陷（2026-10-07）
+
+§M7.38 说"下一步：验收四条"。真去做的时候，验收本身把 **⑬⑭⑮** 三个真缺陷逼了出来 —— 前两个卡在"含 graft 的宿主"这一半（§M7.36 那个夹具**根本没有 graft**，所以它们一直躲着），第三个卡在 `promote` 自己身上。
+
+**装置（两棵树，都在 `/tmp`，都可按本节步骤复现）**：
+- `/tmp/p32acc` —— **手写**宿主：面 `panel` / `panel::frame` / `panel::frame::widget`，声明认领 `panel::frame`，类型化切口 `cut(crate::panel::frame::widget::NODE_ID) graft(fast_widget::fast::NODE_ID)`（实现 crate 的面在 `src/fast/fast.rs` ⇒ 模块 `fast`）。
+- `/tmp/p32promote` —— **脚手架**宿主：`new_project {faces:[panel, frame(parent root/panel), widget(parent root/panel/frame)]}` 生成（面因此带 `// generated-by=NichLink`，这是 `promote` 能落地的前提），声明认领 `panel::object::frame`，同一型切口 + 一条 `.nichlink/external-grafts/fast/graft.plan` 记录。
+两棵树都先 `check` → 加声明 → 再 `check` → `crates --write` → 手工把两个新包加进工作区 `members`（**成员物化仍是 P3.5 的事** ✓）→ `cargo build -p app-facade`。
+
+**① 入口逐字节相同**（`sha256`，`app/src/**` 6 份 + `Cargo.toml` + `build.rs`，`--write` 前后各一遍）：**逐字节相同** ✓；`app/` 里**唯一新增的文件是 `add_crates.rs`**（声明本体）✓ —— 分区没有碰宿主一个字节。
+
+**② `graft_plan.tsv` 的 `(cut, graft, full)` 逐字节相同**：**四个形状**（不分区宿主 / 分区宿主 / 幽灵 / facade）的 `graft_plan.tsv` **整份文件逐字节相同**（连 `line`/`column` 都相同，因为声明住在同一个文件里）✓：
+
+```
+# cut	graft	full	line	column
+crate::panel::frame::widget::NODE_ID	fast_widget::fast::NODE_ID	false	7	8
+```
+
+**③ 切口两端 id 逐字节相同**：以 `BUILTIN_STATIC_FACES` 的 `(id, parent, owns_registry)` 三元组为准 —— **facade 的 3 条与不分区宿主的 3 条逐字节相等**（facade 携带并集 ✓），而切割端 `panel::frame::widget` 的烤入身份在 **幽灵树里与基线树里逐字节相同**：
+
+```
+assert_static_identity(crate::panel::frame::widget::NODE_ID, NodeId::from_raw([237, 5, 168, 59, 255, 18, 166, 220, 215, 79, 157, 26, 106, 221, 20, 231]))
+```
+
+替换端 `fast_widget::fast::NODE_ID` 住在一个分区分不到的 crate 里（`fast-widget` 不是被切的树），两侧表达式逐字相同 ✓。幽灵与宿主各自只为自己编译的面发身份断言（facade 一条都不发 —— 那是 §M7.33 的设计 ✓）。
+
+**④ `promote` 在分区形状下仍能落地**（脚手架宿主）：`apply {action:"promote", selector:"fast", confirm:true}` 先给出预览、`apply:true` 后**落地** ✓ —— 入口第 7 行改成自嫁接 `cut(<同一 id>) graft(<同一 id>)`（条目数 1 → 1 ✓）、面文件改写成外部实现的字段（`kind: WidgetFast` + `flow: FlowContract::new(…, "panel.render.v1", …)`）✓、记录移到 `.nichlink/trash/external-grafts/fast-<stamp>` ✓；**落地后分区树仍 `cargo build` 通过** ✓。
+
+**⑤ 分区后的树真的编译得过**（§M7.33 的第五条）：**两棵树各一次**，宿主 + 幽灵 + facade 三个 crate 全绿 ✓（`touch` 三个 `src/lib.rs` 强制重编，看到三条 `Compiling` + `Finished` ✓）。
+
+#### 逼出来的三个真缺陷（⑬⑭⑮）
+
+**⑬ 宿主为"已经交出去的切口面"发 graft 表** ✗ —— 上一轮那个夹具的宿主**没有 graft**（`fast-widget` 是后来才加的），所以这一条一直躲着。含 graft 的宿主一编译就是：
+
+```
+error[E0433]: cannot find `frame` in `panel`
+  --> build/app-.../out/generated_lib.rs:157
+  StaticGraftCut::from_ids(crate::panel::frame::widget::NODE_ID, fast_widget::fast::NODE_ID, false),
+```
+
+§M7.36 的 ⑨ 只过滤了**面表**，没过滤**切口表**。修法：条目归**编译该切口面的 crate** —— 新增 `renderer::owners::names_a_compiled_module`，管线里每个 graft 条目先问"这个切口面在本 crate 编译的 `static_faces` 里吗"，不在就整条不发（宿主因此一条不发、幽灵发它认领的那条、facade 因为并集全发 ✓）。**这条同时是"窄而会拒绝"的正面例子**：宿主不是"少发一条数据"，而是**根本不该点名一个它没有的模块** ✓。
+
+**⑭ 可达性检查把前言里的名字当成"够到碎片之外"** ✗ —— 这条更狠：**脚手架建出来的宿主完全无法分区**。两个错叠在一起：① `use crate::{NoParts, NoPreset};` 的**分组导入**在扫描里得到一个**空头**（`{` 不在标识符字符集里）⇒ 每个生成的注册面都被拒；② 就算过了分组那一关，`crate::RegistrationRule` 也不在允许清单里。而**幽灵其实解析得到它们**：生成树的前言是 `pub use <registry_core>::*;`，宿主与幽灵**一字不差**。修法两条：分组导入**逐个名字**受检；判定改成**可判定**的那条 —— **首段不是本包顶层模块的名字就是 crate 根上的条目**（顶层模块＝`src/` 下的目录或与 `lib.rs` 同级的 `.rs`，就是 Rust 的模块↔路径映射 ✓），crate 根条目一律可达（前提是前言相同）。剩下**诚实的残留**：宿主在**自己 crate 根**上定义（且不是模块）的条目，幽灵确实没有 —— 那件事用文本判等于猜"什么算一个 Rust 条目"，因此**交给 rustc 说一次**，并在代码注释里写明，不假装判得了 ✓。这条改动的直接证据：`promote` 落地的面写的是 `crate::FlowContract` / `crate::ContractId` —— 一份"允许名字清单"会被我们自己产物的下一个字段再打破一次 ✗。
+
+**⑮ `promote` 找不到本生成器写出的面文件版式** ✗ —— `external_file` 只找 `src/<模块>.rs` 与 `src/<模块>/mod.rs`，而**脚手架与 `apply add` 把面放在 `src/<模块目录>/<叶名>.rs`**（`panel::object::frame` ⇒ `src/panel/object/frame/frame.rs`，生成树也正是从那里挂载它）⇒ `promote` 对**本工具自己创建的每一个面**都拒绝，理由是"既没有……也没有……"，而那个文件就在那里、只是深了一层 ✓。修法：候选表加中间那一形（`src/<relative>/<leaf>.rs`），平坦形仍排第一（同时带两种拼写的 crate 答案不变），拒绝文案把三个候选都点名 ✓。
+
+**尺寸棘轮（顺带）**：`pass.rs` 因为 ⑬ 的守卫到了 **605** code lines ✗ ⇒ 按职责把 `StaticGraftCut` 构造式的拼写移到 `renderer/owners.rs`（`graft_constructor`）——它与 `owned()` 是同一个关注点（"这个 crate 怎么拼这条表达式"）✓，`pass.rs` 回到 600 以内 ✓。
+
+**新钉子（4 条，都会红）**：`a_crate_emits_only_the_graft_entries_it_compiles`（**反证做过**：把守卫改成 `if false` ⇒ 当场红、恢复 ⇒ 绿 ✓）· `the_scaffolds_own_imports_do_not_block_a_partition`（夹具就是脚手架的产物形状，含 `promote` 落地的 `FlowContract`/`ContractId` 两行）· `a_one_segment_module_path_is_still_checked`（规则的另一半：一段 ≠ 不是模块，`crate::panel` 照样拒 ✓）· `the_generators_own_face_layout_is_found`（三种版式 + 平坦优先）✓。
+
+**门禁**：`fmt --check` ✓ · `cargo test --workspace`（36 target 全绿）✓ · clippy **两面** `-D warnings` exit 0 ✓ · conventions（含 size）✓ · `tools/nichlink-publish --check-table` ✓ · **十面 `tools/nichlink-test` 补跑**（§M7.38 那次漏跑的正是它）：见提交说明。
+
+**状态**：P3.2 第三刀的**验收四条全部成立** ✓，分区形状在**手写宿主**与**脚手架宿主**上都真的编译 ✓，`promote` 在分区形状上真的落地 ✓。**下一步**：P3.5 发布物化 + CI 两形状（本节这套"两棵树 + 四条"就是那条 CI 的雏形；**成员清单物化**仍是它的活）。

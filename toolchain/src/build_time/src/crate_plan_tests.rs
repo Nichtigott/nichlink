@@ -191,6 +191,104 @@ fn a_face_reaching_outside_the_fragment_is_refused_by_name() {
     let _ = fs::remove_dir_all(root.parent().expect("a parent"));
 }
 
+/// A fragment written the way the scaffold writes faces plans cleanly: the kernel names a face
+/// imports from the crate root are names **every** generated tree has, so they are not "outside".
+/// 按脚手架写法的碎片能干净地规划出来：注册面从 crate 根导入的内核名字是**每个**生成树都有的名字，因此不算
+/// "在外面"。
+///
+/// Measured before this pin existed: a host scaffolded by `new_project` could not be partitioned at
+/// all, because every generated face opens with `use crate::{NoParts, NoPreset};` and every
+/// registration-rule file with `use crate::RegistrationRule;` — while the ghost resolves all three
+/// (its preamble globs the kernel's registry vocabulary in exactly like the host's), so the refusal
+/// was a false "would not compile" (audit `M7`, §M7.39).
+/// 这条钉子出现之前实测：`new_project` 建出来的宿主**完全无法分区**，因为每个生成的注册面都以
+/// `use crate::{NoParts, NoPreset};` 开头、每个注册规范文件都以 `use crate::RegistrationRule;` 开头——
+/// 而幽灵三者都解析得到（它的前言与宿主一样把内核的注册词汇 glob 了进来），所以那句拒绝是一句假的"编译不过"
+/// （审计 `M7`，§M7.39）。
+#[test]
+fn the_scaffolds_own_imports_do_not_block_a_partition() {
+    let root = host(
+        "scaffold-imports",
+        &[
+            (
+                "panel/panel.rs",
+                "crate::root_object! {\n    kind: Panel,\n    needs_registry: true,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+            ),
+            (
+                // The shape `promote` lands adds `crate::FlowContract` / `crate::ContractId` to a
+                // face file, so the fixture carries them too — a rule that only knew the scaffold's
+                // three names would refuse our own promoter's output on the next partition.
+                // `promote` 落地的形状会给面文件加上 `crate::FlowContract` / `crate::ContractId`，因此夹具也
+                // 带着它们——一条只认识脚手架那三个名字的规则，会在下一次分区时拒绝我们自己提升出来的产物。
+                "panel/object/frame/frame.rs",
+                "use crate::{NoParts, NoPreset};\n\ncrate::panel_object! {\n    kind: Frame,\n    needs_registry: true,\n    parent: crate::panel::NODE_ID,\n    flow: crate::FlowContract::new(crate::ContractId::new(\"panel.render.v1\"), 1, \"PanelInput\", \"PanelFrame\"),\n}\n",
+            ),
+            (
+                "panel/object/frame/registry_rule/registry_rule.rs",
+                "use crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = crate::RegistrationRule::ANY;\n",
+            ),
+            (
+                "panel/object/frame/object/widget/widget.rs",
+                "use crate::{NoParts, NoPreset};\n\ncrate::frame_object! {\n    kind: Widget,\n    parent: crate::panel::object::frame::NODE_ID,\n}\n",
+            ),
+        ],
+        SCAFFOLD_DECLARATION,
+    );
+    let planned = plan_host(&root).expect("the scaffold's own imports are reachable");
+    assert_eq!(planned.len(), 1, "one declared crate");
+    assert!(
+        planned[0]
+            .mounts
+            .iter()
+            .any(|mount| mount.module_path == "panel::object::frame::object::widget"),
+        "the claimed subtree is mounted: {:?}",
+        planned[0].mounts
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
+/// The same, for the scaffold-shaped fixture above.
+/// 同上，供上面那个脚手架形状的夹具使用。
+const SCAFFOLD_DECLARATION: &str = r#"use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub const SHAPE: Shape = Shape {
+    package_prefix: "myapp",
+    crates: &[Crate::named("widgets").at(&[crate::panel::object::frame::SUBTREE])],
+};
+"#;
+
+/// One segment is not the same as "not a module": `crate::panel` names a top-level module all the
+/// same, and a fragment that claims `control::object` has no `panel` to resolve it against.
+/// 一段并不等于"不是模块"：`crate::panel` 照样点名一个顶层模块，而认领 `control::object` 的碎片没有
+/// `panel` 可供它解析。
+#[test]
+fn a_one_segment_module_path_is_still_checked() {
+    let root = host(
+        "one-segment-module",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "control/object/button/button.rs",
+                "use crate::panel;\n\ncrate::control_object! {\n    kind: Button,\n}\n",
+            ),
+            (
+                "panel/panel.rs",
+                "crate::root_object! {\n    kind: Panel,\n}\n",
+            ),
+        ],
+        DECLARATION,
+    );
+    let refused = plan_host(&root).expect_err("refused");
+    assert!(
+        refused.contains("reaches `crate::panel`"),
+        "a bare top-level module is still a module: {refused}"
+    );
+    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+}
+
 /// Two subtrees of **one** crate may reference each other: both are mounted, so both resolve.
 /// **同一个** crate 的两棵子树之间可以互相引用：两棵都被挂载，因此都解析得到。
 #[test]

@@ -13,7 +13,7 @@ use std::path::Path;
 
 use super::aliases::{registry_path, render_object_aliases};
 use super::ide::render_ide_shadows;
-use super::owners::{face_module, owned};
+use super::owners::{face_module, graft_constructor, names_a_compiled_module, owned};
 use super::tree::{ShapeRender, render_nodes};
 use crate::build_time::diagnostics::BuildDiagnostics;
 use crate::build_time::registry_syntax::GraftSyntax;
@@ -77,42 +77,27 @@ pub(crate) fn render_lib(
     ));
     let mut cut_contracts = String::new();
     for graft in grafts {
-        // A typed cut is emitted verbatim, so the compiler resolves the Rust
-        // expressions the author wrote instead of a selector string. A string
-        // cut keeps the previous form, with a range split into `new_range` from
-        // the two endpoint fields — never by re-splitting the path text, which
-        // would cut a path that literally contains `" to "` in half.
-        // 类型化切口原样发射，编译器因此解析作者写的 Rust 表达式，而不是选择器
-        // 字符串。字符串切口保持原有形式，区间用两个端点字段拆成 `new_range`——绝不
-        // 重新拆分路径文本，否则字面含有 `" to "` 的路径会被拦腰截断。
-        let constructor = match &graft.expressions {
-            Some(expressions) => match &expressions.cut_end {
-                Some(end) => format!(
-                    "{registry}::StaticGraftCut::from_id_range({}, {}, {}, {})",
-                    owned(&shape, &expressions.cut),
-                    owned(&shape, end),
-                    owned(&shape, &expressions.graft),
-                    graft.full
-                ),
-                None => format!(
-                    "{registry}::StaticGraftCut::from_ids({}, {}, {})",
-                    owned(&shape, &expressions.cut),
-                    owned(&shape, &expressions.graft),
-                    graft.full
-                ),
-            },
-            None => match &graft.cut_end {
-                Some(end) => format!(
-                    "{registry}::StaticGraftCut::new_range({:?}, {end:?}, {:?}, {})",
-                    graft.cut, graft.graft, graft.full
-                ),
-                None => format!(
-                    "{registry}::StaticGraftCut::new({:?}, {:?}, {})",
-                    graft.cut, graft.graft, graft.full
-                ),
-            },
-        };
-        writeln!(output, "    {constructor},").unwrap();
+        // A crate may only name the modules it compiles, and a typed cut names one. After a partition
+        // the host hands its claim away, so a cut that falls **inside** it names a module the host no
+        // longer has: emitting the entry anyway failed with `error[E0433]: cannot find 'frame' in
+        // 'panel'` (measured on the first end-to-end build whose host carried a graft inside a claimed
+        // subtree). The entry belongs to the crates that compile the face — the ghost that owns it, and
+        // the facade that carries the union (audit `M7`, §M7.39).
+        // 一个 crate 只许点名它编译的模块，而类型化切口点名一个模块。分区之后宿主把认领的子树交出去，因此落在
+        // **其中**的切口点名的是宿主已经没有的模块：照旧发射这条条目会报
+        // `error[E0433]: cannot find 'frame' in 'panel'`（首次端到端构建实测：宿主的 graft 落在被认领的
+        // 子树之内）。这条条目属于编译该面的 crate——拥有它的幽灵，以及携带并集的 facade（审计 `M7`，§M7.39）。
+        if let Some(expressions) = &graft.expressions
+            && !names_a_compiled_module(static_faces, &expressions.cut)
+        {
+            continue;
+        }
+        writeln!(
+            output,
+            "    {},",
+            graft_constructor(&shape, graft, &registry)
+        )
+        .unwrap();
         // A typed cut names both endpoints as expressions, so the compiler can
         // also check the one thing a selector cannot: that the replacement's
         // parts construct exactly what the cut object's preset expects. The

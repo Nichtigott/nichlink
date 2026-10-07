@@ -296,6 +296,9 @@ pub(crate) fn plan(
     faces: &[(String, String, NodeId)],
 ) -> Result<Vec<PlannedCrate>, String> {
     let parent = package_root.parent().unwrap_or(package_root);
+    // Read once: the names every `crate::` path is judged against, for every declared crate.
+    // 只读一次：每条 `crate::` 路径据以判定的那些名字，对所有已声明的 crate 相同。
+    let modules = source_modules(package_root);
     let mut planned = Vec::new();
     for (name, subtrees) in &declaration.crates {
         let package = format!("{}-{name}", declaration.package_prefix);
@@ -354,7 +357,14 @@ pub(crate) fn plan(
         let ancestor_modules: Vec<String> =
             ancestors.iter().map(|(module, _)| module.clone()).collect();
         for file in &files {
-            check_reachability(package_root, name, file, subtrees, &ancestor_modules)?;
+            check_reachability(
+                package_root,
+                name,
+                file,
+                subtrees,
+                &ancestor_modules,
+                &modules,
+            )?;
         }
         let mut remap: Vec<(String, String)> = mounts
             .iter()
@@ -486,6 +496,7 @@ fn check_reachability(
     source: &str,
     subtrees: &[String],
     ancestors: &[String],
+    modules: &[String],
 ) -> Result<(), String> {
     let path = package_root.join("src").join(source);
     let Ok(text) = fs::read_to_string(&path) else {
@@ -498,6 +509,32 @@ fn check_reachability(
         }
         for (at, _) in line.match_indices("crate::") {
             let rest = &line[at + "crate::".len()..];
+            // A grouped import (`use crate::{NoParts, NoPreset};`) names several things at once, and
+            // the group is not itself a path: every name in it is checked on its own. Reading the group
+            // as one path produced an **empty** head, so a host built by `new_project` could not be
+            // partitioned at all — each generated face opens with exactly that line (measured, §M7.39).
+            // 分组导入（`use crate::{NoParts, NoPreset};`）一次点名好几样东西，而分组本身不是路径：其中每个
+            // 名字各自受检。把分组当成一条路径会得到一个**空**的头，于是 `new_project` 建出来的宿主**完全无法
+            // 分区**——每个生成的注册面都以那一行开头（实测，§M7.39）。
+            if let Some(group) = rest.strip_prefix('{') {
+                let Some((names, _)) = group.split_once('}') else {
+                    continue;
+                };
+                for name in names
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                {
+                    // The first segment is what has to resolve; `crate::{panel::NODE_ID}` names the
+                    // same module a bare `crate::panel` does.
+                    // 需要解析的是第一段；`crate::{panel::NODE_ID}` 点名的模块与裸的 `crate::panel` 相同。
+                    let head = name.split("::").next().unwrap_or(name).trim();
+                    if !reachable(head, subtrees, ancestors, modules) {
+                        return Err(unreachable(crate_name, source, index + 1, head, subtrees));
+                    }
+                }
+                continue;
+            }
             // The trailing `::` of a braced path (`crate::panel::{Gauge}`) is not part of the module
             // the reader has to see, and a message that ends in one reads like a cut-off sentence.
             // 花括号路径（`crate::panel::{Gauge}`）末尾的 `::` 不属于读者需要看见的那个模块，而以此结尾的
@@ -522,33 +559,79 @@ fn check_reachability(
             if rest[head.len()..].trim_start().starts_with('!') {
                 continue;
             }
-            if reachable(&head, subtrees, ancestors) {
+            if reachable(&head, subtrees, ancestors, modules) {
                 continue;
             }
-            return Err(format!(
-                "add_crates: `{crate_name}` would not compile: {source}:{} reaches `crate::{head}`, \
-                 which lives outside the subtree(s) this crate claims ({}), and a ghost crate mounts \
-                 only those files — there is no module above them to resolve it against.\n\
-                 way forward: partition a node that contains the definition (a crate is a subtree, so \
-                 a larger subtree is a legal answer), or make the fragment self-contained by moving \
-                 the item into it",
-                index + 1,
-                subtrees.join(", ")
-            ));
+            return Err(unreachable(crate_name, source, index + 1, &head, subtrees));
         }
     }
     Ok(())
 }
 
-/// Whether a `crate::` path stays inside the fragment (or names something every crate has).
-/// 一条 `crate::` 路径是否留在碎片之内（或者点名了每个 crate 都有的东西）。
-fn reachable(head: &str, subtrees: &[String], ancestors: &[String]) -> bool {
-    // The constants and helpers the declaration macros themselves expand to.
-    // 声明宏自己展开出来的那些常量与帮手。
-    const ALWAYS: &[&str] = &["NICHLINK_NAMESPACE", "root_node_id", "ROOT_NODE_ID"];
-    if ALWAYS.contains(&head) {
-        return true;
+/// The refusal for one `crate::` path the ghost cannot resolve, with the ways forward.
+/// 对一条幽灵解析不了的 `crate::` 路径的拒绝，带上出路。
+fn unreachable(
+    crate_name: &str,
+    source: &str,
+    line: usize,
+    head: &str,
+    subtrees: &[String],
+) -> String {
+    format!(
+        "add_crates: `{crate_name}` would not compile: {source}:{line} reaches `crate::{head}`, \
+         which lives outside the subtree(s) this crate claims ({}), and a ghost crate mounts \
+         only those files — there is no module above them to resolve it against.\n\
+         way forward: partition a node that contains the definition (a crate is a subtree, so \
+         a larger subtree is a legal answer), or make the fragment self-contained by moving \
+         the item into it, or name it through the crate that defines it \
+         (`nichlink_toolchain::runtime::registry_core::…` for a kernel name), which every \
+         crate can name",
+        subtrees.join(", ")
+    )
+}
+
+/// The names of this package's own top-level modules, read from `src/`.
+/// 本包自己的顶层模块名，从 `src/` 读出。
+///
+/// Rust's module↔path mapping is what makes this decidable: a top-level module is a directory or a
+/// `.rs` file beside `lib.rs`/`main.rs`. A `crate::` path whose first segment is one of these is a
+/// **module path**, so the ghost must mount it; anything else is a crate-root item, and the preamble
+/// every generated tree emits decides what those are.
+/// 让这件事可判定的是 Rust 的模块↔路径映射：顶层模块就是 `lib.rs`/`main.rs` 旁边的目录或 `.rs` 文件。
+/// 首段是其中之一的 `crate::` 路径是**模块路径**，幽灵必须挂载它；其余是 crate 根上的条目，而它们是什么由
+/// 每个生成树都会发射的前言决定。
+fn source_modules(package_root: &Path) -> Vec<String> {
+    let mut modules = Vec::new();
+    let Ok(entries) = fs::read_dir(package_root.join("src")) else {
+        return modules;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.path().is_dir() {
+            modules.push(name);
+        } else if let Some(stem) = name.strip_suffix(".rs")
+            && stem != "lib"
+            && stem != "main"
+        {
+            modules.push(stem.to_owned());
+        }
     }
+    modules.sort();
+    modules.dedup();
+    modules
+}
+
+/// Whether a `crate::` path resolves in the ghost as well as in the host.
+/// 一条 `crate::` 路径在幽灵里是否与在宿主里一样解析得到。
+fn reachable(head: &str, subtrees: &[String], ancestors: &[String], modules: &[String]) -> bool {
+    // Only the **first** segment decides whether this is a module path: `crate::FlowContract::new(…)`
+    // and `crate::NoParts` both begin with an item, and an associated function is not a module. The
+    // claim and ancestor comparisons below still read the whole path, because that is what a shell
+    // carries (`<ancestor>::NODE_ID`) and what a claim names.
+    // 决定它是不是模块路径的只有**第一段**：`crate::FlowContract::new(…)` 与 `crate::NoParts` 都以条目开头，
+    // 而关联函数不是模块。下面的认领与祖先比较仍然读整条路径，因为壳携带的（`<祖先>::NODE_ID`）与认领点名的
+    // 就是整条。
+    let first = head.split("::").next().unwrap_or(head);
     if subtrees
         .iter()
         .any(|subtree| head == subtree || head.starts_with(&format!("{subtree}::")))
@@ -560,9 +643,34 @@ fn reachable(head: &str, subtrees: &[String], ancestors: &[String]) -> bool {
     // defined above the fragment is exactly what this planner refuses on.
     // 祖先作为**模块**、以及仅为它的 `NODE_ID` 可达：壳携带那一个常量，好让碎片的 `parent:` 仍然解析，别的
     // 什么都不带——定义在碎片之上的 trait 正是本规划器据以拒绝的东西。
-    ancestors
+    if ancestors
         .iter()
         .any(|ancestor| head == ancestor || head == format!("{ancestor}::NODE_ID"))
+    {
+        return true;
+    }
+    // Everything left whose first segment is **not** a module of this package is a crate-root item,
+    // and the ghost's
+    // crate root carries the same preamble the host's does — `pub use <registry_core>::*;` — so the
+    // kernel vocabulary a face imports resolves in both. Measured before this rule: `new_project`'s
+    // own faces (`use crate::{NoParts, NoPreset};`, `use crate::RegistrationRule;`) and the faces
+    // `promote` lands (`crate::FlowContract`, `crate::ContractId`) were all refused as "outside the
+    // fragment", which made a scaffolded host impossible to partition at all — a false "would not
+    // compile" about our own output, and a hand-maintained list of allowed names is what that
+    // falsehood would have to be re-guessed into on every new field (audit `M7`, §M7.39).
+    // 剩下的、**不是**本包模块的一切都是 crate 根上的条目，而幽灵的 crate 根与宿主的一样带着同一段前言
+    // （`pub use <registry_core>::*;`），因此注册面导入的内核词汇在两边都解析得到。这条规则出现之前实测：
+    // `new_project` 自己的注册面（`use crate::{NoParts, NoPreset};`、`use crate::RegistrationRule;`）与
+    // `promote` 落地的注册面（`crate::FlowContract`、`crate::ContractId`）全都被当成"够到碎片之外"拒绝，
+    // 于是一个脚手架建出来的宿主**根本没法分区**——那是一句关于我们自己产物的假"编译不过"；而要想把它继续
+    // 说成真的，就得为每个新字段维护一份"允许的名字"清单（审计 `M7`，§M7.39）。
+    //
+    // The residual is honest and left to rustc: an item a host defines in its **own crate root**
+    // (and not a module) is one no ghost has. Deciding that from text means guessing what a Rust
+    // item is; the compiler says it exactly, once, on the crate that is wrong.
+    // 残留部分是诚实的、交给 rustc：宿主在**自己的 crate 根**上定义（且不是模块）的条目，任何幽灵都没有。
+    // 用文本判定那件事等于猜"什么算一个 Rust 条目"；编译器会在出错的那个 crate 上准确地说一次。
+    !first.is_empty() && !modules.iter().any(|module| module == first)
 }
 
 #[cfg(test)]

@@ -53,11 +53,28 @@ pub(super) fn crate_and_module(
 
 /// The file one module path names inside an external crate.
 /// 一个模块路径在外部 crate 里指的那个文件。
+///
+/// Three layouts, and the middle one is the one this repository's own generator writes: a face whose
+/// module is `panel::object::frame` lives at `src/panel/object/frame/frame.rs` — its own directory,
+/// named after itself — exactly as the scaffold and `apply add` lay faces out, and exactly as the
+/// generated tree mounts them. Only the flat form was searched before, so `promote` could not land an
+/// implementation for any face this tool itself creates: it refused, about a file that was right
+/// there one directory deeper, with "has neither … nor …" (measured against a scaffolded host,
+/// audit `M7`, §M7.39).
+/// 三种版式，中间那种正是本仓库自己的生成器写出来的：模块为 `panel::object::frame` 的注册面住在
+/// `src/panel/object/frame/frame.rs`——以自己的名字命名的目录里——脚手架与 `apply add` 就是这样摆放注册面
+/// 的，生成树也这样挂载它们。此前只找平坦版式，因此 `promote` 对本工具自己创建的**任何**注册面都无法落地：
+/// 它对着一个就在那里、只是深了一层的文件说"既没有……也没有……"（对照脚手架宿主实测，审计 `M7`，§M7.39）。
 pub(super) fn external_file(crate_root: &Path, module: &str) -> Result<PathBuf, String> {
     let relative = module.replace("::", "/");
+    let leaf = module.rsplit("::").next().unwrap_or(module);
     let source = crate_root.join("src");
     for candidate in [
+        // The flat form stays first: a crate that carries both spellings keeps the answer it gave
+        // before this candidate list grew.
+        // 平坦版式仍排在前面：同时带两种拼写的 crate，得到的答案与本清单变长之前一致。
         source.join(format!("{relative}.rs")),
+        source.join(&relative).join(format!("{leaf}.rs")),
         source.join(&relative).join("mod.rs"),
     ] {
         if candidate.is_file() {
@@ -65,8 +82,9 @@ pub(super) fn external_file(crate_root: &Path, module: &str) -> Result<PathBuf, 
         }
     }
     Err(format!(
-        "the declaration names the module `{module}`, and {} has neither `src/{relative}.rs` nor \
-         `src/{relative}/mod.rs`; this action lands **file-per-face** implementations",
+        "the declaration names the module `{module}`, and {} has none of `src/{relative}.rs`, \
+         `src/{relative}/{leaf}.rs` or `src/{relative}/mod.rs`; this action lands **file-per-face** \
+         implementations",
         crate_root.display()
     ))
 }
