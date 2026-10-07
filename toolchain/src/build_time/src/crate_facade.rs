@@ -192,7 +192,7 @@ fn facade_cargo_toml(
 
 /// `(dependency name, relative path)` for the host and for every ghost.
 /// 宿主与每个幽灵的 `(依赖名, 相对路径)`。
-fn sibling_dependencies(
+pub(super) fn sibling_dependencies(
     directory: &Path,
     host_root: &Path,
     host_package: &str,

@@ -40,6 +40,9 @@ pub(crate) mod crate_facade;
 #[path = "crate_members.rs"]
 pub(crate) mod crate_members;
 #[cfg(feature = "cli")]
+#[path = "crate_release.rs"]
+pub(crate) mod crate_release;
+#[cfg(feature = "cli")]
 #[path = "crate_write.rs"]
 pub(crate) mod crate_write;
 #[path = "diagnostics.rs"]
@@ -189,7 +192,11 @@ pub(crate) use crate_facade::plan_facade;
 #[cfg(feature = "cli")]
 pub(crate) use crate_plan::plan as plan_crates;
 #[cfg(feature = "cli")]
-pub(crate) use crate_write::{revert_partition, write_partition};
+pub(crate) use crate_release::plan_facade as plan_release_facade;
+#[cfg(feature = "cli")]
+pub(crate) use crate_release::plan_ghost as plan_release_ghost;
+#[cfg(feature = "cli")]
+pub(crate) use crate_write::{guard_shape, revert_partition, write_partition, write_release};
 pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;

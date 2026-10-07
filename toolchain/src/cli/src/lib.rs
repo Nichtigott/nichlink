@@ -57,7 +57,8 @@ USAGE:
 COMMANDS:
     new       Create a NichLink host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
-    crates    Plan the crate split a host declared (`--write` creates it)
+    crates    Plan the crate split a host declared (`--write` creates it;
+              `--release` makes the packages publishable instead)
     build     Validate the registration tree, then run cargo build
     snippets  Inject the face-field editor snippets (VS Code project file, or
               the LuaSnip file Neovim loads)

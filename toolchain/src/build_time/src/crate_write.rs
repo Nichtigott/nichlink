@@ -18,11 +18,12 @@
 //!    形状会被**点名拒绝**，并给出该手写上去的那几行。
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::crate_facade::PlannedFacade;
 use super::crate_members;
 use super::crate_plan::{GENERATED_MARKER, PlannedCrate};
+use super::crate_release::ReleasePackage;
 use super::discovery_cache::write_if_changed;
 
 /// What one write pass changed, for the reply the caller renders.
@@ -70,31 +71,7 @@ pub(crate) fn write_partition(
     if let Some(facade) = facade {
         directories.push((facade.directory.as_path(), facade.package.as_str()));
     }
-    for (directory, package) in &directories {
-        let directory = *directory;
-        if !directory.exists() {
-            continue;
-        }
-        let marker = [directory.join("Cargo.toml"), directory.join("src/lib.rs")]
-            .iter()
-            .any(|path| {
-                fs::read_to_string(path)
-                    .map(|text| text.contains(GENERATED_MARKER))
-                    .unwrap_or(false)
-            });
-        if !marker {
-            return Err(format!(
-                "add_crates: {package} at {} does not look like a package this action created (no \
-                 `{GENERATED_MARKER}` line in its Cargo.toml or src/lib.rs), so it is left alone.\
-                 \nway forward: remove it by hand if it really is a leftover",
-                directory.display()
-            ));
-        }
-        fs::remove_dir_all(directory).map_err(|error| {
-            format!("add_crates: cannot remove {}: {error}", directory.display())
-        })?;
-        written.files.push(relative(root, directory));
-    }
+    clear_generated(root, &directories, &mut written)?;
     for planned in planned {
         remap.extend(planned.remap.iter().cloned());
     }
@@ -111,20 +88,14 @@ pub(crate) fn write_partition(
     // the state cargo refuses to load (audit `M7`, P3.5).
     // 成员清单在这里**算出来**是同一个理由，而**写**在包存在之后：拒绝让树保持原样，而一份点名了不存在的包的
     // 清单是 cargo 拒绝加载的状态（审计 `M7`，P3.5）。
-    let members = match workspace {
-        Some(workspace_root) => {
-            let directories: Vec<&Path> = directories
-                .iter()
-                .map(|(directory, _)| *directory)
-                .collect();
-            let entries = crate_members::entries(workspace_root, &directories);
-            let path = workspace_root.join("Cargo.toml");
-            let text = fs::read_to_string(&path)
-                .map_err(|error| format!("add_crates: cannot read {}: {error}", path.display()))?;
-            crate_members::merged(&text, &entries)?.map(|text| (path, text))
-        }
-        None => None,
-    };
+    let members = members_edit(
+        workspace,
+        &directories
+            .iter()
+            .map(|(directory, _)| *directory)
+            .collect::<Vec<_>>(),
+        false,
+    )?;
     // The facade is one more package with the same three files, so it goes through the same writer —
     // and a partition that hands work away always has one, because handing work away is what makes the
     // cross-crate half exist (audit `M7`, §M7.33).
@@ -206,44 +177,15 @@ pub(crate) fn revert_partition(
     // exactly the state cargo refuses to load (audit `M7`, P3.5).
     // 成员清单**先**剥、而且只在内存里剥：把包拿掉之后再拒绝清单编辑，会留下一份点名了已不存在的包的清单，
     // 而那正是 cargo 拒绝加载的状态（审计 `M7`，P3.5）。
-    let members = match workspace {
-        Some(workspace_root) => {
-            let paths: Vec<&Path> = directories
-                .iter()
-                .map(|(directory, _)| *directory)
-                .collect();
-            let entries = crate_members::entries(workspace_root, &paths);
-            let path = workspace_root.join("Cargo.toml");
-            let text = fs::read_to_string(&path)
-                .map_err(|error| format!("add_crates: cannot read {}: {error}", path.display()))?;
-            crate_members::stripped(&text, &entries)?.map(|text| (path, text))
-        }
-        None => None,
-    };
-    for (directory, package) in directories {
-        if !directory.exists() {
-            continue;
-        }
-        let marker = [directory.join("Cargo.toml"), directory.join("src/lib.rs")]
+    let members = members_edit(
+        workspace,
+        &directories
             .iter()
-            .any(|path| {
-                fs::read_to_string(path)
-                    .map(|text| text.contains(GENERATED_MARKER))
-                    .unwrap_or(false)
-            });
-        if !marker {
-            return Err(format!(
-                "add_crates: {package} at {} does not look like a package this action created (no \
-                 `{GENERATED_MARKER}` line in its Cargo.toml or src/lib.rs), so it is left alone.\
-                 \nway forward: remove it by hand if it really is a leftover",
-                directory.display()
-            ));
-        }
-        fs::remove_dir_all(directory).map_err(|error| {
-            format!("add_crates: cannot remove {}: {error}", directory.display())
-        })?;
-        written.files.push(relative(root, directory));
-    }
+            .map(|(directory, _)| *directory)
+            .collect::<Vec<_>>(),
+        true,
+    )?;
+    clear_generated(root, &directories, &mut written)?;
     for planned in planned {
         remap.extend(planned.remap.iter().cloned());
     }
@@ -497,6 +439,164 @@ fn relative(root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+/// Refuse to write one shape over the other, naming the way through.
+/// 拒绝用一个形状盖过另一个形状，并点名出路。
+///
+/// The two shapes plan the **same directories**, so a silent replacement would leave a package whose
+/// build reads sources that are not there — a release build script reading `src/` files a development
+/// write removed, or the reverse. `--revert` is the way through, and it is named.
+/// 两个形状规划的是**同一批目录**，因此静默替换会留下一个构建读不到源码的包——发布形状的构建脚本去读开发写入
+/// 删掉的 `src/` 文件，或者反过来。出路是 `--revert`，而它会被点名。
+pub(crate) fn guard_shape(directories: &[&Path], release: bool) -> Result<(), String> {
+    for directory in directories {
+        let directory = *directory;
+        let manifest = directory.join("Cargo.toml");
+        let Ok(text) = std::fs::read_to_string(&manifest) else {
+            continue;
+        };
+        let written_as_release = text.contains("shape = \"release\"");
+        if written_as_release != release {
+            return Err(format!(
+                "add_crates: {} was written as the {} shape, and this run asked for the {} shape. \
+                 The two share their directories, so one is taken back before the other is written.\
+                 \nway forward: run `nichlink crates --revert`, then write the shape you want",
+                directory.display(),
+                if written_as_release {
+                    "release"
+                } else {
+                    "development"
+                },
+                if release { "release" } else { "development" },
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Write a release-shaped partition: the same packages, each carrying the sources its build reads.
+/// 写下发布形状的拆分：同一批包，每个都携带自己构建要读的源码。
+///
+/// No workspace config and no remap: a release package reads its own `src/`, so there is nothing to
+/// remap — that is the whole point of the shape (audit `M7`, §M7.42). The member list is still
+/// materialized when the host lives in a workspace, because cargo refuses a package that sits under a
+/// workspace it is not listed in, exactly as in the development shape.
+/// 没有工作区配置、也没有 remap：发布包读的是它自己的 `src/`，因此没有任何东西需要 remap——那正是这个形状的
+/// 要点（审计 `M7`，§M7.42）。宿主位于工作区里时成员清单照样物化，因为 cargo 会拒绝一个位于它未被列入的工作区
+/// 之下的包，与开发形状完全相同。
+pub(crate) fn write_release(
+    root: &Path,
+    workspace: Option<&Path>,
+    packages: &[ReleasePackage],
+) -> Result<Written, String> {
+    let mut written = Written::default();
+    let directories: Vec<(&Path, &str)> = packages
+        .iter()
+        .map(|package| (package.directory.as_path(), package.package.as_str()))
+        .collect();
+    clear_generated(root, &directories, &mut written)?;
+    let members = members_edit(
+        workspace,
+        &directories
+            .iter()
+            .map(|(directory, _)| *directory)
+            .collect::<Vec<_>>(),
+        false,
+    )?;
+    for package in packages {
+        for (path, content) in [
+            (package.directory.join("Cargo.toml"), &package.cargo_toml),
+            (package.directory.join("src/lib.rs"), &package.lib_rs),
+            (package.directory.join("build.rs"), &package.build_rs),
+        ] {
+            write_ghost_file(&path, content)?;
+            written.files.push(relative(root, &path));
+        }
+        for (source, destination) in &package.copies {
+            let text = fs::read_to_string(source).map_err(|error| {
+                format!(
+                    "add_crates: cannot read {} to copy it into {}: {error}",
+                    source.display(),
+                    package.package
+                )
+            })?;
+            let path = package.directory.join(destination);
+            write_ghost_file(&path, &text)?;
+            written.files.push(relative(root, &path));
+        }
+    }
+    if let Some((path, text)) = members {
+        write_ghost_file(&path, &text)?;
+        written.members_changed = true;
+    }
+    written.files.sort();
+    written.files.dedup();
+    Ok(written)
+}
+
+/// Remove the generated packages that are already there, after checking they are this action's.
+/// 删掉已经在那里的生成包，先确认它们是本动作的产物。
+fn clear_generated(
+    root: &Path,
+    directories: &[(&Path, &str)],
+    written: &mut Written,
+) -> Result<(), String> {
+    for (directory, package) in directories {
+        let directory = *directory;
+        if !directory.exists() {
+            continue;
+        }
+        let marker = [directory.join("Cargo.toml"), directory.join("src/lib.rs")]
+            .iter()
+            .any(|path| {
+                fs::read_to_string(path)
+                    .map(|text| text.contains(GENERATED_MARKER))
+                    .unwrap_or(false)
+            });
+        if !marker {
+            return Err(format!(
+                "add_crates: {package} at {} does not look like a package this action created (no \
+                 `{GENERATED_MARKER}` line in its Cargo.toml or src/lib.rs), so it is left alone.\
+                 \nway forward: remove it by hand if it really is a leftover",
+                directory.display()
+            ));
+        }
+        fs::remove_dir_all(directory).map_err(|error| {
+            format!("add_crates: cannot remove {}: {error}", directory.display())
+        })?;
+        written.files.push(relative(root, directory));
+    }
+    Ok(())
+}
+
+/// The `members` edit this pass has to make, computed **before** anything is written.
+/// 本次写入要做的 `members` 编辑，在任何东西被写下**之前**算出来。
+///
+/// `None` when there is no enclosing workspace, or when the list already says what this pass needs.
+/// The caller computes it first for the same reason the config is merged first: a refusal must leave
+/// the tree as it found it, and a member list naming a package that does not exist is exactly the
+/// state cargo refuses to load (audit `M7`, P3.5).
+/// 没有外层工作区、或清单已经说出本次需要的内容时是 `None`。调用方先算它的理由与先合并配置相同：拒绝必须让
+/// 树保持原样，而一份点名了不存在的包的成员清单正是 cargo 拒绝加载的状态（审计 `M7`，P3.5）。
+fn members_edit(
+    workspace: Option<&Path>,
+    directories: &[&Path],
+    removing: bool,
+) -> Result<Option<(PathBuf, String)>, String> {
+    let Some(workspace_root) = workspace else {
+        return Ok(None);
+    };
+    let entries = crate_members::entries(workspace_root, directories);
+    let path = workspace_root.join("Cargo.toml");
+    let text = fs::read_to_string(&path)
+        .map_err(|error| format!("add_crates: cannot read {}: {error}", path.display()))?;
+    let merged = if removing {
+        crate_members::stripped(&text, &entries)?
+    } else {
+        crate_members::merged(&text, &entries)?
+    };
+    Ok(merged.map(|text| (path, text)))
 }
 
 #[cfg(test)]

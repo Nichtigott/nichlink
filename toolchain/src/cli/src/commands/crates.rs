@@ -29,6 +29,7 @@ pub(crate) fn crates(
     let mut directory: Option<PathBuf> = None;
     let mut write = false;
     let mut revert = false;
+    let mut release = false;
     for arg in args.by_ref() {
         match arg.as_str() {
             "-h" | "--help" => return crate::cli::usage(out),
@@ -38,6 +39,13 @@ pub(crate) fn crates(
             }
             "--write" => write = true,
             "--revert" => revert = true,
+            // The development shape mounts a fragment's files out of the host package; the release
+            // shape copies them in, because crates.io rejects a package whose `#[path]` reaches
+            // outside it (audit `M7`, §M7.42). The two shapes land in the same directories, so one is
+            // reverted before the other is written.
+            // 开发形状把碎片的文件从宿主包里挂载出来；发布形状把它们复制进去，因为 crates.io 拒绝 `#[path]`
+            // 伸到包外的包（审计 `M7`，§M7.42）。两个形状落在同一批目录里，因此写一个之前要先撤回另一个。
+            "--release" => release = true,
             _ if arg.starts_with('-') => return Err(format!("unexpected argument '{arg}'")),
             _ if directory.is_none() => directory = Some(PathBuf::from(arg)),
             _ => return Err("crates accepts at most one project path".to_owned()),
@@ -83,28 +91,54 @@ pub(crate) fn crates(
     if planned.is_empty() {
         return line(out, format!("nothing declared: {package} names no crate"));
     }
-    for planned in &planned {
+    if release {
+        for planned in &planned {
+            line(
+                out,
+                format!(
+                    "crate {} at {} (release shape, {} copied file(s))",
+                    planned.package,
+                    planned.directory.display(),
+                    planned.mounts.len() + 1
+                ),
+            )?;
+        }
         line(
             out,
             format!(
-                "crate {} at {} ({} mounted file(s), {} remap entr(ies))",
-                planned.package,
-                planned.directory.display(),
-                planned.mounts.len(),
-                planned.remap.len()
+                "facade {}-facade at {} (release shape, resolves the host through cargo at build time)",
+                declaration.package_prefix,
+                package_root
+                    .parent()
+                    .unwrap_or(&package_root)
+                    .join(format!("{}-facade", declaration.package_prefix))
+                    .display(),
             ),
         )?;
-    }
-    if let Some(facade) = &facade {
-        line(
-            out,
-            format!(
-                "facade {} at {} (dependencies: {})",
-                facade.package,
-                facade.directory.display(),
-                facade.dependencies.join(", ")
-            ),
-        )?;
+    } else {
+        for planned in &planned {
+            line(
+                out,
+                format!(
+                    "crate {} at {} ({} mounted file(s), {} remap entr(ies))",
+                    planned.package,
+                    planned.directory.display(),
+                    planned.mounts.len(),
+                    planned.remap.len()
+                ),
+            )?;
+        }
+        if let Some(facade) = &facade {
+            line(
+                out,
+                format!(
+                    "facade {} at {} (dependencies: {})",
+                    facade.package,
+                    facade.directory.display(),
+                    facade.dependencies.join(", ")
+                ),
+            )?;
+        }
     }
     let (root, workspace) = partition_roots(&package_root);
     if revert {
@@ -132,11 +166,58 @@ pub(crate) fn crates(
     if !write {
         line(
             out,
-            "preview only: pass --write to create these packages and merge the workspace config"
-                .to_owned(),
+            if release {
+                "preview only: pass --write to create these packages in the release shape"
+                    .to_owned()
+            } else {
+                "preview only: pass --write to create these packages and merge the workspace config"
+                    .to_owned()
+            },
         )?;
         return Ok(());
     }
+    if release {
+        let mut packages = Vec::new();
+        for planned in &planned {
+            packages.push(crate::build_time::plan_release_ghost(
+                &package_root,
+                planned,
+                &faces,
+            )?);
+        }
+        packages.push(crate::build_time::plan_release_facade(
+            &package_root,
+            &package,
+            &declaration.package_prefix,
+            &package,
+            &planned,
+        )?);
+        crate::build_time::guard_shape(
+            &packages
+                .iter()
+                .map(|package| package.directory.as_path())
+                .collect::<Vec<_>>(),
+            true,
+        )?;
+        let written = crate::build_time::write_release(&root, workspace.as_deref(), &packages)?;
+        return line(
+            out,
+            format!(
+                "wrote {} file(s) under {}; the release shape carries its own sources, so there is \
+                 nothing to remap{}",
+                written.files.len(),
+                root.display(),
+                members_reply(written.members_changed, workspace.is_some())
+            ),
+        );
+    }
+    crate::build_time::guard_shape(
+        &planned
+            .iter()
+            .map(|planned| planned.directory.as_path())
+            .collect::<Vec<_>>(),
+        false,
+    )?;
     let written =
         crate::build_time::write_partition(&root, workspace.as_deref(), &planned, facade.as_ref())?;
     line(

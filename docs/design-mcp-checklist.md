@@ -2081,3 +2081,24 @@ error[E0433]: cannot find `frame` in `panel`
 **实测**：`tools/nichlink-partition-rehearsal` 三条腿全绿（`== OK — both shapes build, the four facts hold, and the promote lands`）✓。
 
 **P3.5 仍差**：`--release` 物化真实包（自包含副本 + `[package.metadata.nichlink] shape` + 身份/记录/租约迁移并显式列出哪些记录失效）。
+
+### §M7.42 P3.5 第三件：**发布形状** —— 每个包携带自己构建要读的源码（2026-10-07）
+
+开发形状把碎片的文件从宿主包里**挂载**出来（一次编辑两个 crate 同时可见），而它正是发布不了的原因：crates.io 拒绝 `#[path]` 伸到包外的包（已实测），而让身份在开发树里一致的 `--remap-path-prefix` 住在工作区配置里、没有依赖方会继承（那正是 §M7.33/§M7.35 标注的未解边界）。这一节做的是同一笔交易的另一半：**每个生成的包都携带自己构建要读的源码**，因此形状里没有任何东西依赖包外的文件，**也不需要任何 remap** ✓。
+
+**两个实测事实**（先量后写，两次都是可编译的实验）：
+- **复制到包自己的 `src/` 之下 ⇒ 身份逐字节不变、remap 不需要**。声明宏的身份输入来自 `file!()`，做法是去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/`（`kernel/src/registry_core/identity/path_text.rs::manifest_relative_source`）——文件一旦在包内，这条推导自己就给出宿主烤进去的那个 `<模块>/<文件>.rs`。实测（手搭的 `/tmp/p32rel/app-widgets`）：不分区基线与发布幽灵共享的两个面 `StaticFace` 行逐字节相同、切割面自己的 `assert_static_identity` 也逐字节相同 ✓，而且**没有写任何 `.cargo/config.toml`** ✓。
+- **facade 在构建期经 `cargo metadata` 找宿主**，这是唯一活得过发布的拼写：行内 `path` 在打包后的清单里会被 cargo 改写成注册局要求。实测：这样解析宿主的 facade 构建全绿、生成的并集与宿主一致 ✓（`cargo metadata` 从构建脚本里跑不会死锁 ✓）。
+
+**形状**（新模块 `build_time::crate_release` + `crate_write::write_release`，随 `cli` 门控）：
+- **幽灵**：`Cargo.toml`（宿主依赖表逐字照抄 + `[package.metadata.nichlink] shape = "release"` 与 `host = <宿主命名空间>`，**没有** `publish = false`）· `src/lib.rs`（命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`env!("CARGO_MANIFEST_DIR")` + `NICH_LINK_SHAPE_ONLY=<认领>` + `run_for(本包根, OUT_DIR, 宿主命名空间)`）· **复制进来的源码**：认领目录**整棵**（注册面、注册规范、手写宿主放在旁边的任何文件）+ **每个祖先面的文件与其 `registry_rule/` 目录** + 宿主声明 `add_crates.rs`。
+  - 祖先与规范文件不是可选装饰：**第一次发布构建就是被它们挡下的**——没有祖先面，推导报 `parent declaration cannot be resolved` / `parent node is missing`（碎片里 `parent:` 指向的祖先面必须在树里）；而生成树会挂载注册规范文件（`pub mod registry_rule;`），漏了同样编译不过 ✓。
+  - 声明里带**自定义 `registry_rule_path`** 的祖先会被**点名拒绝**（本形状复制目录、不追声明），并给出两条出路 ✓（窄而会拒绝胜过宽而会猜）。
+- **facade**：不携带源码 ✓；`build.rs` 跑 `cargo metadata` 找到宿主包根（`"name":"<宿主>"` 之后紧邻的 `manifest_path`——脚本没有自己的依赖，因此是扫描而不是解析 JSON），再以 `NICH_LINK_SHAPE_FACADE=1` 跑同一条 facade 管线 ✓；清单同样是"宿主依赖照抄 + 同级依赖"并带形状指纹 ✓。
+- **两个形状共用同一批目录** ⇒ 写一个之前必须先撤回另一个：`crate_write::guard_shape` 按目录读 `Cargo.toml`，发现磁盘上记着的形状与本次要求不符就**点名拒绝**并给出 `--revert` ✓（钉子钉住两个方向：开发盖发布被拒、它本来就是的形状照常覆盖自己、目录还不存在时不算任何形状）。`--revert` 对两个形状是同一个（目录相同、标记检查相同、成员清单同样收回）✓。
+
+**实测（`/tmp/p32rel3`，真 CLI）**：`crates --release --write` ⇒ `wrote 12 file(s)`（幽灵 3 份生成文件 + 4 份复制（2 面 + 自身规范 + 祖先面与祖先规范）+ facade 3 份 = 12 ✓）、成员清单物化 ✓、**没有任何 `.cargo/config.toml`** ✓；`cargo build -p app-facade` 从工作区根一次通过（宿主+幽灵+facade 三条 `Compiling` + `Finished`）✓；发布幽灵生成的 `#[path]` 全部指向**它自己**（宿主 `src/` 出现 0 次）✓；`cargo package --list` 两个包都自包含（幽灵带上 `add_crates.rs` 与全部源码、facade 只有三份文件）✓；`--revert` 把清单逐字节还原、两个包都消失 ✓。
+
+**CI**：分区演练加了**第四条腿**（发布形状：断言携带的源码齐全、没有 remap 配置、`cargo build` 通过、`cargo package --list` 成功、`--revert` 干净），四条腿在 `tools/nichlink-partition-rehearsal` 上全绿 ✓。
+
+**仍差（P3.5 收尾）**：同级依赖的**版本号**（`path` + `version`，发布时 cargo 只保留 version）与 `license`/`description` 等发布元数据是宿主作者的字段，本形状不代填；`cargo publish --workspace` 那一步要等一次真正的发布（需要 index 与维护者一句"发布"）。

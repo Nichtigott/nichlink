@@ -27,14 +27,18 @@
 #      host and its generated siblings share (measured: writing it inside the host left every mounted
 #      face failing `assert_static_identity`, §M7.40);
 #   3. **promote on a partitioned tree** — a scaffolded host (`new_project` writes faces the authoring
-#      executor owns) that is partitioned *and* has a graft record landed into it.
+#      executor owns) that is partitioned *and* has a graft record landed into it;
+#   4. **release** — the same partition written so the packages can be published: each carries the
+#      sources its build reads, so nothing is mounted out of another package and no remap is involved.
 # 三条腿，因为三种形状是三条不同的代码路径：
 #   1. **工作区**——宿主是某个工作区的成员，生成的包必须被物化进它的 `members`，而不分区的树、宿主分区后的树、
 #      幽灵的树与 facade 的树必须带同样的 graft 计划与同样的身份；
 #   2. **独立**——宿主之上没有任何工作区，因此 remap 属于宿主与它生成的同级包共同拥有的那个目录（实测：写在
 #      宿主里面时，每个被挂载的面都在 `assert_static_identity` 上失败，§M7.40）；
 #   3. **在分区树上 promote**——一个脚手架建出来的宿主（`new_project` 写的注册面归创作执行器所有）既被分区，
-#      又落下一条 graft 记录。
+#      又落下一条 graft 记录；
+#   4. **发布**——同一次拆分写成可发布的样子：每个包携带自己构建要读的源码，因此没有任何东西从别的包挂载出来，
+#      也不牵涉任何 remap。
 #
 # The three trees are taken through `check` with the same environment the generated build scripts set
 # (`NICH_LINK_SHAPE_ONLY`, `NICH_LINK_SHAPE_FACADE`), because that is the same pipeline the build runs —
@@ -236,7 +240,7 @@ cut_identity() {
 }
 
 # ============================================================ leg 1: the workspace shape
-step "leg 1/3: a host inside a workspace"
+step "leg 1/4: a host inside a workspace"
 
 WS="$WORK/ws"
 mkdir -p "$WS"
@@ -354,7 +358,7 @@ cmp "$WORK/ws-manifest-before" "$WS/Cargo.toml" ||
   fail "the workspace does not load after the revert"
 
 # ============================================================ leg 2: the standalone shape
-step "leg 2/3: a host with no enclosing workspace"
+step "leg 2/4: a host with no enclosing workspace"
 
 SOL="$WORK/sol"
 mkdir -p "$SOL"
@@ -378,7 +382,7 @@ step "leg 2: building the partitioned tree from the facade's own directory"
 [ ! -f "$SOL/.cargo/config.toml" ] || fail "the revert left the remap behind in the standalone shape"
 
 # ============================================================ leg 3: promote on a partitioned tree
-step "leg 3/3: promote landing into a partitioned tree"
+step "leg 3/4: promote landing into a partitioned tree"
 
 PR="$WORK/promote"
 mkdir -p "$PR"
@@ -445,4 +449,46 @@ grep -q 'graft(crate::panel::object::frame::object::widget::NODE_ID)' "$PR/app/s
   fail "the record did not move to the trash"
 (cd "$PR/app-facade" && build) || fail "the tree does not build after the promote"
 
-step "OK — both shapes build, the four facts hold, and the promote lands"
+# ============================================================ leg 4: the publishable shape
+step "leg 4/4: the release shape carries its own sources"
+
+REL="$WORK/release"
+mkdir -p "$REL"
+write_fast_widget "$REL/fast-widget"
+write_host "$REL/app" app yes
+write_declaration "$REL/app"
+
+"$NICHLINK" check "$REL/app" >/dev/null || fail "the release host does not check"
+"$NICHLINK" crates --release --write "$REL/app" >/dev/null || fail "the release shape does not write"
+
+# The fragment brings its own files, the ancestor faces its derivation reads, and its declaration.
+# 碎片带来自己的文件、推导要读的祖先面，以及它的声明。
+for file in \
+  "$REL/app-widgets/src/panel/frame/frame.rs" \
+  "$REL/app-widgets/src/panel/frame/widget/widget.rs" \
+  "$REL/app-widgets/src/panel/frame/registry_rule/registry_rule.rs" \
+  "$REL/app-widgets/src/panel/panel.rs" \
+  "$REL/app-widgets/add_crates.rs"; do
+  [ -f "$file" ] || fail "the release ghost does not carry $file"
+done
+grep -q 'shape = "release"' "$REL/app-widgets/Cargo.toml" || fail "no shape fingerprint"
+# Nothing is mounted out of the host, and nothing needs a remap.
+if grep -q "$REL/app/src" "$REL/app-widgets/build.rs"; then
+  fail "the release build script names the host's source directory"
+fi
+[ ! -f "$REL/.cargo/config.toml" ] ||
+  fail "the release shape wrote a remap config it does not need"
+
+step "leg 4: building the release shape, and packaging it"
+(cd "$REL/app-facade" && build) || fail "the release shape does not build"
+# `cargo package --list` is the check that the package is self-contained: a file it needs but does not
+# carry is exactly the state crates.io rejects later.
+(cd "$REL/app-widgets" && command cargo package --list $CARGO_FLAGS --allow-dirty >/dev/null 2>&1) ||
+  fail "the release ghost cannot be packaged"
+[ -z "$(find "$REL" -name config.toml -path '*/.cargo/*' 2>/dev/null)" ] ||
+  fail "the release shape left a remap config behind"
+
+"$NICHLINK" crates --revert "$REL/app" >/dev/null || fail "the release shape does not revert"
+[ ! -d "$REL/app-widgets" ] || fail "the revert left the release ghost behind"
+
+step "OK — both shapes build, the four facts hold, the promote lands, and the release shape packages"
