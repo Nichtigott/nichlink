@@ -6,7 +6,11 @@
 
 use nichlink_toolchain::runtime::{Crate, Shape};
 
-pub const SHAPE: Shape = Shape {
-    package_prefix: "partitioned-button",
-    crates: &[Crate::named("objects").at(&[crate::control::SUBTREE])],
-};
+/// Which subtrees of this host become crates of their own.
+/// 这个宿主里哪些子树各自成为一个 crate。
+pub fn add_crates() -> Shape {
+    Shape::of(
+        "partitioned-button",
+        &[Crate::named("objects").at(&[crate::control::SUBTREE])],
+    )
+}

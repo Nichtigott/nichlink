@@ -153,12 +153,14 @@ write_declaration() {
 
 use nichlink_toolchain::runtime::{Crate, Shape};
 
-pub const SHAPE: Shape = Shape {
+pub fn add_crates() -> Shape {
+    Shape {
     package_prefix: "app",
     crates: &[
         Crate::named("widgets").at(&[crate::panel::frame::SUBTREE]),
     ],
-};
+}
+}
 EOF
 }
 
@@ -421,10 +423,12 @@ cat >"$PR/app/add_crates.rs" <<'EOF'
 //! The crate shape this host declares.
 use nichlink_toolchain::runtime::{Crate, Shape};
 
-pub const SHAPE: Shape = Shape {
+pub fn add_crates() -> Shape {
+    Shape {
     package_prefix: "app",
     crates: &[Crate::named("widgets").at(&[crate::panel::object::frame::SUBTREE])],
-};
+}
+}
 EOF
 
 "$NICHLINK" check "$PR/app" >/dev/null || fail "the scaffolded host does not check"

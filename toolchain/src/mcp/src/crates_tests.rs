@@ -1,6 +1,7 @@
 //! Pins for `nichlink.crates`: the preview discipline and the three writers (audit `M7`, P4).
 //! `nichlink.crates` 的钉子：预览纪律与三个写入方（审计 `M7`，P4）。
 
+use crate::build_time::crate_plan::crates_dir;
 use std::fs;
 use std::path::PathBuf;
 
@@ -119,9 +120,7 @@ fn plan_is_read_only_and_names_the_writers() {
         "plan says it took none: {answer}"
     );
     assert!(
-        !root
-            .parent()
-            .expect("the area")
+        !crates_dir(root.parent().expect("the area"))
             .join("app-widgets")
             .exists(),
         "plan wrote nothing"
@@ -138,9 +137,7 @@ fn an_action_without_apply_changes_nothing() {
     assert!(answer.contains("preview"), "{answer}");
     assert!(answer.contains("apply: true"), "{answer}");
     assert!(
-        !root
-            .parent()
-            .expect("the area")
+        !crates_dir(root.parent().expect("the area"))
             .join("app-widgets")
             .exists(),
         "the preview wrote nothing"
@@ -160,22 +157,30 @@ fn applying_writes_the_release_shape_and_reverting_takes_it_back() {
         answer.contains("release"),
         "the answer carries the tree as read back: {answer}"
     );
-    let manifest =
-        fs::read_to_string(area.join("app-widgets/Cargo.toml")).expect("the release manifest");
+    let manifest = fs::read_to_string(crates_dir(&area).join("app-widgets/Cargo.toml"))
+        .expect("the release manifest");
     assert!(manifest.contains("shape = \"release\""), "{manifest}");
     assert!(
-        area.join("app-widgets/src/panel/frame/frame.rs").is_file(),
+        crates_dir(&area)
+            .join("app-widgets/src/panel/frame/frame.rs")
+            .is_file(),
         "the release shape carries the fragment's own sources"
     );
     assert!(
-        area.join("app-facade/build.rs").is_file(),
+        crates_dir(&area).join("app-facade/build.rs").is_file(),
         "and the facade exists"
     );
 
     let answer = crates(&root, &json!({"action":"revert","apply":true})).expect("reverts");
     assert!(answer.contains("wrote"), "{answer}");
-    assert!(!area.join("app-widgets").exists(), "the ghost is gone");
-    assert!(!area.join("app-facade").exists(), "the facade is gone");
+    assert!(
+        !crates_dir(&area).join("app-widgets").exists(),
+        "the ghost is gone"
+    );
+    assert!(
+        !crates_dir(&area).join("app-facade").exists(),
+        "the facade is gone"
+    );
     let _ = fs::remove_dir_all(area);
 }
 
@@ -233,11 +238,11 @@ fn the_declaration_layer_is_declarable_and_undeclarable() {
 
     // `undeclare` refuses while the crate's package is on disk, because after the entry is gone
     // nothing knows that directory.
-    fs::create_dir_all(area.join("app-gauge")).expect("the package directory");
+    fs::create_dir_all(crates_dir(&area).join("app-gauge")).expect("the package directory");
     let refusal =
         crates(&root, &json!({"action":"undeclare","crate":"gauge"})).expect_err("refused");
     assert!(refusal.contains("revert"), "{refusal}");
-    fs::remove_dir_all(area.join("app-gauge")).expect("take it back");
+    fs::remove_dir_all(crates_dir(&area).join("app-gauge")).expect("take it back");
 
     // With nothing on disk it removes exactly that entry, and the file keeps the other crate.
     let removed = crates(
@@ -275,7 +280,10 @@ fn declaring_the_first_crate_creates_the_declaration() {
     )
     .expect("creates it");
     let file = fs::read_to_string(root.join("add_crates.rs")).expect("the new declaration");
-    assert!(file.contains(r#"package_prefix: "app""#), "{file}");
+    assert!(
+        file.contains(r#"Shape::of("app""#) || file.contains(r#"package_prefix: "app""#),
+        "the prefix comes from the host package: {file}"
+    );
     let answer = crates(&root, &json!({"action":"plan"})).expect("plans");
     assert!(answer.contains("app-widgets"), "{answer}");
     let _ = fs::remove_dir_all(area);

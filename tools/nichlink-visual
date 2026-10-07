@@ -130,10 +130,12 @@ EOF
             cat >"$host/add_crates.rs" <<'EOF'
 use nichlink_toolchain::runtime::{Crate, Shape};
 
-pub const SHAPE: Shape = Shape {
+pub fn add_crates() -> Shape {
+    Shape {
     package_prefix: "partition-demo",
     crates: &[Crate::named("widgets").at(&[crate::panel::frame::SUBTREE])],
-};
+}
+}
 EOF
             cat >"$host/target/nichlink/out/pruning_manifest.tsv" <<'EOF'
 # node	source	symbol	path	kind	registry_name	parent	source_hash	fields	calls	parent_node	owns_registry	logical_path

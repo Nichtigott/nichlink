@@ -76,14 +76,36 @@ pub(crate) fn read_shape_declaration(
         return Ok(None);
     };
     let digest = NodeId::from_bytes(text.as_bytes()).to_string();
-    let body = text
-        .split("Shape {")
-        .nth(1)
-        .and_then(|rest| rest.split('}').next())
+    // The **last** `Shape {`, not the first: a declaration written as a function has two of them
+    // (`-> Shape {` and the literal), and `split(...).nth(1)` would answer with the empty text
+    // between them — measured, that is exactly how the function form read as "no package_prefix".
+    // 取**最后**一个 `Shape {` 而不是第一个：写成函数的声明有两个（`-> Shape {` 与字面量），而
+    // `split(...).nth(1)` 会答出两者之间的空文本——实测：函数形态就是这样被读成"没有 package_prefix"的。
+    // Two spellings, one meaning: a struct literal (`Shape { … }`) or the constructor the template
+    // writes (`Shape::of(…)`). Take the **last** opening of either — a declaration written as a
+    // function has two `Shape {` (`-> Shape {` and the literal), and answering with the text between
+    // them is how the function form once read as "no package_prefix".
+    // 两种拼写、一个意思：结构体字面量（`Shape { … }`）或模板写的构造器（`Shape::of(…)`）。取两者中
+    // **最后**一个开头——写成函数的声明有两个 `Shape {`（`-> Shape {` 与字面量），而答出两者之间的文本，
+    // 正是函数形态曾被读成"没有 package_prefix"的原因。
+    let start = ["Shape {", "Shape::of("]
+        .iter()
+        .filter_map(|opening| text.rfind(opening))
+        .max()
+        .ok_or_else(|| {
+            unreadable(
+                &path,
+                "it has no `Shape { … }` literal and no `Shape::of(…)`",
+            )
+        })?;
+    let body = text[start..]
+        .split('}')
+        .next()
         .ok_or_else(|| unreadable(&path, "it has no `Shape { … }` literal"))?;
     let package_prefix = body
         .split("package_prefix")
         .nth(1)
+        .or_else(|| body.split("Shape::of(").nth(1))
         .and_then(|rest| rest.split('"').nth(1))
         .ok_or_else(|| {
             unreadable(
@@ -445,11 +467,21 @@ fn template(package_prefix: &str, name: &str, subtrees: &[String]) -> String {
          // `nichlink crates --check` 打印它会写下什么。\n\
          use nichlink_toolchain::runtime::{{Crate, Shape}};\n\
          \n\
-         pub const SHAPE: Shape = Shape {{\n\
-         \x20   package_prefix: \"{package_prefix}\",\n\
-         \x20   crates: &[{entries}\n\
-         \x20   ],\n\
-         }};\n"
+         // A function rather than a `const`: every name on the way to the value — `Crate::named`,\n\
+         // `.at`, and the paths inside `&[…]` — is ordinary Rust, so an editor completes them and a\n\
+         // mistyped path is `error[E0433]` pointing at that line and column.\n\
+         // 用函数而不是 `const`：通向这个值的每个名字——`Crate::named`、`.at`，以及 `&[…]` 里的路径\n\
+         // ——都是普通 Rust，因此编辑器会补全，写错的路径是 `error[E0433]` 并指到那一行那一列。\n\
+         pub fn add_crates() -> Shape {{\n\
+         \x20   Shape::of(\"{package_prefix}\", &[{entries}\n\
+         \x20   ])\n\
+         }}\n\
+         \n\
+         // This file is read as **text** by the build. Do not `mod` it into the crate: a partitioned\n\
+         // host no longer compiles the subtrees its declaration names (they went to the crates the\n\
+         // split created), so the `crate::…` paths here have nothing to resolve against.\n\
+         // 本文件由构建期当**文本**读。不要把它 `mod` 进 crate：被划分的宿主不再编译声明点名的那些子树\n\
+         // （它们已经去了拆分产生的 crate），因此这里的 `crate::…` 路径没有东西可解析。\n"
     )
 }
 
@@ -563,12 +595,29 @@ pub(crate) fn declare(
             path.display()
         ));
     }
-    let list_start = before.find("crates: &[").ok_or_else(|| {
-        unreadable(
-            &path,
-            "it declares no `crates: &[…]` list, so this writer cannot say where a new crate goes",
-        )
-    })? + "crates: &[".len();
+    // Two spellings again: the struct literal writes `crates: &[`, the constructor writes
+    // `Shape::of("prefix", &[`. Prefer the field spelling when both appear.
+    // 又是两种拼写：结构体字面量写 `crates: &[`，构造器写 `Shape::of("prefix", &[`。两者都在时优先字段拼写。
+    let list_open = before
+        .find("crates: &[")
+        .or_else(|| {
+            before
+                .find("Shape::of(")
+                .and_then(|at| before[at..].find("&[").map(|offset| at + offset))
+        })
+        .ok_or_else(|| {
+            unreadable(
+                &path,
+                "it declares no `crates: &[…]` list (nor a `Shape::of(…)` one), so this writer \
+                 cannot say where a new crate goes",
+            )
+        })?;
+    // Past the `&[` itself, whichever spelling opened it.
+    let list_start = list_open
+        + before[list_open..]
+            .find("&[")
+            .map(|at| at + "&[".len())
+            .unwrap_or("crates: &[".len());
     let close = before[list_start..].find(']').ok_or_else(|| {
         unreadable(
             &path,

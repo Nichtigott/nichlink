@@ -127,6 +127,23 @@ pub struct Shape {
     pub crates: &'static [Crate],
 }
 
+impl Shape {
+    /// The shape a package declares: a prefix and the crates built from it.
+    /// 包声明的形状：一个前缀，以及由它构建的那些 crate。
+    ///
+    /// A constructor rather than a struct literal: a declaration then writes two **method** names an
+    /// editor completes (`Shape::of(…)` and `Crate::named(…)`) instead of remembering the field names
+    /// `package_prefix:` and `crates:`.
+    /// 用构造器而不是结构体字面量：声明里因此只写两个**方法**名（编辑器会补全）——`Shape::of(…)` 与
+    /// `Crate::named(…)`——而不必记住 `package_prefix:` 与 `crates:` 这两个字段名。
+    pub const fn of(package_prefix: &'static str, crates: &'static [Crate]) -> Self {
+        Self {
+            package_prefix,
+            crates,
+        }
+    }
+}
+
 /// Check a declared shape, and hand it back so a caller can name it once.
 /// 校验一份声明好的形状，并把它交回来，好让调用方只点名一次。
 ///

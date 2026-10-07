@@ -387,7 +387,7 @@ fn declaring_appends_without_disturbing_what_is_there() {
     .expect("the file is created");
     assert!(first.before.is_empty(), "there was no file");
     assert!(
-        first.after.contains(r#"package_prefix: "myapp""#),
+        first.after.contains(r#"Shape::of("myapp""#),
         "the prefix comes from the host package: {}",
         first.after
     );
