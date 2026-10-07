@@ -21,6 +21,7 @@ use std::fs;
 use std::path::Path;
 
 use super::crate_facade::PlannedFacade;
+use super::crate_members;
 use super::crate_plan::{GENERATED_MARKER, PlannedCrate};
 use super::discovery_cache::write_if_changed;
 
@@ -34,12 +35,29 @@ pub(crate) struct Written {
     /// Whether the workspace config was touched (false when it already carried every entry).
     /// 工作区配置是否被改动（它已经带着每一条时是 false）。
     pub(crate) config_changed: bool,
+    /// Whether the workspace manifest's `members` was touched (false when there is no enclosing
+    /// workspace, or when it already listed every generated package).
+    /// 工作区清单的 `members` 是否被改动（没有外层工作区、或它已经列出每一个生成包时是 false）。
+    pub(crate) members_changed: bool,
 }
 
-/// Write every planned crate, then make sure the workspace config carries the remap.
-/// 写下每个已规划的 crate，然后确保工作区配置带着那些 remap。
+/// Write every planned crate, then make sure the workspace config carries the remap and the
+/// workspace manifest lists the new packages.
+/// 写下每个已规划的 crate，然后确保工作区配置带着那些 remap、且工作区清单列出了这些新包。
+///
+/// `root` is the directory cargo reads config from when it builds the generated packages, and
+/// `workspace` is the workspace manifest they have to be members of — `None` when the host is not in
+/// one. Two callers pass both — the write half and the revert half — so the decision lives in one
+/// place: a package generated beside a host that belongs to a workspace has to be a member of it, and
+/// without a workspace the generated packages are standalone siblings with nothing to materialize
+/// them into.
+/// `root` 是 cargo 构建这些生成包时读取配置的目录，`workspace` 是它们必须成为成员的那份工作区清单——宿主
+/// 不在任何工作区里时是 `None`。两个调用方都传这两样——写入那一半与撤回那一半——因此判断只有一处：生成在
+/// 某个属于工作区的宿主旁边的包必须是它的成员，而没有工作区时，生成的包就是彼此独立的同级包，没有任何东西可以
+/// 把它们物化进去。
 pub(crate) fn write_partition(
-    workspace_root: &Path,
+    root: &Path,
+    workspace: Option<&Path>,
     planned: &[PlannedCrate],
     facade: Option<&PlannedFacade>,
 ) -> Result<Written, String> {
@@ -75,7 +93,7 @@ pub(crate) fn write_partition(
         fs::remove_dir_all(directory).map_err(|error| {
             format!("add_crates: cannot remove {}: {error}", directory.display())
         })?;
-        written.files.push(relative(workspace_root, directory));
+        written.files.push(relative(root, directory));
     }
     for planned in planned {
         remap.extend(planned.remap.iter().cloned());
@@ -87,7 +105,26 @@ pub(crate) fn write_partition(
     // partition with no remap, which is a partition whose identities have silently moved.
     // 配置**先**做：本动作不肯合并的 `rustflags` 是一句拒绝，而拒绝必须让树保持原样——先写包会留下一次没有
     // remap 的拆分，而那样的拆分里身份已经悄悄搬了家。
-    written.config_changed = merge_workspace_config(workspace_root, &remap)?;
+    written.config_changed = merge_workspace_config(root, &remap)?;
+    // The member list is **computed** here for the same reason and **written** after the packages
+    // exist: a refusal leaves the tree untouched, while a list naming a package that is not there is
+    // the state cargo refuses to load (audit `M7`, P3.5).
+    // 成员清单在这里**算出来**是同一个理由，而**写**在包存在之后：拒绝让树保持原样，而一份点名了不存在的包的
+    // 清单是 cargo 拒绝加载的状态（审计 `M7`，P3.5）。
+    let members = match workspace {
+        Some(workspace_root) => {
+            let directories: Vec<&Path> = directories
+                .iter()
+                .map(|(directory, _)| *directory)
+                .collect();
+            let entries = crate_members::entries(workspace_root, &directories);
+            let path = workspace_root.join("Cargo.toml");
+            let text = fs::read_to_string(&path)
+                .map_err(|error| format!("add_crates: cannot read {}: {error}", path.display()))?;
+            crate_members::merged(&text, &entries)?.map(|text| (path, text))
+        }
+        None => None,
+    };
     // The facade is one more package with the same three files, so it goes through the same writer —
     // and a partition that hands work away always has one, because handing work away is what makes the
     // cross-crate half exist (audit `M7`, §M7.33).
@@ -119,8 +156,12 @@ pub(crate) fn write_partition(
             (directory.join("build.rs"), build_rs),
         ] {
             write_ghost_file(&path, content)?;
-            written.files.push(relative(workspace_root, &path));
+            written.files.push(relative(root, &path));
         }
+    }
+    if let Some((path, text)) = members {
+        write_ghost_file(&path, &text)?;
+        written.members_changed = true;
     }
     written.files.sort();
     written.files.dedup();
@@ -142,7 +183,8 @@ pub(crate) fn write_partition(
 ///   没有这一行的目录会被点名拒绝——另一种做法是工具删掉别人的包，只因为它恰好躺在幽灵会在的位置。
 /// - **配置文件只减去它自己加的那些条目**，而只剩本动作加进去的表头的文件会被删掉，而不是留一个空壳。
 pub(crate) fn revert_partition(
-    workspace_root: &Path,
+    root: &Path,
+    workspace: Option<&Path>,
     planned: &[PlannedCrate],
     facade: Option<&PlannedFacade>,
 ) -> Result<Written, String> {
@@ -159,6 +201,25 @@ pub(crate) fn revert_partition(
     if let Some(facade) = facade {
         directories.push((facade.directory.as_path(), facade.package.as_str()));
     }
+    // The member list is stripped **first**, and only in memory: taking the packages out and then
+    // refusing the manifest edit would leave a list naming packages that no longer exist, which is
+    // exactly the state cargo refuses to load (audit `M7`, P3.5).
+    // 成员清单**先**剥、而且只在内存里剥：把包拿掉之后再拒绝清单编辑，会留下一份点名了已不存在的包的清单，
+    // 而那正是 cargo 拒绝加载的状态（审计 `M7`，P3.5）。
+    let members = match workspace {
+        Some(workspace_root) => {
+            let paths: Vec<&Path> = directories
+                .iter()
+                .map(|(directory, _)| *directory)
+                .collect();
+            let entries = crate_members::entries(workspace_root, &paths);
+            let path = workspace_root.join("Cargo.toml");
+            let text = fs::read_to_string(&path)
+                .map_err(|error| format!("add_crates: cannot read {}: {error}", path.display()))?;
+            crate_members::stripped(&text, &entries)?.map(|text| (path, text))
+        }
+        None => None,
+    };
     for (directory, package) in directories {
         if !directory.exists() {
             continue;
@@ -181,14 +242,18 @@ pub(crate) fn revert_partition(
         fs::remove_dir_all(directory).map_err(|error| {
             format!("add_crates: cannot remove {}: {error}", directory.display())
         })?;
-        written.files.push(relative(workspace_root, directory));
+        written.files.push(relative(root, directory));
     }
     for planned in planned {
         remap.extend(planned.remap.iter().cloned());
     }
     remap.sort();
     remap.dedup();
-    written.config_changed = strip_workspace_config(workspace_root, &remap)?;
+    written.config_changed = strip_workspace_config(root, &remap)?;
+    if let Some((path, text)) = members {
+        write_ghost_file(&path, &text)?;
+        written.members_changed = true;
+    }
     written.files.sort();
     written.files.dedup();
     Ok(written)

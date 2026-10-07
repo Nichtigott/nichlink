@@ -37,6 +37,9 @@ pub(crate) mod crate_plan;
 pub(crate) mod crate_facade;
 
 #[cfg(feature = "cli")]
+#[path = "crate_members.rs"]
+pub(crate) mod crate_members;
+#[cfg(feature = "cli")]
 #[path = "crate_write.rs"]
 pub(crate) mod crate_write;
 #[path = "diagnostics.rs"]

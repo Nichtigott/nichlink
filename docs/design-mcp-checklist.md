@@ -2046,3 +2046,21 @@ error[E0433]: cannot find `frame` in `panel`
 **门禁**：`fmt --check` ✓ · `cargo test --workspace`（36 target 全绿）✓ · clippy **两面** `-D warnings` exit 0 ✓ · conventions（含 size）✓ · `tools/nichlink-publish --check-table` ✓ · **十面 `tools/nichlink-test` 补跑**（§M7.38 那次漏跑的正是它）：见提交说明。
 
 **状态**：P3.2 第三刀的**验收四条全部成立** ✓，分区形状在**手写宿主**与**脚手架宿主**上都真的编译 ✓，`promote` 在分区形状上真的落地 ✓。**下一步**：P3.5 发布物化 + CI 两形状（本节这套"两棵树 + 四条"就是那条 CI 的雏形；**成员清单物化**仍是它的活）。
+
+### §M7.40 P3.5 第一件：**成员清单物化** + 配置落在"真正会被读到的那个目录"（2026-10-07）
+
+§M7.39 记了两次"手工把生成包加进 `members`"。这一节把那一步交给工具，顺带逼出 **⑯**。
+
+**新模块 `build_time::crate_members`**（随 `cli` 门控）：把生成的包物化进**工作区清单**的 `members`，撤出时按**逐字节的带引号拼写**收回。四条规矩与工作区配置同一套：**合并、从不整体重写**（其余每一行、每一个键原样保留——注释、`[workspace.package]`、别人的成员条目、`members = ["crates/*"]` 这样的 glob 都不动）· **幂等**（第二遍发现每一条都在就什么都不写）· **只收回自己写下的条目**（按精确拼写匹配，别人的条目与 glob 留着）· **读不懂的形状点名拒绝**（`members` 不是一串带引号字符串、或数组不闭合 ⇒ 拒绝并点名 `Cargo.toml:<行>`，一个字节都不写）。单行与**一行一条目**两种写法都支持（后者是 cargo/rustfmt 写长清单的方式，只重建条目行、保留键行与结束括号的原文与缩进）。
+
+**写入顺序是有讲究的**：成员清单**先算、后写**——拒绝必须让树保持原样，而"清单点名了不存在的包"正是 cargo 拒绝加载的状态（`failed to load manifest for workspace member`）。因此：配置合并（拒绝点）→ 算出清单新文本（拒绝点）→ 删旧包 → 写三份文件 → **最后**写清单。撤出时反过来：清单**先在内存里剥**（拒绝点），再删包，最后写清单 ✓。
+
+**⑯（真缺陷，实测）配置落在了 cargo 永远不会读的地方**：宿主**不在**任何工作区里时（`new_project` 生成的宿主就是这一种——它自带 `[workspace]` 表），`workspace_root_of` 返回宿主包自己 ⇒ `.cargo/config.toml` 写进 `<宿主>/.cargo/` ⇒ 而生成的包是宿主的**同级**，cargo 从**被调用的目录**及其祖先找配置，宿主里面的那份在构建同级包时永远不会被读到 ⇒ 实测分区树 **exit 101**：每个被挂载的面都在 `assert_static_identity` 上炸（`the failure occurred here` + `static identity failed`）。**修法**：配置的位置改成"**这次拆分的构建区**"——有外层工作区就是那个工作区根，没有就是**宿主与它的同级包共同拥有的父目录** ✓。写在父目录不是漏进无关目录：拆分把它的包**放在**那里，而每条 rustflags 都是作用域限于一个宿主绝对路径的 `--remap-path-prefix`，对别的东西是空操作；那里已有的配置照旧只合并不替换 ✓。
+
+**实测（两组夹具）**：
+- **工作区形状** `/tmp/p32ws`（用户手写的工作区清单：注释 + 多行 `members` + `[workspace.package]`）：`crates --write` ⇒ 回复尾 `; workspace members updated`，清单变成 `members = ["app","fast-widget","app-facade","app-widgets"]`（**缩进、注释、别的表一字未动** ✓），随后 `cargo build -p app-facade` 从**工作区根**一次通过——**没有手工编辑** ✓；再跑一次 `--write`：清单与配置**逐字节相同**（幂等 ✓）；`--revert` ⇒ 清单**逐字节回到原样**、两个包目录与 `.cargo/config.toml` 都消失、`cargo metadata` 仍能加载 ✓。
+- **独立形状** `/tmp/p32sol2`（宿主自带 `[workspace]` 表、上面没有任何工作区）：`--write` ⇒ 配置落在 `/tmp/p32sol2/.cargo/config.toml`（父目录 ✓）、回复尾 `; no enclosing workspace, so no member list` ✓；`cargo build` 在 facade 自己的目录里 ⇒ 三个 crate 全绿 ✓（**⑯ 之前这里是 exit 101** ✗✓）。
+
+**钉子 8 条**：`crate_members` 7 条（单行合并 · 多行保形 · 没有清单时在表头下加一行 · 收回后逐字节还原/键本身是本动作加的就整键去掉 · 别人的条目与 glob 不动 · 三种读不懂的形状都拒绝且不写一个字节 · 拼写是相对路径、排序去重）+ `crate_write` 1 条（**有工作区才编辑清单**：写入 `members_changed` 为真、撤回后清单逐字节还原；`workspace: None` 时清单一个字都不动）✓。
+
+**仍差（P3.5 余下）**：`--release` 物化真实包（自包含副本 + `[package.metadata.nichlink] shape` + 身份/记录/租约迁移并显式列出哪些记录失效）· **CI 两个形状都构建都测**。

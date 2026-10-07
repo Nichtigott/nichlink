@@ -106,20 +106,26 @@ pub(crate) fn crates(
             ),
         )?;
     }
+    let (root, workspace) = partition_roots(&package_root);
     if revert {
-        let workspace = workspace_root_of(&package_root);
-        let reverted = crate::build_time::revert_partition(&workspace, &planned, facade.as_ref())?;
+        let reverted = crate::build_time::revert_partition(
+            &root,
+            workspace.as_deref(),
+            &planned,
+            facade.as_ref(),
+        )?;
         return line(
             out,
             format!(
-                "removed {} generated package(s) under {}; workspace config {}",
+                "removed {} generated package(s) under {}; workspace config {}{}",
                 reverted.files.len(),
-                workspace.display(),
+                root.display(),
                 if reverted.config_changed {
                     "updated"
                 } else {
                     "carried none of this action's entries"
-                }
+                },
+                members_reply(reverted.members_changed, workspace.is_some())
             ),
         );
     }
@@ -131,22 +137,69 @@ pub(crate) fn crates(
         )?;
         return Ok(());
     }
-    let workspace = workspace_root_of(&package_root);
-    let written = crate::build_time::write_partition(&workspace, &planned, facade.as_ref())?;
+    let written =
+        crate::build_time::write_partition(&root, workspace.as_deref(), &planned, facade.as_ref())?;
     line(
         out,
         format!(
-            "wrote {} file(s) under {}; workspace config {}",
+            "wrote {} file(s) under {}; workspace config {}{}",
             written.files.len(),
-            workspace.display(),
+            root.display(),
             if written.config_changed {
                 "updated"
             } else {
                 "already carried the remap"
-            }
+            },
+            members_reply(written.members_changed, workspace.is_some())
         ),
     )?;
     Ok(())
+}
+
+/// The member-list half of a write or revert reply.
+/// 写入或撤回回复里属于成员清单的那一半。
+fn members_reply(changed: bool, in_a_workspace: bool) -> String {
+    if !in_a_workspace {
+        return "; no enclosing workspace, so no member list".to_owned();
+    }
+    if changed {
+        "; workspace members updated".to_owned()
+    } else {
+        "; workspace members already listed".to_owned()
+    }
+}
+
+/// The directory cargo reads config from when it builds the generated packages, and the workspace
+/// manifest they are materialized into (`None` when the host belongs to no workspace).
+/// cargo 构建这些生成包时读取配置的目录，以及把它们物化进去的那份工作区清单（宿主不属于任何工作区时是
+/// `None`）。
+///
+/// The config location is **not** the host package when there is no enclosing workspace: the generated
+/// packages are the host's siblings, cargo finds config from the directory it is invoked in and that
+/// directory's ancestors, and a `.cargo/config.toml` inside the host is never read while cargo builds
+/// a sibling. Measured: with the config written inside the host, the remap never reached the ghost and
+/// every mounted face failed `assert_static_identity` (audit `M7`, §M7.40). The directory both the host
+/// and its siblings share is the parent.
+/// 没有外层工作区时，配置的位置**不是**宿主包本身：生成的包是宿主的同级包，cargo 从它被调用的目录及其祖先
+/// 目录找配置，而宿主的 `.cargo/config.toml` 在 cargo 构建一个同级包时永远不会被读到。实测：配置写在宿主
+/// 里面时，remap 从未到达幽灵，于是每个被挂载的面都让 `assert_static_identity` 失败（审计 `M7`，§M7.40）。
+/// 宿主与它的同级包共同拥有的那个目录，就是父目录。
+///
+/// Writing it there is not "leaking into an unrelated directory": the partition **puts its packages** in
+/// that directory, so it is the partition's build area, and every rustflags entry this action adds is a
+/// `--remap-path-prefix` scoped to one absolute host path — a no-op for anything else built from there.
+/// An existing config in that directory is merged, never replaced, on the same terms as everywhere else.
+/// 写在那里并不是"漏进一个无关目录"：拆分**把它的包放在**那个目录里，因此它就是这次拆分的构建区，而本动作
+/// 加的每一条 rustflags 都是作用域限于某一个宿主绝对路径的 `--remap-path-prefix`——对从那里构建的其它东西
+/// 是空操作。那里已有的配置会被合并、从不替换，条件与别处相同。
+fn partition_roots(package_root: &Path) -> (PathBuf, Option<PathBuf>) {
+    let workspace = workspace_root_of(package_root);
+    if workspace == package_root {
+        let parent = package_root.parent().unwrap_or(package_root).to_path_buf();
+        (parent, None)
+    } else {
+        (workspace.clone(), Some(workspace))
+    }
 }
 
 /// The outer-most ancestor that is a workspace, or the package itself when there is none.
