@@ -2124,3 +2124,17 @@ error[E0433]: cannot find `frame` in `panel`
 **登记要成套**（四条表缺一不可，钉子会当场点名）：目录 `tools()` 的一句话 + `advertised_schema` 的 schema 臂 + `DISPATCH` 的顺序（与目录同序）+ `effect`（`Effect::Rewrite` ⇒ 自动 `destructiveHint: true`，因为 `revert` 真的会把包拿走）+ `ownership::subject` 归到 `Subject::Write` + `READ_KEYS` 行（`action`/`apply`）+ 写者名单与 destructive 名单各一行 + `next_hint` 一句话。**顺带把特性门放宽到 mcp**：`partition_view`/`crate_write`/`crate_release`/`crate_facade`/`crate_members` 与 `crate_plan::relative_walk` 的门从 `any(cli, studio)` 变成 `any(cli, studio, mcp)`——桥要用同一批写入方，而它此前根本够不到它们。
 
 **实测（真二进制、真调用）**：`nichlink-mcp --list crates` 列出 `keys: action, apply, root` ✓；`--call nichlink.crates --root <fixture> --action plan` 打出分区 + "no action taken" + 双语说明 + `next` 提示 + 可引用的 `evidence` 行 ✓；`--action release`（不带 apply）**磁盘上什么都没变** ✓；`--action release --apply true` 写下 **9 个文件**，`Cargo.toml` 里 `shape = "release"`，读回的行变成 `on disk release · … 6 file(s), 2.0 KiB` ✓；`--action revert --apply true` 把包收回去 ✓。**钉子 5 条**（`mcp/src/crates_tests.rs`）：无声明的宿主被告知声明在哪 · `plan` 不写任何东西 · 不带 `apply` 的动作不改变磁盘 · `apply` 写下发布形状后 `revert` 收回 · 未知动作按名字被拒并列出存在的四个 ✓。**门禁**：fmt ✓ · clippy 两面 exit 0 ✓ · 发布表 ✓ · 十面见提交说明。
+
+### §M7.45 把 CI 推绿（2026-10-07）：1.99 的两条新 lint + 六个只在 macOS/Windows 上成立的路径假设
+
+首次推送（64 个提交）后 CI 七个作业红。**归因先行**：与上一次 main 上的运行（`37242219783`，2026-10-04）逐作业对比——`release-audit`、`features`、`ubuntu-latest stable`、`windows-latest` 两个 `Tests` 在两次里都红（继承），而两个 **Documentation** 失败这次**变绿**（§M7.44 那批 rustdoc 修复生效 ✓），macOS 两个作业则从"更早的步骤就红"变成"Tests 红"（先前被 Clippy/Documentation 挡住，**新可见**而不是新引入）。⇒ 四条真实缺陷：
+
+① **clippy 1.99 的两条新 lint**（本机 1.96 根本看不到，所以本地门禁全绿而 CI 红）：
+`clippy::single_element_loop` @ `toolchain/src/runtime/src/authoring/manifest/parse.rs:59`（`for key in ["registry_rule_path"]` ⇒ 展平成一个 `if let`）；`Some(x).filter(|_| predicate)` @ `toolchain/src/mcp/src/check.rs:776`（谓词不看值 ⇒ `(!path.is_empty()).then(|| …)`）。这两条也是 `release-audit` 作业失败的原因（它同样跑 lint）。
+② **macOS：`/var` 是 `/private/var` 的符号链接** ⇒ 我的 P3 测试把 `canonicalize()` 过的路径与原始 `temp_dir()` 路径逐字比较，左边 `/private/var/…` 右边 `/var/…` ✗。
+③ **Windows：分隔符与 `\\?\` 前缀** ⇒ `starts_with('/')`、`ends_with("host/src/")`、`spec.contains("/checkout/toolchain")`、以及"报告里含 `lock.display()`"这四条断言在 `\` 拼写的路径上全假 ✗。
+④ **`a_gone_holders_lock_is_taken_over` 在 macOS/Windows 上本来就不该成立**：`process_is_alive` 只在 Linux 经 `/proc` 回答，其它平台**有意**回答"假定活着"（宁可让陈旧锁把下一次发布推迟到 `STALE_AGE`，也不从活写者手里夺锁）——这是产品里写明并带理由的设计，错的是**测试**：它在没有 `/proc` 的平台上断言了一次该平台做不到的接管 ✗。
+
+**修法**：路径一律经 `Path` 判断（`is_absolute`、`ends_with("src/…")`——Windows 的解析器同时接受 `\` 与 `/`），或在比较前把两侧的分隔符拍平；"幽灵位置不影响拼写"那条钉子改成比较**同一个根**拼出的两个字符串（平台无关 ✓），规范化那一半只比 `file_name()`；发布锁那条按平台分支：有 `/proc` 走接管（并断言锁文件随后点名本次运行），否则走拒绝（并断言拒绝点名文件与 pid、且锁还在）✓。同时为 1.99 的同类形状做了全仓扫描（单元素 `for … in [..]` 归零、`.filter(|_|` 只剩迭代器上的一处与两行注释）。
+
+**验证**：本机 fmt ✓ · workspace 全绿 ✓ · clippy 两面 0 ✗error ✓ · 发布表 ✓ · 十面见提交说明 ✓；平台相关的那几条本机跑的是 Linux 分支，macOS/Windows 分支由 CI 矩阵判定 ✓。

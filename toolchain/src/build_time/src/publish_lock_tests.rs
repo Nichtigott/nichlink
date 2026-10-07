@@ -5,6 +5,7 @@
 /// 子进程打印的东西，好让父进程把"它跑了"与"什么都没匹配上"区分开。
 const CHILD_MARKER: &str = "N49-CHILD";
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use super::{DEFAULT_WAIT_MS, acquire_within, path_for};
@@ -112,18 +113,37 @@ fn a_gone_holders_lock_is_taken_over() {
     // 一个任何进程都不可能的 pid（Linux 上限 2^22；这个远高于任何上限、又低于 u32::MAX 因而能解析），
     // 因此在任何能回答的平台上"持有者活着"都是假。
     std::fs::write(&path, "pid\t4000000000\nstarted\t0\n").expect("a leftover");
-    let lock = acquire_within(&out, Duration::from_millis(200)).expect("taken over");
-    assert_eq!(
-        lock.stolen_from,
-        Some(4_000_000_000),
-        "the takeover is reported"
-    );
-    assert!(
-        std::fs::read_to_string(&path)
-            .expect("readable")
-            .contains(&format!("pid\t{}", std::process::id())),
-        "the file now names this run"
-    );
+    // Whether a pid is alive is answered through `/proc`, which only Linux has; where it does not
+    // exist the rule is to **assume alive** rather than steal a lock from a live writer
+    // (`process_is_alive`), so the same leftover is a refusal there — and the refusal is what this
+    // pin checks on those platforms, instead of asserting a takeover the platform cannot perform.
+    // pid 是否活着经 `/proc` 回答，而只有 Linux 有它；它不存在时规则是**假定活着**，而不是从活写者手里夺锁
+    // （`process_is_alive`），因此同样的残留在那里是一句拒绝——在这些平台上本钉子检查的就是那句拒绝，而不是
+    // 断言一次该平台做不到的接管。
+    if Path::new("/proc").is_dir() {
+        let lock = acquire_within(&out, Duration::from_millis(200)).expect("taken over");
+        assert_eq!(
+            lock.stolen_from,
+            Some(4_000_000_000),
+            "the takeover is reported"
+        );
+        assert!(
+            std::fs::read_to_string(&path)
+                .expect("readable")
+                .contains(&format!("pid\t{}", std::process::id())),
+            "the file now names this run"
+        );
+    } else {
+        let refusal = acquire_within(&out, Duration::from_millis(50)).expect_err("refused");
+        assert!(
+            refusal.contains("4000000000") && refusal.contains(".publishing.lock"),
+            "the refusal names the file and the pid it could not clear: {refusal}"
+        );
+        assert!(
+            path.exists(),
+            "and the lock it refused to clear is still there"
+        );
+    }
 }
 
 /// A lock that names no holder is honoured while it is young: with no pid to check, age is the only
@@ -219,8 +239,15 @@ fn a_held_lock_stops_the_publish_and_names_itself() {
         report.contains("refused"),
         "the publish is refused, not attempted: {report}"
     );
+    // One separator convention for the comparison: the report prints the path with the platform's
+    // own separators, and `lock.display()` does the same, so on Windows both have to be flattened
+    // before `contains` can mean anything.
+    // 比较时统一一种分隔符：报告用平台自己的分隔符打印路径，`lock.display()` 也一样，因此在 Windows 上
+    // 两者都得先拍平，`contains` 才有意义。
+    let flattened = report.replace('\\', "/");
+    let lock_text = lock.display().to_string().replace('\\', "/");
     assert!(
-        report.contains("publish-lock") && report.contains(&lock.display().to_string()),
+        report.contains("publish-lock") && flattened.contains(&lock_text),
         "the run names the lock it could not take: {report}"
     );
     assert!(

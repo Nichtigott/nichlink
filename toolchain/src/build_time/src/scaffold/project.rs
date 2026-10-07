@@ -635,7 +635,13 @@ mod tests {
         // 本地来源把两个表都指向合并之后的那一个 crate。
         let (runtime, build_dependency) = dependency_specs(&source);
         for spec in [&runtime, &build_dependency] {
-            assert!(spec.contains("/checkout/toolchain"), "{spec}");
+            // The template writes the path with the platform's separators, so the assertion reads it
+            // the same way on Windows as here.
+            // 模板用平台自己的分隔符写这条路径，因此这个断言在 Windows 上与这里读法一致。
+            assert!(
+                spec.replace('\\', "/").contains("/checkout/toolchain"),
+                "{spec}"
+            );
             for stale in ["run_method", "build_method"] {
                 assert!(!spec.contains(stale), "{stale} no longer exists: {spec}");
             }

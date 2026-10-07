@@ -773,7 +773,11 @@ fn observation(log: &Path, verbose: bool) -> Result<Observation, String> {
         let trimmed = line.trim();
         let rest = trimmed.strip_prefix("--> ")?;
         let (path, _) = rest.rsplit_once(':')?;
-        Some(rest.trim().to_owned()).filter(|_| !path.is_empty())
+        // `then` rather than `Some(..).filter(|_| ..)`: the predicate never looks at the value, and
+        // clippy 1.99 says so (the filter form reads as if it did).
+        // 用 `then` 而不是 `Some(..).filter(|_| ..)`：谓词根本不看那个值，clippy 1.99 正是这么说的
+        // （filter 那种写法读起来像它会看）。
+        (!path.is_empty()).then(|| rest.trim().to_owned())
     });
     let failed = failed
         .iter()

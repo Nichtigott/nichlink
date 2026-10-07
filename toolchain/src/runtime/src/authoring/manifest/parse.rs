@@ -56,10 +56,12 @@ fn parse_face_macro_impl(path: &Path, text: &str) -> Result<FaceManifest, String
             values.insert(key.to_owned(), value);
         }
     }
-    for key in ["registry_rule_path"] {
-        if let Some(value) = face.string(key) {
-            values.insert(key.to_owned(), value);
-        }
+    // One key, so no loop: clippy's `single_element_loop` (new in 1.99) is right that a one-element
+    // loop reads as if more keys were coming.
+    // 只有一个键，因此不写循环：clippy 的 `single_element_loop`（1.99 新增）说得对——单元素循环读起来
+    // 像后面还会有更多键。
+    if let Some(value) = face.string("registry_rule_path") {
+        values.insert("registry_rule_path".to_owned(), value);
     }
     if let Some(value) = face.boolean("needs_registry") {
         values.insert("needs_registry".to_owned(), value.to_string());

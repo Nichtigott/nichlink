@@ -137,11 +137,13 @@ fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
     // The remap strips the host's `src` prefix back off, which is why identity is unaffected.
     // 拼写是宿主的**绝对**路径：生成树住在构建脚本的 `OUT_DIR`（由 cargo 决定），因此"从幽灵自己目录出发的
     // 相对走法"无法解析。remap 会把宿主的 `src` 前缀摘回去，因此身份不受影响。
+    // Through `Path`, not through string prefixes: Windows spells the same path with `\`, and its
+    // parser accepts `\` and `/` alike, so this says "absolute, and it ends at the source" on both.
+    // 经 `Path` 而不是字符串前缀：Windows 用 `\` 拼同一条路径，而它的解析器同时接受 `\` 与 `/`，因此这里
+    // 在两个平台上说的都是"绝对的，且以该源码结尾"。
+    let spelling = Path::new(&mount.spelling);
     assert!(
-        mount.spelling.starts_with('/')
-            && mount
-                .spelling
-                .ends_with("/src/control/object/button/button.rs"),
+        spelling.is_absolute() && spelling.ends_with("src/control/object/button/button.rs"),
         "the spelling is the host's absolute source path: {}",
         mount.spelling
     );
@@ -352,7 +354,7 @@ pub const SHAPE: Shape = Shape {
         planned[0]
             .remap
             .iter()
-            .all(|(from, to)| from.ends_with("host/src/") && to.is_empty()),
+            .all(|(from, to)| Path::new(from).ends_with("host/src") && to.is_empty()),
         "every remap walks out of the ghost into the host's src: {:?}",
         planned[0].remap
     );
@@ -600,12 +602,13 @@ fn a_ghost_placed_elsewhere_still_spells_a_walk_to_the_host() {
     );
     let planned = plan_host(&root).expect("the fragment is self-contained");
     let sibling = &planned[0];
-    let host_dir = root.canonicalize().expect("the host canonicalizes");
-    // Where the ghost sits no longer enters the spelling at all: it is the host's absolute path, so a
-    // ghost two levels deeper spells the *same* string. That is the property that makes `--at` work.
-    // 幽灵坐在哪里不再影响拼写：拼写是宿主的绝对路径，因此嵌深两层的幽灵拼出**同一个**字符串。这条性质正是
-    // `--at` 能成立的原因。
-    let deeper = crate_plan_spelling(&host_dir, "control/object/button/button.rs");
+    // Where the ghost sits does not enter the spelling at all: it is the host's absolute path, so the
+    // rule applied to the host alone spells what the planner spelled for a ghost sitting elsewhere.
+    // That is the property that makes `--at` work, and this half of it compares two strings built
+    // from the **same** root, so it does not depend on how this platform spells a temp directory.
+    // 幽灵坐在哪里完全不进入拼写：拼写是宿主的绝对路径，因此单把宿主交给规则所拼出的，就是规划器为一个坐在别处的
+    // 幽灵拼出的东西。这正是 `--at` 能成立的那条性质，而这一半比较的是由**同一个**根拼出的两个字符串，因此不依赖
+    // 本平台如何拼写临时目录。
     let sibling_spelling = sibling
         .mounts
         .iter()
@@ -613,8 +616,25 @@ fn a_ghost_placed_elsewhere_still_spells_a_walk_to_the_host() {
         .next()
         .expect("one mount");
     assert_eq!(
-        deeper, sibling_spelling,
+        crate_plan_spelling(&root, "control/object/button/button.rs"),
+        sibling_spelling,
         "the ghost's location does not matter"
+    );
+    // And a canonicalized host still names the same file: macOS temp directories are symlinks
+    // (`/var` → `/private/var`) and Windows canonical paths carry a `\\?\` prefix, so the two
+    // spellings are not string-equal there — the file they end at is what has to match.
+    // 而规范化过的宿主仍然指向同一个文件：macOS 的临时目录是符号链接（`/var` → `/private/var`），Windows 的
+    // 规范化路径带 `\\?\` 前缀，因此两处拼写在那里并不逐字相等——要相等的是它们结尾的那个文件。
+    let host_dir = root.canonicalize().expect("the host canonicalizes");
+    let deeper = crate_plan_spelling(&host_dir, "control/object/button/button.rs");
+    assert_eq!(
+        Path::new(&deeper).file_name(),
+        Path::new(&sibling_spelling).file_name(),
+        "canonical or not, it is the same file: {deeper} vs {sibling_spelling}"
+    );
+    assert!(
+        Path::new(&deeper).ends_with("src/control/object/button/button.rs"),
+        "and both spell the source below `src`: {deeper}"
     );
 }
 
