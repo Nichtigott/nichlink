@@ -27,6 +27,13 @@ that generated it, which is a template fix rather than a cross-crate symbol — 
 version moved because a published `0.1.4` CLI could not be corrected any other way.
 "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
+`0.2.0` (2026-10-07) closed that gap: the three names are on the index, and
+`tools/nichlink-publish --verify-consumers` resolved and built them in a throwaway crate outside the
+checkout. It was first published on 2026-09-29 and then **deleted** from crates.io; it was
+**re-published on 2026-10-07** from the then-current checkout, so today's `0.2.0` is *not*
+byte-identical to the deleted one (the checksum differs, and a lockfile pinning the old one will fail
+to verify — `cargo publish` is immutable, which is why the re-publication needed the deletion first).
+Prefer `0.2.1` or later once it exists.
 Raising the line to `1.0.0` is a separate decision that would move every internal
 `nichlink-*` version requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
@@ -64,7 +71,14 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 （run `36297635525`），`--verify-consumers` 在同一次运行里通过：检出之外的一次性 crate 按版本解析并
 构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
-## [0.2.0] — 2026-09-29
+`0.2.0`（2026-10-07）关掉了那个等待态：三个名字都在 index 上，而
+`tools/nichlink-publish --verify-consumers` 已在检出之外的一次性 crate 里按版本解析并构建了它们。
+它曾于 2026-09-29 首发、随后被**从 crates.io 删除**；这一次是 **2026-10-07** 用当时的检出**重发**的，
+因此今天的 `0.2.0` 与被删掉的那份**并非逐字节相同**（校验和不同，把旧校验和钉在 lockfile 里的消费者
+会校验失败——`cargo publish` 不可变，这正是重发必须先有那次删除的原因）。能升到 `0.2.1` 或更高时，
+优先用新版本。
+
+## [0.2.0] — 2026-09-29, re-published 2026-10-07
 
 ### Changed
 
@@ -105,6 +119,33 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 
 - **Wired back (2026-09-29).** Batch 2's six target-less test files (**20** `#[test]` functions, the `(b)` class) are targets again: nineteen as integration tests under `toolchain/tests/` (an external caller reaches the tolerant arm of `__control_object!` — the in-crate ban is on absolute-path calls from inside an expansion), and one mounted in-crate because it collects *this* crate's opted-in declarations. Wiring them back exposed the branch only they reached: a `collector: debug` declaration could not compile (`$crate::submit!`, not `$crate::call_evidence::submit!`), and the merged crate gained `extern crate self as nichlink_toolchain;` for the expansions that carry `::nichlink_toolchain::…` paths. The earlier probe evidence — both build faces' `--list` matching none of them, and a `compile_error!` in each file leaving `cargo check --all-targets` at exit 0 — is kept as the record of what the gap was.
   **已接回（2026-09-29）**：批 2 的六个没有 target 的测试文件（**20** 个 `#[test]`，即 `(b)` 类）重新有了 target：十九个是 `toolchain/tests/` 下的集成测试（外部调用者能到达 `__control_object!` 的宽容 arm——crate 内的禁令针对的是「展开里经绝对路径调用」），一个留在 crate 内挂载，因为它采集的是**本 crate** 已选择加入的声明。接回它们才暴露出「只有它们才会走到」的那一支：`collector: debug` 声明根本编译不过（应是 `$crate::submit!`，不是 `$crate::call_evidence::submit!`），而合并后的 crate 也补上了 `extern crate self as nichlink_toolchain;`，供那些带 `::nichlink_toolchain::…` 路径的展开解析。此前的探针证据（两个构建面 `--list` 命中 0、给每个文件插 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0）作为「当时的洞长什么样」的记录保留。
+
+### Added
+
+- **Host-declared crate partitioning (`add_crates.rs`, 2026-10-07).** A host declares at its package
+  root which subtrees become crates of their own — ordinary Rust (`Crate::named("widgets").at(&[…::SUBTREE])`
+  inside a `Shape`), so the compiler checks the paths and an editor completes them. `nichlink crates
+  --check` prints the plan, `--write` materializes it (one package per declared crate, plus a *facade*
+  that carries the cross-crate half: the graft table and the two contract assertions), and `--revert`
+  takes it back. The **development** shape mounts a fragment's files out of the host package (an edit
+  is visible in both crates at once; a workspace-root `--remap-path-prefix` keeps the identities
+  identical); **`--release`** writes the same partition as packages that can be published — each
+  carries the sources its own build reads, so no `#[path]` reaches outside a package and there is
+  nothing to remap. Identities survive both shapes, because a face derives its identity input from
+  `file!()` by dropping `CARGO_MANIFEST_DIR` and one leading `src/`. Generated packages are
+  materialized into the host's workspace `members` (merged, never rewritten), `NICHLINK_NAMESPACE` is
+  the crate-root constant that names the identity namespace, and `tools/nichlink-partition-rehearsal`
+  builds the workspace, standalone and release shapes in CI.
+  **宿主声明的 crate 分区（`add_crates.rs`，2026-10-07）。** 宿主在包根声明哪些子树各自成为一个
+  crate——就是普通 Rust（`Shape` 里的 `Crate::named("widgets").at(&[…::SUBTREE])`），因此编译器会查
+  路径、编辑器能补全。`nichlink crates --check` 打印计划，`--write` 物化它（每个声明的 crate 一个包，
+  外加承载跨 crate 那一半——graft 表与两条契约断言——的 *facade*），`--revert` 收回来。**开发**形状把
+  碎片的文件从宿主包里挂载出来（一次编辑两个 crate 同时可见；工作区根的 `--remap-path-prefix` 让身份
+  保持一致）；**`--release`** 把同一次拆分写成可发布的包——每个包携带自己构建要读的源码，因此没有
+  `#[path]` 伸到包外、也没有任何东西需要 remap。身份在两个形状里都保得住，因为注册面的身份输入由
+  `file!()` 去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/` 得出。生成的包会被物化进宿主所在工作区的
+  `members`（合并、从不重写），`NICHLINK_NAMESPACE` 是点名身份命名空间的 crate 根常量，而
+  `tools/nichlink-partition-rehearsal` 在 CI 里构建工作区、独立与发布三个形状。
 
 ### Fixed
 
@@ -1398,7 +1439,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 ### [Unreleased] 未发布
 
-### [0.2.0] 未发布
+### [0.2.0] —— 2026-09-29 首发、2026-10-07 重发
 
 变更：
 
