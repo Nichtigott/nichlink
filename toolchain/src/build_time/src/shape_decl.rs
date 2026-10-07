@@ -491,7 +491,19 @@ fn entry_span(text: &str, name: &str) -> Result<std::ops::Range<usize>, String> 
     for (offset, character) in text[start..].char_indices() {
         match character {
             '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth -= 1,
+            ')' => depth -= 1,
+            // The bracket that closes the list this entry lives in ends the entry: the last entry of
+            // a single-line `crates: &[Crate::named(…)]` legitimately has **no** trailing comma, and a
+            // reader that demanded one would refuse to remove exactly that entry (measured — it did).
+            // 关掉这条条目所在列表的那个括号就是条目的结尾：单行 `crates: &[Crate::named(…)]` 里的最后
+            // 一条**合法地没有**结尾逗号，而要求它存在的读取器会恰好拒绝移除那一条（实测：确实拒了）。
+            ']' | '}' => {
+                depth -= 1;
+                if depth < 0 {
+                    end = Some(start + offset);
+                    break;
+                }
+            }
             ',' if depth == 0 => {
                 end = Some(start + offset + 1);
                 break;
@@ -500,7 +512,7 @@ fn entry_span(text: &str, name: &str) -> Result<std::ops::Range<usize>, String> 
         }
     }
     let end = end.ok_or_else(|| {
-        format!("the `{name}` entry has no ending comma, so this writer cannot say where it ends")
+        format!("the `{name}` entry never ends: its list is not closed, so this writer cannot say where it stops")
     })?;
     Ok(start..end)
 }

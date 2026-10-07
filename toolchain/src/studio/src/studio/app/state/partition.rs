@@ -27,6 +27,15 @@ pub struct PartitionState {
     /// The action waiting for its confirmation.
     /// 正在等待确认的动作。
     pub pending: Option<PartitionAction>,
+    /// The declared crate whose entry is waiting to be removed from `add_crates.rs`.
+    /// 正在等待从 `add_crates.rs` 里移除条目的那个已声明 crate。
+    ///
+    /// It carries the name rather than reusing `pending`: that one names an action on the **generated
+    /// packages**, while this one edits the author's hand-written declaration, and the two are
+    /// different layers (audit `M7`, §M7.48).
+    /// 它带着名字，而不是复用 `pending`：后者点名的是对**生成包**的动作，而这一个编辑的是作者手写的声明，
+    /// 两者是两层（审计 `M7`，§M7.48）。
+    pub pending_undeclare: Option<String>,
     /// What the last action did, said out loud.
     /// 上一个动作做了什么，明说出来。
     pub outcome: Option<String>,

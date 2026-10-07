@@ -2170,3 +2170,13 @@ error[E0433]: cannot find `frame` in `panel`
 **三个面**：MCP `crates {action:"declare"|"undeclare", crate, subtree}`（schema/目录/READ_KEYS/next 提示成套登记 ✓）· CLI `nichlink crates --declare <name> --subtree <crate::…::SUBTREE> [--write]` / `--undeclare <name>` ✓ · **Studio 的删除键还没做**（列在余项里，没有假装完成 ✗）。
 
 **实测**：CLI 端到端（一次性宿主）：`--declare` 预览只打印 diff、文件未动 ✓ → `--write` 创建声明（`package_prefix: "smoke"` 取自宿主包名 ✓、读回 1 个 crate ✓）→ `--undeclare` 预览打印整份文件的 `-` 行 ✓ → `--write` 连文件一起收走（"declares no crates again"）✓。MCP 侧同路径由钉子覆盖（预览不动文件、`apply` 落盘、包在磁盘上时拒绝、缺参数按名字拒绝）✓。**钉子 7 条**（`shape_decl_tests`：只动被点名那条、最后一条连文件走、未知名字列出已知名、无声明时拒绝、首次声明创建文件、同名拒绝、非路径子树拒绝）+ 3 条 MCP 钉子 ✓。
+
+### §M7.49 Studio 的删除键（维护者：「0.2.1 是包含这个删除键的」）
+
+§M7.48 里我标为"尚未做"的那一件补上了：分区屏按 **`D`** 把**选中的已声明 crate** 的条目从 `add_crates.rs` 里移除，按 `y` 确认（与那三个针对生成包的动作同一套"两次按键"纪律 ✓）。三个面至此都改得动声明层：**MCP `declare`/`undeclare` · CLI `--declare/--undeclare` · Studio `D`** ✓，三者走**同一批写入方**（`shape_decl::{declare,undeclare}` + `partition_view::apply_declaration_edit` + `package_directory_of` 守卫 ✓）。
+
+**两个语义点**：① 选中的是 **facade** 时不静默（它不是已声明的 crate，按键会**说出来**——静默会被读成坏键，审计 `STU-V-02` ✓）；② 该 crate 的包**还在磁盘上**时拒绝并给出那个键（"先按 `x` 收回"）——条目一旦消失，就没有动作还知道那个目录 ✓。
+
+**这条键当场抓出一个真 bug（值得记）**：它第一次跑就报 `the widgets entry has no ending comma, so this writer cannot say where it ends` ✗ —— 我的 `entry_span` 只把**结尾逗号**当条目终点，于是**单行** `crates: &[Crate::named("widgets").at(&[…])]` 里的最后一条（**合法地没有**逗号）永远移除不掉 ✗。修法是让"关掉这条条目所在列表的那个括号"也成为终点（`]`/`}` 使深度 < 0 时收尾 ✓），并补一条**单行声明**的钉子 —— 原来的夹具都是多行写法，所以这个洞在 CLI/MCP 两级钉子那里都没露出来 ✓✓（**同一份实现，两套夹具的形状不同，就能漏掉一种版式**）。
+
+**实测**：真 tmux 面板里页脚已宣传该键（`… · D remove the selected crate from the declaration (each asks once more) · …` ✓）；钉子 3 条（`D`+`y` 移除且屏上随即读到"宿主又只有一个 crate" · facade 上按键会被说明 · 包在磁盘上时被拒并提示先 `x`）+ 1 条（单行声明可移除）✓。门禁：fmt ✓ · clippy 两面 0 error ✓ · workspace 全绿 ✓ · studio 分区钉子 6/6 ✓。

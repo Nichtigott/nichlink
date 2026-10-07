@@ -196,3 +196,110 @@ fn the_actions_write_and_take_back_the_partition() {
     let _ = fs::remove_dir_all(root);
     clear_project_context();
 }
+
+/// `D` removes the selected crate from the declaration, and `y` confirms it — the same two-press
+/// discipline as the three package actions, because this edits the author's hand-written source.
+/// `D` 把选中的 crate 从声明里移除，`y` 确认——与那三个针对生成包的动作同一套"两次按键"纪律，因为它编辑的是
+/// 作者手写的源码。
+#[test]
+fn the_delete_key_removes_the_selected_crate_from_the_declaration() {
+    let root = partition_host("undeclare");
+    let mut app = open_screen(&root);
+    let file = root.join("add_crates.rs");
+    let before = fs::read_to_string(&file).expect("the declaration");
+    let app_widgets = root.parent().expect("a parent").join("app-widgets");
+    assert!(before.contains(r#"Crate::named("widgets")"#), "{before}");
+
+    // Arming writes nothing.
+    app.handle_key(KeyEvent::from(KeyCode::Char('D')));
+    assert_eq!(
+        state(&app).pending_undeclare.as_deref(),
+        Some("widgets"),
+        "the selected crate is the one armed"
+    );
+    assert!(
+        !app_widgets.exists(),
+        "and arming touches neither the file nor a package"
+    );
+
+    // `y` removes exactly that entry, and the screen reads the new declaration.
+    app.handle_key(KeyEvent::from(KeyCode::Char('y')));
+    let after_confirm = state(&app);
+    assert!(
+        after_confirm.pending_undeclare.is_none(),
+        "the arm was consumed"
+    );
+    assert!(
+        after_confirm
+            .outcome
+            .as_deref()
+            .unwrap_or("")
+            .contains("widgets"),
+        "{:?}",
+        after_confirm.outcome
+    );
+    // This fixture declares a single crate, so removing it takes the declaration with it — the host
+    // is one crate again, which is what the screen must then say.
+    // 这个夹具只声明了一个 crate，因此移除它会连声明一起带走——宿主回到"就是一个 crate"，而那正是本屏接下来
+    // 必须说的话。
+    assert!(
+        !file.exists(),
+        "removing the only declared crate takes the file"
+    );
+    assert!(
+        !state(&app).declared,
+        "and the screen reads the host as one crate again"
+    );
+    let _ = fs::remove_dir_all(root);
+    clear_project_context();
+}
+
+/// `D` on the facade says why it cannot be removed, rather than doing nothing.
+/// 在 facade 上按 `D` 会说出它为什么不能被移除，而不是什么都不做。
+#[test]
+fn the_delete_key_names_the_facade_as_not_a_crate() {
+    let root = partition_host("facade-key");
+    let mut app = open_screen(&root);
+    // The facade is the second row, and it serves no single declared crate.
+    app.handle_key(KeyEvent::from(KeyCode::Char('j')));
+    app.handle_key(KeyEvent::from(KeyCode::Char('D')));
+    let state = state(&app);
+    assert!(
+        state.pending_undeclare.is_none(),
+        "the facade cannot be undeclared"
+    );
+    assert!(
+        app.event.contains("facade") || app.event.contains("declared crate"),
+        "the key says why: {:?}",
+        app.event
+    );
+    let _ = fs::remove_dir_all(root);
+    clear_project_context();
+}
+
+/// A crate whose package is still on disk is refused with the key that fixes it, because after the
+/// entry is gone nothing knows that directory any more.
+/// 包还在磁盘上的 crate 会被拒绝，并给出能修好的那个键——因为条目一旦消失，就没有东西还知道那个目录了。
+#[test]
+fn the_delete_key_refuses_while_the_package_is_on_disk() {
+    let root = partition_host("guarded");
+    let mut app = open_screen(&root);
+    let area = root.parent().expect("a parent").to_path_buf();
+    fs::create_dir_all(area.join("app-widgets")).expect("a package directory");
+    app.handle_key(KeyEvent::from(KeyCode::Char('D')));
+    app.handle_key(KeyEvent::from(KeyCode::Char('y')));
+    let state = state(&app);
+    assert!(
+        state.outcome.as_deref().unwrap_or("").contains("revert"),
+        "{:?}",
+        state.outcome
+    );
+    assert!(
+        fs::read_to_string(root.join("add_crates.rs"))
+            .expect("the declaration")
+            .contains(r#"Crate::named("widgets")"#),
+        "the entry is still there"
+    );
+    let _ = fs::remove_dir_all(area);
+    clear_project_context();
+}

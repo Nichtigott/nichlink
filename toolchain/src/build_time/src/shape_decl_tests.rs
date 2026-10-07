@@ -440,3 +440,21 @@ fn declaring_a_non_path_is_refused() {
         );
     }
 }
+
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+/// The last entry of a **single-line** list has no trailing comma, and it is still removable.
+/// **单行**列表里的最后一条没有结尾逗号，而它同样可以被移除。
+#[test]
+fn undeclaring_works_on_a_single_line_declaration() {
+    let inline = "use nichlink_toolchain::runtime::{Crate, Shape};\n\n\
+                  pub const SHAPE: Shape = Shape {\n    package_prefix: \"myapp\",\n\
+                  crates: &[Crate::named(\"widgets\").at(&[crate::control::object::SUBTREE])],\n};\n";
+    let (root, _, _) = package("inline", inline);
+    let edit = undeclare(&root, "widgets").expect("the inline entry is removable");
+    assert!(edit.removes_file, "it was the only entry");
+    edit.apply().expect("it lands");
+    assert!(
+        read_shape_declaration(&root).expect("it reads").is_none(),
+        "the host is one crate again"
+    );
+}

@@ -124,6 +124,16 @@ pub(crate) fn draw_partition(
             Style::default().fg(Color::LightYellow),
         )));
     }
+    if let Some(name) = &state.pending_undeclare {
+        text.push(Line::from(Span::styled(
+            format!(
+                "D to remove `{name}` from {} — press y to confirm (the generated package is not \
+                 touched; revert it with x first)",
+                nichlink_kernel::lexicon::ADD_CRATES_FILE
+            ),
+            Style::default().fg(Color::LightYellow),
+        )));
+    }
     if let Some(outcome) = &state.outcome {
         text.push(Line::from(Span::styled(
             outcome.clone(),
@@ -132,7 +142,8 @@ pub(crate) fn draw_partition(
     }
     text.push(Line::from(""));
     text.push(Line::from(Span::styled(
-        "w development · R release · x revert (each asks once more) · r reread · q/Esc close"
+        "w development · R release · x revert · D remove the selected crate from the declaration \
+         (each asks once more) · r reread · q/Esc close"
             .to_owned(),
         Style::default().fg(MUTED),
     )));

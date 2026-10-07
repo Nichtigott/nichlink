@@ -31,6 +31,55 @@ impl App {
         }
     }
 
+    /// Remove the selected crate from the host's declaration, the way the CLI and the bridge do.
+    /// 把选中的 crate 从宿主声明里移除，与 CLI 和桥同一条路。
+    ///
+    /// The guards are shared rather than repeated: a crate whose package is still on disk is refused
+    /// (after the entry is gone, no action knows that directory), and the edit is rolled back when the
+    /// resulting declaration does not plan.
+    /// 守卫是共用的而不是重写的：包还在磁盘上的 crate 会被拒绝（条目一旦消失就没有动作知道那个目录），而改动在
+    /// "改完之后声明规划不成立"时会被回滚。
+    pub(super) fn undeclare_selected_crate(&mut self, name: String) {
+        let outcome = with_selected_project_read(|| -> Result<String, String> {
+            let root = selected_package_root()?;
+            if let Some(directory) = crate::build_time::package_directory_of(&root, &name)? {
+                return Err(format!(
+                    "`{name}` still has its package at {}: press `x` to revert first (it takes the \
+                     generated packages back while the declaration still names them)\n\
+                     `{name}` 的包还在 {}：先按 `x` 收回（它趁声明还点名它们时把生成的包收回去）\n",
+                    directory.display(),
+                    directory.display()
+                ));
+            }
+            let edit = crate::build_time::undeclare(&root, &name)?;
+            let diff = edit.diff();
+            let after = crate::build_time::apply_declaration_edit(&root, edit)?;
+            Ok(format!(
+                "removed `{name}` from {}:\n{diff}{}",
+                root.join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
+                    .display(),
+                match after {
+                    Some(view) => format!(
+                        "the declaration now names {} crate(s)\n",
+                        view.packages
+                            .iter()
+                            .filter(|package| package.crate_name.is_some())
+                            .count()
+                    ),
+                    None => "this host declares no crates again\n".to_owned(),
+                }
+            ))
+        });
+        if let Some(Overlay::Partition(state)) = self.overlay.as_mut() {
+            state.pending_undeclare = None;
+            state.outcome = Some(match outcome {
+                Ok(message) => message,
+                Err(refusal) => refusal,
+            });
+        }
+        self.refresh_partition();
+    }
+
     /// Do what the screen was asked to do, and say what happened.
     /// 执行本屏被要求做的事，并说明发生了什么。
     pub(super) fn run_partition_action(&mut self, action: PartitionAction) {
