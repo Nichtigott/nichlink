@@ -299,6 +299,16 @@ pub(crate) fn check_shape(
 /// 构建当文本读、却没有 crate 挂载的声明。它读得到树，因此能点名出路——哪个节点包含被认领的那个——而不是让
 /// 作者去猜。
 fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result<(), String> {
+    // Judge only the claims this run's tree is *about*. A partition's fragment carries one subtree
+    // plus its ancestor shells, so the declaration's other claims name modules that are simply absent
+    // here — measured: validating them per claim failed every multi-claim partition (`control` "has
+    // no faces below it" while building the `panel::gauge` crate). A claim whose neighbourhood this
+    // run cannot see at all is left to the run that owns it; the whole-declaration check upstream
+    // still refuses a declaration that names nothing in this tree.
+    // 只审"本次树的邻域里的"认领。划分出来的片段只带一棵子树加它的祖先壳，因此声明里其余认领点名的模块在这里
+    // 根本不存在——实测：逐条校验让每一个多认领的划分都失败（构建 `panel::gauge` 那个 crate 时，`control`
+    // 被报"下面没有面"）。本次运行完全看不见其邻域的认领，留给拥有它的那次运行；上游那条"整份声明"的检查
+    // 仍然会拒绝一棵都点不到模块的声明。
     let below = |module: &str| -> usize {
         rows.iter()
             .filter(|row| {
@@ -326,10 +336,15 @@ fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result
             ),
         });
     }
-    Err(format!(
-        "add_crates: `{name}` names `{subtree}`, which has no faces below it; that crate would be \
-         empty"
-    ))
+    // Neither below this claim nor a face in this tree: with only this run's rows there is no way to
+    // tell "another crate's claim, absent here" from "a module that is really empty", and the first is
+    // the common case in a fragment (measured: refusing it broke every multi-claim partition). The
+    // plan, which can read the module tree, is where an empty crate belongs; this reader keeps only
+    // the refusals its rows can prove — "below it" and "it is itself a face here".
+    // 既不在它下面、也不是本树里的一个面：只有本次运行的行表时，无法区分"别的 crate 的认领、在这里缺席"与
+    // "一个真的空模块"，而前者在片段里是常态（实测：拒绝它让每一个多认领的划分都失败）。能读模块树的规划器才是
+    // "空 crate"该被判的地方；本读取器只保留行表能证明的拒绝——"它下面有面"与"它本身就是这里的一个面"。
+    Ok(())
 }
 
 /// The one refusal spelling for a declaration the build cannot read.

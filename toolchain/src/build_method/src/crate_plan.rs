@@ -377,6 +377,14 @@ pub(crate) fn plan(
     // 只读一次：每条 `crate::` 路径据以判定的那些名字，对所有已声明的 crate 相同。
     let modules = source_modules(package_root);
     let mut planned = Vec::new();
+    // Read once per plan: the module tree this run can see, and every claim the declaration makes.
+    // 每次规划读一次：本次运行看得见的模块树，以及声明里写下的每一条认领。
+    let all_modules = module_paths(package_root);
+    let all_claims: Vec<String> = declaration
+        .crates
+        .iter()
+        .flat_map(|(_, subtrees)| subtrees.iter().cloned())
+        .collect();
     for (name, subtrees) in &declaration.crates {
         let package = format!("{}-{name}", declaration.package_prefix);
         let directory = crates_dir(parent).join(&package);
@@ -414,11 +422,23 @@ pub(crate) fn plan(
             // "这个认领点名了东西没有"的权威是**模块树**，不是面表：本规划器看到的面已经被收窄成宿主保留的
             // 那些，因此对更深子树（`control::left`）的合法认领在那里一个也匹配不到——实测：这条误拒是本判据
             // 一开始的行为。点名不到任何**模块**的认领是写错或计划过期；点名到模块但没有面的，是空但真实。
-            let all_modules = module_paths(package_root);
             let names_a_module = all_modules
                 .iter()
                 .any(|module| module == subtree || module.starts_with(&format!("{subtree}::")));
-            if claimed == 0 && !names_a_module {
+            // Scope of this refusal: the **whole declaration**, not this one claim. A partition's
+            // fragment compiles one subtree, so the other claims legitimately name modules that are
+            // not in *its* tree — measured: per-claim refusal failed every multi-claim partition
+            // (`control` "names no module in this host's tree" while building the `panel::frame`
+            // crate). A declaration that names nothing here is still refused, with the nearest module.
+            // 拒绝的适用范围是**整份声明**，不是这一条认领。划分出来的片段只编译一棵子树，因此其余认领合法地点名
+            // 不在**它**树里的模块——实测：逐条拒绝让每一个多认领的划分都失败（构建 `panel::frame` 那个 crate 时
+            // `control` 被报"在本宿主的树里没有对应模块"）。整份声明一条都点不到模块时仍然拒绝，并给出最近的模块。
+            let any_claim_names_a_module = all_claims.iter().any(|claim| {
+                all_modules
+                    .iter()
+                    .any(|module| module == claim || module.starts_with(&format!("{claim}::")))
+            });
+            if claimed == 0 && !names_a_module && !any_claim_names_a_module {
                 let nearest =
                     super::shape_decl::closest(subtree, modules.iter().map(String::as_str))
                         .map(|module| format!("; the nearest module is `{module}`"))

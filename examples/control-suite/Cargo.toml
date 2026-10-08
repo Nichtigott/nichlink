@@ -1,0 +1,19 @@
+# A **partitioned** example host: the declaration lives in `host/add_crates.rs`, and the two
+# generated packages beside it (`crates/control-suite-objects`, `crates/control-suite-facade`)
+# are the crates the split produced — committed, because "declare once, split on submit" is the deal.
+# It is the **release** shape: every generated package carries its own copies of the sources it
+# compiles, and there is no `.cargo/config.toml` and no `--remap-path-prefix` anywhere. That is not
+# only what crates.io needs — the development shape's remap makes rustc report diagnostics under
+# paths rust-analyzer cannot find, which makes the editor log an error per file per `cargo check`
+# forever (measured: a 2.6 GB `lsp.log` and every completion in the window dead). Self-contained
+# copies are what an editor can live with.
+# 一个**被划分过的**示例宿主：声明住在 `host/add_crates.rs`，它旁边那两个生成包
+# （`crates/control-suite-objects`、`crates/control-suite-facade`）就是这次拆分产出的 crate
+# —— 它们入库，因为"顶层声明一次、提交时生成"就是这套东西的约定。它用的是**发布形状**：每个生成包都
+# 携带自己编译的那些源码的副本，且**任何地方都没有** `.cargo/config.toml`、也没有 `--remap-path-prefix`。
+# 这不只是 crates.io 的要求——开发形状的 remap 会让 rustc 报出 rust-analyzer 找不到的路径，于是编辑器每跑
+# 一次 `cargo check` 就为每个文件记一条错误、永不停歇（实测：2.6 GB 的 `lsp.log`，全窗口补全全灭）。
+# 自包含的副本才是编辑器能与之共处的形状。
+[workspace]
+resolver = "3"
+members = ["host", "graft", "crates/control-suite-facade", "crates/control-suite-frames", "crates/control-suite-gauges", "crates/control-suite-objects"]

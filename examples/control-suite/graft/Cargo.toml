@@ -1,0 +1,25 @@
+[package]
+name = "nichlink-example-control-suite-graft"
+version = "0.2.1"
+edition = "2024"
+publish = false
+
+# 已发布的 crate 用 `[lib] name` 决定代码里的 crate 名 —— 宿主入口的 graft 表达式就按它写。
+[lib]
+name = "control_button_graft"
+path = "src/lib.rs"
+
+[dependencies]
+nichlink-toolchain = { path = "../../../toolchain", features = ["run", "authoring"] }
+
+# Our macros emit a `#[cfg(rust_analyzer)]` mirror so an editor completes the fields inside a face
+# declaration; Rust 2024's check-cfg calls that an unexpected cfg unless the crate says otherwise.
+# rustc judges a `cfg` inside a macro by the **destination** crate, so this belongs in every crate
+# that uses the macros, not only in the ones we generate (a crate with a build script of ours gets
+# the same declaration from `cargo::rustc-check-cfg`, which is why the ghost and the facade need none).
+# 我们的宏会发射一个 `#[cfg(rust_analyzer)]` 镜像，让编辑器补全面声明里的字段；Rust 2024 的 check-cfg
+# 会把它当成未知 cfg，除非本 crate 自己声明。rustc 对**宏里的** cfg 按**目标 crate** 判定，所以这条属于
+# 每一个使用宏的 crate，而不只是我们生成的那些（有我们构建脚本的包会从 `cargo::rustc-check-cfg` 拿到同样的
+# 声明，因此幽灵与 facade 不需要它）。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_analyzer)"] }
