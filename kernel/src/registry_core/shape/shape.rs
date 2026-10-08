@@ -37,6 +37,35 @@ pub struct DeclaredCrate<'a> {
 /// contains `control::object` and never `control_extra`.
 /// 边界是整个 `::` 段，与作用域自己的子树选择器完全一致：`control` 包含 `control::object`，绝不包含
 /// `control_extra`。
+/// Which entries a **later** entry supersedes, and which pairs overlapped.
+/// 哪些条目被**后**一条盖住，以及哪些对发生了重叠。
+///
+/// A cut replaces a whole subtree, so an entry whose target sits inside another entry's subtree is
+/// answered by **declaration order**: the later entry wins and the earlier one is dropped — the
+/// maintainer's ruling ("先加载了 graftA 然后再加载 graftB，就按照 graftB 的对象 a 走"). The decision is
+/// reported so a caller can speak it as a hint instead of applying it silently.
+/// 切口替换的是整棵子树，因此目标落在另一条条目子树里的条目由**声明顺序**作答：后一条赢、前一条被丢掉
+/// ——维护者的裁定。这次裁定会被报出来，好让调用方把它作为提示说出口，而不是静默应用。
+///
+/// One implementation for every reader (the scope, the plan, the renderer): three copies of this rule
+/// would be three chances for the plan and the scope to disagree about which cut answers.
+/// 每个读取者（作用域、计划、渲染器）共用一份实现：三份拷贝就是三次"计划与作用域对哪条在作答意见不一"的机会。
+pub fn superseded_by_later(entries: &[(String, String)]) -> (Vec<usize>, Vec<(String, String)>) {
+    let mut superseded = Vec::new();
+    let mut overlaps = Vec::new();
+    for (position, (left, _)) in entries.iter().enumerate() {
+        for (right, _) in entries.iter().skip(position + 1) {
+            if left == right || subtree_overlaps(left, right) {
+                if !superseded.contains(&position) {
+                    superseded.push(position);
+                }
+                overlaps.push((left.clone(), right.clone()));
+            }
+        }
+    }
+    (superseded, overlaps)
+}
+
 pub fn subtree_overlaps(left: &str, right: &str) -> bool {
     let (short, long) = if left.len() <= right.len() {
         (left, right)

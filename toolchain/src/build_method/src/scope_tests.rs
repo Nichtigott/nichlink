@@ -249,10 +249,12 @@ fn a_refused_scope_value_is_a_diagnostic() {
 }
 
 /// Both spellings normalise to the same `::` module path, so the overlap rule can compare a typed
-/// cut with a logical one (and the end-to-end case — `cut(button)` beside `cut(control) full` — is
-/// refused with `graft-overlap`, measured on a real host).
-/// 两种拼写都归一到同一个 `::` 模块路径，因此重叠规则能把类型化切口与逻辑切口放在一起比（端到端那一例
-/// ——`cut(button)` 与 `cut(control) full` 并列——实测会以 `graft-overlap` 被拒）。
+/// cut with a logical one. Overlap itself is answered by **declaration order** — the later entry wins
+/// and the earlier one is dropped, with a hint naming both (the maintainer's ruling; the end-to-end
+/// behaviour is pinned by `tools/nichlink-graft-matrix`, leg 2).
+/// 两种拼写都归一到同一个 `::` 模块路径，因此重叠规则能把类型化切口与逻辑切口放在一起比。重叠本身由
+/// **声明顺序**作答——后一条赢、前一条被丢掉，并给一条提示同时点名两者（维护者的裁定；端到端行为由
+/// `tools/nichlink-graft-matrix` 的 leg 2 钉住）。
 #[test]
 fn a_cut_names_the_same_subtree_however_it_is_spelled() {
     assert_eq!(

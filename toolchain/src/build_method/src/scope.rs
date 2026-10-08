@@ -238,27 +238,22 @@ impl SourceScope {
         // 两个重叠的切口没有确定的含义：切口替换的是整棵子树，因此目标落在另一个切口子树里的条目是一个没有答案
         // 的问题。按名拒绝——crate 声明侧对重叠的认领早就是这么做的（`shape::subtree_overlaps`，一份实现，
         // 以 `::` 段为边界）。
-        for (position, left) in cuts.iter().enumerate() {
-            for right in cuts.iter().skip(position + 1) {
-                let (Some(a), Some(b)) = (cut_subtree(&left.cut), cut_subtree(&right.cut)) else {
-                    continue;
-                };
-                if a == b || nichlink_kernel::registry_core::shape::subtree_overlaps(&a, &b) {
-                    errors.push(BuildDiagnostic::new(
-                        "graft-overlap",
-                        format!(
-                            "two graft cuts overlap: `{}` and `{}`, in `{}`; a cut replaces a whole \
-                             subtree, so an entry inside another entry's subtree has no defined \
-                             meaning\nway forward: cut only the outer subtree with `full`, or make \
-                             the two cuts disjoint",
-                            a,
-                            b,
-                            entry.display()
-                        ),
-                    ));
-                }
-            }
-        }
+        // Overlap is answered by **declaration order**: the later entry wins and the earlier one is
+        // dropped (the maintainer's ruling). The rule lives in the kernel, and the hint is spoken once
+        // by the build entry point; this reader only applies it.
+        // 重叠由**声明顺序**作答：后一条赢、前一条被丢掉（维护者的裁定）。规则住在内核，提示由构建入口说一次；
+        // 这个读取者只应用它。
+        let pairs: Vec<(String, String)> = cuts
+            .iter()
+            .filter_map(|cut| cut_subtree(&cut.cut).map(|subtree| (subtree, cut.cut.clone())))
+            .collect();
+        let (superseded, _) = nichlink_kernel::registry_core::shape::superseded_by_later(&pairs);
+        let cuts: Vec<_> = cuts
+            .into_iter()
+            .enumerate()
+            .filter(|(position, _)| !superseded.contains(position))
+            .map(|(_, cut)| cut)
+            .collect();
         let faces = collect_faces(src, nodes);
         if faces.is_empty() {
             return Self {
@@ -500,7 +495,7 @@ pub(crate) fn module_feature(src: &Path, node: &Node) -> Option<&'static str> {
 /// 类型化切口是 `crate::a::b::NODE_ID`（或 `crate::a::b::Type::NODE_ID`）；逻辑切口是 `root/a/b`。
 /// 两者点名同一个模块，而 `root` 就是 crate 本身，因此丢掉它才让两种拼写可比。`None` 表示"这条规则判不了
 /// 这个切口"——读不懂的切口交给别的检查，而不是猜。
-fn cut_subtree(cut: &str) -> Option<String> {
+pub(crate) fn cut_subtree(cut: &str) -> Option<String> {
     let cut = cut.trim();
     if cut.is_empty() {
         return None;

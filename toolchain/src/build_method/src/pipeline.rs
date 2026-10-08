@@ -9,6 +9,12 @@ use super::{
 };
 use nichlink_kernel::lexicon;
 
+/// Whether `entry` is one a later entry superseded (its subtree is in `dropped`).
+/// `entry` 是否被后一条盖住（它的子树在 `dropped` 里）。
+fn is_superseded(entry: &nichlink_kernel::syntax::GraftSyntax, dropped: &[String]) -> bool {
+    super::scope::cut_subtree(&entry.cut).is_some_and(|subtree| dropped.contains(&subtree))
+}
+
 pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let manifest = &input.manifest;
     // Two bases, resolved once: `scan` is the tree the walk reads, and `src` is
@@ -102,7 +108,39 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
-    let graft_entries = super::host_graft_entries(&entry, &mut compile_errors);
+    let mut graft_entries = super::host_graft_entries(&entry, &mut compile_errors);
+    // Overlap is answered by **declaration order** (the later entry wins), and this is the one place
+    // that has to apply it: the record below and the rendered table are both built from what survives.
+    // The hint is spoken here, once, so a reader hears the decision instead of inferring it.
+    // 重叠由**声明顺序**作答（后一条赢），而这里是必须应用它的那一个地方：下面的记录与渲染出的表都由幸存者
+    // 构建。提示在这里说一次，好让读者听到裁定而不是自己去推断。
+    {
+        let pairs: Vec<(String, String)> = graft_entries
+            .declared
+            .iter()
+            .filter_map(|entry| {
+                super::scope::cut_subtree(&entry.cut).map(|subtree| (subtree, entry.cut.clone()))
+            })
+            .collect();
+        let (superseded, overlaps) =
+            nichlink_kernel::registry_core::shape::superseded_by_later(&pairs);
+        for (earlier, later) in &overlaps {
+            eprintln!(
+                "nichlink: two graft cuts overlap: `{earlier}` (earlier, ignored) and `{later}` \
+                 (later, wins); the later entry answers, so `{later}` replaces its subtree"
+            );
+        }
+        let dropped: Vec<String> = superseded
+            .iter()
+            .filter_map(|position| pairs.get(*position).map(|(subtree, _)| subtree.clone()))
+            .collect();
+        graft_entries
+            .declared
+            .retain(|entry| !is_superseded(entry, &dropped));
+        graft_entries
+            .enabled
+            .retain(|entry| !is_superseded(entry, &dropped));
+    }
     // A plan file is an authoring record the build never reads, so a plan whose
     // slot no declaration names would otherwise be discovered at runtime, long
     // after the build pruned it. This is the one case that is unambiguous *and*

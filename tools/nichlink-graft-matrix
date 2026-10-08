@@ -64,7 +64,7 @@ PY
   fail "the plan does not record the root-face cut"
 (cd "$AREA/app" && build >/dev/null 2>&1) || fail "the root-face cut does not build"
 
-step "leg 2/3: overlapping cuts are refused by name"
+step "leg 2/3: overlapping cuts keep the later entry and say which one answers"
 AREA=$(host overlap)
 python3 - "$AREA/app/src/lib.rs" <<'PY'
 import re, sys, pathlib
@@ -74,12 +74,31 @@ s = re.sub(
     "cut(crate::control::object::button::NODE_ID)\n        graft(control_button_graft::button_fast::NODE_ID),\n    cut(crate::control::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
 p.write_text(s)
 PY
-if (cd "$AREA/app" && "$NICHLINK" check . >"$WORK/overlap.out" 2>&1); then
-  fail "overlapping cuts were accepted silently"
+(cd "$AREA/app" && "$NICHLINK" check . >"$WORK/overlap.out" 2>&1) ||
+  fail "overlapping cuts no longer check: $(head -3 "$WORK/overlap.out")"
+# The decision is spoken: both entries named, and which one answers.
+grep -q "two graft cuts overlap" "$WORK/overlap.out" ||
+  fail "the overlap went unmentioned: $(head -3 "$WORK/overlap.out")"
+grep -q "later, wins" "$WORK/overlap.out" ||
+  fail "the hint does not say which entry answers: $(grep -m1 overlap "$WORK/overlap.out")"
+printf '   hint: %s\n' "$(grep -m1 'two graft cuts overlap' "$WORK/overlap.out" | cut -c1-200)"
+# And only the winner reaches the plan: the later `control` full entry replaces the earlier button cut.
+PLAN="$AREA/app/target/nichlink/out/graft_plan.tsv"
+[ -f "$PLAN" ] || fail "no graft plan to read"
+# The fixture declares three cuts — `button`, then `control` (full), then `slider`. Pairwise "later
+# wins" therefore leaves exactly the **last** one: `slider` supersedes `control`, which superseded
+# `button`. Both earlier entries must be gone from the plan, and the last one must be in it.
+# 夹具声明了三条切口——`button`、`control`(full)、`slider`。逐对"后者赢"因此只留下**最后**一条：
+# `slider` 盖住 `control`，`control` 又盖住 `button`。前两条都必须从计划里消失，最后一条必须在。
+grep -q "crate::control::object::slider::NODE_ID" "$PLAN" ||
+  fail "the last cut is not in the plan: $(cat "$PLAN" | tr '\n' ' ')"
+if grep -q "crate::control::object::button::NODE_ID" "$PLAN"; then
+  fail "a superseded cut is still in the plan"
 fi
-grep -q "phase=graft-overlap" "$WORK/overlap.out" ||
-  fail "the refusal does not name the overlap phase: $(head -3 "$WORK/overlap.out")"
-printf '   refusal: %s\n' "$(sed -n '3,5p' "$WORK/overlap.out" | tr '\n' ' ' | cut -c1-220)"
+if grep -q "crate::control::NODE_ID" "$PLAN"; then
+  fail "the intermediate cut is still in the plan"
+fi
+(cd "$AREA/app" && build >/dev/null 2>&1) || fail "the overlapping host does not build"
 
 step "leg 3/3: re-partitioning the host keeps the plan and every crate"
 AREA=$(host repartition)
@@ -107,5 +126,5 @@ cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_li
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] ||
   fail "the ghost does not emit both cuts"
 
-printf '\nOK — root-face cut builds, overlapping cuts are refused by name, and a re-partitioned host keeps its plan\n'
+printf '\nOK — root-face cut builds, overlapping cuts keep the later entry with a hint, and a re-partitioned host keeps its plan\n'
 rm -rf "$WORK"
