@@ -20,12 +20,13 @@ CARGO_FLAGS="${NICHLINK_GRAFT_MATRIX_CARGO_FLAGS---offline}"
 NICHLINK="$ROOT/target/debug/nichlink"
 # Build the binary this script drives, rather than assuming somebody else did: a fresh checkout has no
 # `target/debug/nichlink`, and a gate that only passes where it was built by hand fails on the machine
-# that matters (measured on CI, twice, for the sibling rehearsal).
-# 自己构建本脚本要驱动的二进制，而不是假设别人构建过：全新检出不带它，而只在"有人手工构建过"的机器上通过的
-# 闸门恰好在最要紧的那台机器上失败（姊妹演练在 CI 上实测过两次）。
+# that matters (measured on CI). Self-contained on purpose — this runs before the helpers below exist.
+# 自己构建本脚本要驱动的二进制：全新检出不带它，而在"有人手工构建过"的机器上才通过的闸门，恰好在最要紧的
+# 那台机器上失败（CI 实测）。这里刻意不依赖下面的辅助函数——它跑在它们定义之前。
 if [ ! -x "$NICHLINK" ]; then
-  step "building the CLI this matrix drives"
-  build -p nichlink-toolchain --features cli --bin nichlink || fail "cannot build $NICHLINK"
+  echo "building the CLI this matrix drives" >&2
+  "${CARGO:-cargo}" build ${CARGO_FLAGS-} -p nichlink-toolchain --features cli --bin nichlink >&2 ||
+    { echo "cannot build $NICHLINK" >&2; exit 1; }
 fi
 fail() { printf 'graft matrix FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
