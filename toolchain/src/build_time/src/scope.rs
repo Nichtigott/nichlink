@@ -231,6 +231,34 @@ impl SourceScope {
                 Vec::new()
             }
         };
+        // Two cuts that overlap have no defined meaning: a cut replaces a whole subtree, so an entry
+        // whose target sits inside another entry's subtree is a question with no answer. Refuse by
+        // name — the same rule the crate declaration already applies to overlapping claims
+        // (`shape::subtree_overlaps`, one implementation, `::`-segment boundaries).
+        // 两个重叠的切口没有确定的含义：切口替换的是整棵子树，因此目标落在另一个切口子树里的条目是一个没有答案
+        // 的问题。按名拒绝——crate 声明侧对重叠的认领早就是这么做的（`shape::subtree_overlaps`，一份实现，
+        // 以 `::` 段为边界）。
+        for (position, left) in cuts.iter().enumerate() {
+            for right in cuts.iter().skip(position + 1) {
+                let (Some(a), Some(b)) = (cut_subtree(&left.cut), cut_subtree(&right.cut)) else {
+                    continue;
+                };
+                if a == b || nichlink_kernel::registry_core::shape::subtree_overlaps(&a, &b) {
+                    errors.push(BuildDiagnostic::new(
+                        "graft-overlap",
+                        format!(
+                            "two graft cuts overlap: `{}` and `{}`, in `{}`; a cut replaces a whole \
+                             subtree, so an entry inside another entry's subtree has no defined \
+                             meaning\nway forward: cut only the outer subtree with `full`, or make \
+                             the two cuts disjoint",
+                            a,
+                            b,
+                            entry.display()
+                        ),
+                    ));
+                }
+            }
+        }
         let faces = collect_faces(src, nodes);
         if faces.is_empty() {
             return Self {
@@ -459,6 +487,46 @@ pub(crate) fn module_feature(src: &Path, node: &Node) -> Option<&'static str> {
         }
         _ => None,
     }
+}
+
+/// The subtree a cut names, as a `::` module path, so the overlap rule can compare cuts written in
+/// either spelling.
+/// 切口点名的子树，写成 `::` 模块路径，好让重叠规则能比较两种拼写的切口。
+///
+/// A typed cut is `crate::a::b::NODE_ID` (or `crate::a::b::Type::NODE_ID`); a logical cut is
+/// `root/a/b`. Both name the same module, and `root` is the crate itself, so dropping it is what
+/// makes the two spellings comparable. `None` means "not a subtree this rule can judge" — a cut
+/// this function cannot read is left to the other checks rather than guessed at.
+/// 类型化切口是 `crate::a::b::NODE_ID`（或 `crate::a::b::Type::NODE_ID`）；逻辑切口是 `root/a/b`。
+/// 两者点名同一个模块，而 `root` 就是 crate 本身，因此丢掉它才让两种拼写可比。`None` 表示"这条规则判不了
+/// 这个切口"——读不懂的切口交给别的检查，而不是猜。
+fn cut_subtree(cut: &str) -> Option<String> {
+    let cut = cut.trim();
+    if cut.is_empty() {
+        return None;
+    }
+    if !cut.contains("::") {
+        // A logical path: `root/a/b`, or `a/b` when the root is implied.
+        let path = cut.strip_prefix("root/").unwrap_or(cut);
+        let path = path.trim_matches('/');
+        return (!path.is_empty()).then(|| path.replace('/', "::"));
+    }
+    let rest = cut.strip_prefix("crate::").unwrap_or(cut);
+    let mut segments: Vec<&str> = rest.split("::").collect();
+    if segments.last()? != &"NODE_ID" {
+        return None;
+    }
+    segments.pop();
+    // A marker type sits between the module and `NODE_ID`; modules are lower-case by convention,
+    // so an upper-case last segment is that type rather than a module.
+    if segments
+        .last()
+        .is_some_and(|segment| segment.chars().next().is_some_and(char::is_uppercase))
+    {
+        segments.pop();
+    }
+    let module = segments.join("::");
+    (!module.is_empty()).then_some(module)
 }
 
 #[cfg(test)]

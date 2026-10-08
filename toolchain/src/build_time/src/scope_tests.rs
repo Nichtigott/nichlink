@@ -247,3 +247,30 @@ fn a_refused_scope_value_is_a_diagnostic() {
         );
     }
 }
+
+/// Both spellings normalise to the same `::` module path, so the overlap rule can compare a typed
+/// cut with a logical one (and the end-to-end case — `cut(button)` beside `cut(control) full` — is
+/// refused with `graft-overlap`, measured on a real host).
+/// 两种拼写都归一到同一个 `::` 模块路径，因此重叠规则能把类型化切口与逻辑切口放在一起比（端到端那一例
+/// ——`cut(button)` 与 `cut(control) full` 并列——实测会以 `graft-overlap` 被拒）。
+#[test]
+fn a_cut_names_the_same_subtree_however_it_is_spelled() {
+    assert_eq!(
+        super::cut_subtree("crate::control::object::button::NODE_ID").as_deref(),
+        Some("control::object::button")
+    );
+    assert_eq!(
+        super::cut_subtree("crate::control::object::button::Button::NODE_ID").as_deref(),
+        Some("control::object::button")
+    );
+    assert_eq!(
+        super::cut_subtree("root/control/object/button").as_deref(),
+        Some("control::object::button")
+    );
+    assert_eq!(
+        super::cut_subtree("crate::control::NODE_ID").as_deref(),
+        Some("control")
+    );
+    // Not a subtree this rule can judge, so it is left to the other checks rather than guessed at.
+    assert_eq!(super::cut_subtree("crate::control::SOMETHING_ELSE"), None);
+}
