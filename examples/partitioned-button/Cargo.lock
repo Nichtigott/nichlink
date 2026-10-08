@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-kernel"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-macro"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "nichlink-kernel",
  "proc-macro2",
@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "nichlink-toolchain"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "nichlink-kernel",
  "nichlink-macro",
