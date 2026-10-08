@@ -66,6 +66,13 @@ pub fn superseded_by_later(entries: &[(String, String)]) -> (Vec<usize>, Vec<(St
     (superseded, overlaps)
 }
 
+/// Whether two subtree paths name the same node or one contains the other.
+/// 两条子树路径是否点名同一个节点，或一条包含另一条。
+///
+/// Segment-aware, not a plain prefix test: `panel` and `panel::frame` overlap, while `panel` and
+/// `panel_two` do not — the byte after the shorter path has to be the `:` that starts a segment.
+/// 按**段**判断，不是朴素前缀：`panel` 与 `panel::frame` 重叠，而 `panel` 与 `panel_two` 不重叠——
+/// 短的那条之后必须紧跟着起一个段的 `:`。
 pub fn subtree_overlaps(left: &str, right: &str) -> bool {
     let (short, long) = if left.len() <= right.len() {
         (left, right)

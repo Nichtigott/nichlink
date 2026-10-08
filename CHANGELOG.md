@@ -107,6 +107,18 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   而改完之后规划不成立的改动会被回滚而不是留下。另一半问题——这次拆分要写什么、磁盘上有什么、每个包多大、
   `cargo publish` 还差什么——由 `plan`/`write`/`release`/`revert` 回答。
 
+### Changed
+
+- **The two host-facing modules are named after the cargo method they implement (2026-10-07, breaking).**
+  `build_time` is now `build_method` and `runtime` is now `run_method`, so the host entries read
+  `nichlink_toolchain::build_method::run()` and `nichlink_toolchain::run_method::host!()`. Nothing else
+  moved: the modules are the same code, and the seven-module layout is unchanged. Update the two call
+  sites a host has; 0.2.0 and earlier spell the old names.
+  **两个宿主面模块改回"它实现的那个 cargo 方法"的口径（2026-10-07，破坏性）。** `build_time` 现名
+  `build_method`，`runtime` 现名 `run_method`，宿主入口因此写成
+  `nichlink_toolchain::build_method::run()` 与 `nichlink_toolchain::run_method::host!()`。除此之外没有
+  搬动：模块还是同一份代码，七模块布局不变。宿主只需改这两处调用点；0.2.0 及更早写的是旧名。
+
 ### Fixed
 
 - **Three stale references left over from the nine-crates-into-three merge (2026-10-07).** The tmux
@@ -166,13 +178,6 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   false)`），形状落在构建输入上，并有一条钉子断言生成的脚本含 `run_for_partition`、不含 `unsafe` 与
   `set_var`。
 
-- **Two graft cuts that overlap are refused by name (2026-10-07).** A cut replaces a whole subtree, so
-  an entry inside another entry's subtree has no defined meaning; the refusal names both cuts, the file,
-  and the reason (`phase=graft-overlap`) instead of applying them in some order.
-  **两条重叠的 graft 切口按名拒绝（2026-10-07）。** 切口替换的是整棵子树，因此"一条条目落在另一条条目
-  的子树里"没有定义过的含义；拒绝里点名两条切口、所在的文件与理由（`phase=graft-overlap`），而不是按某种
-  顺序把它们应用掉。
-
 - **A claimed subtree that matches no published face is refused, not silently empty (2026-10-07).** A
   misspelled path (or a plan built from an earlier declaration) used to produce a crate with zero
   sources that compiles, ships, and answers every later question wrongly. It now stops, names the
@@ -195,6 +200,24 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   **声明读取器只认第一个 `Shape {`（2026-10-07）。** 写成函数的声明有两个（`-> Shape {` 与字面量），
   于是读取器答出两者之间的空文本、报"没有 `package_prefix`"。现在取最后一个开头，并且也接受
   `Shape::of(…)`。
+
+
+- **A generated package no longer warns about its own cfg (2026-10-07).** The generated tree carries a
+  rust-analyzer mirror behind `cfg(rust_analyzer)`, and the generated build scripts did not tell rustc
+  that name was expected — so every package a split produced reported `unexpected_cfgs` on itself. The
+  build scripts now emit the `rustc-check-cfg` line for it.
+  **生成包不再对自己的 cfg 报警（2026-10-07）。** 生成树里有一层给 rust-analyzer 用的镜像，门控在
+  `cfg(rust_analyzer)` 上，而生成的构建脚本没有告诉 rustc 这个名字是预期的——于是每次拆分产出的每个包都
+  对自己报 `unexpected_cfgs`。构建脚本现在为它发出那行 `rustc-check-cfg`。
+
+- **Two real errors in generated manifests, and the overlap rule for graft cuts (2026-10-07).** The
+  publishable shape wrote no version requirement for its own crates, and the scaffold wrote two
+  dependency lines that disagreed with each other; both are fixed. Overlapping cuts used to be refused;
+  they are now answered by declaration order — the later entry wins — with a note saying so, which is
+  what a host that intentionally replaces one face twice would expect.
+  **生成清单里的两处真错，以及重叠切口的判定规则（2026-10-07）。** 可发布形状没有为自己的 crate 写版本
+  要求，脚手架写出的两行依赖彼此不一致；两处都已修。重叠切口过去被拒绝，现在由**声明顺序**作答——后一条赢
+  ——并给出说明；这正是"故意对同一个面替换两次"的宿主会预期的行为。
 
 ## [0.2.0] — 2026-09-29, re-published 2026-10-07
 
