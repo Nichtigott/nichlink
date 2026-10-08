@@ -72,6 +72,19 @@ jobs:
         env:
           NICHLINK_GRAFT_MATRIX_CARGO_FLAGS: ""
         run: tools/nichlink-graft-matrix
+      - name: Real-project size (29 faces, two crates, cuts handed away)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # The maintainer's question in the shape of a test: in a host with real size, do graft and crate
+        # partition conflict? Three configurations, all measured with a real cargo: cuts on faces the
+        # host keeps (host 2, facade 2), the whole container handed away (host 0, ghost 2, facade 2),
+        # and the unpartitioned baseline. It also prints wall times, because the split's cost is part
+        # of the question.
+        # 维护者的问题长成一道测试：真实规模的宿主里，graft 与 crate 划分会不会冲突？三种配置都用真 cargo
+        # 量过：切口留在宿主保留的面上（宿主 2、facade 2）、整棵容器交出去（宿主 0、幽灵 2、facade 2）、
+        # 以及未拆分的基线。它同时打印墙上时间，因为拆分的代价也是问题的一部分。
+        env:
+          NICHLINK_REAL_PROJECT_CARGO_FLAGS: ""
+        run: tools/nichlink-real-project-test
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging
