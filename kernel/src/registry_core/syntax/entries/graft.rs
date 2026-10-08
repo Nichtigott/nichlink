@@ -366,9 +366,20 @@ impl<'a> GraftVisitor<'a> {
                 index += 1;
             }
             if !matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "graft") {
+                // `full` written **after** `graft` lands here. Saying where it belongs is the
+                // difference between "the grammar is wrong" and a one-token fix, and the measured
+                // spelling readers reach for is exactly `… graft(…) full`.
+                // 把 `full` 写在 `graft` **之后**会落到这里。点出它该写在哪，是"语法不对"与"改一个词"之间的
+                // 差别；而实测读者最容易写出的拼法正是 `… graft(…) full`。
+                let misplaced_full =
+                    matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "full");
                 self.error = Some(syntax_error(
                     cut_span,
-                    "graft cut expects `graft <implementation>`",
+                    if misplaced_full {
+                        "`full` is written **before** `graft`: `cut(…) [to …] full graft(…)`"
+                    } else {
+                        "graft cut expects `graft <implementation>`"
+                    },
                 ));
                 return;
             }
@@ -415,6 +426,22 @@ impl<'a> GraftVisitor<'a> {
                     return;
                 }
             };
+            // A trailing `full` is refused rather than ignored. The grammar puts `full` **before**
+            // `graft`, and silently dropping it changes what the entry means: the cut then covers the
+            // node instead of the whole subtree. Measured — this spelling was *accepted*, with
+            // `full: false`, so the author's `full` had no effect and nothing said so.
+            // 尾随的 `full` 要拒绝而不是忽略。语法把 `full` 放在 `graft` **之前**，而静默丢掉它会改变这条条目
+            // 的含义：切口于是只覆盖那个节点，而不是整棵子树。实测——这种拼法曾被**接受**且 `full: false`，
+            // 于是作者的 `full` 毫无作用，而且没有任何东西说明这件事。
+            if let Some(TokenTree::Ident(stray)) = tokens.get(index + 1) {
+                if stray == "full" {
+                    self.error = Some(syntax_error(
+                        stray.span(),
+                        "`full` is written **before** `graft`: `cut(…) [to …] full graft(…)`",
+                    ));
+                    return;
+                }
+            }
             // The two endpoints stay separate fields; joining them into `cut`
             // would make a path that literally contains `" to "` indistinguish-
             // able from a range at every later consumer.

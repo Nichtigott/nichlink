@@ -276,3 +276,24 @@ fn a_refusal_points_at_the_entry_it_is_about() {
         .expect("a refusal inside an entry can point at it");
     assert_eq!(location.line, 4, "the refusal belongs to the fourth line");
 }
+
+/// `full` after `graft` is refused by naming where `full` belongs — not by saying the grammar is
+/// wrong. Measured: this is the spelling readers reach for (`cut(a) to b graft(c) full`), and the
+/// older message ("expects `graft <implementation>`") sent them looking for a missing `graft` that
+/// was already there.
+/// `full` 写在 `graft` 之后时，拒绝要点出 `full` 该写在哪，而不是说语法不对。实测：这正是读者会写出的
+/// 拼法（`cut(a) to b graft(c) full`），而旧文案（"expects `graft <implementation>`"）会让人去找一个
+/// 早就写在那里的 `graft`。
+#[test]
+fn full_written_after_graft_is_refused_by_naming_where_it_belongs() {
+    let source = r#"nichlink_kernel::graft_plan!(framework, cut ["root/a" to "root/a3"] graft "replacement" full);"#;
+    let error = graft_entries(source).expect_err("refused").to_string();
+    assert!(
+        error.contains("**before** `graft`"),
+        "it says where `full` belongs: {error}"
+    );
+    assert!(
+        !error.contains("expects `graft <implementation>`"),
+        "and does not send the reader looking for a `graft` that is already written: {error}"
+    );
+}
