@@ -280,10 +280,43 @@ pub(crate) fn check_shape(
     out_dir: &Path,
     rows: &[PruningRow],
 ) -> Result<(), String> {
+    let mut claims = 0usize;
+    let mut satisfied = 0usize;
     for (name, subtrees) in &declaration.crates {
         for subtree in subtrees {
-            claim_has_a_subtree(name, subtree, rows)?;
+            claims += 1;
+            match claim_has_a_subtree(name, subtree, rows) {
+                Ok(resolved) => satisfied += usize::from(resolved),
+                Err(error) => return Err(error),
+            }
         }
+    }
+    // A declaration whose claims **all** point at nothing in this tree is refused here, and here only:
+    // `claim_has_a_subtree` deliberately skips a claim whose neighbourhood this run cannot see, or every
+    // fragment build would fail on the host's other claims (measured). The complement of that rule is
+    // this one: when not a single claim resolves, the tree is not "a neighbourhood we cannot see" — the
+    // declaration names nothing here, and a crate built from it would carry no sources and answer every
+    // later question wrongly.
+    // 一份声明，若它的认领**全都**在本树里点不到东西，就在这里拒绝，而且只在这里：`claim_has_a_subtree`
+    // 有意跳过"本次看不见邻域"的认领，否则每个片段的构建都会在宿主的其余认领上失败（实测过）。这条规则是
+    // 那条的补集：当**一条都解析不到**时，树并不是"看不见的邻域"——而是这份声明在这里什么都没点到，由它构建的
+    // crate 会没有源码，并在之后每个问题上都答错。
+    if claims > 0 && satisfied == 0 {
+        let named: Vec<&str> = declaration
+            .crates
+            .iter()
+            .flat_map(|(_, subtrees)| subtrees.iter().map(String::as_str))
+            .collect();
+        return Err(format!(
+            "add_crates: `{}` names no module this tree has, so the crate would be empty: no faces \
+             below it in this host. Run `nichlink check` and read what it says about the tree, or fix \
+             the path",
+            if named.is_empty() {
+                "?".to_owned()
+            } else {
+                named.join("`, `")
+            },
+        ));
     }
     write_shape_lock(out_dir, declaration, rows)
 }
@@ -298,7 +331,7 @@ pub(crate) fn check_shape(
 /// 编译器已经会拒绝叶子（叶子上没有 `SUBTREE` 标记），因此这是第二个读者在编译器看不见的情形里说同一条规则：
 /// 构建当文本读、却没有 crate 挂载的声明。它读得到树，因此能点名出路——哪个节点包含被认领的那个——而不是让
 /// 作者去猜。
-fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result<(), String> {
+fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result<bool, String> {
     // Judge only the claims this run's tree is *about*. A partition's fragment carries one subtree
     // plus its ancestor shells, so the declaration's other claims name modules that are simply absent
     // here — measured: validating them per claim failed every multi-claim partition (`control` "has
@@ -318,7 +351,7 @@ fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result
             .count()
     };
     if below(subtree) > 0 {
-        return Ok(());
+        return Ok(true);
     }
     let is_a_face = rows
         .iter()
@@ -344,7 +377,7 @@ fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result
     // 既不在它下面、也不是本树里的一个面：只有本次运行的行表时，无法区分"别的 crate 的认领、在这里缺席"与
     // "一个真的空模块"，而前者在片段里是常态（实测：拒绝它让每一个多认领的划分都失败）。能读模块树的规划器才是
     // "空 crate"该被判的地方；本读取器只保留行表能证明的拒绝——"它下面有面"与"它本身就是这里的一个面"。
-    Ok(())
+    Ok(false)
 }
 
 /// The one refusal spelling for a declaration the build cannot read.

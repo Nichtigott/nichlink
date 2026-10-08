@@ -175,7 +175,22 @@ sed 's/.*:://' "$work/union.names" | sort -u >"$work/union.leaves"
 # ---- 灰测试：写了，但没有任何面到达 ------------------------------------------
 grey_total=0
 : >"$work/grey"
-find . -name target -prune -o -name '*.rs' -print | sed 's|^\./||' | sort >"$work/rust-files"
+# Only the workspace **members** are inventoried. A package that is its own workspace — the committed
+# examples (`examples/partitioned-button`, `examples/control-suite`) — is not built by any face this
+# script runs, so calling its tests "grey" would be a false accusation: they are real, they run in
+# their own workspace, and they are simply not ours to count. Measured: adding a test to
+# `examples/control-suite/host` turned this gate red with 1 grey test while the example's own
+# `cargo test --workspace` was green.
+# 只清点工作区**成员**。自成一个工作区的包——入库示例——不被本脚本驱动的任何面构建，因此把它们的测试叫
+# "灰"是误告：它们是真的、在自己的工作区里跑得动，只是不归本文具清点。实测：给 `examples/control-suite/host`
+# 加一条测试就让这道门禁以"1 条灰测试"变红，而示例自己的 `cargo test --workspace` 是绿的。
+find . -name target -prune -o -name '*.rs' -print | sed 's|^\./||' | sort >"$work/rust-files.all"
+: >"$work/rust-files"
+while IFS= read -r member; do
+  [ -n "$member" ] || continue
+  grep -E "^${member}/" "$work/rust-files.all" >>"$work/rust-files" || true
+done <"$work/members"
+sort -u -o "$work/rust-files" "$work/rust-files"
 while IFS= read -r file; do
   # A test item is an attribute alone on its line followed by its `fn`. That is what rustfmt
   # writes and what this tree writes; a `#[test] fn f()` packed onto one line, or a `#[test]`
