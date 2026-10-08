@@ -207,6 +207,25 @@ pub(crate) fn crates(
             ),
         );
     }
+    // `--check` prints the plan a `--write` would follow, so it has to refuse what that write would
+    // refuse. The shape already on disk is the one thing a reader of the plan cannot see, and printing
+    // a development plan over a committed release shape (or the reverse) is how a hand-run write lands
+    // on the wrong shape — the two shapes share their directories, so the difference is invisible in
+    // the plan itself. The guarded set is exactly the one the matching `--write` guards: `planned` in
+    // both shapes, plus the facade package in the release shape (the release write guards it; the
+    // development write does not).
+    // `--check` 打印的是 `--write` 将要遵循的那份计划，因此它必须拒绝那次写入会拒绝的东西。磁盘上已有的
+    // 形状正是计划读者看不见的那一件事，而在入库的发布形状上打印一份开发计划（或反过来）正是手跑写入落错
+    // 形状的成因——两个形状共用同一批目录，因此差别在计划本身里看不出来。受检集合与对应 `--write` 所检的
+    // 完全一致：两个形状都是 `planned`，发布形状另加 facade 包（发布写入会检它，开发写入不检）。
+    let mut guarded: Vec<&Path> = planned
+        .iter()
+        .map(|planned| planned.directory.as_path())
+        .collect();
+    if release && let Some(facade) = &facade {
+        guarded.push(facade.directory.as_path());
+    }
+    crate::build_method::guard_shape(&guarded, release)?;
     if !write {
         line(
             out,

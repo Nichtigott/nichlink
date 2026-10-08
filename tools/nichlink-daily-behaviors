@@ -6,6 +6,31 @@
 每一步——这不是假设，是第一次跑的实测），每步真跑 `nichlink check` + `cargo build`（有声明时加
 `crates --check`），并分别跑"无声明"与"发布形状切分之后"两个阶段。
 
+每一行都带**期望**（`check` 是过还是拒、宿主 `build` 成不成功），本工具因此是一道自检门禁而不是一份报告
+（退出码非零＝有行不符）。另有三条对每一行都成立的硬条件：
+① `check` rc 与期望一致（`ok` ⇒ 0；`refuse` ⇒ 1，**不是**用法错 2）；
+② 宿主 `build` 与期望一致；
+③ **build 失败 ⇒ check 必须拒绝**——`check` 报成功而 `cargo build` 失败，正是 2026-10-08 实测到的那类
+缺陷（面旁边的 `registry_rule.rs` 被删掉：`check` rc=0、`build` rc=101
+`error[E0433]: cannot find registry_rule in super`）。反方向（check 拒绝、宿主 build 成功）不违反③：
+`add-crates` 那条判的是**整个分区**，而宿主自己不编译被认领的子树——见下面"8b"的实测。
+
+装置上踩过的坑，写在这里免得再犯：
+① **每个用例必须在自己的副本上做**（第一步曾累积施加，第 5 步之后的每一行都是同一个 cargo 报错）；
+② **写出来的注册面必须用生成树真的提供的宏拼写**——`crate::__nichlink_face!` 从来不存在，于是
+"加一个面"那两行报的是 `error[E0433]: cannot find __nichlink_face in crate`，把装置缺陷记成了产品
+缺陷。正确的拼写是父面名字那个别名（`panel` 的子面用 `crate::panel_object!`）。
+
+**未闭合的实测发现（8b：删掉某个被认领子树里唯一的面）**：切分之后删掉 `panel/frame/widget/widget.rs`
+⇒ `check` 以 `phase=add-crates` 拒绝（"`frames` names `panel::frame`, which is a face and not a subtree"），
+而**宿主 `build` 仍然成功**（宿主不编译被认领的子树）。哪一半对：我按 release 形状写出完整分区再构建
+（`crates --release --write` 之后在分区根 `cargo build` 整个工作区）⇒ **幽灵的构建脚本同样以这条
+`add-crates` 拒绝，rc=101** ⇒ 拒绝是对的：这棵树配这份声明，整个项目构建不过，声明必须跟着改。两个遗留
+疑问留档：(a) `crates --release --write` **接受**这棵形状并写出了分区，随后幽灵拒绝——写者与检查者对同一份
+声明给了两个答案；(b) 拒绝文案说 `panel::frame` "is a face and not a subtree"，而被认领的节点其实仍然是
+容器（旁边那份 `registry_rule` 就是它的子节点，渲染器为该节点发射 `SUBTREE`），因此这句理由对这个形状
+并不准确，出路（改成认领 `panel`）也不是显然正确的那条。
+
 用法：tools/nichlink-daily-behaviors
 """
 import os, re, shutil, subprocess, sys, pathlib
@@ -13,46 +38,90 @@ import os, re, shutil, subprocess, sys, pathlib
 ROOT = pathlib.Path("/home/nich/Moirai_N3/nichlink")
 NICHLINK = ROOT / "target/debug/nichlink"
 BASE = ROOT / "examples/control-suite"
+# `--offline` 是本检出的开发默认；CI 有网络、注册表缓存是冷的，它会把这个变量置空（同其它演练工具）。
+CARGO_FLAGS = os.environ.get("NICHLINK_BEHAVIORS_CARGO_FLAGS", "--offline")
+
+# 自己构建本工具要驱动的二进制，而不是假设别人已经构建过：全新检出不带它，而在"有人手工构建过"的机器上才
+# 通过的闸门，恰好在最要紧的那台机器上失败（同 `tools/nichlink-graft-matrix`；CI 实测过一次）。每次都构建
+# 也是对的：矩阵每一行都要跑 `check` + `cargo build`，前提是这个二进制与库来自同一次提交。
+def build_cli():
+    print("building the CLI this matrix drives", file=sys.stderr)
+    command = ["cargo", "build"] + CARGO_FLAGS.split() + [
+        "-p", "nichlink-toolchain", "--features", "cli", "--bin", "nichlink"]
+    built = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    if built.returncode != 0 or not NICHLINK.exists():
+        print(f"cannot build {NICHLINK}\n{built.stdout[-2000:]}\n{built.stderr[-2000:]}",
+              file=sys.stderr)
+        sys.exit(1)
+
+build_cli()
 
 def run(cmd, cwd, env=None):
     p = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, env=env)
     return p.returncode, (p.stdout + p.stderr).strip()
 
-def probe(host, label, rows, with_decl):
-    """check + build(+ crates --check)，记录真退出码。"""
+def probe(host, label, expect, rows, with_decl):
+    """check + build(+ crates --check)，记录真退出码并判定这一行。
+
+    `expect` 是一对：`check` 期望（`ok` = rc 0，`refuse` = rc 1）与宿主 `build` 期望（是否成功）。
+    两者分开，因为 `add-crates` 那条判的是整个分区，而宿主不编译被认领的子树——那一行的 check 拒绝与
+    宿主 build 成功可以同时为真（见文件头 8b 的实测）。
+    """
+    check_want, build_want = expect
     env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
     rc_check, out = run(f"{NICHLINK} check .", host, env)
-    rc_build, bout = run("cargo build --offline", host, env)
+    rc_build, bout = run(f"cargo build {CARGO_FLAGS}", host, env)
     rc_crates = "-"
     if with_decl:
-        rc_crates, _ = run(f"{NICHLINK} crates --check .", host, env)
-    first = (out.splitlines() or [""])[0][:100] if rc_check else ""
-    rows.append((label, rc_check, rc_build, rc_crates, first))
+        # 有声明的那一阶段，磁盘上是**发布形状**（本工具开局就 `--release --write` 过），因此这里问的是
+        # 与之匹配的那份计划。问错形状会被形状守卫拒绝——那正是下一步在 phase-2 里单独钉住的行为。
+        rc_crates, _ = run(f"{NICHLINK} crates --release --check .", host, env)
+    check_ok = rc_check == 0
+    build_ok = rc_build == 0
+    wanted = check_ok == (check_want == "ok") and build_ok == build_want
+    # ③ 硬条件：build 失败而 check 说没事，就是那条差集——这一条与期望无关，任何一行违反都算 FAIL。
+    predicted = not (not build_ok and check_ok)
+    verdict = "PASS" if wanted and predicted else "FAIL"
+    want = f"{check_want}/{'build' if build_want else 'no-build'}"
+    first = (out.splitlines() or [""])[1][:70] if rc_check else "ok"
+    rows.append((label, want, rc_check, rc_build, rc_crates, verdict, first))
+    if verdict == "FAIL":
+        rows.append(("", "", 0, 0, "", "  check: " + out[:400].replace("\n", "\n           "), ""))
+        rows.append(("", "", 0, 0, "", "  build: " + bout[:400].replace("\n", "\n           "), ""))
+
+def new_face(host, name, body):
+    d = host / "src" / "panel" / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}.rs").write_text(body)
+
+# 一个拥有注册机的面：`needs_registry: true` 而不写 `registry_rule:` 时，宏展开成
+# `super::registry_rule::REGISTRATION_RULE`，因此它**必须**在旁边有那份规范规则。
+# 宏拼写是父面名字那个别名（`panel` 的子面用 `crate::panel_object!`）。
+OWNING_FACE = 'crate::panel_object! {\n    kind: Extra,\n    needs_registry: true,\n    parent: crate::panel::NODE_ID,\n}\n\npub struct Extra;\n'
+# 不拥有注册机的面：没有规则文件也必须通过——维护者原话「如果就是没有 registry_rule.rs 呢，有些确实不需要啊」。
+LEAF_FACE = 'crate::panel_object! {\n    kind: Leafy,\n    parent: crate::panel::NODE_ID,\n}\n\npub struct Leafy;\n'
+# 点名规则的面：作者给了路径，宏就用它，不需要兄弟模块。
+NAMED_FACE = OWNING_FACE.replace("    parent:", "    registry_rule: crate::RegistrationRule::ANY,\n    parent:")
+RULE = "use crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();\n"
 
 def mutate(host, kind):
     """施加一种日常改动。"""
     src = host / "src"
-    faces = sorted(p for p in src.rglob("*.rs") if p.name != "lib.rs")
     control = src / "control" / "control.rs"
-    panel = next((p for p in faces if p.parent.name == p.stem and p.name != "lib.rs"), None)
+    panel_rule = src / "panel" / "registry_rule" / "registry_rule.rs"
     if kind == "1 add plain module":
         (src / "helper.rs").write_text("//! A plain module, not a face.\npub fn twice(n: u32) -> u32 { n * 2 }\n")
-    elif kind == "2 add a face" and panel:
-        d = panel.parent / "extra"
-        d.mkdir(exist_ok=True)
-        (d / "extra.rs").write_text(
-            'crate::__nichlink_face! {\n    kind: Extra,\n    parent: crate::%s::NODE_ID,\n}\n'
-            % panel.parent.name)
-        rule = d / "registry_rule"
+    elif kind == "2 add a registry face, with its rule":
+        new_face(host, "extra", OWNING_FACE)
+        rule = src / "panel" / "extra" / "registry_rule"
         rule.mkdir(exist_ok=True)
-        (rule / "registry_rule.rs").write_text("//! The rule beside this face.\n")
-    elif kind == "2b add a face without a rule" and panel:
-        # 维护者判据：有些面确实不需要 registry_rule（不拥有注册机的叶子）⇒ 没有它也必须能构建 ✓
-        d = panel.parent / "leafy"
-        d.mkdir(exist_ok=True)
-        (d / "leafy.rs").write_text(
-            'crate::__nichlink_face! {\n    kind: Leafy,\n    parent: crate::%s::NODE_ID,\n}\n'
-            % panel.parent.name)
+        (rule / "registry_rule.rs").write_text(RULE)
+    elif kind == "2b add a face that needs no rule":
+        new_face(host, "leafy", LEAF_FACE)
+    elif kind == "2c add a registry face that names its rule":
+        new_face(host, "named", NAMED_FACE)
+    elif kind == "2d add a registry face with no rule":
+        new_face(host, "naked", OWNING_FACE)
     elif kind == "3 edit a field" and control.exists():
         t = control.read_text()
         control.write_text(t.replace("kind:", "exports: [\"control.render\"],\n    kind:", 1))
@@ -65,25 +134,68 @@ def mutate(host, kind):
         (lib / "src").mkdir(parents=True, exist_ok=True)
         (lib / "Cargo.toml").write_text('[package]\nname = "helper-lib"\nversion = "0.1.0"\nedition = "2024"\n[workspace]\n')
         (lib / "src/lib.rs").write_text("pub fn twice(n: u32) -> u32 { n * 2 }\n")
-    elif kind == "6 rename a face file" and panel:
-        panel.rename(panel.with_name(panel.stem + "_renamed.rs"))
-    elif kind == "7 move a face" and panel:
-        tgt = src / "moved"; tgt.mkdir(exist_ok=True)
-        shutil.move(str(panel), str(tgt / panel.name))
-    elif kind == "8 delete a face" and faces:
-        faces[-1].unlink()
+    elif kind == "6 rename a face file":
+        control.rename(control.with_name("control_renamed.rs"))
+    elif kind == "7 move a face":
+        tgt = src / "moved"
+        tgt.mkdir(exist_ok=True)
+        shutil.move(str(control), str(tgt / "control.rs"))
+    elif kind == "8 delete a leaf face":
+        # 叶子面（不拥有注册机、没有子面）：删掉它是合法重构，树少一个面即可。这里删的是 `cap`——
+        # 它对面所在的被认领子树不是"唯一的面"，因此声明不必跟着改（对照 8b）。
+        (src / "control" / "object" / "button" / "cap" / "cap.rs").unlink()
+    elif kind == "8b delete the only face of a claimed subtree":
+        # `panel::frame` 被 `frames` 认领，而 `widget` 是它下面唯一的面：删掉之后声明必须跟着改。
+        (src / "panel" / "frame" / "widget" / "widget.rs").unlink()
     elif kind == "9 add path: field" and control.exists():
         t = control.read_text()
         control.write_text(t.replace("kind:", "path: \"control/renamed\",\n    kind:", 1))
-    elif kind == "10 registry_rule edit" and control.exists():
-        rule = control.parent / "registry_rule" / "registry_rule.rs"
-        if rule.exists():
-            rule.write_text(rule.read_text() + "\n// touched\n")
+    elif kind == "10 registry_rule edit" and panel_rule.exists():
+        panel_rule.write_text(panel_rule.read_text() + "\n// touched\n")
+    elif kind == "11 delete an existing rule":
+        # 拥有注册机的面丢掉旁边的规则文件：`check` 必须点名拒绝，而不是让 `build` 单独报 E0433。
+        panel_rule.unlink()
+    elif kind == "12 rename an existing rule":
+        panel_rule.rename(panel_rule.with_name("rule.rs"))
+    elif kind == "13 rule folder moved out":
+        shutil.move(str(src / "panel" / "registry_rule"), str(src / "panel" / "rules"))
+    elif kind == "14 registry face names its rule instead":
+        # 同一个面改成显式点名规则：没有兄弟模块也必须过（否则就是假拒绝）。
+        panel = src / "panel" / "panel.rs"
+        panel.write_text(panel.read_text().replace(
+            "    parent:", "    registry_rule: crate::RegistrationRule::ANY,\n    parent:", 1))
+        panel_rule.unlink()
 
-KINDS = ["1 add plain module", "2 add a face", "2b add a face without a rule", "3 edit a field", "4 add a test",
-         "5 add a dependency", "6 rename a face file", "7 move a face", "8 delete a face",
-         "9 add path: field", "10 registry_rule edit"]
+# 期望＝(check, 宿主 build 是否成功)。没有声明的阶段里 `add_crates.rs` 已经删掉，因此切分带来的
+# 那一行（8b）在那一阶段是普通的"删一个面"，只有在切分之后才要求声明跟着改。
+OK = ("ok", True)
+REFUSE = ("refuse", False)
+KINDS = [
+    ("1 add plain module", OK),
+    ("2 add a registry face, with its rule", OK),
+    ("2b add a face that needs no rule", OK),
+    ("2c add a registry face that names its rule", OK),
+    ("2d add a registry face with no rule", REFUSE),
+    ("3 edit a field", OK),
+    ("4 add a test", OK),
+    ("5 add a dependency", OK),
+    ("6 rename a face file", REFUSE),
+    ("7 move a face", REFUSE),
+    ("8 delete a leaf face", OK),
+    ("8b delete the only face of a claimed subtree", {"after-split": ("refuse", True), "no-declaration": OK}),
+    ("9 add path: field", REFUSE),
+    ("10 registry_rule edit", OK),
+    ("11 delete an existing rule", REFUSE),
+    ("12 rename an existing rule", REFUSE),
+    ("13 rule folder moved out", REFUSE),
+    ("14 registry face names its rule instead", OK),
+]
 
+def expectation(expect, phase):
+    """一行的期望可以是单个 tuple（两个阶段相同），也可以按阶段给。"""
+    return expect[phase] if isinstance(expect, dict) else expect
+
+failed = []
 for phase in ("no-declaration", "after-split"):
     w = pathlib.Path(f"/tmp/behave-{phase}")
     shutil.rmtree(w, ignore_errors=True)
@@ -106,9 +218,29 @@ for phase in ("no-declaration", "after-split"):
         env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
         run(f"{NICHLINK} check .", host, env)
         rc, out = run(f"{NICHLINK} crates --release --write .", host, env)
-        rows.append(("0 baseline split", 0, 0, 0, out.splitlines()[0][:90] if out else ""))
-    probe(host, "baseline", rows, phase == "after-split")
-    for kind in KINDS:
+        rows.append(("0 baseline split", "-", 0, 0, 0, "PASS" if rc == 0 else "FAIL", out.splitlines()[0][:90] if out else ""))
+        # 形状指纹的钉子（B 轴缺口：`crates --check` 不比对形状指纹）：磁盘上现在是**发布形状**，因此
+        # ① 请求与之匹配的发布计划必须通过（守卫不是见谁都拒）；
+        # ② 请求**开发**计划必须点名拒绝——这正是"手跑一次开发 `--write` 落在入库发布形状上"的成因。
+        rc_release, release_out = run(f"{NICHLINK} crates --release --check .", host, env)
+        rc_dev, dev_out = run(f"{NICHLINK} crates --check .", host, env)
+        shape_ok = rc_release == 0 and rc_dev == 1 and "written as the release shape" in dev_out
+        rows.append((
+            "0b shape fingerprint vs --check",
+            "release=0 dev=1",
+            rc_release,
+            rc_dev,
+            "-",
+            "PASS" if shape_ok else "FAIL",
+            "release check refused the shape it matches" if rc_release != 0 else
+            ("the development plan was not refused: " + dev_out[:120]) if rc_dev != 1 else
+            "matched shape passes, mismatched shape is refused by name",
+        ))
+        if not shape_ok:
+            rows.append(("", "", 0, 0, "", "  release check: " + release_out[:300].replace("\n", "\n           "), ""))
+            rows.append(("", "", 0, 0, "", "  dev check: " + dev_out[:300].replace("\n", "\n           "), ""))
+    probe(host, "baseline", OK, rows, phase == "after-split")
+    for kind, expect in KINDS:
         # 每种改动都在**自己的副本**上做：累积会让一步的失败污染后面每一步（第一次跑就是这样，
         # 第 5 步之后的五行全是同一个 cargo 报错）。
         w2 = pathlib.Path(f"/tmp/behave-{phase}-{kind.split()[0]}")
@@ -127,8 +259,13 @@ for phase in ("no-declaration", "after-split"):
             if "target" not in m.parts:
                 m.write_text(re.sub(r'path = "[^"]*toolchain"', 'path = "%s/toolchain"' % ROOT, m.read_text()))
         mutate(h2, kind)
-        probe(h2, kind, rows, phase == "after-split")
+        probe(h2, kind, expectation(expect, phase), rows, phase == "after-split")
     print(f"\n########## {phase} ##########")
-    print(f"{'step':<24} {'check':>5} {'build':>5} {'crates':>6}  first line")
-    for label, rc1, rc2, rc3, first in rows:
-        print(f"{label:<24} {rc1:>5} {rc2:>5} {str(rc3):>6}  {first}")
+    print(f"{'step':<46} {'want':>16} {'check':>5} {'build':>5} {'crates':>6} {'':<5} first line")
+    for label, want, rc1, rc2, rc3, verdict, first in rows:
+        if verdict == "FAIL":
+            failed.append((phase, label))
+        print(f"{label:<46} {want:>16} {rc1:>5} {rc2:>5} {str(rc3):>6} {verdict:<5} {first}")
+
+print(f"\n{'OK: every row matches its expectation' if not failed else 'FAILED rows: ' + repr(failed)}")
+sys.exit(1 if failed else 0)

@@ -29,6 +29,14 @@ const NAME: &str = "outside-src";
 /// A throwaway package whose library target is `host/lib.rs`, with one face next
 /// to it, laid out the way the discovery walk reads a tree.
 /// 库目标是 `host/lib.rs` 的一次性包，旁边有一个注册面，布局按发现遍历的读法。
+///
+/// The face owns a registry, so its canonical rule module is part of the layout: a face that
+/// declares `needs_registry: true` and names no rule reads `super::registry_rule`, and a tree
+/// without that module is one no crate can compile (the build now refuses it by name). The fixture
+/// used to leave the file out, which was invisible only because nothing judged it.
+/// 该面拥有注册机，因此规范规则模块是这套布局的一部分：声明 `needs_registry: true` 又不点名规则的注册面读的是
+/// `super::registry_rule`，而缺少该模块的树任何 crate 都编译不过（构建现在按名拒绝它）。夹具过去没有这个
+/// 文件，只因为没人判它才一直看不见。
 fn package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -45,6 +53,14 @@ fn package(label: &str) -> PathBuf {
     )
     .expect("manifest");
     std::fs::write(root.join("host/lib.rs"), "// host entry\n").expect("library target");
+    let rule = root.join("host/control/registry_rule/registry_rule.rs");
+    std::fs::create_dir_all(rule.parent().expect("rule directory")).expect("rule directory");
+    std::fs::write(
+        &rule,
+        "use crate::RegistrationRule;\n\n\
+         pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();\n",
+    )
+    .expect("registration rule");
     std::fs::write(
         &face,
         "nichlink_toolchain::build_method::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \

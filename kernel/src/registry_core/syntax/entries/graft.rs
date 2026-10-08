@@ -364,6 +364,20 @@ impl<'a> GraftVisitor<'a> {
                 matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "full");
             if full {
                 index += 1;
+                // A range already names every slot it covers, so `full` has no single subtree to
+                // replace: the two together are refused **by name** rather than interpreted.
+                // Measured: this shape was accepted and emitted `from_id_range(…, true)`, whose
+                // meaning — per target, or the run as a whole? — is written down nowhere, and a
+                // construct whose meaning the tool cannot vouch for must not be written into a
+                // host's source. Both directions of this grammar share the wording.
+                // 区间已经点名它覆盖的每一个槽位，因此 `full` 没有"某一棵子树"可替换：两者一起出现时**按名
+                // 拒绝**，而不是替它解释。实测：这一形曾被接受并发出 `from_id_range(…, true)`，而它的含义
+                // ——逐目标，还是整段？——哪里都没写；而一个含义保证不了的构造，不该被写进宿主的源码。本语法的
+                // 两个方向共用这份文案。
+                if end.is_some() {
+                    self.error = Some(syntax_error(cut_span, range_full_refusal()));
+                    return;
+                }
             }
             if !matches!(tokens.get(index), Some(TokenTree::Ident(value)) if value == "graft") {
                 // `full` written **after** `graft` lands here. Saying where it belongs is the
@@ -519,9 +533,24 @@ pub fn render_graft_expression(
             "the range end `{end}` is not an expression this renderer can write"
         )));
     }
+    // The reader refuses this pair, so the writer must not produce it: a generator that emits what
+    // its own parser rejects is how a tool writes a declaration into a host that cannot be read back.
+    // 读取方拒绝这一对，因此写入方不得产出它：一个发射自己解析器所拒之物的生成器，正是"把读不回来的声明
+    // 写进宿主"的成因。
+    if cut_end.is_some() && full {
+        return Err(spelling_error(range_full_refusal()));
+    }
     let range = cut_end.map_or(String::new(), |end| format!(" to {end}"));
     let whole = if full { " full" } else { "" };
     Ok(format!("cut({cut}{range}){whole} graft({graft})"))
+}
+
+/// Why `full` on a range cut is refused — the one wording both directions of this grammar use.
+/// 为何拒绝"区间 + `full`"——本语法两个方向共用的那一份文案。
+fn range_full_refusal() -> String {
+    "`full` on a range cut has no defined meaning: a range already names every slot it covers, so \
+     there is no one subtree for `full` to replace. Write one cut per face, or drop `full`."
+        .to_owned()
 }
 
 /// A spelling this renderer refuses to write, with the reason and no location (the caller has not

@@ -233,7 +233,7 @@ fn a_refused_scope_value_is_a_diagnostic() {
     ];
     for (case, raw, expected) in cases {
         let mut errors = super::BuildDiagnostics::default();
-        let scope = super::SourceScope::from_raw(&raw, &src, &[], &entry, &mut errors);
+        let scope = super::SourceScope::from_raw(&raw, &src, &[], &entry, &[], &mut errors);
         assert!(
             errors.iter().any(|diagnostic| {
                 diagnostic.phase == "scope" && diagnostic.message.contains(expected)
@@ -336,6 +336,89 @@ fn a_full_cut_on_the_root_face_keeps_every_face_live() {
             );
         }
     }
+
+    std::fs::remove_dir_all(&root).expect("cleanup");
+}
+
+/// A crate claim keeps the faces under it live even when a graft slot narrows the scope elsewhere.
+/// crate 认领让它的面保持存活，即使某条嫁接槽位在别处收窄了作用域。
+///
+/// A claim is a forced-liveness root for the same reason a graft slot is: the crate that claims a
+/// subtree exists to compile it. Without this, the narrowing a declared slot performs prunes the
+/// claim — and **nobody** compiles it, because the host handed the same subtree away. Measured end to
+/// end on the two-claim fixture before this rule existed: the ghost mounted
+/// `panel/frame/widget/{widget,cap}.rs` and neither file under `panel/gauge`, which no crate of that
+/// shape compiled.
+/// 认领与嫁接槽位同理，是强制存活根：认领一棵子树的 crate 存在的意义就是编译它。没有这一条，声明槽位造成的收窄
+/// 会剪掉那条认领——而**没有谁**会去编译它，因为宿主把同一棵子树交出去了。本条规则存在之前在双认领夹具上端到端
+/// 实测：幽灵挂载了 `panel/frame/widget/{widget,cap}.rs`，而 `panel/gauge` 下的两个文件一个都没挂——那个形状里
+/// 没有任何 crate 编译它们。
+#[test]
+fn a_crate_claim_keeps_its_subtree_live_next_to_a_graft_slot() {
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-scope-claim-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+    let src = root.join("src");
+    let entry = src.join("lib.rs");
+    std::fs::create_dir_all(&src).expect("fixture src");
+    // One slot inside `a::b::c`, and a second branch `a::d` that only a crate claim keeps alive.
+    // `a::b::c` 里有一条槽位，另一条分支 `a::d` 只有 crate 认领能让它存活。
+    std::fs::write(
+        &entry,
+        "crate::host!();\n\
+             crate::static_graft_plan!(\n\
+                 FRAMEWORK,\n\
+                 cut(crate::a::b::c::NODE_ID) graft(\"c_fast\"),\n\
+             );\n",
+    )
+    .expect("host entry");
+    for (path, kind) in [
+        ("a/a.rs", "A"),
+        ("a/b/b.rs", "B"),
+        ("a/b/c/c.rs", "C"),
+        ("a/d/d.rs", "D"),
+    ] {
+        let file = src.join(path);
+        std::fs::create_dir_all(file.parent().expect("fixture parent")).expect("fixture dir");
+        std::fs::write(
+            &file,
+            format!("crate::root_object! {{\n    kind: {kind},\n}}\n"),
+        )
+        .expect("face file");
+    }
+    let nodes = discover_root(&src);
+    let faces = super::collect_faces(&src, &nodes);
+    assert_eq!(faces.len(), 4, "the fixture has four faces");
+
+    // Without the claim the slot narrows the scope and `a::d` is pruned — that is the behaviour the
+    // claim has to override, and asserting it here is what gives this pin teeth.
+    // 没有认领时，槽位收窄作用域、`a::d` 被剪掉——这正是认领要盖过的行为，在这里断言它才让本钉子有牙。
+    let without = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
+    let live_without = selected_sources(&src, &nodes, &without);
+    assert!(
+        !live_without.iter().any(|source| source == "a/d/d.rs"),
+        "the slot alone prunes the claimed branch: {live_without:?}"
+    );
+
+    let claims = vec!["a::d".to_owned()];
+    let with = super::SourceScope::auto_from_entry_with_claims(&src, &nodes, &entry, &claims);
+    let live_with = selected_sources(&src, &nodes, &with);
+    assert!(
+        live_with.iter().any(|source| source == "a/d/d.rs"),
+        "a claimed subtree stays live: {live_with:?}"
+    );
+    assert!(
+        live_with.iter().any(|source| source == "a/b/c/c.rs"),
+        "and the declared slot stays live too: {live_with:?}"
+    );
 
     std::fs::remove_dir_all(&root).expect("cleanup");
 }

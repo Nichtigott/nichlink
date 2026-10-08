@@ -71,8 +71,27 @@ fn control_tree() -> Vec<(&'static str, &'static str)> {
             "control/object/button/button.rs",
             "crate::object_object! {\n    kind: Button,\n    parent: crate::control::object::NODE_ID,\n}\n",
         ),
+        // The canonical rule beside each face that owns a registry. A face with
+        // `needs_registry: true` and no rule makes the generated module read a `super::registry_rule`
+        // nothing mounts, so the build refuses that tree by name — a fixture without these files is a
+        // tree no `cargo build` can compile, and that stayed invisible only while nothing judged it.
+        // 每个拥有注册机的面旁边那份规范规则。只有 `needs_registry: true` 而没有规则，会让生成的模块去读一个
+        // 没有任何东西挂载的 `super::registry_rule`，因此构建按名拒绝那棵树——没有这些文件的夹具是任何
+        // `cargo build` 都编译不过的树，只因为没人判它才一直看不见。
+        (
+            "control/registry_rule/registry_rule.rs",
+            REGISTRATION_RULE_SOURCE,
+        ),
+        (
+            "control/object/registry_rule/registry_rule.rs",
+            REGISTRATION_RULE_SOURCE,
+        ),
     ]
 }
+
+/// The canonical registration rule the fixtures put beside a registry-owning face.
+/// 夹具放在拥有注册机的面旁边的那份规范注册规则。
+const REGISTRATION_RULE_SOURCE: &str = "use crate::RegistrationRule;\n\npub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();\n";
 
 const DECLARED_BUTTON: &str = "// host entry\ncrate::static_graft_plan!(\n    FRAMEWORK,\n    cut \"root/control/object/button\" graft \"button_fast\",\n);\n";
 
@@ -394,6 +413,13 @@ fn build_with_a_manifest_path_validates_that_project() {
             (
                 "control/child/child.rs",
                 "crate::root_object! {\n    kind: Child,\n    parent: crate::control::NODE_ID,\n}\n",
+            ),
+            // The rule the registry-owning face needs, so the **only** defect here is the one this
+            // test is about: a missing rule is a second, unrelated refusal.
+            // 拥有注册机的面所需的那份规则，因此这里**唯一**的缺陷就是本测试针对的那一个：缺规则是另一条无关的拒绝。
+            (
+                "control/registry_rule/registry_rule.rs",
+                REGISTRATION_RULE_SOURCE,
             ),
         ],
     );
@@ -803,6 +829,12 @@ fn check_accepts_a_library_target_outside_src() {
     let root = temporary_root("cli-outside-src");
     let face = root.join("host/control/control.rs");
     fs::create_dir_all(face.parent().expect("face parent")).expect("face directory");
+    // The canonical rule beside the registry-owning face: without it the tree is one no crate can
+    // compile, and the build refuses it by name.
+    // 拥有注册机的面旁边那份规范规则：没有它，这棵树任何 crate 都编译不过，而构建会按名拒绝它。
+    let rule = root.join("host/control/registry_rule/registry_rule.rs");
+    fs::create_dir_all(rule.parent().expect("rule parent")).expect("rule directory");
+    fs::write(&rule, REGISTRATION_RULE_SOURCE).expect("rule");
     fs::write(
         &face,
         "crate::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \

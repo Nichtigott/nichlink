@@ -19,7 +19,7 @@
 # 的实现文件版式、以及写在 cargo 永远不会读的地方的 remap（审计 `M7`，§M7.37–§M7.40）。手工跑什么都不留下；
 # 这个脚本留下的是一道门禁。
 #
-# Three legs, because the three shapes are different code paths:
+# Six legs, because the shapes are different code paths:
 #   1. **workspace** — the host is a member of a workspace, the generated packages have to be
 #      materialized into its `members`, and the unpartitioned tree, the host's partitioned tree, the
 #      ghost's tree and the facade's tree have to carry the same graft plan and the same identities;
@@ -29,8 +29,13 @@
 #   3. **promote on a partitioned tree** — a scaffolded host (`new_project` writes faces the authoring
 #      executor owns) that is partitioned *and* has a graft record landed into it;
 #   4. **release** — the same partition written so the packages can be published: each carries the
-#      sources its build reads, so nothing is mounted out of another package and no remap is involved.
-# 三条腿，因为三种形状是三条不同的代码路径：
+#      sources its build reads, so nothing is mounted out of another package and no remap is involved;
+#   5. **the committed example** — the four legs above build fixtures this script writes itself, so
+#      `examples/partitioned-button` is the leg that keeps a *real* partitioned host in the repository;
+#   6. **re-partitioning** — the author's graft plan is written once and the crate boundary under it
+#      moves twice; every shape must still build with the same cut. That is the property cross-crate
+#      grafts were asked for: 「跨crate graft是为了防止后续crate调整导致的graft失效」.
+# 六条腿，因为各种形状是彼此不同的代码路径：
 #   1. **工作区**——宿主是某个工作区的成员，生成的包必须被物化进它的 `members`，而不分区的树、宿主分区后的树、
 #      幽灵的树与 facade 的树必须带同样的 graft 计划与同样的身份；
 #   2. **独立**——宿主之上没有任何工作区，因此 remap 属于宿主与它生成的同级包共同拥有的那个目录（实测：写在
@@ -38,7 +43,11 @@
 #   3. **在分区树上 promote**——一个脚手架建出来的宿主（`new_project` 写的注册面归创作执行器所有）既被分区，
 #      又落下一条 graft 记录；
 #   4. **发布**——同一次拆分写成可发布的样子：每个包携带自己构建要读的源码，因此没有任何东西从别的包挂载出来，
-#      也不牵涉任何 remap。
+#      也不牵涉任何 remap；
+#   5. **入库示例**——上面四条腿构建的都是本脚本自己写出来的夹具，因此 `examples/partitioned-button` 才是把
+#      一棵**真的**被划分过的宿主留在仓库里的那条腿；
+#   6. **重新划分**——作者的 graft 计划只写一次，它下面的 crate 边界搬两次；每一种形状都必须带着同一条切口
+#      构建得过。这正是跨 crate graft 被要去的那个性质：「跨crate graft是为了防止后续crate调整导致的graft失效」。
 #
 # The three trees are taken through `check` with the same environment the generated build scripts set
 # (`NICH_LINK_SHAPE_ONLY`, `NICH_LINK_SHAPE_FACADE`), because that is the same pipeline the build runs —
@@ -547,4 +556,246 @@ facade_file=$(find "$EXAMPLE/target" -path "*/partitioned-button-facade-*/out/ge
 grep -q 'partitioned_button_objects::control::object::button::NODE_ID' "$facade_file" ||
   fail "the facade does not name the crate that compiles the cut face"
 
-step "OK — both shapes build, the four facts hold, the promote lands, the release shape packages, and the committed example still carries its graft"
+# ============================================================ leg 6: re-partitioning
+step "leg 6/6: the same graft plan under two different crate boundaries"
+
+# The property this leg gates is the reason cross-crate grafts exist: 「跨crate graft是为了防止后续crate调整
+# 导致的graft失效」. So the author's plan is written **once**, the boundary under it moves, and after every
+# move all three crates build with the *same* cut, carrying the *same* identities. The tree is one level
+# deeper than leg 1's so the boundary can move without ever claiming a leaf: a leaf has no `SUBTREE`
+# marker, so it is not a crate — that refusal is the compiler's, and this leg never trips it.
+# 这条腿守的性质正是跨 crate graft 存在的理由：「跨crate graft是为了防止后续crate调整导致的graft失效」。
+# 因此作者的 plan 只写**一次**，它下面的边界搬来搬去，而每一次搬完之后三个 crate 都用**同一条**切口、带
+# **同样的**身份构建得过。这棵树比 leg 1 那棵深一层，好让边界在"从不认领叶子"的前提下移动：叶子没有
+# `SUBTREE` 标记，因此不是一个 crate——那条拒绝是编译器的，本腿从不触发它。
+write_repartition_host() {
+  mkdir -p "$1/src/panel/frame/widget/cap" "$1/src/panel/frame/widget/registry_rule" \
+    "$1/src/panel/frame/registry_rule" "$1/src/panel/registry_rule"
+  cat >"$1/Cargo.toml" <<EOF
+[package]
+name = "$2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["run"] }
+fast-widget = { path = "../fast-widget" }
+
+[build-dependencies]
+nichlink-toolchain = { path = "$ROOT/toolchain", features = ["build"] }
+EOF
+  cat >"$1/build.rs" <<'EOF'
+fn main() {
+    println!("cargo:rerun-if-changed=src");
+    nichlink_toolchain::build_method::run();
+}
+EOF
+  # The plan the boundary is about to move under. It is written once here and never touched again: the
+  # sha256 of this file is compared after every re-partition, and a leg that let `crates --write` rewrite
+  # the author's plan would fail there instead of silently passing.
+  # 边界即将在它下面搬动的 plan。它在这里写一次、之后再也不动：每次重新划分之后都比较这个文件的 sha256，
+  # 因此"`crates --write` 把作者的 plan 改写了"的腿会在那里红，而不是悄悄通过。
+  cat >"$1/src/lib.rs" <<'EOF'
+nichlink_toolchain::run_method::host!();
+
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.rehearsal.repartition");
+
+nichlink_toolchain::run_method::static_graft_plan!(
+    FRAMEWORK,
+    cut(crate::panel::frame::widget::cap::NODE_ID) graft(fast_widget::fast::NODE_ID),
+);
+EOF
+  cat >"$1/src/panel/panel.rs" <<'EOF'
+crate::root_object! {
+    kind: Panel,
+    needs_registry: true,
+    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),
+}
+EOF
+  cat >"$1/src/panel/registry_rule/registry_rule.rs" <<'EOF'
+//! Panel 对直接子对象的最低结构要求。
+//! Panel's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  cat >"$1/src/panel/frame/frame.rs" <<'EOF'
+crate::panel_object! {
+    kind: Frame,
+    needs_registry: true,
+    parent: crate::panel::NODE_ID,
+}
+EOF
+  cat >"$1/src/panel/frame/registry_rule/registry_rule.rs" <<'EOF'
+//! Frame 对直接子对象的最低结构要求。
+//! Frame's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  cat >"$1/src/panel/frame/widget/widget.rs" <<'EOF'
+crate::frame_object! {
+    kind: Widget,
+    needs_registry: true,
+    parent: crate::panel::frame::NODE_ID,
+}
+EOF
+  cat >"$1/src/panel/frame/widget/registry_rule/registry_rule.rs" <<'EOF'
+//! Widget 对直接子对象的最低结构要求。
+//! Widget's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  # The cut face: a leaf, and the only thing in the subtree that carries no registry of its own.
+  # 切口面：叶子，也是这棵子树里唯一不拥有注册机的东西。
+  cat >"$1/src/panel/frame/widget/cap/cap.rs" <<'EOF'
+crate::widget_object! {
+    kind: Cap,
+    parent: crate::panel::frame::widget::NODE_ID,
+}
+EOF
+  # A **second** branch, so one crate can be asked to claim two subtrees (the B-axis gap: nothing
+  # end-to-end proved that `Crate::named(..).at(&[a::SUBTREE, b::SUBTREE])` materializes both).
+  # **第二条**分支，好让同一个 crate 被要求认领两棵子树（B 轴缺口：`Crate::named(..).at(&[a::SUBTREE,
+  # b::SUBTREE])` 会把两棵都物化出来，这件事此前没有端到端证据）。
+  mkdir -p "$1/src/panel/gauge/needle" "$1/src/panel/gauge/registry_rule"
+  cat >"$1/src/panel/gauge/gauge.rs" <<'EOF'
+crate::panel_object! {
+    kind: Gauge,
+    needs_registry: true,
+    parent: crate::panel::NODE_ID,
+}
+EOF
+  cat >"$1/src/panel/gauge/registry_rule/registry_rule.rs" <<'EOF'
+//! Gauge 对直接子对象的最低结构要求。
+//! Gauge's minimum structure for a direct child.
+
+use crate::RegistrationRule;
+
+pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();
+EOF
+  cat >"$1/src/panel/gauge/needle/needle.rs" <<'EOF'
+crate::gauge_object! {
+    kind: Needle,
+    parent: crate::panel::gauge::NODE_ID,
+}
+EOF
+}
+
+# The declaration that fixes one boundary: `$2` is the subtree expression the crate claims.
+# 固定某一条边界的声明：`$2` 是这个 crate 认领的子树表达式。
+write_boundary() {
+  cat >"$1/add_crates.rs" <<EOF
+//! The crate shape this hosted tree declares.
+//! 这棵宿主树声明的 crate 形状。
+
+use nichlink_toolchain::run_method::{Crate, Shape};
+
+pub fn add_crates() -> Shape {
+    Shape::of("app", &[Crate::named("widgets").at(&[$2])])
+}
+EOF
+}
+
+# One graft entry of a generated tree, verbatim — the cut, the graft and the `full` flag together.
+# 一棵生成树里的某条 graft 条目，逐字——切口、替换与 `full` 标志合在一起。
+cut_entry() {
+  grep -o 'StaticGraftCut::from_ids([^;]*),' "$1/generated_lib.rs" | head -1
+}
+
+# How many graft entries a generated tree carries. `$( )` around `grep -c`, never `grep -c || printf 0`
+# — `grep -c` prints `0` *and* exits 1, which is how leg 5 once compared `"00"`.
+# 一棵生成树带几条 graft 条目。`grep -c` 外面套 `$( )`，绝不用 `grep -c || printf 0`——`grep -c` 会**打印**
+# `0` **并**以 1 退出，leg 5 就是这样比出 `"00"` 的。
+cut_count() {
+  [ -f "$1/generated_lib.rs" ] || { printf 'missing'; return; }
+  printf '%s' "$(grep -c 'StaticGraftCut::from_ids' "$1/generated_lib.rs" || true)"
+}
+
+RP="$WORK/repartition"
+mkdir -p "$RP"
+cat >"$RP/Cargo.toml" <<'EOF'
+[workspace]
+resolver = "3"
+members = [
+    "app",
+    "fast-widget",
+]
+EOF
+write_fast_widget "$RP/fast-widget"
+write_repartition_host "$RP/app" app
+
+step "leg 6: the unpartitioned baseline — the plan lands in the host"
+"$NICHLINK" check "$RP/app" >/dev/null || fail "the two-level host does not check"
+cp -R "$RP/app/target/nichlink/out" "$WORK/rp-base"
+(cd "$RP" && build -p app) || fail "the unpartitioned two-level host does not build"
+cp "$RP/app/src/lib.rs" "$WORK/rp-lib-before"
+BASELINE_CUT=$(cut_entry "$WORK/rp-base")
+[ -n "$BASELINE_CUT" ] || fail "the baseline host emits no typed graft cut at all"
+
+# One boundary: check every shape, write it, build it, and compare the cut against the baseline.
+# 一条边界：把每个形状都 check 一遍、写出来、构建，并把切口与基准逐字比较。
+repartition() {
+  label=$1
+  only=$2
+  claim=$3
+  second_claim_file=${4:-}
+  write_boundary "$RP/app" "$claim"
+  "$NICHLINK" check "$RP/app" >/dev/null ||
+    fail "leg 6/$label: the host does not check after the boundary moved"
+  cp -R "$RP/app/target/nichlink/out" "$WORK/rp-$label-host"
+  NICH_LINK_SHAPE_ONLY="$only" "$NICHLINK" check "$RP/app" >/dev/null ||
+    fail "leg 6/$label: the ghost shape does not check"
+  cp -R "$RP/app/target/nichlink/out" "$WORK/rp-$label-ghost"
+  NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$RP/app" >/dev/null ||
+    fail "leg 6/$label: the facade shape does not check"
+  cp -R "$RP/app/target/nichlink/out" "$WORK/rp-$label-facade"
+
+  [ "$(cut_count "$WORK/rp-$label-host")" = "0" ] ||
+    fail "leg 6/$label: the host still emits a cut for a face it does not compile"
+  [ "$(cut_count "$WORK/rp-$label-ghost")" = "1" ] ||
+    fail "leg 6/$label: the ghost does not emit the one cut it compiles"
+  [ "$(cut_count "$WORK/rp-$label-facade")" = "1" ] ||
+    fail "leg 6/$label: the facade does not carry the cut"
+  [ "$(cut_entry "$WORK/rp-$label-ghost")" = "$BASELINE_CUT" ] ||
+    fail "leg 6/$label: the cut changed when the boundary moved (identity or graft differ)"
+  grep -q 'app_widgets::panel::frame::widget::cap::NODE_ID' "$WORK/rp-$label-facade/generated_lib.rs" ||
+    fail "leg 6/$label: the facade does not name the crate that compiles the cut face"
+  cmp "$WORK/rp-lib-before" "$RP/app/src/lib.rs" ||
+    fail "leg 6/$label: re-partitioning rewrote the author's graft plan"
+  # A second claim is only real if the ghost that owns it actually mounts the files below it — the
+  # claim being accepted in the declaration is not evidence that anything was materialized.
+  # 第二条认领只有在真正拥有它的幽灵确实挂载了它下面的文件时才算数——声明收下了那条认领，并不证明有任何
+  # 东西被物化出来。
+  if [ -n "$second_claim_file" ]; then
+    grep -q "$second_claim_file" "$WORK/rp-$label-ghost/generated_lib.rs" ||
+      fail "leg 6/$label: the ghost does not mount $second_claim_file — the second claim was not materialized"
+  fi
+
+  "$NICHLINK" crates --write "$RP/app" >/dev/null || fail "leg 6/$label: the boundary does not write"
+  (cd "$RP" && build -p app-facade) || fail "leg 6/$label: the re-partitioned workspace does not build"
+}
+
+# The boundary starts one level **below** the root face and then moves up, so the same plan is compiled
+# by a different crate without the author touching a line of it. The second move also re-writes on top of
+# the first boundary, which is what a user editing the declaration and running `--write` again does.
+# 边界先落在根面**下面**一层，然后往上搬，于是同一份 plan 由另一个 crate 编译，而作者一行都没动。第二次
+# 搬动还是在第一条边界之上重写——这正是"用户改了声明再跑一次 `--write`"所做的事。
+step "leg 6: boundary A — the subtree below the root face"
+repartition a-widget panel::frame::widget "crate::panel::frame::widget::SUBTREE"
+step "leg 6: boundary B — one level up, the same plan"
+repartition b-frame panel::frame "crate::panel::frame::SUBTREE"
+# Two claims by **one** crate: the declared `Crate` names both subtrees, and both have to be compiled by
+# the same ghost, mounted from the host, and built together — the end-to-end leg the matrix was missing.
+# **一个** crate 认领两棵子树：声明的 `Crate` 点名两棵，两棵都必须由同一个幽灵编译、从宿主挂载、并一起
+# 构建——这正是矩阵此前缺的那条端到端。
+step "leg 6: boundary C — one crate claiming two subtrees"
+repartition c-two-claims "panel::frame::widget,panel::gauge" \
+  "crate::panel::frame::widget::SUBTREE, crate::panel::gauge::SUBTREE" \
+  "panel/gauge/needle/needle.rs"
+
+step "OK — both shapes build, the four facts hold, the promote lands, the release shape packages, the committed example still carries its graft, and the same plan survives two crate boundaries"

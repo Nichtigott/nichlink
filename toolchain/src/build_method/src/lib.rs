@@ -207,8 +207,8 @@ pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;
 pub(crate) use face_syntax_check::{
-    aggregate_parent_macro_errors, aggregate_requirements, aggregate_stable_name_errors,
-    face_syntax_errors, parsed_face, unplaced_face_errors,
+    aggregate_parent_macro_errors, aggregate_registry_rule_errors, aggregate_requirements,
+    aggregate_stable_name_errors, face_syntax_errors, parsed_face, unplaced_face_errors,
 };
 pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
 pub(crate) use graph::{write_generation, write_graph_manifest};

@@ -242,6 +242,68 @@ fn the_renderer_refuses_a_spelling_it_cannot_guarantee() {
     );
 }
 
+/// `full` on a range is refused by name, in **both** directions of the grammar, and the two legal
+/// neighbours still work.
+/// 区间上的 `full` 在语法的**两个**方向上都按名拒绝，而它两个合法邻居照旧可用。
+///
+/// Measured before this pin: the shape was accepted, and the build emitted
+/// `StaticGraftCut::from_id_range(…, true)` — a cut that replaces each slot of a sibling run
+/// together with its subtree. Nothing anywhere said which of those two readings it means, and a
+/// tool that writes declarations into a host's own source must not emit a spelling whose meaning it
+/// cannot vouch for. The way out is explicit: one cut per face, or drop `full`.
+/// 本钉子之前实测：这一形被接受，构建发出 `StaticGraftCut::from_id_range(…, true)`——一条把一段兄弟里
+/// **每个**槽位连同其子树一起替换的切口。两种读法里到底是哪一种，哪里都没写；而一个往宿主自己的源码里写
+/// 声明的工具，绝不能发出自己保证不了含义的拼写。出路是显式的那两条：逐面写切口，或者去掉 `full`。
+#[test]
+fn full_on_a_range_is_refused_in_both_directions() {
+    for source in [
+        r#"static_graft_plan! { cut ["root/a" to "root/c"] full graft "replacement" }"#,
+        r#"static_graft_plan! { cut(crate::a::NODE_ID to crate::b::NODE_ID) full graft(fast::NODE_ID) }"#,
+    ] {
+        let error = graft_entries(source)
+            .expect_err("a range with `full` is refused")
+            .to_string();
+        assert!(
+            error.contains("`full` on a range cut has no defined meaning"),
+            "{source}: {error}"
+        );
+        assert!(
+            error.contains("Write one cut per face, or drop `full`"),
+            "the refusal carries the way out: {source}: {error}"
+        );
+    }
+
+    let refused = render_graft_expression(
+        "crate::a::NODE_ID",
+        Some("crate::b::NODE_ID"),
+        true,
+        "fast::NODE_ID",
+    )
+    .expect_err("the renderer must not write what its own parser refuses");
+    assert!(
+        refused
+            .message
+            .contains("`full` on a range cut has no defined meaning"),
+        "{refused:?}"
+    );
+
+    // The two neighbours stay legal: a range without `full`, and `full` without a range.
+    // 两个邻居照旧合法：不带 `full` 的区间，以及不带区间的 `full`。
+    let range = render_graft_expression(
+        "crate::a::NODE_ID",
+        Some("crate::b::NODE_ID"),
+        false,
+        "fast::NODE_ID",
+    )
+    .expect("a range without `full` still renders");
+    assert!(graft_entries(&format!("static_graft_plan! {{ {range} }}")).is_ok());
+    let single = render_graft_expression("crate::a::NODE_ID", None, true, "fast::NODE_ID")
+        .expect("`full` without a range still renders");
+    let parsed = graft_entries(&format!("static_graft_plan! {{ {single} }}"))
+        .expect("and still parses back");
+    assert!(parsed[0].full && parsed[0].cut_end.is_none());
+}
+
 /// Every entry reports the line its own cut is on, not the line the macro starts on.
 /// 每条条目报告的是**它自己那条切口**所在的行，而不是宏开始的那一行。
 ///

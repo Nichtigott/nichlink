@@ -24,7 +24,20 @@ fn package(label: &str) -> (PathBuf, String) {
     )
     .expect("manifest");
     fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
-    fs::create_dir_all(root.join("src/dial")).expect("dial directory");
+    fs::create_dir_all(root.join("src/dial/registry_rule")).expect("dial directory");
+    // The rule beside the face that owns a registry: `needs_registry: true` without a rule makes the
+    // generated module read a `super::registry_rule` nothing mounts, and the build refuses that tree
+    // by name. This fixture called itself healthy while leaving the file out — it was a tree no
+    // `cargo build` could compile, and it only stayed invisible because nothing judged it.
+    // 拥有注册机的面旁边那份规则：只有 `needs_registry: true` 而没有规则，会让生成的模块去读一个没有任何东西
+    // 挂载的 `super::registry_rule`，而构建按名拒绝那棵树。本夹具自称"健康的树"却没有这个文件——它其实是一棵
+    // 任何 `cargo build` 都编译不过的树，只因为没人判它才一直看不见。
+    fs::write(
+        root.join("src/dial/registry_rule/registry_rule.rs"),
+        "use crate::RegistrationRule;\n\n\
+         pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();\n",
+    )
+    .expect("dial rule");
     fs::write(
         root.join("src/dial/dial.rs"),
         "crate::root_object! {\n    kind: Dial,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n    \

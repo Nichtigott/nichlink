@@ -1,11 +1,12 @@
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::{
     BuildInput, SourceScope, aggregate_contract_errors, aggregate_parent_macro_errors,
-    aggregate_requirements, aggregate_stable_name_errors, cache_directory, discover_root_reporting,
-    emit_rerun_paths, face_syntax_errors, graft_plan_check, prime_node_id_cache, render_lib,
-    static_plan, unplaced_face_errors, update_discovery_cache, write_file_manifest,
-    write_function_manifest, write_generation, write_graft_manifest, write_graph_manifest,
-    write_if_changed, write_pruning_manifest, write_shape_manifest, write_source_scope_manifest,
+    aggregate_registry_rule_errors, aggregate_requirements, aggregate_stable_name_errors,
+    cache_directory, discover_root_reporting, emit_rerun_paths, face_syntax_errors,
+    graft_plan_check, prime_node_id_cache, render_lib, static_plan, unplaced_face_errors,
+    update_discovery_cache, write_file_manifest, write_function_manifest, write_generation,
+    write_graft_manifest, write_graph_manifest, write_if_changed, write_pruning_manifest,
+    write_shape_manifest, write_source_scope_manifest,
 };
 use nichlink_kernel::lexicon;
 
@@ -80,7 +81,27 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // 那会打死构建脚本，并让 `check --json` 什么都不打印。
     let mut early_errors = BuildDiagnostics::default();
     let entry = super::host_entry_from_environment(layout, &nodes, &mut early_errors);
-    let scope = SourceScope::from_environment(src, &nodes, &entry, &mut early_errors);
+    // The claims are read **before** the scope, because they are forced-liveness roots for the
+    // derivation below: a crate that claims a subtree exists to compile it, so a claim may not be
+    // pruned by the narrowing that graft slots cause. Read once and used twice (scope and render),
+    // like the shape itself.
+    // 认领在作用域**之前**读取，因为它们是下面那次推导的强制存活根：认领一棵子树的 crate 存在的意义就是编译它，
+    // 因此认领不得被嫁接槽位造成的收窄剪掉。读一次、用两次（作用域与渲染），与 crate 形状本身一样。
+    let claims = input.only.as_deref().map(|value| {
+        value
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<String>>()
+    });
+    let scope = SourceScope::from_environment(
+        src,
+        &nodes,
+        &entry,
+        claims.as_deref().unwrap_or(&[]),
+        &mut early_errors,
+    );
     let cache_units = cache_directory(manifest).join("units");
     let cache_state = update_discovery_cache(manifest, src, &nodes, &discovery_fingerprint);
 
@@ -101,6 +122,14 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     );
     let contract_errors = aggregate_contract_errors(src, &nodes, false, &scope);
     append_error(&mut compile_errors, contract_errors);
+    // A missing sibling rule is the build's own failure, so it belongs with the declaration-level
+    // checks: it is what makes `check` and `cargo build` agree about a face neither can compile.
+    // 缺同目录规则是构建自身的失败，因此它属于声明层检查：正是它让 `check` 与 `cargo build` 对"两边都
+    // 编译不了的面"给出一致答案。
+    append_error(
+        &mut compile_errors,
+        aggregate_registry_rule_errors(src, &nodes, false, &scope),
+    );
     let stable_errors = aggregate_stable_name_errors(src, &nodes);
     append_error(&mut compile_errors, stable_errors);
     let parent_macro_errors = aggregate_parent_macro_errors(src, &nodes);
@@ -164,6 +193,15 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         |id| graft_plan_check::slot_module(src, &nodes, id),
     );
     append_error(&mut compile_errors, plan_errors);
+    // A record this build cannot honor must not leave it: skipping an **unsupported version** would
+    // ship a binary whose graft silently never happens. Malformed files stay the authoring surfaces'
+    // business — they cannot even say what they promised.
+    // 本构建兑现不了的记录不得离开它：跳过**不支持的版本**等于发布一个嫁接静默地从未发生的二进制。
+    // 畸形文件仍归创作界面管——它们连自己承诺过什么都说不出来。
+    append_error(
+        &mut compile_errors,
+        graft_plan_check::unsupported_version_errors(manifest),
+    );
     // The crate shape is an input to the **render** as well as to the release checks: a subtree the
     // declaration hands to another crate must not be compiled here a second time, so the host's
     // generated tree emits no module for it while the records below still carry every face (the tree
@@ -179,17 +217,11 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         }
     };
     // The render mode comes first, because it decides **which** subtrees this run must not render: a
-    // ghost is the crate the declared subtrees were handed to, so it hands nothing away.
+    // ghost is the crate the declared subtrees were handed to, so it hands nothing away. The claims
+    // themselves were read above, before the scope, because they are forced-liveness roots there.
     // 先定渲染模式，因为它决定本次运行**不得**渲染哪些子树：幽灵正是那些被交出去的子树所交给的 crate，因此它
-    // 什么都不交出去。
-    let only = input.only.clone().map(|value| {
-        value
-            .split(',')
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-            .map(str::to_owned)
-            .collect::<Vec<String>>()
-    });
+    // 什么都不交出去。认领本身在上面、作用域之前就读过了，因为它们是那里的强制存活根。
+    let only = claims.clone();
     let cut_out = super::crate_plan::cut_out_for(shape.as_ref(), only.is_some());
     // The plan is computed **here**, before the render, because the render needs what it produces: the
     // mount spelling per face. A ghost's files live in the host package, so the spelling has to walk

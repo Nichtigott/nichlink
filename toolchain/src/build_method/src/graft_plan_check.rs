@@ -29,7 +29,9 @@ use std::fs;
 use std::path::Path;
 
 use nichlink_kernel::lexicon;
-use nichlink_kernel::registry_core::plugin::graft_document::GraftPlanDocument;
+use nichlink_kernel::registry_core::plugin::graft_document::{
+    GraftPlanDocument, GraftPlanDocumentError,
+};
 use nichlink_kernel::{BuildDiagnostic, BuildDiagnostics};
 
 use super::Node;
@@ -55,6 +57,80 @@ pub(crate) struct PlannedSlot {
     pub(crate) plan_file: String,
 }
 
+/// One plan file the build found: its selector directory and the file itself.
+/// 构建找到的一个计划文件：它的选择器目录与文件本身。
+///
+/// The layout (`.nichlink/external-grafts/<selector>/graft.plan`) is read in one place so the two
+/// readers below cannot disagree about which files exist.
+/// 版式（`.nichlink/external-grafts/<selector>/graft.plan`）只在一处读取，因此下面两个读取方不会对
+/// "存在哪些文件"给出不同答案。
+fn plan_files(root: &Path) -> Vec<(String, std::path::PathBuf)> {
+    let directory = root
+        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::EXTERNAL_GRAFT_DIR);
+    let Ok(entries) = fs::read_dir(&directory) else {
+        return Vec::new();
+    };
+    let mut files = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| {
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                entry.path().join(lexicon::GRAFT_PLAN_FILE),
+            )
+        })
+        .collect::<Vec<_>>();
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+/// Every plan record whose layout version this build does not understand, refused by name.
+/// 本构建读不懂版式版本的每一条计划记录，按名拒绝。
+///
+/// [`planned_slots`] skips a plan it cannot parse, and that boundary is deliberate for a record that
+/// is not a record at all (see its own note). An **unsupported version** is different: the file *is*
+/// a well-formed record, written by a newer layout, so skipping it means shipping a binary whose
+/// graft silently never happens — exactly what this check exists to refuse. Nothing else is added
+/// here: a malformed file cannot even say what it promised, so it stays the authoring surfaces' and
+/// the apply path's business.
+/// [`planned_slots`] 会跳过自己解析不了的计划，而那一条边界对"根本不是记录的记录"是有意的（见它自己的
+/// 说明）。**不支持的版本**不一样：那个文件**是**一条格式良好的记录，只是由更新的版式写成，因此跳过它等于
+/// 发布一个嫁接静默地从未发生的二进制——正是本检查存在的理由。这里不加别的：畸形文件连自己承诺过什么都
+/// 说不出来，因此仍归创作界面与 apply 路径管。
+pub(crate) fn unsupported_version_errors(root: &Path) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    for (selector, plan_file) in plan_files(root) {
+        let Ok(text) = fs::read_to_string(&plan_file) else {
+            continue;
+        };
+        let Err(error) = GraftPlanDocument::parse_graft_plan_document(&text) else {
+            continue;
+        };
+        if !matches!(error, GraftPlanDocumentError::UnsupportedVersion(_)) {
+            continue;
+        }
+        let relative = plan_file.strip_prefix(root).unwrap_or(&plan_file);
+        errors.push(
+            BuildDiagnostic::new(
+                "static-plan",
+                format!(
+                    "external graft plan `{selector}` is written in a layout this build does not \
+                 understand ({error}); the record is well formed, so ignoring it would ship a \
+                 binary whose graft silently never happens\n\
+                 way forward: upgrade the tool that reads it, or remove the record if it is a \
+                 leftover from an experiment"
+                ),
+            )
+            .at(
+                nichlink_kernel::declaration::portable_path(&relative.to_string_lossy()),
+                0,
+            ),
+        );
+    }
+    errors
+}
+
 /// Every readable plan under the package's external graft directory.
 /// 包的 external graft 目录下每个可读计划。
 ///
@@ -66,18 +142,8 @@ pub(crate) struct PlannedSlot {
 /// 应用路径上被拒绝（`run_method::apply_recorded_grafts`），创作界面也会把它显示为坏
 /// 计划。`nichlink grafts` 同样会列出它。
 pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
-    let directory = root
-        .join(lexicon::NICHLINK_DIR)
-        .join(lexicon::EXTERNAL_GRAFT_DIR);
-    let Ok(entries) = fs::read_dir(&directory) else {
-        return Vec::new();
-    };
     let mut slots = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let plan_file = entry.path().join(lexicon::GRAFT_PLAN_FILE);
+    for (selector, plan_file) in plan_files(root) {
         let Ok(text) = fs::read_to_string(&plan_file) else {
             continue;
         };
@@ -89,7 +155,7 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
         // 经内核的可移植路径规则在任何平台都用 `/`：布局按 `/` 记录，不加则会报 `\`。
         let relative_plan = plan_file.strip_prefix(root).unwrap_or(&plan_file);
         slots.push(PlannedSlot {
-            selector: entry.file_name().to_string_lossy().into_owned(),
+            selector,
             target: document.target,
             target_path: document.target_path.clone(),
             graft: document.graft.clone(),
@@ -99,7 +165,6 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
             ),
         });
     }
-    slots.sort_by(|left, right| left.selector.cmp(&right.selector));
     slots
 }
 
@@ -357,6 +422,72 @@ mod tests {
         assert_eq!(
             slots[0].plan_file,
             ".nichlink/external-grafts/canvas_graft/graft.plan"
+        );
+
+        fs::remove_dir_all(&root).expect("temporary fixture cleanup");
+    }
+
+    /// A plan record written in a layout this build does not understand is refused **by name**,
+    /// while a record that is not a record at all stays skipped.
+    /// 本构建读不懂版式的计划记录**按名拒绝**，而根本不是记录的记录仍被跳过。
+    ///
+    /// The distinction is the promise: an unsupported version means the file *is* a well-formed
+    /// record from a newer layout, so skipping it ships a binary whose graft silently never happens.
+    /// A malformed file cannot even say what it promised, so it stays the apply path's business.
+    /// 区别在于承诺：不支持的版本意味着那个文件**是**一条格式良好的、来自更新版式的记录，跳过它等于发布一个
+    /// 嫁接静默地从未发生的二进制。畸形文件连自己承诺过什么都说不出来，因此仍归 apply 路径管。
+    #[test]
+    fn a_plan_version_this_build_cannot_read_is_refused_by_name() {
+        let root = temporary_directory("graft-plan-version");
+        let plan = root
+            .join(lexicon::NICHLINK_DIR)
+            .join(lexicon::EXTERNAL_GRAFT_DIR)
+            .join("canvas_graft");
+        fs::create_dir_all(&plan).expect("plan directory");
+        let document = GraftPlanDocument::new(
+            NodeId::from_namespaced_path("host", "control/control.rs", "Control"),
+            "root/canvas",
+            "canvas_fast",
+            true,
+        );
+        let mut text = document.render_graft_plan_document();
+        text = text.replacen("version=1", "version=99", 1);
+        fs::write(plan.join(lexicon::GRAFT_PLAN_FILE), text).expect("plan file");
+
+        // The slot reader still skips it — that is the boundary this pin does not move.
+        // 槽位读取方仍然跳过它——本钉子没有移动那条边界。
+        assert!(planned_slots(&root).is_empty());
+        let rendered = unsupported_version_errors(&root).render_build_diagnostics();
+        assert!(
+            rendered.contains("phase=static plan / 静态计划"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains(".nichlink/external-grafts/canvas_graft/graft.plan"),
+            "the refusal points at the artifact: {rendered}"
+        );
+        assert!(rendered.contains("version `99`"), "{rendered}");
+        assert!(rendered.contains("way forward"), "{rendered}");
+
+        // A malformed record is not this check's business: it is not a record at all.
+        // 畸形记录不归本检查管：它根本不是一条记录。
+        fs::write(plan.join(lexicon::GRAFT_PLAN_FILE), "not a plan at all\n").expect("broken file");
+        assert!(
+            unsupported_version_errors(&root)
+                .render_build_diagnostics()
+                .is_empty()
+        );
+        // And a record this build can read is silent.
+        // 而本构建读得懂的记录保持沉默。
+        fs::write(
+            plan.join(lexicon::GRAFT_PLAN_FILE),
+            document.render_graft_plan_document(),
+        )
+        .expect("plan file");
+        assert!(
+            unsupported_version_errors(&root)
+                .render_build_diagnostics()
+                .is_empty()
         );
 
         fs::remove_dir_all(&root).expect("temporary fixture cleanup");

@@ -537,10 +537,20 @@ mod tests {
 
     /// A host whose library target is `host/lib.rs`, with one face next to it.
     /// 库目标是 `host/lib.rs` 的宿主，旁边有一个注册面。
+    ///
+    /// The face owns a registry, so the canonical rule module has to sit beside it: a face that
+    /// declares `needs_registry: true` and names no rule reads `super::registry_rule`, and the build
+    /// refuses a tree where that module is missing (measured before the refusal existed:
+    /// `error[E0433]: cannot find registry_rule in super`). This fixture used to leave the file out —
+    /// harmless while nothing judged it, and exactly the tree a real `cargo build` cannot compile.
+    /// 该面拥有注册机，因此规范规则模块必须在它旁边：声明 `needs_registry: true` 又不点名规则的注册面读的是
+    /// `super::registry_rule`，而构建会拒绝那棵树（在那条拒绝存在之前实测为
+    /// `error[E0433]: cannot find registry_rule in super`）。本夹具过去没有这个文件——在没人判它时无害，
+    /// 而那正是真 `cargo build` 编译不过的树。
     fn host_outside_src(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!("nichlink-{label}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("host/control")).expect("face directory");
+        fs::create_dir_all(root.join("host/control/registry_rule")).expect("face directory");
         fs::write(
             root.join("Cargo.toml"),
             format!(
@@ -550,6 +560,12 @@ mod tests {
         )
         .expect("manifest");
         fs::write(root.join("host/lib.rs"), "// host entry\n").expect("entry");
+        fs::write(
+            root.join("host/control/registry_rule/registry_rule.rs"),
+            "use crate::RegistrationRule;\n\n\
+             pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new();\n",
+        )
+        .expect("registration rule");
         fs::write(
             root.join("host/control/control.rs"),
             "crate::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \

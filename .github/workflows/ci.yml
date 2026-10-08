@@ -72,6 +72,21 @@ jobs:
         env:
           NICHLINK_GRAFT_MATRIX_CARGO_FLAGS: ""
         run: tools/nichlink-graft-matrix
+      - name: Daily behaviours (a registry face's rule file)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # Every row applies one everyday edit to a real host (on its own copy), then runs the real
+        # `check` and the real `cargo build`, and asserts both the expectation and the one invariant
+        # that matters: a build failure must be one `check` already refused. That invariant is the
+        # regression guard for the measured defect this step exists for — deleting a registry-owning
+        # face's `registry_rule.rs` made `check` say `ok` while `cargo build` died with
+        # `error[E0433]: cannot find registry_rule in super`.
+        # 每一行都在**真宿主**上施加一种日常改动（各自的副本），再跑真的 `check` 与真的 `cargo build`，
+        # 既断言期望，也断言唯一要紧的那条不变量：**build 失败必须是 check 已经拒绝过的**。该不变量正是
+        # 本步骤为之存在的那个实测缺陷的回归闸门——删掉拥有注册机的面旁边的 `registry_rule.rs` 时，
+        # `check` 曾报 `ok`，而 `cargo build` 死于 `error[E0433]: cannot find registry_rule in super`。
+        env:
+          NICHLINK_BEHAVIORS_CARGO_FLAGS: ""
+        run: tools/nichlink-daily-behaviors
       - name: Real-project size (29 faces, two crates, cuts handed away)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # The maintainer's question in the shape of a test: in a host with real size, do graft and crate

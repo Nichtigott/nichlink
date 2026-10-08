@@ -55,12 +55,13 @@ impl SourceScope {
         src: &Path,
         nodes: &[Node],
         entry: &HostEntry,
+        claims: &[String],
         errors: &mut BuildDiagnostics,
     ) -> Self {
         let Some(raw) = env::var_os(lexicon::SCOPE_ENV) else {
-            return Self::auto_reporting(src, nodes, entry, errors);
+            return Self::auto_reporting(src, nodes, entry, claims, errors);
         };
-        Self::from_raw(&raw.to_string_lossy(), src, nodes, entry, errors)
+        Self::from_raw(&raw.to_string_lossy(), src, nodes, entry, claims, errors)
     }
 
     /// Read the scope from one explicit `NICH_LINK_SCOPE` value.
@@ -76,6 +77,7 @@ impl SourceScope {
         src: &Path,
         nodes: &[Node],
         entry: &HostEntry,
+        claims: &[String],
         errors: &mut BuildDiagnostics,
     ) -> Self {
         let raw = if let Some((version, values)) = raw.split_once(':') {
@@ -103,7 +105,7 @@ impl SourceScope {
             };
         }
         if raw.trim().eq_ignore_ascii_case("auto") {
-            return Self::auto_reporting(src, nodes, entry, errors);
+            return Self::auto_reporting(src, nodes, entry, claims, errors);
         }
         let mut refused = false;
         let ids = raw
@@ -179,9 +181,10 @@ impl SourceScope {
         src: &Path,
         nodes: &[Node],
         entry: &HostEntry,
+        claims: &[String],
         errors: &mut BuildDiagnostics,
     ) -> Self {
-        Self::auto_from_entry_reporting(src, nodes, entry.path(), errors)
+        Self::auto_from_entry_reporting(src, nodes, entry.path(), claims, errors)
     }
 
     /// Derive the scope from one explicit entry source, without reading the
@@ -200,13 +203,26 @@ impl SourceScope {
     /// 丢弃发现结果的入口推导作用域（仅测试）。
     #[cfg(test)]
     fn auto_from_entry(src: &Path, nodes: &[Node], entry: &Path) -> Self {
-        Self::auto_from_entry_reporting(src, nodes, entry, &mut BuildDiagnostics::default())
+        Self::auto_from_entry_reporting(src, nodes, entry, &[], &mut BuildDiagnostics::default())
+    }
+
+    /// The same derivation with crate claims, so the forced-liveness rule can be pinned.
+    /// 同一次推导，带 crate 认领，好让那条强制存活的规则能被钉住。
+    #[cfg(test)]
+    fn auto_from_entry_with_claims(
+        src: &Path,
+        nodes: &[Node],
+        entry: &Path,
+        claims: &[String],
+    ) -> Self {
+        Self::auto_from_entry_reporting(src, nodes, entry, claims, &mut BuildDiagnostics::default())
     }
 
     fn auto_from_entry_reporting(
         src: &Path,
         nodes: &[Node],
         entry: &Path,
+        claims: &[String],
         errors: &mut BuildDiagnostics,
     ) -> Self {
         let Some(entry_source) = fs::read_to_string(entry).ok() else {
@@ -338,6 +354,20 @@ impl SourceScope {
             if let Some(end_module) = end_module {
                 queue.extend(select_module_subtree(&faces, &end_module, &mut selected));
             }
+        }
+        // A **crate claim** is a forced-liveness root for the same reason a graft slot is: the crate
+        // exists to compile that subtree. Without this, the narrowing above prunes a claimed subtree
+        // that holds no declared slot — and then **nobody** compiles it, silently: the host handed it
+        // away, so the host does not compile it either. Measured on the two-claim fixture: the ghost
+        // mounted `panel/frame/widget/{widget,cap}.rs` and neither `panel/gauge/gauge.rs` nor
+        // `panel/gauge/needle/needle.rs`, which no crate in that shape compiled.
+        // **crate 认领**与嫁接槽位同理，是强制存活根：那个 crate 存在的意义就是编译这棵子树。没有这一条，
+        // 上面的收窄会剪掉一棵"里面没有声明槽位"的被认领子树——而且**没有谁**编译它，悄无声息：宿主把它交出去了，
+        // 因此宿主也不编译它。在双认领夹具上实测：幽灵挂载了 `panel/frame/widget/{widget,cap}.rs`，而
+        // `panel/gauge/gauge.rs` 与 `panel/gauge/needle/needle.rs` 一个都没挂——那个形状里没有任何 crate
+        // 编译它们。
+        for claim in claims {
+            queue.extend(select_module_subtree(&faces, claim, &mut selected));
         }
         for face in &faces {
             if face_declares_plugin(src, face)
