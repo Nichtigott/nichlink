@@ -6,7 +6,11 @@
 # 发 tools/call。一次性 `--call` 模式测的是工具本身；这里测的是客户端真正接上的**协议面**。
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BRIDGE="$ROOT/target/debug/nichlink-mcp"
+# Override to drive an **installed** copy (`cargo install … --root <prefix>`): the protocol surface a
+# client attaches to is the installed binary's, and a session against the in-tree one cannot prove that.
+# 覆盖它即可驱动**装出来**的那一份（`cargo install … --root <prefix>`）：客户端接上的是安装副本的协议面，
+# 只打树内那一份证明不了这件事。
+BRIDGE="${NICHLINK_MCP_BRIDGE:-$ROOT/target/debug/nichlink-mcp}"
 CARGO_FLAGS="${NICHLINK_MCP_SESSION_CARGO_FLAGS---offline}"
 HOST="${1:-$ROOT/examples/partitioned-button/host}"
 fail() { printf 'mcp session FAILED: %s\n' "$1" >&2; exit 1; }
