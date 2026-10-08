@@ -1,12 +1,15 @@
 [package]
 name = "nichlink-run-method"
-version = "0.2.1"
-edition = "2024"
-description = "Compatibility shell: the host-facing crate name this surface had before the nine-to-three merge"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 repository = "https://github.com/Nichtigott/nichlink"
+homepage = "https://github.com/Nichtigott/nichlink"
+description = "Compatibility shell: the host-facing crate name this surface had before the nine-to-three merge"
 keywords = ["runtime", "tracing", "registration", "macros"]
 categories = ["development-tools", "rust-patterns"]
+readme = "README.md"
 
 [dependencies]
 nichlink-toolchain = { path = "../toolchain", version = "0.2.1" }

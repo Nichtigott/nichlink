@@ -433,14 +433,14 @@ impl<'a> GraftVisitor<'a> {
             // 尾随的 `full` 要拒绝而不是忽略。语法把 `full` 放在 `graft` **之前**，而静默丢掉它会改变这条条目
             // 的含义：切口于是只覆盖那个节点，而不是整棵子树。实测——这种拼法曾被**接受**且 `full: false`，
             // 于是作者的 `full` 毫无作用，而且没有任何东西说明这件事。
-            if let Some(TokenTree::Ident(stray)) = tokens.get(index + 1) {
-                if stray == "full" {
-                    self.error = Some(syntax_error(
-                        stray.span(),
-                        "`full` is written **before** `graft`: `cut(…) [to …] full graft(…)`",
-                    ));
-                    return;
-                }
+            if let Some(TokenTree::Ident(stray)) = tokens.get(index + 1)
+                && stray == "full"
+            {
+                self.error = Some(syntax_error(
+                    stray.span(),
+                    "`full` is written **before** `graft`: `cut(…) [to …] full graft(…)`",
+                ));
+                return;
             }
             // The two endpoints stay separate fields; joining them into `cut`
             // would make a path that literally contains `" to "` indistinguish-

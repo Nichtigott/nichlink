@@ -158,18 +158,13 @@ pub(crate) fn read_shape_declaration(
                     // a spelling away — say it, instead of making the reader re-derive the grammar.
                     // 每一棵子树路径都以 `::SUBTREE` 收尾；不合规时通常只差几个字母——直接说出来，
                     // 不要让读者自己去推语法。
-                    unreadable(
-                        &path,
-                        &format!(
-                            "`{name}` names `{entry}`, which is not a `…::SUBTREE` marker \
-                             (every subtree path ends in `::SUBTREE`, so `{suggested}` is the spelling \
-                             this one is missing)",
-                            suggested = format!(
-                                "{}::SUBTREE",
-                                entry.rsplit_once("::").map(|(head, _)| head).unwrap_or(entry)
-                            )
-                        ),
-                    )
+                    let head = entry.rsplit_once("::").map(|(head, _)| head).unwrap_or(entry);
+                    let why = format!(
+                        "`{name}` names `{entry}`, which is not a `…::SUBTREE` marker \
+                         (every subtree path ends in `::SUBTREE`, so `{head}::SUBTREE` is the spelling \
+                         this one is missing)"
+                    );
+                    unreadable(&path, &why)
                 })?
                 .trim()
                 .trim_start_matches("crate::")
