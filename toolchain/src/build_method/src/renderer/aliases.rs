@@ -69,7 +69,7 @@ pub(super) fn render_object_aliases(output: &mut String, src: &Path, nodes: &[No
     for name in names {
         writeln!(
             output,
-            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        {run_method}::__nichlink_object! {{ $($tokens)* }}\n        #[cfg(rust_analyzer)]\n        {run_method}::face_fields_mirror! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        {run_method}::__nichlink_object! {{ $($tokens)* }}\n        #[allow(unexpected_cfgs)]\n        #[cfg(rust_analyzer)]\n        {run_method}::face_fields_mirror! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -148,7 +148,7 @@ mod tests {
         // 调用：它带 `cfg(rust_analyzer)`。
         assert!(
             output.contains(&format!(
-                "#[cfg(rust_analyzer)]\n        {}::face_fields_mirror! {{ $($tokens)* }}",
+                "#[allow(unexpected_cfgs)]\n        #[cfg(rust_analyzer)]\n        {}::face_fields_mirror! {{ $($tokens)* }}",
                 run_method_path()
             )),
             "aliases must expose the field vocabulary to an editor: {output}"

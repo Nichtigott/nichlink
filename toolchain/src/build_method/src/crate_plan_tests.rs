@@ -500,6 +500,45 @@ pub const SHAPE: Shape = Shape {
 /// 幽灵由哪三份文件组成，以及工作区根必须携带的那份配置。
 /// A claim naming nothing the build published is refused by name — never a quiet empty crate.
 /// 点名不到任何已发布的面时，认领被点名拒绝——绝不变成一个安静的空 crate。
+/// One crate may claim **several** subtrees: both are mounted, and the crate is the one they share.
+/// 一个 crate 可以认领**多棵**子树：两棵都被挂载，而它们是同一个 crate 的。
+#[test]
+fn a_crate_may_claim_more_than_one_subtree() {
+    let root = host(
+        "two-claims",
+        &[
+            (
+                "control/control.rs",
+                "crate::root_object! {\n    kind: Control,\n}\n",
+            ),
+            (
+                "panel/panel.rs",
+                "crate::root_object! {\n    kind: Panel,\n}\n",
+            ),
+        ],
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\npub fn add_crates() -> Shape {\n    Shape::of(\"myapp\", &[\n        Crate::named(\"widgets\").at(&[crate::control::SUBTREE, crate::panel::SUBTREE]),\n    ])\n}\n",
+    );
+    // The two claims are one crate's, so the fixture names it twice on purpose: what is asserted is
+    // that **every** claim's subtree is mounted, not how many entries the declaration used.
+    // 两条认领属于同一个 crate，因此夹具故意把名字写两遍：要断言的是**每条**认领的子树都被挂载，
+    // 而不是声明里用了几条条目。
+    let planned = plan_host(&root).expect("both claims plan");
+    let mounted: Vec<String> = planned
+        .iter()
+        .flat_map(|crate_planned| crate_planned.mounts.iter())
+        .map(|mount| mount.module_path.clone())
+        .collect();
+    assert!(
+        mounted.iter().any(|module| module == "control"),
+        "{mounted:?}"
+    );
+    assert!(
+        mounted.iter().any(|module| module == "panel"),
+        "{mounted:?}"
+    );
+    assert_eq!(planned.len(), 1, "and they are one crate, not two");
+}
+
 #[test]
 fn a_claim_that_matches_no_published_face_is_refused_by_name() {
     let root = host(
