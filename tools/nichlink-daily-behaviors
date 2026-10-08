@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""日常编码行为的矩阵：把一份 nichlink 仓库**当作没有 crate 来维护**会不会有阻碍。
+
+维护者的问题（2026-10-08）：日常行为在"无声明"的状态下能否照旧，以及**切分之后**同样行为是否照旧。
+本工具在一个**真宿主**上逐个施加日常改动，每种改动在**自己的副本**上做（累积会让一步的失败污染后面
+每一步——这不是假设，是第一次跑的实测），每步真跑 `nichlink check` + `cargo build`（有声明时加
+`crates --check`），并分别跑"无声明"与"发布形状切分之后"两个阶段。
+
+用法：tools/nichlink-daily-behaviors
+"""
+import os, re, shutil, subprocess, sys, pathlib
+
+ROOT = pathlib.Path("/home/nich/Moirai_N3/nichlink")
+NICHLINK = ROOT / "target/debug/nichlink"
+BASE = ROOT / "examples/control-suite"
+
+def run(cmd, cwd, env=None):
+    p = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, env=env)
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+def probe(host, label, rows, with_decl):
+    """check + build(+ crates --check)，记录真退出码。"""
+    env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
+    rc_check, out = run(f"{NICHLINK} check .", host, env)
+    rc_build, bout = run("cargo build --offline", host, env)
+    rc_crates = "-"
+    if with_decl:
+        rc_crates, _ = run(f"{NICHLINK} crates --check .", host, env)
+    first = (out.splitlines() or [""])[0][:100] if rc_check else ""
+    rows.append((label, rc_check, rc_build, rc_crates, first))
+
+def mutate(host, kind):
+    """施加一种日常改动。"""
+    src = host / "src"
+    faces = sorted(p for p in src.rglob("*.rs") if p.name != "lib.rs")
+    control = src / "control" / "control.rs"
+    panel = next((p for p in faces if p.parent.name == p.stem and p.name != "lib.rs"), None)
+    if kind == "1 add plain module":
+        (src / "helper.rs").write_text("//! A plain module, not a face.\npub fn twice(n: u32) -> u32 { n * 2 }\n")
+    elif kind == "2 add a face" and panel:
+        d = panel.parent / "extra"
+        d.mkdir(exist_ok=True)
+        (d / "extra.rs").write_text(
+            'crate::__nichlink_face! {\n    kind: Extra,\n    parent: crate::%s::NODE_ID,\n}\n'
+            % panel.parent.name)
+        rule = d / "registry_rule"
+        rule.mkdir(exist_ok=True)
+        (rule / "registry_rule.rs").write_text("//! The rule beside this face.\n")
+    elif kind == "2b add a face without a rule" and panel:
+        # 维护者判据：有些面确实不需要 registry_rule（不拥有注册机的叶子）⇒ 没有它也必须能构建 ✓
+        d = panel.parent / "leafy"
+        d.mkdir(exist_ok=True)
+        (d / "leafy.rs").write_text(
+            'crate::__nichlink_face! {\n    kind: Leafy,\n    parent: crate::%s::NODE_ID,\n}\n'
+            % panel.parent.name)
+    elif kind == "3 edit a field" and control.exists():
+        t = control.read_text()
+        control.write_text(t.replace("kind:", "exports: [\"control.render\"],\n    kind:", 1))
+    elif kind == "4 add a test" and control.exists():
+        control.write_text(control.read_text() + "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_holds() {\n        assert!(true);\n    }\n}\n")
+    elif kind == "5 add a dependency":
+        (host / "Cargo.toml").write_text((host / "Cargo.toml").read_text().replace(
+            "[dependencies]", "[dependencies]\nhelper-lib = { path = \"/tmp/helper-lib\" }", 1))
+        lib = pathlib.Path("/tmp/helper-lib")
+        (lib / "src").mkdir(parents=True, exist_ok=True)
+        (lib / "Cargo.toml").write_text('[package]\nname = "helper-lib"\nversion = "0.1.0"\nedition = "2024"\n[workspace]\n')
+        (lib / "src/lib.rs").write_text("pub fn twice(n: u32) -> u32 { n * 2 }\n")
+    elif kind == "6 rename a face file" and panel:
+        panel.rename(panel.with_name(panel.stem + "_renamed.rs"))
+    elif kind == "7 move a face" and panel:
+        tgt = src / "moved"; tgt.mkdir(exist_ok=True)
+        shutil.move(str(panel), str(tgt / panel.name))
+    elif kind == "8 delete a face" and faces:
+        faces[-1].unlink()
+    elif kind == "9 add path: field" and control.exists():
+        t = control.read_text()
+        control.write_text(t.replace("kind:", "path: \"control/renamed\",\n    kind:", 1))
+    elif kind == "10 registry_rule edit" and control.exists():
+        rule = control.parent / "registry_rule" / "registry_rule.rs"
+        if rule.exists():
+            rule.write_text(rule.read_text() + "\n// touched\n")
+
+KINDS = ["1 add plain module", "2 add a face", "2b add a face without a rule", "3 edit a field", "4 add a test",
+         "5 add a dependency", "6 rename a face file", "7 move a face", "8 delete a face",
+         "9 add path: field", "10 registry_rule edit"]
+
+for phase in ("no-declaration", "after-split"):
+    w = pathlib.Path(f"/tmp/behave-{phase}")
+    shutil.rmtree(w, ignore_errors=True)
+    shutil.copytree(BASE, w, ignore=shutil.ignore_patterns("target", "crates", ".cargo", "Cargo.lock"))
+    host = w / "host"
+    # 复制到检出之外必须重指指向本检出的 path 依赖，并把它从我们的工作区里摘出去——
+    # 否则 cargo metadata 一上来就失败，矩阵测到的是装置而不是产品（第一次跑就是这样全红）。
+    root = w / "Cargo.toml"
+    root.write_text('[workspace]\nresolver = "3"\nmembers = ["host", "graft"]\n')
+    # 每个成员清单都要重指：host 之外还有 graft（第一次只改了 host，装置照样全红）。
+    for m in w.rglob("Cargo.toml"):
+        if "target" in m.parts:
+            continue
+        m.write_text(re.sub(r'path = "[^"]*toolchain"', 'path = "%s/toolchain"' % ROOT, m.read_text()))
+    (host / "target").mkdir(exist_ok=True)
+    rows = []
+    if phase == "no-declaration":
+        (host / "add_crates.rs").unlink(missing_ok=True)
+    else:
+        env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
+        run(f"{NICHLINK} check .", host, env)
+        rc, out = run(f"{NICHLINK} crates --release --write .", host, env)
+        rows.append(("0 baseline split", 0, 0, 0, out.splitlines()[0][:90] if out else ""))
+    probe(host, "baseline", rows, phase == "after-split")
+    for kind in KINDS:
+        # 每种改动都在**自己的副本**上做：累积会让一步的失败污染后面每一步（第一次跑就是这样，
+        # 第 5 步之后的五行全是同一个 cargo 报错）。
+        w2 = pathlib.Path(f"/tmp/behave-{phase}-{kind.split()[0]}")
+        shutil.rmtree(w2, ignore_errors=True)
+        shutil.copytree(BASE, w2, ignore=shutil.ignore_patterns("target", "crates", ".cargo", "Cargo.lock"))
+        h2 = w2 / "host"
+        if phase == "no-declaration":
+            (h2 / "add_crates.rs").unlink(missing_ok=True)
+        else:
+            env2 = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
+            shutil.copy(host / "add_crates.rs", h2 / "add_crates.rs")
+            run(f"{NICHLINK} check .", h2, env2)
+            run(f"{NICHLINK} crates --release --write .", h2, env2)
+        (w2 / "Cargo.toml").write_text('[workspace]\nresolver = "3"\nmembers = ["host", "graft"]\n')
+        for m in w2.rglob("Cargo.toml"):
+            if "target" not in m.parts:
+                m.write_text(re.sub(r'path = "[^"]*toolchain"', 'path = "%s/toolchain"' % ROOT, m.read_text()))
+        mutate(h2, kind)
+        probe(h2, kind, rows, phase == "after-split")
+    print(f"\n########## {phase} ##########")
+    print(f"{'step':<24} {'check':>5} {'build':>5} {'crates':>6}  first line")
+    for label, rc1, rc2, rc3, first in rows:
+        print(f"{label:<24} {rc1:>5} {rc2:>5} {str(rc3):>6}  {first}")
