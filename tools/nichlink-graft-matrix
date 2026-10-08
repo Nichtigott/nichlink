@@ -18,6 +18,15 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-graft-matrix.XXXXXX")
 CARGO_FLAGS="${NICHLINK_GRAFT_MATRIX_CARGO_FLAGS---offline}"
 NICHLINK="$ROOT/target/debug/nichlink"
+# Build the binary this script drives, rather than assuming somebody else did: a fresh checkout has no
+# `target/debug/nichlink`, and a gate that only passes where it was built by hand fails on the machine
+# that matters (measured on CI, twice, for the sibling rehearsal).
+# 自己构建本脚本要驱动的二进制，而不是假设别人构建过：全新检出不带它，而只在"有人手工构建过"的机器上通过的
+# 闸门恰好在最要紧的那台机器上失败（姊妹演练在 CI 上实测过两次）。
+if [ ! -x "$NICHLINK" ]; then
+  step "building the CLI this matrix drives"
+  build -p nichlink-toolchain --features cli --bin nichlink || fail "cannot build $NICHLINK"
+fi
 fail() { printf 'graft matrix FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
 build() { command cargo build $CARGO_FLAGS "$@"; }

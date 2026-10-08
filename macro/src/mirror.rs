@@ -170,7 +170,7 @@ pub(crate) fn mirror_item(fields: &[Field]) -> Tokens {
 
     // `let _: FaceFields<<arguments>> = FaceFields <literal>;`
     let face_fields = format!(
-        "::{}::runtime::macros::FaceFields",
+        "::{}::run_method::macros::FaceFields",
         lexicon::RUN_METHOD_CRATE
     );
     let mut body = Tokens::new();
