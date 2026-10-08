@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::build_time::face_views;
+use crate::build_method::face_views;
 use serde_json::Value;
 
 use crate::mcp::apply::load_registry;
@@ -84,8 +84,8 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
             // directory.
             // 与写入路径同一条规矩：读回以上下文携带的包根为基准，绝不以进程自己的目录为基准。
             let context =
-                crate::runtime::AuthoringContext::new(root.to_path_buf(), namespace.clone());
-            let read_back = |id| context.scope(|| crate::runtime::authored_face(&registry, id));
+                crate::run_method::AuthoringContext::new(root.to_path_buf(), namespace.clone());
+            let read_back = |id| context.scope(|| crate::run_method::authored_face(&registry, id));
             // The package-wide answer set: which kind offers which capability.
             // 包级的答案表：哪个 kind 提供哪个能力。
             let mut offerings: BTreeMap<String, Vec<(String, BTreeSet<String>)>> = BTreeMap::new();

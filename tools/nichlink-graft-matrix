@@ -74,7 +74,7 @@ printf '   refusal: %s\n' "$(sed -n '3,5p' "$WORK/overlap.out" | tr '\n' ' ' | c
 step "leg 3/3: re-partitioning the host keeps the plan and every crate"
 AREA=$(host repartition)
 cat >"$AREA/app/add_crates.rs" <<'RS'
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of("app", &[Crate::named("objects").at(&[crate::control::SUBTREE])])

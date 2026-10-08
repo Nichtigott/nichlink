@@ -173,7 +173,7 @@
 - `toolchain/src/mcp/src/registry.rs` 的入口**都返回渲染好的字符串**（`registry` / `registry_brief` /
   `registry_with` / `registry_body` / `namespace`），**没有**"结构化面清单"可用；
 - 带 `parts` / `exports` / `handle_traits` / `part_traits` 这些字段的**结构化发现**在
-  `toolchain/src/build_time/src/discovery_cache.rs`（那里逐个字段名遍历）；
+  `toolchain/src/build_method/src/discovery_cache.rs`（那里逐个字段名遍历）；
 - ⇒ **W4 `consistency` 与 W5 `conformance` 都需要先把"结构化面清单（parent + 声明字段 + 成员归属）"
   接到 mcp 面**（一条只读的、与 `registry` 同源的分支），再谈"同族 × 属性"与"标本形状指纹"。
   这也是唯一一处**必须新增解析管线**的地方（W1–W3/W6 都只用现有事实）。**先做这件事，再做 W4/W5**；

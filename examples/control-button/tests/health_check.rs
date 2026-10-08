@@ -19,7 +19,7 @@
 //! Pinned by `a_real_registered_face_reports_its_declared_check`.
 //! 由 `a_real_registered_face_reports_its_declared_check` 钉住。
 
-use nichlink_toolchain::runtime::{Provenance, RuntimeValue};
+use nichlink_toolchain::run_method::{Provenance, RuntimeValue};
 
 /// The real registered Button face: a good label passes, a blank one fails with
 /// evidence that names the check and the face's source file.

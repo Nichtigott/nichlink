@@ -2,11 +2,11 @@
 //! 创建宿主项目：桥的脚手架写入。
 //!
 //! The bridge does not render a project itself. It calls
-//! `crate::build_time::scaffold::create_project`, the executor `nichlink new` (the
+//! `crate::build_method::scaffold::create_project`, the executor `nichlink new` (the
 //! CLI) and `submit_new_project` (Studio) both run, so a project an agent scaffolds
 //! is the project those two write: the same manifest, build script, source entry,
 //! editor snippets, and detected dependency source.
-//! 桥不自己渲染项目。它调用 `crate::build_time::scaffold::create_project`——CLI 的
+//! 桥不自己渲染项目。它调用 `crate::build_method::scaffold::create_project`——CLI 的
 //! `nichlink new` 与 Studio 的 `submit_new_project` 都运行的那个执行器——因此代理脚手架出来的
 //! 项目就是那两者写出的项目：同一份清单、构建脚本、源码入口、编辑器 snippet，以及同一个被探测出的
 //! 依赖来源。
@@ -32,7 +32,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use crate::build_time::scaffold::{self, ProjectKind};
+use crate::build_method::scaffold::{self, ProjectKind};
 use serde_json::Value;
 
 use crate::mcp::preview::{remove_copy, work_directory};
@@ -282,7 +282,7 @@ fn initial_census(target: &Path, package: &str) -> String {
     let files = crate::mcp::source_index::load_sources(target)
         .map(|sources| sources.len())
         .unwrap_or(0);
-    let registries = crate::build_time::face_views(target, package)
+    let registries = crate::build_method::face_views(target, package)
         .map(|views| views.iter().filter(|view| view.owns_registry).count())
         .unwrap_or(0);
     format!(
@@ -392,7 +392,7 @@ fn add_faces(staging: &Path, requests: &[Value]) -> Result<Vec<String>, String> 
         crate::mcp::apply::run_add(staging, &namespace, request)
             .map_err(|error| format!("`faces[{index}]` was refused: {error}"))?;
     }
-    let faces = crate::build_time::face_views(staging, &namespace)?;
+    let faces = crate::build_method::face_views(staging, &namespace)?;
     Ok(faces
         .iter()
         .map(|face| format!("  {}  {}  {}", face.path, face.kind, face.source))

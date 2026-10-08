@@ -3,7 +3,7 @@
 
 use std::sync::Mutex;
 
-use crate::runtime::{PluginAdapter, VerifiedPluginArtifact};
+use crate::run_method::{PluginAdapter, VerifiedPluginArtifact};
 use wasmi::{
     Config, EnforcedLimits, Engine, Instance, Linker, Memory, Module, Store, StoreLimits,
     StoreLimitsBuilder,
@@ -211,10 +211,10 @@ impl WasmBackend {
             let version = abi
                 .call(&mut store, ())
                 .map_err(|error| HostError::Abi(error.to_string()))?;
-            if version != crate::runtime::PLUGIN_ABI_VERSION as i32 {
+            if version != crate::run_method::PLUGIN_ABI_VERSION as i32 {
                 return Err(HostError::Abi(format!(
                     "plugin ABI version {version} is incompatible with host ABI {}",
-                    crate::runtime::PLUGIN_ABI_VERSION
+                    crate::run_method::PLUGIN_ABI_VERSION
                 )));
             }
         }
@@ -397,7 +397,7 @@ impl PluginInstance for WasmInstance {
 }
 
 fn operation_export(operation: &str) -> Result<String, HostError> {
-    if crate::runtime::validate_operation_name(operation).is_err() {
+    if crate::run_method::validate_operation_name(operation).is_err() {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(format!("nichlink_{operation}"))

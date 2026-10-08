@@ -17,7 +17,7 @@
 
 use std::time::Instant;
 
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     FrameworkId, NodeId, OwnedAdmission, OwnedFlowContract, OwnedLocalizedText,
     OwnedObjectContract, OwnedRegistrationRule, OwnedSourceLocation, RegistrationSnapshot,
     Registry, root_node_id,

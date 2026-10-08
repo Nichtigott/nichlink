@@ -33,7 +33,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::build_time::{DeclaredGraft, declared_grafts};
+use crate::build_method::{DeclaredGraft, declared_grafts};
 use crate::mcp::callgraph::{caller_note, is_call_to};
 use crate::mcp::source_index::{load_one, load_sources};
 

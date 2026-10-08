@@ -25,7 +25,7 @@ default = ["build", "run"]
 
 # ── Host-facing (two halves: `[build-dependencies]` and `[dependencies]`)
 # ── 宿主面向（两半，分别对应 build-dependencies 与 dependencies）
-build = ["nichlink-kernel/syntax", "dep:syn", "dep:proc-macro2", "dep:serde_json"]  # module build_time
+build = ["nichlink-kernel/syntax", "dep:syn", "dep:proc-macro2", "dep:serde_json"]  # module build_method
 run = ["dep:nichlink-macro"]                                                        # module runtime
 
 # ── Execution surfaces (the names of their own public API gates, unchanged)
@@ -92,12 +92,12 @@ rataflow = { version = "0.1", optional = true, default-features = false, feature
 wat = "1"
 
 [[test]]
-name = "build_time_missing_source_tree"
-path = "tests/build_time_missing_source_tree.rs"
+name = "build_method_missing_source_tree"
+path = "tests/build_method_missing_source_tree.rs"
 
 [[test]]
-name = "build_time_outside_src_layout"
-path = "tests/build_time_outside_src_layout.rs"
+name = "build_method_outside_src_layout"
+path = "tests/build_method_outside_src_layout.rs"
 
 [[test]]
 name = "mcp_client"

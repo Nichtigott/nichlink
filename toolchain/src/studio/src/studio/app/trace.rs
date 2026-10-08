@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::runtime::{
+use crate::run_method::{
     CallTrace, NodeId, Registry, TraceArtifact, read_trace_artifact, trace_artifact_path,
 };
 

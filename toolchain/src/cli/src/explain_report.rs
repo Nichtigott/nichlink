@@ -11,7 +11,7 @@
 
 use std::path::Path;
 
-use crate::build_time::{
+use crate::build_method::{
     DeclaredGraft, FaceView, declared_grafts, read_build_scope, read_pruning_manifest,
 };
 use nichlink_kernel::identity::NodeId;

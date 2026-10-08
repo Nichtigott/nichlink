@@ -6,7 +6,7 @@
 
 use super::super::graft::{declaration_for, graft_selector_error};
 use super::*;
-use crate::build_time::{DeclaredGraft, DeclaredGrafts};
+use crate::build_method::{DeclaredGraft, DeclaredGrafts};
 use std::path::PathBuf;
 
 fn declared(cut: DeclaredGraft) -> DeclaredGrafts {
@@ -61,7 +61,7 @@ fn a_typed_cut_names_the_module_from_the_crate_root() {
         graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
         full: true,
         cfg: None,
-        expressions: Some(crate::build_time::DeclaredGraftExpressions {
+        expressions: Some(crate::build_method::DeclaredGraftExpressions {
             cut: "crate::control::object::button::NODE_ID".to_owned(),
             cut_end: None,
             graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
@@ -128,7 +128,7 @@ fn an_unresolved_module_only_matches_a_string_cut() {
         graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
         full: false,
         cfg: None,
-        expressions: Some(crate::build_time::DeclaredGraftExpressions {
+        expressions: Some(crate::build_method::DeclaredGraftExpressions {
             cut: "crate::control::object::button::NODE_ID".to_owned(),
             cut_end: None,
             graft: "control_button_graft::button_fast::NODE_ID".to_owned(),

@@ -8,7 +8,7 @@
 //! step generated; face code stays ordinary Rust and no parent keeps a child
 //! roster.
 
-nichlink_toolchain::runtime::host!();
+nichlink_toolchain::run_method::host!();
 
 // 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 // 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -45,7 +45,7 @@ pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.partitione
 // 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 //   cut "root/control/button" graft "button_fast"
 // The string form still works and needs no link, but tooling cannot complete it.
-nichlink_toolchain::runtime::static_graft_plan!(
+nichlink_toolchain::run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),

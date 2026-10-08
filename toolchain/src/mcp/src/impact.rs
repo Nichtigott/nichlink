@@ -20,7 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
-use crate::build_time::declared_grafts;
+use crate::build_method::declared_grafts;
 use serde_json::Value;
 
 use crate::mcp::apply::load_registry;
@@ -233,14 +233,15 @@ struct Reached {
 fn capabilities(
     root: &Path,
     namespace: &str,
-    faces: &[crate::build_time::FaceView],
+    faces: &[crate::build_method::FaceView],
 ) -> Result<Vec<(String, String, String, String)>, String> {
     let registry = load_registry(root, namespace)?;
     // Same rule as every other read-back: resolve against the package root the
     // context carries, never the process's own directory.
     // 与其它每一处读回同一条规矩：以上下文携带的包根为基准，绝不以进程自己的目录为基准。
-    let context = crate::runtime::AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
-    let read_back = |id| context.scope(|| crate::runtime::authored_face(&registry, id));
+    let context =
+        crate::run_method::AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
+    let read_back = |id| context.scope(|| crate::run_method::authored_face(&registry, id));
     // Which kind offers which capability, and who wants what.
     // 哪个 kind 提供哪个能力，以及谁想要什么。
     let mut offered: BTreeMap<String, Vec<(String, BTreeSet<String>)>> = BTreeMap::new();

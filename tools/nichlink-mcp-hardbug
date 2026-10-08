@@ -221,13 +221,13 @@ def graft_face(name, kind):
     """The out-of-project replacement for one sibling, declared with `external_object!`."""
     return f'''//! The out-of-project replacement for `{kind}`.
 
-use nichlink_toolchain::runtime::registry_core::{{
+use nichlink_toolchain::run_method::registry_core::{{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 }};
 
 pub struct {kind}Fast;
 
-nichlink_toolchain::runtime::external_object! {{
+nichlink_toolchain::run_method::external_object! {{
     source: "{name}_fast/{name}_fast.rs",
     kind: {kind}Fast,
     preset: NoPreset,
@@ -298,7 +298,7 @@ def graft_lib():
     return f'''//! An out-of-project crate: it takes no part in the host's generated tree.
 //! 项目外 crate：它不参与宿主那棵生成树。
 
-use nichlink_toolchain::runtime::registry_core::{{FrameworkId, Registry}};
+use nichlink_toolchain::run_method::registry_core::{{FrameworkId, Registry}};
 
 /// Must match the host framework, or the overlay rejects this tree.
 pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
@@ -321,7 +321,7 @@ pub fn external_registry() -> Registry {{
 def patch_entry(entry, declared):
     """Replace the entry's graft plan with one cut per declared sibling, in WIDGETS order."""
     text = entry.read_text(encoding="utf-8")
-    marker = "nichlink_toolchain::runtime::static_graft_plan!("
+    marker = "nichlink_toolchain::run_method::static_graft_plan!("
     if marker not in text:
         raise SystemExit(f"{entry} no longer declares a graft plan — the example's shape changed")
     start = text.index(marker)
@@ -624,7 +624,7 @@ def scope_sources(host):
 def graft_plan_line(host):
     """The 1-based line the entry's graft plan starts on."""
     text = (host / "src/lib.rs").read_text(encoding="utf-8")
-    return text[: text.index("nichlink_toolchain::runtime::static_graft_plan!")].count("\n") + 1
+    return text[: text.index("nichlink_toolchain::run_method::static_graft_plan!")].count("\n") + 1
 
 
 def mechanism_words(klass):
@@ -858,7 +858,7 @@ def prove(klass, host, truth):
 
 def patch_entry_text(text, declared):
     """Replace the graft plan in a **string** the same way `patch_entry` does in a file."""
-    marker = "nichlink_toolchain::runtime::static_graft_plan!("
+    marker = "nichlink_toolchain::run_method::static_graft_plan!("
     start = text.index(marker)
     end = text.index("\n);", start) + len("\n);")
     cuts = "\n".join(
@@ -1229,7 +1229,7 @@ def build(directory, klass):
         # 第九个面在两个 crate 里都在、且不在任何切口里：没声明它的是入口。
         entry = host / "src/lib.rs"
         text = entry.read_text(encoding="utf-8")
-        line = text[: text.index("nichlink_toolchain::runtime::static_graft_plan!")].count("\n") + 1
+        line = text[: text.index("nichlink_toolchain::run_method::static_graft_plan!")].count("\n") + 1
         write(host / "tests/shipped.rs", shipped_test(WIDGETS + [PRUNED]))
         truth["pruned"] = {
             "face": f"root/control/{PRUNED}",

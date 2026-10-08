@@ -139,20 +139,20 @@ source for a package throughout a manifest.
 ```rust
 // build.rs
 fn main() {
-    nichlink_toolchain::build_time::run();
+    nichlink_toolchain::build_method::run();
 }
 ```
 
 In the crate root, connect the generated plan once:
 
 ```rust
-nichlink_toolchain::runtime::host!();
+nichlink_toolchain::run_method::host!();
 ```
 
 This expands to `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`;
 writing the include directly is an equivalent, advanced alternative.
 `nichlink-toolchain` re-exports the kernel, so face code refers to
-contracts, plans, and traces through `nichlink_toolchain::runtime::…`.
+contracts, plans, and traces through `nichlink_toolchain::run_method::…`.
 
 `main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
 framework library uses `src/lib.rs`. The build adapter scans the host crate's
@@ -171,12 +171,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_toolchain::runtime::PresetContract for CanvasPreset {
+impl nichlink_toolchain::run_method::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_toolchain::runtime::PartsContract for CanvasParts {
+impl nichlink_toolchain::run_method::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -199,8 +199,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_toolchain::runtime::FlowContract::new(
-        nichlink_toolchain::runtime::ContractId::new("canvas.render.v1"),
+    flow: nichlink_toolchain::run_method::FlowContract::new(
+        nichlink_toolchain::run_method::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -231,7 +231,7 @@ For a replacement, both sides publish a flow contract. The host validates the
 contract id, version, input, and output before applying the graft:
 
 ```rust
-let plan = nichlink_toolchain::runtime::GraftPlan::command(
+let plan = nichlink_toolchain::run_method::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -478,11 +478,11 @@ or third-party source. The static macro constructs no `Vec` or `String`; the
 builder writes its contents directly into the `StaticPlan`:
 
 ```rust
-use nichlink_toolchain::runtime::{FrameworkId, Registry};
+use nichlink_toolchain::run_method::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -533,7 +533,7 @@ When several data boundaries must change together, put all cuts in one static
 declaration:
 
 ```rust
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -546,7 +546,7 @@ reload path must construct and modify a plan at runtime.
 A path range can target contiguous siblings under one parent Registry:
 
 ```rust
-let plan = nichlink_toolchain::runtime::GraftPlan::command(
+let plan = nichlink_toolchain::run_method::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -573,7 +573,7 @@ screen keeps them apart:
   registry untouched.
 * `.nichlink/external-grafts/<selector>/graft.plan` is the **record** the screen
   writes: the authoring input the runtime can now apply over the declaration.
-  It is not compiled; `nichlink_toolchain::runtime::apply_recorded_grafts` loads it and
+  It is not compiled; `nichlink_toolchain::run_method::apply_recorded_grafts` loads it and
   `Registry::overlay_recorded` reconciles it under the precedence rule in
   [`docs/graft.md`](docs/graft.md) — a record overrides a string-form
   `static_graft_plan!` cut, a typed-form cut stays final, and a record selector
@@ -844,9 +844,9 @@ choice.
 ## Runtime tracing
 
 ```rust
-let trace = nichlink_toolchain::runtime::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_toolchain::runtime::CallTrace::disabled();
-let detailed = nichlink_toolchain::runtime::CallTrace::full();
+let trace = nichlink_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_toolchain::run_method::CallTrace::disabled();
+let detailed = nichlink_toolchain::run_method::CallTrace::full();
 ```
 
 `errors-only` keeps failed chains and discards successful evidence. `full` keeps
@@ -869,7 +869,7 @@ same methods.
 
 | Crate                | Directory                  | Execution surface                                                                                                                                                                                          |
 | -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nichlink-toolchain` | `toolchain/build_time/`    | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives                                                  |
+| `nichlink-toolchain` | `toolchain/build_method/`    | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives                                                  |
 | `nichlink-toolchain` | `toolchain/runtime/`       | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor                                                                            |
 | `nichlink-toolchain` | `toolchain/call_evidence/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
 | `nichlink-toolchain` | `toolchain/plugin_host/`   | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table                                                                                                 |

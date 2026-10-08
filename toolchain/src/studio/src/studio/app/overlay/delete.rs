@@ -18,7 +18,7 @@ impl App {
                 // `delete_module` 改为经环境变量、进程 CWD 或本 crate 的清单目录解析根路径——并把
                 // 模块从那个恰好命中的项目里搬走。删除模块是最不能靠猜根路径的操作。
                 let result = super::super::write_guard::with_selected_project(|| {
-                    crate::runtime::delete_module(&self.registry, &spec)
+                    crate::run_method::delete_module(&self.registry, &spec)
                 });
                 // Per arm: a deleted module is ordinary; a refused delete is the alert
                 // (audit `STU-S-18`).

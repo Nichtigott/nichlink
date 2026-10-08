@@ -27,8 +27,8 @@ use std::marker::PhantomData;
 
 use nichlink_kernel::identity::NodeId as OfficialNodeId;
 use nichlink_kernel::registry_core::identity::NodeId as KernelNodeId;
-use nichlink_toolchain::runtime::NodeId as SurfaceNodeId;
-use nichlink_toolchain::runtime::registry_core::identity::NodeId as SurfaceKernelNodeId;
+use nichlink_toolchain::run_method::NodeId as SurfaceNodeId;
+use nichlink_toolchain::run_method::registry_core::identity::NodeId as SurfaceKernelNodeId;
 
 /// The same identity, reached four ways: module path, kernel module page, the
 /// surface's flat re-export, and the surface's kernel module path.
@@ -69,16 +69,17 @@ fn the_whitelist_and_the_module_pages_both_hold() {
 }
 
 /// The surfaces keep every kernel name they had: a host that writes
-/// `nichlink_toolchain::runtime::PluginManifest` or `nichlink_toolchain::runtime::sha256_hex`
+/// `nichlink_toolchain::run_method::PluginManifest` or `nichlink_toolchain::run_method::sha256_hex`
 /// must not notice the kernel root getting smaller.
-/// 执行面保留它们原有的全部内核名字：写 `nichlink_toolchain::runtime::PluginManifest` 或
-/// `nichlink_toolchain::runtime::sha256_hex` 的宿主不该察觉内核根部变小了。
+/// 执行面保留它们原有的全部内核名字：写 `nichlink_toolchain::run_method::PluginManifest` 或
+/// `nichlink_toolchain::run_method::sha256_hex` 的宿主不该察觉内核根部变小了。
 #[test]
 fn the_surface_keeps_its_flat_kernel_names() {
-    let _: PhantomData<nichlink_toolchain::runtime::PluginManifest> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::Registry> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::plugin::catalog::PluginCatalog> = PhantomData;
-    assert_eq!(nichlink_toolchain::runtime::sha256_hex(b"").len(), 64);
+    let _: PhantomData<nichlink_toolchain::run_method::PluginManifest> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::Registry> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::plugin::catalog::PluginCatalog> =
+        PhantomData;
+    assert_eq!(nichlink_toolchain::run_method::sha256_hex(b"").len(), 64);
 }
 
 /// Every kernel module page is part of the official surface, so a host that
@@ -110,10 +111,10 @@ fn every_kernel_module_page_still_resolves() {
 }
 
 /// The plugin protocol keeps its module pages on both the kernel and the
-/// surface shim; a host that wrote `nichlink_toolchain::runtime::plugin::trust::…`
+/// surface shim; a host that wrote `nichlink_toolchain::run_method::plugin::trust::…`
 /// must not notice the shim narrowing.
 /// 插件协议在内核与执行面 shim 两侧都保留模块页；写过
-/// `nichlink_toolchain::runtime::plugin::trust::…` 的宿主不该察觉 shim 变窄。
+/// `nichlink_toolchain::run_method::plugin::trust::…` 的宿主不该察觉 shim 变窄。
 #[test]
 fn the_plugin_module_pages_still_resolve() {
     let _: PhantomData<nichlink_kernel::plugin::artifact::PluginArtifact> = PhantomData;
@@ -122,10 +123,12 @@ fn the_plugin_module_pages_still_resolve() {
     let _: PhantomData<nichlink_kernel::plugin::plugin_policy::PluginPolicy> = PhantomData;
     let _: PhantomData<nichlink_kernel::plugin::slot::PluginChannel> = PhantomData;
     let _: PhantomData<nichlink_kernel::plugin::trust::PluginTrustPolicy> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::plugin::graft_document::GraftPlanDocument> =
+    let _: PhantomData<nichlink_toolchain::run_method::plugin::catalog::PluginCatalog> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::plugin::trust::PluginTrustError> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::plugin::graft_document::GraftPlanDocument> =
+        PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::plugin::trust::PluginTrustError> =
+        PhantomData;
 }
 
 /// The runtime evidence surface stays reachable both through the
@@ -135,17 +138,18 @@ fn the_plugin_module_pages_still_resolve() {
 /// `runtime::trace::locals::*` 页抵达。
 #[test]
 fn the_runtime_and_locals_pages_still_resolve() {
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::CallTrace> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::Coordinates> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::Provenance> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::RuntimeValue> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::CallTrace> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalId> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalKind> =
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::CallTrace> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::Coordinates> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::Provenance> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::RuntimeValue> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::CallTrace> = PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalId> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::LocalValue> =
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalKind> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::runtime::runtime::trace::locals::Observation> =
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalValue> =
+        PhantomData;
+    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::Observation> =
         PhantomData;
 }
 
@@ -157,7 +161,7 @@ fn the_runtime_and_locals_pages_still_resolve() {
 #[test]
 fn the_public_macro_names_still_resolve() {
     #[allow(unused_imports)]
-    use nichlink_toolchain::runtime::{
+    use nichlink_toolchain::run_method::{
         external_object, face_fields, face_fields_mirror, host, static_graft_plan,
     };
     #[allow(unused_imports)]
@@ -181,7 +185,7 @@ fn the_public_macro_names_still_resolve() {
         trace_value,
     };
     assert_eq!(
-        nichlink_toolchain::runtime::lexicon::GENERATED_LIB_FILE,
+        nichlink_toolchain::run_method::lexicon::GENERATED_LIB_FILE,
         "generated_lib.rs"
     );
 }
@@ -195,17 +199,17 @@ fn the_public_macro_names_still_resolve() {
 #[test]
 fn the_authoring_surface_still_resolves() {
     #[allow(unused_imports)]
-    use nichlink_toolchain::runtime::authoring::{
+    use nichlink_toolchain::run_method::authoring::{
         AuthoringChange, AuthoringContext, FACE_FIELD_COUNT, ModuleFacePatch, NewModuleFace,
         add_module, add_module_from_face, add_module_with_registration, delete_module,
         edit_module_face, generated_snapshots, generated_snapshots_from,
     };
     #[allow(unused_imports)]
-    use nichlink_toolchain::runtime::authoring::{
+    use nichlink_toolchain::run_method::authoring::{
         external_graft, filesystem, manifest, operations, parse, snapshot, validation,
     };
     assert_eq!(
-        nichlink_toolchain::runtime::authoring::FACE_FIELD_COUNT,
-        nichlink_toolchain::runtime::authoring::face_field::FACE_FIELD_COUNT
+        nichlink_toolchain::run_method::authoring::FACE_FIELD_COUNT,
+        nichlink_toolchain::run_method::authoring::face_field::FACE_FIELD_COUNT
     );
 }

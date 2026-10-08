@@ -9,10 +9,10 @@
 
 use std::fmt::Write as _;
 
-pub use crate::runtime::registry_core::mir::{
+pub use crate::run_method::registry_core::mir::{
     CallEvidence, CallRelation, MirCall, MirGraph, MirLocal, MirParseError, merge_call_relations,
 };
-use crate::runtime::{CallEdge, CallTrace};
+use crate::run_method::{CallEdge, CallTrace};
 
 /// Static MIR candidates plus calls observed in one live run.
 /// 静态 MIR 候选边与一次运行中真实观察到的调用边。
@@ -97,7 +97,7 @@ impl UnifiedCallGraph {
 #[cfg(test)]
 mod tests {
     use super::{CallEvidence, MirGraph, UnifiedCallGraph};
-    use crate::runtime::{CallTrace, NodeId, SourceLocation};
+    use crate::run_method::{CallTrace, NodeId, SourceLocation};
 
     #[test]
     fn keeps_static_and_live_edges_distinct() {

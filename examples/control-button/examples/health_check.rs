@@ -16,7 +16,7 @@
 //! `RuntimeValue`、用空调用路径（本示例不接 trace）交给 `health_check`、渲染聚合错误。
 //! 没有声明检查的面会对一切取值通过，什么都证明不了——所以 Button 面确实声明了一条。
 
-use nichlink_toolchain::runtime::{Provenance, RuntimeValue};
+use nichlink_toolchain::run_method::{Provenance, RuntimeValue};
 
 fn main() {
     let registry = control_button::base_registry();

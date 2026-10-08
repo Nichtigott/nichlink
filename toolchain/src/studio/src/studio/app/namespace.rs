@@ -20,12 +20,12 @@
 //! academic: TOML's dotted form (`package.name = "x"`) is the same table with no
 //! `[package]` header, so the scan found nothing and Studio authored that project
 //! under the documented default — an identity domain none of its recorded ids live
-//! in. The authority is now `crate::build_time::package_name`, shared with the
+//! in. The authority is now `crate::build_method::package_name`, shared with the
 //! CLI and the MCP bridge, so all three name a package the same way.
 //! 这里曾经是对 `[package] name` 的逐行字面扫描，而差别不是学理上的：TOML 的点式写法
 //! （`package.name = "x"`）是同一张表却没有 `[package]` 表头，因此扫描什么也找不到，Studio
 //! 就在文档化的默认值之下创作那个项目——而它记录的任何 id 都不住在那个身份域里。现在的权威是
-//! `crate::build_time::package_name`，与 CLI 和 MCP 桥共用，因此三者对包的命名方式一致。
+//! `crate::build_method::package_name`，与 CLI 和 MCP 桥共用，因此三者对包的命名方式一致。
 //!
 //! Split out of `support` when that file reached the size ceiling; the boundary is
 //! the concern, not the line count: `support` is interaction geometry and editor
@@ -91,10 +91,10 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// `nichlink.default` 是真实答案，而搭建新项目的向导依赖它。针对已存在树的**查询**则不能凭空
 /// 造出身份域，因此桥选择拒绝。
 pub(super) fn namespace_for(manifest: &Path, configured: Option<&str>) -> String {
-    // The override half is the shared rule in `build_time`; the fallback is this surface's own
+    // The override half is the shared rule in `build_method`; the fallback is this surface's own
     // decision (authoring creates, so it defaults) and stays on this line where it can be read.
-    // 覆盖那一半是 `build_time` 里的共享规则；回落是这个执行面自己的决定（创作在创建，因此给默认值）
+    // 覆盖那一半是 `build_method` 里的共享规则；回落是这个执行面自己的决定（创作在创建，因此给默认值）
     // 并且留在这两行里，一眼能读到。
-    crate::build_time::identity_namespace(configured, manifest)
-        .unwrap_or_else(|_| crate::runtime::lexicon::DEFAULT_NAMESPACE.to_owned())
+    crate::build_method::identity_namespace(configured, manifest)
+        .unwrap_or_else(|_| crate::run_method::lexicon::DEFAULT_NAMESPACE.to_owned())
 }

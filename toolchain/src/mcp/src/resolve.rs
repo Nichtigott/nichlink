@@ -14,7 +14,7 @@
 
 use std::path::Path;
 
-use crate::build_time::FaceView;
+use crate::build_method::FaceView;
 use nichlink_kernel::NodeId;
 use serde_json::Value;
 
@@ -117,7 +117,7 @@ pub(crate) fn derived_faces(
     #[cfg(test)]
     crate::mcp::published::note_derivation();
     let (faces, unreadable, external) =
-        crate::build_time::face_views_with_external(root, namespace)?;
+        crate::build_method::face_views_with_external(root, namespace)?;
     // External faces are not a defect and are not hidden either: a crate whose faces are
     // `external_object!` declarations is a crate the generated tree deliberately does not
     // contain, and a reader told only "faces 0" would file a bug against a working example.

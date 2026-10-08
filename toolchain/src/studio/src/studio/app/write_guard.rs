@@ -52,7 +52,7 @@ pub(super) fn with_selected_project<T>(
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
     let root = selected_package_root()?;
-    crate::runtime::AuthoringContext::new(root, package_namespace()).scope(operation)
+    crate::run_method::AuthoringContext::new(root, package_namespace()).scope(operation)
 }
 
 /// Run one read of the authoring records inside the selected project's context.
@@ -70,5 +70,5 @@ pub(super) fn with_selected_project_read<T>(
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
     let root = selected_read_root()?;
-    crate::runtime::AuthoringContext::new(root, package_namespace()).scope(operation)
+    crate::run_method::AuthoringContext::new(root, package_namespace()).scope(operation)
 }

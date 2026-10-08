@@ -66,7 +66,7 @@ pub(crate) fn check(
     };
     let out_dir = build_out_dir(&manifest);
     if json_output {
-        return match crate::build_time::check_for(&manifest, &out_dir, &package) {
+        return match crate::build_method::check_for(&manifest, &out_dir, &package) {
             Ok(()) => {
                 writeln!(
                     out,
@@ -86,7 +86,7 @@ pub(crate) fn check(
             }
         };
     }
-    crate::build_time::run_for(&manifest, &out_dir, &package)?;
+    crate::build_method::run_for(&manifest, &out_dir, &package)?;
     writeln!(out, "nichlink check: ok ({package})")
         .map_err(|error| format!("cannot write output: {error}"))?;
     // The line the maintainer asked for: "see the terminal say the index is ready before you read

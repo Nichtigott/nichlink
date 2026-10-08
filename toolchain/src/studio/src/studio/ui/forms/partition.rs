@@ -11,16 +11,16 @@ use super::super::*;
 
 /// One package's block of lines.
 /// 一个包的那一块行。
-fn package_lines(package: &crate::build_time::PackageView) -> Vec<Line<'static>> {
+fn package_lines(package: &crate::build_method::PackageView) -> Vec<Line<'static>> {
     let role = match &package.crate_name {
         Some(name) => format!("crate {name} ({} )", package.subtrees.join(", ")),
         None => "facade (carries the cross-crate half)".to_owned(),
     };
     let on_disk = match package.on_disk {
-        crate::build_time::OnDisk::Absent => "absent",
-        crate::build_time::OnDisk::Development => "development",
-        crate::build_time::OnDisk::Release => "release",
-        crate::build_time::OnDisk::Foreign => "NOT this action's package",
+        crate::build_method::OnDisk::Absent => "absent",
+        crate::build_method::OnDisk::Development => "development",
+        crate::build_method::OnDisk::Release => "release",
+        crate::build_method::OnDisk::Foreign => "NOT this action's package",
     };
     let kilobytes = package.bytes as f64 / 1024.0;
     let mut lines = vec![

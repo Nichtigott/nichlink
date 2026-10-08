@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::runtime::{CallTrace, trace_artifact_path, write_trace_artifact};
+use crate::run_method::{CallTrace, trace_artifact_path, write_trace_artifact};
 use serde_json::json;
 
 use super::{mir, unified};

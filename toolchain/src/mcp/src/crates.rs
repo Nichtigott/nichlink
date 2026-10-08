@@ -4,10 +4,10 @@
 //! A host declares at its package root which subtrees become crates of their own (`add_crates.rs`),
 //! and `nichlink crates` plus Studio's partition screen already turn that declaration into packages.
 //! The bridge is the third surface, and it answers the same question with the same reader
-//! (`build_time::partition_view`) and writes with the same writer — so an agent can plan a split,
+//! (`build_method::partition_view`) and writes with the same writer — so an agent can plan a split,
 //! see what is on disk, judge whether it could be published, and only then write it.
 //! 宿主在包根声明哪些子树各自成为一个 crate（`add_crates.rs`），而 `nichlink crates` 与 Studio 的分区屏
-//! 已经能把这份声明变成包。桥是第三个执行面，它用**同一个**读取器（`build_time::partition_view`）回答
+//! 已经能把这份声明变成包。桥是第三个执行面，它用**同一个**读取器（`build_method::partition_view`）回答
 //! 同一个问题、用**同一个**写入方写入——于是代理可以先规划一次拆分、看清磁盘上有什么、判断能不能发布，
 //! 然后才写。
 //!
@@ -21,8 +21,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::build_time::partition_view::{OnDisk, PartitionView};
-use crate::build_time::{DeclarationEdit, declare, undeclare};
+use crate::build_method::partition_view::{OnDisk, PartitionView};
+use crate::build_method::{DeclarationEdit, declare, undeclare};
 
 /// The most package rows one reply prints before it says how many it left out.
 /// 一次回复在说明"省掉多少"之前最多打印多少个包行。
@@ -60,7 +60,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                 // **first** or the directory stays behind as an orphan this tool can no longer reach.
                 // 磁盘上的包是由这份即将被改动的声明命名的：条目一旦消失，就没有动作还知道那个目录了，因此
                 // `revert` 必须**先**跑，否则那个目录会作为孤儿留下、本工具再也够不到它。
-                if let Some(directory) = crate::build_time::package_directory_of(root, &name)? {
+                if let Some(directory) = crate::build_method::package_directory_of(root, &name)? {
                     return Err(format!(
                         "`{name}` still has its package at {}: `revert` first (it takes the generated \
                          packages back while the declaration still names them), then undeclare\n\
@@ -77,7 +77,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
             }
         };
     }
-    let view = crate::build_time::partition_view::view(root)?;
+    let view = crate::build_method::partition_view::view(root)?;
     let Some(view) = view else {
         return Ok(format!(
             "{} declares no crates: it is one crate. A split is declared at the package root in \
@@ -112,7 +112,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                 ));
             }
             let plan =
-                crate::build_time::partition_view::plan(root)?.expect("a declaration exists");
+                crate::build_method::partition_view::plan(root)?.expect("a declaration exists");
             let directories: Vec<&Path> = plan
                 .planned
                 .iter()
@@ -121,8 +121,8 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                 .collect();
             let outcome = match action {
                 "write" => {
-                    crate::build_time::guard_shape(&directories, false)?;
-                    let written = crate::build_time::write_partition(
+                    crate::build_method::guard_shape(&directories, false)?;
+                    let written = crate::build_method::write_partition(
                         &plan.config_root,
                         plan.workspace.as_deref(),
                         &plan.planned,
@@ -131,8 +131,8 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                     written_sentence(&written)
                 }
                 "release" => {
-                    crate::build_time::guard_shape(&directories, true)?;
-                    let written = crate::build_time::write_release(
+                    crate::build_method::guard_shape(&directories, true)?;
+                    let written = crate::build_method::write_release(
                         &plan.config_root,
                         plan.workspace.as_deref(),
                         &plan.release,
@@ -140,7 +140,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                     written_sentence(&written)
                 }
                 _ => {
-                    let written = crate::build_time::revert_partition(
+                    let written = crate::build_method::revert_partition(
                         &plan.config_root,
                         plan.workspace.as_deref(),
                         &plan.planned,
@@ -152,7 +152,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
             // The answer carries the tree **after** the write, read from the disk: the next call can
             // be aimed with it instead of with what the caller hoped happened.
             // 答案携带写入**之后**的树、从磁盘读出：下一次调用可以据此瞄准，而不是据调用方希望发生的事。
-            let after = crate::build_time::partition_view::view(root)?
+            let after = crate::build_method::partition_view::view(root)?
                 .map(|view| describe(&view))
                 .unwrap_or_default();
             Ok(format!("{outcome}\n{after}"))
@@ -245,7 +245,7 @@ fn finish_declaration_edit(
              文件未被动过——再次调用并带 `apply: true` 才会写入\n"
         ));
     }
-    let after = crate::build_time::apply_declaration_edit(root, edit)?;
+    let after = crate::build_method::apply_declaration_edit(root, edit)?;
     Ok(format!(
         "{action}\n{diff}\
          the declaration changed, so the packages on disk describe the shape before it: `write` (or \
@@ -360,7 +360,7 @@ fn plan_sentence_cn(action: &str) -> &'static str {
 
 /// What a write or a revert did.
 /// 一次写入或撤回做了什么。
-fn written_sentence(written: &crate::build_time::crate_write::Written) -> String {
+fn written_sentence(written: &crate::build_method::crate_write::Written) -> String {
     format!(
         "wrote {} file(s); workspace config {}; member list {}\n",
         written.files.len(),

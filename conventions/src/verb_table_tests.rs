@@ -30,7 +30,7 @@ fn a_get_that_is_an_option_is_exempt() {
 /// 裸动词是入口位的特权：`build.rs` 里的 `run` 可以，库文件里的 `run` 不行。
 #[test]
 fn a_bare_verb_is_only_allowed_at_an_entry_position() {
-    assert!(violations_in("toolchain/src/build_time/build.rs", "fn run() {}\n").is_empty());
+    assert!(violations_in("toolchain/src/build_method/build.rs", "fn run() {}\n").is_empty());
     assert!(violations_in("toolchain/src/cli/src/bin/nichlink.rs", "fn main() {}\n").is_empty());
     let found = violations_in("toolchain/src/runtime/src/lib.rs", "pub fn run() {}\n");
     assert_eq!(names(&found), vec!["run".to_owned()]);
@@ -104,7 +104,7 @@ fn the_shipped_workspace_verb_table_holds() {
 fn a_declaration_inside_a_string_literal_is_not_a_declaration() {
     let source =
         "fn ghost_build_rs() -> String {\n    format!(\"fn main() {{\\n    work();\\n}}\\n\")\n}\n";
-    let violations = violations_in("toolchain/src/build_time/src/generator.rs", source);
+    let violations = violations_in("toolchain/src/build_method/src/generator.rs", source);
     assert!(
         violations.is_empty(),
         "a literal is not a declaration: {violations:?}"
@@ -113,6 +113,6 @@ fn a_declaration_inside_a_string_literal_is_not_a_declaration() {
     // stop the gate from working.
     // 对照：同一句声明**作为代码**仍然被判定，因此掩码没有把门禁变成不干活。
     let real = "fn main() {\n    work();\n}\n";
-    let violations = violations_in("toolchain/src/build_time/src/generator.rs", real);
+    let violations = violations_in("toolchain/src/build_method/src/generator.rs", real);
     assert_eq!(violations.len(), 1, "{violations:?}");
 }

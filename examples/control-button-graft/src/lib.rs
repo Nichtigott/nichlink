@@ -4,7 +4,7 @@
 //! declares its origin explicitly with `external_object!`, builds a registry in
 //! its own namespace, and the host overlays it.
 
-use nichlink_toolchain::runtime::registry_core::{FrameworkId, Registry};
+use nichlink_toolchain::run_method::registry_core::{FrameworkId, Registry};
 
 /// The identity namespace this crate's faces are compiled under.
 /// 本 crate 的注册面编译时所用的身份命名空间。

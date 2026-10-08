@@ -7,12 +7,12 @@
 //! published records** (`<package>/target/nichlink/out`, read through
 //! `build_method`'s readers — `published.rs`), so a workspace-rooted answer costs
 //! the records instead of every member's source walk; the derivation
-//! (`crate::build_time::face_views`) is the fallback for a member that published
+//! (`crate::build_method::face_views`) is the fallback for a member that published
 //! nothing, and every answer says which of the two it used.
 //! 本桥过去靠重新推导来回答注册问题：代理 grep 宏名，自己重建那棵树——这正是注册树要消除
 //! 的漂移。这里的行现在来自构建**自己已发布的记录**（`<package>/target/nichlink/out`，经
 //! `build_method` 的读取器读取——`published.rs`），因此工作区根上的一次答案花的是记录而不是
-//! 每个成员的源码遍历；推导（`crate::build_time::face_views`）是给什么都没发布的成员的回落，
+//! 每个成员的源码遍历；推导（`crate::build_method::face_views`）是给什么都没发布的成员的回落，
 //! 而每一份答案都会说出自己用的是哪一种。
 //!
 //! What the published rows carry is `node`, `source` and the symbol release
@@ -26,7 +26,7 @@
 
 use std::path::Path;
 
-use crate::build_time::{FaceView, PruningRow};
+use crate::build_method::{FaceView, PruningRow};
 use nichlink_kernel::lexicon;
 use serde_json::Value;
 
@@ -276,7 +276,7 @@ pub(crate) fn namespace(root: &Path) -> Result<String, String> {
 /// 空间的散列——而代理会带着它们去做无法解析的 graft 记录或 trace 查找。一个它能据以行动的
 /// 拒绝（`set NICH_LINK_NAMESPACE`）胜过到处都错的身份。
 pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, String> {
-    crate::build_time::identity_namespace(configured, &root.join("Cargo.toml")).map_err(|error| {
+    crate::build_method::identity_namespace(configured, &root.join("Cargo.toml")).map_err(|error| {
         format!(
             "cannot learn the identity namespace of {}: {error}; \
              set {} to name it explicitly",

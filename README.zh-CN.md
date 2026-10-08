@@ -124,20 +124,20 @@ canonical source。
 ```rust
 // build.rs
 fn main() {
-    nichlink_toolchain::build_time::run();
+    nichlink_toolchain::build_method::run();
 }
 ```
 
 在 crate 根部只接线一次生成计划：
 
 ```rust
-nichlink_toolchain::runtime::host!();
+nichlink_toolchain::run_method::host!();
 ```
 
 它展开为 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
 直接书写该 include 是等价的高级写法。`nichlink-toolchain` 再导出整个
 kernel，注册面代码中的合同、计划和追踪 API 都通过
-`nichlink_toolchain::runtime::…` 引用。
+`nichlink_toolchain::run_method::…` 引用。
 
 不要求必须有 `main.rs`：二进制项目以 `src/main.rs` 作为入口，前端框架
 这类库项目以 `src/lib.rs` 作为入口。构建适配器扫描的是宿主自己的源码；
@@ -155,12 +155,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_toolchain::runtime::PresetContract for CanvasPreset {
+impl nichlink_toolchain::run_method::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_toolchain::runtime::PartsContract for CanvasParts {
+impl nichlink_toolchain::run_method::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -183,8 +183,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_toolchain::runtime::FlowContract::new(
-        nichlink_toolchain::runtime::ContractId::new("canvas.render.v1"),
+    flow: nichlink_toolchain::run_method::FlowContract::new(
+        nichlink_toolchain::run_method::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -213,7 +213,7 @@ crate::node_editor_object! {
 通过后才执行嫁接：
 
 ```rust
-let plan = nichlink_toolchain::runtime::GraftPlan::command(
+let plan = nichlink_toolchain::run_method::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -441,11 +441,11 @@ src/                                    src/
 不构造 `Vec` 或 `String`；构建器会把内容直接写进 `StaticPlan`：
 
 ```rust
-use nichlink_toolchain::runtime::{FrameworkId, Registry};
+use nichlink_toolchain::run_method::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -492,7 +492,7 @@ a1_fast                           A
 需要同时修改多个数据边界时，把切口写在同一个静态声明里：
 
 ```rust
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -505,7 +505,7 @@ nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
 也可以选择同一父 Registry 下的一段兄弟节点：
 
 ```rust
-let plan = nichlink_toolchain::runtime::GraftPlan::command(
+let plan = nichlink_toolchain::run_method::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -524,7 +524,7 @@ Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西�
   存活下来，并填充发布态静态计划。它不删除任何代码。
 * `Registry::overlay` 是**应用**：它在运行期校验并返回有效树，原树与外部树都不被改动。
 * `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它是运行期
-  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_toolchain::runtime::apply_recorded_grafts`
+  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_toolchain::run_method::apply_recorded_grafts`
   读取它，`Registry::overlay_recorded` 按 [`docs/graft.zh-CN.md`](docs/graft.zh-CN.md) 中的优先级规则
   对账——记录覆盖字符串形式的 `static_graft_plan!` 切口，类型化切口保持最终，外部注册机
   解析不出的记录选择器回退到声明。界面读回它来列出、打开、改范围和删除计划。
@@ -736,9 +736,9 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 ## 运行时追踪
 
 ```rust
-let trace = nichlink_toolchain::runtime::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_toolchain::runtime::CallTrace::disabled();
-let detailed = nichlink_toolchain::runtime::CallTrace::full();
+let trace = nichlink_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = nichlink_toolchain::run_method::CallTrace::disabled();
+let detailed = nichlink_toolchain::run_method::CallTrace::full();
 ```
 
 `errors-only` 只保留失败链路并丢弃成功证据；`full` 保留 frame、局部变量和
@@ -757,7 +757,7 @@ NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规�
 
 | Crate                | 目录                       | 执行面职责                                                                                                                                                                   |
 | -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nichlink-toolchain` | `toolchain/build_time/`    | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令                                                                      |
+| `nichlink-toolchain` | `toolchain/build_method/`    | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令                                                                      |
 | `nichlink-toolchain` | `toolchain/runtime/`       | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器                                                                                        |
 | `nichlink-toolchain` | `toolchain/call_evidence/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
 | `nichlink-toolchain` | `toolchain/plugin_host/`   | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表                                                                                                                      |

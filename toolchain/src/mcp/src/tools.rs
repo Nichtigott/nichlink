@@ -13,7 +13,7 @@
 //! (logical path, kind, module, registry_name) and annotates each with the build's verdict.
 //! Another answers from evidence that is not
 //! source text: `nichlink.registry` derives the tree the build derives
-//! (`crate::build_time::face_views`), `nichlink.explain` reads the files the
+//! (`crate::build_method::face_views`), `nichlink.explain` reads the files the
 //! build *published* (`target/nichlink/out`) for scope and release pruning,
 //! `nichlink.diff` states the face-level delta between those two sides, and
 //! `nichlink.trace` reads a recorded trace artifact, refusing one that describes
@@ -22,7 +22,7 @@
 //! `nichlink.unified` merges the two, where a live call confirms a compiler
 //! candidate. Three tools write, and all three preview before they do:
 //! `nichlink.apply` edits faces through the authoring executor, `nichlink.new_project`
-//! scaffolds a host with `build_time::scaffold::create_project`, and `nichlink.plugin`
+//! scaffolds a host with `build_method::scaffold::create_project`, and `nichlink.plugin`
 //! stores one plugin lock record through the kernel's `PluginCatalog` gate
 //! (`apply.rs`, `new_project.rs` and `plugin.rs` explain each contract). What none of
 //! them reports is contract,
@@ -31,13 +31,13 @@
 //! scan or a manifest.
 //! 一类工具读取 Rust 源码文本——`nichlink.search` 还会匹配注册面（逻辑路径、kind、module、registry_name），
 //! 并把构建的判断标在每一条上。另一类用非源码文本的证据作答：`nichlink.registry` 推导出构建所推导
-//! 的那棵树（`crate::build_time::face_views`）；`nichlink.explain` 读构建**发布**的文件
+//! 的那棵树（`crate::build_method::face_views`）；`nichlink.explain` 读构建**发布**的文件
 //! （`target/nichlink/out`），回答作用域与发布剪枝；`nichlink.diff` 说出两侧的面级差异；
 //! `nichlink.trace` 读取已记录的 trace artifact，并拒绝描述另一棵树的那份；`nichlink.mir` 读
 //! `-Zunpretty=mir` 转储或 JSONL artifact，并能输出那份无人写过的 JSONL；`nichlink.unified` 把两者
 //! 合并，真实调用在其中确认编译器候选。三个工具会写入，而三者都先预览再写：`nichlink.apply`
 //! 经 authoring 执行器编辑注册面，`nichlink.new_project` 用
-//! `build_time::scaffold::create_project` 脚手架出一个宿主，`nichlink.plugin` 经内核的
+//! `build_method::scaffold::create_project` 脚手架出一个宿主，`nichlink.plugin` 经内核的
 //! `PluginCatalog` 闸门存下一条插件锁记录（三份契约分别见 `apply.rs`、`new_project.rs` 与
 //! `plugin.rs`）。它们都没有报告的是 contract、admission 与 registration rule 数据：那些住在已构建的
 //! `RegistrationSnapshot` 里，需要已编译的注册，而不是扫描或清单。
@@ -285,7 +285,7 @@ pub(crate) fn tools() -> Vec<Value> {
         tool(
             "nichlink.new_project",
             "Create a host project with the same scaffold `nichlink new` (the CLI) and Studio's \
-             new-project wizard run — `crate::build_time::scaffold::create_project` — so the \
+             new-project wizard run — `crate::build_method::scaffold::create_project` — so the \
              manifest, build script, source entry, editor snippets, and detected dependency \
              source are the ones this workspace ships rather than a second renderer written here. \
              `directory` is where the project goes: a relative one is taken against `root` (the \

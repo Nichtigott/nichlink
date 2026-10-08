@@ -26,7 +26,7 @@
 
 use std::path::Path;
 
-use crate::runtime::{
+use crate::run_method::{
     PluginArtifact, PluginAssurance, PluginCatalog, PluginChannel, PluginDecision, PluginPolicy,
     PluginSignatureVerifier, PluginSource, PluginTrustPolicy, VerifiedPluginArtifact,
 };

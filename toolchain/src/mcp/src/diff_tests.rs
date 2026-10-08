@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::build_time::face_views;
+use crate::build_method::face_views;
 use serde_json::json;
 
 use super::diff;
@@ -394,7 +394,7 @@ fn a_record_directory_outside_the_root_is_refused() {
 #[test]
 fn records_published_under_another_namespace_are_refused() {
     let (root, name) = package("other-domain");
-    crate::build_time::check_for(&root, &crate::mcp::build_evidence::out_dir(&root), &name)
+    crate::build_method::check_for(&root, &crate::mcp::build_evidence::out_dir(&root), &name)
         .expect("the tree publishes cleanly");
     let child = std::process::Command::new(std::env::current_exe().expect("the test binary"))
         .args([

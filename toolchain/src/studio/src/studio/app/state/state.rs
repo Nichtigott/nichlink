@@ -51,12 +51,12 @@ pub(crate) use super::project_context::source_path_for;
 // let the graph it draws disagree with the evidence the kernel merged.
 // 内核拥有唯一的"按 `::` 边界匹配名字"规则。Studio 曾带一份单向副本，而且每次比较都会
 // 分配一个 `format!`，这会让它画出的图与内核归并的证据不一致。
-pub(crate) use crate::runtime::mir::same_symbol;
+pub(crate) use crate::run_method::mir::same_symbol;
 // The layered call tree is kernel vocabulary too: Studio builds the relation
 // list, the kernel decides the levels, lanes and cuts. `CallTreeNode` is named
 // only by the widget drawer's node text, so it is re-exported with that feature.
 // 分层调用树同样是内核词汇：Studio 提供关系列表，内核决定层、车道与裁剪。`CallTreeNode`
 // 只被控件绘制方的节点文本命名，因此与该特性一同重导出。
 #[cfg(feature = "node-graph")]
-pub(crate) use crate::runtime::mir::CallTreeNode;
-pub(crate) use crate::runtime::mir::{CallRelation, call_tree};
+pub(crate) use crate::run_method::mir::CallTreeNode;
+pub(crate) use crate::run_method::mir::{CallRelation, call_tree};

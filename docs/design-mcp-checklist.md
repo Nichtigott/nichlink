@@ -121,7 +121,7 @@ tokens <session>` 或 `target/bench-scenarios/axes2.py`，语料是那 12 个会
 
 **改法**：`apply_cut::path_class_refusal` 在渲染之前、写盘之前检查输入；只在计划**通篇**类型化时拒绝
 （反方向会拒绝语法本就接受的请求）。`typed_spelling` 从面自己的 `source` 经**构建自己的**
-`build_time::source_module_path` 推导拼写——不从逻辑路径拼装，因为 `object` 那一层只有源码布局知道。
+`build_method::source_module_path` 推导拼写——不从逻辑路径拼装，因为 `object` 那一层只有源码布局知道。
 推导不出时说"这棵树里没有这个面"并指向 `registry`。
 
 **验收**：喂 `root/control/dial` ⇒ 拒绝且消息含 `crate::control::object::dial::NODE_ID`（并给出
@@ -975,7 +975,7 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 ⇒ **没有索引条目的存档解析不了**。因此探针必须查**索引缓存**（并要求其中出现 `"vers":"<版本>"`），
 不能查 `.crate` —— 我第一版查的就是 `.crate`，实测被这条事实推翻（并把它钉进了钉子）。
 
-**改动**：`build_time::scaffold::{registry_release_present, offline_source_warning}`（纯本地、确定性、
+**改动**：`build_method::scaffold::{registry_release_present, offline_source_warning}`（纯本地、确定性、
 无网络、不会在气隙机器上挂住），由 `new_project` 在**预览与落盘两种回复**里附加一行 `offline …`：
 点名版本、它查过的位置、以及三条出路（先联网构建一次 / 改用 `dependency: "git"` / 从检出里跑以获得
 `path` 依赖）。`path`/`git` 来源自带字节，因此从不警告。
@@ -1030,7 +1030,7 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 
 ### M6 §5.2 T3：家族读走记录（本轮，**部分达成，验收未过**）
 
-**改动**：① `build_time::face_views_from_pruning(rows)` —— 由剪枝记录构造 `FaceView`（W3-1b 发布
+**改动**：① `build_method::face_views_from_pruning(rows)` —— 由剪枝记录构造 `FaceView`（W3-1b 发布
 `parent_node`/`owns_registry`/`logical_path` 的目的就是它）；缺列的行**计数**，非零则调用方回退推导，
 **绝不拿更小的家族去比**。② `consistency::member_faces` 记录优先：成员已发布且 `build_output_is_current`
 ⇒ 面取自记录，证据行说 `tree published from … (this comparison reads the build's own record)`。
@@ -1096,7 +1096,7 @@ O(sets² × names)；现在只数一遍（`name → 计数`）。它在这个形
 
 **落地**：① 新增构建期记录 **`file_manifest.tsv`**（每份 `.rs` 一行：`source` + 它声明的函数名；一个函数都没
 声明的文件写 `-`，因为按**路径**匹配的读者必须看得见每份文件）——写入方 `manifests::write_file_manifest`
-（用内核自己的 `function_symbols`），读取方 `build_time::read_file_manifest -> Vec<FileRow>`。
+（用内核自己的 `function_symbols`），读取方 `build_method::read_file_manifest -> Vec<FileRow>`。
 ② `search` 的**源码那一半**改由它作答（`record_source_lines`）：路径与函数名都取自清单，**零文件读取**；
 记录答不了才回退原扫描，预筛规则不变。③ **工作区根**读**成员**的清单（根没有自己的记录），否则对着工作区根的
 查询会退回扫描整棵树。
@@ -1254,7 +1254,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 | 成分 | 判定 | 证据 |
 | --- | --- | --- |
-| "在编译阶段" | **成立** ✓ | `build.rs` → `build_time::run()`（`pipeline.rs`）在编译期跑 |
+| "在编译阶段" | **成立** ✓ | `build.rs` → `build_method::run()`（`pipeline.rs`）在编译期跑 |
 | "**软解析**算法" | **成立** ✓ | `source_walk::discover_root_reporting`：读目录、**静默跳过**不是面的普通模块、只对"是面却解析不了"的文件报错 ⇒ 自有容忍式读取器，**不经 rustc**（内核 `syntax`/`source` 同族） |
 | "在内存中吞掉 **50,000 节点**的依赖图" | **半** ⚠ | 图的信息有：`Node` 模块树 + `pruning_manifest`（`parent`/`calls`/`logical_path`）+ 调用图 + `source_scope`；但**没有"图"作为一等产物**，也**没有 50k 节点的实测**——真跑过的是 **10,003 面单 crate = 141.64 s**；50k 是**文件数**夹具（20 成员 × 2,500） |
 | "**剪枝**" | **成立（注册意义）** ✓ | `cut`/`graft` 计划 + `source_scope.tsv` 决定哪些面进构建范围 |
@@ -1390,7 +1390,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 **验收（逐字节，实测不是声称）**：
 - **发布物逐字节相同**：把 `target/scale/t3`（2,504 文件）复制一份，先由**改前**的二进制 `verify` 发布、存下 `out/`，清掉 `target/` 再由**改后**的二进制发布同一个路径 ⇒ `diff -r` 为空、八份产物 sha256 全等（`discovery.fingerprint`、`file_manifest.tsv`、`function_manifest.tsv`、`generated_lib.rs`、`graft_plan.tsv`、`pruning_manifest.tsv`、`shape_manifest.tsv`、`source_scope.tsv`）✓
 - **旧记录不失效**：`target/scale/w50` 的 20 个成员是在这次改动**之前**发布的；改前/改后两个二进制都印 `freshness: content-verified` 且指纹同为 `ca0d05b9e102b8aa0300a7d40ee703d2` ✓（若顺序变了，指纹会变、全部记录立刻陈旧——这正是要防的）
-- **钉子**：`build_time::source_walk::discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count`——200 个面的宽夹具（宽层不在根层），workers 取 **1/2/3/8/64**，树与**发现的顺序**都必须一致 ✓
+- **钉子**：`build_method::source_walk::discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count`——200 个面的宽夹具（宽层不在根层），workers 取 **1/2/3/8/64**，树与**发现的顺序**都必须一致 ✓
 
 **实测（同一会话内与 P0.1 交错跑、三次取中位）**：`cut6`（只有 P0.1）5.095 s → `p02`（P0.1+P0.2）**4.859 s**（`child000001`）；5.279 → **4.759 s**（`zzz-nothing`）⇒ 这一刀值 0.24–0.52 s（1.05–1.11×）。**与基线合起来**（同会话交错）：**8.205 → 4.762 s（1.72×）**、**7.823 → 4.689 s（1.67×）** ✓ —— 这达到 P0.1 表里那句"50k `search --query` ~4.8 s"。
 
@@ -1436,7 +1436,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 **一句话**：把散落在 `pruning_manifest.tsv` / `file_manifest.tsv` 与读者各自的重新推导里的图事实，变成**一个带节点数、边数与内容摘要的产物**——而且它和记录是**同一次计算的两个视图**，因此两份文件不可能对一个面产生分歧。
 
-**改法**：① 新增 `toolchain/src/build_time/src/graph.rs`：`write_graph_manifest(out_dir, rows, file_rows, grafts)`；② 记录写入方**把行交回来**（`write_pruning_manifest` 与 `write_file_manifest` 现在返回它们发布的行）：图是同一批行的第二个视图，而把清单读回来建图要付同一批五万行的第二次解析——这正是本批一直在去掉的"算出来了却不交出来"，只是方向相反；③ 管线在记录之后、指纹之前写图（载荷全部落地才写指纹，因此**半份图不会被当成完整的**）。
+**改法**：① 新增 `toolchain/src/build_method/src/graph.rs`：`write_graph_manifest(out_dir, rows, file_rows, grafts)`；② 记录写入方**把行交回来**（`write_pruning_manifest` 与 `write_file_manifest` 现在返回它们发布的行）：图是同一批行的第二个视图，而把清单读回来建图要付同一批五万行的第二次解析——这正是本批一直在去掉的"算出来了却不交出来"，只是方向相反；③ 管线在记录之后、指纹之前写图（载荷全部落地才写指纹，因此**半份图不会被当成完整的**）。
 
 **产物形状**（`# graph\tnichlink-build-graph` / `# nodes` / `# edges` / `# digest` / `# from\tto\tkind`）：
 
@@ -1453,7 +1453,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 **验收（实测）**：
 - **发布物逐字节不变**：t3（2,504 文件）用改前/改后二进制各 `verify` 一次 ⇒ 原有八份产物 `diff` 全同、sha256 全等，**新增第九份** `graph_edges.tsv` 一个 ✓
 - **图上真实规模**：t3 = **5,003 节点 / 5,002 边**（2,501 `in` + 2,501 `parent`，摘要 `8290a465…`）；`examples/control-button` = 11 节点 / 8 边，含两条 `graft` 边 ✓
-- **钉子**（`build_time::graph::graph_tests`，15 项）：`the_graph_is_the_records_own_rows_seen_as_edges`（记录里每个面都是节点、`face:` 节点里记录没有对应行的**只有包根**、`parent` 边等于记录的 `parent_node`、解析不出的父级**不成边**、`calls-file` 指向唯一声明的文件）· `a_name_two_files_declare_stays_a_name`（歧义按歧义发布）· `the_header_counts_and_digest_vouch_for_the_body`（计数与摘要对得上正文，截断/手改可被发现）
+- **钉子**（`build_method::graph::graph_tests`，15 项）：`the_graph_is_the_records_own_rows_seen_as_edges`（记录里每个面都是节点、`face:` 节点里记录没有对应行的**只有包根**、`parent` 边等于记录的 `parent_node`、解析不出的父级**不成边**、`calls-file` 指向唯一声明的文件）· `a_name_two_files_declare_stays_a_name`（歧义按歧义发布）· `the_header_counts_and_digest_vouch_for_the_body`（计数与摘要对得上正文，截断/手改可被发现）
 
 **门禁**：fmt ✓ · workspace test ✓ · `--features mcp` **591 项** ✓ · conventions 158 项（含 600 行棘轮）✓ · 两面 clippy ✓ · `--check-table` ✓。
 
@@ -1464,7 +1464,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 
 #### 一、就绪记录 `graph.generation`（P2.1）
 
-管线在一次**干净**运行里**最后**写它（排在 `discovery.fingerprint` 之后），原子写（temp + rename，`write_if_changed` 本就是这个形状）。字段：`generation`（数**运行次数**，从上一份 +1）、`digest`（图的边正文摘要）、`faces`/`files`（记录里的面数、源码 `.rs` 文件数）、`graph_nodes`/`graph_edges`、`stamp`（`文件数:最新 mtime`，用的是与核验记忆**同一个** `source_stamp`——这条规则在本轮从桥里搬进 `build_time`，只剩一份实现）、`finished_at`（UTC `HH:MM:SS`）。**它在＝这次运行完成了，它不在＝磁盘上是上一次（或没有）**。
+管线在一次**干净**运行里**最后**写它（排在 `discovery.fingerprint` 之后），原子写（temp + rename，`write_if_changed` 本就是这个形状）。字段：`generation`（数**运行次数**，从上一份 +1）、`digest`（图的边正文摘要）、`faces`/`files`（记录里的面数、源码 `.rs` 文件数）、`graph_nodes`/`graph_edges`、`stamp`（`文件数:最新 mtime`，用的是与核验记忆**同一个** `source_stamp`——这条规则在本轮从桥里搬进 `build_method`，只剩一份实现）、`finished_at`（UTC `HH:MM:SS`）。**它在＝这次运行完成了，它不在＝磁盘上是上一次（或没有）**。
 
 #### 二、写入路径：落盘即启动刷新（P1.2）
 
@@ -1491,7 +1491,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 | 没发布过 ⇒ 说该跑什么 | `a_run_that_published_nothing_reads_as_absent`、`mcp::graph::graph_tests::an_unpublished_index_says_what_to_run` |
 | 就绪 / 落后 两态 | `a_finished_run_publishes_a_record_that_says_ready`、`an_edit_makes_the_index_behind_and_the_line_says_so`、`a_behind_index_is_answered_from_and_named` |
 | 图工具三问 | `mcp::graph::graph_tests::{the_census_opens_with_the_index_line_and_counts_the_edges, a_logical_path_resolves_through_the_record_and_shows_its_edges, the_cycle_between_the_two_files_is_named_as_one_component, a_name_the_record_does_not_know_is_refused_with_the_spellings_it_does}` |
-| 跨文件调用是文件之间的边（环的原料） | `build_time::graph::graph_tests::a_call_that_crosses_files_is_an_edge_between_them` |
+| 跨文件调用是文件之间的边（环的原料） | `build_method::graph::graph_tests::a_call_that_crosses_files_is_an_edge_between_them` |
 | CLI 那一行 | `cli::lib_tests::check_without_json_keeps_the_human_line`（第一行不变 + 第二行是索引行） |
 | 工具注册 | `tools_tests::the_dispatch_table_follows_the_catalog`、`READ_KEYS` 的表点名 `nichlink.graph`；`--list` 预算从 5000 提到 **5200**（第 29 个工具，约 90 字符/条目——**动的是界，不是把条目削到能塞进去**，理由写在钉子旁） |
 
@@ -1511,7 +1511,7 @@ faces **0.64 s**）· `source_half 0.06 s` ⇒ 合计 4.4 s，而墙钟 **7.9 s*
 **声明的成品样子**（包根 `add_crates.rs`，包级文件，与 `Cargo.toml`/`build.rs` 同级——放 `src/` 下会被发现遍历读到）：
 
 ```rust
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "nichlink-example-control-button",
@@ -1527,11 +1527,11 @@ pub const SHAPE: Shape = Shape {
 | 件 | 位置 | 钉了什么 |
 | --- | --- | --- |
 | 规则（唯一一份） | `kernel/src/registry_core/shape/shape.rs` | 边界是**整个 `::` 段**（`control` 含 `control::object`、不含 `control_extra`）；重叠/嵌套/重名/空名/空前缀各**点名**拒绝。5 条钉子 |
-| 函数面 | `toolchain/src/runtime/src/shape.rs` | `Subtree` / `Crate` / `Shape` / `add_crates(&Shape)`；宿主自己的 crate 装载时校验。2 条钉子 |
-| 构建期读者 | `toolchain/src/build_time/src/shape_decl.rs` | 读包根那份文件（**文本**，不链接宿主），只认 `Crate::named(…).at(&[…::SUBTREE])`，别的拼写**点名拒绝**；写 `add-crates.lock`（声明身份 + 每 crate 的子树与面集合身份 + 留在宿主的面数）。6 条钉子 |
-| 渲染器 | `build_time/src/renderer/tree.rs` | 每个**生成的内联模块**发一个 `pub const SUBTREE: Subtree = Subtree::new(module_path!())` |
+| 函数面 | `toolchain/src/run_method/src/shape.rs` | `Subtree` / `Crate` / `Shape` / `add_crates(&Shape)`；宿主自己的 crate 装载时校验。2 条钉子 |
+| 构建期读者 | `toolchain/src/build_method/src/shape_decl.rs` | 读包根那份文件（**文本**，不链接宿主），只认 `Crate::named(…).at(&[…::SUBTREE])`，别的拼写**点名拒绝**；写 `add-crates.lock`（声明身份 + 每 crate 的子树与面集合身份 + 留在宿主的面数）。6 条钉子 |
+| 渲染器 | `build_method/src/renderer/tree.rs` | 每个**生成的内联模块**发一个 `pub const SUBTREE: Subtree = Subtree::new(module_path!())` |
 | 词汇表 | `kernel/src/registry_core/lexicon/lexicon.rs` | `ADD_CRATES_FILE` / `ADD_CRATES_LOCK_FILE` / `ADD_CRATES_MARKER` |
-| 管线 | `build_time/src/pipeline.rs` | 树干净时校验声明；不成立 ⇒ `add-crates` 诊断，且**发布任何产物之前**失败。没有声明 = 一个 crate 的包（不是错误） |
+| 管线 | `build_method/src/pipeline.rs` | 树干净时校验声明；不成立 ⇒ `add-crates` 诊断，且**发布任何产物之前**失败。没有声明 = 一个 crate 的包（不是错误） |
 
 **端到端实测**（真的在 `examples/control-button` 上加了声明 + 一行 `#[path]` 挂载，跑完已还原）：`cargo build` 过 ✓；CLI `check` 写出
 
@@ -1775,7 +1775,7 @@ NICH_LINK_NAMESPACE=nsrace and ask again
 
 **边界（写明）**：它不是通用跨进程互斥，也**不是给读者的保证**——想要一致"一组"的读者最后读就绪记录（`graph.generation`，管线一向最后写它）；两个进程的**写**仍然独立，只是不再交错。
 
-**钉子**（`build_time::publish_lock`，7 条 + 1 子进程）：取到即存在、点名持有者、Drop 后消失 · 第二个写者**等**而不是并肩写 · 活持有者被**点名拒绝**（含 `way forward` 与预算变量名）· 已死 pid 的锁被**接管**且报告 pid · 无法辨认但新鲜的锁被**尊重** · 预算从环境读 · **端到端**：占住锁 ⇒ 子进程那次发布被拒且**一个载荷都没落盘**，清掉锁后**同一个夹具**能发布（正对照）。实测真宿主：`check` 后**无锁残留**、五份产物仍逐字节未变、`(id, source)` 列不变、digest 仍 `92ef0bd3…`。
+**钉子**（`build_method::publish_lock`，7 条 + 1 子进程）：取到即存在、点名持有者、Drop 后消失 · 第二个写者**等**而不是并肩写 · 活持有者被**点名拒绝**（含 `way forward` 与预算变量名）· 已死 pid 的锁被**接管**且报告 pid · 无法辨认但新鲜的锁被**尊重** · 预算从环境读 · **端到端**：占住锁 ⇒ 子进程那次发布被拒且**一个载荷都没落盘**，清掉锁后**同一个夹具**能发布（正对照）。实测真宿主：`check` 后**无锁残留**、五份产物仍逐字节未变、`(id, source)` 列不变、digest 仍 `92ef0bd3…`。
 
 ### §M7.21 门禁：面文件不得拼 `env!("CARGO_PKG_NAME")`（2026-10-06）
 
@@ -1811,7 +1811,7 @@ P3.3 把身份来源改成 crate 根常量，这道门禁是它不回退的保�
 
 ### §M7.24 P3.2 第二刀（一半）：规划器 —— 幽灵 crate 会变成什么，先算清楚再写（2026-10-06）
 
-`build_time::crate_plan`：**纯规划器，什么都不写**。对声明里的每个 crate 给出：包名 `<package_prefix>-<name>` · 目录（宿主包的**同级**）· **宿主自己的命名空间**（幽灵必须定义它，P3.3 正是为它引入的常量）· 每条子树之下**每份面文件**一项挂载（`module_path` / 宿主相对 `source` / `#[path]` 拼写）· 以及 `--remap-path-prefix` 要用的前缀对。
+`build_method::crate_plan`：**纯规划器，什么都不写**。对声明里的每个 crate 给出：包名 `<package_prefix>-<name>` · 目录（宿主包的**同级**）· **宿主自己的命名空间**（幽灵必须定义它，P3.3 正是为它引入的常量）· 每条子树之下**每份面文件**一项挂载（`module_path` / 宿主相对 `source` / `#[path]` 拼写）· 以及 `--remap-path-prefix` 要用的前缀对。
 
 **拼写规则（可推导，不靠猜）**：`#[path]` 相对**内联模块所在目录**解析，而内联模块把自己的名字加进那个目录 ⇒ 深度 `d` 的挂载需要 `../`×`(d+1)` 走出内联目录、`src` 与幽灵包，再 `<host>/src/` 走进去 ⇒ 拼写恰好是 `<前缀><宿主相对源码>` ✓ ⇒ 把前缀映射为**空**，`file!()` 读起来就是宿主记录点名的那个拼写，身份因此逐字节不变（`b261fe0` 那道闸守着它）。
 
@@ -1837,7 +1837,7 @@ legal answer), or make the fragment self-contained by moving the item into it
 **第二刀的另一半：三个已确认的设计点（动手前写清，免得半途改口径）**
 
 1. **幽灵的 `src/lib.rs` 只有两项**：`pub const NICHLINK_NAMESPACE: &str = "<宿主命名空间>";` + `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));` —— 它自己**没有**面文件（面在宿主那边），生成树由它自己的构建脚本产出。
-2. **幽灵的 `build.rs` 为宿主的清单跑管线**：`build_time::run_for(<宿主>/Cargo.toml, OUT_DIR, "<宿主命名空间>")`（`run_for` 已是公开入口 ✓），并打印 `cargo:rerun-if-changed=<宿主>/src`。也就是说**幽灵的生成树 = 按 `crate_plan` 的挂载清单渲染出来的树**：祖先节点只发**空的容器模块**（绝不挂载祖先的面文件——挂了就是同一个面在两个注册机里 ✗），子树下的叶子按 `PlannedMount.spelling` 挂载宿主的文件。
+2. **幽灵的 `build.rs` 为宿主的清单跑管线**：`build_method::run_for(<宿主>/Cargo.toml, OUT_DIR, "<宿主命名空间>")`（`run_for` 已是公开入口 ✓），并打印 `cargo:rerun-if-changed=<宿主>/src`。也就是说**幽灵的生成树 = 按 `crate_plan` 的挂载清单渲染出来的树**：祖先节点只发**空的容器模块**（绝不挂载祖先的面文件——挂了就是同一个面在两个注册机里 ✗），子树下的叶子按 `PlannedMount.spelling` 挂载宿主的文件。
 3. **remap 只能落在工作区根的 `.cargo/config.toml`**：rustflags 是**每次调用**的，不是按包生效的（cargo 的 config 发现基于当前目录而不是被构建的包 ⇒ 幽灵目录里的 `.cargo/config.toml` 只在从那个目录跑 cargo 时才生效 ✗）。因此规划器只**报告**需要的 `(from, to)` 对，写入方必须**合并**工作区根的配置而不是覆盖它 ⚠ —— 这条同时是 P3.5"发布形状的身份"边界的近亲：依赖方不会继承我们的 `config.toml`，所以**跨发布形状的身份今天仍无解**。
 
 ### §M7.25 幽灵渲染模式：只编译本 crate 的子树（祖先只发壳）（2026-10-06）
@@ -1881,7 +1881,7 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 
 **命令**：`nichlink crates [<包目录>] [--check|--write]`（默认 `--check`）。`--check` 读声明与**已发布的记录**（缺记录时按名拒绝并给 `run nichlink check first` 那条出路 ✓）算出计划并打印"会创建哪个包、在哪、几次挂载、几条 remap"；`--write` 真写下幽灵的三份文件，并把缺少的 `--remap-path-prefix` 条目**合并**进**工作区根**的 `.cargo/config.toml`（`workspace_root_of` 从包目录向上找最外层带 `[workspace]` 的 `Cargo.toml`，没有就退回包自己 ✓）。
 
-**写盘的两条规则**（`build_time::crate_write`，`#[cfg(feature = "cli")]` 门控——唯一调用方是 CLI 那一面）：① **幂等且先比内容**（`write_if_changed`）：第二遍不改一个字节，因为拆分是要提交的东西；② **配置是合并、从不整体写下**：没有文件就建（含目录 ✓）、有 `[build]` 无 `rustflags` 就追加、有**单行**数组就插进缺少的条目并**原样保留其余每行每键**；**多行数组/别的语法一律点名拒绝**并给出该手写上去的条目 —— 盲目往用户维护的文件里合并，是一件工具吃掉别人配置的方式 ✓。
+**写盘的两条规则**（`build_method::crate_write`，`#[cfg(feature = "cli")]` 门控——唯一调用方是 CLI 那一面）：① **幂等且先比内容**（`write_if_changed`）：第二遍不改一个字节，因为拆分是要提交的东西；② **配置是合并、从不整体写下**：没有文件就建（含目录 ✓）、有 `[build]` 无 `rustflags` 就追加、有**单行**数组就插进缺少的条目并**原样保留其余每行每键**；**多行数组/别的语法一律点名拒绝**并给出该手写上去的条目 —— 盲目往用户维护的文件里合并，是一件工具吃掉别人配置的方式 ✓。
 
 **钉子 3 条又是它们先抓到了两个真问题**：① 创建 `.cargo/config.toml` 时没先建 `.cargo/` 目录 ✗；② **文件先写、配置后合并** ⇒ 配置不可合并时幽灵包已经落盘 ✗（钉子断言了相反的顺序 ✓）。修法：配置**先**合并（拒绝必须让树保持原样——留下一次没有 remap 的拆分，等于留下一次身份已经悄悄搬家的拆分）。
 
@@ -1943,7 +1943,7 @@ pub mod control {                 ← 壳（control/control.rs 的挂载数 = 0 
 
 ### §M7.35 第三刀 facade：规划与写盘落地（§M7.33 的第①③步）（2026-10-06）
 
-**规划器**（新模块 `build_time::crate_facade`，随 `cli` 特性门控；`crate_plan.rs` 已 540 行，按职责另立同级模块 ✓）：`plan_facade(host_root, package_prefix, namespace, host_package, &planned) -> Result<Option<PlannedFacade>, String>` 给出 facade 的三份产物 —— `Cargo.toml`（**宿主的依赖表逐字照抄** + 同级 `path` 依赖 `host`/每个幽灵 + `publish = false`）· `src/lib.rs`（宿主命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`run_for(宿主清单, OUT_DIR, 宿主命名空间)` + **`NICH_LINK_SHAPE_FACADE=1`** + 宿主 `src` 与声明各一条 `rerun-if-changed`）✓。
+**规划器**（新模块 `build_method::crate_facade`，随 `cli` 特性门控；`crate_plan.rs` 已 540 行，按职责另立同级模块 ✓）：`plan_facade(host_root, package_prefix, namespace, host_package, &planned) -> Result<Option<PlannedFacade>, String>` 给出 facade 的三份产物 —— `Cargo.toml`（**宿主的依赖表逐字照抄** + 同级 `path` 依赖 `host`/每个幽灵 + `publish = false`）· `src/lib.rs`（宿主命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`run_for(宿主清单, OUT_DIR, 宿主命名空间)` + **`NICH_LINK_SHAPE_FACADE=1`** + 宿主 `src` 与声明各一条 `rerun-if-changed`）✓。
 
 **两个边界（都钉住了）**：① 声明没交出任何东西 ⇒ **返回 `None`**（没有跨 crate 的东西要承载的 facade 是为说空话而存在的 crate ✓）；② facade 包名与宿主包名相同 ⇒ **点名拒绝**（`package_prefix` 是那个旋钮 ✓，一个 crate 不能依赖它自己 ✓）。
 
@@ -2051,7 +2051,7 @@ error[E0433]: cannot find `frame` in `panel`
 
 §M7.39 记了两次"手工把生成包加进 `members`"。这一节把那一步交给工具，顺带逼出 **⑯**。
 
-**新模块 `build_time::crate_members`**（随 `cli` 门控）：把生成的包物化进**工作区清单**的 `members`，撤出时按**逐字节的带引号拼写**收回。四条规矩与工作区配置同一套：**合并、从不整体重写**（其余每一行、每一个键原样保留——注释、`[workspace.package]`、别人的成员条目、`members = ["crates/*"]` 这样的 glob 都不动）· **幂等**（第二遍发现每一条都在就什么都不写）· **只收回自己写下的条目**（按精确拼写匹配，别人的条目与 glob 留着）· **读不懂的形状点名拒绝**（`members` 不是一串带引号字符串、或数组不闭合 ⇒ 拒绝并点名 `Cargo.toml:<行>`，一个字节都不写）。单行与**一行一条目**两种写法都支持（后者是 cargo/rustfmt 写长清单的方式，只重建条目行、保留键行与结束括号的原文与缩进）。
+**新模块 `build_method::crate_members`**（随 `cli` 门控）：把生成的包物化进**工作区清单**的 `members`，撤出时按**逐字节的带引号拼写**收回。四条规矩与工作区配置同一套：**合并、从不整体重写**（其余每一行、每一个键原样保留——注释、`[workspace.package]`、别人的成员条目、`members = ["crates/*"]` 这样的 glob 都不动）· **幂等**（第二遍发现每一条都在就什么都不写）· **只收回自己写下的条目**（按精确拼写匹配，别人的条目与 glob 留着）· **读不懂的形状点名拒绝**（`members` 不是一串带引号字符串、或数组不闭合 ⇒ 拒绝并点名 `Cargo.toml:<行>`，一个字节都不写）。单行与**一行一条目**两种写法都支持（后者是 cargo/rustfmt 写长清单的方式，只重建条目行、保留键行与结束括号的原文与缩进）。
 
 **写入顺序是有讲究的**：成员清单**先算、后写**——拒绝必须让树保持原样，而"清单点名了不存在的包"正是 cargo 拒绝加载的状态（`failed to load manifest for workspace member`）。因此：配置合并（拒绝点）→ 算出清单新文本（拒绝点）→ 删旧包 → 写三份文件 → **最后**写清单。撤出时反过来：清单**先在内存里剥**（拒绝点），再删包，最后写清单 ✓。
 
@@ -2090,7 +2090,7 @@ error[E0433]: cannot find `frame` in `panel`
 - **复制到包自己的 `src/` 之下 ⇒ 身份逐字节不变、remap 不需要**。声明宏的身份输入来自 `file!()`，做法是去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/`（`kernel/src/registry_core/identity/path_text.rs::manifest_relative_source`）——文件一旦在包内，这条推导自己就给出宿主烤进去的那个 `<模块>/<文件>.rs`。实测（手搭的 `/tmp/p32rel/app-widgets`）：不分区基线与发布幽灵共享的两个面 `StaticFace` 行逐字节相同、切割面自己的 `assert_static_identity` 也逐字节相同 ✓，而且**没有写任何 `.cargo/config.toml`** ✓。
 - **facade 在构建期经 `cargo metadata` 找宿主**，这是唯一活得过发布的拼写：行内 `path` 在打包后的清单里会被 cargo 改写成注册局要求。实测：这样解析宿主的 facade 构建全绿、生成的并集与宿主一致 ✓（`cargo metadata` 从构建脚本里跑不会死锁 ✓）。
 
-**形状**（新模块 `build_time::crate_release` + `crate_write::write_release`，随 `cli` 门控）：
+**形状**（新模块 `build_method::crate_release` + `crate_write::write_release`，随 `cli` 门控）：
 - **幽灵**：`Cargo.toml`（宿主依赖表逐字照抄 + `[package.metadata.nichlink] shape = "release"` 与 `host = <宿主命名空间>`，**没有** `publish = false`）· `src/lib.rs`（命名空间常量 + `include!(OUT_DIR/generated_lib.rs)`）· `build.rs`（`env!("CARGO_MANIFEST_DIR")` + `NICH_LINK_SHAPE_ONLY=<认领>` + `run_for(本包根, OUT_DIR, 宿主命名空间)`）· **复制进来的源码**：认领目录**整棵**（注册面、注册规范、手写宿主放在旁边的任何文件）+ **每个祖先面的文件与其 `registry_rule/` 目录** + 宿主声明 `add_crates.rs`。
   - 祖先与规范文件不是可选装饰：**第一次发布构建就是被它们挡下的**——没有祖先面，推导报 `parent declaration cannot be resolved` / `parent node is missing`（碎片里 `parent:` 指向的祖先面必须在树里）；而生成树会挂载注册规范文件（`pub mod registry_rule;`），漏了同样编译不过 ✓。
   - 声明里带**自定义 `registry_rule_path`** 的祖先会被**点名拒绝**（本形状复制目录、不追声明），并给出两条出路 ✓（窄而会拒绝胜过宽而会猜）。
@@ -2107,9 +2107,9 @@ error[E0433]: cannot find `frame` in `panel`
 
 维护者愿景里的最后半句——「**然后也可以在studio中操作**」——落地：`c` 打开 **CRATE PARTITION** 屏，`w`（开发形状）/ `R`（发布形状）/ `x`（撤回）各要按一次 `y` 确认。
 
-**一份读取器，两个执行面**：新模块 `build_time::partition_view`（`pub(crate) fn plan` / `pub fn view`）是 CLI `nichlink crates` 与 Studio 本屏共用的**唯一**读取器，读的是**已发布的记录**（`target/nichlink/out`）而不是现推导一遍——理由与写入路径相同：计划就是构建发布出来的东西，自己推导的画面会描述一棵写入方并不打算写的树。它给出：声明的前缀、宿主自己那棵树有多少面、每个生成包**服务哪个 crate/哪棵子树**、**编译几个面**、开发形状**挂载几个文件**、发布形状**复制几个文件**、磁盘上**是哪种形状**（`OnDisk::{Absent,Development,Release,Foreign}`）、**文件数与字节数**（维护者要的"自动判断大小"）、facade 的**分区内依赖**（发布顺序），以及逐条的**发布说明**（缺 `description`/`license` · `publish = false` · **只有 path 没有 version 的依赖** · 开发形状不可发布）。`OnDisk::Foreign` 与"包名读不出来"都是**点名拒绝**而不是兜底（原先 `package_name` 失败会静默回退成 `"host"` —— 而包名**就是**身份命名空间，猜一个会描述出没人烤过的 id ✗）。
+**一份读取器，两个执行面**：新模块 `build_method::partition_view`（`pub(crate) fn plan` / `pub fn view`）是 CLI `nichlink crates` 与 Studio 本屏共用的**唯一**读取器，读的是**已发布的记录**（`target/nichlink/out`）而不是现推导一遍——理由与写入路径相同：计划就是构建发布出来的东西，自己推导的画面会描述一棵写入方并不打算写的树。它给出：声明的前缀、宿主自己那棵树有多少面、每个生成包**服务哪个 crate/哪棵子树**、**编译几个面**、开发形状**挂载几个文件**、发布形状**复制几个文件**、磁盘上**是哪种形状**（`OnDisk::{Absent,Development,Release,Foreign}`）、**文件数与字节数**（维护者要的"自动判断大小"）、facade 的**分区内依赖**（发布顺序），以及逐条的**发布说明**（缺 `description`/`license` · `publish = false` · **只有 path 没有 version 的依赖** · 开发形状不可发布）。`OnDisk::Foreign` 与"包名读不出来"都是**点名拒绝**而不是兜底（原先 `package_name` 失败会静默回退成 `"host"` —— 而包名**就是**身份命名空间，猜一个会描述出没人烤过的 id ✗）。
 
-**三个动作调用的是 CLI 同一批写入方**（`write_partition` / `write_release` / `revert_partition` + `guard_shape`），因此两个执行面不可能写下不同的树。为此把这几族模块的**特性门从 `cli` 放宽到 `any(cli, studio)`**（`cli = [..., "studio", ...]` 包含 studio、但 studio 不包含 cli，所以此前 Studio 根本够不到它们），并把 `partition_roots`（配置与成员清单该落在哪）与 `build_out_dir`（记录在哪）从 CLI 移进 `build_time` —— **一条规则只有一份实现**，CLI 现在调用它们。UI 层：`ui/forms/partition.rs` 画屏（分区块 + 每包一行 + 页脚 `w development · R release · x revert`），`app/overlay/partition.rs` 收键（**任何键都消费掉已装备的动作**，与删除/graft 同一套"两次按键"纪律），`state/partition.rs` 存状态，页脚加入 `c crates`。
+**三个动作调用的是 CLI 同一批写入方**（`write_partition` / `write_release` / `revert_partition` + `guard_shape`），因此两个执行面不可能写下不同的树。为此把这几族模块的**特性门从 `cli` 放宽到 `any(cli, studio)`**（`cli = [..., "studio", ...]` 包含 studio、但 studio 不包含 cli，所以此前 Studio 根本够不到它们），并把 `partition_roots`（配置与成员清单该落在哪）与 `build_out_dir`（记录在哪）从 CLI 移进 `build_method` —— **一条规则只有一份实现**，CLI 现在调用它们。UI 层：`ui/forms/partition.rs` 画屏（分区块 + 每包一行 + 页脚 `w development · R release · x revert`），`app/overlay/partition.rs` 收键（**任何键都消费掉已装备的动作**，与删除/graft 同一套"两次按键"纪律），`state/partition.rs` 存状态，页脚加入 `c crates`。
 
 **实测**：`target/visual/partition.txt`（真 tmux 面板，300×60）里 `CRATE PARTITION` 屏显示出 `declared package_prefix … · 2 generated package(s)`、幽灵行 `role crate widgets (panel::frame)` + `carries 1 face(s) compiled · 1 mounted (development) · 3 copied (release)`、facade 行 `depends on partition-demo, partition-demo-widgets` ✓。**顺带修一个 CI 一直红着的东西**：`tools/nichlink-visual` 的构建行仍写着合并前的 `-p nichlink-studio`（那个包在九→三合并后已不存在）⇒ 整条视觉步骤只可能失败 ✗；改成 `-p nichlink-toolchain --features studio --bin nichlink-studio` ✓，并把 `partition` 场景接进 `ci.yml` 的视觉步骤（场景自带一个声明了拆分的宿主，因为它**不能**往真实示例宿主里加 `add_crates.rs`——那会改变示例构建出来的东西）。
 
@@ -2119,7 +2119,7 @@ error[E0433]: cannot find `frame` in `panel`
 
 ### §M7.44 P4：MCP 工具面接 `add_crates` —— `nichlink.crates`（2026-10-07）
 
-维护者的话「进 MCP 工具与 Studio 工作流」两半里的后半：**桥**是第三个执行面，而它用**同一个**读取器（`build_time::partition_view`）与**同一批**写入方，因此三个面不可能对"这次拆分要写什么"给出不同答案。`action` 是 `plan`（默认，也是唯一不写入的）/ `write`（开发形状）/ `release`（可发布形状）/ `revert`（收回来）；**不带 `apply: true` 一律只是预览**——回复是分区加上一句"这个动作会改什么"，带上才真的写，并且回复携带**从磁盘读回**的那棵树（下一次调用可以据此瞄准，而不是据调用方希望发生的事）。答案逐包给出：它服务哪个 crate/哪棵子树 · 编译几个面 · 开发形状挂载几个 · 发布形状复制几个 · **磁盘上是哪种形状** · **文件数与字节数** · facade 的**分区内依赖**（＝可发布顺序）· 逐条**发布说明**（缺 `description`/`license` · `publish = false` · 只有 path 没有 version 的依赖 · 开发形状不可发布）；没有声明的宿主被告知声明该写在哪、长什么样，而不是拿到一张空表。
+维护者的话「进 MCP 工具与 Studio 工作流」两半里的后半：**桥**是第三个执行面，而它用**同一个**读取器（`build_method::partition_view`）与**同一批**写入方，因此三个面不可能对"这次拆分要写什么"给出不同答案。`action` 是 `plan`（默认，也是唯一不写入的）/ `write`（开发形状）/ `release`（可发布形状）/ `revert`（收回来）；**不带 `apply: true` 一律只是预览**——回复是分区加上一句"这个动作会改什么"，带上才真的写，并且回复携带**从磁盘读回**的那棵树（下一次调用可以据此瞄准，而不是据调用方希望发生的事）。答案逐包给出：它服务哪个 crate/哪棵子树 · 编译几个面 · 开发形状挂载几个 · 发布形状复制几个 · **磁盘上是哪种形状** · **文件数与字节数** · facade 的**分区内依赖**（＝可发布顺序）· 逐条**发布说明**（缺 `description`/`license` · `publish = false` · 只有 path 没有 version 的依赖 · 开发形状不可发布）；没有声明的宿主被告知声明该写在哪、长什么样，而不是拿到一张空表。
 
 **登记要成套**（四条表缺一不可，钉子会当场点名）：目录 `tools()` 的一句话 + `advertised_schema` 的 schema 臂 + `DISPATCH` 的顺序（与目录同序）+ `effect`（`Effect::Rewrite` ⇒ 自动 `destructiveHint: true`，因为 `revert` 真的会把包拿走）+ `ownership::subject` 归到 `Subject::Write` + `READ_KEYS` 行（`action`/`apply`）+ 写者名单与 destructive 名单各一行 + `next_hint` 一句话。**顺带把特性门放宽到 mcp**：`partition_view`/`crate_write`/`crate_release`/`crate_facade`/`crate_members` 与 `crate_plan::relative_walk` 的门从 `any(cli, studio)` 变成 `any(cli, studio, mcp)`——桥要用同一批写入方，而它此前根本够不到它们。
 
@@ -2130,7 +2130,7 @@ error[E0433]: cannot find `frame` in `panel`
 首次推送（64 个提交）后 CI 七个作业红。**归因先行**：与上一次 main 上的运行（`37242219783`，2026-10-04）逐作业对比——`release-audit`、`features`、`ubuntu-latest stable`、`windows-latest` 两个 `Tests` 在两次里都红（继承），而两个 **Documentation** 失败这次**变绿**（§M7.44 那批 rustdoc 修复生效 ✓），macOS 两个作业则从"更早的步骤就红"变成"Tests 红"（先前被 Clippy/Documentation 挡住，**新可见**而不是新引入）。⇒ 四条真实缺陷：
 
 ① **clippy 1.99 的两条新 lint**（本机 1.96 根本看不到，所以本地门禁全绿而 CI 红）：
-`clippy::single_element_loop` @ `toolchain/src/runtime/src/authoring/manifest/parse.rs:59`（`for key in ["registry_rule_path"]` ⇒ 展平成一个 `if let`）；`Some(x).filter(|_| predicate)` @ `toolchain/src/mcp/src/check.rs:776`（谓词不看值 ⇒ `(!path.is_empty()).then(|| …)`）。这两条也是 `release-audit` 作业失败的原因（它同样跑 lint）。
+`clippy::single_element_loop` @ `toolchain/src/run_method/src/authoring/manifest/parse.rs:59`（`for key in ["registry_rule_path"]` ⇒ 展平成一个 `if let`）；`Some(x).filter(|_| predicate)` @ `toolchain/src/mcp/src/check.rs:776`（谓词不看值 ⇒ `(!path.is_empty()).then(|| …)`）。这两条也是 `release-audit` 作业失败的原因（它同样跑 lint）。
 ② **macOS：`/var` 是 `/private/var` 的符号链接** ⇒ 我的 P3 测试把 `canonicalize()` 过的路径与原始 `temp_dir()` 路径逐字比较，左边 `/private/var/…` 右边 `/var/…` ✗。
 ③ **Windows：分隔符与 `\\?\` 前缀** ⇒ `starts_with('/')`、`ends_with("host/src/")`、`spec.contains("/checkout/toolchain")`、以及"报告里含 `lock.display()`"这四条断言在 `\` 拼写的路径上全假 ✗。
 ④ **`a_gone_holders_lock_is_taken_over` 在 macOS/Windows 上本来就不该成立**：`process_is_alive` 只在 Linux 经 `/proc` 回答，其它平台**有意**回答"假定活着"（宁可让陈旧锁把下一次发布推迟到 `STALE_AGE`，也不从活写者手里夺锁）——这是产品里写明并带理由的设计，错的是**测试**：它在没有 `/proc` 的平台上断言了一次该平台做不到的接管 ✗。
@@ -2163,7 +2163,7 @@ error[E0433]: cannot find `frame` in `panel`
 
 维护者一句「**mcp 难道不能 delete crate 布局吗？**」点到的是真洞：P3.6/P4 只覆盖了**生成物**那一层 —— `write`/`release` 把声明的拆分写出来、`revert` 把生成的包收回去（三个面都有 ✓）—— 而**声明本身**（`add_crates.rs`：哪棵子树成为哪个 crate）在 CLI/MCP/Studio 里**都只能人手编辑** ✗。他原来那句「也可以在 studio 中操作」指的正是这一层。补上：
 
-**一份实现，三个面共用**（`build_time::shape_decl`）：`declare(root, name, subtrees)` 与 `undeclare(root, name)` 返回 `DeclarationEdit { path, before, after, removes_file }`，编辑是**文本**而不是重渲染 —— `add_crates.rs` 是作者也会读的手写源码，重渲染会重排版、还会丢掉他们的注释 ✗。`undeclare` 从 `Crate::named("<name>")` 起**按括号深度**找条目结尾（不按版式猜；条目可能跨行、还可能带嵌套 `&[…::SUBTREE]`），连同它那一行的缩进一起移除，**其余每个字节保持原样**（钉子逐行比对 ✓）。**移除最后一个 crate 就是移除文件**：宿主回到"就是一个 crate"，而一份 `crates: &[]` 是读取器有意拒绝的形状（`declare` 在无文件时会**创建**它，前缀取自宿主包名 —— 与每个生成包名的推导同一个值）。
+**一份实现，三个面共用**（`build_method::shape_decl`）：`declare(root, name, subtrees)` 与 `undeclare(root, name)` 返回 `DeclarationEdit { path, before, after, removes_file }`，编辑是**文本**而不是重渲染 —— `add_crates.rs` 是作者也会读的手写源码，重渲染会重排版、还会丢掉他们的注释 ✗。`undeclare` 从 `Crate::named("<name>")` 起**按括号深度**找条目结尾（不按版式猜；条目可能跨行、还可能带嵌套 `&[…::SUBTREE]`），连同它那一行的缩进一起移除，**其余每个字节保持原样**（钉子逐行比对 ✓）。**移除最后一个 crate 就是移除文件**：宿主回到"就是一个 crate"，而一份 `crates: &[]` 是读取器有意拒绝的形状（`declare` 在无文件时会**创建**它，前缀取自宿主包名 —— 与每个生成包名的推导同一个值）。
 
 **三条守住语义的规则**：① **`undeclare` 在该 crate 的包还在磁盘上时拒绝**（"先 `revert`"）—— 条目一旦消失，就没有动作还知道那个目录了，留着就是本工具再也够不到的孤儿 ✓（这条还当场纠正了我自己写错的路径算法：生成包在宿主**旁边**，第二份"包在前缀里"的字符串运算第一次就找错了地方 ⇒ 改成问计划本身 ✓）。② **改动后会验证规划**：`apply_declaration_edit` 落盘 → 读回计划 → 不成立就**回滚原样**并说明（"声明已恢复原样"），而不是留下一份其余工具都拒绝的声明 ✓。③ **预览就是那段确切的文本差异**（`-`/`+` 行），`apply: true`／`--write` 才写 ✓。
 

@@ -7,7 +7,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use tracing::Span;
 
-use crate::runtime::{CallSite, CallTrace, EvidenceKind};
+use crate::run_method::{CallSite, CallTrace, EvidenceKind};
 
 /// Create a structured tracing span for one NichLink call site.
 /// 为一个 NichLink 调用点创建结构化 tracing span。

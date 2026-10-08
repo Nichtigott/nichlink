@@ -8,7 +8,7 @@
 
 use super::*;
 
-pub(super) use crate::runtime::{FaceFieldRole, face_field_default, face_field_presentation};
+pub(super) use crate::run_method::{FaceFieldRole, face_field_default, face_field_presentation};
 
 pub(super) fn face_field_value(add: &AddState, index: usize) -> String {
     let stored = add.values[index].trim();

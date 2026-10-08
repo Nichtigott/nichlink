@@ -4,8 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::build_time::face_views;
-use crate::runtime::{CallTrace, LocalKind, trace_artifact_path, write_trace_artifact};
+use crate::build_method::face_views;
+use crate::run_method::{CallTrace, LocalKind, trace_artifact_path, write_trace_artifact};
 use serde_json::json;
 
 use super::trace;

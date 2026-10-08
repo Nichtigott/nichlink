@@ -80,7 +80,7 @@ fn a_cut_is_rendered_by_the_kernel_and_read_back_before_it_is_written() {
 #[test]
 fn an_applied_cut_adds_exactly_one_parseable_entry() {
     let (root, _name) = package("cut-apply");
-    let plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+    let plan = "nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
                 cut(crate::control::object::button::NODE_ID)\n        \
                 graft(control_button_graft::button_fast::NODE_ID),\n);\n";
     std::fs::write(root.join("src/lib.rs"), plan).expect("host entry");
@@ -121,7 +121,7 @@ fn a_cut_that_cannot_be_written_is_refused_with_its_reason() {
     let (root, _name) = package("cut-refuse");
     std::fs::write(
         root.join("src/lib.rs"),
-        "nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK, cut(a::b::NODE_ID) graft(c::d::NODE_ID),);\n",
+        "nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK, cut(a::b::NODE_ID) graft(c::d::NODE_ID),);\n",
     )
     .expect("host entry");
     let refused = apply(
@@ -279,7 +279,7 @@ pub(crate) fn face_package(label: &str) -> PathBuf {
 #[test]
 fn a_logical_path_is_refused_by_a_typed_plan_with_the_spelling_to_use() {
     let root = face_package("cut-class");
-    let plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+    let plan = "nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
                 cut(crate::control::object::button::NODE_ID)\n        \
                 graft(control_button_graft::button_fast::NODE_ID),\n);\n";
     std::fs::write(root.join("src/lib.rs"), plan).expect("host entry");
@@ -343,7 +343,7 @@ fn the_class_check_is_silent_without_a_class_to_join() {
     let root = face_package("cut-class-quiet");
     // A plan that names its cuts by logical path: the same `root/control/dial` request is its own
     // class, so it is not this check's business.
-    let string_plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+    let string_plan = "nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
                        cut \"root/control/button\" graft \"button_fast\",\n);\n";
     std::fs::write(root.join("src/lib.rs"), string_plan).expect("host entry");
     let reply = apply(

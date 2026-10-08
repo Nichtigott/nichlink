@@ -15,7 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::build_time::FaceView;
+use crate::build_method::FaceView;
 
 use crate::mcp::trace::{RecordedTrace, local_line, read_verified};
 use crate::mcp::truncation::{withheld, withheld_uncounted};

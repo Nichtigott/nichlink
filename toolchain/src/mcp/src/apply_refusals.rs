@@ -15,7 +15,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use crate::build_time::{declared_grafts, face_views, graft_plan_rows};
+use crate::build_method::{declared_grafts, face_views, graft_plan_rows};
 
 use super::apply_cut;
 use super::{Action, EDITABLE_FIELDS, Outcome};
@@ -228,7 +228,7 @@ pub(super) fn write_example(root: &Path, namespace: &str, action: Action) -> Str
 
 /// A bare snake_case module name nothing in this tree uses yet.
 /// 一个这棵树还没用过的裸 snake_case 模块名。
-pub(super) fn free_module(views: &[crate::build_time::FaceView]) -> String {
+pub(super) fn free_module(views: &[crate::build_method::FaceView]) -> String {
     for candidate in ["widget", "widget2", "widget3"] {
         let taken = views.iter().any(|view| {
             view.module.rsplit("::").next() == Some(candidate)

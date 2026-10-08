@@ -12,7 +12,7 @@ use std::path::Path;
 
 use super::write_guard::{selected_package_root, with_selected_project_read};
 use super::*;
-use crate::build_time::partition_view::view;
+use crate::build_method::partition_view::view;
 
 impl App {
     /// Open the partition screen for the selected project.
@@ -42,7 +42,7 @@ impl App {
     pub(super) fn undeclare_selected_crate(&mut self, name: String) {
         let outcome = with_selected_project_read(|| -> Result<String, String> {
             let root = selected_package_root()?;
-            if let Some(directory) = crate::build_time::package_directory_of(&root, &name)? {
+            if let Some(directory) = crate::build_method::package_directory_of(&root, &name)? {
                 return Err(format!(
                     "`{name}` still has its package at {}: press `x` to revert first (it takes the \
                      generated packages back while the declaration still names them)\n\
@@ -51,9 +51,9 @@ impl App {
                     directory.display()
                 ));
             }
-            let edit = crate::build_time::undeclare(&root, &name)?;
+            let edit = crate::build_method::undeclare(&root, &name)?;
             let diff = edit.diff();
-            let after = crate::build_time::apply_declaration_edit(&root, edit)?;
+            let after = crate::build_method::apply_declaration_edit(&root, edit)?;
             Ok(format!(
                 "removed `{name}` from {}:\n{diff}{}",
                 root.join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
@@ -122,7 +122,7 @@ fn read_partition_state(state: &mut PartitionState) {
 /// 每个动作调用的那一个写入方，与同名 CLI 动词共用。
 fn write_partition_action(action: PartitionAction) -> Result<String, String> {
     let root = selected_package_root()?;
-    let Some(plan) = crate::build_time::partition_view::plan(&root)? else {
+    let Some(plan) = crate::build_method::partition_view::plan(&root)? else {
         return Err(format!(
             "{} declares no crates: {} has no declaration, so there is nothing to write",
             root.display(),
@@ -138,8 +138,8 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
         .collect();
     match action {
         PartitionAction::WriteDevelopment => {
-            crate::build_time::guard_shape(&directories, false)?;
-            let written = crate::build_time::write_partition(
+            crate::build_method::guard_shape(&directories, false)?;
+            let written = crate::build_method::write_partition(
                 &plan.config_root,
                 plan.workspace.as_deref(),
                 &plan.planned,
@@ -148,8 +148,8 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
             Ok(summary(&written, plan.workspace.is_some(), "development"))
         }
         PartitionAction::WriteRelease => {
-            crate::build_time::guard_shape(&directories, true)?;
-            let written = crate::build_time::write_release(
+            crate::build_method::guard_shape(&directories, true)?;
+            let written = crate::build_method::write_release(
                 &plan.config_root,
                 plan.workspace.as_deref(),
                 &plan.release,
@@ -157,7 +157,7 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
             Ok(summary(&written, plan.workspace.is_some(), "release"))
         }
         PartitionAction::Revert => {
-            let written = crate::build_time::revert_partition(
+            let written = crate::build_method::revert_partition(
                 &plan.config_root,
                 plan.workspace.as_deref(),
                 &plan.planned,
@@ -184,7 +184,7 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
 /// One sentence for a write, with the two halves a reader has to know about.
 /// 一次写入的一句话，带上读者必须知道的另一半。
 fn summary(
-    written: &crate::build_time::crate_write::Written,
+    written: &crate::build_method::crate_write::Written,
     in_a_workspace: bool,
     shape: &str,
 ) -> String {

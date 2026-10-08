@@ -54,7 +54,7 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
     // `check_for` 收包**目录**，而 `package_name` 收它的清单**文件**：这里传文件，管线就会去找
     // `<Cargo.toml>/src` 并报 "is not a source directory"。CLI 的局部变量名叫 `manifest` 却装着
     // 目录——混淆就是这样通过审阅的。
-    let verdict = match crate::build_time::check_for(root, &out, &package) {
+    let verdict = match crate::build_method::check_for(root, &out, &package) {
         Ok(()) => "verdict ok (the kernel accepted the tree)\n".to_owned(),
         Err(diagnostics) => format!(
             "verdict failed ({} diagnostic(s))\n{}",

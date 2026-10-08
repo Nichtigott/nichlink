@@ -203,7 +203,7 @@ Pass `Vec::new()`. `CallTrace::current_path()` (`frames.rs:223`) is the traced v
 /// 声明源与来源链；用 `Display` 渲染。存在与否就是宿主的决策信号：注册机不替宿主决定是否致命。
 ///
 /// ```no_run
-/// # use nichlink_toolchain::runtime::{Provenance, Registry, RuntimeValue};
+/// # use nichlink_toolchain::run_method::{Provenance, Registry, RuntimeValue};
 /// # fn demo(registry: &Registry, node: nichlink::NodeId) {
 /// let value = RuntimeValue::number(0.5, Provenance::default().push(node, "Slider", "measure", "0.5"));
 /// if let Err(error) = registry.health_check(node, &value, Vec::new()) { eprintln!("{error}"); }

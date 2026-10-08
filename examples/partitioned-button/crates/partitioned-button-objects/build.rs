@@ -6,7 +6,7 @@ fn main() {
     println!("cargo:rerun-if-changed=add_crates.rs");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
-    nichlink_toolchain::build_time::run_for_partition(
+    nichlink_toolchain::build_method::run_for_partition(
         root,
         &out,
         "nichlink-example-partitioned-button",

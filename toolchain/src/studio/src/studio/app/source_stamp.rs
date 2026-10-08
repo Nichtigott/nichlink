@@ -56,8 +56,8 @@ pub(super) fn source_stamp() -> u128 {
         // the graft screen, even though the registration tree does not change.
         // 计划是创作记录：编辑或删除它必须刷新 graft 界面，尽管注册树本身没变。
         package_root
-            .join(crate::runtime::lexicon::NICHLINK_DIR)
-            .join(crate::runtime::lexicon::EXTERNAL_GRAFT_DIR),
+            .join(crate::run_method::lexicon::NICHLINK_DIR)
+            .join(crate::run_method::lexicon::EXTERNAL_GRAFT_DIR),
     ] {
         stamp_directory(&root, &mut files);
     }

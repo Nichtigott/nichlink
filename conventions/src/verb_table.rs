@@ -110,16 +110,16 @@ pub struct Violation {
 pub fn is_entry_file(path: &Path) -> bool {
     let text = path.to_string_lossy().replace('\\', "/");
     // Three more positions are entries by nature rather than by path: the build-script entry the
-    // host's `build.rs` calls (`build_time::run`), the CLI's argv dispatch (`cli::run`), and the
+    // host's `build.rs` calls (`build_method::run`), the CLI's argv dispatch (`cli::run`), and the
     // bridge's stdio loop (`mcp::protocol::run`). Rule ④ allows a bare verb at an entry position,
     // and these *are* the entries of their surfaces — everything else in those files still has to
     // carry its object.
     // 还有三个位置是"按性质"的入口而不是按路径：宿主 `build.rs` 调用的构建期入口
-    // （`build_time::run`）、CLI 的 argv 分发（`cli::run`）、桥的 stdio 循环
+    // （`build_method::run`）、CLI 的 argv 分发（`cli::run`）、桥的 stdio 循环
     // （`mcp::protocol::run`）。规则 ④ 允许裸动词出现在入口位，而它们**就是**各自执行面的入口
     // ——这三个文件里的其它东西仍然必须带宾语。
     const ENTRY_FILES: &[&str] = &[
-        "toolchain/src/build_time/src/lib.rs",
+        "toolchain/src/build_method/src/lib.rs",
         "toolchain/src/cli/src/lib.rs",
         "toolchain/src/mcp/src/protocol.rs",
     ];

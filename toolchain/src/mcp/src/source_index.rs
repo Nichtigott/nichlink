@@ -154,7 +154,7 @@ pub(crate) fn indexed_path(face_source: &str) -> String {
 }
 
 pub(crate) fn face_directories<'a>(
-    faces: impl IntoIterator<Item = &'a crate::build_time::FaceView>,
+    faces: impl IntoIterator<Item = &'a crate::build_method::FaceView>,
 ) -> Vec<String> {
     let mut directories: Vec<String> = faces
         .into_iter()

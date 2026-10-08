@@ -188,13 +188,13 @@ impl App {
 }
 
 impl App {
-    pub(crate) fn graph_locals(&self, item: &CallRef) -> Vec<crate::runtime::LocalValue> {
+    pub(crate) fn graph_locals(&self, item: &CallRef) -> Vec<crate::run_method::LocalValue> {
         self.runtime_trace
             .locals()
             .iter()
             .filter(|local| {
                 self.runtime_trace
-                    .path_for_local(crate::runtime::LocalId(local.id))
+                    .path_for_local(crate::run_method::LocalId(local.id))
                     .iter()
                     .any(|call| call.function == item.function)
             })

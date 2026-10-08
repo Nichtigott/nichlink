@@ -63,7 +63,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, Mous
 // `MirCall` 只被控件绘制方的编译器候选查询命名，因此与该特性一同导入。
 #[cfg(feature = "node-graph")]
 use crate::call_evidence::MirCall;
-use crate::runtime::{
+use crate::run_method::{
     NodeId, PluginCatalog, PluginMode, PluginRecord, PluginSource, RegistrationSnapshot, Registry,
     face_field,
 };

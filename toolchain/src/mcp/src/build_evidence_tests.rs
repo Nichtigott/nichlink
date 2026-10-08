@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::build_time::face_views;
+use crate::build_method::face_views;
 use serde_json::json;
 
 use super::explain;

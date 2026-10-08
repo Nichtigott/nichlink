@@ -256,7 +256,7 @@ once after the traced operation:
 ```rust
 let trace = CallTrace::full();
 // … trace.with_at(...), trace.local(...), trace.transform(...) …
-nichlink_toolchain::runtime::write_trace_artifact(
+nichlink_toolchain::run_method::write_trace_artifact(
     &trace,
     &trace_artifact_path(package_root()),
     env!("CARGO_PKG_NAME"), // the identity the faces were stamped with

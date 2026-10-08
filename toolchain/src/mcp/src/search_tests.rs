@@ -56,7 +56,7 @@ fn face(root: &Path, relative: &str, _kind: &str, source: &str) {
 /// Publish the build evidence for this package.
 /// 发布本包的构建证据。
 fn publish(root: &Path, name: &str) {
-    crate::build_time::check_for(root, &root.join("target/nichlink/out"), name)
+    crate::build_method::check_for(root, &root.join("target/nichlink/out"), name)
         .expect("a healthy tree checks clean");
 }
 

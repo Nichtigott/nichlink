@@ -59,8 +59,8 @@ pub(super) fn package_namespace() -> String {
                 .map(|project| project.namespace.clone())
         })
         .unwrap_or_else(|| {
-            crate::runtime::lexicon::resolve_namespace(
-                std::env::var(crate::runtime::lexicon::NAMESPACE_ENV)
+            crate::run_method::lexicon::resolve_namespace(
+                std::env::var(crate::run_method::lexicon::NAMESPACE_ENV)
                     .ok()
                     .as_deref(),
             )
@@ -72,7 +72,7 @@ pub(super) fn package_namespace() -> String {
 /// has not adopted one.
 /// 在一个创作上下文里执行一次**读取**；会话尚未采纳项目时按规则解析它。
 pub(super) fn with_authoring_context<T>(operation: impl FnOnce() -> T) -> T {
-    crate::runtime::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
+    crate::run_method::AuthoringContext::new(package_root(), package_namespace()).scope(operation)
 }
 
 /// The selected project's root, when the session has adopted one.
@@ -121,7 +121,8 @@ pub(super) fn package_root() -> PathBuf {
     }) {
         return root;
     }
-    let configured = std::env::var_os(crate::runtime::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let configured =
+        std::env::var_os(crate::run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = std::env::current_dir().ok();
     resolve_project_from(
         None,
@@ -159,7 +160,8 @@ pub(super) fn package_root() -> PathBuf {
 /// 产物不同的身份域里重建注册树，任何
 /// 已记录的 `NodeId`（trace、graft 记录）都指不到本会话能找的节点。
 pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String> {
-    let configured = std::env::var_os(crate::runtime::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let configured =
+        std::env::var_os(crate::run_method::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = std::env::current_dir().ok();
     let root = resolve_project_from(
         PROJECT_CONTEXT
@@ -180,7 +182,7 @@ pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String
     let manifest = manifest_for(&root);
     let namespace = namespace_for(
         &manifest,
-        std::env::var(crate::runtime::lexicon::NAMESPACE_ENV)
+        std::env::var(crate::run_method::lexicon::NAMESPACE_ENV)
             .ok()
             .as_deref(),
     );
@@ -218,7 +220,7 @@ pub(super) fn resolve_project_from(
         return usable(
             path,
             current,
-            crate::runtime::lexicon::PACKAGE_ROOT_ENV,
+            crate::run_method::lexicon::PACKAGE_ROOT_ENV,
             "NICH_LINK_PACKAGE_ROOT",
         );
     }

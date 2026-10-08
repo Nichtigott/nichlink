@@ -12,7 +12,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::build_time::{FaceView, OverlaySlot, declared_grafts, read_build_scope};
+use crate::build_method::{FaceView, OverlaySlot, declared_grafts, read_build_scope};
 use serde_json::{Value, json};
 
 use super::super::build_out_dir;
@@ -21,12 +21,12 @@ use super::report::{cut_endpoint, cut_form};
 
 /// The note every overlay projection carries, success or failure.
 /// 每一次覆盖投影（无论成功或失败）都携带的说明。
-/// The text belongs to `crate::build_time::OVERLAY_NOTE`, because the MCP
+/// The text belongs to `crate::build_method::OVERLAY_NOTE`, because the MCP
 /// bridge renders the same projection; a local copy would let the CLI's JSON
 /// document and the bridge's answer describe one projection two ways.
-/// 该文本属于 `crate::build_time::OVERLAY_NOTE`，因为 MCP 桥渲染的是同一份投影；本地副本会
+/// 该文本属于 `crate::build_method::OVERLAY_NOTE`，因为 MCP 桥渲染的是同一份投影；本地副本会
 /// 让 CLI 的 JSON 文档与桥的回答对同一份投影给出两种说法。
-pub(super) const OVERLAY_NOTE: &str = crate::build_time::OVERLAY_NOTE;
+pub(super) const OVERLAY_NOTE: &str = crate::build_method::OVERLAY_NOTE;
 
 /// Render the static overlay projection: which of the build's slots a declared
 /// cut replaces, and which faces the scope prunes.
@@ -63,16 +63,16 @@ pub(super) fn overlay_report(
     // drawing a tree from a previous build.
     // 与逐节点报告同一条规则：不再描述这批源码的产物按缺失处理，因此投影说的是"未知"，而不是
     // 用上一次构建画出一棵树。
-    let scope = crate::build_time::build_output_is_current(manifest, &out_dir)
+    let scope = crate::build_method::build_output_is_current(manifest, &out_dir)
         .then(|| read_build_scope(&out_dir).ok())
         .flatten();
     let declared = declared_grafts(manifest);
-    // The traversal itself belongs to `crate::build_time::overlay_projection`,
+    // The traversal itself belongs to `crate::build_method::overlay_projection`,
     // because the MCP bridge's `nichlink.explain {"overlay": true}` asks the same
     // question; this page only renders the rows it returns.
-    // 遍历本身属于 `crate::build_time::overlay_projection`，因为 MCP 桥的
+    // 遍历本身属于 `crate::build_method::overlay_projection`，因为 MCP 桥的
     // `nichlink.explain {"overlay": true}` 问的是同一个问题；本页只渲染它返回的行。
-    let projection = match crate::build_time::overlay_projection(
+    let projection = match crate::build_method::overlay_projection(
         manifest,
         faces,
         scope.as_ref(),

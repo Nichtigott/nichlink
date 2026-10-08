@@ -200,7 +200,7 @@ impl App {
 }
 
 pub(super) fn declaration_contract_paths(source: &str) -> (String, String) {
-    let Ok(Some(face)) = crate::runtime::parse_face(source) else {
+    let Ok(Some(face)) = crate::run_method::parse_face(source) else {
         return (String::new(), String::new());
     };
     let paths = |field| face.path_list(field).unwrap_or_default().join(",");
@@ -247,7 +247,7 @@ mod edit_form_tests {
 
     use super::super::project_context::select_project;
     use super::*;
-    use crate::runtime::authoring::parse::parse_admission_owned;
+    use crate::run_method::authoring::parse::parse_admission_owned;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 

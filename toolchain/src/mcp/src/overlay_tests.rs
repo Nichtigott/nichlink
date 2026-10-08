@@ -45,7 +45,7 @@ fn package(label: &str) -> (PathBuf, String, NodeId) {
         "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
     )
     .expect("face");
-    let id = crate::build_time::face_views(&root, &name).expect("faces derive")[0].id;
+    let id = crate::build_method::face_views(&root, &name).expect("faces derive")[0].id;
     (root, name, id)
 }
 
@@ -118,7 +118,7 @@ fn an_unbuilt_project_reports_an_unknown_scope_and_no_pruning() {
 fn a_published_scope_marks_the_slots_it_prunes() {
     let (root, name, _) = package("pruned");
     let out = root.join("target/nichlink/out");
-    crate::build_time::check_for(&root, &out, &name).expect("a valid host checks clean");
+    crate::build_method::check_for(&root, &out, &name).expect("a valid host checks clean");
     // The fingerprint is over the sources, so replacing the scope manifest models
     // exactly what a narrowed build publishes — without setting a process-wide
     // environment variable two tests could race on.

@@ -18,7 +18,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::build_time::{DeclaredGrafts, FaceView, declared_grafts, face_views};
+use crate::build_method::{DeclaredGrafts, FaceView, declared_grafts, face_views};
 use serde_json::{Value, json};
 
 // The JSON error document and the command error text are one rule each; the
@@ -199,11 +199,11 @@ fn report_problems(problems: Vec<String>) -> Result<(), String> {
 /// 为每个计划目录生成一行报告，按 selector 排序。
 ///
 /// The rule — which plans exist, what each targets, and whether the host entry declares
-/// that slot — belongs to `crate::build_time::graft_plan_rows`, because the MCP
+/// that slot — belongs to `crate::build_method::graft_plan_rows`, because the MCP
 /// bridge's `nichlink.grafts` asks the same question and two copies of a rule like this
 /// drift. This only renders the rows into the `nichlink.grafts/1` JSON shape.
 /// 规则——有哪些计划、每条针对什么、以及宿主入口是否声明了那个槽位——属于
-/// `crate::build_time::graft_plan_rows`，因为 MCP 桥的 `nichlink.grafts` 问的是同一个
+/// `crate::build_method::graft_plan_rows`，因为 MCP 桥的 `nichlink.grafts` 问的是同一个
 /// 问题，而这类规则的两份副本会漂移。这里只把那些行渲染成 `nichlink.grafts/1` 的 JSON 形状。
 pub(crate) fn plan_rows(
     manifest: &Path,
@@ -211,7 +211,7 @@ pub(crate) fn plan_rows(
     declared: Option<&DeclaredGrafts>,
 ) -> Result<Vec<Value>, String> {
     Ok(
-        crate::build_time::graft_plan_rows(manifest, faces, declared)?
+        crate::build_method::graft_plan_rows(manifest, faces, declared)?
             .iter()
             .map(row_json)
             .collect(),
@@ -226,7 +226,7 @@ pub(crate) fn plan_rows(
 /// same plan differently.
 /// 与携带同一批行的覆盖投影共用：一条行有两个渲染器，会让 `grafts` 与 `explain --overlay`
 /// 对同一条计划给出不同描述。
-pub(crate) fn row_json(row: &crate::build_time::GraftPlanRow) -> Value {
+pub(crate) fn row_json(row: &crate::build_method::GraftPlanRow) -> Value {
     let declared_by = row.declared_by.as_ref().map(|cut| {
         json!({
             "cut": match &cut.cut_end {

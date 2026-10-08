@@ -8,7 +8,7 @@
 
 // Kernel lexer re-exports. Historical Studio paths stay valid through these.
 // kernel 词法器重导出，Studio 历史路径经由它们保持可用。
-pub use crate::runtime::source::{body_calls, function_source_range, function_symbols};
+pub use crate::run_method::source::{body_calls, function_source_range, function_symbols};
 
 use super::project_context::{package_namespace, package_root, with_authoring_context};
 use super::*;
@@ -21,7 +21,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     // environment when several libraries share one process.
     let namespace = package_namespace();
     let mut registry = Registry::root_for_namespace(
-        crate::runtime::FrameworkId::new("nichlink.studio"),
+        crate::run_method::FrameworkId::new("nichlink.studio"),
         namespace,
     );
     // Scan only the host package's `src/` tree. When Studio is launched from
@@ -34,7 +34,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
         return Ok(registry);
     }
     let snapshots =
-        with_authoring_context(|| crate::runtime::generated_snapshots_from(&source_root))
+        with_authoring_context(|| crate::run_method::generated_snapshots_from(&source_root))
             .map_err(|error| format!("cannot load generated registration faces: {error}"))?;
     registry
         .register_snapshot_batch(snapshots)
@@ -46,7 +46,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
 /// 将一条 admission 策略渲染成 Edit 表单所携带的紧凑子句形式。
 ///
 /// This call site does not spell the grammar: the kernel's single renderer,
-/// `crate::runtime::authoring::parse::compact_admission`, owns the spelling
+/// `crate::run_method::authoring::parse::compact_admission`, owns the spelling
 /// (`FIXR-01`). Studio used to assemble the clauses here — one clause per non-empty
 /// list, `;` between them, `ANY` for none — because the kernel kept its compact
 /// renderer private, and that second copy was a drift risk by construction: it
@@ -54,7 +54,7 @@ pub(super) fn load_registry() -> Result<Registry, String> {
 /// agreeing. The widened deny list of `LGC-LG-02` is what such a copy costs when it
 /// stops agreeing.
 /// 本调用点不拼语法：内核唯一的渲染器
-/// `crate::runtime::authoring::parse::compact_admission` 拥有拼法（`FIXR-01`）。Studio
+/// `crate::run_method::authoring::parse::compact_admission` 拥有拼法（`FIXR-01`）。Studio
 /// 过去在这里装配子句——每张非空列表一个子句、之间用 `;`、都没有则 `ANY`——因为内核当时把紧凑
 /// 渲染器设成私有；而那份副本本身就是漂移风险：它恰好逐字节相同，因此它哪天不再相同也没有任何
 /// 东西会报告。`LGC-LG-02` 里 deny 列表被放宽，正是这种副本不再相同时的代价。
@@ -66,22 +66,22 @@ pub(super) fn load_registry() -> Result<Registry, String> {
 /// 改为委派之后，Edit 表单预填与检视器那一行与 `parse_admission_owned` 读回的拼法逐字节一致——
 /// 由构造保证，而不是靠两份副本恰好相符。两个面都经过这一个调用点
 /// （`studio/src/studio/app/keyboard.rs`、`studio/src/studio/ui/panels.rs`）。
-pub(crate) fn admission_text(admission: &crate::runtime::OwnedAdmission) -> String {
-    crate::runtime::authoring::parse::compact_admission(admission)
+pub(crate) fn admission_text(admission: &crate::run_method::OwnedAdmission) -> String {
+    crate::run_method::authoring::parse::compact_admission(admission)
 }
 
 /// Render one registry rule as the compact clause form the Edit form carries.
 /// 将一条注册规范渲染成 Edit 表单所携带的紧凑子句形式。
 ///
 /// This call site does not spell the grammar: the kernel's single renderer,
-/// `crate::runtime::authoring::parse::compact_registration_rule`, owns the
+/// `crate::run_method::authoring::parse::compact_registration_rule`, owns the
 /// spelling (`FIXR-01`'s third member — the admission copies were the first two,
 /// `LGC-LG-02`/t8). Studio used to assemble the `preset:/parts:/exports:/handle:/
 /// part_trait:` clauses here because the kernel's owned-value renderer was private,
 /// and that copy was a drift risk by construction: it happened to agree byte for
 /// byte with the kernel, so nothing could report the day it stopped agreeing.
 /// 本调用点不拼语法：内核唯一的渲染器
-/// `crate::runtime::authoring::parse::compact_registration_rule` 拥有拼法（`FIXR-01`
+/// `crate::run_method::authoring::parse::compact_registration_rule` 拥有拼法（`FIXR-01`
 /// 的第三例——前两例是 admission 的两份副本，`LGC-LG-02`/t8）。Studio 过去在这里装配
 /// `preset:/parts:/exports:/handle:/part_trait:` 子句，因为内核“从拥有型取值渲染”的入口是私有
 /// 的；而那份副本本身就是漂移风险：它恰好与内核逐字节相同，因此它哪天不再相同也没有任何东西会报告。
@@ -93,8 +93,8 @@ pub(crate) fn admission_text(admission: &crate::runtime::OwnedAdmission) -> Stri
 /// 改为委派之后，Edit 表单预填与检视器那一行与 `parse_registration_rule_owned` 读回的拼法逐字节
 /// 一致——由构造保证，而不是靠两份副本恰好相符。两个面都经过这一个调用点
 /// （`studio/src/studio/app/keyboard.rs`、`studio/src/studio/ui/panels.rs`）。
-pub(crate) fn registration_rule_text(rule: &crate::runtime::OwnedRegistrationRule) -> String {
-    crate::runtime::authoring::parse::compact_registration_rule(rule)
+pub(crate) fn registration_rule_text(rule: &crate::run_method::OwnedRegistrationRule) -> String {
+    crate::run_method::authoring::parse::compact_registration_rule(rule)
 }
 
 /// Locate the 1-based declaration line of a function in a registry source file.
@@ -123,13 +123,13 @@ mod admission_text_tests {
     //! `FIXR-01`）。
 
     use super::*;
-    use crate::runtime::authoring::parse::{compact_admission, parse_admission_owned};
+    use crate::run_method::authoring::parse::{compact_admission, parse_admission_owned};
 
     /// One policy in the owned form both sides take, from path spellings.
     /// 一份策略的拥有型形式，由路径拼法构造——两边取用的都是它。
-    fn admission(allowed: &[&str], denied: &[&str]) -> crate::runtime::OwnedAdmission {
+    fn admission(allowed: &[&str], denied: &[&str]) -> crate::run_method::OwnedAdmission {
         let owned = |paths: &[&str]| paths.iter().map(|path| (*path).to_owned()).collect();
-        crate::runtime::OwnedAdmission {
+        crate::run_method::OwnedAdmission {
             allowed_paths: owned(allowed),
             denied_paths: owned(denied),
         }
@@ -247,7 +247,7 @@ mod registration_rule_text_tests {
     //! 前两例是两份 admission 副本，即 `LGC-LG-02`/t8）。
 
     use super::*;
-    use crate::runtime::authoring::parse::{
+    use crate::run_method::authoring::parse::{
         compact_registration_rule, parse_registration_rule_owned,
     };
 
@@ -259,14 +259,14 @@ mod registration_rule_text_tests {
         exports: &[&str],
         handle_traits: &[&str],
         part_traits: &[&str],
-    ) -> crate::runtime::OwnedRegistrationRule {
+    ) -> crate::run_method::OwnedRegistrationRule {
         let owned = |values: &[&str]| {
             values
                 .iter()
                 .map(|value| (*value).to_owned())
                 .collect::<Vec<_>>()
         };
-        crate::runtime::OwnedRegistrationRule {
+        crate::run_method::OwnedRegistrationRule {
             required_preset: preset.map(str::to_owned),
             required_parts: owned(parts),
             required_exports: owned(exports),

@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 
 use crate::call_evidence::{CallTrace, LocalKind, SourceLocation};
-use crate::runtime::{NodeId, TraceArtifact, root_node_id, trace_artifact_path};
+use crate::run_method::{NodeId, TraceArtifact, root_node_id, trace_artifact_path};
 
 use super::*;
 // `CallRef` and `SearchState` are named by this file in every feature
@@ -110,8 +110,8 @@ fn fixture(label: &str) -> Fixture {
     // launched session takes it, so this test pins the chain a host relies on.
     // 命名空间来自 Cargo 对该清单的回答，与已启动会话取得它的方式一致，因此本条测试钉住宿主所依赖
     // 的那条链。
-    let name =
-        crate::build_time::package_name(&manifest).expect("the fixture manifest names its package");
+    let name = crate::build_method::package_name(&manifest)
+        .expect("the fixture manifest names its package");
     select_project(root.clone(), manifest, name.clone());
     let app = App::load_app();
     let face = app
@@ -430,9 +430,9 @@ fn the_loader_reads_the_convention_path() {
     fixture.write_fixture(&matching_artifact(&fixture, &trace));
     let expected = fixture
         .root
-        .join(crate::runtime::lexicon::NICHLINK_DIR)
-        .join(crate::runtime::lexicon::TRACE_DIR)
-        .join(crate::runtime::lexicon::TRACE_FILE);
+        .join(crate::run_method::lexicon::NICHLINK_DIR)
+        .join(crate::run_method::lexicon::TRACE_DIR)
+        .join(crate::run_method::lexicon::TRACE_FILE);
     assert_eq!(fixture.artifact_path(), expected);
     assert!(fixture.artifact_path().is_file());
     assert_eq!(App::load_app().trace_status, TraceStatus::Loaded);

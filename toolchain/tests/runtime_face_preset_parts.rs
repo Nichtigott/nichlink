@@ -19,14 +19,14 @@ pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 /// 一对自定义 preset/parts，刻意不同于宽松默认值，断言才能区分"被转发"与"被静默替换"。
 struct ProbePreset;
 
-impl nichlink_toolchain::runtime::PresetContract for ProbePreset {
+impl nichlink_toolchain::run_method::PresetContract for ProbePreset {
     type Output = ();
     const REQUIRED_PARTS: &'static [&'static str] = &["probe"];
 }
 
 struct ProbeParts;
 
-impl nichlink_toolchain::runtime::PartsContract for ProbeParts {
+impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
     type Output = ();
     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 }

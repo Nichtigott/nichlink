@@ -58,7 +58,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-use crate::build_time::build_output_is_current;
+use crate::build_method::build_output_is_current;
 
 /// How long, in seconds, a content verification may be reused without paying again.
 /// 一次内容核验可以不付费复用的时长（秒）。
@@ -338,7 +338,7 @@ pub(crate) fn consult(root: &Path, out: &Path, policy: Policy) -> Consultation {
 /// Touches no memo: this is the half that may run on a worker thread.
 /// 不碰任何记忆：这是可以跑在工作线程上的那一半。
 pub(crate) fn pay_with_stamp(root: &Path, out: &Path, stamp: Option<(usize, u64)>) -> Paid {
-    let stamp = stamp.unwrap_or_else(|| crate::build_time::source_stamp(root));
+    let stamp = stamp.unwrap_or_else(|| crate::build_method::source_stamp(root));
     Paid {
         current: build_output_is_current(root, out),
         clock: wall_clock(),
@@ -459,7 +459,7 @@ fn stamp_for(key: &(PathBuf, PathBuf), root: &Path) -> (usize, u64) {
     if let Some(stamp) = STAMPS.with(|stamps| stamps.borrow().get(key).copied()) {
         return stamp;
     }
-    let stamp = crate::build_time::source_stamp(root);
+    let stamp = crate::build_method::source_stamp(root);
     STAMPS.with(|stamps| stamps.borrow_mut().insert(key.clone(), stamp));
     stamp
 }

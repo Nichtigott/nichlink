@@ -1011,7 +1011,7 @@ fn snippets_injects_the_editor_file() {
     ])
     .expect("snippets command");
 
-    let path = root.join(crate::build_time::scaffold::SNIPPET_FILE);
+    let path = root.join(crate::build_method::scaffold::SNIPPET_FILE);
     let text = std::fs::read_to_string(&path).expect("editor file");
     let parsed: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
     let snippets = parsed.as_object().expect("an object of snippets");

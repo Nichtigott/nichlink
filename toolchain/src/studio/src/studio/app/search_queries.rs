@@ -3,8 +3,8 @@
 
 use super::*;
 
-use crate::runtime::registry_core::declaration::source_file_matches;
-use crate::runtime::source::item_symbols;
+use crate::run_method::registry_core::declaration::source_file_matches;
+use crate::run_method::source::item_symbols;
 
 impl App {
     /// Flat rows for one search query, with **adjacent** duplicates collapsed.
@@ -173,7 +173,7 @@ fn outer() {\n\
         source_rows_for_text(
             SOURCE,
             "src/panel.rs",
-            crate::runtime::ROOT_NODE_ID,
+            crate::run_method::ROOT_NODE_ID,
             "outer",
             false,
             needle,

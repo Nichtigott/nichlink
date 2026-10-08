@@ -6,7 +6,7 @@
 
 use super::super::state::new_project_field;
 use super::*;
-use crate::runtime::face_field;
+use crate::run_method::face_field;
 
 #[test]
 fn new_project_and_explicit_root_face_compile() {

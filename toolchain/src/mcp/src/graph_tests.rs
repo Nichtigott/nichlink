@@ -44,7 +44,7 @@ fn package(label: &str) -> (PathBuf, String) {
 /// Publish the index the way a real run does.
 /// 像真实的一次运行那样发布索引。
 fn publish(root: &Path, name: &str) {
-    crate::build_time::check_for(root, &crate::mcp::build_evidence::out_dir(root), name)
+    crate::build_method::check_for(root, &crate::mcp::build_evidence::out_dir(root), name)
         .expect("a healthy tree checks clean");
 }
 

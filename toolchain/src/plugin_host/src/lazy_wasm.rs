@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::runtime::{FlowContract, FrameworkId, PluginMode, VerifiedPluginArtifact};
+use crate::run_method::{FlowContract, FrameworkId, PluginMode, VerifiedPluginArtifact};
 use arc_swap::ArcSwapOption;
 
 use crate::plugin_host::{HostError, PluginInstance, WasmBackend};
@@ -21,7 +21,7 @@ use slot_state::SlotState;
 /// historical `crate::plugin_host::ValidationChannel` path.
 /// 定义本体在 kernel 的 `plugin` 模块；本别名保留
 /// `crate::plugin_host::ValidationChannel` 历史路径。
-pub use crate::runtime::PluginChannel as ValidationChannel;
+pub use crate::run_method::PluginChannel as ValidationChannel;
 
 /// A release-time opening for one Wasm extension or replacement.
 /// 正式发布时保留的一个 Wasm 扩展或替换入口。
@@ -218,7 +218,7 @@ fn validate_artifact(
     channel: ValidationChannel,
     artifact: &VerifiedPluginArtifact,
 ) -> Result<(), HostError> {
-    crate::runtime::validate_artifact(
+    crate::run_method::validate_artifact(
         slot.name,
         slot.framework,
         slot.mode,
@@ -228,7 +228,7 @@ fn validate_artifact(
         artifact,
     )
     .map_err(|error| match error {
-        crate::runtime::SlotValidationError::Policy(message) => HostError::Policy(message),
-        crate::runtime::SlotValidationError::Contract(message) => HostError::Contract(message),
+        crate::run_method::SlotValidationError::Policy(message) => HostError::Policy(message),
+        crate::run_method::SlotValidationError::Contract(message) => HostError::Contract(message),
     })
 }

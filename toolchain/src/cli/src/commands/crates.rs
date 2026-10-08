@@ -94,7 +94,7 @@ pub(crate) fn crates(
     if let Some(action) = declaration {
         return declaration_edit(&package_root, action, declared_subtrees, write, out);
     }
-    let declaration = crate::build_time::read_shape_declaration(&package_root)?.ok_or_else(|| {
+    let declaration = crate::build_method::read_shape_declaration(&package_root)?.ok_or_else(|| {
         format!(
             "{} has no {}: a host without a declaration is one crate, so there is nothing to plan",
             package_root.display(),
@@ -103,22 +103,22 @@ pub(crate) fn crates(
     })
             .map_err(|error| error.to_string())?;
     let out_dir = super::build_out_dir(&package_root);
-    let rows = crate::build_time::read_pruning_manifest(&out_dir).map_err(|error| {
+    let rows = crate::build_method::read_pruning_manifest(&out_dir).map_err(|error| {
         format!("{error}\nway forward: run `nichlink check` first — the plan reads the faces the build published")
     })
             .map_err(|error| error.to_string())?;
-    let faces: Vec<(String, String, crate::build_time::NodeId)> = rows
+    let faces: Vec<(String, String, crate::build_method::NodeId)> = rows
         .iter()
         .map(|row| {
             (
                 row.source.clone(),
-                crate::build_time::source_module_path(&row.source),
+                crate::build_method::source_module_path(&row.source),
                 row.id,
             )
         })
         .collect();
-    let planned = crate::build_time::plan_crates(&package_root, &package, &declaration, &faces)?;
-    let facade = crate::build_time::plan_facade(
+    let planned = crate::build_method::plan_crates(&package_root, &package, &declaration, &faces)?;
+    let facade = crate::build_method::plan_facade(
         &package_root,
         &declaration.package_prefix,
         &package,
@@ -152,7 +152,7 @@ pub(crate) fn crates(
                 // 与打包方同一条规则，**问**它而不是自己再拼一遍：这一行原先自己拼路径，于是打印的 facade
                 // 比实际写下处高了一层（`…/partitioned-button-facade` 而不是 `…/crates/…`），正是那种会把
                 // 读者送去追一个并不存在的缺陷的自我描述。
-                crate::build_time::crate_plan::crates_dir(
+                crate::build_method::crate_plan::crates_dir(
                     package_root.parent().unwrap_or(&package_root)
                 )
                 .join(format!("{}-facade", declaration.package_prefix))
@@ -184,9 +184,9 @@ pub(crate) fn crates(
             )?;
         }
     }
-    let (root, workspace) = crate::build_time::partition_roots(&package_root);
+    let (root, workspace) = crate::build_method::partition_roots(&package_root);
     if revert {
-        let reverted = crate::build_time::revert_partition(
+        let reverted = crate::build_method::revert_partition(
             &root,
             workspace.as_deref(),
             &planned,
@@ -223,27 +223,27 @@ pub(crate) fn crates(
     if release {
         let mut packages = Vec::new();
         for planned in &planned {
-            packages.push(crate::build_time::plan_release_ghost(
+            packages.push(crate::build_method::plan_release_ghost(
                 &package_root,
                 planned,
                 &faces,
             )?);
         }
-        packages.push(crate::build_time::plan_release_facade(
+        packages.push(crate::build_method::plan_release_facade(
             &package_root,
             &package,
             &declaration.package_prefix,
             &package,
             &planned,
         )?);
-        crate::build_time::guard_shape(
+        crate::build_method::guard_shape(
             &packages
                 .iter()
                 .map(|package| package.directory.as_path())
                 .collect::<Vec<_>>(),
             true,
         )?;
-        let written = crate::build_time::write_release(&root, workspace.as_deref(), &packages)?;
+        let written = crate::build_method::write_release(&root, workspace.as_deref(), &packages)?;
         return line(
             out,
             format!(
@@ -255,15 +255,19 @@ pub(crate) fn crates(
             ),
         );
     }
-    crate::build_time::guard_shape(
+    crate::build_method::guard_shape(
         &planned
             .iter()
             .map(|planned| planned.directory.as_path())
             .collect::<Vec<_>>(),
         false,
     )?;
-    let written =
-        crate::build_time::write_partition(&root, workspace.as_deref(), &planned, facade.as_ref())?;
+    let written = crate::build_method::write_partition(
+        &root,
+        workspace.as_deref(),
+        &planned,
+        facade.as_ref(),
+    )?;
     line(
         out,
         format!(
@@ -334,17 +338,18 @@ fn declaration_edit(
                      subtree, not a name on its own"
                 ));
             }
-            crate::build_time::declare(package_root, &name, &subtrees)?
+            crate::build_method::declare(package_root, &name, &subtrees)?
         }
         DeclarationAction::Undeclare { name } => {
-            if let Some(directory) = crate::build_time::package_directory_of(package_root, &name)? {
+            if let Some(directory) = crate::build_method::package_directory_of(package_root, &name)?
+            {
                 return Err(format!(
                     "`{name}` still has its package at {}: `--revert` first (it takes the generated \
                      packages back while the declaration still names them), then undeclare",
                     directory.display()
                 ));
             }
-            crate::build_time::undeclare(package_root, &name)?
+            crate::build_method::undeclare(package_root, &name)?
         }
     };
     let diff = edit.diff();
@@ -358,7 +363,7 @@ fn declaration_edit(
             ),
         );
     }
-    let after = crate::build_time::apply_declaration_edit(package_root, edit)?;
+    let after = crate::build_method::apply_declaration_edit(package_root, edit)?;
     line(out, diff)?;
     match after {
         Some(view) => line(

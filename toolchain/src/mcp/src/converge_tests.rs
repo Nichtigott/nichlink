@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::runtime::{
+use crate::run_method::{
     CallTrace, LocalKind, SourceLocation, trace_artifact_path, write_trace_artifact,
 };
 use serde_json::json;
@@ -236,7 +236,7 @@ fn the_values_a_run_captured_are_attached_to_the_faces_that_ran() {
 fn the_per_face_detail_cap_says_when_it_stopped_and_names_the_cap() {
     let (root, name) = package("trace-detail-cap");
     recorded_run(&root, &name, &name);
-    let faces = crate::build_time::face_views(&root, &name).expect("faces derive");
+    let faces = crate::build_method::face_views(&root, &name).expect("faces derive");
     let full = converge_from_trace(&root, &faces, 40).expect("the report renders");
     assert!(
         full.contains("values (2)"),

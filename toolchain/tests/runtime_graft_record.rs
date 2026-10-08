@@ -11,13 +11,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_toolchain::runtime::registry_core::lexicon;
-use nichlink_toolchain::runtime::registry_core::{
+use nichlink_toolchain::run_method::registry_core::lexicon;
+use nichlink_toolchain::run_method::registry_core::{
     Admission, FrameworkId, NodeId, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
     OwnedSourceLocation, RegistrationRule, RegistrationSnapshot, Registry, StaticGraftCut,
     root_node_id,
 };
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 // The ungated tests never call the loader directly; only the no-`authoring` pin
@@ -25,7 +25,7 @@ use nichlink_toolchain::runtime::{
 // 不受门控的测试不直接调用加载器；只有那条“无 authoring”钉子会调用，因此这些名字
 // 不出现在 `authoring` 构建里。
 #[cfg(not(feature = "authoring"))]
-use nichlink_toolchain::runtime::{LoadedGraft, load_graft_records};
+use nichlink_toolchain::run_method::{LoadedGraft, load_graft_records};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("graft-record-test");
 const BASE_NAMESPACE: &str = "graft-record-base";

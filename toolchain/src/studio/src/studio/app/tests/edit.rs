@@ -5,8 +5,8 @@
 //! 编辑往返回归测试。
 
 use super::*;
-use crate::runtime::face_field;
-use crate::runtime::registry_core::declaration::portable_path;
+use crate::run_method::face_field;
+use crate::run_method::registry_core::declaration::portable_path;
 
 #[test]
 fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {

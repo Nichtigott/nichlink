@@ -13,7 +13,7 @@
 //! 在另一个线程上把一次加载按住，再从本线程问这个槽：队列是否仍然可达、`install` 是否会等。
 
 use super::*;
-use crate::runtime::{
+use crate::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -28,7 +28,7 @@ fn artifact(bytes: Vec<u8>) -> VerifiedPluginArtifact {
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: crate::runtime::ROOT_NODE_ID,
+        parent: crate::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

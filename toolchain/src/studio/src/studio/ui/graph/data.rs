@@ -39,7 +39,7 @@ pub(super) fn draw_data_flow_panel(
         )));
     } else {
         for local in locals {
-            let id = crate::runtime::LocalId(local.id);
+            let id = crate::run_method::LocalId(local.id);
             let upstream = app
                 .runtime_trace
                 .incoming(id)

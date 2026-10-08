@@ -144,7 +144,7 @@ fn the_generators_own_face_layout_is_found() {
 #[test]
 fn an_external_declaration_is_read_into_the_hosts_spellings() {
     let source = "\
-nichlink_toolchain::runtime::external_object! {
+nichlink_toolchain::run_method::external_object! {
     source: \"button_fast/button_fast.rs\",
     kind: ButtonFast,
     preset: NoPreset,

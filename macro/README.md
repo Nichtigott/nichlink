@@ -47,12 +47,12 @@ front end only when its strict arms have already declined the declaration.
   仅有一次；它不是 `FaceFields` 成员，因此永远不会进入镜像。
 
 The declaration is re-emitted as
-`::nichlink_toolchain::runtime::__nichlink_object! { … }` (or `__external_object!` for
+`::nichlink_toolchain::run_method::__nichlink_object! { … }` (or `__external_object!` for
 the external target), so the collector mode the caller chose survives the round
 trip. If reordering produces exactly the tokens it was given, the front end
 reports that a field's *shape* is wrong instead of recursing.
 
-归一化后的声明会重新发出为 `::nichlink_toolchain::runtime::__nichlink_object! { … }`
+归一化后的声明会重新发出为 `::nichlink_toolchain::run_method::__nichlink_object! { … }`
 （外部目标则为 `__external_object!`），调用方选择的 collector 模式因此得以保留。
 如果重排得到的正是收到的 token，前端会报告"某个字段的写法不对"，而不是无限递归。
 

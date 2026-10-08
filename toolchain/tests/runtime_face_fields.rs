@@ -17,16 +17,16 @@ mod canonical {
         kind: Ordered,
         name: { zh: "有序", en: "Ordered" },
         needs_registry: true,
-        parent: nichlink_toolchain::runtime::registry_core::root_node_id("face-fields-test"),
-        registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY,
+        parent: nichlink_toolchain::run_method::registry_core::root_node_id("face-fields-test"),
+        registry_rule: nichlink_toolchain::run_method::registry_core::RegistrationRule::ANY,
     }
 }
 
 mod shuffled {
     nichlink_toolchain::__nichlink_object! {
-        registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY;
+        registry_rule: nichlink_toolchain::run_method::registry_core::RegistrationRule::ANY;
         kind: Ordered;
-        parent: nichlink_toolchain::runtime::registry_core::root_node_id("face-fields-test");
+        parent: nichlink_toolchain::run_method::registry_core::root_node_id("face-fields-test");
         needs_registry: true;
         name: { zh: "有序", en: "Ordered" };
     }
@@ -109,10 +109,10 @@ fn a_reordered_face_reports_the_authors_lines() {
 mod parens {
     nichlink_toolchain::__nichlink_object!(
         kind: Ordered;
-        registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY;
+        registry_rule: nichlink_toolchain::run_method::registry_core::RegistrationRule::ANY;
         needs_registry: true;
         name: { zh: "有序", en: "Ordered" };
-        parent: nichlink_toolchain::runtime::registry_core::root_node_id("face-fields-test")
+        parent: nichlink_toolchain::run_method::registry_core::root_node_id("face-fields-test")
     );
 }
 
@@ -152,7 +152,7 @@ fn the_parenthesised_form_declares_the_same_face() {
 /// 本测试文件为自己模块保留的规范规则，位置正是创作布局规定的地方：注册面旁边的
 /// `registry_rule`。
 mod registry_rule {
-    use nichlink_toolchain::runtime::registry_core::RegistrationRule;
+    use nichlink_toolchain::run_method::registry_core::RegistrationRule;
 
     pub const REGISTRATION_RULE: RegistrationRule = RegistrationRule::new()
         .require_exports(&["control.render"])
@@ -168,7 +168,7 @@ mod omitted_rule {
         kind: RuleOmitted,
         name: { zh: "省略规则", en: "Rule omitted" },
         needs_registry: true,
-        parent: nichlink_toolchain::runtime::registry_core::root_node_id("face-fields-test"),
+        parent: nichlink_toolchain::run_method::registry_core::root_node_id("face-fields-test"),
     }
 }
 
@@ -207,7 +207,7 @@ fn a_face_without_a_registry_keeps_the_permissive_default() {
 }
 
 mod external_shuffled {
-    use nichlink_toolchain::runtime::registry_core::{
+    use nichlink_toolchain::run_method::registry_core::{
         ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
     };
 
@@ -218,7 +218,7 @@ mod external_shuffled {
     // order: the front end must sort it and send it to `__external_object!`.
     // 与任何外部面相同的字段集合，但用 `;` 分隔且顺序不同：前端必须把它排序后送到
     // `__external_object!`。
-    nichlink_toolchain::runtime::external_object! {
+    nichlink_toolchain::run_method::external_object! {
         kind: ExternalFast;
         flow: FlowContract::new(ContractId::new("t.v1"), 1, "In", "Out");
         source: "face_fields/external_fast.rs";

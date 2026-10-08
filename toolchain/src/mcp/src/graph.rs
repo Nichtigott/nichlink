@@ -173,7 +173,7 @@ fn resolve_nodes(root: &Path, query: &str) -> Result<Vec<String>, String> {
     }
     let out = crate::mcp::build_evidence::out_dir(root);
     let mut found = BTreeSet::new();
-    if let Ok(rows) = crate::build_time::read_pruning_manifest(&out) {
+    if let Ok(rows) = crate::build_method::read_pruning_manifest(&out) {
         for row in rows {
             let spellings = [
                 row.logical_path.as_deref(),

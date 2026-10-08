@@ -7,7 +7,7 @@ pub(crate) fn draw_delete(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    id: crate::runtime::NodeId,
+    id: crate::run_method::NodeId,
 ) -> (Rect, Rect) {
     let path = app
         .registry

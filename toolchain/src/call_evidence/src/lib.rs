@@ -28,12 +28,12 @@ pub use inventory;
 /// type while keeping the collected value zero-copy.
 /// 本地的 inventory 载荷避免与内核声明类型产生孤儿规则耦合，同时让收集到的值保持零拷贝。
 #[doc(hidden)]
-pub struct CollectedRegistration(pub &'static crate::runtime::RegistrationInfo);
+pub struct CollectedRegistration(pub &'static crate::run_method::RegistrationInfo);
 
 #[cfg(debug_assertions)]
 inventory::collect!(CollectedRegistration);
 
-pub use crate::runtime::{
+pub use crate::run_method::{
     CallEdge, CallSite, CallTrace, DataEdge, DataHop, EvidenceKind, LocalId, LocalKind, LocalValue,
     NodeId, Observation, SourceLocation,
 };

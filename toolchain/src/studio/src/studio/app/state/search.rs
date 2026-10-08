@@ -1,7 +1,7 @@
 //! Search and provenance-graph state.
 //! 搜索与溯源图状态。
 
-use crate::runtime::NodeId;
+use crate::run_method::NodeId;
 
 /// Search session state for one or two queries, including graph navigation.
 /// 一次或两次查询的搜索会话状态，含调用图导航。

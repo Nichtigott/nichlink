@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use crate::build_time::face_views;
+use crate::build_method::face_views;
 use serde_json::json;
 
 use super::apply;
@@ -323,7 +323,7 @@ fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
         "{text}"
     );
     assert!(
-        text.contains("impl nichlink_toolchain::runtime::PartsContract for ButtonParts"),
+        text.contains("impl nichlink_toolchain::run_method::PartsContract for ButtonParts"),
         "{text}"
     );
     // The parts list follows the JSON object's own order, which is sorted by key, so the pin states
@@ -907,7 +907,7 @@ fn the_deepen_preview_names_the_pins_it_leaves_alone() {
 #[test]
 fn a_refusal_carries_a_request_built_from_this_trees_names() {
     let root = face_package("example-names");
-    let plan = "nichlink_toolchain::runtime::static_graft_plan!(\n    FRAMEWORK,\n    \
+    let plan = "nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
                 cut(crate::control::object::button::NODE_ID)\n        \
                 graft(control_button_graft::button_fast::NODE_ID),\n);\n";
     std::fs::write(root.join("src/lib.rs"), plan).expect("host entry");

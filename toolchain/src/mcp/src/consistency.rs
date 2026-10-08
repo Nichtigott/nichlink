@@ -395,7 +395,7 @@ const RECORD_CANNOT_ANSWER: &str = "this comparison reads each sibling's declare
 fn member_faces(
     member: &Member,
     because: &str,
-) -> Result<(String, Vec<crate::build_time::FaceView>, String), String> {
+) -> Result<(String, Vec<crate::build_method::FaceView>, String), String> {
     if let Some((faces, evidence)) = published_faces(member) {
         return Ok((evidence, faces, String::new()));
     }
@@ -407,9 +407,9 @@ fn member_faces(
 /// The sibling set: faces directly under one logical path, in tree order.
 /// 同族集合：直接挂在某个逻辑路径下的面，按树序。
 fn siblings<'a>(
-    faces: &'a [crate::build_time::FaceView],
+    faces: &'a [crate::build_method::FaceView],
     parent: &str,
-) -> Vec<&'a crate::build_time::FaceView> {
+) -> Vec<&'a crate::build_method::FaceView> {
     let wanted = parent.trim_end_matches('/');
     faces
         .iter()

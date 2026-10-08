@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::runtime::AuthoringContext;
+use crate::run_method::AuthoringContext;
 
 /// The crate and module a typed declaration names its implementation with.
 /// 类型化声明用来命名其实现的 crate 路径。
@@ -22,7 +22,7 @@ use crate::runtime::AuthoringContext;
 /// `control_button_graft::button_fast::NODE_ID` 得到 `Some("control_button_graft")`。第一段是 crate，
 /// 其余是它内部的模块——宿主清单与外部源码树正是按这两半查找的。
 pub(super) fn crate_and_module(
-    expressions: &crate::build_time::DeclaredGraftExpressions,
+    expressions: &crate::build_method::DeclaredGraftExpressions,
 ) -> Result<(String, String), String> {
     let text = expressions.graft.trim();
     let crate_name = text
@@ -249,9 +249,9 @@ pub(super) fn external_registry(root: &Path) -> Result<nichlink_kernel::Registry
         nichlink_kernel::FrameworkId::new("nichlink.mcp"),
         namespace.clone(),
     );
-    let source_root = crate::build_time::source_layout(root)?.scan_root;
+    let source_root = crate::build_method::source_layout(root)?.scan_root;
     let snapshots = AuthoringContext::new(root.to_path_buf(), namespace)
-        .scope(|| crate::runtime::generated_snapshots_from(&source_root))
+        .scope(|| crate::run_method::generated_snapshots_from(&source_root))
         .map_err(|error| format!("the external implementation's source is unreadable: {error}"))?;
     registry
         .register_snapshot_batch(snapshots)

@@ -32,7 +32,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use nichlink_toolchain::plugin_host::{ProcessBackend, ProcessProgram};
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -109,12 +109,12 @@ static ALLOCATOR: Counting = Counting;
 
 /// A verified artifact over `bytes`, shaped like the other backend tests'.
 /// 覆盖 `bytes` 的已验证产物，形状与后端其他测试一致。
-fn artifact(bytes: Vec<u8>) -> nichlink_toolchain::runtime::VerifiedPluginArtifact {
+fn artifact(bytes: Vec<u8>) -> nichlink_toolchain::run_method::VerifiedPluginArtifact {
     let checksum = Box::leak(sha256_hex(&bytes).into_boxed_str());
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

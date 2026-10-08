@@ -1,7 +1,7 @@
 //! Ed25519 verification at the plugin execution boundary.
 //! 插件执行边界上的 Ed25519 验证。
 
-use crate::runtime::{PluginManifest, PluginSignatureVerifier};
+use crate::run_method::{PluginManifest, PluginSignatureVerifier};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 /// One public key the host will trust, named by its SHA-256 fingerprint.
@@ -43,7 +43,7 @@ impl Ed25519Verifier {
             .iter()
             .find(|key| key.fingerprint.eq_ignore_ascii_case(fingerprint))
             .filter(|key| {
-                crate::runtime::sha256_hex(&key.bytes).eq_ignore_ascii_case(key.fingerprint)
+                crate::run_method::sha256_hex(&key.bytes).eq_ignore_ascii_case(key.fingerprint)
             })
             .and_then(|key| VerifyingKey::from_bytes(&key.bytes).ok())
     }
@@ -74,13 +74,13 @@ fn decode_signature(value: &str) -> Option<Signature> {
     if value.len() != 128 {
         return None;
     }
-    let bytes: [u8; 64] = crate::runtime::hex_decode(value)?.try_into().ok()?;
+    let bytes: [u8; 64] = crate::run_method::hex_decode(value)?.try_into().ok()?;
     Some(Signature::from_bytes(&bytes))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::{FrameworkId, PluginMode, PluginSource, sha256_hex};
+    use crate::run_method::{FrameworkId, PluginMode, PluginSource, sha256_hex};
     use ed25519_dalek::{Signer, SigningKey};
 
     use super::*;

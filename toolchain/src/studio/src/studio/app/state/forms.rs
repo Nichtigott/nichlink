@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{new_project_field, plugin_field};
-use crate::runtime::authoring::face_field;
-use crate::runtime::{FACE_FIELD_COUNT, NodeId};
+use crate::run_method::authoring::face_field;
+use crate::run_method::{FACE_FIELD_COUNT, NodeId};
 
 /// Fields used by the New Project wizard.
 /// New Project 向导使用的字段。
@@ -187,7 +187,7 @@ impl AddState {
         !self.locked_fields.contains(&field)
     }
 
-    pub(crate) fn apply_parent_rule(&mut self, rule: &crate::runtime::OwnedRegistrationRule) {
+    pub(crate) fn apply_parent_rule(&mut self, rule: &crate::run_method::OwnedRegistrationRule) {
         self.parent_requirements.clear();
         if let Some(preset) = &rule.required_preset {
             self.values[face_field::PRESET] = preset.clone();

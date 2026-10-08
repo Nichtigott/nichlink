@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::runtime::{PluginAdapter, VerifiedPluginArtifact};
+use crate::run_method::{PluginAdapter, VerifiedPluginArtifact};
 use tempfile::{Builder, TempPath};
 
 use crate::plugin_host::{HostError, PluginInstance};
@@ -497,7 +497,7 @@ impl PluginInstance for ProcessInstance {
 }
 
 fn validate_operation(operation: &str) -> Result<(), HostError> {
-    if crate::runtime::validate_operation_name(operation).is_err() {
+    if crate::run_method::validate_operation_name(operation).is_err() {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
     Ok(())

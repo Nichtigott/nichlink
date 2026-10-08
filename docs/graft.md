@@ -18,7 +18,7 @@ Three different artifacts meet at a graft, and none of them copies source:
 | **Application** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | runtime host | Validates and returns a new effective tree, mutating neither the base registry nor the external registry. |
 
 The declaration macro is exported by `nichlink-toolchain`
-(`nichlink_toolchain::runtime::static_graft_plan!`); the kernel only parses the text the
+(`nichlink_toolchain::run_method::static_graft_plan!`); the kernel only parses the text the
 macro stringifies. The application methods live in the kernel
 (`nichlink_kernel::Registry`).
 
@@ -77,7 +77,7 @@ A record is loaded and applied by the ungated runtime API in
 feature, so a host does not need `syn` merely to read a plan file):
 
 ```rust
-use nichlink_toolchain::runtime::{apply_recorded_grafts, Registry, StaticGraftCut};
+use nichlink_toolchain::run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
 
 // `declared` is the build-captured static plan and the arbiter of which slots
 // stay alive; `external` is the linked external registry.
@@ -281,7 +281,7 @@ same way (both Rust expressions or both strings):
 ```rust
 // String form: names the slot by logical path and the implementation by
 // selector name. Resolved dynamically at overlay time; needs no link.
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -289,7 +289,7 @@ nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
 // external implementation's `NODE_ID`; the external crate must be linked, so a
 // typed declaration is final against a record. A range is `cut(a to b)`; see
 // the "Ranges over siblings" section above.
-nichlink_toolchain::runtime::static_graft_plan!(FRAMEWORK,
+nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
 );

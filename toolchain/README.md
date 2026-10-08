@@ -5,7 +5,7 @@ The publishing surface: the seven thin execution surfaces of NichLink in one cra
 
 | module | was | responsibility |
 | --- | --- | --- |
-| `build_time` | `nichlink-build-method` | build-time filesystem / `OUT_DIR` orchestration |
+| `build_method` | `nichlink-build-method` | build-time filesystem / `OUT_DIR` orchestration |
 | `runtime` | `nichlink-run-method` | runtime state instance + trace binding |
 | `call_evidence` | `nichlink-debug-method` | observation evidence surface |
 | `plugin_host` | `nichlink-plugin-host` | wasm / process plugin host execution |
@@ -14,11 +14,11 @@ The publishing surface: the seven thin execution surfaces of NichLink in one cra
 | `cli` | `nichlink-cli` | process glue: argv dispatch, cargo subprocesses |
 
 Host usage: `[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`;
-the crate root calls `nichlink_toolchain::runtime::host!();` and the thin `build.rs` calls
-`nichlink_toolchain::build_time::run()`.
+the crate root calls `nichlink_toolchain::run_method::host!();` and the thin `build.rs` calls
+`nichlink_toolchain::build_method::run()`.
 宿主用法：`[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`；
-crate 根部调用 `nichlink_toolchain::runtime::host!();`，薄 `build.rs` 调用
-`nichlink_toolchain::build_time::run()`。
+crate 根部调用 `nichlink_toolchain::run_method::host!();`，薄 `build.rs` 调用
+`nichlink_toolchain::build_method::run()`。
 
 Feature names are kept from the crates that carried them (`wasm`, `process-tools`, `authoring`,
 `node-graph`, `prototype-fixtures`, `dev-supervisor`); `default = ["wasm", "node-graph"]`

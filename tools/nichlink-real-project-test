@@ -109,7 +109,7 @@ cuts=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*
 
 step "partitioned: two containers handed to crates of their own"
 cat >"$WORK/host/add_crates.rs" <<'RS'
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of(
@@ -151,7 +151,7 @@ step "whole-container: both cuts move into a crate of their own"
 # `crates --check` 尚未比对形状指纹是同一族。
 (cd "$WORK/host" && "$NICHLINK" crates --revert . >/dev/null 2>&1) || fail "the previous split does not revert"
 cat >"$WORK/host/add_crates.rs" <<'RS'
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of("whole", &[Crate::named("control").at(&[crate::control::SUBTREE])])

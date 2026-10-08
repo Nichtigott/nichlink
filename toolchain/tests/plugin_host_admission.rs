@@ -23,7 +23,7 @@ use nichlink_toolchain::plugin_host::{
 };
 #[cfg(feature = "wasm")]
 use nichlink_toolchain::plugin_host::{USER_LOCK, lane_for};
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginPolicy, PluginRevocation, PluginSource, PluginTrustPolicy,
     RegistrationInfo, RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -32,7 +32,7 @@ use nichlink_toolchain::runtime::{
 // the imports are gated with it rather than left unused in a feature-less build.
 // 本文件里通道词汇只经 Wasm 表抵达，因此这些导入与它一同门控，而不是在无特性构建里悬空。
 #[cfg(feature = "wasm")]
-use nichlink_toolchain::runtime::{PluginAssurance, PluginChannel};
+use nichlink_toolchain::run_method::{PluginAssurance, PluginChannel};
 
 /// A module that answers `health` with `ok` and echoes its input.
 /// 一个以 `ok` 回答 `health` 并回显输入的小模块。
@@ -82,7 +82,7 @@ fn registration(manifest: PluginManifest) -> RegistrationInfo {
     RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

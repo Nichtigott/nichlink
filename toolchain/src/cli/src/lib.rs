@@ -258,9 +258,9 @@ pub(crate) fn build_target(
 /// 把一个宿主项目目录解析成规范根目录与 Cargo 为该包给出的包名。
 ///
 /// The package name is the NodeId namespace for every operator command here, read from
-/// `crate::build_time::package_name` — one authority, so these commands cannot disagree with
+/// `crate::build_method::package_name` — one authority, so these commands cannot disagree with
 /// each other.
-/// 包名即 NodeId 命名空间，在此由 `crate::build_time::package_name` 读取——同一权威，因此这些
+/// 包名即 NodeId 命名空间，在此由 `crate::build_method::package_name` 读取——同一权威，因此这些
 /// 命令彼此不会分歧。
 ///
 /// It is **not** one story across all surfaces, and the difference is stated rather than implied:
@@ -283,7 +283,7 @@ pub(crate) fn resolve_package(directory: &str) -> Result<(PathBuf, String), Stri
     if !manifest.join("Cargo.toml").is_file() {
         return Err(format!("{} has no Cargo.toml", manifest.display()));
     }
-    let package = crate::build_time::package_name(&manifest.join("Cargo.toml"))?;
+    let package = crate::build_method::package_name(&manifest.join("Cargo.toml"))?;
     Ok((manifest, package))
 }
 
@@ -300,7 +300,7 @@ pub(crate) fn build_out_dir(manifest: &Path) -> PathBuf {
     // chances for one of them to read a directory the build never wrote (audit `M7`, P3.6).
     // 一份实现，与 Studio 和桥共用：这条路径有三份拷贝，就是三次"其中一个读到的目录构建从没写过"的机会
     // （审计 `M7`，P3.6）。
-    crate::build_time::partition_view::build_out_dir(manifest)
+    crate::build_method::partition_view::build_out_dir(manifest)
 }
 
 /// Run registration discovery and validation for the host project at
@@ -309,7 +309,7 @@ pub(crate) fn build_out_dir(manifest: &Path) -> PathBuf {
 fn registration_check(directory: &str) -> Result<String, String> {
     let (manifest, package) = resolve_package(directory)?;
     let out_dir = build_out_dir(&manifest);
-    crate::build_time::run_for(&manifest, &out_dir, &package)?;
+    crate::build_method::run_for(&manifest, &out_dir, &package)?;
     Ok(package)
 }
 

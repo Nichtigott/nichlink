@@ -148,7 +148,7 @@ pub(crate) fn draw_graft(
     if let Some(error) = graft_declaration_error(graft) {
         lines.push(Line::from(Span::styled(error, Style::default().fg(MUTED))));
     } else {
-        let document = crate::runtime::GraftPlanDocument::new(
+        let document = crate::run_method::GraftPlanDocument::new(
             graft.target,
             graft.target_path.clone(),
             graft.selector.trim(),
@@ -235,7 +235,7 @@ pub(crate) fn draw_graft(
 /// A selector the entry declaration cannot be rendered for yet.
 /// 还无法渲染入口声明的选择器。
 fn graft_declaration_error(graft: &GraftState) -> Option<String> {
-    crate::runtime::validate_graft_selector(graft.selector.trim())
+    crate::run_method::validate_graft_selector(graft.selector.trim())
         .err()
         .map(|error| format!("  ({error})"))
 }

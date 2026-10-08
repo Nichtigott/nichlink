@@ -25,8 +25,8 @@ pub mod probe {
 
     nichlink_toolchain::__nichlink_object! {
         kind: Probe,
-        parent: nichlink_toolchain::runtime::registry_core::root_node_id("p33-probe-domain"),
-        registry_rule: nichlink_toolchain::runtime::registry_core::RegistrationRule::ANY,
+        parent: nichlink_toolchain::run_method::registry_core::root_node_id("p33-probe-domain"),
+        registry_rule: nichlink_toolchain::run_method::registry_core::RegistrationRule::ANY,
     }
 }
 
@@ -37,7 +37,7 @@ pub mod external_probe {
     /// 下面那条声明命名的标记类型。
     pub struct Extern;
 
-    nichlink_toolchain::runtime::external_object! {
+    nichlink_toolchain::run_method::external_object! {
         collector: development,
         kind: Extern,
     }
@@ -47,8 +47,8 @@ pub mod external_probe {
 /// 两个面散列的都是那个**常量**——而不是包名会给出的那个散列。
 #[test]
 fn the_declaration_reads_the_root_constant_instead_of_the_package_name() {
-    use nichlink_toolchain::runtime::NodeId;
-    use nichlink_toolchain::runtime::registry_core::manifest_relative_source;
+    use nichlink_toolchain::run_method::NodeId;
+    use nichlink_toolchain::run_method::registry_core::manifest_relative_source;
 
     let relative = manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!());
     let expected = |kind: &str| NodeId::from_namespaced_path(NICHLINK_NAMESPACE, relative, kind);

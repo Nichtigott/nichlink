@@ -16,7 +16,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
-use crate::build_time::{FaceView, PruningRow, read_pruning_manifest};
+use crate::build_method::{FaceView, PruningRow, read_pruning_manifest};
 use nichlink_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;

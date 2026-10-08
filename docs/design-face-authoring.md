@@ -22,7 +22,7 @@ crate::root_object! { kind: Control, needs_registry: true }
 `run_method/tests/kind_only_registry_name.rs` 里钉住的那一条(前端宏会补 `collector`):
 
 ```rust
-nichlink_toolchain::runtime::__control_object! { collector: development, kind: KindOnlyFace }
+nichlink_toolchain::run_method::__control_object! { collector: development, kind: KindOnlyFace }
 ```
 
 它同时钉住 `registry_name` 的来源:该面记录的 `registry_name` 是 `"kind_only"`——声明所在
@@ -65,7 +65,7 @@ nichlink_toolchain::runtime::__control_object! { collector: development, kind: K
   读取方,共用一份实现:
   1. 文件视图:`core/src/registry_core/syntax/fields.rs::FaceSyntax::string_list`
      (委托 `authoring::parse::trait_names_from_paths`);
-  2. 过程宏前端:`nichlink_toolchain::runtime::__face_trait_labels_or!`(`macro/src/lib.rs`);
+  2. 过程宏前端:`nichlink_toolchain::run_method::__face_trait_labels_or!`(`macro/src/lib.rs`);
   3. 写入方:`run_method/src/authoring/operations/face_write.rs::apply_trait_contract`。
 
 因此编译进的注册信息、构建期契约检查、创作解析器与 Studio 不可能对标签各说一套。**只写标签、

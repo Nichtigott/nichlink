@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::runtime::{GraftPlan, Registry};
+use crate::run_method::{GraftPlan, Registry};
 use arc_swap::ArcSwap;
 
 use crate::plugin_host::{HostError, PluginInstance};

@@ -4,13 +4,13 @@
 //! discards the original subtree and uses the one carried here, so the contract
 //! must stay compatible with the `control.frame.v1` that `Control` publishes.
 
-use nichlink_toolchain::runtime::registry_core::{
+use nichlink_toolchain::run_method::registry_core::{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 };
 
 pub struct ControlFast;
 
-nichlink_toolchain::runtime::external_object! {
+nichlink_toolchain::run_method::external_object! {
     source: "control_fast/control_fast.rs",
     kind: ControlFast,
     preset: NoPreset,

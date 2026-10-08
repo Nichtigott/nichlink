@@ -28,8 +28,8 @@ mod apply_cut;
 #[path = "apply_promote.rs"]
 mod apply_promote;
 
-use crate::build_time::{face_views, source_layout};
-use crate::runtime::{AuthoringContext, NewModuleFace};
+use crate::build_method::{face_views, source_layout};
+use crate::run_method::{AuthoringContext, NewModuleFace};
 use nichlink_kernel::Registry;
 use serde_json::Value;
 
@@ -427,7 +427,7 @@ pub(crate) fn run_add(root: &Path, namespace: &str, arguments: &Value) -> Result
     // `add_module_from_face` 会返回它注册的那个面，供调用方提交；本工具的反馈是重新推导出的树，
     // 因此那一半被丢掉，而不是提交进一次性的注册树。
     let (change, _) = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
-        .scope(|| crate::runtime::add_module_from_face(&registry, &face))?;
+        .scope(|| crate::run_method::add_module_from_face(&registry, &face))?;
     Ok(Outcome {
         message: change.message,
         source: change.source,
@@ -500,11 +500,11 @@ fn run_edit(
     // `NICH_LINK_PACKAGE_ROOT`，而单元测试没设。
     let context = AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
     let (change, previous_kind, new_kind) = context.scope(|| -> Result<_, String> {
-        let mut authored = crate::runtime::authored_face(&registry, id)?;
+        let mut authored = crate::run_method::authored_face(&registry, id)?;
         let previous = authored.kind.clone();
         overlay(&mut authored, fields, action)?;
         let kind = authored.kind.clone();
-        let change = crate::runtime::edit_module_face(&registry, id, &authored.as_patch())?;
+        let change = crate::run_method::edit_module_face(&registry, id, &authored.as_patch())?;
         Ok((change, previous, kind))
     })?;
     // `kind` is an identity input — `NodeId = hash(namespace, source, name)`, and a face's name is its
@@ -581,7 +581,7 @@ fn run_delete(root: &Path, namespace: &str, arguments: &Value) -> Result<Outcome
     let registry = load_registry(root, namespace)?;
     let id = resolve_node(root, namespace, target)?;
     let change = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
-        .scope(|| crate::runtime::delete_module(&registry, &format!("{id} confirm")))?;
+        .scope(|| crate::run_method::delete_module(&registry, &format!("{id} confirm")))?;
     Ok(Outcome {
         message: change.message,
         source: change.source,
@@ -705,7 +705,7 @@ fn run_deepen(
         "\n/// The layer inside this face: the parts its own declaration already describes.\n\
          /// 这个面内部的那一层：它自己的声明已经描述过的那些零件。\npub struct {kind}Parts {{\n\
          {declarations}}}\n\
-         \nimpl nichlink_toolchain::runtime::PartsContract for {kind}Parts {{\n\
+         \nimpl nichlink_toolchain::run_method::PartsContract for {kind}Parts {{\n\
          \x20   type Output = {kind}Parts;\n\
          \x20   const PROVIDED_PARTS: &'static [&'static str] = &[{listed}];\n}}\n\
          \nimpl {kind} {{\n\
@@ -742,7 +742,7 @@ fn run_deepen(
 /// 每个键按名字匹配：拼错的字段被拒绝而不是被丢弃——正是这个方向让代理不会以为自己改了什么而
 /// 其实没改。
 fn overlay(
-    authored: &mut crate::runtime::AuthoredFace,
+    authored: &mut crate::run_method::AuthoredFace,
     fields: &Value,
     action: Action,
 ) -> Result<(), String> {
@@ -833,7 +833,7 @@ pub(crate) fn load_registry(root: &Path, namespace: &str) -> Result<Registry, St
         Registry::root_for_namespace(nichlink_kernel::FrameworkId::new("nichlink.mcp"), namespace);
     let source_root = source_layout(root)?.scan_root;
     let snapshots = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
-        .scope(|| crate::runtime::generated_snapshots_from(&source_root))?;
+        .scope(|| crate::run_method::generated_snapshots_from(&source_root))?;
     registry
         .register_snapshot_batch(snapshots)
         .map_err(|error| format!("the package's own faces were rejected: {error}"))?;

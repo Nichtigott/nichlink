@@ -247,7 +247,7 @@ pub(crate) fn state(root: &Path) -> State {
             };
         }
     };
-    let current = crate::build_time::source_stamp(root);
+    let current = crate::build_method::source_stamp(root);
     if published.stamp == current {
         State::Ready(published)
     } else {
@@ -285,7 +285,7 @@ pub(crate) fn start(root: &Path) -> Result<Started, String> {
         // refresh did not land.
         // 判断结果没有被丢掉——它被**发布**了：一次失败的运行会移除指纹、不写就绪记录，下一个读者就是这样
         // 得知这次刷新没有落地。
-        let _ = crate::build_time::check_for(&key, &out, &package);
+        let _ = crate::build_method::check_for(&key, &out, &package);
         RUNNING
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

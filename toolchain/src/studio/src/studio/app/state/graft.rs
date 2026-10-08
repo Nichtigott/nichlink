@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use crate::runtime::NodeId;
+use crate::run_method::NodeId;
 
 /// Compose one external graft declaration and manage the plans already on disk.
 /// 撰写一条外部 graft 声明，并管理磁盘上已有的计划。

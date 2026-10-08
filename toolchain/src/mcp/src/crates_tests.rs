@@ -1,7 +1,7 @@
 //! Pins for `nichlink.crates`: the preview discipline and the three writers (audit `M7`, P4).
 //! `nichlink.crates` 的钉子：预览纪律与三个写入方（审计 `M7`，P4）。
 
-use crate::build_time::crate_plan::crates_dir;
+use crate::build_method::crate_plan::crates_dir;
 use std::fs;
 use std::path::PathBuf;
 
@@ -26,7 +26,7 @@ fn host(label: &str) -> PathBuf {
     fs::create_dir_all(root.join("src/panel/frame")).expect("the host's sources");
     fs::write(
         root.join("src/lib.rs"),
-        "nichlink_toolchain::runtime::host!();\n",
+        "nichlink_toolchain::run_method::host!();\n",
     )
     .expect("the entry");
     fs::write(
@@ -58,7 +58,7 @@ fn host(label: &str) -> PathBuf {
     .expect("the host manifest");
     fs::write(
         root.join("add_crates.rs"),
-        "use nichlink_toolchain::runtime::{Crate, Shape};\n\n\
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
          pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n\
          crates: &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])],\n};\n",
     )

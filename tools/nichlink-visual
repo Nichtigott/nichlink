@@ -128,7 +128,7 @@ EOF
 crate::panel_object! { kind: Frame, parent: crate::panel::NODE_ID, }
 EOF
             cat >"$host/add_crates.rs" <<'EOF'
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape {

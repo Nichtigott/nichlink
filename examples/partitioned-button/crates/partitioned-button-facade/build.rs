@@ -30,7 +30,7 @@ fn main() {
     let host = host_root();
     println!("cargo:rerun-if-changed={}", host.join("src").display());
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
-    nichlink_toolchain::build_time::run_for_partition(
+    nichlink_toolchain::build_method::run_for_partition(
         &host,
         &out,
         "nichlink-example-partitioned-button",

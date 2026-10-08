@@ -5,8 +5,8 @@
 //! 外部 graft 组合回归测试。
 
 use super::*;
-use crate::runtime::face_field;
-use crate::runtime::registry_core::declaration::portable_path;
+use crate::run_method::face_field;
+use crate::run_method::registry_core::declaration::portable_path;
 
 /// The graft screen composes a plan, shows the entry line, and never edits host
 /// source. A plan is a record; the overlay itself is applied by the host.
@@ -105,25 +105,25 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
     // 目录值得两次有意的按键，而中间任何其他键都会解除。
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('f')));
     assert!(
-        !with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft"))
+        !with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft"))
             .expect("plan reads back")
             .full()
     );
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
     assert!(app.event.contains("press d again"), "{}", app.event);
     assert!(
-        with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft")).is_ok(),
+        with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft")).is_ok(),
         "one press must not delete the record"
     );
     app.handle_overlay_key(KeyEvent::from(KeyCode::Down));
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
     assert!(
-        with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft")).is_ok(),
+        with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft")).is_ok(),
         "another key clears the arm, so this press only arms again"
     );
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('d')));
     assert!(
-        with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft")).is_err()
+        with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft")).is_err()
     );
     assert!(app.event.contains("moved to"), "{}", app.event);
     assert_eq!(std::fs::read(&source).expect("source remains"), before);
@@ -172,7 +172,7 @@ fn graft_refuses_a_selector_that_already_exists() {
         app.event
     );
     assert!(
-        !with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft"))
+        !with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft"))
             .expect("the original plan is untouched")
             .full()
     );
@@ -228,7 +228,7 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
     );
 
     app.handle_overlay_key(KeyEvent::from(KeyCode::Char('s')));
-    let plan = with_authoring_context(|| crate::runtime::read_external_graft("canvas_graft"))
+    let plan = with_authoring_context(|| crate::run_method::read_external_graft("canvas_graft"))
         .expect("the plan is written even though the slot is undeclared");
     assert!(app.event.starts_with("Warning:"), "{}", app.event);
     // The wording is for the reader; the colour comes from the field the write set

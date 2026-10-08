@@ -4,7 +4,7 @@
 use super::project_context::{package_root, select_project};
 use super::write_guard::{selected_package_root, with_selected_project};
 use super::*;
-use crate::runtime::pascal_case;
+use crate::run_method::pascal_case;
 
 impl App {
     pub(super) fn submit_new_project(&mut self, project: &NewProjectState) {
@@ -39,17 +39,17 @@ impl App {
         } else {
             package_root().join(root)
         };
-        let source = crate::build_time::scaffold::detected_source(
+        let source = crate::build_method::scaffold::detected_source(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
             &std::env::current_exe().unwrap_or_default(),
         );
         let kind = if kind == "library" {
-            crate::build_time::scaffold::ProjectKind::Library
+            crate::build_method::scaffold::ProjectKind::Library
         } else {
-            crate::build_time::scaffold::ProjectKind::Binary
+            crate::build_method::scaffold::ProjectKind::Binary
         };
         if let Err(error) =
-            crate::build_time::scaffold::create_project(&root, package, kind, &source)
+            crate::build_method::scaffold::create_project(&root, package, kind, &source)
         {
             self.alert(format!("New project failed: {error}"));
             return;
@@ -100,7 +100,7 @@ impl App {
                 return;
             }
         };
-        let face = crate::runtime::NewModuleFace {
+        let face = crate::run_method::NewModuleFace {
             module: &add.values[face_field::MODULE],
             kind,
             preset: &add.values[face_field::PRESET],
@@ -134,8 +134,9 @@ impl App {
             flow: &add.values[face_field::FLOW],
             flow_provider: &add.values[face_field::FLOW_PROVIDER],
         };
-        match with_selected_project(|| crate::runtime::add_module_from_face(&self.registry, &face))
-        {
+        match with_selected_project(|| {
+            crate::run_method::add_module_from_face(&self.registry, &face)
+        }) {
             Ok((change, info)) => {
                 // One place applies a write's outcome (audit `STU-S-27`).
                 // 写入的结果只有一处应用（审计 `STU-S-27`）。
@@ -158,7 +159,7 @@ impl App {
                 return;
             }
         };
-        let patch = crate::runtime::ModuleFacePatch {
+        let patch = crate::run_method::ModuleFacePatch {
             module: &edit.values[face_field::MODULE],
             kind: &edit.values[face_field::KIND],
             preset: &edit.values[face_field::PRESET],
@@ -183,8 +184,9 @@ impl App {
             flow: &edit.values[face_field::FLOW],
             flow_provider: &edit.values[face_field::FLOW_PROVIDER],
         };
-        match with_selected_project(|| crate::runtime::edit_module_face(&self.registry, id, &patch))
-        {
+        match with_selected_project(|| {
+            crate::run_method::edit_module_face(&self.registry, id, &patch)
+        }) {
             Ok(change) => {
                 let message = change.message;
                 let changed_source = change.source;

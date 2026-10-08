@@ -31,19 +31,19 @@ what blocks 1.0, not by when they were found.
 - **B3d 修正了一处归因**:F1 的垃圾默认名不是审计指认的"完整 arm"产生,而是由*两个都显式写了的紧凑 arm* 消费 `$crate::NoPreset` 后经 `stringify!` 产生;修法是删掉那条重发 arm,让带 `handle` 的紧凑 arm 自己成为默认化 arm。三个示例面现在实测 `preset == "NoPreset"`、`parts == "NoParts"`。
 - **F2 的责任在计划本身**:B2 要求"四处路径判断合成一个 `path_is_under`",但那四处对"相等"的语义并不一致(准入包含相等,连接器严格在其下),合并把连接器的准入静默放宽了。已加 `path_is_strictly_under` 并把两种含义写在一处。教训:合并重复前逐处比对边界语义,不能只看"看起来一样"。
 - **F5 确立一条原则**:零调用者的删除,在真实调用者出现时反转。`RegistryError` 的 `node/path/source/message/children` 已补回,另三个保持删除,因为文档化的 `health_check` 宿主 API 就是调用者。
-- **trace 接入定为 1.x**(`docs/design-trace-ingest.md`);1.0 只加一条 `LIVE SAMPLE` 标注的回归测试。设计还查明示例 trace 不只是假的,而是选不中的:它的节点与注册树不同域,`Live` 永不点亮;后来某一轮给样本补了一个被观测局部值(该轮起文中的"不记录 locals"不再成立),但那个值同样只对样本自己的节点可见,而注册树里没有那个节点。1.x 的第一片(trace artifact)已开工,见该设计的 §3 与 `toolchain/runtime/src/runtime/trace/snapshot/`。
+- **trace 接入定为 1.x**(`docs/design-trace-ingest.md`);1.0 只加一条 `LIVE SAMPLE` 标注的回归测试。设计还查明示例 trace 不只是假的,而是选不中的:它的节点与注册树不同域,`Live` 永不点亮;后来某一轮给样本补了一个被观测局部值(该轮起文中的"不记录 locals"不再成立),但那个值同样只对样本自己的节点可见,而注册树里没有那个节点。1.x 的第一片(trace artifact)已开工,见该设计的 §3 与 `toolchain/run_method/src/runtime/trace/snapshot/`。
 - **B4 的"有效树 dump"有真实边界**:CLI 无法为任意宿主重建 `Registry`(基树与外部树只存在于宿主 crate 内)。已提供宿主侧端口 `Registry::dump_effective`,CLI 的 `explain --overlay` 明确标注为 `static-projection`。
 
 **下一批已完成(尺寸回归 + 未接线能力 + 三条定夺项)**
 
 1. ✅ 尺寸回归第一轮(当时的样本均 ≤450):`record.rs` 900 → 85 父 + `reconcile.rs` 192 / `reports.rs` 136 / `apply.rs` 263;`toolchain/cli/src/lib.rs` 944 → 243 + `commands/*`;`explain.rs` 598 → 197 + `explain_report/overlay/json.rs`;`face_view.rs` 561 → 435 + `scope_view.rs` 165。公开路径全部逐字兼容。
    ⚠️ **第四轮更正:这条当时写成"非测试文件均 ≤450"并不成立。** 实测有 15 个非测试文件超过它(最大 `kernel/src/registry_core/declaration/runtime_checks.rs` 751)。现在不再是口头约定:`conventions` crate 的 `size` 门禁把它变成**只能变短的棘轮**——把超标文件连实测行数一起钉在 `BASELINE` 里,新增超标文件会失败,已缩回上限之内的过期项也会失败(防止清单悄悄变成许可)。清单从 15 项开始,第四轮的第 8 条把 `diagnostic/build.rs` 缩回 429 行后,棘轮**强制**删掉了那一项。条目数不在散文里复述——它就是 `BASELINE.len()`,而 `size.rs` 的模块文档已写明复述数字的散文终会与它漂移(本条此前复述的那个数字正是一例,已删)。
-2. ✅ Feature 2 落地:`health_check` 的宿主 API 文档(含 `no_run` 示例,用补回的 `node()/path()/source()/message()/children()`)、五个检查单测、`examples/control-button` 的 `health_check` example + 端到端测试、`toolchain/runtime/README*.md` 的宿主调用段。
+2. ✅ Feature 2 落地:`health_check` 的宿主 API 文档(含 `no_run` 示例,用补回的 `node()/path()/source()/message()/children()`)、五个检查单测、`examples/control-button` 的 `health_check` example + 端到端测试、`toolchain/run_method/README*.md` 的宿主调用段。
 3. ✅ trace 1.0 回归测试:`trace_legend_reads_live_sample_and_never_claims_live_data`(断言图例为 `LIVE SAMPLE`,剥掉后不残留裸 `LIVE`),注释指向 `docs/design-trace-ingest.md`。
 4. ✅ 记录路径有了真实宿主:`examples/control-button/examples/graft_record.rs`,把包根重定向到带 `Drop` 清理的临时目录,同时证明类型化声明 `TypedDeclarationKept` 与字符串声明 `DeclarationOverridden`,且基树与 `builtin_static_plan()` 不变。
 5. ✅ **A1:`NICH_LINK_ENTRY` 只解析一次、两个读取者共用**(你选严格档)。构建侧新增 `entry::HostEntry`(`Configured`/`Declared`/`Convention`)与 `resolve_host_entry`,由 `host_entry_from_environment` 每构建读环境一次;`pipeline` 把同一个值交给 `SourceScope` 与 `host_graft_entries(&entry)`,后者不再自行解析入口。被指定却不是文件的入口现在**构建失败**(`NICH_LINK_ENTRY names …`,与 `host_entry_source` 给创作面的 `Err` 同义),而不是让一半回退到 `main.rs`;未设置时行为逐字节不变。测试钉住:配置入口同时决定剪枝与切口表、相对/绝对路径都相对包根、缺文件即失败、约定入口缺失仍只是"没有入口"。
 6. ✅ **B:兄弟区间的顺序契约写成契约。** 跨度按 `registry_name` 排序(`resolution.rs`),现在这件事既写在代码注释里,也写进 `docs/graft.md`/`graft.zh-CN.md` 的新节 "Ranges over siblings" 与两个根 README。写反的端点(`mid to alpha`)**报错**而不是静默交换,错误同时给出两个端点、规则和正确的写法;两条测试钉住(`a_range_covers_the_siblings_between_its_endpoints_in_registry_name_order` 用注册序与名字序不同的四兄弟夹具,`a_backwards_range_is_refused_with_both_endpoints_and_the_order_rule`)。`GraftError::InvalidRange` 的载荷改为完整原因句、`Display` 原样打印(公开类型形状不变,跨父级那条消息逐字节不变)。
-7. ✅ **C19:诊断字段表。** `toolchain/cli/README*.md` 记录 `check --json` 的文档契约(十一键恒在、`line=0` 表示无行号、JSON 顺序 == 人类可读顺序、退出码仍非零)与逐 phase 的字段表;`toolchain/runtime/README*.md` 记录五个读取器,以及"顶层 `message()` 是固定聚合句、失败检查名在 `children()[0].message()`、`Display` 是推荐渲染"这条规则。
+7. ✅ **C19:诊断字段表。** `toolchain/cli/README*.md` 记录 `check --json` 的文档契约(十一键恒在、`line=0` 表示无行号、JSON 顺序 == 人类可读顺序、退出码仍非零)与逐 phase 的字段表;`toolchain/run_method/README*.md` 记录五个读取器,以及"顶层 `message()` 是固定聚合句、失败检查名在 `children()[0].message()`、`Display` 是推荐渲染"这条规则。
 8. ✅ **C24:Studio 对未声明槽位仍然写计划,但改成醒目警告。** 写入顺序合法("先写记录、后声明槽位"),因此不拒绝;但横幅以 `Warning:` 开头(状态栏据此上警示色),说明发布态会剪掉该槽位、运行期会把这条记录当作 `UnkeptSlot` 跳过(即嫁接不生效且不报错)、缺声明的是哪个入口文件,并附上按同一个内核构造器渲染出的可直接粘贴子句。测试 `graft_warns_about_an_undeclared_slot_after_writing_the_plan` 钉住"计划已写入 + 警告内容 + 子句与记录逐字相同"。
 
 9. ✅ **运行期不再有沉默的嫁接。** `apply_recorded_grafts` 现在在返回前把每条 `RecordReport` 与每个不可读计划打印到 stderr(每项一行:未生效/损坏为 `warning:`,优先级裁决为 `note:`),同样的条目仍留在 `GraftOverlay`。原因是设计上"跳过不是致命错误"(`Registry::resolve_record`:一条陈旧记录不该让其余记录失效)本身没错,但**把"不失败"和"不告知"混为一谈**了——只取 `.effective` 的宿主什么都看不到,而那是一次悄无声息从未发生的嫁接(源码树正常、运行中的二进制没应用它)。渲染器是纯函数,由 `graft_report_lines_mark_problems_as_warnings` 钉住;示例 `graft_record` 新增第三种情形做端到端演示,实测 stderr 输出 `warning: graft record \`slider_fast\` addresses \`root/control/button\`, which no declaration keeps alive; record skipped`。构建期那半边本来就有 `cargo:warning`(`graft_plan_check`),Studio 那半边是第 8 条。
@@ -113,8 +113,8 @@ what blocks 1.0, not by when they were found.
 
 | # | 项 | 证据 | 验收 |
 | --- | --- | --- | --- |
-| 1 | ✅ `face_objects` arm 绑定 `$preset`/`$parts` 却展开成 `NoPreset`/`NoParts`（已复核机制，已修） | `toolchain/src/runtime/src/macros/face_objects.rs:92-95` | 已落地：`__face_ty_or!`/`__face_ty_name_or!` 按每个绑定分别判有无，省略者保持默认、写下的原样转发；钉子 `toolchain/runtime/tests/face_preset_parts.rs`、`toolchain/runtime/tests/face_arm_defaults.rs` |
-| 2 | ✅ arm 5 不可达（已修：该 arm 已删除） | `toolchain/src/runtime/src/macros/face_objects.rs`（无行号：被删的 arm 不再有位置） | 删除后既有宏测试全绿 |
+| 1 | ✅ `face_objects` arm 绑定 `$preset`/`$parts` 却展开成 `NoPreset`/`NoParts`（已复核机制，已修） | `toolchain/src/run_method/src/macros/face_objects.rs:92-95` | 已落地：`__face_ty_or!`/`__face_ty_name_or!` 按每个绑定分别判有无，省略者保持默认、写下的原样转发；钉子 `toolchain/run_method/tests/face_preset_parts.rs`、`toolchain/run_method/tests/face_arm_defaults.rs` |
+| 2 | ✅ arm 5 不可达（已修：该 arm 已删除） | `toolchain/src/run_method/src/macros/face_objects.rs`（无行号：被删的 arm 不再有位置） | 删除后既有宏测试全绿 |
 | 3 | `register_snapshot_batch` 尾部缺父循环不可达，且重复构造同一错误 | `declaration/../../tree/transaction.rs:58-71` | 删除；transaction 全部测试绿 |
 | 4 | `UnknownReplacement`/`UnknownTarget` 用原树根 id 报错，丢掉选择器 | `tree/graft_ops/overlay.rs:151-156`、`resolution.rs:43-51` | 错误携带选择器字符串；新增测试断错文案含 selector |
 | 5 | `same_symbol` 每次比较两次堆分配且在双重循环内 | `mir/merge.rs:53-55` | 改 `strip_suffix` 零分配；既有 merge 测试绿 |
@@ -188,7 +188,7 @@ what blocks 1.0, not by when they were found.
 | 入口 | 谁提供 | 谁消费 | 钉在哪 |
 | --- | --- | --- | --- |
 | `authoring::parse::try_render_requirements` | 内核 `authoring/parse/rules.rs`（严格，`-> Result<String, FaceParseError>`） | `run_method` 的 manifest 渲染器（旧 `render_requirements` 保留为有损薄包装） | `a_malformed_requires_entry_refuses_the_rewrite`（走真实 `render_source`） |
-| `build_method::face_views_and_unreadable` | `toolchain/build_time/src/face_view.rs` | 面对外回答（`face_views` 委托它），不可读的面从此可查 | `a_registration_file_that_does_not_parse_is_named_not_dropped` |
+| `build_method::face_views_and_unreadable` | `toolchain/build_method/src/face_view.rs` | 面对外回答（`face_views` 委托它），不可读的面从此可查 | `a_registration_file_that_does_not_parse_is_named_not_dropped` |
 | `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `kernel/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
 | `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_snapshot`（旧名 `parse_requirements_owned` 保留为一行转发器）签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
 
@@ -250,7 +250,7 @@ what blocks 1.0, not by when they were found.
 kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registry_name` 现在是
 **模块名派生**(`kind_only`),而被 B1 删掉的那个 arm 用的是 `stringify!($kind)`
 (`KindOnlyFace`)。也就是说我在 B1 里"那个 arm 不可达"的判断是**错的**:它可达,而且产出不同。
-`toolchain/runtime/tests/kind_only_registry_name.rs` 现在钉住的是模块名派生这一支。
+`toolchain/run_method/tests/kind_only_registry_name.rs` 现在钉住的是模块名派生这一支。
 
 **已定:保留现状(模块名派生)。** 理由:存活下来的完整 arm 与宏前端的默认值都是
 `last_path_segment(module_path!())`,内核词表文档写的也是这个;注册路径的其他段本来就是小写
@@ -259,7 +259,7 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
 
 **NodeId 不随之改变(已核到代码,不再是存疑)。** 声明宏发射的常量是
 `NodeId::from_namespaced_path(env!("CARGO_PKG_NAME"), $source, stringify!($kind))`
-(`toolchain/src/runtime/src/macros/face_registration.rs:45-49`),第三个参数是 **kind**,而
+(`toolchain/src/run_method/src/macros/face_registration.rs:45-49`),第三个参数是 **kind**,而
 `from_namespaced_path` 只把 namespace + 相对路径 + 该名字卷进哈希
 (`kernel/src/registry_core/identity/node_id.rs:47-58`);构建侧同理用
 `package_node_id(&relative, &kind)`。因此这次变化只影响**逻辑路径**(它由槽位/注册名拼出)、
@@ -475,7 +475,7 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
   公开）。过程中尺寸棘轮两次拦下我自己：`process.rs` 越线（拆成 `process.rs` + `process/child.rs`）
   以及**把新规则写进了本就超标的 `syntax/entries/graft.rs`**（改为放进 `build_method`，而不是
   抬高钉住的行数）。
-- **29 个 `ignore` 文档片段**（全在 `toolchain/runtime/src/macros/face.rs`，authoring DSL 唯一的
+- **29 个 `ignore` 文档片段**（全在 `toolchain/run_method/src/macros/face.rs`，authoring DSL 唯一的
   在码文档）仍未编译；它们是有意的字段片段，转成可编译示例是一份独立的文档工作。
 - **第四轮登记的其余新发现已全部处理**，除上述片段外没有遗留。
 
@@ -513,12 +513,12 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
 
 - ~~`external_object!` 链上 `file!()` 落到哪。~~ 已收口并**修正了我的推断**：默认值是
   `manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!())`
-  （`toolchain/src/runtime/src/macros/face_external.rs:102-104`），两个部分都在**声明它的** crate 里
+  （`toolchain/src/run_method/src/macros/face_external.rs:102-104`），两个部分都在**声明它的** crate 里
   展开，因此项目外面报告自己的文件——但**拼写方式取决于 Cargo 怎么把它交给 rustc**：
   `manifest_relative_source` 先剥 manifest 前缀、再剥开头的 `src/`，而不以 manifest 目录开头
   的路径原样保留。因此发布包里 `src/control/control.rs` 记录为 `control/control.rs`（注册布局
-  路径），而在工作区里构建的集成测试记录为 `toolchain/runtime/tests/external_source_default.rs`。
-  由新测试 `toolchain/runtime/tests/external_source_default.rs::an_external_face_defaults_its_source_to_this_file`
+  路径），而在工作区里构建的集成测试记录为 `toolchain/run_method/tests/external_source_default.rs`。
+  由新测试 `toolchain/run_method/tests/external_source_default.rs::an_external_face_defaults_its_source_to_this_file`
   钉住（有默认分支、非绝对路径两条断言，并做了 Windows 分隔符归一化）。
 - 非 full graft 覆写原树子注册机 namespace（`overlay.rs` 的 non-full 分支）：**已判定不可
   观测**。`header.namespace` 全仓只被 `register_snapshot_batch` 读取，而子注册机只能由内核

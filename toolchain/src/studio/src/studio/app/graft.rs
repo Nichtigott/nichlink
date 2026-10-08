@@ -33,7 +33,7 @@
 use super::project_context::package_root;
 use super::write_guard::{selected_read_root, with_selected_project, with_selected_project_read};
 use super::*;
-use crate::build_time::{DeclaredGraft, DeclaredGrafts};
+use crate::build_method::{DeclaredGraft, DeclaredGrafts};
 
 impl App {
     /// Open the graft screen for the selected face.
@@ -119,7 +119,7 @@ impl App {
             return;
         }
         let created = with_selected_project(|| {
-            crate::runtime::create_external_graft(
+            crate::run_method::create_external_graft(
                 &self.registry,
                 state.target,
                 selector,
@@ -192,7 +192,7 @@ impl App {
         // state (audit `STU-S-29`).
         // 对创作记录的读取与写入一样走选中的项目：读者从未打开的计划不得被描述成本界面的状态
         // （审计 `STU-S-29`）。
-        match with_selected_project_read(|| crate::runtime::read_external_graft(selector)) {
+        match with_selected_project_read(|| crate::run_method::read_external_graft(selector)) {
             Ok(plan) => {
                 let path = plan.plan_path();
                 // Per arm: opening the plan is ordinary, the editor failure is the alert
@@ -212,7 +212,7 @@ impl App {
     /// Switch one plan between node and subtree replacement.
     /// 在"只替换节点"与"替换整棵子树"之间切换一条计划。
     pub(super) fn toggle_graft_plan(&mut self, selector: &str, full: bool) {
-        match with_selected_project(|| crate::runtime::rewrite_external_graft(selector, !full)) {
+        match with_selected_project(|| crate::run_method::rewrite_external_graft(selector, !full)) {
             Ok(plan) => {
                 self.note(format!(
                     "External graft `{selector}` now {} `{}`",
@@ -231,7 +231,7 @@ impl App {
     /// Move one plan to the recoverable trash.
     /// 把一条计划移到可恢复的回收目录。
     pub(super) fn delete_graft_plan(&mut self, selector: &str) {
-        match with_selected_project(|| crate::runtime::remove_external_graft(selector)) {
+        match with_selected_project(|| crate::run_method::remove_external_graft(selector)) {
             Ok(trash) => {
                 self.note(format!(
                     "External graft `{selector}` moved to {}; press r to reload",
@@ -267,7 +267,7 @@ impl App {
 /// Read the plans and the entry declaration shown by one graft screen.
 /// 读取一个 graft 界面显示的计划与入口声明。
 fn read_graft_state(registry: &Registry, state: &mut GraftState) {
-    state.plans = with_selected_project_read(crate::runtime::list_external_grafts)
+    state.plans = with_selected_project_read(crate::run_method::list_external_grafts)
         .unwrap_or_default()
         .into_iter()
         .map(|entry| match entry.document {
@@ -292,14 +292,14 @@ fn read_graft_state(registry: &Registry, state: &mut GraftState) {
 
     let module = registry
         .find_registry(state.target)
-        .map(|info| crate::build_time::source_module_path(&info.source.file));
+        .map(|info| crate::build_method::source_module_path(&info.source.file));
     // The declaration is read from the selected project for the same reason: the screen
     // says what the opened project declares, and a refused selection is said out loud in
     // the banner rather than replaced by a guess (audit `STU-S-29`).
     // 声明同样从选中的项目读取：本界面说的是打开的项目声明了什么，而被拒绝的选择要在横幅里说
     // 出来，而不是被一个猜测替换（审计 `STU-S-29`）。
     state.declaration = match selected_read_root() {
-        Ok(root) => match crate::build_time::declared_grafts(&root) {
+        Ok(root) => match crate::build_method::declared_grafts(&root) {
             Ok(declared) => declaration_for(&state.target_path, module.as_deref(), &declared),
             Err(reason) => GraftDeclaration::Unknown { reason },
         },
@@ -378,7 +378,7 @@ fn describe_graft(cut: &DeclaredGraft) -> String {
 /// A selector the filesystem and the plan format both accept.
 /// 文件系统与计划格式都能接受的选择器。
 pub(super) fn graft_selector_error(selector: &str) -> Option<String> {
-    crate::runtime::validate_graft_selector(selector.trim())
+    crate::run_method::validate_graft_selector(selector.trim())
         .err()
         .map(|error| error.to_string())
 }
@@ -386,7 +386,7 @@ pub(super) fn graft_selector_error(selector: &str) -> Option<String> {
 /// Where a plan by this selector lives, in the same layout the writer uses.
 /// 该选择器的计划所在位置，与写入方使用同一套布局。
 fn plan_path_for(selector: &str) -> PathBuf {
-    crate::runtime::graft_record_root(&package_root())
+    crate::run_method::graft_record_root(&package_root())
         .join(selector.trim())
-        .join(crate::runtime::lexicon::GRAFT_PLAN_FILE)
+        .join(crate::run_method::lexicon::GRAFT_PLAN_FILE)
 }

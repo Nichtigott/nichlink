@@ -16,7 +16,7 @@ generated `StaticPlan`; this workspace does not ship a concrete `root_registry`.
 
 ## External declarations
 
-Use `nichlink_toolchain::runtime::external_object!` for declarations owned by another
+Use `nichlink_toolchain::run_method::external_object!` for declarations owned by another
 crate. After B3b only `kind` is required; every other field is optional and
 defaults the way the generated compact form defaults it: `source` to the
 declaring file, `registry_name` to the module's last segment, `parent` to the
@@ -172,7 +172,7 @@ The current graft model is an immutable overlay. A host keeps its original
 source tree and declares the external implementation at its entry point:
 
 ```rust
-let plan = nichlink_toolchain::runtime::graft_plan!(framework,
+let plan = nichlink_toolchain::run_method::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -196,14 +196,14 @@ unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
 format now has a reader: `GraftPlanDocument` in the kernel parses and renders it,
 refuses an unknown version or key instead of guessing, and is the only place the
 layout is defined. The record is also now the **input** to an overlay:
-`nichlink_toolchain::runtime::apply_recorded_grafts` loads `.nichlink/external-grafts/`
+`nichlink_toolchain::run_method::apply_recorded_grafts` loads `.nichlink/external-grafts/`
 and `Registry::overlay_recorded` reconciles each record against the static
 declarations, applies it, and reports every adjustment; see [`graft.md`](graft.md)
 for the precedence policy and which reports are fatal.
 `nichlink-toolchain` gained `declared_grafts`/`host_entry_source`
 for authoring surfaces that need to know which slots the build ships.
 
-`nichlink_toolchain::runtime::ExternalGraftPlanFile` no longer exposes `target`,
+`nichlink_toolchain::run_method::ExternalGraftPlanFile` no longer exposes `target`,
 `graft`, and `full` as public fields; it carries the parsed `GraftPlanDocument`
 and the selector, and answers through `target()`, `target_path()`, `graft()`,
 `full()`, and `plan_path()`. `root` is still a public `PathBuf` field — there is

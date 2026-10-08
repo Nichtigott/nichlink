@@ -44,7 +44,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use nichlink_toolchain::plugin_host::{
     ValidationChannel, WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
 };
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -133,7 +133,7 @@ fn slot() -> WasmPluginSlot {
 
 /// A verified artifact whose module declares a table of `elements` entries.
 /// 一个已验证产物，其模块声明一张有 `elements` 个条目的表。
-fn artifact_with_table(elements: usize) -> nichlink_toolchain::runtime::VerifiedPluginArtifact {
+fn artifact_with_table(elements: usize) -> nichlink_toolchain::run_method::VerifiedPluginArtifact {
     let wat = format!(
         r#"(module
           (memory (export "memory") 1)
@@ -148,7 +148,7 @@ fn artifact_with_table(elements: usize) -> nichlink_toolchain::runtime::Verified
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

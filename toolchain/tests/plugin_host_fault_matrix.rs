@@ -7,7 +7,7 @@
 // 这些导入供下面按特性门控的模块使用（它们经 `use super::*` 再导入），因此用同一个条件
 // 门控；否则在没有适配器特性时 `-D warnings` 会把它们当作未使用而拒绝。
 #[cfg(any(feature = "wasm", feature = "process-tools"))]
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -21,12 +21,12 @@ use nichlink_toolchain::runtime::{
 fn artifact(
     bytes: Vec<u8>,
     mode: PluginMode,
-) -> nichlink_toolchain::runtime::VerifiedPluginArtifact {
+) -> nichlink_toolchain::run_method::VerifiedPluginArtifact {
     let checksum = Box::leak(sha256_hex(&bytes).into_boxed_str());
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",

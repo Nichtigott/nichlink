@@ -4,13 +4,13 @@
 //! (the author writes `mod button_fast;`), so the file keeps its `//!` header and
 //! editor tooling resolves it natively.
 
-use nichlink_toolchain::runtime::registry_core::{
+use nichlink_toolchain::run_method::registry_core::{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 };
 
 pub struct ButtonFast;
 
-nichlink_toolchain::runtime::external_object! {
+nichlink_toolchain::run_method::external_object! {
     source: "button_fast/button_fast.rs",
     kind: ButtonFast,
     preset: NoPreset,

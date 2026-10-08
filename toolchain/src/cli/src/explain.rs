@@ -15,7 +15,7 @@
 
 use std::io::Write;
 
-use crate::build_time::{FaceView, face_views};
+use crate::build_method::{FaceView, face_views};
 use nichlink_kernel::identity::NodeId;
 use serde_json::{Value, json};
 
@@ -125,7 +125,7 @@ pub(crate) fn explain(
     // `build_output_is_current` for why the fingerprint is the token.
     // 已发布的产物只在仍然描述这批源码时才被信任；为什么指纹是那枚凭据见
     // `build_output_is_current`。
-    let current = crate::build_time::build_output_is_current(&manifest, &out_dir);
+    let current = crate::build_method::build_output_is_current(&manifest, &out_dir);
     let (scope_json, scope_note) = report::scope_report(&out_dir, face, current);
     let (pruning_json, pruning_note) = report::pruning_report(&out_dir, face, current);
     let (grafts_json, graft_note) = report::declared_report(&manifest, face);

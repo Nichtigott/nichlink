@@ -1,0 +1,352 @@
+//! Build-time declaration validation.
+//! 构建期注册声明校验。
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+
+use super::Node;
+use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
+use super::registration_phase;
+use super::registry_syntax::{FaceSyntax, ParentSyntax, parse_face};
+use super::source_walk::UnplacedFace;
+use super::{SourceScope, collect_active_ids, relative_display};
+
+pub(crate) fn aggregate_requirements(
+    src: &Path,
+    nodes: &[Node],
+    include_demo: bool,
+    scope: &SourceScope,
+    cache_units: Option<&Path>,
+) -> BuildDiagnostics {
+    let active = scope.roots.as_ref().map(|_| {
+        let mut active = std::collections::BTreeSet::new();
+        collect_active_ids(src, nodes, scope, false, &mut active);
+        active
+    });
+    registration_phase::aggregate(src, include_demo, active.as_ref(), cache_units)
+}
+
+pub(crate) fn aggregate_stable_name_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
+    let mut names = BTreeMap::<String, (String, usize)>::new();
+    let mut errors = BuildDiagnostics::default();
+    visit_stable_names(src, nodes, &mut names, &mut errors);
+    errors
+}
+
+/// Check that a parent-specific macro agrees with the declared parent.
+/// 校验父级专属宏名与声明的 parent 一致。
+pub(crate) fn aggregate_parent_macro_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    visit_parent_macro_errors(src, nodes, &mut errors);
+    errors
+}
+
+fn visit_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
+    for node in nodes {
+        if let Some(file) = &node.file {
+            let relative = relative_display(src, file);
+            if let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+            {
+                let declared = face
+                    .macro_name
+                    .strip_suffix("_object")
+                    .filter(|name| *name != "external")
+                    .filter(|name| *name != "control" || source.contains("generated-by=NichLink"));
+                if let Some(declared) = declared {
+                    let Some(parent) = face.parent() else {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "parent-specific registration macro requires an explicit parent",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(if declared == "root" {
+                                "parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\"))".to_owned()
+                            } else {
+                                format!("parent: crate::{declared}::NODE_ID")
+                            })
+                            .actual("missing"),
+                        );
+                        visit_parent_macro_errors(src, &node.children, errors);
+                        continue;
+                    };
+                    // `NodeId::from_path` is a plain identity: it is not
+                    // namespaced, while every face's own `NODE_ID` is. A parent
+                    // written that way resolves at build time but not at run
+                    // time, so the registry reports `<missing-parent>` after a
+                    // successful build. Refuse it with the spelling that works.
+                    // `NodeId::from_path` 是普通身份函数：它不带命名空间，而每个面自己的
+                    // `NODE_ID` 带。这样写的父级在构建期能解析、运行期不能，于是构建成功
+                    // 之后注册机会报 `<missing-parent>`。这里直接拒绝，并给出可用的写法。
+                    if let ParentSyntax::FromPath { .. } = parent {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "`NodeId::from_path` carries no namespace, so the runtime cannot resolve this parent",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(format!(
+                                "parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")) or crate::{declared}::NODE_ID"
+                            ))
+                            .actual("parent: NodeId::from_path(..)".to_owned()),
+                        );
+                        continue;
+                    }
+                    let expected = match parent {
+                        ParentSyntax::Root => "root".to_owned(),
+                        ParentSyntax::FromPath { source, .. } => Path::new(&source)
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .unwrap_or("root")
+                            .to_owned(),
+                        ParentSyntax::NodePath(module) => module
+                            .rsplit("::")
+                            .find(|segment| !segment.is_empty())
+                            .unwrap_or("root")
+                            .to_owned(),
+                    };
+                    if declared != expected {
+                        errors.push(
+                            BuildDiagnostic::new(
+                                "parent-macro",
+                                "registration macro does not match its parent registry",
+                            )
+                            .at(relative.clone(), face.location.line)
+                            .field("parent")
+                            .expected(format!("crate::{expected}_object!"))
+                            .actual(format!("crate::{}_object!", declared)),
+                        );
+                    }
+                }
+            }
+        }
+        visit_parent_macro_errors(src, &node.children, errors);
+    }
+}
+
+fn visit_stable_names(
+    src: &Path,
+    nodes: &[Node],
+    names: &mut BTreeMap<String, (String, usize)>,
+    errors: &mut BuildDiagnostics,
+) {
+    for node in nodes {
+        if let Some(file) = &node.file {
+            let relative = relative_display(src, file);
+            if !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && let Ok(source) = fs::read_to_string(file)
+                && let Some(face) = parsed_face(&source, &relative)
+                && let Some(stable_name) = face.string("stable_name")
+            {
+                let line = face
+                    .field_location("stable_name")
+                    .map_or(face.location.line, |location| location.line);
+                if let Some((previous_file, previous_line)) = names.get(&stable_name) {
+                    errors.push(
+                        BuildDiagnostic::new(
+                            "stable-identity",
+                            format!("duplicate stable_name `{stable_name}`"),
+                        )
+                        .at(relative, line)
+                        .field("stable_name")
+                        .expected(format!(
+                            "unique; already declared at {previous_file}:{previous_line}"
+                        ))
+                        .actual(stable_name),
+                    );
+                } else {
+                    names.insert(stable_name, (relative, line));
+                }
+            }
+        }
+        visit_stable_names(src, &node.children, names, errors);
+    }
+}
+
+/// Decode the face in one discovered file, or `None` when it has none.
+/// 解码一个已发现文件中的注册面；文件没有面时返回 `None`。
+///
+/// A malformed face yields `None` here on purpose. [`face_syntax_errors`] reports
+/// it once, with a position, before any stage decodes fields, so every later
+/// stage skips the file instead of aborting the process — that ordering is what
+/// keeps `check --json` producing a document for a host whose face is broken.
+/// 畸形面在这里有意返回 `None`。[`face_syntax_errors`] 会在任何阶段解码字段之前带着位置
+/// 报告它一次，因此后续每个阶段都跳过该文件而不是打死进程——正是这个顺序让"宿主的面坏了"
+/// 时 `check --json` 仍能产出文档。
+pub(crate) fn parsed_face(source: &str, _display_path: &str) -> Option<FaceSyntax> {
+    parse_face(source).ok().flatten()
+}
+
+/// Report every discovered file whose registration face does not parse.
+/// 报告每个注册面解析不了的已发现文件。
+///
+/// This runs before the stages that decode fields, because those stages cannot
+/// describe a file they cannot parse and would otherwise abort.
+/// 本函数在解码字段的各阶段之前运行，因为那些阶段描述不了自己解析不了的文件，否则只会
+/// 打死进程。
+pub(crate) fn face_syntax_errors(src: &Path, nodes: &[Node]) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    visit_face_syntax_errors(src, nodes, &mut errors);
+    errors
+}
+
+fn visit_face_syntax_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagnostics) {
+    for node in nodes {
+        if let Some(file) = &node.file
+            && let Ok(source) = fs::read_to_string(file)
+            && let Err(error) = parse_face(&source)
+        {
+            errors.push(BuildDiagnostic::new("face-syntax", error.message).at(
+                relative_display(src, file),
+                error.location.as_ref().map_or(0, |location| location.line),
+            ));
+        }
+        visit_face_syntax_errors(src, &node.children, errors);
+    }
+}
+
+/// Turn the faces discovery could not place into diagnostics.
+/// 把发现过程安放不了的面变成诊断。
+pub(crate) fn unplaced_face_errors(unplaced: &[UnplacedFace]) -> BuildDiagnostics {
+    let mut errors = BuildDiagnostics::default();
+    for face in unplaced {
+        errors.push(
+            BuildDiagnostic::new(face.phase, face.message.clone())
+                .at(face.relative.clone(), face.line),
+        );
+    }
+    errors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::aggregate_parent_macro_errors;
+    use crate::build_method::Node;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn validates_all_three_parent_specific_declaration_levels() {
+        let root = temporary_directory("parent-macros");
+        let workspace = root.join("workspace/workspace.rs");
+        let panel = root.join("workspace/object/panel/panel.rs");
+        let child = root.join("workspace/object/panel/object/child/child.rs");
+        write_face(
+            &workspace,
+            "crate::root_object! { kind: Workspace, parent: crate::ROOT_NODE_ID, }",
+        );
+        write_face(
+            &panel,
+            "crate::workspace_object! { kind: Panel, parent: crate::workspace::NODE_ID, }",
+        );
+        write_face(
+            &child,
+            "crate::panel_object! { kind: Child, parent: crate::workspace::object::panel::NODE_ID, }",
+        );
+        let nodes = vec![Node {
+            name: "workspace".to_owned(),
+            file: Some(workspace),
+            children: vec![Node {
+                name: "panel".to_owned(),
+                file: Some(panel),
+                children: vec![Node {
+                    name: "child".to_owned(),
+                    file: Some(child),
+                    children: Vec::new(),
+                }],
+            }],
+        }];
+        assert!(aggregate_parent_macro_errors(&root, &nodes).is_empty());
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    #[test]
+    fn reports_the_expected_macro_for_a_wrong_parent_spelling() {
+        let root = temporary_directory("wrong-parent-macro");
+        let child = root.join("panel/object/child/child.rs");
+        write_face(
+            &child,
+            "crate::wrong_object! { kind: Child, parent: crate::panel::NODE_ID, }",
+        );
+        let nodes = vec![Node {
+            name: "child".to_owned(),
+            file: Some(child),
+            children: Vec::new(),
+        }];
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
+        assert!(rendered.contains("phase=parent-macro"));
+        assert!(rendered.contains("expected=crate::panel_object!"));
+        assert!(rendered.contains("actual=crate::wrong_object!"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    /// A parent spelled `NodeId::from_path(..)` resolves for the build but not
+    /// for the runtime, so it must be refused rather than accepted and then
+    /// reported as `<missing-parent>` after a successful build.
+    /// 写成 `NodeId::from_path(..)` 的父级对构建期可解析、对运行期不可，因此必须拒绝，
+    /// 而不是接受之后在构建成功时由注册机报 `<missing-parent>`。
+    #[test]
+    fn refuses_a_parent_that_the_runtime_cannot_resolve() {
+        let root = temporary_directory("unnamespaced-parent");
+        let child = root.join("panel/object/child/child.rs");
+        write_face(
+            &child,
+            "crate::panel_object! { kind: Child, parent: crate::NodeId::from_path(\"panel/panel.rs\", \"Panel\"), }",
+        );
+        let nodes = vec![Node {
+            name: "child".to_owned(),
+            file: Some(child),
+            children: Vec::new(),
+        }];
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
+        assert!(
+            rendered.contains("carries no namespace"),
+            "unexpected diagnostics: {rendered}"
+        );
+        assert!(rendered.contains("crate::panel::NODE_ID"), "{rendered}");
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    #[test]
+    fn reports_a_missing_explicit_parent() {
+        let root = temporary_directory("missing-parent");
+        let child = root.join("panel/object/child/child.rs");
+        write_face(&child, "crate::panel_object! { kind: Child, }");
+        let nodes = vec![Node {
+            name: "child".to_owned(),
+            file: Some(child),
+            children: Vec::new(),
+        }];
+        let rendered = aggregate_parent_macro_errors(&root, &nodes).render_build_diagnostics();
+        assert!(
+            rendered.contains("parent-specific registration macro requires an explicit parent")
+        );
+        assert!(rendered.contains("expected=parent: crate::panel::NODE_ID"));
+        fs::remove_dir_all(root).expect("temporary fixture cleanup");
+    }
+
+    fn write_face(path: &std::path::Path, source: &str) {
+        fs::create_dir_all(path.parent().expect("fixture parent"))
+            .expect("temporary fixture directory");
+        fs::write(path, source).expect("temporary registration face");
+    }
+
+    fn temporary_directory(label: &str) -> PathBuf {
+        crate::build_method::registry_identity::freeze_test_namespace();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "nichlink-build-{label}-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("temporary fixture root");
+        path
+    }
+}

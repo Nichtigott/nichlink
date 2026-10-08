@@ -12,7 +12,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::build_time::scaffold::{self, DependencySource, ProjectKind};
+use crate::build_method::scaffold::{self, DependencySource, ProjectKind};
 
 pub(crate) fn new(
     args: &mut impl Iterator<Item = String>,
@@ -117,11 +117,11 @@ fn checkout_root(value: &Path) -> Result<PathBuf, String> {
 /// Whether a directory is a NichLink checkout this scaffold can point at.
 /// 某个目录是否是脚手架可以指向的 NichLink 检出。
 ///
-/// The check lives here rather than in `build_time` because the scaffold writes a
+/// The check lives here rather than in `build_method` because the scaffold writes a
 /// *dependency* into someone else's manifest: the predicate has to be enforced by the
 /// caller that is about to write it, and keeping it local means the packaged CLI does
 /// not need a symbol newer than the published `nichlink-toolchain`.
-/// 这个判断放在这里而不是 `build_time`，因为脚手架是把一条**依赖**写进别人的清单：判断必须
+/// 这个判断放在这里而不是 `build_method`，因为脚手架是把一条**依赖**写进别人的清单：判断必须
 /// 由即将写下它的调用方执行，而放在本地意味着打包后的 CLI 不需要一个比已发布
 /// `nichlink-toolchain` 更新的符号。
 ///

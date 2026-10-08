@@ -102,23 +102,23 @@ EOF
   cat >"$1/build.rs" <<'EOF'
 fn main() {
     println!("cargo:rerun-if-changed=src");
-    nichlink_toolchain::build_time::run();
+    nichlink_toolchain::build_method::run();
 }
 EOF
   cat >"$1/src/lib.rs" <<'EOF'
-nichlink_toolchain::runtime::host!();
+nichlink_toolchain::run_method::host!();
 EOF
   cat >"$1/src/fast/fast.rs" <<'EOF'
 //! 项目外的 Widget 实现。
 //! The out-of-project replacement for Widget.
 
-use nichlink_toolchain::runtime::registry_core::{
+use nichlink_toolchain::run_method::registry_core::{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 };
 
 pub struct WidgetFast;
 
-nichlink_toolchain::runtime::external_object! {
+nichlink_toolchain::run_method::external_object! {
     source: "fast/fast.rs",
     kind: WidgetFast,
     preset: NoPreset,
@@ -151,7 +151,7 @@ write_declaration() {
 //! The crate shape this hosted tree declares.
 //! 这棵宿主树声明的 crate 形状。
 
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape {
@@ -192,15 +192,15 @@ EOF
   cat >"$1/build.rs" <<'EOF'
 fn main() {
     println!("cargo:rerun-if-changed=src");
-    nichlink_toolchain::build_time::run();
+    nichlink_toolchain::build_method::run();
 }
 EOF
   cat >"$1/src/lib.rs" <<'EOF'
-nichlink_toolchain::runtime::host!();
+nichlink_toolchain::run_method::host!();
 
 pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.rehearsal.partition");
 
-nichlink_toolchain::runtime::static_graft_plan!(
+nichlink_toolchain::run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::panel::frame::widget::NODE_ID) graft(fast_widget::fast::NODE_ID),
 );
@@ -414,14 +414,14 @@ cat >>"$PR/app/src/lib.rs" <<'EOF'
 
 pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.rehearsal.promote");
 
-nichlink_toolchain::runtime::static_graft_plan!(
+nichlink_toolchain::run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::panel::object::frame::object::widget::NODE_ID) graft(fast_widget::fast::NODE_ID),
 );
 EOF
 cat >"$PR/app/add_crates.rs" <<'EOF'
 //! The crate shape this host declares.
-use nichlink_toolchain::runtime::{Crate, Shape};
+use nichlink_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape {

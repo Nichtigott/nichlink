@@ -741,11 +741,11 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     let version = env!("CARGO_PKG_VERSION");
     let home = std::env::temp_dir().join(format!("new-project-cargo-home-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
-    let source = crate::build_time::scaffold::DependencySource::Registry;
+    let source = crate::build_method::scaffold::DependencySource::Registry;
 
     // Empty cache: the warning names the version, where it looked, and both ways out.
     // 空缓存：警告点名版本、它查过的位置，以及两条出路。
-    let warning = crate::build_time::scaffold::offline_source_warning(&source, version, &home)
+    let warning = crate::build_method::scaffold::offline_source_warning(&source, version, &home)
         .expect("an empty cache cannot resolve the release");
     assert!(
         warning.contains(version)
@@ -767,7 +767,7 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     )
     .expect("the archive");
     assert!(
-        crate::build_time::scaffold::offline_source_warning(&source, version, &home).is_some(),
+        crate::build_method::scaffold::offline_source_warning(&source, version, &home).is_some(),
         "an archive without an index entry does not resolve offline"
     );
 
@@ -781,22 +781,22 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     )
     .expect("the index entry");
     assert!(
-        crate::build_time::scaffold::offline_source_warning(&source, version, &home).is_none(),
+        crate::build_method::scaffold::offline_source_warning(&source, version, &home).is_none(),
         "a version the index cache carries resolves offline, so there is nothing to warn about"
     );
 
     // And a source that carries its own bytes never warns: `path` and `git` do not need the cache.
     // 而自带字节的来源从不警告：`path` 与 `git` 不需要缓存。
     for other in [
-        crate::build_time::scaffold::DependencySource::Local {
+        crate::build_method::scaffold::DependencySource::Local {
             workspace: std::path::PathBuf::from("/tmp"),
         },
-        crate::build_time::scaffold::DependencySource::Git {
+        crate::build_method::scaffold::DependencySource::Git {
             url: "https://example.invalid/x".to_owned(),
         },
     ] {
         assert!(
-            crate::build_time::scaffold::offline_source_warning(&other, version, &home).is_none(),
+            crate::build_method::scaffold::offline_source_warning(&other, version, &home).is_none(),
             "{other:?} resolves without a registry cache"
         );
     }
@@ -819,7 +819,7 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
 /// → `cargo build --offline` → 普查）记在 `target/hardbug-runs/offline-birth.txt`。
 #[test]
 fn a_named_checkout_is_the_way_to_get_dependencies_that_resolve_offline() {
-    use crate::build_time::scaffold::{DependencySource, dependency_specs, requested_source};
+    use crate::build_method::scaffold::{DependencySource, dependency_specs, requested_source};
 
     let case = std::env::temp_dir().join(format!("new-project-checkout-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&case);
@@ -851,7 +851,7 @@ fn a_named_checkout_is_the_way_to_get_dependencies_that_resolve_offline() {
             "both lines point at the named checkout: {runtime} / {build}"
         );
         assert!(
-            crate::build_time::scaffold::offline_source_warning(
+            crate::build_method::scaffold::offline_source_warning(
                 &source,
                 env!("CARGO_PKG_VERSION"),
                 &case

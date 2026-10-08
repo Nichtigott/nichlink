@@ -2,7 +2,7 @@
 //! Control folder face: it owns a Registry, and every direct child must satisfy
 //! the rule kept beside it.
 
-use nichlink_toolchain::runtime::{ContractId, FlowContract};
+use nichlink_toolchain::run_method::{ContractId, FlowContract};
 
 crate::root_object! {
     kind: Control,

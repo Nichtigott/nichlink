@@ -47,7 +47,7 @@ use std::path::{Path, PathBuf};
 use nichlink_kernel::lexicon;
 use serde_json::Value;
 
-use crate::build_time::FaceView;
+use crate::build_method::FaceView;
 use crate::mcp::build_evidence::out_dir;
 use crate::mcp::published::{self, FACES_UNKNOWN, Publication, PublishedTree};
 use crate::mcp::registry::namespace_from;

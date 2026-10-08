@@ -16,9 +16,9 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::build_time::face_views;
-use crate::runtime::runtime::trace::locals::LocalValue;
-use crate::runtime::{
+use crate::build_method::face_views;
+use crate::run_method::runtime::trace::locals::LocalValue;
+use crate::run_method::{
     CallTrace, TraceArtifact, read_trace_artifact, render_call_report_for_trace,
     trace_artifact_path,
 };

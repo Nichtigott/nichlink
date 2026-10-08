@@ -47,7 +47,7 @@
 
 use std::path::Path;
 
-use crate::build_time::FaceView;
+use crate::build_method::FaceView;
 use nichlink_kernel::identity::NodeId;
 use serde_json::Value;
 
@@ -831,7 +831,7 @@ fn record_source_lines(
             return Ok(None);
         }
         let out = crate::mcp::build_evidence::out_dir(root);
-        let Ok(member_rows) = crate::build_time::read_file_manifest(&out) else {
+        let Ok(member_rows) = crate::build_method::read_file_manifest(&out) else {
             return Ok(None);
         };
         if member_rows.is_empty() {
@@ -875,7 +875,7 @@ fn record_face_lines(
     withheld_hits: &mut usize,
 ) -> Result<Option<Vec<String>>, String> {
     let out = crate::mcp::build_evidence::out_dir(root);
-    let Ok(rows) = crate::build_time::read_pruning_manifest(&out) else {
+    let Ok(rows) = crate::build_method::read_pruning_manifest(&out) else {
         return Ok(None);
     };
     // The rows are read **once** and handed to the delta as well: the record half and the delta read
@@ -969,7 +969,11 @@ fn record_face_lines(
 
 /// One face hit built from a published record.
 /// 由一条已发布记录构成的面命中。
-fn record_face_line(id: NodeId, row: &crate::build_time::PruningRow, built: &TreeDelta) -> String {
+fn record_face_line(
+    id: NodeId,
+    row: &crate::build_method::PruningRow,
+    built: &TreeDelta,
+) -> String {
     let status = if !built.known {
         "build unknown (run `nichlink check`)".to_owned()
     } else {

@@ -2,15 +2,15 @@
 //! 发布面：NichLink 的七个薄执行面合成一个 crate。
 //!
 //! Each module was its own crate before the merge; the module name is the merge plan's
-//! name for that surface (`build_method` -> `build_time`, `run_method` -> `runtime`, ...).
+//! name for that surface (`build_method` -> `build_method`, `run_method` -> `runtime`, ...).
 //! 每个模块在合并前都是独立 crate；模块名取合并方案里那一面的名字
-//! （`build_method` -> `build_time`、`run_method` -> `runtime`，等）。
+//! （`build_method` -> `build_method`、`run_method` -> `runtime`，等）。
 //!
 //! The root globs every module so the historical crate-root paths (`crate::host!()` and
 //! friends) still resolve; `run`-shaped names live in their modules, and the build entry
-//! is written `crate::build_time::run()`.
+//! is written `crate::build_method::run()`.
 //! 根部把每个模块 glob 出来，使历史上的 crate 根路径仍然可解析；`run` 形状的名字留在各自
-//! 模块里，构建入口写成 `crate::build_time::run()`。
+//! 模块里，构建入口写成 `crate::build_method::run()`。
 #![warn(missing_docs)]
 
 // The merged crate has to be able to name itself. Macros that the old per-crate layout expanded
@@ -41,8 +41,8 @@ pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 // t115-mount: begin
 #[cfg(feature = "build")]
-#[path = "build_time/src/lib.rs"]
-pub mod build_time;
+#[path = "build_method/src/lib.rs"]
+pub mod build_method;
 #[cfg(feature = "evidence")]
 #[path = "call_evidence/src/lib.rs"]
 pub mod call_evidence;
@@ -56,8 +56,8 @@ pub mod mcp;
 #[path = "plugin_host/src/lib.rs"]
 pub mod plugin_host;
 #[cfg(feature = "run")]
-#[path = "runtime/src/lib.rs"]
-pub mod runtime;
+#[path = "run_method/src/lib.rs"]
+pub mod run_method;
 #[cfg(feature = "studio")]
 #[path = "studio/src/lib.rs"]
 pub mod studio;
@@ -70,7 +70,7 @@ pub mod studio;
 // 把每个执行面的历史 crate 根提升到根上，使 `crate::X`（也就是 `nichlink_toolchain::X`）
 // 对每个模块条目都可解析；下面显式再导出的名字在冲突处优先于这些 glob。
 #[cfg(feature = "build")]
-pub use self::build_time::*;
+pub use self::build_method::*;
 #[cfg(feature = "evidence")]
 pub use self::call_evidence::*;
 #[cfg(feature = "cli")]
@@ -85,30 +85,30 @@ pub use self::cli::*;
 #[cfg(feature = "plugins")]
 pub use self::plugin_host::*;
 #[cfg(feature = "run")]
-pub use self::runtime::*;
+pub use self::run_method::*;
 #[cfg(feature = "studio")]
 pub use self::studio::*;
 
 // Two names are carried by more than one of the globs above, so the paragraph at the top of
-// this block has to be made true rather than merely asserted: `run` arrives from `build_time`,
+// this block has to be made true rather than merely asserted: `run` arrives from `build_method`,
 // `mcp` and `cli`, and `mir` arrives both from `call_evidence` and from `runtime` (which
 // re-exports the kernel's `mir`). The explicit re-exports below win over the globs and name the
-// host-facing one of each pair — the build-script entry `build_time::run()` and the kernel's
+// host-facing one of each pair — the build-script entry `build_method::run()` and the kernel's
 // `mir` module — while every other name stays reachable through the globs. Nothing else is
 // promised at this level: the module path is still the official address
 // (`nichlink_toolchain::mcp::run`, `nichlink_toolchain::cli::run`, …). Measured by
 // `cargo clippy --all-targets --all-features -- -D warnings`, which reported
 // `ambiguous_glob_reexports` for both names before this pair existed.
 // 上面这些 glob 里有两个名字被多个模块同时带上，因此这一段开头那句话得**做到**而不只是写着：
-// `run` 会从 `build_time`、`mcp`、`cli` 三处来，`mir` 会同时从 `call_evidence` 与 `runtime`
+// `run` 会从 `build_method`、`mcp`、`cli` 三处来，`mir` 会同时从 `call_evidence` 与 `runtime`
 // （后者重导出了内核的 `mir`）来。下面这两行显式再导出优先于 glob，并各自点名宿主面向的那一个
-// ——构建脚本入口 `build_time::run()` 与内核的 `mir` 模块；其余名字仍可经 glob 取得。
+// ——构建脚本入口 `build_method::run()` 与内核的 `mir` 模块；其余名字仍可经 glob 取得。
 // 这一层不再承诺别的：官方地址依旧是模块路径（`nichlink_toolchain::mcp::run`、
 // `nichlink_toolchain::cli::run` 等）。判据是
 // `cargo clippy --all-targets --all-features -- -D warnings`：在这一对出现之前，这两个名字都会
 // 报 `ambiguous_glob_reexports`。
 #[cfg(feature = "build")]
-pub use self::build_time::run;
+pub use self::build_method::run;
 #[cfg(feature = "run")]
-pub use self::runtime::mir;
+pub use self::run_method::mir;
 // t115-root-glob: end

@@ -2,7 +2,7 @@
 //! Button leaf face: a direct child of Control that owns no Registry of its own.
 
 use crate::control::{ControlFrame, ControlHandle};
-use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+use nichlink_toolchain::run_method::{ContractId, FlowContract, NON_EMPTY_TEXT};
 
 crate::control_object! {
     kind: Button,

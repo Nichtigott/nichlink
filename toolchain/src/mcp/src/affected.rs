@@ -261,8 +261,8 @@ fn plan_layer(member: &Path, source: &str) -> Vec<String> {
     let Ok((faces, _)) = crate::mcp::resolve::derived_faces(member, &namespace) else {
         return Vec::new();
     };
-    let declared = crate::build_time::declared_grafts(member);
-    let Ok(rows) = crate::build_time::graft_plan_rows(member, &faces, declared.as_ref().ok())
+    let declared = crate::build_method::declared_grafts(member);
+    let Ok(rows) = crate::build_method::graft_plan_rows(member, &faces, declared.as_ref().ok())
     else {
         return Vec::new();
     };

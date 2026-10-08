@@ -1,8 +1,8 @@
 //! Call references, the assembled call-tree view, and its memo.
 //! 调用引用、装配好的调用树视图，以及它的备忘。
 
-use crate::runtime::mir::CallTree;
-use crate::runtime::{NodeId, Registry};
+use crate::run_method::mir::CallTree;
+use crate::run_method::{NodeId, Registry};
 
 /// One reference to a function at a node, used for call navigation.
 /// 指向某个节点上函数的引用，用于调用跳转。

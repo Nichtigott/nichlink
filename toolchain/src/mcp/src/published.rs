@@ -38,7 +38,7 @@
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 
-use crate::build_time::{BuildScopeView, PruningRow, read_build_scope, read_pruning_manifest};
+use crate::build_method::{BuildScopeView, PruningRow, read_build_scope, read_pruning_manifest};
 use nichlink_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;

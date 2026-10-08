@@ -6,7 +6,7 @@
 
 use super::super::plugin_field;
 use super::*;
-use crate::runtime::face_field;
+use crate::run_method::face_field;
 
 #[test]
 fn add_overlay_click_selects_a_field_and_toggles_the_checkbox() {
@@ -63,12 +63,12 @@ fn add_navigation_walks_one_fixed_field_order() {
         visited.push(current.field);
     }
     assert_eq!(visited, order[..9], "navigation skipped a form row");
-    assert_eq!(order.len(), crate::runtime::FACE_FIELD_COUNT);
+    assert_eq!(order.len(), crate::run_method::FACE_FIELD_COUNT);
 }
 
 #[test]
 fn add_form_starts_with_editable_bilingual_summary() {
-    let add = AddState::new(crate::runtime::ROOT_NODE_ID);
+    let add = AddState::new(crate::run_method::ROOT_NODE_ID);
     assert!(add.values[face_field::NAME_ZH].is_empty());
     assert!(add.values[face_field::NAME_EN].is_empty());
     assert!(add.values[face_field::SUMMARY_ZH].is_empty());
@@ -78,8 +78,8 @@ fn add_form_starts_with_editable_bilingual_summary() {
 
 #[test]
 fn parent_rule_marks_the_fields_a_child_must_supply() {
-    let mut add = AddState::new(crate::runtime::ROOT_NODE_ID);
-    add.apply_parent_rule(&crate::runtime::OwnedRegistrationRule {
+    let mut add = AddState::new(crate::run_method::ROOT_NODE_ID);
+    add.apply_parent_rule(&crate::run_method::OwnedRegistrationRule {
         required_preset: Some("ActionParts".to_owned()),
         required_parts: vec!["paint".to_owned()],
         required_exports: vec!["control.render".to_owned()],

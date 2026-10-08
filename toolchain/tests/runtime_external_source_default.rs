@@ -46,10 +46,10 @@ pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 use std::path::Path;
 
-use nichlink_toolchain::runtime::registry_core::declaration::portable_path;
-use nichlink_toolchain::runtime::registry_core::{FrameworkId, Registry};
+use nichlink_toolchain::run_method::registry_core::declaration::portable_path;
+use nichlink_toolchain::run_method::registry_core::{FrameworkId, Registry};
 
-nichlink_toolchain::runtime::external_object! {
+nichlink_toolchain::run_method::external_object! {
     kind: DefaultSourced,
 }
 

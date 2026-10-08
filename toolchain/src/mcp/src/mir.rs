@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::runtime::{CallTrace, read_trace_artifact, trace_artifact_path};
+use crate::run_method::{CallTrace, read_trace_artifact, trace_artifact_path};
 use nichlink_kernel::EvidenceKind;
 use nichlink_kernel::mir::{MirGraph, MirSnapshot};
 use serde_json::Value;

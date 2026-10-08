@@ -42,7 +42,7 @@ fn package(label: &str, declares: bool) -> (PathBuf, String, NodeId) {
         "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
     )
     .expect("face");
-    let id = crate::build_time::face_views(&root, &name).expect("faces derive")[0].id;
+    let id = crate::build_method::face_views(&root, &name).expect("faces derive")[0].id;
     (root, name, id)
 }
 

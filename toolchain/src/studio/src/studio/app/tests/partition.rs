@@ -3,8 +3,8 @@
 //! 分区屏自己的钉子：它打开时看到什么，以及它的三个动作做什么（审计 `M7`，P3.6）。
 
 use super::*;
-use crate::build_time::OnDisk;
-use crate::build_time::crate_plan::crates_dir;
+use crate::build_method::OnDisk;
+use crate::build_method::crate_plan::crates_dir;
 use std::fs;
 use std::path::PathBuf;
 
@@ -25,7 +25,7 @@ fn partition_host(label: &str) -> PathBuf {
     fs::create_dir_all(root.join("src/panel/frame")).expect("the host's sources");
     fs::write(
         root.join("src/lib.rs"),
-        "nichlink_toolchain::runtime::host!();\n",
+        "nichlink_toolchain::run_method::host!();\n",
     )
     .expect("the entry");
     fs::write(
@@ -49,7 +49,7 @@ fn partition_host(label: &str) -> PathBuf {
     .expect("the host manifest");
     fs::write(
         root.join("add_crates.rs"),
-        "use nichlink_toolchain::runtime::{Crate, Shape};\n\n\
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
          pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n\
          crates: &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])],\n};\n",
     )

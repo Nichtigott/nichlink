@@ -6,12 +6,12 @@
 
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-use nichlink_toolchain::runtime::registry_core::lexicon;
-use nichlink_toolchain::runtime::registry_core::{
+use nichlink_toolchain::run_method::registry_core::lexicon;
+use nichlink_toolchain::run_method::registry_core::{
     FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
     PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 };
-use nichlink_toolchain::runtime::{
+use nichlink_toolchain::run_method::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 
@@ -317,7 +317,8 @@ fn static_plan_carries_faces_and_the_declared_graft() {
 #[test]
 fn the_authoring_query_sees_the_declared_typed_slots() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let declared = nichlink_toolchain::build_time::declared_grafts(&root).expect("the entry reads");
+    let declared =
+        nichlink_toolchain::build_method::declared_grafts(&root).expect("the entry reads");
     assert!(
         declared.entry.ends_with("src/lib.rs"),
         "the file calling host!() is the entry: {}",
@@ -353,7 +354,7 @@ fn the_authoring_query_sees_the_declared_typed_slots() {
 /// The build-time scope narrows to the slots the host declared: the subtrees the
 /// cuts name stay live, and a face nobody declared is not shipped.
 #[test]
-fn the_declared_slots_define_the_build_time_scope() {
+fn the_declared_slots_define_the_build_method_scope() {
     let scope = std::fs::read_to_string(concat!(env!("OUT_DIR"), "/source_scope.tsv"))
         .expect("the build step publishes its source scope");
     let selected = scope
@@ -589,7 +590,7 @@ fn plugin_bytes_must_verify_before_they_can_replace_a_face() {
     let checksum = Box::leak(
         format!(
             "sha256:{}",
-            nichlink_toolchain::runtime::registry_core::sha256_hex(payload)
+            nichlink_toolchain::run_method::registry_core::sha256_hex(payload)
         )
         .into_boxed_str(),
     );
@@ -645,7 +646,7 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
 
     let registry = base_registry();
     let target = control_button::control::object::button::NODE_ID;
-    let plan = nichlink_toolchain::runtime::create_external_graft(
+    let plan = nichlink_toolchain::run_method::create_external_graft(
         &registry,
         target,
         "button_graft",

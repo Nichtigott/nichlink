@@ -37,7 +37,7 @@ use nichlink_kernel::tree::graft_ops::{RecordReport, RecordedGraft, ResolvedReco
 use serde_json::Value;
 
 use crate::mcp::apply::{Outcome, load_registry};
-use crate::runtime::AuthoringContext;
+use crate::run_method::AuthoringContext;
 
 #[path = "apply_promote/source.rs"]
 mod source;
@@ -69,7 +69,7 @@ pub(crate) fn run_promote(
     // Read from the project root: a preview's copy has no `.nichlink/`, so reading `work` would
     // answer as if this package had no records at all.
     // 从项目根读取：预览的副本里没有 `.nichlink/`，读 `work` 会答成"这个包根本没有记录"。
-    let document = crate::runtime::load_graft_record(root, &selector).map_err(|error| {
+    let document = crate::run_method::load_graft_record(root, &selector).map_err(|error| {
         format!(
             "{error}; the record is `.nichlink/external-grafts/{selector}/graft.plan` under the \
              project root this call resolved"
@@ -118,12 +118,12 @@ pub(crate) fn run_promote(
             ));
         }
     };
-    let faces = crate::build_time::face_views(work, &namespace)?;
+    let faces = crate::build_method::face_views(work, &namespace)?;
     let face = faces
         .iter()
         .find(|face| face.id == slot)
         .ok_or_else(|| format!("`{path}` is not a face this tree derives"))?;
-    let declared = crate::build_time::declared_grafts(work).map_err(|error| {
+    let declared = crate::build_method::declared_grafts(work).map_err(|error| {
         format!("this tree's graft plan is unreadable, so there is nothing to retire ({error})")
     })?;
     let cut = declared
@@ -234,10 +234,11 @@ pub(crate) fn run_promote(
     .map_err(|error| format!("the face's own file is unreadable: {error}"))?;
     let (change, previous_kind) = context
         .scope(|| -> Result<_, String> {
-            let mut authored = crate::runtime::authored_face(&registry, slot)?;
+            let mut authored = crate::run_method::authored_face(&registry, slot)?;
             let previous = authored.kind.clone();
             overlay(&mut authored, &replacement);
-            let change = crate::runtime::edit_module_face(&registry, slot, &authored.as_patch())?;
+            let change =
+                crate::run_method::edit_module_face(&registry, slot, &authored.as_patch())?;
             Ok((change, previous))
         })
         .map_err(|error| {
@@ -355,7 +356,7 @@ fn text(arguments: &Value, key: &str) -> Result<String, String> {
 /// `module` 与 `parent` 保留宿主的：落地的面占据基树本来就有的那个槽位，而运行期覆盖对同样的字段也是
 /// 这么做的。`kind` **会被复制**，因为运行期覆盖也替换它——而执行器会正确地迁移 kind 变化（标记类型、
 /// 声明，以及它喂给的身份），这也是回复要警告身份变化的原因。
-fn overlay(authored: &mut crate::runtime::AuthoredFace, replacement: &External) {
+fn overlay(authored: &mut crate::run_method::AuthoredFace, replacement: &External) {
     authored.kind = replacement.kind.clone();
     authored.preset = replacement.preset.clone();
     authored.parts = replacement.parts.clone();
@@ -403,7 +404,7 @@ fn overlay(authored: &mut crate::runtime::AuthoredFace, replacement: &External) 
 fn repoint_entry(
     work: &Path,
     entry: &Path,
-    cut: &crate::build_time::DeclaredGraft,
+    cut: &crate::build_method::DeclaredGraft,
     applying: bool,
 ) -> Result<String, String> {
     let source = std::fs::read_to_string(entry)

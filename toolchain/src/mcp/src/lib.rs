@@ -44,11 +44,11 @@
 //! tool runs the real operation against a throwaway copy of the package and
 //! reports the resulting tree and file diff; only `apply: true` touches the
 //! project. Naming a package runs `cargo metadata` (through
-//! `crate::build_time::package_name`), because the package name is the
+//! `crate::build_method::package_name`), because the package name is the
 //! `NodeId` namespace and Cargo is its authority.
 //! Three writes exist: `nichlink.apply` (faces, through the authoring executor), and
 //! the two Studio actions the bridge was missing — `nichlink.new_project`
-//! (`build_time::scaffold::create_project`, the same scaffold `nichlink new` and
+//! (`build_method::scaffold::create_project`, the same scaffold `nichlink new` and
 //! Studio's wizard run) and `nichlink.plugin` (the plugin lock record
 //! `submit_plugin` writes, through the kernel's `PluginCatalog` gate). All three
 //! preview by default, and the two whose effect is not recoverable by reading the
@@ -60,10 +60,10 @@
 //! `AuthoringContext` 里，因此代理的编辑会经过内核的准入与拓扑校验，而不是在这里重新实现一遍。
 //! 写入先预览：工具在一份一次性的包副本上运行真实操作，报告将得到的树与文件 diff；只有
 //! `apply: true` 才会碰真实项目。为包命名会运行 `cargo metadata`（经
-//! `crate::build_time::package_name`），因为包名就是 `NodeId` 命名空间，而 Cargo 是它
+//! `crate::build_method::package_name`），因为包名就是 `NodeId` 命名空间，而 Cargo 是它
 //! 的权威。
 //! 写入一共有三个：`nichlink.apply`（注册面，走 authoring 执行器），以及桥此前缺的那两个 Studio
-//! 动作——`nichlink.new_project`（`build_time::scaffold::create_project`，即 `nichlink new` 与
+//! 动作——`nichlink.new_project`（`build_method::scaffold::create_project`，即 `nichlink new` 与
 //! Studio 向导运行的同一份脚手架）与 `nichlink.plugin`（`submit_plugin` 写下的插件锁记录，经内核的
 //! `PluginCatalog` 闸门）。三者默认都只预览；其中两个的效果无法靠读源码复原——插件锁记录，以及写进
 //! 已存在目录的项目——因此它们还要求请求自己说出 `confirm: true`。

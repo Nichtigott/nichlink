@@ -73,7 +73,7 @@ fn a_launched_session_authors_under_the_host_crates_package_name() {
 /// 权威更替不会悄悄丢掉它们。
 #[test]
 fn the_namespace_comes_from_cargo_not_from_a_literal_manifest_scan() {
-    let default = crate::runtime::lexicon::DEFAULT_NAMESPACE;
+    let default = crate::run_method::lexicon::DEFAULT_NAMESPACE;
     let cases: &[(&str, &str)] = &[
         (
             "[package]\nname = \"demo-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
@@ -182,7 +182,7 @@ fn the_namespace_follows_the_manifest_unless_the_environment_names_one() {
     let workspace = temp_project("ns-workspace", "[workspace]\nmembers = [\"app\"]\n");
     assert_eq!(
         namespace_for(&workspace.join("Cargo.toml"), None),
-        crate::runtime::lexicon::DEFAULT_NAMESPACE
+        crate::run_method::lexicon::DEFAULT_NAMESPACE
     );
     let _ = std::fs::remove_dir_all(&host);
     let _ = std::fs::remove_dir_all(&workspace);
@@ -202,11 +202,11 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
     std::fs::create_dir_all(checkout.join("kernel")).expect("kernel sibling");
     std::fs::create_dir_all(checkout.join("toolchain")).expect("toolchain sibling");
 
-    let source = crate::build_time::scaffold::detected_source(
+    let source = crate::build_method::scaffold::detected_source(
         &checkout.join("toolchain"),
         &checkout.join("outside-bin/nichlink-toolchain"),
     );
-    let (core, build) = crate::build_time::scaffold::dependency_specs(&source);
+    let (core, build) = crate::build_method::scaffold::dependency_specs(&source);
 
     // Audit `F8` changed what an installed copy writes: the fallback used to be a git dependency,
     // which needs a fetch before the project resolves at all. It is now the published release — so

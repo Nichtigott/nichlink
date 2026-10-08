@@ -9,7 +9,7 @@
 
 use std::io::Write;
 
-use crate::build_time::scaffold;
+use crate::build_method::scaffold;
 
 /// Inject the face-field editor snippets into a project or an editor config.
 /// 把注册面字段的编辑器 snippet 注入项目或编辑器配置。

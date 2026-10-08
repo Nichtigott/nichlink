@@ -4,14 +4,14 @@
 //! 声明宏从 `file!()` 推导 `source`，因此本探针不再注入、也无需同步一个同级的
 //! `__REGISTRATION_SOURCE` 常量。
 
-use crate::runtime::registry_core::declaration::portable_path;
+use crate::run_method::registry_core::declaration::portable_path;
 
 crate::__nichlink_object!(collector: debug, kind: DebugProbe);
 
 #[test]
 #[cfg(debug_assertions)]
 fn debug_collector_receives_opted_in_declarations() {
-    let registrations = crate::registrations!(crate::runtime::RegistrationInfo)
+    let registrations = crate::registrations!(crate::run_method::RegistrationInfo)
         .copied()
         .collect::<Vec<_>>();
     let probe = registrations

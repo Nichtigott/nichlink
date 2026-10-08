@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use crate::build_time::{
+use crate::build_method::{
     GraftPlanRow, PruningRow, declared_grafts, graft_plan_rows, read_build_scope,
     read_pruning_manifest,
 };
@@ -404,7 +404,7 @@ fn row_map(rows: &[PruningRow]) -> BTreeMap<NodeId, (String, String)> {
 /// 报告外部 graft 记录相对源码树的状况。
 fn diff_records(
     root: &Path,
-    faces: &[crate::build_time::FaceView],
+    faces: &[crate::build_method::FaceView],
     namespace: &str,
     arguments: &Value,
     unparsable: &str,

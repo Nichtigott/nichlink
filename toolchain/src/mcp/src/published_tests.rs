@@ -376,7 +376,7 @@ fn reading_published_records_costs_less_than_deriving_the_same_member() {
     let Some(root) = checkout_member("examples/control-button") else {
         return;
     };
-    let namespace = crate::build_time::package_name(&root.join("Cargo.toml"))
+    let namespace = crate::build_method::package_name(&root.join("Cargo.toml"))
         .expect("the example package has a name Cargo reports");
     let Publication::Published(_) = read(&root) else {
         println!(

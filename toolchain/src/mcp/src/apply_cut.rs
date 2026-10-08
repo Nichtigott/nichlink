@@ -11,7 +11,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::build_time::face_views;
+use crate::build_method::face_views;
 use crate::mcp::apply::Outcome;
 
 /// Hand one face's subtree over: write the declaration the build-time plan reads.
@@ -55,7 +55,7 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
         nichlink_kernel::syntax::entries::render_graft_expression(&cut, cut_end, full, &graft)
             .map_err(|error| format!("this cut cannot be written: {}", error.message))?;
 
-    let declared = crate::build_time::declared_grafts(root).map_err(|error| {
+    let declared = crate::build_method::declared_grafts(root).map_err(|error| {
         format!(
             "this tree's graft plan is unreadable, so there is nothing to add a cut to ({error}); \
              the plan is the `static_graft_plan!` / `graft_plan!` call in the host entry"
@@ -229,7 +229,7 @@ fn example_face(root: &Path) -> Option<String> {
 /// 经内核的解析器读回，而不是按文本搜索，因此示例给出的拼写就是构建读的那个，而不是一行长得像它的东西。
 /// 宿主没有计划、或条目一个名字都没点时给 `None`——示例是提示，而空的示例比占位符更糟。
 pub(crate) fn plan_graft_example(root: &Path) -> Option<String> {
-    let plan = crate::build_time::declared_grafts(root).ok()?.entry;
+    let plan = crate::build_method::declared_grafts(root).ok()?.entry;
     let source = std::fs::read_to_string(plan).ok()?;
     let entries = nichlink_kernel::syntax::entries::graft_entries(&source).ok()?;
     entries
@@ -322,14 +322,14 @@ fn face_source(root: &Path, logical: &str) -> Option<String> {
 /// 猜这个映射，正是本模块拒绝写进宿主的猜法，因此以面自己的 `source` 为权威；本棵树推导不出的路径，
 /// 就没有拼写可给。
 ///
-/// The mapping itself is the build's own function (`build_time::source_module_path`), not a second
+/// The mapping itself is the build's own function (`build_method::source_module_path`), not a second
 /// spelling of it written here: this file's whole job is writing a spelling the build will read back,
 /// so a local copy of that rule is a copy that can disagree with the reader.
-/// 映射本身用的是**构建自己的**函数（`build_time::source_module_path`），而不是在这里写第二份：本文件的
+/// 映射本身用的是**构建自己的**函数（`build_method::source_module_path`），而不是在这里写第二份：本文件的
 /// 全部工作就是写出构建会读回的拼写，因此这条规则的本地副本就是一份可能与读取方不一致的副本。
 fn typed_spelling(root: &Path, logical: &str) -> Option<String> {
     let source = face_source(root, logical)?;
-    let module = crate::build_time::source_module_path(source.trim_start_matches("./"));
+    let module = crate::build_method::source_module_path(source.trim_start_matches("./"));
     Some(format!("crate::{module}::NODE_ID"))
 }
 

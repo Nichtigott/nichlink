@@ -18,7 +18,7 @@ use std::path::Path;
 
 use nichlink_kernel::syntax::FaceSyntax;
 
-use crate::build_time::FaceView;
+use crate::build_method::FaceView;
 use crate::mcp::source_index::load_sources;
 
 /// How one shape field is compared between a specimen and a sibling.
@@ -237,7 +237,7 @@ fn published_census(root: &Path) -> Option<String> {
         if !crate::mcp::freshness::verdict(&root, &out) {
             return None;
         }
-        let rows = crate::build_time::read_pruning_manifest(&out).ok()?;
+        let rows = crate::build_method::read_pruning_manifest(&out).ok()?;
         if rows.is_empty() {
             return None;
         }
@@ -540,7 +540,7 @@ pub(super) fn repair_value(specimen: &[DeclaredField], name: &str, kind: &str) -
 
 pub(super) fn repair_request(
     specimen: &[DeclaredField],
-    face: &crate::build_time::FaceView,
+    face: &crate::build_method::FaceView,
     gaps: &[String],
     text: Option<&str>,
 ) -> Option<serde_json::Value> {
@@ -618,7 +618,7 @@ pub(super) fn shape_names_from_record(
     member: &std::path::Path,
 ) -> Option<std::collections::BTreeMap<String, std::collections::BTreeSet<String>>> {
     let out = crate::mcp::build_evidence::out_dir(member);
-    let rows = crate::build_time::read_shape_manifest(&out).ok()?;
+    let rows = crate::build_method::read_shape_manifest(&out).ok()?;
     if rows.is_empty() {
         return None;
     }
@@ -776,17 +776,17 @@ pub(crate) fn deviations(
 /// 但错"的答案。
 pub(super) fn published_faces(
     member: &crate::mcp::workspace::Member,
-) -> Option<(Vec<crate::build_time::FaceView>, String)> {
+) -> Option<(Vec<crate::build_method::FaceView>, String)> {
     member.published()?;
     if !crate::mcp::build_evidence::build_evidence(&member.dir).current {
         return None;
     }
     let out = crate::mcp::build_evidence::out_dir(&member.dir);
-    let rows = crate::build_time::read_pruning_manifest(&out).ok()?;
+    let rows = crate::build_method::read_pruning_manifest(&out).ok()?;
     if rows.is_empty() {
         return None;
     }
-    let (faces, skipped) = crate::build_time::face_views_from_pruning(&rows);
+    let (faces, skipped) = crate::build_method::face_views_from_pruning(&rows);
     if skipped > 0 {
         return None;
     }
@@ -851,9 +851,9 @@ pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool
     // always left alone — so a tool call never takes the user's machine (audit `T1`, cut 7).
     // 这里两个条目就够付线程交接的钱：一个成员是一次整树内容哈希，不是一个文件。预算就是遍历所用的那条机器
     // 规则——一半的核、最多八个、永远留一个核——因此一次工具调用绝不拿走用户的整台机器（审计 `T1` 第七刀）。
-    let paid = crate::build_time::parallel_map_with_threshold(
+    let paid = crate::build_method::parallel_map_with_threshold(
         &due,
-        crate::build_time::worker_budget(),
+        crate::build_method::worker_budget(),
         2,
         |(_, member, out, stamp)| crate::mcp::freshness::pay_with_stamp(member, out, *stamp),
     );
@@ -878,7 +878,7 @@ pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool
 /// 它所描述的那次构建已经陈旧。
 pub(crate) fn current_identity(
     root: &Path,
-    row: &crate::build_time::PruningRow,
+    row: &crate::build_method::PruningRow,
 ) -> Option<nichlink_kernel::identity::NodeId> {
     let namespace = crate::mcp::registry::namespace(root).ok()?;
     let text = std::fs::read_to_string(root.join("src").join(&row.source)).ok()?;

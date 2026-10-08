@@ -22,7 +22,7 @@ pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 /// 一个自定义 preset，其记录名可与默认值区分。
 struct ProbePreset;
 
-impl nichlink_toolchain::runtime::PresetContract for ProbePreset {
+impl nichlink_toolchain::run_method::PresetContract for ProbePreset {
     type Output = ();
     const REQUIRED_PARTS: &'static [&'static str] = &["probe"];
 }
@@ -31,7 +31,7 @@ impl nichlink_toolchain::runtime::PresetContract for ProbePreset {
 /// 一个自定义 parts，其记录名可与默认值区分。
 struct ProbeParts;
 
-impl nichlink_toolchain::runtime::PartsContract for ProbeParts {
+impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
     type Output = ();
     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 }

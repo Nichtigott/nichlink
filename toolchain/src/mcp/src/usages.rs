@@ -124,8 +124,8 @@ pub(crate) fn usages(root: &Path, arguments: &Value) -> Result<String, String> {
     // 读回会解析该面的生成路径，而那次解析以上下文携带的包根为基准——不是进程碰巧所在的目录。在上下文
     // 之外调用它，曾经让一次编辑落进错误的树；这里的单元测试没有设 `NICH_LINK_PACKAGE_ROOT`，这正是
     // 它们能抓到它的原因。
-    let context = crate::runtime::AuthoringContext::new(root.to_path_buf(), namespace.clone());
-    let read_back = |id| context.scope(|| crate::runtime::authored_face(&registry, id));
+    let context = crate::run_method::AuthoringContext::new(root.to_path_buf(), namespace.clone());
+    let read_back = |id| context.scope(|| crate::run_method::authored_face(&registry, id));
     // Every face's declared tokens, and which of them could not be read back. A
     // hand-written module has no generated field list, and the executor refuses to
     // invent one, so it is counted rather than silently skipped.

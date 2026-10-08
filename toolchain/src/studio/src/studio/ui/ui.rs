@@ -55,7 +55,7 @@ use super::app::{CallTreeNode, CallTreeView};
 // The authoring layout's slot names: the form, the appliers and the tests index
 // one array, so they all read the same constants.
 // 创作布局的槽位名：表单、写入方与测试索引同一个数组，因此都读同一批常量。
-use crate::runtime::face_field;
+use crate::run_method::face_field;
 
 const INK: Color = Color::Rgb(214, 225, 231);
 const MUTED: Color = Color::Rgb(112, 132, 143);
@@ -333,7 +333,10 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(160, 48)).unwrap();
         let mut app = App::load_app();
         app.overlay = Some(Overlay::Graft(super::super::app::GraftState {
-            target: crate::runtime::NodeId::from_path("control/object/button/button.rs", "Button"),
+            target: crate::run_method::NodeId::from_path(
+                "control/object/button/button.rs",
+                "Button",
+            ),
             target_path: "root/control/button".to_owned(),
             selector: "button_fast".to_owned(),
             full: false,

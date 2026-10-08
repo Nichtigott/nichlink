@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::runtime::VerifiedPluginArtifact;
+use crate::run_method::VerifiedPluginArtifact;
 use arc_swap::ArcSwapOption;
 
 use crate::plugin_host::{HostError, PluginInstance, WasmBackend, WasmInstance};
