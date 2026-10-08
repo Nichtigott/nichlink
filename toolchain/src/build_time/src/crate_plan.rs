@@ -406,18 +406,27 @@ pub(crate) fn plan(
             // with no sources compiles, ships, and answers every later question wrongly.
             // 匹配不到任何东西的认领，绝不能安静地变成一个空 crate：要么路径写错了，要么这份计划是上一版声明
             // 构建的。两者都值得当场停下——没有源码的 crate 会编译、会发布，并在之后每个问题上都答错。
-            if claimed == 0 {
-                let nearest = super::shape_decl::closest(
-                    subtree,
-                    faces.iter().map(|(_, module, _)| module.as_str()),
-                )
-                .map(|module| format!("; the nearest published face is `{module}`"))
-                .unwrap_or_default();
+            // The authority for "does this claim name something" is the **module tree**, not the face
+            // list: the faces this planner sees have already been narrowed to what the host keeps, so a
+            // legitimate claim on a deeper subtree (`control::left`) matches nothing there — measured,
+            // that false refusal is what this test first did. A claim that names no module at all is a
+            // misspelling or a stale plan; one that names a module with no faces is empty but real.
+            // "这个认领点名了东西没有"的权威是**模块树**，不是面表：本规划器看到的面已经被收窄成宿主保留的
+            // 那些，因此对更深子树（`control::left`）的合法认领在那里一个也匹配不到——实测：这条误拒是本判据
+            // 一开始的行为。点名不到任何**模块**的认领是写错或计划过期；点名到模块但没有面的，是空但真实。
+            let all_modules = module_paths(package_root);
+            let names_a_module = all_modules
+                .iter()
+                .any(|module| module == subtree || module.starts_with(&format!("{subtree}::")));
+            if claimed == 0 && !names_a_module {
+                let nearest =
+                    super::shape_decl::closest(subtree, modules.iter().map(String::as_str))
+                        .map(|module| format!("; the nearest module is `{module}`"))
+                        .unwrap_or_default();
                 return Err(format!(
-                    "add_crates: `{subtree}` matches none of the {} face(s) the build published, so \
-                     `{name}` would carry no sources{nearest}. Either the path is misspelled, or the \
-                     plan predates this declaration — run `nichlink check` and read what it says",
-                    faces.len(),
+                    "add_crates: `{subtree}` names no module in this host's tree, so `{name}` would \
+                     carry nothing{nearest}. Either the path is misspelled, or the plan predates this \
+                     declaration — run `nichlink check` and read what it says"
                 ));
             }
         }
@@ -713,6 +722,49 @@ fn unreachable(
 /// 撤回路径与读者目光都不看的地方"的机会。
 pub(crate) fn crates_dir(root: &Path) -> PathBuf {
     root.join(lexicon::CRATES_DIR)
+}
+
+/// Every module path this host's `src/` declares, to any depth — the authority for "does this claim
+/// name something in the tree".
+/// 这个宿主的 `src/` 在任何深度上声明的模块路径全集——它是"这个认领点名的东西在不在树里"的权威。
+///
+/// `source_modules` above answers a different question (which top-level names a `crate::` path may
+/// start with) and only reads one level; a claim can name any depth (`control::left`), so this walks.
+/// 上面的 `source_modules` 回答的是另一个问题（`crate::` 路径可以以哪些顶层名字开头），而且只读一层；
+/// 认领可以点名任意深度（`control::left`），所以这里要递归。
+fn module_paths(package_root: &Path) -> Vec<String> {
+    fn walk(base: &Path, prefix: &str, out: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(base) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+            if path.is_dir() {
+                let module = if prefix.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{prefix}::{name}")
+                };
+                out.push(module.clone());
+                walk(&path, &module, out);
+            } else if let Some(stem) = name.strip_suffix(".rs") {
+                if prefix.is_empty() && (stem == "lib" || stem == "main") {
+                    continue;
+                }
+                out.push(if prefix.is_empty() {
+                    stem.to_owned()
+                } else {
+                    format!("{prefix}::{stem}")
+                });
+            }
+        }
+    }
+    let mut modules = Vec::new();
+    walk(&package_root.join("src"), "", &mut modules);
+    modules.sort();
+    modules.dedup();
+    modules
 }
 
 fn source_modules(package_root: &Path) -> Vec<String> {

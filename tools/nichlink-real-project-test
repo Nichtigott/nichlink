@@ -1,0 +1,140 @@
+#!/bin/sh
+# A real-sized project: does graft still land when the faces are spread over several crates, and what
+# does the split cost in wall time?
+# 真实规模的项目：面被分到几个 crate 之后 graft 还能不能落地，以及拆分在墙上时间里值多少。
+#
+# The host is grown from the committed example: two containers (`left`, `right`), twelve leaf faces
+# each, both containers handed to crates of their own, and the two typed cuts left on faces the host
+# keeps. Nothing here is a fixture written by hand — the faces are clones of one that works.
+# 宿主从入库示例长大：两个容器（`left`、`right`）各十二个叶子面，两个容器都各自交给新 crate，而两条类型化
+# 切口留在宿主自己编译的面上。这里没有手写夹具——面都是从一个能跑的面克隆来的。
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-project.XXXXXX")
+CARGO_FLAGS="${NICHLINK_REAL_PROJECT_CARGO_FLAGS---offline}"
+NICHLINK="$ROOT/target/debug/nichlink"
+LEAVES="${NICHLINK_REAL_PROJECT_LEAVES:-12}"
+fail() { printf 'real-project FAILED: %s\n' "$1" >&2; exit 1; }
+step() { printf '== %s\n' "$1"; }
+build() { command cargo build $CARGO_FLAGS "$@"; }
+now() { date +%s.%N; }
+since() { awk -v a="$1" -v b="$(now)" 'BEGIN { printf "%.2f", b - a }'; }
+
+step "building the CLI"
+build -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1 ||
+  fail "cannot build $NICHLINK"
+
+step "growing the host: two containers, $LEAVES leaves each"
+mkdir -p "$WORK"
+cp -a "$ROOT/examples/partitioned-button/host" "$WORK/host"
+cp -a "$ROOT/examples/partitioned-button/graft" "$WORK/ext"
+printf '[workspace]\nresolver = "3"\nmembers = ["host", "ext"]\n' >"$WORK/Cargo.toml"
+sed -i "s#path = \"../../../toolchain\"#path = \"$ROOT/toolchain\"#g" "$WORK/host/Cargo.toml" "$WORK/ext/Cargo.toml"
+sed -i 's#path = "\.\./graft"#path = "../ext"#' "$WORK/host/Cargo.toml"
+SRC="$WORK/host/src/control"
+# A fragment has to be self-contained: a ghost mounts only the files it claims, so a face that reaches
+# `crate::control::…` (a type the host keeps) cannot be handed away — the reachability check refuses the
+# declaration by name, and that refusal is the whole point of it. The clones therefore use kernel paths
+# only, and their container's rule drops the host-typed requirement.
+# 碎片必须自包含：幽灵只挂载它认领的文件，因此引用了 `crate::control::…`（宿主保留的类型）的面交不出去
+# ——可达性检查会点名拒绝那份声明，而那条拒绝正是它的意义所在。所以克隆只使用内核路径，容器的规则也去掉
+# 那条要求宿主类型的项。
+python3 - "$SRC" "$LEAVES" <<'PY'
+import re, sys, pathlib
+src = pathlib.Path(sys.argv[1]); leaves = int(sys.argv[2])
+template = (src / "object" / "button" / "button.rs").read_text()
+rule = (src / "registry_rule" / "registry_rule.rs").read_text()
+
+def self_contained(kind, parent, registry, own_trait=None):
+    text = template.replace("use crate::control::{ControlFrame, ControlHandle};\n", "")
+    text = re.sub(r"\n\s*handle_contracts: \[[^\]]*\],", "", text)
+    text = re.sub(r"\nimpl ControlHandle for \w+ \{.*?\n\}\n?", "\n", text, flags=re.S)
+    text = text.replace("kind: Button", f"kind: {kind}")
+    text = text.replace("parent: crate::control::NODE_ID", f"parent: {parent}")
+    text = text.replace("pub struct Button;", f"pub struct {kind};")
+    if registry:
+        # A container is a direct child of `control`, so it still has to satisfy that rule's handle
+        # requirement — and it cannot name the host's trait, because the host keeps it. It brings one
+        # of its own, inside the subtree it claims: the requirement is on the name, not on the crate.
+        # 容器是 `control` 的直接子对象，因此仍要满足那条规则里的 handle 要求——而它不能点名宿主的 trait
+        # （宿主保留着它）。它自带一个，且就在自己认领的子树里：那条要求认的是**名字**，不是哪个 crate。
+        text = text.replace(
+            f"kind: {kind},",
+            f"kind: {kind},\n    needs_registry: true,\n    handle_contracts: [{own_trait}],",
+            1,
+        )
+        text = text.replace(f"pub struct {kind};", f"pub trait ControlHandle {{}}\n\npub struct {kind};")
+    return text
+
+for side in ("left", "right"):
+    cap = side.capitalize()
+    (src / side / "registry_rule").mkdir(parents=True, exist_ok=True)
+    (src / side / "registry_rule" / "registry_rule.rs").write_text(
+        rule.replace('.require_handle_traits(&["ControlHandle"])', "")
+    )
+    # The container's own parent is still `control`, so its alias stays `control_object!`: the alias is
+    # named after the nearest ancestor that owns a registry, not after the directory it sits in.
+    # 容器自己的父级仍是 `control`，因此它的别名保持 `control_object!`：别名按**最近的拥有注册机的祖先**
+    # 命名，而不是按它所在的目录。
+    (src / side / f"{side}.rs").write_text(
+        self_contained(cap, "crate::control::NODE_ID", registry=True,
+                       own_trait=f"crate::control::{side}::ControlHandle")
+    )
+    for i in range(1, leaves + 1):
+        n = f"{i:02d}"
+        d = src / side / f"leaf_{n}"
+        d.mkdir(parents=True, exist_ok=True)
+        kind = f"Leaf{cap}{n}"
+        (d / f"leaf_{n}.rs").write_text(
+            self_contained(kind, f"crate::control::{side}::NODE_ID", registry=False)
+            .replace("control_object!", f"{side}_object!")
+        )
+PY
+faces=$(find "$SRC" -name '*.rs' -not -name registry_rule.rs | wc -l)
+printf '   %s face files under control/\n' "$faces"
+
+# The copied host brings the example's own declaration (it claims `control`), so the unpartitioned leg
+# has to drop it first — otherwise this leg measures a partitioned host and the cuts are in the ghost.
+# 复制来的宿主带着示例自己的声明（它认领了 `control`），因此"未拆分"这一腿必须先删掉它——否则这一腿量到的
+# 是已拆分的宿主，而那两条切口在幽灵里。
+rm -f "$WORK/host/add_crates.rs"
+
+step "unpartitioned: check, then build (wall time)"
+t0=$(now); (cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the grown host does not check"
+printf '   check           %ss\n' "$(since "$t0")"
+(cd "$WORK/host" && build >/dev/null 2>&1) || fail "the grown host does not build"
+printf '   cargo build     %ss\n' "$(since "$t0")"
+cuts=$(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs" | head -1)
+[ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] || fail "the host does not emit its two cuts"
+
+step "partitioned: two containers handed to crates of their own"
+cat >"$WORK/host/add_crates.rs" <<'RS'
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub fn add_crates() -> Shape {
+    Shape::of(
+        "split",
+        &[
+            Crate::named("left").at(&[crate::control::left::SUBTREE]),
+            Crate::named("right").at(&[crate::control::right::SUBTREE]),
+        ],
+    )
+}
+RS
+t1=$(now)
+(cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the partitioned host does not check"
+printf '   check           %ss\n' "$(since "$t1")"
+(cd "$WORK/host" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
+printf '   write           %ss\n' "$(since "$t1")"
+(cd "$WORK" && build --workspace >/dev/null 2>&1) || fail "the partitioned workspace does not build"
+printf '   cargo build     %ss\n' "$(since "$t1")"
+for pkg in split-left split-right split-facade; do
+  [ -d "$WORK/crates/$pkg" ] || fail "the split did not produce $pkg"
+done
+host_cuts=$(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs" | head -1)
+[ "$(grep -c 'StaticGraftCut::from_ids' "$host_cuts")" = "2" ] ||
+  fail "the host stopped emitting the cuts on faces it still compiles"
+facade=$(find "$WORK/target" -path "*split-facade-*/out/generated_lib.rs" | head -1)
+[ "$(grep -c 'StaticGraftCut::from_ids' "$facade")" = "2" ] || fail "the facade does not carry both cuts"
+printf '\nOK — %s faces, two crates, and the graft plan still lands (host 2, facade 2)\n' "$faces"
+printf 'work kept at %s\n' "$WORK"
