@@ -424,7 +424,7 @@ pub fn project_files(
     // 让 `cargo metadata`、`check` 与 `build` 报 "current package believes it's in a workspace
     // when it's not"——本仓库自己的演练脚本不得不手工追加这张表。
     let cargo = format!(
-        "[workspace]\n\n[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{runtime_dependency}\n\n[build-dependencies]\n{build_dependency}\n"
+        "[workspace]\n\n[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n{runtime_dependency}\n\n[build-dependencies]\n{build_dependency}\n\n# Our macros emit a `#[cfg(rust_analyzer)]` mirror so an editor completes the fields inside a face\n# declaration, and rustc judges a `cfg` inside a macro by the **destination** crate.\n# 我们的宏会发射 `#[cfg(rust_analyzer)]` 镜像让编辑器补全面声明里的字段，而 rustc 对宏里的 cfg 按**目标 crate**\n# 判定，所以要在本 crate 里声明它。\n[lints.rust]\nunexpected_cfgs = {{ level = \"warn\", check-cfg = [\"cfg(rust_analyzer)\"] }}\n"
     );
     vec![
         ("Cargo.toml", cargo),

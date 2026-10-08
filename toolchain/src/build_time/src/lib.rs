@@ -268,7 +268,12 @@ pub fn run_for(manifest: &Path, out_dir: &Path, package: &str) -> Result<(), Str
     std::fs::create_dir_all(out_dir)
         .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
     let (only, facade) = legacy_shape_from_environment();
-    run_shape(manifest, out_dir, package, only, facade)
+    // `false`: this entry is the **structured** caller — it returns diagnostics instead of panicking,
+    // and a caller that wants cargo directives is a build script, which is `run_for_partition`'s job
+    // (two tests pin that an unwritable tree is an `Err` here, not a panic).
+    // `false`：这个入口是**结构化**调用方——它返回诊断而不 panic；想要 cargo 指令的调用方是构建脚本，那是
+    // `run_for_partition` 的职责（两条测试钉住：这里写不了生成树时是 `Err`，不是 panic）。
+    run_shape(manifest, out_dir, package, only, facade, false)
 }
 
 /// Run the pipeline for **one fragment of a partition**: this package compiles `only` (a comma-joined
@@ -289,7 +294,14 @@ pub fn run_for_partition(
     only: Option<&str>,
     facade: bool,
 ) -> Result<(), String> {
-    run_shape(manifest, out_dir, package, only.map(str::to_owned), facade)
+    run_shape(
+        manifest,
+        out_dir,
+        package,
+        only.map(str::to_owned),
+        facade,
+        true,
+    )
 }
 
 /// The shared body of [`run_for`] and [`run_for_partition`].
@@ -300,11 +312,26 @@ fn run_shape(
     package: &str,
     only: Option<String>,
     facade: bool,
+    emit_cargo_directives: bool,
 ) -> Result<(), String> {
     std::fs::create_dir_all(out_dir)
         .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
-    check_for_shape(manifest, out_dir, package, only, facade)
-        .map_err(|diagnostics| diagnostics.render_build_diagnostics())
+    // A **build script** has to emit cargo's directives, and one of them matters here: the
+    // `rustc-check-cfg=cfg(rust_analyzer)` line that keeps the generated tree's rust-analyzer mirror
+    // from warning as an unexpected cfg. Passing `false` (the CLI's setting) left every generated
+    // package warning on its own build — measured: `unexpected_cfgs` on `partitioned-button-facade`.
+    // **构建脚本**必须发 cargo 指令，其中一条在这里很要紧：`rustc-check-cfg=cfg(rust_analyzer)`，它让生成树里
+    // 给 rust-analyzer 的镜像不再被当成未知 cfg 警告。传 `false`（CLI 的设置）会让每个生成包在自己的构建里报警
+    // ——实测：`partitioned-button-facade` 上的 `unexpected_cfgs`。
+    check_for_shape(
+        manifest,
+        out_dir,
+        package,
+        only,
+        facade,
+        emit_cargo_directives,
+    )
+    .map_err(|diagnostics| diagnostics.render_build_diagnostics())
 }
 
 /// The shape the **earlier** generator declared, read from the two variables it set.
@@ -341,7 +368,7 @@ pub fn check_for(
     out_dir: &Path,
     package: &str,
 ) -> Result<(), nichlink_kernel::BuildDiagnostics> {
-    check_for_shape(manifest, out_dir, package, None, false)
+    check_for_shape(manifest, out_dir, package, None, false, false)
 }
 
 /// [`check_for`] for one fragment of a partition: it compiles `only`, or it is the facade.
@@ -352,6 +379,7 @@ pub fn check_for_shape(
     package: &str,
     only: Option<String>,
     facade: bool,
+    emit_cargo_directives: bool,
 ) -> Result<(), nichlink_kernel::BuildDiagnostics> {
     std::fs::create_dir_all(out_dir).map_err(|error| {
         let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
@@ -362,8 +390,12 @@ pub fn check_for_shape(
         diagnostics
     })?;
     registry_identity::set_package_namespace(package.to_owned());
-    let input = BuildInput::new(manifest.to_path_buf(), out_dir.to_path_buf(), false)
-        .with_shape(only, facade);
+    let input = BuildInput::new(
+        manifest.to_path_buf(),
+        out_dir.to_path_buf(),
+        emit_cargo_directives,
+    )
+    .with_shape(only, facade);
     // `package` is the authority for this run, not the process-wide pin: a
     // bridge or a test binary runs several packages in one process, and the pin
     // is first-write-wins, so a second run would otherwise publish identities
