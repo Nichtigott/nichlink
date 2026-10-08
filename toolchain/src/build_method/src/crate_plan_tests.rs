@@ -24,7 +24,7 @@ fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
             "nichlink-plan-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&parent);
+    let _ = std::fs::remove_dir_all(&parent);
     let root = parent.join("host");
     fs::create_dir_all(root.join("src")).expect("src");
     for (relative, text) in files {
@@ -162,7 +162,7 @@ fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
         "the spelling is the host's absolute source path: {}",
         mount.spelling
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A face that reaches outside the fragment is refused **by name**, with the line, the reason and the
@@ -205,7 +205,7 @@ fn a_face_reaching_outside_the_fragment_is_refused_by_name() {
     // a refusal, which the self-contained pin above shows from the other side.
     // 幽灵**解析得到**的引用——它自己的子树，或宏读的那个常量——不是拒绝的理由；上面那条自足的钉子从另一侧
     // 展示了这一点。
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A fragment written the way the scaffold writes faces plans cleanly: the kernel names a face
@@ -261,7 +261,7 @@ fn the_scaffolds_own_imports_do_not_block_a_partition() {
         "the claimed subtree is mounted: {:?}",
         planned[0].mounts
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The same, for the scaffold-shaped fixture above.
@@ -303,7 +303,7 @@ fn a_one_segment_module_path_is_still_checked() {
         refused.contains("reaches `crate::panel`"),
         "a bare top-level module is still a module: {refused}"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Two subtrees of **one** crate may reference each other: both are mounted, so both resolve.
@@ -373,7 +373,7 @@ pub const SHAPE: Shape = Shape {
         "every remap walks out of the ghost into the host's src: {:?}",
         planned[0].remap
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The two render modes read one shape differently: a host hands its claims away, a ghost is the crate
@@ -415,7 +415,7 @@ fn a_host_hands_its_claims_away_and_a_ghost_hands_nothing_away() {
         Vec::<String>::new(),
         "no declaration: the whole tree"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A fragment may name its **ancestor's identity** — the shell carries that one constant so
@@ -493,7 +493,7 @@ pub const SHAPE: Shape = Shape {
         refused.contains("crate::panel::ControlHandle") && refused.contains("way forward"),
         "the refusal names the path and the way forward: {refused}"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The three files a ghost is made of, and the config the workspace root has to carry.
@@ -629,7 +629,7 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
         "and say where they belong: {}",
         widgets.config_patch
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The spelling is a **walk between two paths**, not "sibling plus depth": a ghost the author puts

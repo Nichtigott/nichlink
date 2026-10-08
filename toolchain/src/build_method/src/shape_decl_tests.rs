@@ -39,7 +39,7 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
             "nichlink-shape-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     let src = root.join("src");
     let out = root.join("out");
     fs::create_dir_all(src.join("control/object/button")).expect("subtree directory");

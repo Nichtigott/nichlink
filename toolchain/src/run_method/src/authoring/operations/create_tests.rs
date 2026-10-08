@@ -14,7 +14,7 @@ fn unique_directory(label: &str) -> PathBuf {
         "nichlink-lg48-{label}-{}-{sequence}",
         std::process::id()
     ));
-    let _ = fs::remove_dir_all(&directory);
+    let _ = std::fs::remove_dir_all(&directory);
     directory
 }
 
@@ -32,7 +32,7 @@ fn a_created_file_is_taken_back() {
     let message = partial.report("registration rejected".to_owned());
     assert_eq!(message, "registration rejected");
     assert!(!file.exists(), "the created file is gone");
-    let _ = fs::remove_dir_all(&directory);
+    let _ = std::fs::remove_dir_all(&directory);
 }
 
 /// A directory this call created and left empty is removed again, and that is
@@ -68,7 +68,7 @@ fn a_directory_holding_someone_elses_content_is_left_alone() {
         "a non-empty directory is not a rollback failure"
     );
     assert!(keep.exists(), "the caller's file survives");
-    let _ = fs::remove_dir_all(&directory);
+    let _ = std::fs::remove_dir_all(&directory);
 }
 
 /// A rollback that really fails is reported, so the caller is never told the tree
@@ -102,5 +102,5 @@ fn a_failed_rollback_is_named_in_the_message() {
         message.contains(&directory.display().to_string()),
         "the message names what is still on disk: {message}"
     );
-    let _ = fs::remove_dir_all(&directory);
+    let _ = std::fs::remove_dir_all(&directory);
 }

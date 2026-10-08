@@ -106,7 +106,7 @@ fn the_index_carries_the_kernels_branch_facts() {
         [("Band", "Small", 11)],
         "only the construction is a path; the two patterns are not"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn temporary_root(tag: &str) -> PathBuf {
         "nichlink-toolchain-{tag}-{}-{sequence}",
         std::process::id()
     ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("create root");
     root
 }
@@ -141,7 +141,7 @@ fn a_file_inside_the_source_root_is_still_read() {
     let sources = load_sources(&root).expect("the walk reads the root");
     assert_eq!(sources.len(), 1);
     assert!(sources[0].source.contains("fn inside"));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A link out of the root is neither walked into nor read. A prefix
@@ -156,7 +156,7 @@ fn a_link_out_of_the_source_root_is_neither_walked_nor_read() {
         "{}-outside",
         root.file_name().expect("a name").to_string_lossy()
     ));
-    let _ = fs::remove_dir_all(&outside);
+    let _ = std::fs::remove_dir_all(&outside);
     fs::create_dir_all(&outside).expect("create outside tree");
     fs::write(outside.join("secret.rs"), "fn secret() {}\n").expect("write outside file");
     std::os::unix::fs::symlink(&outside, root.join("linked")).expect("link the outside tree");
@@ -173,8 +173,8 @@ fn a_link_out_of_the_source_root_is_neither_walked_nor_read() {
     let error = load_one(&root, "secret.rs").expect_err("a link out of the root is refused");
     assert!(error.contains("source root"), "{error}");
 
-    let _ = fs::remove_dir_all(&root);
-    let _ = fs::remove_dir_all(&outside);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&outside);
 }
 
 /// A tree-relative path has one spelling, and it is the shared rule's: a file whose
@@ -197,7 +197,7 @@ fn a_backslash_in_a_file_name_is_spelled_one_way() {
         .map(|file| file.relative.clone())
         .collect::<Vec<_>>();
     assert_eq!(names, ["a/b.rs"], "{names:?}");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The containment refusal names the base it checked and the rule that makes the base matter: with

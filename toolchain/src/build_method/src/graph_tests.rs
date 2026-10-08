@@ -19,7 +19,7 @@ fn package(label: &str) -> (PathBuf, PathBuf) {
             "nichlink-graph-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     let src = root.join("src");
     fs::create_dir_all(src.join("dial")).expect("face directory");
     fs::write(
@@ -153,7 +153,7 @@ fn the_graph_is_the_records_own_rows_seen_as_edges() {
         edges.contains(&(format!("face:{}", dial.id).as_str(), "name:helper", "calls")),
         "a call that stays inside its own file keeps the face and the name: {graph}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A name two files declare is published as a name, not guessed into an edge to one of them (audit
@@ -197,7 +197,7 @@ fn a_name_two_files_declare_stays_a_name() {
             && !graph.contains("file:third/third.rs\tcalls-file"),
         "and it is not guessed onto either declaration: {graph}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A call that crosses files is an edge **between the two files**, which is the dependency a
@@ -232,7 +232,7 @@ fn a_call_that_crosses_files_is_an_edge_between_them() {
         graph.contains("file:other/other.rs\tfile:dial/dial.rs\tcalls-file"),
         "and back, which is the cycle: {graph}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The header's counts and digest describe the body, so "the graph is complete" is checkable rather
@@ -278,5 +278,5 @@ fn the_header_counts_and_digest_vouch_for_the_body() {
         digest, recomputed,
         "the digest is the body's own hash, so a truncated or edited body is detectable"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }

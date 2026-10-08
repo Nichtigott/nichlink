@@ -20,7 +20,7 @@ fn host(label: &str) -> PathBuf {
             "nichlink-release-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     for file in [
         "src/panel/frame/frame.rs",
         "src/panel/frame/widget/widget.rs",
@@ -148,7 +148,7 @@ fn a_release_ghost_carries_the_files_its_build_reads() {
         "a release build script must not name the host's directory: {}",
         ghost.build_rs
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A release facade carries no sources: its build resolves the host as a dependency, which is the only
@@ -197,5 +197,5 @@ fn a_release_facade_resolves_its_host_instead_of_carrying_it() {
         refused.contains("at least one generated package"),
         "{refused}"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }

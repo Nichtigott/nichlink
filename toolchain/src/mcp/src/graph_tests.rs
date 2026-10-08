@@ -16,7 +16,7 @@ fn package(label: &str) -> (PathBuf, String) {
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let name = format!("mcp-graph-{label}");
     let root = std::env::temp_dir().join(format!("{name}-{}-{sequence}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("src")).expect("package directory");
     fs::write(
         root.join("Cargo.toml"),
@@ -74,7 +74,7 @@ fn the_census_opens_with_the_index_line_and_counts_the_edges() {
         answer.contains("parent 2"),
         "and the parent edges are there: {answer}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A node named the way the **record** names it resolves to a face and shows its neighbourhood
@@ -101,7 +101,7 @@ fn a_logical_path_resolves_through_the_record_and_shows_its_edges() {
         answer.contains("file:other/other.rs") && answer.contains("calls-file"),
         "its file and its dependency are both named: {answer}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A name the record does not know is refused with the spellings it does know (audit `M7`, P1.3).
@@ -113,7 +113,7 @@ fn a_name_the_record_does_not_know_is_refused_with_the_spellings_it_does() {
     let error = super::graph(&root, &json!({"node": "no/such/face"})).expect_err("the refusal");
     assert!(error.contains("logical path"), "{error}");
     assert!(error.contains("`face:`"), "{error}");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The two faces' files call each other, so `cycles` names them as one component that must stay
@@ -136,7 +136,7 @@ fn the_cycle_between_the_two_files_is_named_as_one_component() {
         answer.contains("not dependencies and are not counted here"),
         "the answer says which edges it did not count: {answer}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// An index that is behind is still answered from, and the answer says so (audit `M7`, P2.3).
@@ -164,7 +164,7 @@ fn a_behind_index_is_answered_from_and_named() {
         answer.contains("calls-file"),
         "and the edges are still read: {answer}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A tree that never published an index says what to run rather than inventing an empty graph
@@ -179,5 +179,5 @@ fn an_unpublished_index_says_what_to_run() {
         "{answer}"
     );
     assert!(answer.contains("graph  unavailable"), "{answer}");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }

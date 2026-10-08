@@ -277,7 +277,7 @@ fn a_held_lock_stops_the_publish_and_names_itself() {
         "the same host publishes once the tree is free: {report}"
     );
     assert!(out.join("pruning_manifest.tsv").exists(), "payloads landed");
-    let _ = std::fs::remove_dir_all(out.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&out);
 }
 
 /// Publish `out` from a **child process** with a one-millisecond wait budget, returning whether it

@@ -19,7 +19,7 @@ fn workspace(label: &str) -> PathBuf {
             "nichlink-write-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("workspace root");
     root
 }
@@ -93,7 +93,7 @@ fn writing_is_idempotent() {
             .contains("pub const NICHLINK_NAMESPACE"),
         "and a second pass did not touch them"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A config the user already maintains keeps **everything** else, and gains only the missing entries.
@@ -120,7 +120,7 @@ fn an_existing_workspace_config_is_merged_not_replaced() {
     ] {
         assert!(config.contains(kept), "kept `{kept}`: {config}");
     }
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A `rustflags` this action cannot merge into is **refused by name**, with the lines to add by hand:
@@ -146,7 +146,7 @@ fn an_unmergeable_config_is_refused_with_the_lines_to_add() {
         !root.join("myapp-widgets/src/lib.rs").exists(),
         "the files are not written when the config cannot be made sound"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Taking a partition back removes the packages this action created and its config entries — and a
@@ -174,7 +174,7 @@ fn reverting_takes_back_exactly_this_actions_work() {
     let again =
         super::revert_partition(&root, None, &planned, None).expect("the second revert runs");
     assert!(again.files.is_empty() && !again.config_changed, "{again:?}");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A directory this action did **not** create is refused by name and left exactly as it is: the
@@ -199,7 +199,7 @@ fn a_package_without_the_marker_is_never_removed() {
         root.join("myapp-widgets/Cargo.toml").exists(),
         "and the package is untouched"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The config keeps everything that is not ours: other keys, other flags, other sections.
@@ -225,7 +225,7 @@ fn reverting_the_config_keeps_everything_that_is_not_ours() {
         config.contains("git-fetch-with-cli = true") && !config.contains("remap-path-prefix"),
         "and nothing of ours is left: {config}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The workspace manifest comes back out exactly as it went in, and a partition without an enclosing
@@ -275,8 +275,8 @@ fn the_workspace_manifest_is_edited_only_when_there_is_a_workspace() {
         fs::read_to_string(standalone.join("Cargo.toml")).expect("the manifest"),
         "[workspace]\nresolver = \"3\"\nmembers = [\"host\"]\n"
     );
-    let _ = fs::remove_dir_all(&root);
-    let _ = fs::remove_dir_all(&standalone);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&standalone);
 }
 
 /// The release shape writes the package's own files, and the same revert takes it back.
@@ -324,7 +324,7 @@ fn the_release_shape_carries_its_sources_and_reverts() {
     let directory = planned.directory.clone();
     let reverted = super::revert_partition(&root, None, &[planned], None).expect("the revert runs");
     assert!(!directory.exists(), "{reverted:?}");
-    let _ = fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// A shape is never written over the other one silently (audit `M7`, §M7.42).
@@ -354,5 +354,5 @@ fn writing_one_shape_over_the_other_is_refused_by_name() {
     // A directory that is not there yet is nobody's shape.
     // 还不存在的目录不属于任何形状。
     assert!(super::guard_shape(&[root.join("absent").as_path()], false).is_ok());
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }

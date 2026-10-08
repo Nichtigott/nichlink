@@ -20,7 +20,7 @@ fn package(label: &str, body: &str) -> (PathBuf, PathBuf) {
             "nichlink-manifests-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     let src = root.join("src");
     fs::create_dir_all(src.join("dial")).expect("face directory");
     fs::write(
@@ -61,7 +61,7 @@ fn a_commented_out_function_is_not_a_declaration() {
             "`{ghost}` is not a declaration: the kernel scanner masks what is not Rust: {text}"
         );
     }
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn a_method_carries_no_impl_owner_the_scanner_cannot_know() {
         !text.contains("Dial::method"),
         "the impl owner was a guess, and it is gone: {text}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A tracked symbol comes from the facts that name it: a module item keeps its
@@ -108,7 +108,7 @@ fn a_pruning_probe_symbol_is_named_after_the_face_kind() {
         text.contains("dial::PRUNING_TABLE"),
         "a module item keeps its module path: {text}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The record carries the three facts audit `W3-1` added, and a derivation agrees with them.
@@ -289,7 +289,7 @@ fn every_published_column_reads_back() {
         old[0].source_hash.is_none() && old[0].calls.is_none(),
         "and its absent columns are `None`, not an error: {old:?}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A child whose parent is named by module path gets that parent's **identity**, not just its path.
@@ -362,7 +362,7 @@ fn a_module_named_parent_resolves_to_its_identity() {
         Some("root/dial/child"),
         "the logical path nests under the parent's registry name: {child:?}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The shape record carries what each declaration spelled, and reads back whole (audit `W6-2`, step three).
@@ -423,5 +423,5 @@ fn the_shape_record_carries_the_declared_fields_and_reads_back() {
             .any(|row| row.source == "src/lib.rs" || row.source == "lib.rs"),
         "a non-face file has no row: {rows:?}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }

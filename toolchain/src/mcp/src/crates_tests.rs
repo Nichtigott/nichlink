@@ -18,7 +18,7 @@ fn host(label: &str) -> PathBuf {
         "nichlink-mcp-crates-{label}-{}-{sequence}",
         std::process::id()
     ));
-    let _ = fs::remove_dir_all(&area);
+    let _ = std::fs::remove_dir_all(&area);
     // One level down: a ghost is the host's sibling, so a host directly in the temp directory would
     // plan its packages into `/tmp`.
     // 在下一层：幽灵是宿主的同级，因此直接坐在临时目录里的宿主会把包规划进 `/tmp`。
@@ -103,7 +103,7 @@ fn a_host_without_a_declaration_is_told_where_one_goes() {
     let answer = crates(&root, &json!({})).expect("answers");
     assert!(answer.contains("declares no crates"), "{answer}");
     assert!(answer.contains("add_crates.rs"), "{answer}");
-    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// `plan` writes nothing, and says what the two writers would do.
@@ -125,7 +125,7 @@ fn plan_is_read_only_and_names_the_writers() {
             .exists(),
         "plan wrote nothing"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A write without `apply` is a preview: the partition is printed and nothing is on disk.
@@ -142,7 +142,7 @@ fn an_action_without_apply_changes_nothing() {
             .exists(),
         "the preview wrote nothing"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// `apply: true` writes the release shape, reads it back off the disk, and `revert` takes it back.
@@ -181,7 +181,7 @@ fn applying_writes_the_release_shape_and_reverting_takes_it_back() {
         !crates_dir(&area).join("app-facade").exists(),
         "the facade is gone"
     );
-    let _ = fs::remove_dir_all(area);
+    let _ = std::fs::remove_dir_all(area);
 }
 
 /// An action this tool does not have is refused by name, with the four that exist.
@@ -193,7 +193,7 @@ fn an_unknown_action_is_refused_with_the_list() {
     assert!(refusal.contains("`publish`"), "{refusal}");
     assert!(refusal.contains("`plan`"), "{refusal}");
     assert!(refusal.contains("`revert`"), "{refusal}");
-    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The declaration layer is operable: `declare` adds a crate, `undeclare` takes it out, and both
@@ -242,7 +242,7 @@ fn the_declaration_layer_is_declarable_and_undeclarable() {
     let refusal =
         crates(&root, &json!({"action":"undeclare","crate":"gauge"})).expect_err("refused");
     assert!(refusal.contains("revert"), "{refusal}");
-    fs::remove_dir_all(crates_dir(&area).join("app-gauge")).expect("take it back");
+    std::fs::remove_dir_all(crates_dir(&area).join("app-gauge")).expect("take it back");
 
     // With nothing on disk it removes exactly that entry, and the file keeps the other crate.
     let removed = crates(
@@ -260,7 +260,7 @@ fn the_declaration_layer_is_declarable_and_undeclarable() {
         after.contains(r#"Crate::named("widgets")"#),
         "and the crate that was not named is untouched: {after}"
     );
-    let _ = fs::remove_dir_all(area);
+    let _ = std::fs::remove_dir_all(area);
 }
 
 /// A host that declares nothing gets its first crate declared, file and all — that is what "add a
@@ -286,7 +286,7 @@ fn declaring_the_first_crate_creates_the_declaration() {
     );
     let answer = crates(&root, &json!({"action":"plan"})).expect("plans");
     assert!(answer.contains("app-widgets"), "{answer}");
-    let _ = fs::remove_dir_all(area);
+    let _ = std::fs::remove_dir_all(area);
 }
 
 /// A missing or empty argument is refused by name, with the shape the caller has to pass.
@@ -305,5 +305,5 @@ fn a_missing_argument_is_refused_with_its_shape() {
         let refusal = crates(&root, &arguments).expect_err("refused");
         assert!(refusal.contains(expected), "{refusal}");
     }
-    let _ = fs::remove_dir_all(root.parent().expect("the area"));
+    let _ = std::fs::remove_dir_all(&root);
 }

@@ -22,7 +22,7 @@ fn host(label: &str, declaration: Option<&str>) -> PathBuf {
             "nichlink-partition-view-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&area);
+    let _ = std::fs::remove_dir_all(&area);
     // The host is one level down: a ghost is the host's **sibling**, so a host sitting directly in
     // the temp directory would plan its packages into `/tmp` — where a leftover from any earlier run
     // could make this fixture read somebody else's directory (measured: it did).
@@ -105,7 +105,7 @@ pub const SHAPE: Shape = Shape {
 fn a_host_without_a_declaration_has_no_partition() {
     let root = host("absent", None);
     assert!(view(&root).expect("reads").is_none());
-    let _ = fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// The view describes what the declaration plans, in both shapes, and what is on disk.
@@ -145,7 +145,7 @@ fn the_view_describes_both_shapes_and_the_disk() {
         "nothing is on disk, so there is nothing to warn about: {:?}",
         view.notes
     );
-    let _ = fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// What is on disk is read from the package's own manifest, and a foreign directory is named.
@@ -230,7 +230,7 @@ fn the_disk_state_names_the_shape_and_refuses_to_claim_a_foreign_package() {
         ghost.publish
     );
     assert!(ghost.files > 0 && ghost.bytes > 0, "the size is measured");
-    let _ = fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// The member list is part of the picture: a generated package the workspace does not list is named.
@@ -248,7 +248,7 @@ fn an_unlisted_generated_package_is_named() {
                 .expect("clock")
                 .as_nanos()
         ));
-    let _ = fs::remove_dir_all(&parent);
+    let _ = std::fs::remove_dir_all(&parent);
     let root = parent.join("host");
     fs::create_dir_all(&root).expect("the host");
     let fixture = host("ws-source", Some(DECLARATION));
@@ -287,8 +287,8 @@ fn an_unlisted_generated_package_is_named() {
         Some(parent.as_path()),
         "the workspace root is the directory the member list belongs to"
     );
-    let _ = fs::remove_dir_all(&parent);
-    let _ = fs::remove_dir_all(&fixture);
+    let _ = std::fs::remove_dir_all(&parent);
+    let _ = std::fs::remove_dir_all(&fixture);
 }
 
 /// A relative copy of one directory tree, for the workspace fixture.

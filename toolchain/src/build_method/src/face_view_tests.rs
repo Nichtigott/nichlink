@@ -75,7 +75,7 @@ fn faces_carry_their_logical_path_and_default_registry_name() {
         "identity must be the namespace + relative path + kind hash"
     );
 
-    fs::remove_dir_all(&root).expect("cleanup");
+    std::fs::remove_dir_all(&root).expect("cleanup");
 }
 
 /// A parent the tree cannot resolve keeps the face visible and says so,
@@ -96,7 +96,7 @@ fn an_unresolved_parent_is_reported_not_guessed() {
     assert_eq!(faces.len(), 1);
     assert!(!faces[0].parent_resolved);
 
-    fs::remove_dir_all(&root).expect("cleanup");
+    std::fs::remove_dir_all(&root).expect("cleanup");
 }
 
 /// The two manifest readers agree with what the writers in `manifests.rs`
@@ -148,7 +148,7 @@ fn manifests_round_trip_through_the_readers() {
     assert_eq!(rows[0].symbol, "-");
 
     assert!(read_build_scope(&root.join("missing")).is_err());
-    fs::remove_dir_all(&root).expect("cleanup");
+    std::fs::remove_dir_all(&root).expect("cleanup");
 }
 /// The path is resolved from the parent chain, not from the order the walk
 /// happened to visit the files in.
@@ -195,7 +195,7 @@ fn a_parent_that_sorts_later_still_forms_the_full_path() {
         .find(|face| face.kind == "Alpha")
         .expect("alpha face");
     assert!(alpha.parent_resolved, "the parent is in the tree");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A registration file that does not parse is named instead of dropped in
@@ -240,7 +240,7 @@ fn a_registration_file_that_does_not_parse_is_named_not_dropped() {
         unreadable[0].contains("control/control.rs"),
         "the file that could not be read is named: {unreadable:?}"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// An `external_object!` face is a face of its own registry, not an unreadable file: the

@@ -76,7 +76,7 @@ fn with_temp_root<T>(operation: impl FnOnce(&Path) -> T) -> T {
     ));
     fs::create_dir_all(&root).expect("create root");
     let result = AuthoringContext::new(root.clone(), "nichlink.test").scope(|| operation(&root));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     result
 }
 

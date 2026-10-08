@@ -114,7 +114,7 @@ fn check_json_emits_one_document_and_still_fails() {
                 .contains("duplicate stable_name")),
         "{document}"
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// Without `--json` the human output **opens** with the historical
@@ -147,7 +147,7 @@ fn check_without_json_keeps_the_human_line() {
         run(["nichlink".to_owned(), "check".to_owned(), path]).is_ok(),
         "the public `run` entry point accepts check"
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `explain` resolves a logical path and a node id to the same face, and
@@ -191,7 +191,7 @@ fn explain_json_reports_identity_scope_and_declared_grafts() {
     assert!(result.is_ok(), "{result:?} {stdout}");
     let by_id: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
     assert_eq!(by_id["node"]["path"], "root/control/object/button");
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `explain` refuses to present build output that predates the sources.
@@ -251,7 +251,7 @@ fn explain_reports_an_unknown_scope_when_the_build_output_is_stale() {
     let (_, stdout) = run_capture(&query);
     let current: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
     assert_eq!(current["scope"]["known"], true, "{current}");
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// An unresolvable query is reported with its reason instead of a bare
@@ -283,7 +283,7 @@ fn explain_reports_why_a_node_cannot_be_resolved() {
             .contains("root/nope"),
         "{document}"
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `explain --json` promises exactly one document on stdout, with the failure inside it. A package
@@ -331,7 +331,7 @@ fn explain_json_reports_an_unreadable_source_tree_as_json() {
         document.get("reason").is_some() || document.get("error").is_some(),
         "the document names the failure: {stdout}"
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// The overlay keeps the same contract: a plans path that is a plain file must arrive as a document
@@ -364,7 +364,7 @@ fn explain_overlay_json_reports_an_unreadable_plans_directory_as_json() {
         document.get("error").is_some(),
         "the overlay document carries the failure in `error`: {stdout}"
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `build --manifest-path <p>` validates the project it is about to build, not the current
@@ -413,7 +413,7 @@ fn build_with_a_manifest_path_validates_that_project() {
         "the failure names a file in the project the manifest pointed at, not in the current \
          directory: {error}"
     );
-    fs::remove_dir_all(&broken).expect("cleanup");
+    std::fs::remove_dir_all(&broken).expect("cleanup");
 }
 
 /// Two ways of naming one project must agree; two names for two projects is a usage error rather
@@ -442,8 +442,8 @@ fn build_refuses_two_names_for_two_projects() {
         .expect("one project, two spellings"),
         first.display().to_string()
     );
-    fs::remove_dir_all(&first).expect("cleanup");
-    fs::remove_dir_all(&second).expect("cleanup");
+    std::fs::remove_dir_all(&first).expect("cleanup");
+    std::fs::remove_dir_all(&second).expect("cleanup");
 }
 
 /// `explain --json` emits one JSON document even when the package cannot be
@@ -555,7 +555,7 @@ fn grafts_json_lists_plans_and_declared_state() {
         .find(|plan| plan["selector"] == "broken_graft")
         .expect("broken plan");
     assert!(broken_row["error"].as_str().is_some(), "{broken_row}");
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// A plans directory that exists and cannot be read is a failure, not "no
@@ -580,7 +580,7 @@ fn grafts_reports_an_unreadable_plans_directory() {
     let report: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
     assert_eq!(report["plans"].as_array().map(Vec::len), Some(0));
 
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// A host whose source tree cannot be read is a failure too: the declaration
@@ -610,7 +610,7 @@ fn grafts_reports_a_host_whose_sources_cannot_be_read() {
     let error = result.expect_err("a host without sources cannot be answered about");
     assert!(error.contains("source tree"), "{error}");
 
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `explain --overlay` renders the static overlay projection: the declared
@@ -674,7 +674,7 @@ fn explain_overlay_renders_the_static_projection() {
             .count(),
         1
     );
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `nichlink studio` honours its path argument, so the path Studio's own error
@@ -785,7 +785,7 @@ fn check_reports_a_library_target_that_is_missing_as_a_diagnostic() {
     assert!(result.is_err());
     assert!(stdout.is_empty(), "{stdout}");
 
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A library target outside `src/` is read where it is: the build succeeds on a
@@ -836,7 +836,7 @@ fn check_accepts_a_library_target_outside_src() {
         "the identity path keeps the directory the target lives in: {document}"
     );
     assert_eq!(document["node"]["path"], "root/control", "{document}");
-    fs::remove_dir_all(root).expect("cleanup");
+    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 /// `grafts --json` emits one JSON document even when the package cannot be

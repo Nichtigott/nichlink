@@ -12,7 +12,7 @@ fn package(label: &str) -> (PathBuf, String) {
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let name = format!("mcp-index-{label}");
     let root = std::env::temp_dir().join(format!("{name}-{}-{sequence}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("src")).expect("package directory");
     fs::write(
         root.join("Cargo.toml"),
@@ -60,7 +60,7 @@ fn a_finished_run_publishes_a_record_that_says_ready() {
             super::line(&root, &other)
         ),
     }
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A record that does not match the graph beside it is refused rather than half-read (audit `M7`,
@@ -102,7 +102,7 @@ fn a_record_that_does_not_match_its_graph_is_refused() {
             super::line(&root, &other)
         ),
     }
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A record whose payload never landed is absent rather than believed (audit `M7`, P2.1).
@@ -116,7 +116,7 @@ fn a_run_that_published_nothing_reads_as_absent() {
     );
     let line = super::line(&root, &super::State::Absent);
     assert!(line.contains("run `nichlink check`"), "{line}");
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Editing a source makes the index *behind*, and the line says so and names the way forward (audit
@@ -146,7 +146,7 @@ fn an_edit_makes_the_index_behind_and_the_line_says_so() {
             super::line(&root, &other)
         ),
     }
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The readiness record stamps the namespace it was published under; a record **without** the stamp
@@ -186,5 +186,5 @@ fn the_record_stamps_the_namespace_and_old_records_read_as_none() {
             .namespace,
         None
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }

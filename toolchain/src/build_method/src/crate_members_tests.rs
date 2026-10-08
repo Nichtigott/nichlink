@@ -18,7 +18,7 @@ fn scratch(label: &str, manifest: &str) -> PathBuf {
             "nichlink-members-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("the fixture directory");
     fs::write(root.join("Cargo.toml"), manifest).expect("the workspace manifest");
     root
@@ -83,7 +83,7 @@ fn a_single_line_list_gains_the_packages() {
     // Idempotent: the second run finds every entry and writes nothing.
     // 幂等：第二遍发现每一条都在，什么都不写。
     assert!(!add(&root, &siblings()).expect("nothing missing"));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A list written one item per line keeps that shape, and the closing bracket stays where it was.
@@ -99,7 +99,7 @@ fn a_multi_line_list_keeps_its_shape() {
         manifest(&root),
         "[workspace]\nmembers = [\n    \"app\",\n    \"fast-widget\",\n    \"../app-facade\",\n    \"../app-widgets\",\n]\n\n[workspace.package]\nversion = \"0.1.0\"\n"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A workspace whose root is a package has no list, and gets one — right under its header.
@@ -115,7 +115,7 @@ fn a_workspace_without_a_list_gets_one() {
         manifest(&root),
         "[workspace]\nmembers = [\"../app-facade\", \"../app-widgets\"]\n\n[package]\nname = \"app\"\n\n[dependencies]\n"
     );
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Taking the packages back restores the list this action found — and takes the key with it when the
@@ -128,7 +128,7 @@ fn taking_the_packages_back_restores_what_was_there() {
     assert!(remove(&single, &siblings()).expect("removed"));
     assert_eq!(manifest(&single), "[workspace]\nmembers = [\"app\"]\n");
     assert!(!remove(&single, &siblings()).expect("nothing left to remove"));
-    let _ = fs::remove_dir_all(&single);
+    let _ = std::fs::remove_dir_all(&single);
 
     let multi = scratch(
         "restore-multi",
@@ -140,7 +140,7 @@ fn taking_the_packages_back_restores_what_was_there() {
         manifest(&multi),
         "[workspace]\nmembers = [\n    \"app\",\n]\n"
     );
-    let _ = fs::remove_dir_all(&multi);
+    let _ = std::fs::remove_dir_all(&multi);
 
     let added = scratch(
         "restore-added",
@@ -152,7 +152,7 @@ fn taking_the_packages_back_restores_what_was_there() {
         manifest(&added),
         "[workspace]\n\n[package]\nname = \"app\"\n"
     );
-    let _ = fs::remove_dir_all(&added);
+    let _ = std::fs::remove_dir_all(&added);
 }
 
 /// Another crate's entries are not this action's to remove, and a glob stays a glob.
@@ -172,7 +172,7 @@ fn only_this_actions_entries_are_taken_back() {
     // A spelling the list does not carry changes nothing either: matching is on the exact token.
     // 清单里没有的拼写同样什么都不改：匹配是按逐字节的条目做的。
     assert!(!remove(&root, &["\"../app-facade\"".to_owned()]).expect("not listed"));
-    let _ = fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A `members` that is not an array of quoted strings is refused, naming the line to fix.
@@ -191,7 +191,7 @@ fn a_members_this_action_cannot_read_is_refused() {
             "the refusal names the shape and the line: {refused}"
         );
         assert_eq!(manifest(&root), text, "a refusal writes nothing");
-        let _ = fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

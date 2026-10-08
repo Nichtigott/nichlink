@@ -19,7 +19,7 @@ fn host(label: &str) -> PathBuf {
             "nichlink-facade-{label}-{}-{sequence}",
             std::process::id()
         ));
-    let _ = fs::remove_dir_all(&parent);
+    let _ = std::fs::remove_dir_all(&parent);
     let root = parent.join("control-button");
     fs::create_dir_all(root.join("src")).expect("host dirs");
     fs::write(
@@ -121,7 +121,7 @@ fn a_facade_sees_the_host_and_every_ghost() {
         "its build script runs the host's manifest in facade mode: {}",
         facade.build_rs
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A declaration that hands nothing away has nothing cross-crate to carry: no facade.
@@ -139,7 +139,7 @@ fn a_declaration_with_no_crates_needs_no_facade() {
     .expect("no refusal")
     .is_none();
     assert!(facade, "an empty plan has no facade");
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A facade that would be the host's own package is refused by name: a crate cannot depend on itself.
@@ -154,5 +154,5 @@ fn a_facade_that_would_be_the_host_is_refused() {
         refused.contains("control-facade") && refused.contains("package_prefix"),
         "the refusal names the clash and the knob: {refused}"
     );
-    let _ = fs::remove_dir_all(root.parent().expect("a parent"));
+    let _ = std::fs::remove_dir_all(&root);
 }
