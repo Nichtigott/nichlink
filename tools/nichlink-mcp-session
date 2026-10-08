@@ -1,0 +1,70 @@
+#!/bin/sh
+# Mount the bridge the way a client does: a real stdio JSON-RPC session — initialize, tools/list, then
+# tools/call for every advertised tool. The one-shot `--call` mode tests the tools; this tests the
+# **protocol surface** a client actually attaches to.
+# 按客户端的方式挂载桥：一次真的 stdio JSON-RPC 会话——initialize、tools/list，然后对每个被广告的工具
+# 发 tools/call。一次性 `--call` 模式测的是工具本身；这里测的是客户端真正接上的**协议面**。
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+BRIDGE="$ROOT/target/debug/nichlink-mcp"
+CARGO_FLAGS="${NICHLINK_MCP_SESSION_CARGO_FLAGS---offline}"
+HOST="${1:-$ROOT/examples/partitioned-button/host}"
+fail() { printf 'mcp session FAILED: %s\n' "$1" >&2; exit 1; }
+
+[ -x "$BRIDGE" ] || command cargo build $CARGO_FLAGS -p nichlink-toolchain --features mcp --bin nichlink-mcp >/dev/null 2>&1 ||
+  fail "cannot build $BRIDGE"
+[ -d "$HOST" ] || fail "no host at $HOST"
+
+python3 - "$BRIDGE" "$HOST" <<'PY'
+import json, subprocess, sys
+
+bridge, host = sys.argv[1], sys.argv[2]
+proc = subprocess.Popen([bridge], cwd=host, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, text=True, bufsize=1)
+
+def send(payload):
+    proc.stdin.write(json.dumps(payload) + "\n")
+    proc.stdin.flush()
+
+def recv():
+    line = proc.stdout.readline()
+    if not line:
+        raise SystemExit("mcp session FAILED: the bridge closed stdout early: " + proc.stderr.read()[:400])
+    return json.loads(line)
+
+send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+      "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                 "clientInfo": {"name": "nichlink-session", "version": "0"}}})
+init = recv()
+assert "result" in init, f"initialize did not answer with a result: {init}"
+info = init["result"].get("serverInfo", {})
+printf = lambda *a: print(*a)
+printf(f"initialize      {info.get('name')} {info.get('version')}")
+send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+listed = recv()["result"]["tools"]
+names = [tool["name"] for tool in listed]
+assert names, "tools/list advertised nothing"
+missing = [t for t in listed if not t.get("title") or "annotations" not in t]
+assert not missing, f"advertised without title/annotations: {[t.get('name') for t in missing]}"
+printf(f"tools/list      {len(names)} advertised: {' '.join(names)}")
+
+# Every advertised tool must answer a real call: a result, or a refusal that names what it needs.
+refusals = 0
+for index, name in enumerate(names, start=10):
+    send({"jsonrpc": "2.0", "id": index, "method": "tools/call", "params": {"name": name, "arguments": {}}})
+    answer = recv()
+    assert "result" in answer, f"{name} answered with a protocol error: {answer}"
+    text = json.dumps(answer["result"])
+    assert text.strip(), f"{name} answered with nothing"
+    if "needs" in text or "requires" in text or "must" in text:
+        refusals += 1
+        first = answer["result"].get("content", [{}])[0].get("text", "").splitlines()[:1]
+        printf(f"  {name:<24} refused with a way forward: {first[0][:90] if first else ''}")
+    else:
+        printf(f"  {name:<24} answered")
+assert refusals or len(names) <= 3, "no tool refused, so the refusal path is untested"
+proc.stdin.close()
+print(f"OK — {len(names)} tools mounted over stdio, {refusals} answered with a named refusal")
+PY

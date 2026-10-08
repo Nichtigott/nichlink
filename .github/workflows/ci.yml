@@ -85,6 +85,15 @@ jobs:
         env:
           NICHLINK_REAL_PROJECT_CARGO_FLAGS: ""
         run: tools/nichlink-real-project-test
+      - name: MCP session (mounted over stdio)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # A real client session: initialize, tools/list, then tools/call for every advertised tool. The
+        # one-shot `--call` mode tests the tools; this tests the protocol surface a client attaches to.
+        # 真的客户端会话：initialize、tools/list，然后对每个被广告的工具发 tools/call。一次性 `--call`
+        # 模式测工具本身；这里测客户端真正接上的协议面。
+        env:
+          NICHLINK_MCP_SESSION_CARGO_FLAGS: ""
+        run: tools/nichlink-mcp-session
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging

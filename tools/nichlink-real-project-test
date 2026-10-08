@@ -102,8 +102,8 @@ rm -f "$WORK/host/add_crates.rs"
 step "unpartitioned: check, then build (wall time)"
 t0=$(now); (cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the grown host does not check"
 printf '   check           %ss\n' "$(since "$t0")"
-(cd "$WORK/host" && build >/dev/null 2>&1) || fail "the grown host does not build"
-printf '   cargo build     %ss\n' "$(since "$t0")"
+(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS >/dev/null 2>&1) || fail "the grown host does not build"
+printf '   nichlink build  %ss\n' "$(since "$t0")"
 cuts=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] || fail "the host does not emit its two cuts"
 
@@ -126,8 +126,8 @@ t1=$(now)
 printf '   check           %ss\n' "$(since "$t1")"
 (cd "$WORK/host" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
 printf '   write           %ss\n' "$(since "$t1")"
-(cd "$WORK" && build --workspace >/dev/null 2>&1) || fail "the partitioned workspace does not build"
-printf '   cargo build     %ss\n' "$(since "$t1")"
+(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the partitioned workspace does not build"
+printf '   nichlink build  %ss\n' "$(since "$t1")"
 for pkg in split-left split-right split-facade; do
   [ -d "$WORK/crates/$pkg" ] || fail "the split did not produce $pkg"
 done
@@ -161,8 +161,8 @@ t2=$(now)
 (cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the whole-container host does not check"
 (cd "$WORK/host" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the whole-container split is not written"
 printf '   check+write     %ss\n' "$(since "$t2")"
-(cd "$WORK" && build --workspace >/dev/null 2>&1) || fail "the whole-container workspace does not build"
-printf '   cargo build     %ss\n' "$(since "$t2")"
+(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the whole-container workspace does not build"
+printf '   nichlink build  %ss\n' "$(since "$t2")"
 host_now=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
 [ "$(grep -c 'StaticGraftCut::from_ids' "$host_now")" = "0" ] ||
   fail "the host still emits cuts for faces it handed away"
