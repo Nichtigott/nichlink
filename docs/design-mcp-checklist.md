@@ -2251,3 +2251,56 @@ rust-analyzer stderr ERROR flycheck 0: File with cargo diagnostic not found in V
 **exit=0** ✓；示例里 `.cargo/config.toml` 数量 **0** ✓、`--remap-path-prefix` **0** 处 ✓；
 `tools/nichlink-partition-rehearsal` OK ✓（它自己的四条腿仍在 `/tmp` 里写开发形状夹具 —— 那些不进编辑器，
 因此无害 ✓，但**形状之争（挂载 vs 复制）的总账仍开着** ✓）。
+
+### §M7.54 交接四项落地：缺规则的面、重新划分不变性、A/B 两轴钉子、认领被剪的真缺陷（2026-10-08）
+
+**① `check` 与 `build` 的差集（真缺陷，最该修的那件）**。拥有注册机（`needs_registry: true`）、又不点名
+`registry_rule:` 的面，宏展开成 `super::registry_rule::REGISTRATION_RULE`（`macro/src/lib.rs` 的
+`face_rule_or`），而生成树只在面旁边存在 `<面目录>/registry_rule/registry_rule.rs` 时才挂载该模块 ⇒ 那个文件
+被删掉、改名或搬走时，**`check` 报 ok（rc=0）而 `cargo build` 报 101**（`error[E0433]: cannot find
+registry_rule in super`）。实测：`examples/control-suite` 删掉 `panel/registry_rule/registry_rule.rs` ⇒
+`check rc=0` / `build rc=101`。
+
+**修法（窄修）**：新增 `phase=face-rule` 诊断（`face_syntax_check::aggregate_registry_rule_errors`，接进
+`pipeline.rs` 的声明层检查）。判据是**被发射的那条引用**，不是文件：显式写了 `registry_rule:` 的面走作者给的
+路径、不需要兄弟模块；不拥有注册机的面保留宽松兜底 —— 两者都不被拒绝。拒绝给三条出路：补回规范规则
+文件、用 `registry_rule: <path>::REGISTRATION_RULE` 点名、或去掉 `needs_registry: true`。解析之前有一道
+`source.contains("needs_registry")` 的便宜闸门（字段要存在就必须字面出现 ⇒ 只可能放进更多文件，绝不藏起
+拒绝）：1,000 个面上实测，无闸门 6.6–6.8 s，有闸门回到基线 6.4–6.5 s（对照 6.48–6.54 s）。
+
+**真项目验证（无假拒绝）8/8**：基线 ✓ · 新面带规则 ✓ · 新面**无**规则 ⇒ 拒绝且 build 也失败 ✓ · 新面点名规则
+且无兄弟模块 ✓ · 不拥有注册机的面无规则 ✓ · 删/改名/搬走既有规则 ⇒ 拒绝 ✓。同一批把
+`tools/nichlink-daily-behaviors` 变成**自检门禁**（每行带期望 + 不变量「build 失败必须是 `check` 已经拒绝过
+的」），修掉它自己的两个装置缺陷（`crate::__nichlink_face!` 从来不存在 ⇒ 那两行报的是装置错；行 8 删的其实
+是规则文件），并接进 CI：**两阶段 39 行全过**。
+
+**③ 重新划分不变性做成门禁**：`tools/nichlink-partition-rehearsal` 新增 **leg 6** —— 作者的 graft 计划只写
+一次，crate 边界搬三次（`panel::frame::widget` → `panel::frame` → **一个 crate 认领两棵子树**），每一次都
+检查三种形状、`--write`、构建，并断言切口逐字不变、facade 点名胜任属主、宿主的计划文件未被改写。
+
+**④A 三条钉子**：**根面 + `full`** 早有两条钉子（`scope_tests::a_full_cut_on_the_root_face_keeps_every_face_live`
++ graft matrix leg 1，本次重跑通过）✓；**记录 `version` 不支持 ⇒ 构建按名拒绝**（内核早有该错误，但
+`planned_slots` 对任何解析失败都静默 `continue` ⇒ 等于发布一个嫁接静默地从未发生的二进制）新增
+`graft_plan_check::unsupported_version_errors`；**区间 + `full` ⇒ 命名拒绝**（实测此前**被接受**并发出
+`from_id_range(…, true)`，含义哪里都没写）在**解析器与渲染器两处**按名拒绝，共用一份文案。
+
+**④B 两处缺口**：**`crates --check` 现在比对形状指纹**（`guard_shape` 原先只在 `--write` 调用 ⇒ 手跑开发
+形状落在入库发布形状上无声；受检集合与对应 `--write` 完全一致）；**一个 crate 认领多棵子树**的端到端（leg 6
+边界 C）当场逼出一个**真缺陷**：认领的子树若不含任何声明槽位，会被嫁接槽位造成的自动收窄剪掉 —— 宿主交出去
+了、幽灵又被剪 ⇒ **没有任何 crate 编译那些面**。修法：认领成为强制存活根（`SourceScope::from_environment`
+多收 `claims`，pipeline 在作用域之前读 `input.only`），钉子
+`scope_tests::a_crate_claim_keeps_its_subtree_live_next_to_a_graft_slot`（含反证）。
+
+**CI 的最后一道红**：`gh` 读不到日志的真因是本地 `~/.cache/gh` 写不进去（`XDG_CACHE_HOME=/tmp/gh-cache`
+即可读）；唯一的红是 clippy **1.99** 的 `question_mark`（`shape_decl.rs` 的 `match` ⇒ `?`），本地 stable 是
+**1.96** ⇒ 它熬过了每一次本地门禁。藏在它后面的还有两处只在 CI/全新检出才现形的装置缺陷：真实规模夹具的容器
+面声明了 `handle_contracts` 却只定义 trait 不实现（用改动前的 CLI 复现 ⇒ 判明不是回归）；graft matrix leg 3
+在任何 `check` 之前读复制过来的 `host/target/` 里的陈旧计划（全新检出里那文件不存在 ⇒ 每次都判红）。**六个
+设备步骤在全新副本（`git archive HEAD`）里复跑全部通过**。
+
+**落地门禁**：`cargo fmt --all -- --check` ✓ · `cargo test --workspace`（36 个二进制全绿）✓ · 两面
+`clippy --all-targets -D warnings` ✓ · `tools/nichlink-test` **十面全绿、无灰测试** ✓ ·
+`RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps` ✓ · `tools/nichlink-publish --check-table` ✓ ·
+`tools/nichlink-package-audit`（contents failed: none · verified 3 · failed: none）✓ · 六个设备 ✓。
+CI：**10 个作业里 9 个 ✓**，唯一没绿的是 `verify (macos-latest, 1.96.0)` —— 它**根本没跑**（GitHub 侧
+"The job was not acquired by Runner of type hosted"，macOS arm64 runner 容量），已单独重跑该格。
