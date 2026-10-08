@@ -298,6 +298,26 @@ impl From<GraftPlanDocumentError> for String {
 
 #[cfg(test)]
 mod tests {
+
+    /// A record whose `version` this build does not know is refused **by name**, and the refusal says
+    /// which version it expected: a plan file travels between versions, so the reader must not read on
+    /// and mix a newer plan's fields with this build's meaning.
+    /// 记录里的 `version` 本构建不认识时，**按名拒绝**，并说出它期望哪个版本：计划文件会在版本之间旅行，
+    /// 因此读者不能继续读下去、把新计划的字段与本构建的含义混在一起。
+    #[test]
+    fn an_unknown_plan_version_is_refused_by_name() {
+        let text = "version = 99\ntarget = 00000000000000000000000000000000\n\
+                    target_path = root/a\ngraft = a_fast\nfull = false\n";
+        let message = GraftPlanDocument::parse_graft_plan_document(text)
+            .expect_err("refused")
+            .to_string();
+        assert!(message.contains("version `99`"), "{message}");
+        assert!(message.contains("not supported"), "{message}");
+        assert!(
+            message.contains(&format!("expected {GRAFT_PLAN_VERSION}")),
+            "it names the version it wanted: {message}"
+        );
+    }
     use super::*;
 
     /// A repeated key is refused, like every other reader in this workspace

@@ -274,3 +274,66 @@ fn a_cut_names_the_same_subtree_however_it_is_spelled() {
     // Not a subtree this rule can judge, so it is left to the other checks rather than guessed at.
     assert_eq!(super::cut_subtree("crate::control::SOMETHING_ELSE"), None);
 }
+
+/// A `full` cut on the **root** face leaves every face live: the whole tree is the slot it names, so
+/// the scope must not narrow to nothing (measured on a real host: the root cut renders, builds, and
+/// carries the graft). This is the widest position the matrix has, and the one a reader reaches for
+/// when the replacement covers everything.
+/// **根面**上的 `full` 切口让每个面都保持存活：它点名的槽位就是整棵树，因此作用域不能收窄到空（真宿主上
+/// 实测：根面切口照样渲染、构建、携带 graft）。这是位置矩阵里最宽的一格，也是替换件覆盖一切时读者会写的那个。
+#[test]
+fn a_full_cut_on_the_root_face_keeps_every_face_live() {
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-scope-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+    let src = root.join("src");
+    let entry = src.join("lib.rs");
+    for module in ["a", "b"] {
+        std::fs::create_dir_all(src.join(module)).expect("fixture dir");
+    }
+    std::fs::write(
+        &entry,
+        "crate::host!();\n\
+             crate::static_graft_plan!(\n\
+                 FRAMEWORK,\n\
+                 cut(crate::NODE_ID) full graft(\"everything_fast\"),\n\
+             );\n",
+    )
+    .expect("host entry");
+    for (module, kind) in [("a", "A"), ("b", "B")] {
+        std::fs::write(
+            src.join(format!("{module}/{module}.rs")),
+            format!("crate::root_object! {{\n    kind: {kind},\n}}\n"),
+        )
+        .expect("face file");
+    }
+    let nodes = discover_root(&src);
+    let scope = super::SourceScope::auto_from_entry(&src, &nodes, &entry);
+
+    // The observable property, not a shape: **no face is lost**. A root cut names the whole tree, so
+    // the scope either keeps everything (`roots` is `None` — nothing to narrow) or names every face
+    // explicitly. What it must never do is drop one.
+    // 断言的是可观察的性质，不是某种形状：**一个面都不丢**。根面切口点名的是整棵树，因此作用域要么保持整棵
+    // （`roots` 为 `None`，没有可收窄的东西），要么把每个面都列出来。它绝不能丢掉其中一个。
+    let faces = super::collect_faces(&src, &nodes);
+    assert_eq!(faces.len(), 2, "the fixture has both faces");
+    if let Some(roots) = scope.roots.as_ref() {
+        for face in &faces {
+            assert!(
+                roots.contains(&face.id),
+                "a root cut keeps every face live: {}",
+                face.module
+            );
+        }
+    }
+
+    std::fs::remove_dir_all(&root).expect("cleanup");
+}
