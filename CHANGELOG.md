@@ -134,6 +134,77 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   发布锁经 `/proc` 回答"那个 pid 还活着吗"，而只有 Linux 有它，其它平台上的规则有意是"假定活着"——测试却
   断言了一次那些平台做不到的接管。现在断言改经 `Path` 比较或先归一化，而锁那条钉子按平台**能**回答什么分支。
 
+### Added
+
+- **The split writes into `crates/`, and its declaration is a function (2026-10-07).** A partition's
+  generated packages no longer sit beside `host/` and `graft/` where a reader cannot tell generated
+  from hand-written: they land under `crates/`, one directory for everything the split produced, and
+  the declaration at the package root is now `pub fn add_crates() -> Shape { Shape::of("prefix",
+  &[…]) }` — method names an editor completes, instead of field names the author had to remember.
+  Both spellings are still read (`Shape { package_prefix: …, crates: … }` keeps working).
+  **拆分写进 `crates/`，声明改成函数（2026-10-07）。** 生成包不再与 `host/`、`graft/` 挤在同一层
+  （读者分不出哪个是生成的），而是落在 `crates/` 下——拆分产出的一切都在那一个目录里；包根的声明则写成
+  `pub fn add_crates() -> Shape { Shape::of("前缀", &[…]) }`——作者笔下是编辑器会补全的**方法名**，而不是
+  必须记住的字段名。两种拼写都照旧被读取（`Shape { package_prefix: …, crates: … }` 继续可用）。
+
+- **`nichlink-run-method`: a compatibility shell for the pre-merge host name (2026-10-07).** The
+  host-facing crate name is a public contract, and the nine-into-three merge changed it, which broke
+  every host already generated against the old name. The shell re-exports `nichlink-toolchain` (one
+  implementation behind it), forwards the old crate's only feature (`authoring`), and joins the
+  publish order.
+  **`nichlink-run-method`：合并前宿主名的兼容外壳（2026-10-07）。** 面向宿主的 crate 名是公开契约，
+  九→三合并改了它，于是所有按旧名生成过的宿主都编不过。外壳重导出 `nichlink-toolchain`（实现只有一份），
+  转发旧 crate 唯一的特性（`authoring`），并进入发布顺序。
+
+- **`tools/nichlink-graft-matrix`: the graft shapes a real host has to answer (2026-10-07).** A cut on
+  the root face with `full`, two overlapping cuts, and a re-partition of the host that carries both
+  cuts — each checked against a real cargo, in CI.
+  **`tools/nichlink-graft-matrix`：只有真宿主能回答的几种 graft 形状（2026-10-07）。** 根面加 `full`
+  的切口、两条重叠切口、以及"装着两条切口的那棵子树被重新划分"——各用真 cargo 验一遍，进 CI。
+
+### Fixed
+
+- **Generated build scripts no longer carry `unsafe` (2026-10-07).** The claim a fragment compiles and
+  the facade flag used to travel through `NICH_LINK_SHAPE_*`, which a generated build script could only
+  set with `unsafe { std::env::set_var(…) }` under edition 2024. They are arguments now
+  (`run_for_partition(…, Some("claims"), false)`), the shape lives on the build input, and a nail
+  asserts the generated script contains `run_for_partition` and neither `unsafe` nor `set_var`.
+  **生成的构建脚本不再带 `unsafe`（2026-10-07）。** 碎片编译哪些认领、以及"我就是 facade"这两件事，
+  过去经 `NICH_LINK_SHAPE_*` 传递，而生成的构建脚本在 edition 2024 下只能靠
+  `unsafe { std::env::set_var(…) }` 设置它们。现在它们是参数（`run_for_partition(…, Some("claims"),
+  false)`），形状落在构建输入上，并有一条钉子断言生成的脚本含 `run_for_partition`、不含 `unsafe` 与
+  `set_var`。
+
+- **Two graft cuts that overlap are refused by name (2026-10-07).** A cut replaces a whole subtree, so
+  an entry inside another entry's subtree has no defined meaning; the refusal names both cuts, the file,
+  and the reason (`phase=graft-overlap`) instead of applying them in some order.
+  **两条重叠的 graft 切口按名拒绝（2026-10-07）。** 切口替换的是整棵子树，因此"一条条目落在另一条条目
+  的子树里"没有定义过的含义；拒绝里点名两条切口、所在的文件与理由（`phase=graft-overlap`），而不是按某种
+  顺序把它们应用掉。
+
+- **A claimed subtree that matches no published face is refused, not silently empty (2026-10-07).** A
+  misspelled path (or a plan built from an earlier declaration) used to produce a crate with zero
+  sources that compiles, ships, and answers every later question wrongly. It now stops, names the
+  nearest published face, and says to run `nichlink check` first.
+  **点名不到的认领被拒绝，而不是安静地变成空 crate（2026-10-07）。** 写错的路径（或一份由上一版声明
+  构建的计划）过去会产出一个零源码的 crate——它能编译、能发布，并在之后每个问题上都答错。现在当场停下、
+  给出最近的那个已发布面，并说明先跑 `nichlink check`。
+
+- **Refusals about the declaration say who checks the paths (2026-10-07).** They claimed "the compiler
+  checks the paths", which no compiler can do: a partitioned host no longer compiles the subtrees its
+  declaration names. NichLink resolves them against the registration tree, and the message now says so
+  — and names the spelling to write when the `::SUBTREE` marker is misspelled.
+  **关于声明的拒绝说清了"谁在检查路径"（2026-10-07）。** 它们原本写着"编译器会检查这些路径"，而没有任何
+  编译器做得到：被划分的宿主不再编译声明点名的那些子树。NichLink 对着注册树解析它们，文案现在这么说——
+  并在 `::SUBTREE` 标记写错时直接给出该写的拼写。
+
+- **The declaration reader took only the first `Shape {` (2026-10-07).** A declaration written as a
+  function has two (`-> Shape {` and the literal), so the reader answered with the empty text between
+  them and reported "no `package_prefix`". It now takes the last opening and accepts `Shape::of(…)` too.
+  **声明读取器只认第一个 `Shape {`（2026-10-07）。** 写成函数的声明有两个（`-> Shape {` 与字面量），
+  于是读取器答出两者之间的空文本、报"没有 `package_prefix`"。现在取最后一个开头，并且也接受
+  `Shape::of(…)`。
+
 ## [0.2.0] — 2026-09-29, re-published 2026-10-07
 
 ### Changed
