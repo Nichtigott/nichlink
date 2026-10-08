@@ -12,10 +12,10 @@ shape = "release"
 host = "nichlink-example-partitioned-button"
 
 [dependencies]
-nichlink-toolchain = { path = "../../../../toolchain", features = ["run", "authoring"] }
+nichlink-toolchain = { path = "../../../../toolchain", version = "0.2.1", features = ["run", "authoring"] }
 # 类型化 graft 表达式在宿主入口里按 Rust 路径点名实现，因此它必须被链接进来
 # （字符串写法的 graft 不需要这一行）。
 nichlink-example-partitioned-button-graft = { path = "../../graft" }
 
 [build-dependencies]
-nichlink-toolchain = { path = "../../../../toolchain", features = ["build"] }
+nichlink-toolchain = { path = "../../../../toolchain", version = "0.2.1", features = ["build"] }

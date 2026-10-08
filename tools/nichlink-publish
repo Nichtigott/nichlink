@@ -91,7 +91,6 @@ levels='
 nichlink-kernel
 nichlink-macro
 nichlink-toolchain
-nichlink-run-method
 '
 
 publish=false
@@ -350,7 +349,6 @@ dependencies='
 nichlink-kernel:
 nichlink-macro:nichlink-kernel
 nichlink-toolchain:nichlink-kernel nichlink-macro
-nichlink-run-method:nichlink-toolchain
 '
 
 # The internal dependencies of one crate, read from the table above.

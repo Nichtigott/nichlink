@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "macro", "toolchain", "conventions", "examples/control-button", "examples/control-button-graft", "run-method"]
+members = ["kernel", "macro", "toolchain", "conventions", "examples/control-button", "examples/control-button-graft"]
 resolver = "2"
 
 

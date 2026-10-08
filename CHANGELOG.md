@@ -147,15 +147,6 @@ the package audit is back to `verified:` all nine with `skipped: none`.
   `pub fn add_crates() -> Shape { Shape::of("前缀", &[…]) }`——作者笔下是编辑器会补全的**方法名**，而不是
   必须记住的字段名。两种拼写都照旧被读取（`Shape { package_prefix: …, crates: … }` 继续可用）。
 
-- **`nichlink-run-method`: a compatibility shell for the pre-merge host name (2026-10-07).** The
-  host-facing crate name is a public contract, and the nine-into-three merge changed it, which broke
-  every host already generated against the old name. The shell re-exports `nichlink-toolchain` (one
-  implementation behind it), forwards the old crate's only feature (`authoring`), and joins the
-  publish order.
-  **`nichlink-run-method`：合并前宿主名的兼容外壳（2026-10-07）。** 面向宿主的 crate 名是公开契约，
-  九→三合并改了它，于是所有按旧名生成过的宿主都编不过。外壳重导出 `nichlink-toolchain`（实现只有一份），
-  转发旧 crate 唯一的特性（`authoring`），并进入发布顺序。
-
 - **`tools/nichlink-graft-matrix`: the graft shapes a real host has to answer (2026-10-07).** A cut on
   the root face with `full`, two overlapping cuts, and a re-partition of the host that carries both
   cuts — each checked against a real cargo, in CI.

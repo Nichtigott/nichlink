@@ -695,13 +695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nichlink-run-method"
-version = "0.2.1"
-dependencies = [
- "nichlink-toolchain",
-]
-
-[[package]]
 name = "nichlink-toolchain"
 version = "0.2.1"
 dependencies = [

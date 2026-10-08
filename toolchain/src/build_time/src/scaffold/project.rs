@@ -330,7 +330,7 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
             let build = toml_path(&workspace.join("toolchain"));
             (
                 format!(
-                    "nichlink-toolchain = {{ package = \"nichlink-toolchain\", path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                    "nichlink-toolchain = {{ path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
                 ),
                 format!(
                     "nichlink-toolchain = {{ path = \"{build}\", version = \"{RELEASE_REQUIREMENT}\" }}"
@@ -338,14 +338,12 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
             )
         }
         DependencySource::Registry => (
-            format!(
-                "nichlink-toolchain = {{ package = \"nichlink-toolchain\", version = \"{RELEASE_REQUIREMENT}\" }}"
-            ),
+            format!("nichlink-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
             format!("nichlink-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
         ),
         DependencySource::Git { url } => (
             format!(
-                "nichlink-toolchain = {{ package = \"nichlink-toolchain\", git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                "nichlink-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
             ),
             format!(
                 "nichlink-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
@@ -782,7 +780,8 @@ mod tests {
             );
         }
         assert!(
-            runtime.contains("package = \"nichlink-toolchain\""),
+            !runtime.contains("package = \"nichlink-toolchain\""),
+            runtime.contains("version = \"0.2.1\""),
             "both tables name the one crate the merge produced: {runtime}"
         );
     }
