@@ -285,10 +285,14 @@ pub(crate) fn check_shape(
     for (name, subtrees) in &declaration.crates {
         for subtree in subtrees {
             claims += 1;
-            match claim_has_a_subtree(name, subtree, rows) {
-                Ok(resolved) => satisfied += usize::from(resolved),
-                Err(error) => return Err(error),
-            }
+            // `?` rather than a `match` that returns the same error: clippy's `question_mark` denies the
+            // long form under `-D warnings`, and it fires on the CI toolchain (1.99) while the local one
+            // (1.96) stays quiet — which is how this red survived every local gate.
+            // 用 `?` 而不是"原样返回同一个错误"的 `match`：clippy 的 `question_mark` 在 `-D warnings`
+            // 下拒绝长写法，而它在 CI 的工具链（1.99）上会响、本地那条（1.96）不响——这道红就是这样
+            // 熬过了每一次本地门禁。
+            let resolved = claim_has_a_subtree(name, subtree, rows)?;
+            satisfied += usize::from(resolved);
         }
     }
     // A declaration whose claims **all** point at nothing in this tree is refused here, and here only:
