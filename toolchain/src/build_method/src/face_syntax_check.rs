@@ -238,6 +238,15 @@ fn visit_registry_rule_errors(
         if let Some(file) = &node.file
             && face_source_is_active(src, node, scope, selected_ancestor)
             && let Ok(source) = fs::read_to_string(file)
+            // The cheap gate before the parse. A face that does not own a registry is the common case
+            // (every leaf), and `needs_registry` has to appear literally for the field to exist at
+            // all, so this can only ever let *more* files through — a comment that mentions the field
+            // costs one parse and can never hide a refusal. Measured on 1,000 faces: without the gate
+            // `check` went from 6.30 s to 6.6–6.8 s, with it back to the baseline.
+            // 解析之前的便宜闸门。不拥有注册机的面是常见情形（每个叶子都是），而字段要存在，`needs_registry`
+            // 就必须字面出现，因此这道闸门只可能放进**更多**文件——注释里提到该字段的代价是一次解析，绝不可能
+            // 藏起一条拒绝。在 1,000 个面上实测：没有闸门时 `check` 从 6.30 s 变成 6.6–6.8 s，有了它回到基线。
+            && source.contains("needs_registry")
             && let Some(face) = parsed_face(&source, &relative_display(src, file))
             && face.boolean("needs_registry") == Some(true)
             && face.field("registry_rule").is_none()

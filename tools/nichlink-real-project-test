@@ -63,7 +63,19 @@ def self_contained(kind, parent, registry, own_trait=None):
             f"kind: {kind},\n    needs_registry: true,\n    handle_contracts: [{own_trait}],",
             1,
         )
-        text = text.replace(f"pub struct {kind};", f"pub trait ControlHandle {{}}\n\npub struct {kind};")
+        # `handle_contracts` is the **compiler-checked** half: it asserts that this face implements the
+        # named trait, so declaring one and defining the trait without an implementation is a tree no
+        # `cargo build` can compile — and it went unnoticed only while nothing compiled the container's
+        # own file (measured: the dev-shape ghost does, and it failed with
+        # `the trait bound \`Left: ControlHandle\` is not satisfied`). The trait comes with its impl.
+        # `handle_contracts` 是**参与编译检查**的那一半：它断言这个面实现了点名的 trait，因此"声明了它、又只定义
+        # 了 trait 而不实现"是一棵任何 `cargo build` 都编译不过的树——它之所以一直没被发现，只是因为没有任何东西
+        # 编译容器自己的文件（实测：开发形状的幽灵会，并报
+        # `the trait bound \`Left: ControlHandle\` is not satisfied`）。trait 与它的实现一起给。
+        text = text.replace(
+            f"pub struct {kind};",
+            f"pub trait ControlHandle {{}}\n\nimpl ControlHandle for {kind} {{}}\n\npub struct {kind};",
+        )
     return text
 
 for side in ("left", "right"):
