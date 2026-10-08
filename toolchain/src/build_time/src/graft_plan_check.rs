@@ -3,14 +3,18 @@
 //!
 //! A plan file under `.nichlink/external-grafts/` is an authoring record: the
 //! build reads `static_graft_plan!` declarations and never opens a plan. When
-//! the two disagree, the release-time plan prunes the slot the author meant to
-//! hand over, so the record can never take effect. This check refuses that build:
-//! shipping a binary whose graft silently does not happen is exactly what must
-//! not leave the build, and the declaration list is right here to prove it.
+//! the two disagree, this check **refuses the build, by name**: a plan whose
+//! target slot no declaration could name is reported with the slot, the plan
+//! file and the reason, and the run stops there. There is no release-time
+//! pruning step behind it to fall back on — measured, the build exits non-zero
+//! and prints the refusal — and that is the point: a binary whose graft silently
+//! does not happen is exactly what must not leave the build, and the declaration
+//! list is right here to prove it.
 //! `.nichlink/external-grafts/` 下的计划文件是创作记录：构建读的是
-//! `static_graft_plan!` 声明，从不打开计划。两者不一致时，发布态计划会剪掉作者想
-//! 交出的槽位，于是这条记录永远无法生效。这项检查拒绝这样的构建：发布一个嫁接静默
-//! 不发生的二进制，正是绝不能离开构建的东西，而声明清单就在这里可以证明它。
+//! `static_graft_plan!` 声明，从不打开计划。两者不一致时，**这项检查按名拒绝这次构建**：
+//! 目标槽位没有任何声明可能命名时，拒绝里会给出那个槽位、计划文件与理由，运行就此停下。
+//! 它背后**没有**发布期的剪枝步骤可以兜底——实测：构建以非零退出并打印该拒绝——而这正是要点：
+//! 一个嫁接静默不发生的二进制，正是绝不能离开构建的东西，而声明清单就在这里可以证明它。
 //!
 //! The check stays precise rather than conservative: it refuses only when no
 //! declaration could name the plan's target slot at all, and a declaration that
@@ -223,9 +227,9 @@ mod tests {
     }
 
     /// A plan for a slot nobody declares is the failure this check exists for:
-    /// the release-time plan prunes it, the record can never take effect, and the
+    /// this check refuses the build by name, the record can never take effect, and the
     /// build says so with the clause that would fix it.
-    /// 没有任何声明交出的计划正是这项检查存在的理由：发布态计划会剪掉它，记录永远无法
+    /// 没有任何声明交出的计划正是这项检查存在的理由：这项检查按名拒绝这次构建，记录永远无法
     /// 生效，而构建会连同能修好它的那条子句一起说明。
     #[test]
     fn an_undeclared_plan_target_is_an_error_with_the_clause() {

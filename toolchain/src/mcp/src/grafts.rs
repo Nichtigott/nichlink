@@ -118,10 +118,13 @@ pub(crate) fn grafts_body(member: &Member, arguments: &Value) -> Result<String, 
         return Ok(output);
     }
     // The headline count is over *every* row, not over the rows the bound happened to
-    // print: this number is what a maintainer reads before a release prunes the slot, and
-    // counting inside the truncating loop silently rewrote it to whatever `limit` allowed.
-    // 头条计数是**全部**行，而不是上限恰好打印出来的那些：这个数字是维护者在发布剪掉槽位之前读的
-    // 东西，而在截断循环里计数会把它静默改写成 `limit` 允许的那部分。
+    // print: this number is what a maintainer reads to see how many records are waiting for a
+    // declaration that could name their slot — the build refuses such a plan by name rather than
+    // pruning it at release time — and counting inside the truncating loop silently rewrote it to
+    // whatever `limit` allowed.
+    // 头条计数是**全部**行，而不是上限恰好打印出来的那些：这个数字是维护者用来查看"有多少条记录在等一条
+    // 可能命名其槽位的声明"的——构建对这样的计划**按名拒绝**，而不是在发布期剪掉它——而在截断循环里计数会
+    // 把它静默改写成 `limit` 允许的那部分。
     let unkept = rows
         .iter()
         .filter(|row| row.error.is_none() && row.declared == Some(false))
