@@ -109,8 +109,22 @@ pub fn add_crates() -> Shape {
     Shape::of("app", &[Crate::named("objects").at(&[crate::control::SUBTREE])])
 }
 RS
-before=$(cat "$AREA/app/target/nichlink/out/graft_plan.tsv" 2>/dev/null | md5sum)
+# The plan to compare against is the one the **declaration** publishes, so it is taken *after* the first
+# `check` — not before it. Read before, this line hashed whatever happened to sit in the copied
+# `host/target/`: on a machine that had built the example it is the same plan and the comparison passes,
+# and on a fresh checkout (CI) the file is absent, so `md5sum` hashed empty input and every run failed
+# with "re-partitioning changed the graft plan". Measured — that is exactly how this leg failed on CI
+# while passing locally. The existence check below is what keeps a missing plan from comparing two
+# empty hashes and reporting success.
+# 用来比较的那份计划是**声明**发布出来的，因此在第一次 `check` **之后**取，而不是之前。在它之前读，这一行
+# 哈希的是复制过来的 `host/target/` 里恰好躺着的东西：在构建过示例的机器上它就是同一份计划，于是比较通过；
+# 而在全新检出（CI）上该文件不存在，`md5sum` 哈希的是空输入，于是每次都报 "re-partitioning changed the
+# graft plan"。实测——这正是这条腿在 CI 上红而本地绿的原因。下面的存在性检查正是让"计划缺失"不会变成
+# "两个空哈希相等、于是报成功"。
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the declared host does not check"
+PLAN="$AREA/app/target/nichlink/out/graft_plan.tsv"
+[ -f "$PLAN" ] || fail "the declared host published no graft plan"
+before=$(md5sum <"$PLAN")
 (cd "$AREA/app" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the split host does not check"
 # The partition root is the **workspace** root, so the generated packages sit beside the host, and the
@@ -119,7 +133,8 @@ before=$(cat "$AREA/app/target/nichlink/out/graft_plan.tsv" 2>/dev/null | md5sum
 [ -d "$AREA/crates/app-objects" ] || fail "the split did not produce the ghost"
 [ -d "$AREA/crates/app-facade" ] || fail "the split did not produce the facade"
 (cd "$AREA" && build --workspace >/dev/null 2>&1) || fail "a crate of the split does not build"
-after=$(cat "$AREA/app/target/nichlink/out/graft_plan.tsv" 2>/dev/null | md5sum)
+[ -f "$PLAN" ] || fail "the partitioned host published no graft plan"
+after=$(md5sum <"$PLAN")
 [ "$before" = "$after" ] || fail "re-partitioning changed the graft plan"
 cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_lib.rs" 2>/dev/null | head -1)
 [ -n "$cuts" ] || fail "no generated tree for the ghost"

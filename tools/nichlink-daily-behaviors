@@ -35,7 +35,9 @@
 """
 import os, re, shutil, subprocess, sys, pathlib
 
-ROOT = pathlib.Path("/home/nich/Moirai_N3/nichlink")
+# 检出根从脚本自己的位置推出来，而不是写死一条绝对路径：写死的那一版只能在写它的那台机器上跑，于是
+# "在全新副本里把整件事做一遍"这条验证路径对它关着——而那正是发现 `host/target/` 里陈旧产物一类问题的唯一办法。
+ROOT = pathlib.Path(__file__).resolve().parent.parent
 NICHLINK = ROOT / "target/debug/nichlink"
 BASE = ROOT / "examples/control-suite"
 # `--offline` 是本检出的开发默认；CI 有网络、注册表缓存是冷的，它会把这个变量置空（同其它演练工具）。
