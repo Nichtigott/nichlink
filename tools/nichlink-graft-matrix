@@ -1,0 +1,101 @@
+#!/bin/sh
+# The graft × crate matrix: three shapes that only a real host with a real cargo can answer, each of
+# which was hand-measured before it was written down here.
+# graft × crate 位置矩阵：三种只有"真宿主 + 真 cargo"能回答的形状，每一种都是先手工量过才写进这里。
+#
+#   1. a cut on the **root face** with `full` — the whole tree replaced from the top;
+#   2. **overlapping** cuts (one inside another) — must be refused **by name**, not silently applied;
+#   3. a **re-partition** of the host (the subtree holding both cuts handed to a new crate) — the plan
+#      must not change and every crate must still build.
+#   1. 切口落在**根面**上并带 `full`——整棵树从顶被替换；
+#   2. **重叠**的两条切口（一条在另一条里面）——必须**点名拒绝**，不许静默生效；
+#   3. 把宿主**重新划分**（装着两条切口的那棵子树交给新 crate）——计划不得改变，各 crate 仍要能构建。
+#
+# Usage: tools/nichlink-graft-matrix        (NICHLINK_GRAFT_MATRIX_CARGO_FLAGS to override)
+# 用法：tools/nichlink-graft-matrix        （用 NICHLINK_GRAFT_MATRIX_CARGO_FLAGS 覆盖 cargo 旗标）
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-graft-matrix.XXXXXX")
+CARGO_FLAGS="${NICHLINK_GRAFT_MATRIX_CARGO_FLAGS---offline}"
+NICHLINK="$ROOT/target/debug/nichlink"
+fail() { printf 'graft matrix FAILED: %s\n' "$1" >&2; exit 1; }
+step() { printf '== %s\n' "$1"; }
+build() { command cargo build $CARGO_FLAGS "$@"; }
+
+step "building the CLI this matrix drives"
+build -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1 ||
+  fail "cannot build $NICHLINK"
+
+host() {
+  area="$WORK/$1"
+  mkdir -p "$area"
+  cp -a "$ROOT/examples/partitioned-button/host" "$area/app"
+  cp -a "$ROOT/examples/partitioned-button/graft" "$area/ext"
+  printf '[workspace]\nresolver = "3"\nmembers = ["app", "ext"]\n' >"$area/Cargo.toml"
+  sed -i "s#path = \"../../../toolchain\"#path = \"$ROOT/toolchain\"#g" "$area/app/Cargo.toml" "$area/ext/Cargo.toml"
+  sed -i 's#path = "\.\./graft"#path = "../ext"#' "$area/app/Cargo.toml"
+  echo "$area"
+}
+
+step 'leg 1/3: a cut on the root face with full'
+AREA=$(host root-cut)
+python3 - "$AREA/app/src/lib.rs" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+s = re.sub(
+    r"cut\(crate::control::object::button::NODE_ID\)\s*\n\s*graft\(control_button_graft::button_fast::NODE_ID\),",
+    "cut(crate::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
+s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(control_button_graft::slider_fast::NODE_ID\),",
+           "", s, count=1)
+p.write_text(s)
+PY
+(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the root-face cut does not check"
+[ "$(sed -n '2p' "$AREA/app/target/nichlink/out/graft_plan.tsv" | cut -f1)" = "crate::NODE_ID" ] ||
+  fail "the plan does not record the root-face cut"
+(cd "$AREA/app" && build >/dev/null 2>&1) || fail "the root-face cut does not build"
+
+step "leg 2/3: overlapping cuts are refused by name"
+AREA=$(host overlap)
+python3 - "$AREA/app/src/lib.rs" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+s = re.sub(
+    r"cut\(crate::control::object::button::NODE_ID\)\s*\n\s*graft\(control_button_graft::button_fast::NODE_ID\),",
+    "cut(crate::control::object::button::NODE_ID)\n        graft(control_button_graft::button_fast::NODE_ID),\n    cut(crate::control::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
+p.write_text(s)
+PY
+if (cd "$AREA/app" && "$NICHLINK" check . >"$WORK/overlap.out" 2>&1); then
+  fail "overlapping cuts were accepted silently"
+fi
+grep -q "phase=graft-overlap" "$WORK/overlap.out" ||
+  fail "the refusal does not name the overlap phase: $(head -3 "$WORK/overlap.out")"
+printf '   refusal: %s\n' "$(sed -n '3,5p' "$WORK/overlap.out" | tr '\n' ' ' | cut -c1-220)"
+
+step "leg 3/3: re-partitioning the host keeps the plan and every crate"
+AREA=$(host repartition)
+cat >"$AREA/app/add_crates.rs" <<'RS'
+use nichlink_toolchain::runtime::{Crate, Shape};
+
+pub fn add_crates() -> Shape {
+    Shape::of("app", &[Crate::named("objects").at(&[crate::control::SUBTREE])])
+}
+RS
+before=$(cat "$AREA/app/target/nichlink/out/graft_plan.tsv" 2>/dev/null | md5sum)
+(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the declared host does not check"
+(cd "$AREA/app" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
+(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the split host does not check"
+# The partition root is the **workspace** root, so the generated packages sit beside the host, and the
+# remap config it wrote is found by running cargo from there.
+# 划分根是**工作区**根：生成包落在宿主旁边，而它写下的 remap 配置要靠"从那里跑 cargo"才会被找到。
+[ -d "$AREA/crates/app-objects" ] || fail "the split did not produce the ghost"
+[ -d "$AREA/crates/app-facade" ] || fail "the split did not produce the facade"
+(cd "$AREA" && build --workspace >/dev/null 2>&1) || fail "a crate of the split does not build"
+after=$(cat "$AREA/app/target/nichlink/out/graft_plan.tsv" 2>/dev/null | md5sum)
+[ "$before" = "$after" ] || fail "re-partitioning changed the graft plan"
+cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_lib.rs" 2>/dev/null | head -1)
+[ -n "$cuts" ] || fail "no generated tree for the ghost"
+[ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] ||
+  fail "the ghost does not emit both cuts"
+
+printf '\nOK — root-face cut builds, overlapping cuts are refused by name, and a re-partitioned host keeps its plan\n'
+rm -rf "$WORK"

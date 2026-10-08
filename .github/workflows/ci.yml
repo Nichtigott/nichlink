@@ -62,6 +62,16 @@ jobs:
         env:
           NICHLINK_REHEARSAL_CARGO_FLAGS: ""
         run: tools/nichlink-partition-rehearsal
+      - name: Graft matrix (root face, overlap, re-partition)
+        if: runner.os == 'Linux' && matrix.toolchain == 'stable'
+        # Three shapes only a real host plus a real cargo can answer: a cut on the root face with
+        # `full`, two overlapping cuts (which must be refused by name), and a re-partition whose plan
+        # must not change. Each was hand-measured before it was written down here.
+        # 三种只有"真宿主 + 真 cargo"能回答的形状：根面 + `full` 的切口、两条重叠切口（必须点名拒绝）、
+        # 以及一次"计划不得改变"的重新划分。每一种都是先手工量过才写进这里的。
+        env:
+          NICHLINK_GRAFT_MATRIX_CARGO_FLAGS: ""
+        run: tools/nichlink-graft-matrix
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging
