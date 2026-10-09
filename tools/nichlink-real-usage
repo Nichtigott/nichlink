@@ -1,0 +1,173 @@
+#!/bin/sh
+# The real-usage gate: what a host that **really hands a subtree to another crate** ends up emitting, per
+# package, in **both** partition shapes — judged by attribution rather than by a return code.
+# 真用法门禁：一个**真的把子树交给另一个 crate** 的宿主，在**两种**拆分形状下、逐个包地到底发射了什么——
+# 判据是归属，而不是返回码。
+#
+# Why it exists: these numbers were produced by hand twice (once per shape, on two projects) before anything
+# checked them, and the hand-run is what found the defect where **every package's audit text was the host's
+# whole plan** while only one package actually emitted it (audit `M7`, §M7.55). A gate that asserts `rc=0`
+# cannot see that: both states build.
+# 为什么需要它：这些数字在有任何检查之前是**手工**量出来的（两种形状各一次、两个项目各一遍），而正是那次
+# 手工量出了那个缺陷——**每个包的审计文本都是宿主的整份计划**，而真正发射它的只有一个包（审计 `M7`，
+# §M7.55）。断言 `rc=0` 的门禁看不见它：两种状态都能构建成功。
+#
+# What it asserts, per shape, per package:
+#   ① `audit == cuts` — the audit text (`graft_plan.tsv`) equals what the package actually emits
+#      (`StaticGraftCut::` in the tree the compiler reads);
+#   ② the **facade** carries the union: `facade faces == host faces + ghost faces`, and likewise for cuts —
+#      a cut belongs to exactly one compiling crate, so the split has to partition them;
+#   ③ the **host** emits no cut for faces it no longer compiles (`host cuts == 0` here) and its tree names
+#      **none** of the moved faces (`host faces == 0`: absence is asserted, not assumed);
+#   ④ `explain --overlay`'s slot count equals the faces in the host's own generated tree — the read-only
+#      surface and the compiled artifact agree.
+# 它断言什么（每种形状、每个包）：① `audit == cuts`——审计文本等于该包真正发射的东西；② facade 携带并集：
+# `facade faces == host faces + ghost faces`，切口同理——一条切口只属于一个编译它的 crate，因此拆分必须把
+# 它们分成两半；③ 宿主不再编译的面，它一条切口都不发，且它的生成树**一个都不点名**（缺席是被断言的，不是
+# 假设的）；④ `explain --overlay` 的 slot 数等于宿主自己生成树里的面数——只读面与编译产物一致。
+#
+# Usage: tools/nichlink-real-usage     (NICHLINK_REAL_USAGE_CARGO_FLAGS to override)
+# 用法：tools/nichlink-real-usage     （用 NICHLINK_REAL_USAGE_CARGO_FLAGS 覆盖 cargo 旗标）
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-usage.XXXXXX")
+CARGO_FLAGS="${NICHLINK_REAL_USAGE_CARGO_FLAGS---offline}"
+NICHLINK="${NICHLINK_REAL_USAGE_CLI:-$ROOT/target/debug/nichlink}"
+
+fail() { printf 'real-usage FAILED: %s\n' "$1" >&2; exit 1; }
+step() { printf '== %s\n' "$1"; }
+
+step "building the CLI this gate drives"
+if [ ! -x "$NICHLINK" ]; then
+  cargo build $CARGO_FLAGS -p nichlink-toolchain --features cli --bin nichlink >&2 ||
+    fail "cannot build the CLI"
+fi
+
+# A fixture of this run's own: the committed example's host and graft, a workspace manifest that names both,
+# and **its own target directory** — which is the whole point of copying. Reading a checkout's `target/`
+# means reading whatever the last build left there: measured on the committed example, seven `out`
+# directories for one package, the older ones from before the attribution fix (`cuts=0 audit=0`) and the
+# newer ones after it (`cuts=2 audit=2`), so a reader that sweeps them sees both truths at once and can
+# conclude anything (audit `M7`, §M7.55).
+# 本次运行自己的夹具：入库示例的 host 与 graft、一份点名两者的工作区清单，以及**它自己的 target 目录**——
+# 后者正是"要复制"的全部理由。读检出的 `target/` 就是读上一次构建留下的任何东西：在入库示例上实测，同一个包
+# 有七个 `out` 目录，旧的是归属修复之前的（`cuts=0 audit=0`）、新的是修复之后的（`cuts=2 audit=2`），因此
+# 一个把它们全扫一遍的读者会同时看到两种真相，从而得出任何结论（审计 `M7`，§M7.55）。
+plant() {
+  area="$WORK/$1"
+  mkdir -p "$area"
+  cp -a "$ROOT/examples/partitioned-button/host" "$area/app"
+  cp -a "$ROOT/examples/partitioned-button/graft" "$area/ext"
+  printf '[workspace]\nresolver = "3"\nmembers = ["app", "ext"]\n' >"$area/Cargo.toml"
+  sed -i "s#path = \"../../../toolchain\"#path = \"$ROOT/toolchain\"#g" \
+    "$area/app/Cargo.toml" "$area/ext/Cargo.toml"
+  sed -i 's#path = "\.\./graft"#path = "../ext"#' "$area/app/Cargo.toml"
+  echo "$area"
+}
+
+# One package's own generated tree, read out of the target directory this run created.
+# 一个包自己的生成树，从本次运行创建的 target 目录里读。
+row() { # row <target-dir> <package-name>
+  out=$(ls -d "$1"/debug/build/"$2"-*/out 2>/dev/null | head -1)
+  [ -n "$out" ] || fail "no generated tree for $2 (did it build?)"
+  [ -f "$out/generated_lib.rs" ] || fail "$2 has no generated_lib.rs"
+  ROW_FACES=$(grep -c 'StaticFace::new' "$out/generated_lib.rs" || true)
+  ROW_CUTS=$(grep -c 'StaticGraftCut::' "$out/generated_lib.rs" || true)
+  ROW_AUDIT=$(tail -n +2 "$out/graft_plan.tsv" 2>/dev/null | grep -c . || true)
+  ROW_OUT="$out"
+}
+
+# ① The audit text is the same data as the emission, per package. This is the assertion the hand-run
+# existed for, and it is also the one that a "does it build?" gate cannot make.
+# ① 审计文本与发射是同一份数据（逐包）。这就是那次手工量存在的理由，也是"它能构建吗"式门禁做不出的一条。
+agree() { # agree <label>
+  [ "$ROW_AUDIT" = "$ROW_CUTS" ] ||
+    fail "$1: audit says $ROW_AUDIT cut row(s) while the tree emits $ROW_CUTS — the report and the \
+compiled artifact disagree"
+}
+
+check_shape() { # check_shape <label> <target-dir>
+  label="$1"; target="$2"
+  row "$target" nichlink-example-partitioned-button; host_faces=$ROW_FACES; host_cuts=$ROW_CUTS; agree "$label host"
+  row "$target" partitioned-button-objects;        ghost_faces=$ROW_FACES; ghost_cuts=$ROW_CUTS; agree "$label ghost"
+  row "$target" partitioned-button-facade;         facade_faces=$ROW_FACES; facade_cuts=$ROW_CUTS; agree "$label facade"
+  printf '   %-8s host faces=%s cuts=%s · ghost faces=%s cuts=%s · facade faces=%s cuts=%s\n' \
+    "$label" "$host_faces" "$host_cuts" "$ghost_faces" "$ghost_cuts" "$facade_faces" "$facade_cuts"
+  # ② The facade carries the union, and the split partitions it.
+  [ "$facade_faces" = "$((host_faces + ghost_faces))" ] ||
+    fail "$label: the facade's faces ($facade_faces) are not the union of host ($host_faces) and ghost \
+($ghost_faces)"
+  [ "$facade_cuts" = "$((host_cuts + ghost_cuts))" ] ||
+    fail "$label: the facade's cuts ($facade_cuts) are not the union of host ($host_cuts) and ghost \
+($ghost_cuts)"
+  # ③ Attribution: the crate that compiles the faces emits the cuts, and the one that does not names none
+  # of them. Both halves have to be asserted — the first alone would pass on a tree that emits everything
+  # everywhere, which is exactly the defect this gate was born from.
+  # ③ 归属：编译那些面的 crate 发射那些切口，不编译的那个一个都不点名。两半都要断言——只断前一半的话，
+  # "到处都发全部"的树照样通过，而那正是本门禁诞生的那个缺陷。
+  [ "$ghost_cuts" -ge 1 ] || fail "$label: the ghost compiles the cut faces but emits no cut"
+  [ "$host_cuts" = "0" ] || fail "$label: the host emits cuts for faces it no longer compiles"
+  [ "$host_faces" = "0" ] ||
+    fail "$label: the host still names $host_faces face(s) that the ghost took"
+  SHAPE_FACADE_FACES=$facade_faces
+}
+
+step "shape 1/2: development (the generated packages mount the host's sources)"
+DEV=$(plant dev)
+"$NICHLINK" check "$DEV/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
+"$NICHLINK" crates --write "$DEV/app" >/dev/null 2>&1 || fail "the development split is not written"
+# From the partition root **by changing directory**, never by `--manifest-path`: the development shape
+# remounts the host's sources through a `.cargo/config.toml` it writes at the root, and cargo reads config by
+# walking up from the **current directory** — measured, the same build succeeds from the root and dies with
+# `E0080` (a ghost's `#[path]`/namespace assertion) when invoked with `--manifest-path` from anywhere else
+# (audit `M7`, §M7.67). The release shape does not need the remap, but it builds the same way so the two
+# halves stay comparable.
+# 从分区根构建，且**切换目录**而不是用 `--manifest-path`：开发形状通过它写在根上的 `.cargo/config.toml`
+# 重挂宿主源码，而 cargo 是从**当前目录**向上找 config 的——实测，同一次构建在根目录里成功，而在别处以
+# `--manifest-path` 调用会死在 `E0080`（幽灵对 `#[path]`/命名空间的断言）（审计 `M7`，§M7.67）。发布形状
+# 不需要那次重挂，但两者用同一种方式构建，两半才可比。
+(cd "$DEV" && CARGO_TARGET_DIR="$DEV/target" cargo build $CARGO_FLAGS --workspace >/dev/null 2>&1) ||
+  fail "the development split does not build"
+check_shape dev "$DEV/target"
+# ④ The read-only surface agrees with the compiled artifact — but it answers a **different question** than the
+# per-package rows above, and reading it as the host's own face count is a mistake this gate made first:
+# measured on the split above, `explain --overlay` reports **3** slots while the host compiles **0** faces, and
+# both are right. A slot is a face the **tree** publishes; the per-package rows are what each **crate**
+# compiles. So the thing to compare it against is the crate carrying the union.
+# ④ 只读面与编译产物一致——但它回答的是与上面那些逐包行**不同**的问题，把它读成宿主自己的面数是个错误，而
+# 本门禁第一版正是这么读的：在上面这次拆分上实测，`explain --overlay` 报 **3** 个 slot，而宿主编译 **0** 个面，
+# 两者都对。slot 是**这棵树**发布的一个面；逐包行是每个 **crate** 编译的东西。因此该与它相比的是携带并集的
+# 那个 crate。
+SLOTS=$("$NICHLINK" explain --overlay --path "$DEV/app" 2>/dev/null |
+  sed -n 's/^ *slots (\([0-9]*\)):.*/\1/p' | head -1)
+[ -n "$SLOTS" ] || fail "explain --overlay printed no slot count"
+[ "$SLOTS" = "$facade_faces" ] ||
+  fail "dev: explain --overlay reports $SLOTS published slot(s) while the facade carries $facade_faces \
+face(s) — the read-only surface and the union disagree"
+# The negative half of the same comparison: the surface reports the tree's faces, so it must **not** equal a
+# partitioned crate's own count. If a change ever made it report the host's compiled faces here, this is the
+# line that notices this gate's ④ no longer means what it says.
+# 同一次比较的否定那一半：该面报的是这棵树的面，因此它**不应**等于某个被拆分 crate 自己的面数。若某次改动让它
+# 在这里报宿主编译的面数，这一行会注意到本门禁的 ④ 已经不再说它自称在说的话。
+[ "$SLOTS" != "$host_faces" ] ||
+  fail "dev: explain --overlay now reports the host's own face count ($host_faces), but it is supposed to \
+report the tree's published slots"
+
+step "shape 2/2: release (every generated package carries its own sources)"
+REL=$(plant release)
+"$NICHLINK" check "$REL/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
+"$NICHLINK" crates --release --write "$REL/app" >/dev/null 2>&1 || fail "the release split is not written"
+# The whole workspace, not only the facade: the host is a package of its own here, and its own generated
+# tree is one of the three rows this gate reads. Building only the facade would leave that row missing and
+# the release half would assert less than the development half (measured while writing this: the facade's
+# dependency set does not include the host).
+# 整个工作区，而不只是 facade：在发布形状里宿主是自己一个包，而它自己的生成树正是本门禁要读的三行之一。
+# 只构建 facade 会让那一行缺席，发布那一半断言的就要比开发那一半少（写这条时实测：facade 的依赖集里没有宿主）。
+(cd "$REL" && CARGO_TARGET_DIR="$REL/target" cargo build $CARGO_FLAGS --workspace >/dev/null 2>&1) ||
+  fail "the release shape does not build"
+check_shape release "$REL/target"
+[ "$SHAPE_FACADE_FACES" = "$facade_faces" ] ||
+  fail "the two shapes disagree about the union: $SHAPE_FACADE_FACES vs $facade_faces face(s)"
+
+printf '\nOK — both shapes attribute every cut and every face to the crate that compiles it, and the audit text equals what each package emits\n'
+rm -rf "$WORK"

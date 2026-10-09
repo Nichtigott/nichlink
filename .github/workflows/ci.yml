@@ -226,6 +226,22 @@ jobs:
           NICHLINK_CARGO_FLAGS: ""
           NICHLINK_REAL_PROJECTS: "60"
         run: tools/nichlink-real-projects
+      - name: Real usage (both shapes, judged by attribution)
+        # A host that really hands a subtree to another crate, in both partition shapes, with every row read
+        # out of a target directory this run created: what each package compiles, what each package emits, and
+        # whether the audit text equals it. This is the one step that fails when the report and the compiled
+        # artifact diverge — the defect that made every package's `graft_plan.tsv` the host's whole plan while
+        # only one package emitted it (audit `M7`, §M7.55). A step asserting `rc=0` cannot see it: both states
+        # build. Proven by breaking the attribution on purpose and watching this fail with
+        # "audit says 2 cut row(s) while the tree emits 0".
+        # 一个真的把子树交给另一个 crate 的宿主，两种拆分形状，每一行都从本次运行创建的 target 目录里读：
+        # 每个包编译什么、发射什么，以及审计文本是否等于它。只有这一步会在"报告与编译产物分歧"时失败——
+        # 那个缺陷让每个包的 `graft_plan.tsv` 都成了宿主的整份计划，而真正发射它的只有一个包（审计 `M7`，
+        # §M7.55）。断言 `rc=0` 的步骤看不见它：两种状态都能构建成功。已用"故意弄坏归属"证明：它会以
+        # "audit says 2 cut row(s) while the tree emits 0" 失败。
+        env:
+          NICHLINK_REAL_USAGE_CARGO_FLAGS: ""
+        run: tools/nichlink-real-usage
       - name: IDE mirror (rust_analyzer cfg)
         # No other step compiles this: the check builds two host examples again
         # under a cfg only an editor uses. A nested face's derived rule path
