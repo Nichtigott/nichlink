@@ -240,7 +240,7 @@ pub(crate) fn crates(
                 } else {
                     "carried none of this action's entries"
                 },
-                members_reply(reverted.members_changed, workspace.is_some())
+                members_reply(reverted.members_changed, workspace.is_some(), &root)
             ),
         );
     }
@@ -298,7 +298,7 @@ pub(crate) fn crates(
                  nothing to remap{}",
                 written.files.len(),
                 root.display(),
-                members_reply(written.members_changed, workspace.is_some())
+                members_reply(written.members_changed, workspace.is_some(), &root)
             ),
         );
     }
@@ -326,7 +326,7 @@ pub(crate) fn crates(
             } else {
                 "already carried the remap"
             },
-            members_reply(written.members_changed, workspace.is_some())
+            members_reply(written.members_changed, workspace.is_some(), &root)
         ),
     )?;
     Ok(())
@@ -334,9 +334,28 @@ pub(crate) fn crates(
 
 /// The member-list half of a write or revert reply.
 /// 写入或撤回回复里属于成员清单的那一半。
-fn members_reply(changed: bool, in_a_workspace: bool) -> String {
+pub(crate) fn members_reply(changed: bool, in_a_workspace: bool, root: &std::path::Path) -> String {
     if !in_a_workspace {
-        return "; no enclosing workspace, so no member list".to_owned();
+        // The split wrote packages that **belong to no workspace**, and the reason is structural rather than
+        // a missing feature: the host declares a `[workspace]` of its own, the packages land beside it, and
+        // cargo refuses a member that is not hierarchically below its root — measured,
+        // `error: workspace member `…/crates/dash-dash-board/Cargo.toml` is not hierarchically below the
+        // workspace root `…/dash/Cargo.toml``. Saying only "no member list" left the author with a split
+        // whose `cargo build --workspace` succeeds **without touching any generated package** (audit `M7`,
+        // §M7.64), so the sentence now carries both ways out.
+        // 这次拆分写下了**不属于任何工作区**的包，而原因是结构性的、不是缺功能：宿主自己声明了
+        // `[workspace]`，包落在它旁边，而 cargo 拒绝一个不在其根之下的成员——实测，`error: workspace member
+        // `…/crates/dash-dash-board/Cargo.toml` is not hierarchically below the workspace root
+        // `…/dash/Cargo.toml``。只说一句"没有成员清单"，会让作者拿到一次**成功却不碰任何生成包**的
+        // `cargo build --workspace`（审计 `M7`，§M7.64），因此这句话现在把两条出路都带上。
+        return format!(
+            "; no workspace can take these packages: this host declares a `[workspace]` of its own, and \
+             cargo refuses a member that is not hierarchically below its root — a root above it would \
+             have to be a workspace too, and cargo refuses that as well (`multiple workspace roots found \
+             in the same workspace`, measured when a workspace beside the host listed both). Build each \
+             of them with `cargo build --manifest-path <package>/Cargo.toml` under {}",
+            root.display()
+        );
     }
     if changed {
         "; workspace members updated".to_owned()

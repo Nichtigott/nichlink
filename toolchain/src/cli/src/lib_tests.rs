@@ -1138,3 +1138,37 @@ fn two_dependency_sources_are_refused() {
         "the refusal names both and says to pass one: {error}"
     );
 }
+
+/// When no workspace can take the generated packages, the sentence names a way out that **works**.
+/// 当没有任何工作区能收下生成包时，那句话给出一条**真的能用**的出路。
+///
+/// Measured on a host that declares a `[workspace]` of its own: the packages land beside it, `cargo build
+/// --workspace` succeeds **without touching any of them**, and the only report was "no member list" (audit
+/// `M7`, §M7.64). Two candidate ways out were tried and rejected before this sentence was written, which is
+/// why the negative half matters: `members = ["../crates/…"]` is refused ("not hierarchically below the
+/// workspace root"), and a workspace at the partition root is refused too ("multiple workspace roots found in
+/// the same workspace") — the first version of this sentence offered the second one, and it would have sent a
+/// reader down a road that does not exist.
+/// 在一个自带 `[workspace]` 的宿主上实测：包落在它旁边，`cargo build --workspace` **成功却不碰其中任何一个**，
+/// 而唯一的报告是"没有成员清单"（审计 `M7`，§M7.64）。这句话写出来之前试过并否掉了两条候选出路，这也是否定的
+/// 那一半要紧的原因：`members = ["../crates/…"]` 被拒（"not hierarchically below the workspace root"），
+/// 在分区根建工作区也被拒（"multiple workspace roots found in the same workspace"）——这句话的第一版给的正是
+/// 第二条，它会把读者送上一条不存在的路。
+#[test]
+fn a_split_that_belongs_to_no_workspace_says_how_to_build_it() {
+    let said = super::crates_command::members_reply(false, false, std::path::Path::new("/work"));
+    assert!(
+        said.contains("--manifest-path"),
+        "the way out that was measured to work is named: {said}"
+    );
+    assert!(
+        said.contains("no workspace can take these packages") && said.contains("/work"),
+        "it says what is wrong and where: {said}"
+    );
+    for rejected in ["remove the host's", "delete the host's"] {
+        assert!(
+            !said.contains(rejected),
+            "`{rejected}` was measured **not** to work and must not be offered again: {said}"
+        );
+    }
+}
