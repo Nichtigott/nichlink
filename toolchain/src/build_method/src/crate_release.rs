@@ -205,23 +205,6 @@ pub(crate) fn plan_facade(
              Rename the host or pick a different `package_prefix`; a crate cannot depend on itself."
         ));
     }
-    // A release facade reaches the host's tree through cargo, so a host cargo will not hand over is a
-    // refusal here rather than a facade that compiles zero faces: cargo *ignores* a dependency with no
-    // library target (it warns and builds on), and the build script's name scan then took the facade's
-    // own directory for the host's — measured, the published facade carried neither the faces nor the
-    // cuts and the build still reported success (audit `M7`, §M7.55).
-    // 发布 facade 经 cargo 到达宿主的树，因此 cargo 不肯交出的宿主在这里是一句拒绝，而不是一个编译零个面的
-    // facade：cargo 会**忽略**没有库目标的依赖（警告一句然后继续构建），而构建脚本按名扫描时把 facade 自己的
-    // 目录当成了宿主的——实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功（审计 `M7`，§M7.55）。
-    if !has_library_target(host_root) {
-        return Err(format!(
-            "add_crates: the host package `{host_package}` has no library target, so a release facade \
-             cannot reach its tree: cargo ignores a dependency that is only a binary, and the facade \
-             would compile no faces and carry no cuts while still reporting success.\n\
-             way forward: give the host a `src/lib.rs` (a library host with a thin binary, the shape \
-             the examples use), or partition in the development shape"
-        ));
-    }
     // The same one implementation the ghost and the development facade use: a release shape that put
     // its packages somewhere else would be a fourth answer to "where does a partition write".
     // 与幽灵、开发形状的 facade 共用同一份实现：发布形状若把包写到别处，就是"划分写到哪里"的第四个答案。
@@ -344,7 +327,7 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String], cuts: &[HostCut]) -> Str
 /// faces and emitted zero cuts while reporting success (audit `M7`, §M7.55).
 /// 这个答案是要紧的：facade 把宿主列为依赖，而 cargo 会**忽略**没有库目标的依赖（警告一句、继续构建），
 /// 在二进制宿主上实测，facade 随后编译了零个面、发射了零条切口，却报告成功（审计 `M7`，§M7.55）。
-fn has_library_target(host_root: &Path) -> bool {
+pub(crate) fn has_library_target(host_root: &Path) -> bool {
     if host_root.join("src/lib.rs").is_file() {
         return true;
     }
@@ -360,6 +343,37 @@ fn has_library_target(host_root: &Path) -> bool {
         Some(path) => host_root.join(path).is_file(),
         None => false,
     }
+}
+
+/// Refuse a release partition whose host cargo will not hand to a facade.
+/// 拒绝一次"宿主不会被 cargo 交给 facade"的发布分区。
+///
+/// The check lives at the **writers**, not in the planner: planning is also what a read-only view does, and
+/// a declaration edit that merely *looks* at the plan must not fail because the host is a binary — measured,
+/// putting it in `plan_facade` made `crates --declare … --write` refuse an edit that has nothing to do with
+/// release shapes (audit `M7`, §M7.55).
+/// 这项检查住在**写入方**，不在规划器里：只读视图做的也是规划，而一次只是**看一眼**计划的声明编辑，不该因为
+/// 宿主是二进制而失败——实测，把它放进 `plan_facade` 让 `crates --declare … --write` 拒绝了一次与发布形状毫无
+/// 关系的编辑（审计 `M7`，§M7.55）。
+///
+/// What it refuses: cargo **ignores** a dependency with no library target (it warns and builds on), and the
+/// facade's build script then took its own directory for the host's — measured, the published facade carried
+/// neither the faces nor the cuts and the build still reported success.
+/// 它拒绝什么：cargo 会**忽略**没有库目标的依赖（警告一句然后继续构建），而 facade 的构建脚本随后把自己的目录
+/// 当成了宿主的——实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功。
+pub(crate) fn refuse_binary_host(host_root: &Path) -> Result<(), String> {
+    if has_library_target(host_root) {
+        return Ok(());
+    }
+    let host_package = super::package::package_name(&host_root.join("Cargo.toml"))
+        .unwrap_or_else(|_| host_root.display().to_string());
+    Err(format!(
+        "add_crates: the host package `{host_package}` has no library target, so a release facade \
+         cannot reach its tree: cargo ignores a dependency that is only a binary, and the facade would \
+         compile no faces and carry no cuts while still reporting success.\n\
+         way forward: give the host a `src/lib.rs` (a library host with a thin binary, the shape the \
+         examples use), or partition in the development shape"
+    ))
 }
 
 /// The release facade's `build.rs`: find the host package through cargo, then run the facade pipeline.

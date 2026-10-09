@@ -98,6 +98,15 @@ pub(crate) struct PartitionPlan {
     /// The enclosing workspace, when there is one.
     /// 外层工作区（若存在）。
     pub(crate) workspace: Option<PathBuf>,
+    /// The host package this partition was planned from.
+    /// 本次划分据以规划的宿主包。
+    ///
+    /// Carried because the writers need it and cannot derive it: a release facade's dependency is spelled
+    /// relative to **it**, and the check that refuses a host with no library target is a question about that
+    /// package rather than about the partition root (audit `M7`, §M7.55).
+    /// 带上它是因为写入方需要它、又推导不出来：发布 facade 的依赖是相对**它**拼写的，而"宿主没有库目标"那句
+    /// 拒绝问的是那个包、不是分区根（审计 `M7`，§M7.55）。
+    pub(crate) host_root: PathBuf,
 }
 
 /// Plan the partition a host declares, or `None` when it declares nothing.
@@ -177,6 +186,7 @@ pub(crate) fn plan(package_root: &Path) -> Result<Option<PartitionPlan>, String>
         release,
         config_root,
         workspace,
+        host_root: package_root.to_path_buf(),
     }))
 }
 

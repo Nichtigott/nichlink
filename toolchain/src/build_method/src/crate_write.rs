@@ -548,7 +548,16 @@ pub(crate) fn write_release(
     root: &Path,
     workspace: Option<&Path>,
     packages: &[ReleasePackage],
+    host_root: &Path,
 ) -> Result<Written, String> {
+    // Before a single file lands: a release facade reaches the host's tree through cargo, and a host cargo
+    // will not hand over is a refusal rather than a package that compiles zero faces (see
+    // [`super::crate_release::refuse_binary_host`]). Checked here because this is the one function all three
+    // writers call — the CLI, the bridge and Studio — while `plan_facade` is also what a read-only view runs.
+    // 在任何文件落地之前：发布 facade 经 cargo 到达宿主的树，而 cargo 不肯交出的宿主是一句拒绝，而不是一个编译
+    // 零个面的包（见 [`super::crate_release::refuse_binary_host`]）。在这里查，因为这是三个写入方——CLI、桥与
+    // Studio——都会调用的唯一函数，而 `plan_facade` 也是只读视图会跑的东西。
+    super::crate_release::refuse_binary_host(host_root)?;
     let mut written = Written::default();
     let directories: Vec<(&Path, &str)> = packages
         .iter()

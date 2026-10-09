@@ -192,7 +192,11 @@ fn a_face_outside_the_layout_is_reported_with_its_path() {
         .expect_err("a face outside the layout must fail the build");
     assert!(error.contains("flat.rs"), "the file must be named: {error}");
     assert!(
-        error.contains("face-layout"),
+        error.contains("face-layout")
+            // The half a reader acts on: the move is an identity change, not a layout fix.
+            // 读者会照做的那一半：这次搬动是身份变化，不是布局修正。
+            && error.contains("NodeId = hash(namespace, source path, name)")
+            && error.contains("stops") && error.contains("resolving"),
         "the diagnostic must say what is wrong: {error}"
     );
     assert!(

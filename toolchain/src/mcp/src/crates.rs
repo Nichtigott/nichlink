@@ -136,6 +136,7 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
                         &plan.config_root,
                         plan.workspace.as_deref(),
                         &plan.release,
+                        &plan.host_root,
                     )?;
                     written_sentence(&written)
                 }

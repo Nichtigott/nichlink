@@ -61,6 +61,109 @@ impl ShapeDeclaration {
     }
 }
 
+/// The declaration text from `start` to its **balanced** closing delimiter, or why it does not balance.
+/// 从 `start` 到**配平**的收尾定界符为止的声明文本，或它为何不配平。
+///
+/// Quoted text is skipped, because a `"…"` in a declaration may contain braces (`Crate::named("a}b")`)
+/// and counting them would refuse a file that is fine. Raw strings and byte strings are not special-cased:
+/// the declaration grammar this reader accepts has neither, and guessing at spellings outside it is how a
+/// reader starts answering from text it did not really parse.
+/// 引号里的文本被跳过，因为声明里的一处 `"…"` 可能含花括号（`Crate::named("a}b")`），把那些也数进去会拒绝
+/// 一份没问题的文件。原始字符串与字节串不做特判：本读者接受的声明语法两者都没有，而靠猜语法之外的拼法，正是一个
+/// 读者开始从它并没真正解析过的文本作答的方式。
+fn balanced_body(text: &str, start: usize) -> Result<&str, String> {
+    let bytes = text.as_bytes();
+    let mut cursor = start;
+    while cursor < bytes.len() && !matches!(bytes[cursor], b'{' | b'(' | b'[') {
+        cursor += 1;
+    }
+    if bytes.get(cursor).is_none() {
+        return Err("it opens a `Shape` and never opens a body".to_owned());
+    }
+    let close = closing_bracket(text, cursor)?;
+    Ok(&text[start..=close])
+}
+
+/// The index of the delimiter that closes the one at `open`, by **depth**.
+/// 与 `open` 处那个定界符相配的收尾定界符下标，按**深度**判定。
+///
+/// One scanner, because two writers in this module need the same answer and the first of them did not
+/// ask: `declare` looked for the **first** `]` after `&[`, and the first `]` in a list of
+/// `Crate::named("…").at(&[…::SUBTREE])` entries is the **first entry's own** — so the new crate was
+/// inserted inside the previous one. Measured, the file it wrote was
+/// `&[Crate::named("dash-board").at(&[crate::board::SUBTREE` + newline + `Crate::named("extra").at(…),` +
+/// `]),`, whose brackets all balance and which no longer parses (audit `M7`, §M7.61).
+/// 一个扫描器，因为这个模块里的两个写入方需要同一个答案，而第一个没有问它：`declare` 找的是 `&[` 之后
+/// **第一个** `]`，而在一串 `Crate::named("…").at(&[…::SUBTREE])` 条目里，第一个 `]` 是**第一条 entry
+/// 自己的**——于是新 crate 被插进了上一条里面。实测，它写出的文件是
+/// `&[Crate::named("dash-board").at(&[crate::board::SUBTREE` + 换行 + `Crate::named("extra").at(…),` +
+/// `]),`，每个括号都配平，而它不再能解析（审计 `M7`，§M7.61）。
+///
+/// Quoted text is skipped, because a `"…"` in a declaration may contain brackets (`Crate::named("a]b")`)
+/// and counting them would mis-place the insertion in a file that is fine.
+/// 引号里的文本被跳过，因为声明里的一处 `"…"` 可能含括号（`Crate::named("a]b")`），把那些数进去会让一次插入在
+/// 一份没问题的文件里落错位置。
+fn closing_bracket(text: &str, open: usize) -> Result<usize, String> {
+    let bytes = text.as_bytes();
+    let closers = |opening: u8| match opening {
+        b'(' => b')',
+        b'[' => b']',
+        _ => b'}',
+    };
+    let Some(&opening) = bytes.get(open) else {
+        return Err("there is nothing to close".to_owned());
+    };
+    if !matches!(opening, b'{' | b'(' | b'[') {
+        return Err(format!("`{}` opens nothing", opening as char));
+    }
+    let mut stack: Vec<u8> = Vec::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut cursor = open;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
+            cursor += 1;
+            continue;
+        }
+        match byte {
+            b'"' => quoted = true,
+            b'{' | b'(' | b'[' => stack.push(byte),
+            b'}' | b')' | b']' => {
+                let Some(expected) = stack.pop() else {
+                    return Err(format!(
+                        "its brackets do not balance: `{}` closes nothing",
+                        byte as char
+                    ));
+                };
+                if closers(expected) != byte {
+                    return Err(format!(
+                        "its brackets do not balance: `{}` is closed by `{}`",
+                        expected as char, byte as char
+                    ));
+                }
+                if stack.is_empty() {
+                    return Ok(cursor);
+                }
+            }
+            _ => {}
+        }
+        cursor += 1;
+    }
+    let unclosed = stack.iter().map(|byte| *byte as char).collect::<String>();
+    Err(format!(
+        "its brackets do not balance: the declaration leaves `{unclosed}` open, so nothing here can be \
+         read as a declaration"
+    ))
+}
+
 /// Read the shape `package_root/add_crates.rs` declares, or `None` when the host has none.
 /// 读取 `package_root/add_crates.rs` 声明的形状；宿主没有这个文件时是 `None`。
 ///
@@ -98,10 +201,39 @@ pub(crate) fn read_shape_declaration(
                 "it has no `Shape { … }` literal and no `Shape::of(…)`",
             )
         })?;
-    let body = text[start..]
-        .split('}')
-        .next()
-        .ok_or_else(|| unreadable(&path, "it has no `Shape { … }` literal"))?;
+    // The body runs to the declaration's **balanced** closing delimiter, and a body that never balances
+    // is refused rather than read from. Taking the text up to the first `}` made the reader accept a
+    // declaration a writer had broken in half: measured, `crates --declare --write` used to insert a new
+    // `Crate::named(…)` inside the previous entry, leaving an inner `&[` that never closes, and `check`
+    // then reported `ok` on a file that is not valid Rust — the file sits in the package root, no crate
+    // graph contains it, and nothing compiled it (audit `M7`, §M7.61). A reader that answers from a file
+    // it cannot parse is the second half of that chain; this is the first half of closing it.
+    // 主体一直延伸到这条声明**配平**的收尾定界符，而永不配平的主体被拒绝而不是拿来读。取到第一个 `}` 为止
+    // 让读者接受了被写入方切成两半的声明：实测，`crates --declare --write` 过去会把新的 `Crate::named(…)`
+    // 插进上一条 entry 里，留下一个永不闭合的内层 `&[`，而 `check` 随后在一份不是合法 Rust 的文件上报 `ok`
+    // ——那份文件住在包根、没有任何 crate 图包含它、也没有东西编译它（审计 `M7`，§M7.61）。一个从自己解析不了
+    // 的文件作答的读者是那条链的后半段；这里是把它合上的前半段。
+    let body = balanced_body(&text, start).map_err(|reason| unreadable(&path, &reason))?;
+    // Balanced brackets are not enough, and the measured counter-example is the file a broken writer
+    // leaves: `crates --declare --write` used to insert the new `Crate::named(…)` **inside** the previous
+    // entry, and the result balances every bracket while holding two adjacent expressions in one array
+    // (`&[crate::board::SUBTREE Crate::named("extra").at(…)…]`). A bracket stack cannot see that — it
+    // counts a shape, not a grammar — and `syn` can, which is why the reader parses the body instead of
+    // measuring it (audit `M7`, §M7.61).
+    // 括号配平是不够的，而实测的反例正是写入方留下的那份文件：`crates --declare --write` 过去会把新的
+    // `Crate::named(…)` 插进上一条 entry **里面**，结果每一个括号都配平，而一个数组里放着两个相邻的表达式
+    // （`&[crate::board::SUBTREE Crate::named("extra").at(…)…]`）。括号栈看不见这件事——它数的是形状，不是
+    // 语法——而 `syn` 看得见，这就是读者**解析**主体而不是**度量**它的原因（审计 `M7`，§M7.61）。
+    if let Err(error) = syn::parse_str::<syn::Expr>(body) {
+        return Err(unreadable(
+            &path,
+            &format!(
+                "it does not read as one Rust expression ({error}); a declaration whose brackets balance \
+                 but whose entries do not parse is a file a writer half-finished, and reading a shape out \
+                 of it would describe a partition nobody wrote"
+            ),
+        ));
+    }
     let package_prefix = body
         .split("package_prefix")
         .nth(1)
@@ -726,19 +858,31 @@ pub(crate) fn declare(
             .find("&[")
             .map(|at| at + "&[".len())
             .unwrap_or("crates: &[".len());
-    let close = before[list_start..].find(']').ok_or_else(|| {
-        unreadable(
-            &path,
-            "its `crates: &[` list is never closed, so this writer cannot say where it ends",
-        )
-    })? + list_start;
+    // The list's **own** closing bracket, by depth. Searching for the first `]` answered with the first
+    // entry's, which is why the new crate used to land inside the previous one (see `closing_bracket`).
+    // 列表**自己的**收尾括号，按深度找。搜第一个 `]` 会答出第一条 entry 的，这正是新 crate 过去落进上一条
+    // 里面的原因（见 `closing_bracket`）。
+    let close =
+        closing_bracket(&before, list_start - 1).map_err(|reason| unreadable(&path, &reason))?;
     // Insert **before the closing bracket**, one entry per line: an inline list gains a line break
     // first, a list that already spans lines keeps its own layout, and every byte outside this
     // insertion is untouched.
     // 插在**闭括号之前**，一条一行：单行列表先补一个换行，已经跨行的列表保持它自己的版式，而这次插入之外的
     // 每一个字节都没被动过。
+    // The closing bracket usually sits on its own line, and inserting *at* it would leave that line's
+    // indentation behind as a whitespace-only line — an edit no reviewer can see in a diff, and one that
+    // accumulates with every `declare`. When the text between the line start and the bracket is blank, the
+    // insertion point is the line start.
+    // 收尾括号通常独占一行，插在**它那里**会把那一行的缩进留成一行只有空白的行——那是 diff 里看不见的改动，
+    // 而且每 `declare` 一次就累积一次。当行首到括号之间只有空白时，插入点是行首。
+    let line_start = before[..close].rfind('\n').map_or(0, |at| at + 1);
+    let anchor = if before[line_start..close].trim().is_empty() {
+        line_start
+    } else {
+        close
+    };
     let mut inserted = String::new();
-    if !before[..close].ends_with('\n') {
+    if !before[..anchor].ends_with('\n') {
         inserted.push('\n');
     }
     for subtree in subtrees {
@@ -747,9 +891,9 @@ pub(crate) fn declare(
         inserted.push_str(",\n");
     }
     let mut after = String::with_capacity(before.len() + inserted.len());
-    after.push_str(&before[..close]);
+    after.push_str(&before[..anchor]);
     after.push_str(&inserted);
-    after.push_str(&before[close..]);
+    after.push_str(&before[anchor..]);
     Ok(DeclarationEdit {
         path,
         before,

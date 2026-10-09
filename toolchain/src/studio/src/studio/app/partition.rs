@@ -153,6 +153,7 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
                 &plan.config_root,
                 plan.workspace.as_deref(),
                 &plan.release,
+                &plan.host_root,
             )?;
             Ok(summary(&written, plan.workspace.is_some(), "release"))
         }

@@ -492,3 +492,75 @@ fn undeclaring_works_on_a_single_line_declaration() {
         "the host is one crate again"
     );
 }
+
+/// A declaration a writer broke in half is **not** read back.
+/// 被写入方切成两半的声明**读不回来**。
+///
+/// This is the file `crates --declare --write` used to leave behind: the new `Crate::named(…)` landed
+/// inside the previous entry, so an inner `&[` never closes. The reader answered from it anyway — it took
+/// the text up to the first `}` — which is why `check` reported `ok` on a file that is not valid Rust
+/// (audit `M7`, §M7.61). Nothing compiled that file either: it sits in the package root, and no crate
+/// graph contains it.
+/// 这就是 `crates --declare --write` 过去留下的那份文件：新的 `Crate::named(…)` 落进了上一条 entry 里，
+/// 于是一个内层 `&[` 永不闭合。而读者照样从它作答——它取到第一个 `}` 为止——这正是 `check` 在一份不是合法
+/// Rust 的文件上报 `ok` 的原因（审计 `M7`，§M7.61）。那份文件也没有任何东西编译它：它住在包根，没有任何
+/// crate 图包含它。
+#[test]
+fn a_declaration_with_unbalanced_brackets_is_refused() {
+    let root = declaration_root("unbalanced");
+    std::fs::write(
+        root.join("add_crates.rs"),
+        // Verbatim from a real run of `crates --declare extra --subtree crate::input::SUBTREE --write`:
+        // the new entry landed **inside** the previous one, so the array holds two adjacent expressions.
+        // Every bracket still balances — which is exactly why counting them was not enough.
+        // 逐字取自一次真实的 `crates --declare extra --subtree crate::input::SUBTREE --write`：新的 entry 落进了
+        // 上一条**里面**，于是数组里有两个相邻的表达式。每一个括号仍然配平——这正是"只数括号"不够的原因。
+        "pub fn add_crates() -> Shape {\n    Shape::of(\"dash\", &[\n        \
+         Crate::named(\"dash-board\").at(&[crate::board::SUBTREE\n        \
+         Crate::named(\"extra\").at(&[crate::input::SUBTREE]),\n]),\n    ])\n}\n",
+    )
+    .expect("the broken declaration");
+    let refused =
+        read_shape_declaration(&root).expect_err("a file that does not parse is not a declaration");
+    assert!(
+        refused.contains("does not read as one Rust expression"),
+        "the refusal names what is wrong, in the reader's own words: {refused}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The legal spellings still read, including one whose string contains a brace.
+/// 合法的拼法仍能读，包括一处字符串里含花括号的。
+#[test]
+fn a_quoted_brace_is_not_a_delimiter() {
+    let root = declaration_root("quoted-brace");
+    std::fs::write(
+        root.join("add_crates.rs"),
+        "pub fn add_crates() -> Shape {\n    Shape::of(\"a}b\", &[\n        \
+         Crate::named(\"x\").at(&[crate::control::SUBTREE]),\n    ])\n}\n",
+    )
+    .expect("the declaration");
+    let declaration = read_shape_declaration(&root)
+        .expect("it balances once quoted text is skipped")
+        .expect("it declares a shape");
+    assert_eq!(declaration.package_prefix, "a}b");
+    assert_eq!(declaration.crates.len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A throwaway package root for one declaration file.
+/// 一个只装一份声明文件的一次性包根。
+fn declaration_root(label: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join("shape-decl")
+        .join(format!(
+            "nichlink-declaration-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+    let _ = std::fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("fixture root");
+    root
+}

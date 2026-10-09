@@ -261,7 +261,18 @@ fn record_unplaced(unplaced: &mut Vec<UnplacedFace>, src: &Path, path: &Path) {
             relative: super::relative_display(src, path),
             line: face.location.line,
             phase: "face-layout",
-            message: "registration face is outside the `<name>/<name>.rs` layout, so the build can never compile it; move the file to `<name>/<name>.rs`".to_owned(),
+            // The **identity** half was missing, and it is the half that costs the reader an afternoon:
+            // `NodeId = hash(namespace, source path, name)` includes the source path, so "move the file"
+            // is not a layout fix — it is a rename, and every graft record, adoption entry and plugin lock
+            // keyed by the old id stops resolving. Measured while auditing a rename: the build said only
+            // that the file was in the wrong directory, which is true and useless at the same time
+            // (audit `M7`, §M7.60).
+            // **身份**那一半是缺的，而它正是让读者搭进去一个下午的那一半：`NodeId = hash(命名空间, 源码路径,
+            // 名字)` 含源码路径，因此"把文件挪过去"不是一次布局修正——它是一次改名，而按旧 id 记账的每一条
+            // graft 记录、认领条目与插件锁都会不再解析。审计一次改名时实测：构建只说这个文件在错的目录里，
+            // 这句话同时是对的与没用的（审计 `M7`，§M7.60）。
+            message: "registration face is outside the `<name>/<name>.rs` layout, so the build can never compile it; move the file to `<name>/<name>.rs`. That move is a **rename** as far as this                       framework is concerned: `NodeId = hash(namespace, source path, name)` takes the source                       path as an input, so the face this build derives is not the one the old path produced                       — every graft record, adoption entry and plugin lock keyed by the old identity stops                       resolving, and `nichlink.diff {\"records\": true}` lists what did"
+                .to_owned(),
         }),
         Err(error) => unplaced.push(UnplacedFace {
             relative: super::relative_display(src, path),

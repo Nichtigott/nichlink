@@ -285,7 +285,12 @@ pub(crate) fn crates(
                 .collect::<Vec<_>>(),
             true,
         )?;
-        let written = crate::build_method::write_release(&root, workspace.as_deref(), &packages)?;
+        let written = crate::build_method::write_release(
+            &root,
+            workspace.as_deref(),
+            &packages,
+            &package_root,
+        )?;
         return line(
             out,
             format!(

@@ -304,7 +304,15 @@ fn the_release_shape_carries_its_sources_and_reverts() {
     }];
     fs::write(root.join("add_crates.rs"), "// the declaration\n").expect("the declaration");
 
-    let written = super::write_release(&root, None, &release).expect("the release shape writes");
+    // The host root is a parameter because the writers refuse a host cargo will not hand to a facade:
+    // the fixture's own root is a `src/lib.rs`-less temporary directory, which is a host a release facade
+    // could never reach — so the fixture describes that requirement (see `refuse_binary_host`).
+    // 宿主根是参数，因为写入方会拒绝一个 cargo 不肯交给 facade 的宿主：夹具自己的根是一个没有 `src/lib.rs`
+    // 的临时目录，也就是发布 facade 永远够不到的宿主——因此夹具描述这条要求（见 `refuse_binary_host`）。
+    fs::create_dir_all(root.join("src")).expect("the host's src");
+    fs::write(root.join("src/lib.rs"), "// the host library\n").expect("the host library");
+    let written =
+        super::write_release(&root, None, &release, &root).expect("the release shape writes");
     assert!(
         written.files.len() >= 5,
         "three generated files and two copies: {:?}",
